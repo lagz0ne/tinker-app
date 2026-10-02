@@ -52,8 +52,4 @@ export const bootstrapEnvelope = z.object({
   version: z.number().int().min(0),
   snapshot: snapshotEnvelope,
 });
-export const streamEnvelope = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("changes"), events: z.array(eventEnvelope).max(100) }),
-  z.object({ kind: z.literal("account-change") }),
-]);
 export const streamInput = z.object({ version: z.number().int().min(0), data: z.string() });

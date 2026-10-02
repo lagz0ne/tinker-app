@@ -144,7 +144,7 @@ try {
     files: manifest.items.reduce((count, item) => count + item.files.length, 0),
     payloads: "exact source",
     install: "source with lib alias rewritten to @/app-lib",
-    aliasRewrite: "static and dynamic seam imports rewritten",
+    aliasRewrite: "seam imports rewritten",
     seamUpdate: "both edited seam files unchanged",
     dryRun: "unchanged",
     setupUpdate: "passed",

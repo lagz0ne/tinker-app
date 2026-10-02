@@ -26,11 +26,12 @@ Each account has its own private list.
 Sign out and use a second account in the same tab.
 
 The dev command sets `START_PROOF_MODE=1`.
-That loads a separate PGlite proof adapter and recorded mail.
+That uses the PGlite proof adapter and recorded mail.
 PGlite runs Postgres in memory; restarting clears the proof data.
 Recorded mail sends nothing to an inbox.
 Production resource factories always use `pg` and SMTP.
-The proof adapter does not load unless the proof flag is set.
+The proof preset module loads with the server seam.
+PGlite loads only when its factory runs in proof mode.
 
 `HOST` and `PORT` set the local address.
 Proof auth accepts localhost, loopback, and `*.tini.works`.
@@ -134,7 +135,16 @@ Core and React are workspace packages; this proof does not publish them to npm.
 The registry does not install another runtime framework.
 Review a dry run before overwriting setup.
 Never overwrite the example item to update setup.
-Setup contract 3 needs both seam files before a runtime update.
+Setup contract 3 needs these changes before a runtime update:
+
+- Add `src/lib/tinker.ts` and `src/lib/tinker.server.ts`.
+  Fill `Register` in the browser seam with your feature types.
+- Import `readReceipt` from your own `src/transport/result.server.ts`.
+- Remove the sync table definitions from `src/backend/sync.schema.ts`.
+  Backend files import `stream`, `execution`, and `event`
+  from `../scaffold/backend/sync.schema.ts`.
+- Build feature readers on the envelopes in `src/scaffold/sync.ts`.
+
 The registry puts them in the consumer's configured `lib` folder.
 shadcn 4.21.0 skips import rewriting for `registry:file`.
 Fixed TypeScript files that import the seams use `registry:lib` with fixed targets.
@@ -159,6 +169,7 @@ vp run @tinker-start-scaffold#test:middleware
 vp run @tinker-start-scaffold#test:imports
 vp run @tinker-start-scaffold#test:seam
 vp run @tinker-start-scaffold#test:seam:fixture
+vp run @tinker-start-scaffold#test:schema
 ```
 
 Tests call exported operations through small Core scopes.
@@ -170,6 +181,7 @@ Domain tests do not boot the Start stack.
 - Signed-out private writes open no transaction.
 - Refused work leaves the server root usable.
 - Failed transactions keep the old saved data and publish no saved change.
+- A native commit failure never returns a saved profile.
 - Auth email check and reset callbacks invoke the mail operation.
 - Accounts can read and change only their own todos and event stream.
 - Guessing another account's todo ID cannot change or delete it.
@@ -191,6 +203,7 @@ Domain tests do not boot the Start stack.
 - SSE replays saved events and refuses another account's cursor.
 - A revoked session receives no queued private rows.
 - A final result replay completes a local wait after disconnect.
+- Finished operation traces and Pino logs reach their HTTP receivers.
 - Telemetry storage failure keeps bounded records for retry.
 - Browser ingest refuses foreign origins, bad shapes, and oversized bodies.
 - Stalled uploads and storage requests stop with their owner.
@@ -268,6 +281,3 @@ Victoria storage failure can drop records when the queue fills or closes.
 Cross-side trace propagation is still pending.
 Auth SDK internals are not separate Core spans.
 A host must consume or cancel responses to release their retained request work.
-
-A native commit failure never returns a saved profile.
-Finished operation traces and Pino logs reach their HTTP receivers.

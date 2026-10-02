@@ -1,6 +1,5 @@
 import { operation, resource } from "@tinker/core";
-import { records } from "@/lib/tinker";
-import { readBatch, readBootstrap } from "@/lib/tinker";
+import { records, readBatch, readBootstrap } from "@/lib/tinker";
 import type { Sync } from "../sync.ts";
 import { fail, raise } from "../errors.ts";
 import { accountOwner } from "./owner.ts";

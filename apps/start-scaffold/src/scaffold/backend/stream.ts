@@ -1,6 +1,5 @@
 import { operation, resource } from "@tinker/core";
-import { auth, requestHeaders } from "@/lib/tinker.server";
-import { database } from "@/lib/tinker.server";
+import { auth, requestHeaders, database } from "@/lib/tinker.server";
 import { notifications } from "./notifications.ts";
 import { backendStop, requestStop } from "./lifetime.ts";
 import { readStreamRequest } from "../protocol.ts";
