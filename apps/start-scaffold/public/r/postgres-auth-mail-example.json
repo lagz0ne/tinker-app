@@ -282,7 +282,7 @@
     }
   ],
   "meta": {
-    "version": "0.3.0",
+    "version": "0.3.1",
     "ownership": "userland",
     "update": "These are your files. Never overwrite this item to update setup."
   },

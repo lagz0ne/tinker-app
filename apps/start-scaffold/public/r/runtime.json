@@ -144,7 +144,7 @@
     }
   ],
   "meta": {
-    "version": "0.3.0",
+    "version": "0.3.1",
     "contractVersion": 2,
     "ownership": "fixed",
     "update": "Review the dry run before overwriting. No userland dependencies."

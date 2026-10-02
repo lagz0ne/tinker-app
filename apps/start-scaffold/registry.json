@@ -126,7 +126,7 @@
         }
       ],
       "meta": {
-        "version": "0.3.0",
+        "version": "0.3.1",
         "contractVersion": 2,
         "ownership": "fixed",
         "update": "Review the dry run before overwriting. No userland dependencies."
@@ -370,7 +370,7 @@
         }
       ],
       "meta": {
-        "version": "0.3.0",
+        "version": "0.3.1",
         "ownership": "userland",
         "update": "These are your files. Never overwrite this item to update setup."
       }
@@ -441,10 +441,15 @@
           "path": "compose.victoria.yml",
           "type": "registry:file",
           "target": "~/compose.victoria.yml"
+        },
+        {
+          "path": "AGENTS.md",
+          "type": "registry:file",
+          "target": "~/AGENTS.md"
         }
       ],
       "meta": {
-        "version": "0.3.0",
+        "version": "0.3.1",
         "ownership": "install-only",
         "prerequisites": "Use the dependencies and devDependencies in this app package.json; Core and React are workspace packages, not an npm release.",
         "proof": "The isolated proof adapter is lazy and opt-in. Production resources use pg and SMTP only."
