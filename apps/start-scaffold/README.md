@@ -269,4 +269,5 @@ Cross-side trace propagation is still pending.
 Auth SDK internals are not separate Core spans.
 A host must consume or cancel responses to release their retained request work.
 
-A failed database commit never returns a saved profile.
+A native commit failure never returns a saved profile.
+Finished operation traces and Pino logs reach their HTTP receivers.
