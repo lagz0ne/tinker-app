@@ -1,0 +1,454 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "tinker-start",
+  "homepage": "https://p-50f124fdfa9c.preview.tini.works",
+  "items": [
+    {
+      "name": "runtime",
+      "type": "registry:file",
+      "title": "Start scope and sync setup",
+      "description": "Update src/scaffold only. Native middleware, scope lifetime, SSE replay, execution waits, and bounded Victoria export.",
+      "files": [
+        {
+          "path": "src/scaffold/backend/body.server.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/body.server.ts"
+        },
+        {
+          "path": "src/scaffold/backend/entry.server.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/entry.server.ts"
+        },
+        {
+          "path": "src/scaffold/backend/events.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/events.ts"
+        },
+        {
+          "path": "src/scaffold/backend/index.server.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/index.server.ts"
+        },
+        {
+          "path": "src/scaffold/backend/lifetime.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/lifetime.ts"
+        },
+        {
+          "path": "src/scaffold/backend/notifications.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/notifications.ts"
+        },
+        {
+          "path": "src/scaffold/backend/result.server.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/result.server.ts"
+        },
+        {
+          "path": "src/scaffold/backend/settings.server.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/settings.server.ts"
+        },
+        {
+          "path": "src/scaffold/backend/stream.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/stream.ts"
+        },
+        {
+          "path": "src/scaffold/frontend/events.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/frontend/events.ts"
+        },
+        {
+          "path": "src/scaffold/frontend/index.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/frontend/index.ts"
+        },
+        {
+          "path": "src/scaffold/frontend/owner.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/frontend/owner.ts"
+        },
+        {
+          "path": "src/scaffold/frontend/router.tsx",
+          "type": "registry:file",
+          "target": "~/src/scaffold/frontend/router.tsx"
+        },
+        {
+          "path": "src/scaffold/frontend/sync.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/frontend/sync.ts"
+        },
+        {
+          "path": "src/scaffold/protocol.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/protocol.ts"
+        },
+        {
+          "path": "src/scaffold/start.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/start.ts"
+        },
+        {
+          "path": "src/scaffold/sync.functions.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/sync.functions.ts"
+        },
+        {
+          "path": "src/scaffold/telemetry/delivery.server.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/telemetry/delivery.server.ts"
+        },
+        {
+          "path": "src/scaffold/telemetry/delivery.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/telemetry/delivery.ts"
+        },
+        {
+          "path": "src/scaffold/telemetry/index.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/telemetry/index.ts"
+        },
+        {
+          "path": "src/scaffold/telemetry/ingest.server.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/telemetry/ingest.server.ts"
+        },
+        {
+          "path": "src/scaffold/telemetry/queue.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/telemetry/queue.ts"
+        },
+        {
+          "path": "src/scaffold/telemetry/records.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/telemetry/records.ts"
+        }
+      ],
+      "meta": {
+        "version": "0.3.0",
+        "contractVersion": 2,
+        "ownership": "fixed",
+        "update": "Review the dry run before overwriting. No userland dependencies."
+      }
+    },
+    {
+      "name": "postgres-auth-mail-example",
+      "type": "registry:file",
+      "title": "Postgres, auth, mail, and example features",
+      "description": "Install once. Concrete pg and Drizzle resources, Better Auth, SMTP, shared counter, private profile and todos.",
+      "files": [
+        {
+          "path": "src/backend/auth.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/auth.ts"
+        },
+        {
+          "path": "src/backend/counter.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/counter.ts"
+        },
+        {
+          "path": "src/backend/database.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/database.ts"
+        },
+        {
+          "path": "src/backend/index.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/index.ts"
+        },
+        {
+          "path": "src/backend/mail.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/mail.ts"
+        },
+        {
+          "path": "src/backend/profile.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/profile.ts"
+        },
+        {
+          "path": "src/backend/schema.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/schema.ts"
+        },
+        {
+          "path": "src/backend/sync.schema.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/sync.schema.ts"
+        },
+        {
+          "path": "src/backend/sync.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/sync.ts"
+        },
+        {
+          "path": "src/backend/todos.schema.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/todos.schema.ts"
+        },
+        {
+          "path": "src/backend/todos.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/todos.ts"
+        },
+        {
+          "path": "src/contracts/commands.ts",
+          "type": "registry:file",
+          "target": "~/src/contracts/commands.ts"
+        },
+        {
+          "path": "src/contracts/credentials.ts",
+          "type": "registry:file",
+          "target": "~/src/contracts/credentials.ts"
+        },
+        {
+          "path": "src/contracts/profile.ts",
+          "type": "registry:file",
+          "target": "~/src/contracts/profile.ts"
+        },
+        {
+          "path": "src/contracts/sync.ts",
+          "type": "registry:file",
+          "target": "~/src/contracts/sync.ts"
+        },
+        {
+          "path": "src/contracts/todos.ts",
+          "type": "registry:file",
+          "target": "~/src/contracts/todos.ts"
+        },
+        {
+          "path": "src/errors.ts",
+          "type": "registry:file",
+          "target": "~/src/errors.ts"
+        },
+        {
+          "path": "src/frontend/App.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/App.tsx"
+        },
+        {
+          "path": "src/frontend/Counter.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/Counter.tsx"
+        },
+        {
+          "path": "src/frontend/Todos.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/Todos.tsx"
+        },
+        {
+          "path": "src/frontend/actions.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/actions.ts"
+        },
+        {
+          "path": "src/frontend/index.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/index.ts"
+        },
+        {
+          "path": "src/frontend/records.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/records.ts"
+        },
+        {
+          "path": "src/frontend/state.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/state.ts"
+        },
+        {
+          "path": "src/frontend/ui/button.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/ui/button.tsx"
+        },
+        {
+          "path": "src/frontend/ui/card.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/ui/card.tsx"
+        },
+        {
+          "path": "src/frontend/ui/classes.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/ui/classes.ts"
+        },
+        {
+          "path": "src/frontend/ui/input.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/ui/input.tsx"
+        },
+        {
+          "path": "src/routes/__root.tsx",
+          "type": "registry:file",
+          "target": "~/src/routes/__root.tsx"
+        },
+        {
+          "path": "src/routes/api.auth.$.ts",
+          "type": "registry:file",
+          "target": "~/src/routes/api.auth.$.ts"
+        },
+        {
+          "path": "src/routes/index.tsx",
+          "type": "registry:file",
+          "target": "~/src/routes/index.tsx"
+        },
+        {
+          "path": "src/routes/profile.tsx",
+          "type": "registry:file",
+          "target": "~/src/routes/profile.tsx"
+        },
+        {
+          "path": "src/routes/todos.tsx",
+          "type": "registry:file",
+          "target": "~/src/routes/todos.tsx"
+        },
+        {
+          "path": "src/style.css",
+          "type": "registry:file",
+          "target": "~/src/style.css"
+        },
+        {
+          "path": "src/transport/counter.functions.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/counter.functions.ts"
+        },
+        {
+          "path": "src/transport/profile.functions.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/profile.functions.ts"
+        },
+        {
+          "path": "src/transport/todos.functions.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/todos.functions.ts"
+        },
+        {
+          "path": "drizzle/20261002031710_past_preak/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002031710_past_preak/migration.sql"
+        },
+        {
+          "path": "drizzle/20261002031710_past_preak/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002031710_past_preak/snapshot.json"
+        },
+        {
+          "path": "drizzle/20261002051447_steady_mother_askani/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002051447_steady_mother_askani/migration.sql"
+        },
+        {
+          "path": "drizzle/20261002051447_steady_mother_askani/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002051447_steady_mother_askani/snapshot.json"
+        },
+        {
+          "path": "drizzle/20261002092416_melted_forgotten_one/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002092416_melted_forgotten_one/migration.sql"
+        },
+        {
+          "path": "drizzle/20261002092416_melted_forgotten_one/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002092416_melted_forgotten_one/snapshot.json"
+        },
+        {
+          "path": "drizzle.config.ts",
+          "type": "registry:file",
+          "target": "~/drizzle.config.ts"
+        },
+        {
+          "path": "drizzle/20261002110319_sync_notifications/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002110319_sync_notifications/migration.sql"
+        },
+        {
+          "path": "drizzle/20261002110319_sync_notifications/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002110319_sync_notifications/snapshot.json"
+        }
+      ],
+      "meta": {
+        "version": "0.3.0",
+        "ownership": "userland",
+        "update": "These are your files. Never overwrite this item to update setup."
+      }
+    },
+    {
+      "name": "starter",
+      "type": "registry:block",
+      "title": "Public and private Start application",
+      "description": "Install into a Start project with the documented package prerequisites. One chosen Postgres/auth/SMTP graph.",
+      "registryDependencies": ["@tinker-start/runtime", "@tinker-start/postgres-auth-mail-example"],
+      "files": [
+        {
+          "path": "src/client.tsx",
+          "type": "registry:file",
+          "target": "~/src/client.tsx"
+        },
+        {
+          "path": "src/proof.ts",
+          "type": "registry:file",
+          "target": "~/src/proof.ts"
+        },
+        {
+          "path": "src/router.tsx",
+          "type": "registry:file",
+          "target": "~/src/router.tsx"
+        },
+        {
+          "path": "src/server.ts",
+          "type": "registry:file",
+          "target": "~/src/server.ts"
+        },
+        {
+          "path": "src/start.ts",
+          "type": "registry:file",
+          "target": "~/src/start.ts"
+        },
+        {
+          "path": "vite.config.ts",
+          "type": "registry:file",
+          "target": "~/vite.config.ts"
+        },
+        {
+          "path": "tsconfig.json",
+          "type": "registry:file",
+          "target": "~/tsconfig.json"
+        },
+        {
+          "path": "scripts/serve.mjs",
+          "type": "registry:file",
+          "target": "~/scripts/serve.mjs"
+        },
+        {
+          "path": ".env.example",
+          "type": "registry:file",
+          "target": "~/.env.example"
+        },
+        {
+          "path": "src/routes/api.sync.ts",
+          "type": "registry:file",
+          "target": "~/src/routes/api.sync.ts"
+        },
+        {
+          "path": "src/routes/api.telemetry.ts",
+          "type": "registry:file",
+          "target": "~/src/routes/api.telemetry.ts"
+        },
+        {
+          "path": "compose.victoria.yml",
+          "type": "registry:file",
+          "target": "~/compose.victoria.yml"
+        }
+      ],
+      "meta": {
+        "version": "0.3.0",
+        "ownership": "install-only",
+        "prerequisites": "Use the dependencies and devDependencies in this app package.json; Core and React are workspace packages, not an npm release.",
+        "proof": "The isolated proof adapter is lazy and opt-in. Production resources use pg and SMTP only."
+      }
+    }
+  ]
+}

@@ -1,0 +1,299 @@
+import { test, expect } from "vite-plus/test";
+import { createScope, operation } from "@tinker/core";
+import { preset } from "@tinker/core/testing";
+import { proofDatabase, proofMail } from "@tinker-start-scaffold/proof";
+import {
+  database,
+  databaseSettings,
+  mailSettings,
+  authSettings,
+  requestHeaders,
+  migrate,
+  incrementCounter,
+  handleAuth,
+  bootstrapPrivate,
+  saveProfile,
+  isError,
+  raise,
+  mail,
+} from "@tinker-start-scaffold/backend";
+import type { Mail } from "@tinker-start-scaffold/backend";
+import {
+  accountOwner,
+  tabStop,
+  syncClient,
+  applyBootstrap,
+  receiveMessage,
+} from "@tinker-start-scaffold/sync";
+import {
+  openSync,
+  notifications,
+  backendStop,
+  requestStop,
+} from "@tinker-start-scaffold/transport";
+const settings = [
+  databaseSettings({ url: "postgres://proof", migrations: "drizzle" }),
+  mailSettings({
+    host: "proof",
+    port: 25,
+    user: "proof",
+    password: "proof",
+    from: "proof@example.com",
+  }),
+  authSettings({
+    origin: "http://localhost:4318",
+    secret: "test-secret-with-at-least-thirty-two-letters",
+    plugins: [],
+  }),
+];
+function signup(name: string) {
+  return new Request("http://localhost:4318/api/auth/sign-up/email", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "http://localhost:4318" },
+    body: JSON.stringify({ name, email: `${name}@example.com`, password: "safe-password-42" }),
+  });
+}
+function headers(response: Response) {
+  return new Headers({
+    cookie: response.headers
+      .getSetCookie()
+      .map((value) => value.split(";").at(0))
+      .join("; "),
+  });
+}
+const rollBackEvent = operation({
+  label: "test.rollbackEvent",
+  depends: { database },
+  run: async ({ database }) => {
+    const { sql } = await import("drizzle-orm");
+    await database.transaction(async (tx) => {
+      await tx.execute(
+        sql`INSERT INTO sync_event (stream, revision, "executionId", payload) VALUES ('public', 99, '00000000-0000-4000-8000-000000000001', '{}')`,
+      );
+      raise("Rollback", {});
+    });
+  },
+});
+test("SQL notifications wake after commit, stay silent on rollback, and survive a read before waiting", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    signal: stop.signal,
+    tags: settings,
+    presets: [proofDatabase, proofMail],
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+    const subscription = await (await root.resolve(notifications)).subscribe();
+    const before = subscription.revision();
+    const refused = await root.settle(rollBackEvent);
+    if (refused.status !== "failed" || !isError(refused.error, "Rollback")) throw refused;
+    expect(subscription.revision()).toBe(before);
+    await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+    await subscription.wait(before, stop.signal);
+    expect(subscription.revision()).toBeGreaterThan(before);
+    subscription.close();
+  } finally {
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
+  }
+});
+test("SSE replays the supplied cursor and a held reader receives the next committed batch", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    signal: stop.signal,
+    tags: [
+      ...settings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
+    presets: [proofDatabase, proofMail],
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+    await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+    const response = await root.run(openSync, {
+      rawInput: { search: "", lastEventId: '{"public":0,"private":null}' },
+    });
+    expect(response.headers.get("Content-Type")).toBe("text/event-stream; charset=utf-8");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("X-Accel-Buffering")).toBe("no");
+    const reader = response.body?.getReader();
+    if (!reader) throw response;
+    const first = new TextDecoder().decode((await reader.read()).value);
+    expect(first).toContain('id: {"public":2,"private":null}');
+    expect(first).toContain('"value":1');
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe(": connected\n\n");
+    const waiting = reader.read();
+    await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+    expect(new TextDecoder().decode((await waiting).value)).toContain('"value":2');
+    const idle = reader.read();
+    await reader.cancel();
+    expect((await idle).done).toBe(true);
+    const openingStop = new AbortController();
+    const openingRequest = root.createSession({ tags: requestStop(openingStop.signal) });
+    const opening = openingRequest.settle(openSync, { input: { public: 4, private: null } });
+    openingStop.abort();
+    const aborted = await opening;
+    if (aborted.status !== "failed" || !isError(aborted.error, "Cancelled")) throw aborted;
+    expect((await openingRequest.close({ graceful: true })).status).toBe("success");
+  } finally {
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
+  }
+});
+test("private SSE cursors are refused and a revoked held stream sends no saved private rows", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    signal: stop.signal,
+    tags: [...settings, backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [proofDatabase, proofMail],
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+    const ada = headers(
+      await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
+    );
+    const grace = headers(
+      await root.run(handleAuth, { input: signup("Grace"), tags: requestHeaders(new Headers()) }),
+    );
+    const snapshot = await root.run(bootstrapPrivate, { tags: requestHeaders(ada) });
+    const cursor = {
+      public: 0,
+      private: { accountId: snapshot.stream, revision: snapshot.revision },
+    };
+    const other = root.createSession({ tags: requestHeaders(grace) });
+    const refused = await other.settle(openSync, {
+      rawInput: { search: "", lastEventId: JSON.stringify(cursor) },
+    });
+    if (refused.status !== "failed" || !isError(refused.error, "StreamDenied")) throw refused;
+    await other.close();
+    const owner = root.createSession({ tags: requestHeaders(ada) });
+    const response = await owner.run(openSync, { input: cursor });
+    await root.run(saveProfile, {
+      tags: requestHeaders(ada),
+      input: { executionId: crypto.randomUUID(), profile: { name: "Never sent after revocation" } },
+    });
+    await root.run(handleAuth, {
+      tags: requestHeaders(ada),
+      input: new Request("http://localhost:4318/api/auth/sign-out", {
+        method: "POST",
+        headers: new Headers([...ada, ["origin", "http://localhost:4318"]]),
+      }),
+    });
+    const reader = response.body?.getReader();
+    if (!reader) throw response;
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe(
+      'event: account\ndata: {"kind":"account-change"}\n\n',
+    );
+    expect((await reader.read()).done).toBe(true);
+    expect((await owner.close({ graceful: true })).status).toBe("success");
+  } finally {
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
+  }
+});
+test("reconnecting from applied cursors finishes a save whose final event committed while disconnected", async () => {
+  const stop = new AbortController();
+  const sending = Promise.withResolvers<void>();
+  const accepted = Promise.withResolvers<void>();
+  const server = createScope({
+    signal: stop.signal,
+    tags: [...settings, backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [
+      proofDatabase,
+      preset(mail, async () => ({
+        async send(message: Mail.Message) {
+          if (message.subject === "Your profile was updated") {
+            sending.resolve();
+            await accepted.promise;
+          }
+        },
+      })),
+    ],
+  });
+  const browser = createScope({
+    signal: stop.signal,
+    extensions: [accountOwner],
+    tags: tabStop(stop.signal),
+  });
+  await Promise.all([server.ready, browser.ready]);
+  try {
+    await server.run(migrate);
+    const ada = headers(
+      await server.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
+    );
+    const initial = await server.run(bootstrapPrivate, { tags: requestHeaders(ada) });
+    await browser.run(applyBootstrap, {
+      input: {
+        version: 0,
+        snapshot: { public: { stream: "public", revision: 0, value: 0 }, private: initial },
+      },
+    });
+    const client = await browser.resolve(syncClient);
+    const executionId = crypto.randomUUID();
+    const save = operation({
+      label: "test.pendingSave",
+      depends: { sync: syncClient },
+      run: async ({ sync }, ctx) =>
+        sync.execute(
+          executionId,
+          async () => {
+            await server.run(saveProfile, {
+              input: { executionId, profile: { name: "Saved while offline" } },
+              tags: requestHeaders(ada),
+            });
+            return { kind: "accepted", executionId };
+          },
+          ctx.signal,
+        ),
+    });
+    const waiting = browser.run(save);
+    await sending.promise;
+    const first = server.createSession({ tags: requestHeaders(ada) });
+    const response = await first.run(openSync, {
+      input: { public: 0, private: { accountId: initial.stream, revision: 0 } },
+    });
+    const reader = response.body?.getReader();
+    if (!reader) throw response;
+    const frame = new TextDecoder().decode((await reader.read()).value);
+    const data = frame.split("\ndata: ").at(1)?.trim();
+    await browser.run(receiveMessage, { rawInput: { data, version: client.capture().version } });
+    await reader.cancel();
+    await first.close({ graceful: true });
+    accepted.resolve();
+    const second = server.createSession({ tags: requestHeaders(ada) });
+    const resumed = await second.run(openSync, {
+      input: {
+        public: client.cursors().publicRevision,
+        private: { accountId: initial.stream, revision: client.cursors().privateRevision },
+      },
+    });
+    const replay = resumed.body?.getReader();
+    if (!replay) throw resumed;
+    let resultFrame = new TextDecoder().decode((await replay.read()).value);
+    if (resultFrame.startsWith(":"))
+      resultFrame = new TextDecoder().decode((await replay.read()).value);
+    await browser.run(receiveMessage, {
+      rawInput: {
+        data: resultFrame.split("\ndata: ").at(1)?.trim(),
+        version: client.capture().version,
+      },
+    });
+    expect(await waiting).toEqual({
+      kind: "complete",
+      action: "profile",
+      profileId: initial.profile.id,
+    });
+    await replay.cancel();
+    expect((await second.close({ graceful: true })).status).toBe("success");
+  } finally {
+    accepted.resolve();
+    stop.abort();
+    expect((await browser.closed).status).toBe("success");
+    expect((await server.closed).status).toBe("success");
+  }
+});

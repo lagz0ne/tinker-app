@@ -1,0 +1,88 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "starter",
+  "title": "Public and private Start application",
+  "description": "Install into a Start project with the documented package prerequisites. One chosen Postgres/auth/SMTP graph.",
+  "registryDependencies": ["@tinker-start/runtime", "@tinker-start/postgres-auth-mail-example"],
+  "files": [
+    {
+      "path": "src/client.tsx",
+      "content": "import { startTransition } from \"react\";\nimport { hydrateRoot } from \"react-dom/client\";\nimport { StartClient } from \"@tanstack/react-start/client\";\nstartTransition(() => {\n  hydrateRoot(document, <StartClient />);\n});\n",
+      "type": "registry:file",
+      "target": "~/src/client.tsx"
+    },
+    {
+      "path": "src/proof.ts",
+      "content": "import { preset } from \"@tinker/core/testing\";\nimport { database } from \"./backend/database.ts\";\nimport { mail } from \"./backend/mail.ts\";\nimport type { Database } from \"./backend/database.ts\";\n/** Explicit local proof wiring; production factories always use Postgres and SMTP. */\nexport const proofDatabase = preset(database, async (_deps, ctx): Promise<Database.Handle> => {\n  const [{ PGlite }, { drizzle }] = await Promise.all([\n    import(\"@electric-sql/pglite\"),\n    import(\"drizzle-orm/pglite\"),\n  ]);\n  const client = await PGlite.create();\n  ctx.defer(() => client.close());\n  return Object.assign(drizzle({ client }), {\n    listen: async (wake: () => void) => client.listen(\"start_sync\", wake),\n  });\n});\nexport const proofMail = preset(mail, async (_deps, ctx) => ({\n  send: async () => {\n    ctx.log(\"mail.recorded\", { delivered: false });\n  },\n}));\n",
+      "type": "registry:file",
+      "target": "~/src/proof.ts"
+    },
+    {
+      "path": "src/router.tsx",
+      "content": "export { getRouter } from \"./scaffold/frontend/router.tsx\";\n",
+      "type": "registry:file",
+      "target": "~/src/router.tsx"
+    },
+    {
+      "path": "src/server.ts",
+      "content": "import { createStartHandler as createStartFetch } from \"@tanstack/react-start/server\";\nimport { defaultStreamHandler as renderStartStream } from \"@tanstack/react-start/server\";\nimport type { getRouter } from \"./router.tsx\";\nimport { holdResponse } from \"./scaffold/backend/body.server.ts\";\nimport { getBackend, closeBackend } from \"./scaffold/backend/entry.server.ts\";\nconst renderRequest = createStartFetch(async (context) => {\n  const router = context.router as Awaited<ReturnType<typeof getRouter>>;\n  try {\n    const output = await renderStartStream(context);\n    if (output instanceof Response) return holdResponse(output, () => router.close());\n    return { ...output, response: await holdResponse(output.response, () => router.close()) };\n  } catch (error) {\n    await router.close();\n    throw error;\n  }\n});\nexport default {\n  async fetch(request: Request) {\n    const { requestContext } = await getBackend();\n    return renderRequest(request, { context: requestContext });\n  },\n};\nexport const close = closeBackend;\n",
+      "type": "registry:file",
+      "target": "~/src/server.ts"
+    },
+    {
+      "path": "src/start.ts",
+      "content": "import { createStart, createCsrfMiddleware } from \"@tanstack/react-start\";\nimport { startRequests } from \"./scaffold/start.ts\";\nexport const startInstance = createStart(() => ({\n  requestMiddleware: [\n    createCsrfMiddleware({ filter: (ctx) => ctx.handlerType === \"serverFn\" }),\n    startRequests.middleware,\n  ],\n}));\n",
+      "type": "registry:file",
+      "target": "~/src/start.ts"
+    },
+    {
+      "path": "vite.config.ts",
+      "content": "import { fileURLToPath } from \"node:url\";\nimport { defineConfig } from \"vite-plus\";\nimport { tanstackStart } from \"@tanstack/react-start/plugin/vite\";\nimport tailwindcss from \"@tailwindcss/vite\";\nimport react from \"@vitejs/plugin-react\";\n\nexport default defineConfig({\n  resolve: { alias: { \"@\": fileURLToPath(new URL(\"./src\", import.meta.url)) } },\n  plugins: [\n    tanstackStart({\n      importProtection: {\n        behavior: \"error\",\n        client: {\n          files: [/\\.server\\./, /\\/backend\\//],\n          specifiers: [\n            \"@tanstack/react-start/server\",\n            \"pg\",\n            \"nodemailer\",\n            \"better-auth\",\n            \"better-auth/adapters/**\",\n            \"drizzle-orm/**\",\n            \"@electric-sql/pglite\",\n          ],\n        },\n        server: { files: [/\\.client\\./] },\n      },\n    }),\n    react(),\n    tailwindcss(),\n  ],\n});\n",
+      "type": "registry:file",
+      "target": "~/vite.config.ts"
+    },
+    {
+      "path": "tsconfig.json",
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"esnext\",\n    \"lib\": [\"es2024\", \"dom\", \"dom.iterable\"],\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"types\": [\"node\", \"vite/client\"],\n    \"jsx\": \"react-jsx\",\n    \"strict\": true,\n    \"noUnusedLocals\": true,\n    \"noEmit\": true,\n    \"allowImportingTsExtensions\": true,\n    \"esModuleInterop\": true,\n    \"isolatedModules\": true,\n    \"verbatimModuleSyntax\": true,\n    \"skipLibCheck\": true,\n    \"resolveJsonModule\": true,\n    \"paths\": {\n      \"@/*\": [\"./src/*\"]\n    }\n  },\n  \"exclude\": [\"dist\", \"node_modules\"]\n}\n",
+      "type": "registry:file",
+      "target": "~/tsconfig.json"
+    },
+    {
+      "path": "scripts/serve.mjs",
+      "content": "import { serve } from \"@hono/node-server\";\nimport { readFile } from \"node:fs/promises\";\nimport { resolve, extname } from \"node:path\";\nimport app, { close } from \"../dist/server/server.js\";\n\nconst publicRoot = resolve(\"dist/client\");\nconst types = {\n  \".js\": \"text/javascript\",\n  \".css\": \"text/css\",\n  \".svg\": \"image/svg+xml\",\n  \".png\": \"image/png\",\n  \".json\": \"application/json\",\n};\n\nasync function fetchRequest(request) {\n  const path = new URL(request.url).pathname;\n  const folder = path.split(\"/\").at(1);\n  if (folder === \"assets\" || folder === \"r\") {\n    const file = resolve(publicRoot, `.${decodeURIComponent(path)}`);\n    if (!file.startsWith(`${publicRoot}/${folder}/`)) return new Response(null, { status: 404 });\n    try {\n      return new Response(await readFile(file), {\n        headers: {\n          \"content-type\": types[extname(file)] ?? \"application/octet-stream\",\n          \"cache-control\": folder === \"assets\" ? \"public,max-age=31536000,immutable\" : \"no-cache\",\n        },\n      });\n    } catch (error) {\n      if (error.code !== \"ENOENT\") throw error;\n      return new Response(null, { status: 404 });\n    }\n  }\n  return app.fetch(request);\n}\n\nasync function main() {\n  const server = serve({\n    hostname: process.env.HOST ?? \"127.0.0.1\",\n    port: Number(process.env.PORT ?? 4318),\n    fetch: fetchRequest,\n  });\n  const stopped = Promise.withResolvers();\n  const stop = () => stopped.resolve();\n  process.once(\"SIGINT\", stop);\n  process.once(\"SIGTERM\", stop);\n  await stopped.promise;\n  const httpClosed = new Promise((done, reject) => {\n    server.close((error) => (error ? reject(error) : done()));\n  });\n  await Promise.all([close(), httpClosed]);\n  process.removeListener(\"SIGINT\", stop);\n  process.removeListener(\"SIGTERM\", stop);\n}\n\nif (import.meta.main) await main();\n",
+      "type": "registry:file",
+      "target": "~/scripts/serve.mjs"
+    },
+    {
+      "path": ".env.example",
+      "content": "PUBLIC_ORIGIN=http://localhost:4318\nAUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters\nDATABASE_URL=postgres://app:password@localhost:5432/app\nSMTP_HOST=smtp.example.com\nSMTP_PORT=587\nSMTP_USER=app\nSMTP_PASSWORD=replace-with-your-password\nSMTP_FROM=app@example.com\n\nVICTORIA_TRACES_URL=http://127.0.0.1:10428/insert/opentelemetry/v1/traces\nVICTORIA_LOGS_URL=http://127.0.0.1:9428/insert/jsonline\nOTEL_SERVICE_NAME=start-scaffold\n",
+      "type": "registry:file",
+      "target": "~/.env.example"
+    },
+    {
+      "path": "src/routes/api.sync.ts",
+      "content": "import { createFileRoute } from \"@tanstack/react-router\";\nimport { isError } from \"@tinker/core\";\nimport { openSync } from \"../scaffold/backend/stream.ts\";\nimport { startRequests } from \"../scaffold/start.ts\";\nimport { isError as isAppError } from \"../errors.ts\";\nimport { readResult } from \"../scaffold/backend/result.server.ts\";\nexport const Route = createFileRoute(\"/api/sync\")({\n  server: {\n    middleware: [startRequests.middleware],\n    handlers: {\n      GET: async ({ request, context }) => {\n        /** requestStop already binds cancellation; a call signal would close a shorter child session. */\n        const result = await context.session.settle(openSync, {\n          rawInput: {\n            search: new URL(request.url).search,\n            lastEventId: request.headers.get(\"Last-Event-ID\"),\n          },\n        });\n        if (result.status === \"failed\") {\n          if (isAppError(result.error, \"StreamDenied\")) return new Response(null, { status: 403 });\n          if (isError(result.error, \"DataValidationFailed\"))\n            return new Response(null, { status: 400 });\n        }\n        return readResult(result);\n      },\n    },\n  },\n});\n",
+      "type": "registry:file",
+      "target": "~/src/routes/api.sync.ts"
+    },
+    {
+      "path": "src/routes/api.telemetry.ts",
+      "content": "import { createFileRoute } from \"@tanstack/react-router\";\nimport { startRequests } from \"../scaffold/start.ts\";\nimport { receiveTelemetry } from \"../scaffold/telemetry/ingest.server.ts\";\nimport { readResult } from \"../scaffold/backend/result.server.ts\";\nexport const Route = createFileRoute(\"/api/telemetry\")({\n  server: {\n    middleware: [startRequests.middleware],\n    handlers: {\n      POST: async ({ request, context }) =>\n        readResult(\n          await context.session.settle(receiveTelemetry, {\n            input: request,\n            signal: context.signal,\n          }),\n        ),\n    },\n  },\n});\n",
+      "type": "registry:file",
+      "target": "~/src/routes/api.telemetry.ts"
+    },
+    {
+      "path": "compose.victoria.yml",
+      "content": "name: tinker-start-victoria\n\nservices:\n  traces:\n    image: victoriametrics/victoria-traces:v0.12.0\n    command:\n      - -storageDataPath=/storage\n      - -retentionPeriod=7d\n    ports:\n      - \"127.0.0.1:10428:10428\"\n    volumes:\n      - traces:/storage\n  logs:\n    image: victoriametrics/victoria-logs:v1.53.0\n    command:\n      - -storageDataPath=/storage\n      - -retentionPeriod=7d\n    ports:\n      - \"127.0.0.1:9428:9428\"\n    volumes:\n      - logs:/storage\n\nvolumes:\n  traces:\n  logs:\n",
+      "type": "registry:file",
+      "target": "~/compose.victoria.yml"
+    }
+  ],
+  "meta": {
+    "version": "0.3.0",
+    "ownership": "install-only",
+    "prerequisites": "Use the dependencies and devDependencies in this app package.json; Core and React are workspace packages, not an npm release.",
+    "proof": "The isolated proof adapter is lazy and opt-in. Production resources use pg and SMTP only."
+  },
+  "type": "registry:block"
+}
