@@ -1,0 +1,44 @@
+import { operation, resource, tag } from "@tinker/core";
+import { preset } from "@tinker/core/testing";
+import type { Database } from "./scaffold/backend/database.ts";
+import type { BetterAuthPlugin } from "better-auth";
+import type { Sync } from "./scaffold/sync.ts";
+export const databaseSettings = tag<{ url: string; migrations: string }>({ label: "note.database.settings" });
+export const database = resource({
+  label: "note.database",
+  factory: async (_deps, ctx): Promise<Database.Handle> => {
+    const [{ PGlite }, { drizzle }] = await Promise.all([import("@electric-sql/pglite"), import("drizzle-orm/pglite")]);
+    const client = await PGlite.create();
+    ctx.defer(() => client.close());
+    return Object.assign(drizzle({ client }), { listen: async (wake: () => void) => client.listen("start_sync", wake) });
+  },
+});
+export const authSettings = tag<{
+  origin: string | { allowedHosts: string[]; fallback: string };
+  secret: string;
+  plugins: BetterAuthPlugin[];
+}>({ label: "note.auth.settings" });
+export const requestHeaders = tag<Headers>({ label: "note.headers" });
+export const auth = resource({
+  label: "note.auth",
+  depends: { settings: authSettings },
+  factory: async ({ settings }) => {
+    const { betterAuth } = await import("better-auth");
+    return betterAuth({ baseURL: settings.origin, secret: settings.secret, plugins: settings.plugins });
+  },
+});
+export const mailSettings = tag<{ host: string; port: number; user: string; password: string; from: string }>({ label: "note.mail.settings" });
+export const migrate = operation({ label: "note.migrate", run: () => undefined });
+export const readAccount = operation({ label: "note.account", run: (): string | null => null });
+export const bootstrap = operation({
+  label: "note.bootstrap",
+  run: (): Sync.Snapshot => ({ public: { stream: "public", revision: 0, note: { text: "hello" } }, private: null }),
+});
+/** The compile fixture retains the proof host's explicit test-only preset shape. */
+export const proofDatabase = preset(database, async (_deps, ctx): Promise<Database.Handle> => {
+  const [{ PGlite }, { drizzle }] = await Promise.all([import("@electric-sql/pglite"), import("drizzle-orm/pglite")]);
+  const client = await PGlite.create();
+  ctx.defer(() => client.close());
+  return Object.assign(drizzle({ client }), { listen: async (wake: () => void) => client.listen("start_sync", wake) });
+});
+export const proofMail = proofDatabase;

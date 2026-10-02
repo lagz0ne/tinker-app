@@ -1,8 +1,8 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { extension } from "@tinker/core";
 import type { Scope } from "@tinker/core";
-import { requestHeaders } from "../backend/index.ts";
-import { raise } from "../errors.ts";
+import { requestHeaders } from "@/lib/tinker.server";
+import { raise } from "./errors.ts";
 import { holdResponse } from "./backend/body.server.ts";
 import { requestStop } from "./backend/lifetime.ts";
 

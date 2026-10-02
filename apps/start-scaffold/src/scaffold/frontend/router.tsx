@@ -1,13 +1,13 @@
 import { accountOwner, tabStop } from "./owner.ts";
 import { syncStreaming, loadSnapshot } from "./events.ts";
 import { syncClient, applyBootstrap } from "./sync.ts";
-import { readSnapshot } from "../../contracts/sync.ts";
+import { readSnapshot } from "@/lib/tinker";
 import { createRouter } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { createScope } from "@tinker/core";
 import { ScopeProvider } from "@tinker/react";
-import { routeTree } from "../../routeTree.gen.ts";
-import { frontendSpans } from "../../frontend/state.ts";
+import { routeTree } from "@/routeTree.gen";
+import { frontendSpans } from "../telemetry/state.ts";
 import { history, observer, telemetry, telemetrySettings } from "../telemetry/index.ts";
 const readTelemetrySettings = createIsomorphicFn()
   .server(async () => {

@@ -1,0 +1,12 @@
+export { records } from "../records.ts";
+export { readSnapshot, readBootstrap, readBatch, readStreamMessage } from "../contracts.ts";
+import type { Notes } from "../contracts.ts";
+/** This different app merges the registry without the example's feature types. */
+declare module "../scaffold/sync.ts" {
+  interface Register {
+    change: Notes.Change;
+    result: Notes.Result;
+    public: Notes.Public;
+    private: Notes.Private;
+  }
+}

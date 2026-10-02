@@ -1,23 +1,19 @@
 import { z } from "zod";
-export declare namespace Sync {
-  type Result = z.infer<typeof result>;
+import {
+  eventEnvelope,
+  snapshotEnvelope,
+  batchEnvelope,
+  bootstrapEnvelope,
+  streamInput,
+} from "../scaffold/sync.ts";
+export { readExecution, readCursor, readPrivateCursor, readRetry } from "../scaffold/sync.ts";
+export type { Sync } from "../scaffold/sync.ts";
+export declare namespace FeatureSync {
   type Change = z.infer<typeof change>;
-  type Payload = Event["payload"];
-  type Event = z.infer<typeof event>;
-  type Snapshot = z.infer<typeof snapshot>;
-  type Receipt = { executionId: string };
-  type Reply = { kind: "accepted"; executionId: string } | { kind: "rejected"; message: string };
+  type Result = z.infer<typeof result>;
+  type Public = z.infer<typeof snapshot>["public"];
+  type Private = NonNullable<z.infer<typeof snapshot>["private"]>;
 }
-const executionInput = z.object({ executionId: z.uuid() }).strict();
-export const readExecution = (raw: unknown) => executionInput.parse(raw);
-const cursorInput = z.object({ after: z.number().int().min(0) }).strict();
-export const readCursor = (raw: unknown) => cursorInput.parse(raw);
-const privateCursorInput = z
-  .object({ accountId: z.string().min(1), after: z.number().int().min(0) })
-  .strict();
-export const readPrivateCursor = (raw: unknown) => privateCursorInput.parse(raw);
-const retryInput = z.object({ executionId: z.uuid(), previousExecutionId: z.uuid() }).strict();
-export const readRetry = (raw: unknown) => retryInput.parse(raw);
 const profileRecord = z.object({
   id: z.string(),
   name: z.string(),
@@ -45,16 +41,13 @@ const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("profile"), profile: profileRecord }),
   z.object({ kind: z.literal("todos"), rows: z.array(todoRecord) }),
 ]);
-const event = z.object({
-  stream: z.string(),
-  revision: z.number().int().positive(),
-  executionId: z.uuid(),
+const event = eventEnvelope.extend({
   payload: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("change"), change }),
     z.object({ kind: z.literal("result"), result }),
   ]),
 });
-const snapshot = z.object({
+const snapshot = snapshotEnvelope.extend({
   public: z.object({
     stream: z.literal("public"),
     revision: z.number().int().min(0),
@@ -70,10 +63,9 @@ const snapshot = z.object({
     .nullable(),
 });
 export const readSnapshot = (raw: unknown) => snapshot.parse(raw);
-const bootstrapInput = z.object({ version: z.number().int().min(0), snapshot });
+const bootstrapInput = bootstrapEnvelope.extend({ snapshot });
 export const readBootstrap = (raw: unknown) => bootstrapInput.parse(raw);
-const batchInput = z.object({
-  version: z.number().int().min(0),
+const batchInput = batchEnvelope.extend({
   events: z.array(event),
 });
 export const readBatch = (raw: unknown) => batchInput.parse(raw);
@@ -81,7 +73,8 @@ const streamMessage = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("changes"), events: z.array(event).max(100) }),
   z.object({ kind: z.literal("account-change") }),
 ]);
-const streamInput = z.object({ version: z.number().int().min(0), data: z.string() });
+export const readFeatureResult = (raw: unknown) => result.parse(raw);
+export const readFeatureEvent = (raw: unknown) => event.parse(raw);
 export function readStreamMessage(raw: unknown) {
   const { version, data } = streamInput.parse(raw);
   return { version, message: streamMessage.parse(JSON.parse(data)) };

@@ -1,8 +1,8 @@
 import { operation, resource } from "@tinker/core";
-import { records } from "../../frontend/records.ts";
-import { readBatch, readBootstrap } from "../../contracts/sync.ts";
-import type { Sync } from "../../contracts/sync.ts";
-import { fail, raise } from "../../errors.ts";
+import { records } from "@/lib/tinker";
+import { readBatch, readBootstrap } from "@/lib/tinker";
+import type { Sync } from "../sync.ts";
+import { fail, raise } from "../errors.ts";
 import { accountOwner } from "./owner.ts";
 /** The resource retains only unfinished local executions, including results before receipts. */
 export const syncClient = resource({

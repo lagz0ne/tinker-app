@@ -1,2 +1,6 @@
 import { defineConfig } from "vite-plus";
-export default defineConfig({ test: { testTimeout: 30000 } });
+import { fileURLToPath } from "node:url";
+export default defineConfig({
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  test: { testTimeout: 30000 },
+});

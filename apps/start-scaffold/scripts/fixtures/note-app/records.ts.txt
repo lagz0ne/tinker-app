@@ -1,0 +1,25 @@
+import { data, resource } from "@tinker/core";
+import type { Sync } from "./scaffold/sync.ts";
+export const publicNote = data({ label: "note.public", initial: { text: "" } });
+export const privateNote = data<{ text: string } | null>({ label: "note.private", initial: null });
+export const records = resource({
+  label: "note.records",
+  depends: { public: publicNote.controller, private: privateNote.controller },
+  factory: ({ public: shared, private: own }) => ({
+    resetPrivate() { own.set(null); },
+    bootstrapPublic(value: Sync.Public, after: number) {
+      if (value.revision >= after) shared.set(value.note);
+    },
+    bootstrapPrivate(value: Sync.Private, after: number) {
+      if (value.revision >= after) own.set(value.note);
+    },
+    change(value: Sync.Change) { shared.set(value); },
+    snapshot(publicRevision: number, privateRevision: number): Sync.Snapshot {
+      const note = own.get();
+      return {
+        public: { stream: "public", revision: Math.max(0, publicRevision), note: shared.get() },
+        private: note === null ? null : { stream: "reader", revision: Math.max(0, privateRevision), note },
+      };
+    },
+  }),
+});

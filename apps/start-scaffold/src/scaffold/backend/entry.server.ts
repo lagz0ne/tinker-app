@@ -1,5 +1,5 @@
 import { createScope, extension } from "@tinker/core";
-import { authSettings, databaseSettings, mailSettings, migrate } from "../../backend/index.ts";
+import { authSettings, databaseSettings, mailSettings, migrate } from "@/lib/tinker.server";
 import {
   history,
   observer,
@@ -33,7 +33,7 @@ async function start() {
   });
   await tools.ready;
   const ingest = tools.controller(ingestTelemetry);
-  const proof = settings.proof ? await import("../../proof.ts") : undefined;
+  const proof = settings.proof ? await import("@/lib/tinker.server") : undefined;
   const stop = new AbortController();
   const app = createScope({
     signal: stop.signal,

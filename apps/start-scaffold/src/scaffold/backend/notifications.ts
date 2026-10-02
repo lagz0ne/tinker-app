@@ -1,6 +1,6 @@
 import { resource } from "@tinker/core";
-import { database } from "../../backend/database.ts";
-import { raise } from "../../errors.ts";
+import { database } from "@/lib/tinker.server";
+import { raise } from "../errors.ts";
 /** One native listener wakes all request subscribers; reconnect replaces a broken listener. */
 export const notifications = resource({
   label: "sync.notifications",

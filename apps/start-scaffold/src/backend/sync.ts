@@ -2,7 +2,7 @@ import { operation } from "@tinker/core";
 import { database } from "./database.ts";
 import { currentUser, principal } from "./auth.ts";
 import { eventHistory } from "../scaffold/backend/events.ts";
-import { readCursor, readPrivateCursor } from "../contracts/sync.ts";
+import { readCursor, readPrivateCursor, readFeatureEvent } from "../contracts/sync.ts";
 import type { Sync } from "../contracts/sync.ts";
 import { raise } from "../errors.ts";
 export const bootstrapPublic = operation({
@@ -75,12 +75,14 @@ export const replayPublic = operation({
     ]);
     return {
       accountId: principal?.id ?? null,
-      events: await database
-        .select()
-        .from(event)
-        .where(and(eq(event.stream, "public"), gt(event.revision, ctx.input.after)))
-        .orderBy(asc(event.revision))
-        .limit(200),
+      events: (
+        await database
+          .select()
+          .from(event)
+          .where(and(eq(event.stream, "public"), gt(event.revision, ctx.input.after)))
+          .orderBy(asc(event.revision))
+          .limit(200)
+      ).map(readFeatureEvent),
     };
   },
 });
@@ -94,11 +96,13 @@ export const replayPrivate = operation({
       import("drizzle-orm"),
       import("./sync.schema.ts"),
     ]);
-    return database
-      .select()
-      .from(event)
-      .where(and(eq(event.stream, currentUser.id), gt(event.revision, ctx.input.after)))
-      .orderBy(asc(event.revision))
-      .limit(200);
+    return (
+      await database
+        .select()
+        .from(event)
+        .where(and(eq(event.stream, currentUser.id), gt(event.revision, ctx.input.after)))
+        .orderBy(asc(event.revision))
+        .limit(200)
+    ).map(readFeatureEvent);
   },
 });

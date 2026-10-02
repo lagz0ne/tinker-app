@@ -2,7 +2,7 @@ import { operation, extension, resource } from "@tinker/core";
 import { tabStop } from "./owner.ts";
 import { getBootstrap, getAccount } from "../sync.functions.ts";
 import { syncClient, applyBootstrap } from "./sync.ts";
-import { readStreamMessage } from "../../contracts/sync.ts";
+import { readStreamMessage } from "@/lib/tinker";
 import type { Stream } from "../protocol.ts";
 export const loadSnapshot = operation({
   label: "sync.load",

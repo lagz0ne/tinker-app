@@ -4,7 +4,7 @@ import { database } from "./database.ts";
 import { sendMail } from "./mail.ts";
 import { eventHistory } from "../scaffold/backend/events.ts";
 import { readProfileCommand } from "../contracts/commands.ts";
-import { readExecution, readRetry } from "../contracts/sync.ts";
+import { readExecution, readRetry, readFeatureResult } from "../contracts/sync.ts";
 import type { Sync } from "../contracts/sync.ts";
 import type { Profile } from "../contracts/profile.ts";
 import { raise } from "../errors.ts";
@@ -44,7 +44,7 @@ const notifyProfile = operation({
     ).at(0);
     if (!stored?.notification) raise("RetryNotAvailable", {});
     if (stored.result) return { executionId: ctx.input.executionId };
-    const sent = await send.settle({ input: stored.notification });
+    const sent = await send.settle({ rawInput: stored.notification });
     const result: Sync.Result =
       sent.status === "success"
         ? { kind: "complete", action: "profile", profileId: stored.stream }
@@ -137,7 +137,11 @@ export const retryNotification = operation({
       await history.lock(tx, currentUser.id);
       if (await history.find(tx, ctx.input.executionId, currentUser.id)) return;
       const previous = await history.find(tx, ctx.input.previousExecutionId, currentUser.id);
-      if (!previous?.notification || previous.result?.kind !== "partial")
+      if (
+        !previous?.notification ||
+        !previous.result ||
+        readFeatureResult(previous.result).kind !== "partial"
+      )
         raise("RetryNotAvailable", {});
       await tx.insert(execution).values({
         id: ctx.input.executionId,

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { raise } from "../../errors.ts";
+import { raise } from "../errors.ts";
 const telemetrySettings = z.object({
   VICTORIA_TRACES_URL: z
     .url({ protocol: /^https?$/ })

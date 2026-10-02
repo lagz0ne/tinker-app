@@ -85,7 +85,7 @@
     }
   ],
   "meta": {
-    "version": "0.3.1",
+    "version": "0.4.0",
     "ownership": "install-only",
     "prerequisites": "Use the dependencies and devDependencies in this app package.json; Core and React are workspace packages, not an npm release.",
     "proof": "The isolated proof adapter is lazy and opt-in. Production resources use pg and SMTP only."

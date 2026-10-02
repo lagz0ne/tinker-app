@@ -4,7 +4,8 @@ import { readProfileCommand } from "../contracts/commands.ts";
 import { readProfile, saveProfile, retryNotification } from "../backend/index.ts";
 import { getBackend } from "../scaffold/backend/entry.server.ts";
 import { startRequests } from "../scaffold/start.ts";
-import { readResult, readReceipt } from "../scaffold/backend/result.server.ts";
+import { readResult } from "../scaffold/backend/result.server.ts";
+import { readReceipt } from "./result.server.ts";
 export const getProfile = createServerFn({ method: "GET" })
   .middleware([startRequests.middleware])
   .handler(async ({ context }) =>

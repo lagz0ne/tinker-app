@@ -123,13 +123,38 @@
           "path": "src/scaffold/telemetry/records.ts",
           "type": "registry:file",
           "target": "~/src/scaffold/telemetry/records.ts"
+        },
+        {
+          "path": "src/scaffold/backend/database.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/database.ts"
+        },
+        {
+          "path": "src/scaffold/backend/sync.schema.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/sync.schema.ts"
+        },
+        {
+          "path": "src/scaffold/errors.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/errors.ts"
+        },
+        {
+          "path": "src/scaffold/sync.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/sync.ts"
+        },
+        {
+          "path": "src/scaffold/telemetry/state.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/telemetry/state.ts"
         }
       ],
       "meta": {
-        "version": "0.3.1",
+        "version": "0.4.0",
         "contractVersion": 2,
         "ownership": "fixed",
-        "update": "Review the dry run before overwriting. No userland dependencies."
+        "update": "Review the dry run before overwriting. User values enter through the lib seams."
       }
     },
     {
@@ -367,10 +392,25 @@
           "path": "drizzle/20261002110319_sync_notifications/snapshot.json",
           "type": "registry:file",
           "target": "~/drizzle/20261002110319_sync_notifications/snapshot.json"
+        },
+        {
+          "path": "src/lib/tinker.server.ts",
+          "type": "registry:file",
+          "target": "~/src/lib/tinker.server.ts"
+        },
+        {
+          "path": "src/lib/tinker.ts",
+          "type": "registry:file",
+          "target": "~/src/lib/tinker.ts"
+        },
+        {
+          "path": "src/transport/result.server.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/result.server.ts"
         }
       ],
       "meta": {
-        "version": "0.3.1",
+        "version": "0.4.0",
         "ownership": "userland",
         "update": "These are your files. Never overwrite this item to update setup."
       }
@@ -449,7 +489,7 @@
         }
       ],
       "meta": {
-        "version": "0.3.1",
+        "version": "0.4.0",
         "ownership": "install-only",
         "prerequisites": "Use the dependencies and devDependencies in this app package.json; Core and React are workspace packages, not an npm release.",
         "proof": "The isolated proof adapter is lazy and opt-in. Production resources use pg and SMTP only."

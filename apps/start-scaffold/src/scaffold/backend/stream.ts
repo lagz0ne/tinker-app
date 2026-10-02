@@ -1,12 +1,12 @@
 import { operation, resource } from "@tinker/core";
-import { auth, requestHeaders } from "../../backend/auth.ts";
-import { database } from "../../backend/database.ts";
+import { auth, requestHeaders } from "@/lib/tinker.server";
+import { database } from "@/lib/tinker.server";
 import { notifications } from "./notifications.ts";
 import { backendStop, requestStop } from "./lifetime.ts";
 import { readStreamRequest } from "../protocol.ts";
 import type { Stream } from "../protocol.ts";
-import type { Sync } from "../../contracts/sync.ts";
-import { raise } from "../../errors.ts";
+import type { Sync } from "../sync.ts";
+import { raise } from "../errors.ts";
 /** Cookie caches and session refresh are disabled on this long-lived request. */
 const liveAccount = operation({
   label: "sync.liveAccount",
@@ -55,7 +55,7 @@ export const eventStream = resource({
           raise("StreamDenied", {});
         const [{ and, or, eq, gt, asc }, { event }] = await Promise.all([
           import("drizzle-orm"),
-          import("../../backend/sync.schema.ts"),
+          import("./sync.schema.ts"),
         ]);
         const cursor = { ...initial, private: initial.private ? { ...initial.private } : null };
         const lease = ctx.clock.currentTimeMillis() + 30_000;
@@ -75,7 +75,7 @@ export const eventStream = resource({
             close();
             return false;
           },
-          frame(rows: Sync.Event[]) {
+          frame(rows: Sync.Envelope[]) {
             for (const row of rows) {
               if (row.stream === "public") cursor.public = row.revision;
               else if (cursor.private) cursor.private.revision = row.revision;

@@ -1,14 +1,14 @@
 import { resource } from "@tinker/core";
-import type { Database } from "../../backend/database.ts";
-import type { Sync } from "../../contracts/sync.ts";
-import { raise } from "../../errors.ts";
+import type { Database } from "./database.ts";
+import type { Sync } from "../sync.ts";
+import { raise } from "../errors.ts";
 /** A stream row stays locked until its records and events commit together. */
 export const eventHistory = resource({
   label: "sync.history",
   factory: async () => {
     const [{ eq, sql }, { stream, event, execution }] = await Promise.all([
       import("drizzle-orm"),
-      import("../../backend/sync.schema.ts"),
+      import("./sync.schema.ts"),
     ]);
     return {
       async lock(tx: Database.Transaction, id: string) {

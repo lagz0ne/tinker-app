@@ -1,3 +1,4 @@
+import { profile, counter, nameDraft } from "@tinker-start-scaffold/frontend";
 import { test, expect } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
 import {
@@ -7,9 +8,6 @@ import {
   applyBootstrap,
   applyEvents,
   leaveAccount,
-  counter,
-  profile,
-  nameDraft,
 } from "@tinker-start-scaffold/sync";
 import type { Sync } from "@tinker-start-scaffold/sync";
 const ada = { id: "ada", name: "Ada", email: "ada@example.com", emailVerified: false };

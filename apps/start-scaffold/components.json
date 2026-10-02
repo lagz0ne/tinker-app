@@ -13,7 +13,7 @@
     "components": "@/frontend",
     "ui": "@/frontend/ui",
     "utils": "@/frontend/ui/classes",
-    "lib": "@/frontend",
+    "lib": "@/lib",
     "hooks": "@/frontend"
   },
   "iconLibrary": "lucide"

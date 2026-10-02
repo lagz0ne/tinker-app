@@ -1,11 +1,6 @@
 import { operation, resource, tag } from "@tinker/core";
-import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-export declare namespace Database {
-  type Handle = PgAsyncDatabase<PgQueryResultHKT> & {
-    listen: (wake: () => void, disconnected: () => void) => Promise<() => Promise<void>>;
-  };
-  type Transaction = Parameters<Parameters<Handle["transaction"]>[0]>[0];
-}
+import type { Database } from "../scaffold/backend/database.ts";
+export type { Database } from "../scaffold/backend/database.ts";
 export const databaseSettings = tag<{ url: string; migrations: string }>({
   label: "database.settings",
 });

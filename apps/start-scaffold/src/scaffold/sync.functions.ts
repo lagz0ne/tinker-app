@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
-import { bootstrap, readAccount } from "../backend/index.ts";
+import { bootstrap, readAccount } from "@/lib/tinker.server";
 import { startRequests } from "./start.ts";
 import { readResult } from "./backend/result.server.ts";
 export const getBootstrap = createServerFn({ method: "GET" })
