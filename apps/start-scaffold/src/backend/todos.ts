@@ -29,7 +29,7 @@ export const changeTodo = operation({
     const [{ and, asc, eq }, { todo }, { execution }] = await Promise.all([
       import("drizzle-orm"),
       import("./todos.schema.ts"),
-      import("./sync.schema.ts"),
+      import("../scaffold/backend/sync.schema.ts"),
     ]);
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);

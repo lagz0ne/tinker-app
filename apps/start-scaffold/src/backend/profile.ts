@@ -37,7 +37,7 @@ const notifyProfile = operation({
   run: async ({ database, history, send }, ctx) => {
     const [{ eq }, { execution }] = await Promise.all([
       import("drizzle-orm"),
-      import("./sync.schema.ts"),
+      import("../scaffold/backend/sync.schema.ts"),
     ]);
     const stored = (
       await database.select().from(execution).where(eq(execution.id, ctx.input.executionId))
@@ -93,7 +93,7 @@ export const saveProfile = operation({
     const [{ eq }, { user }, { execution }] = await Promise.all([
       import("drizzle-orm"),
       import("./schema.ts"),
-      import("./sync.schema.ts"),
+      import("../scaffold/backend/sync.schema.ts"),
     ]);
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
@@ -132,7 +132,7 @@ export const retryNotification = operation({
   input: readRetry,
   depends: { currentUser, database, history: eventHistory, notify: notificationWork },
   run: async ({ currentUser, database, history, notify }, ctx) => {
-    const { execution } = await import("./sync.schema.ts");
+    const { execution } = await import("../scaffold/backend/sync.schema.ts");
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
       if (await history.find(tx, ctx.input.executionId, currentUser.id)) return;

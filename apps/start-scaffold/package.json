@@ -23,7 +23,8 @@
     "registry:build": "vp dlx -- shadcn@4.21.0 build && vp fmt public/r",
     "test:registry": "node scripts/check-registry.mjs",
     "test:seam": "node scripts/check-seam.mjs --prove",
-    "test:seam:fixture": "node scripts/check-seam-fixture.mjs"
+    "test:seam:fixture": "node scripts/check-seam-fixture.mjs",
+    "test:schema": "node scripts/check-schema.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "catalog:",

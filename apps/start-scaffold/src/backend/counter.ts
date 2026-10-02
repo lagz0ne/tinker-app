@@ -8,9 +8,10 @@ export const incrementCounter = operation({
   input: readExecution,
   depends: { database, history: eventHistory },
   run: async ({ database, history }, ctx) => {
-    const [{ eq, sql }, { counter, execution }] = await Promise.all([
+    const [{ eq, sql }, { counter }, { execution }] = await Promise.all([
       import("drizzle-orm"),
       import("./sync.schema.ts"),
+      import("../scaffold/backend/sync.schema.ts"),
     ]);
     await database.transaction(async (tx) => {
       await history.lock(tx, "public");

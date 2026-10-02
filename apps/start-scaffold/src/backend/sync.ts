@@ -71,7 +71,7 @@ export const replayPublic = operation({
   run: async ({ database, principal }, ctx) => {
     const [{ and, eq, gt, asc }, { event }] = await Promise.all([
       import("drizzle-orm"),
-      import("./sync.schema.ts"),
+      import("../scaffold/backend/sync.schema.ts"),
     ]);
     return {
       accountId: principal?.id ?? null,
@@ -94,7 +94,7 @@ export const replayPrivate = operation({
     if (ctx.input.accountId !== currentUser.id) raise("StreamDenied", {});
     const [{ and, eq, gt, asc }, { event }] = await Promise.all([
       import("drizzle-orm"),
-      import("./sync.schema.ts"),
+      import("../scaffold/backend/sync.schema.ts"),
     ]);
     return (
       await database
