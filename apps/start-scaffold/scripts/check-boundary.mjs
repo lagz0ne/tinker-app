@@ -12,14 +12,17 @@ try {
   }
   await symlink(join(source, "node_modules"), join(proof, "node_modules"), "dir");
   const router = join(proof, "src/router.tsx");
-  await writeFile(
-    router,
-    `import { database } from "./backend/index.ts";\ndocument.title = database.label;\n${await readFile(router, "utf8")}`,
-  );
-  const result = spawnSync("vp", ["build"], { cwd: proof, encoding: "utf8" });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stdout + result.stderr, /Import denied in client environment/);
-  process.stdout.write("PASS: a browser import of the backend fails the build.\n");
+  const original = await readFile(router, "utf8");
+  for (const specifier of ["./backend/index.ts", "@/lib/tinker.server"]) {
+    await writeFile(
+      router,
+      `import { database } from "${specifier}";\ndocument.title = database.label;\n${original}`,
+    );
+    const result = spawnSync("vp", ["build"], { cwd: proof, encoding: "utf8" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stdout + result.stderr, /Import denied in client environment/);
+    process.stdout.write(`PASS: a browser import of ${specifier} fails the build.\n`);
+  }
 } finally {
   await rm(proof, { recursive: true, force: true });
 }

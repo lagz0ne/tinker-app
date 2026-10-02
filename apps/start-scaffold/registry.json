@@ -16,7 +16,7 @@
         },
         {
           "path": "src/scaffold/backend/entry.server.ts",
-          "type": "registry:file",
+          "type": "registry:lib",
           "target": "~/src/scaffold/backend/entry.server.ts"
         },
         {
@@ -36,7 +36,7 @@
         },
         {
           "path": "src/scaffold/backend/notifications.ts",
-          "type": "registry:file",
+          "type": "registry:lib",
           "target": "~/src/scaffold/backend/notifications.ts"
         },
         {
@@ -51,12 +51,12 @@
         },
         {
           "path": "src/scaffold/backend/stream.ts",
-          "type": "registry:file",
+          "type": "registry:lib",
           "target": "~/src/scaffold/backend/stream.ts"
         },
         {
           "path": "src/scaffold/frontend/events.ts",
-          "type": "registry:file",
+          "type": "registry:lib",
           "target": "~/src/scaffold/frontend/events.ts"
         },
         {
@@ -71,12 +71,12 @@
         },
         {
           "path": "src/scaffold/frontend/router.tsx",
-          "type": "registry:file",
+          "type": "registry:lib",
           "target": "~/src/scaffold/frontend/router.tsx"
         },
         {
           "path": "src/scaffold/frontend/sync.ts",
-          "type": "registry:file",
+          "type": "registry:lib",
           "target": "~/src/scaffold/frontend/sync.ts"
         },
         {
@@ -86,12 +86,12 @@
         },
         {
           "path": "src/scaffold/start.ts",
-          "type": "registry:file",
+          "type": "registry:lib",
           "target": "~/src/scaffold/start.ts"
         },
         {
           "path": "src/scaffold/sync.functions.ts",
-          "type": "registry:file",
+          "type": "registry:lib",
           "target": "~/src/scaffold/sync.functions.ts"
         },
         {
@@ -152,7 +152,7 @@
       ],
       "meta": {
         "version": "0.4.0",
-        "contractVersion": 2,
+        "contractVersion": 3,
         "ownership": "fixed",
         "update": "Review the dry run before overwriting. User values enter through the lib seams."
       }
@@ -396,12 +396,12 @@
         {
           "path": "src/lib/tinker.server.ts",
           "type": "registry:file",
-          "target": "~/src/lib/tinker.server.ts"
+          "target": "@lib/tinker.server.ts"
         },
         {
           "path": "src/lib/tinker.ts",
           "type": "registry:file",
-          "target": "~/src/lib/tinker.ts"
+          "target": "@lib/tinker.ts"
         },
         {
           "path": "src/transport/result.server.ts",

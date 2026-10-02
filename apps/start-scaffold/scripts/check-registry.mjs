@@ -43,8 +43,17 @@ async function run(args, cwd = consumer) {
     child.once("error", reject);
     child.once("close", done);
   });
+  if (args[0] === "build")
+    await writeFile(join(tmpdir(), "start-seam-consumer-build.log"), output + `\nEXIT ${code}\n`);
+  if (args[0] === "exec")
+    await writeFile(join(tmpdir(), "start-seam-consumer-types.log"), output + `\nEXIT ${code}\n`);
   assert.equal(code, 0, output);
   return output;
+}
+function consumerTarget(file) {
+  return file.target.startsWith("@lib/")
+    ? file.target.replace("@lib/", "src/app-lib/")
+    : file.target.slice(2);
 }
 async function hashes(folder = consumer, prefix = "") {
   const rows = [];
@@ -63,10 +72,12 @@ async function hashes(folder = consumer, prefix = "") {
   return rows.sort(([a], [b]) => a.localeCompare(b));
 }
 try {
-  // This proves source copying into an existing Start toolchain, not dependency installation.
+  /** Existing Start dependencies are borrowed; this check owns only the copied source. */
   const packageInfo = JSON.parse(await readFile(join(app, "package.json"), "utf8"));
   await writeFile(join(consumer, "package.json"), JSON.stringify(packageInfo, null, 2));
-  await writeFile(join(consumer, "components.json"), await readFile(join(app, "components.json")));
+  const components = JSON.parse(await readFile(join(app, "components.json"), "utf8"));
+  components.aliases.lib = "@/app-lib";
+  await writeFile(join(consumer, "components.json"), JSON.stringify(components, null, 2));
   await writeFile(join(consumer, "tsconfig.json"), await readFile(join(app, "tsconfig.json")));
   await symlink(join(app, "node_modules"), join(consumer, "node_modules"), "dir");
   const cli = ["dlx", "--", "shadcn@4.21.0"];
@@ -80,11 +91,14 @@ try {
   for (const item of manifest.items) {
     for (const file of item.files) {
       assert.equal(
-        await readFile(join(consumer, file.target.slice(2)), "utf8"),
-        await readFile(join(app, file.path), "utf8"),
+        await readFile(join(consumer, consumerTarget(file)), "utf8"),
+        (await readFile(join(app, file.path), "utf8")).replaceAll("@/lib/", "@/app-lib/"),
       );
     }
   }
+  const seams = ["src/app-lib/tinker.ts", "src/app-lib/tinker.server.ts"];
+  const imports = await readFile(join(consumer, "src/scaffold/frontend/sync.ts"), "utf8");
+  assert.ok(imports.includes('from "@/app-lib/tinker"'), "shadcn must rewrite the lib seam");
   const feature = "src/backend/todos.ts";
   const edited =
     "/** My feature edit must survive setup updates. */\n" +
@@ -96,6 +110,16 @@ try {
     "/** Older setup version for the update proof. */\n" +
       (await readFile(join(consumer, setup), "utf8")),
   );
+  for (const file of seams) {
+    await writeFile(
+      join(consumer, file),
+      "/** My seam edit must survive setup updates. */\n" +
+        (await readFile(join(consumer, file), "utf8")),
+    );
+  }
+  const editedSeams = await Promise.all(
+    seams.map((file) => readFile(join(consumer, file), "utf8")),
+  );
   const before = await hashes();
   const diff = await run([...cli, "add", "@tinker-start/runtime", "--dry-run", "--diff", setup]);
   assert.ok(diff.includes("Older setup version"), diff);
@@ -104,10 +128,14 @@ try {
   assert.equal(await readFile(join(consumer, feature), "utf8"), edited);
   for (const file of fixed.files) {
     assert.equal(
-      await readFile(join(consumer, file.target.slice(2)), "utf8"),
-      await readFile(join(app, file.path), "utf8"),
+      await readFile(join(consumer, consumerTarget(file)), "utf8"),
+      (await readFile(join(app, file.path), "utf8")).replaceAll("@/lib/", "@/app-lib/"),
     );
   }
+  assert.deepEqual(
+    await Promise.all(seams.map((file) => readFile(join(consumer, file), "utf8"))),
+    editedSeams,
+  );
   await run(["build"]);
   await run(["exec", "tsc", "--noEmit"]);
   const proof = {
@@ -115,7 +143,9 @@ try {
     items: manifest.items.length,
     files: manifest.items.reduce((count, item) => count + item.files.length, 0),
     payloads: "exact source",
-    install: "exact source",
+    install: "source with lib alias rewritten to @/app-lib",
+    aliasRewrite: "static and dynamic seam imports rewritten",
+    seamUpdate: "both edited seam files unchanged",
     dryRun: "unchanged",
     setupUpdate: "passed",
     editedFeature: "unchanged",
@@ -125,7 +155,7 @@ try {
       "Existing Start dependencies and built workspace Core/React; dependency install is not tested.",
   };
   await writeFile(
-    join(tmpdir(), "tinkered-start-registry-proof.json"),
+    join(tmpdir(), "start-seam-registry-proof.json"),
     JSON.stringify(proof, null, 2) + "\n",
   );
   console.log(JSON.stringify(proof));

@@ -1,14 +1,19 @@
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
+import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 const { parseSync } = createRequire(new URL("../../../tools/jev/package.json", import.meta.url))(
   "oxc-parser",
 );
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const root = resolve(process.argv[2] ?? resolve(app, "src/scaffold"));
+const root = resolve(
+  process.argv.slice(2).find((arg) => arg !== "--prove") ?? resolve(app, "src/scaffold"),
+);
 const seams = new Set(["@/lib/tinker", "@/lib/tinker.server", "@/routeTree.gen"]);
 let files = 0;
 async function check(folder) {
@@ -61,3 +66,28 @@ function visit(node, path) {
 }
 await check(root);
 console.log(`Seam check passed: ${files} scaffold files.`);
+
+if (process.argv.includes("--prove")) {
+  const planted = await mkdtemp(join(tmpdir(), "start-seam-red-"));
+  try {
+    await cp(root, join(planted, "scaffold"), { recursive: true });
+    await writeFile(
+      join(planted, "scaffold/relative-import.ts"),
+      'export { fail } from "../errors.ts";\n',
+    );
+    const red = spawnSync(
+      process.execPath,
+      [fileURLToPath(import.meta.url), join(planted, "scaffold")],
+      { encoding: "utf8" },
+    );
+    assert.equal(red.status, 1);
+    assert.match(red.stderr, /outside relative import \.\.\/errors\.ts/);
+    await writeFile(
+      join(tmpdir(), "start-seam-planted-red.log"),
+      red.stdout + red.stderr + `\nEXIT ${red.status}\n`,
+    );
+    console.log("PASS: planted outside import EXIT 1; real scaffold EXIT 0.");
+  } finally {
+    await rm(planted, { recursive: true, force: true });
+  }
+}

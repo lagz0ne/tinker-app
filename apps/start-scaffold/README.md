@@ -48,6 +48,16 @@ Proof auth accepts localhost, loopback, and `*.tini.works`.
   connect setup at the filenames Start expects.
 - `drizzle/` contains the checked-in Postgres migrations.
 
+The fixed setup reaches your values through two files.
+`src/lib/tinker.ts` re-exports browser values and input readers.
+`src/lib/tinker.server.ts` re-exports server resources, settings, and proof presets.
+Both files belong to you and are installed once.
+The browser file fills the fixed `Register` with your change, result, and snapshot types.
+The fixed code owns the envelope: stream, revision, execution ID, and change/result kind.
+Your readers check feature bodies at the network door.
+Saved JSON bodies stay unknown to the fixed tables.
+Your transport maps your errors to messages.
+
 The database is a userland resource.
 It loads native libraries inside its factory and closes its client with the scope.
 Current user is a request resource.
@@ -124,7 +134,12 @@ Core and React are workspace packages; this proof does not publish them to npm.
 The registry does not install another runtime framework.
 Review a dry run before overwriting setup.
 Never overwrite the example item to update setup.
-A breaking change to setup's userland exports still needs a migration.
+Setup contract 3 needs both seam files before a runtime update.
+The registry puts them in the consumer's configured `lib` folder.
+shadcn 4.21.0 skips import rewriting for `registry:file`.
+Fixed TypeScript files that import the seams use `registry:lib` with fixed targets.
+The copy test changes the alias to `@/app-lib`, then builds and checks types.
+Both edited seam files survive the runtime update.
 
 Build and check the actual registry with:
 
@@ -142,6 +157,8 @@ vp run @tinker-start-scaffold#test
 vp run @tinker-start-scaffold#test:boundary
 vp run @tinker-start-scaffold#test:middleware
 vp run @tinker-start-scaffold#test:imports
+vp run @tinker-start-scaffold#test:seam
+vp run @tinker-start-scaffold#test:seam:fixture
 ```
 
 Tests call exported operations through small Core scopes.
@@ -251,3 +268,5 @@ Victoria storage failure can drop records when the queue fills or closes.
 Cross-side trace propagation is still pending.
 Auth SDK internals are not separate Core spans.
 A host must consume or cancel responses to release their retained request work.
+
+A failed database commit never returns a saved profile.

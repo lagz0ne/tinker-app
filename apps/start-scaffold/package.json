@@ -22,7 +22,7 @@
     "test:middleware": "node scripts/check-middleware.mjs",
     "registry:build": "vp dlx -- shadcn@4.21.0 build && vp fmt public/r",
     "test:registry": "node scripts/check-registry.mjs",
-    "test:seam": "node scripts/check-seam.mjs",
+    "test:seam": "node scripts/check-seam.mjs --prove",
     "test:seam:fixture": "node scripts/check-seam-fixture.mjs"
   },
   "dependencies": {

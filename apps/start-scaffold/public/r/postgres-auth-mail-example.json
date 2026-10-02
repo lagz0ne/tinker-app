@@ -284,13 +284,13 @@
       "path": "src/lib/tinker.server.ts",
       "content": "export { database, databaseSettings, migrate } from \"../backend/database.ts\";\nexport { auth, authSettings, requestHeaders, readAccount } from \"../backend/auth.ts\";\nexport { mailSettings } from \"../backend/mail.ts\";\nexport { bootstrap } from \"../backend/sync.ts\";\nexport { proofDatabase, proofMail } from \"../proof.ts\";\n",
       "type": "registry:file",
-      "target": "~/src/lib/tinker.server.ts"
+      "target": "@lib/tinker.server.ts"
     },
     {
       "path": "src/lib/tinker.ts",
       "content": "export { records } from \"../frontend/records.ts\";\nexport { readBatch, readBootstrap, readSnapshot, readStreamMessage } from \"../contracts/sync.ts\";\nimport type { FeatureSync } from \"../contracts/sync.ts\";\n/** This app fills the scaffold's open registry with its own bodies. */\ndeclare module \"../scaffold/sync.ts\" {\n  interface Register {\n    change: FeatureSync.Change;\n    result: FeatureSync.Result;\n    public: FeatureSync.Public;\n    private: FeatureSync.Private;\n  }\n}\n",
       "type": "registry:file",
-      "target": "~/src/lib/tinker.ts"
+      "target": "@lib/tinker.ts"
     },
     {
       "path": "src/transport/result.server.ts",
