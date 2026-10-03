@@ -146,10 +146,10 @@
         }
       ],
       "meta": {
-        "version": "0.5.0",
-        "contractVersion": 3,
+        "version": "0.6.0",
+        "contractVersion": 4,
         "ownership": "fixed",
-        "update": "Review the dry run before overwriting. User values enter through the lib seams."
+        "update": "Update the server entry and lib schemas for contract 4 before copying runtime. Review the dry run; user values enter through the lib seams."
       }
     },
     {
@@ -405,7 +405,7 @@
         }
       ],
       "meta": {
-        "version": "0.5.0",
+        "version": "0.6.0",
         "ownership": "userland",
         "update": "These are your files. Never overwrite this item to update setup."
       }
@@ -589,7 +589,7 @@
         }
       ],
       "meta": {
-        "version": "0.5.0",
+        "version": "0.6.0",
         "ownership": "install-only",
         "prerequisites": "Install packed Core and React releases first; package.json supplies all other dependencies and project checks."
       }

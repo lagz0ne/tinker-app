@@ -98,6 +98,8 @@ Account exit cancels waits and starts a new snapshot lifetime.
 npm run build
 npm run typecheck
 npm test
+npm run check:plain
+npm run check:plain -- --prove
 npm run test:seam
 npm run test:boundary
 npm run test:schema
@@ -159,3 +161,26 @@ One send across several server processes is not promised.
 SMTP acceptance means the server accepted mail.
 Mailpit lets you see that message in local development.
 Storage failure can drop records when its bounded queue fills.
+
+## Move from setup contract 3 to 4
+
+The source items are version `0.6.0`; setup contract 4 changes the entry and lib seams.
+Update these install-only files before copying the new fixed runtime.
+A runtime-only overwrite does not update them.
+
+- Move root creation, signals, and close into `src/server.ts`.
+  The backend entry module now exports only the `setup` extension.
+  Remove imports of `getBackend` and `closeBackend`.
+- In `src/lib/tinker.ts`, export `readSnapshot`, `readBootstrap`, and `readBatch` as schema values.
+  Export the message body schema as `streamMessage`.
+  The fixed receive operation owns JSON parsing; remove the old `readStreamMessage` helper.
+- Replace a custom import of `holdResponse` with `responseBodies`.
+  Its resource method holds the body for the native request:
+
+```ts
+const bodies = session.resolve(responseBodies);
+return bodies.hold(response, finish);
+```
+
+Then run the checks above.
+Review the dry run before any fixed-source overwrite.

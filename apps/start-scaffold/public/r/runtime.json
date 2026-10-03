@@ -168,10 +168,10 @@
     }
   ],
   "meta": {
-    "version": "0.5.0",
-    "contractVersion": 3,
+    "version": "0.6.0",
+    "contractVersion": 4,
     "ownership": "fixed",
-    "update": "Review the dry run before overwriting. User values enter through the lib seams."
+    "update": "Update the server entry and lib schemas for contract 4 before copying runtime. Review the dry run; user values enter through the lib seams."
   },
   "type": "registry:file"
 }
