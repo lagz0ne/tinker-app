@@ -157,7 +157,12 @@ At module scope, calls and new expressions fail unless they declare app setup.
 The allowed calls are:
 
 - Core tag, data, resource, operation, and extension declarations.
-- Zod schema declarations and Drizzle table, column, and index declarations.
+- Zod builders: string, number, boolean, unknown, email, url, uuid, object,
+  strictObject, literal, enum, array, record, union, discriminatedUnion, and instanceof.
+  Their min, max, int, positive, nonnegative, regex, trim, optional, nullable,
+  strict, loose, default, or, refine, and extend declaration steps.
+  Parse and safeParse run only inside owned work or a plain reader.
+- Drizzle table, column, and index declarations.
 - createIsomorphicFn, createServerFn, createMiddleware, createFileRoute,
   createRootRouteWithContext, createStartHandler, createStart, and cva.
 - Their server, client, middleware, inputValidator, and handler declaration steps.
