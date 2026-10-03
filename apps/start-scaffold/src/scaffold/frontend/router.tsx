@@ -1,5 +1,5 @@
 import { accountOwner, tabStop } from "./owner.ts";
-import { syncStreaming, loadSnapshot } from "./events.ts";
+import { syncStreaming, loadSnapshot, checkAccount } from "./events.ts";
 import { syncClient, applyBootstrap } from "./sync.ts";
 import { readSnapshot } from "@/lib/tinker";
 import { createRouter } from "@tanstack/react-router";
@@ -61,7 +61,7 @@ export async function getRouter() {
   return Object.assign(
     createRouter({
       routeTree,
-      context: { bootstrap: () => app.run(loadSnapshot) },
+      context: { bootstrap: () => app.run(loadSnapshot), account: () => app.run(checkAccount) },
       dehydrate: () => sync.snapshot(),
       hydrate: async (raw) => {
         const snapshot = readSnapshot(raw);

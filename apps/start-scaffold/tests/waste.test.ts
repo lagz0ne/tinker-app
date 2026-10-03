@@ -20,6 +20,7 @@ import {
   tabStop,
   syncClient,
   loadSnapshot,
+  checkAccount,
   refreshAccount,
   receiveMessage,
   snapshotSource,
@@ -72,36 +73,43 @@ test("a stream checks the session once at open and once for the next wake", asyn
     expect((await root.closed).status).toBe("success");
   }
 });
-test("a signed-out private redirect and its public loader share one snapshot", async () => {
+test("a signed-out private redirect loads one snapshot across separate renders", async () => {
   const stop = new AbortController();
   let loads = 0;
-  const root = createScope({
+  const source = preset(snapshotSource, () => ({
+    async load() {
+      loads += 1;
+      return { public: { stream: "public" as const, revision: 0, value: 0 }, private: null };
+    },
+    async account() {
+      return null;
+    },
+  }));
+  const page = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
     tags: tabStop(stop.signal),
-    presets: [
-      preset(snapshotSource, () => ({
-        async load() {
-          loads += 1;
-          return { public: { stream: "public" as const, revision: 0, value: 0 }, private: null };
-        },
-        async account() {
-          return null;
-        },
-      })),
-    ],
+    presets: [source],
   });
-  await root.ready;
+  const redirected = createScope({
+    signal: stop.signal,
+    extensions: [accountOwner],
+    tags: tabStop(stop.signal),
+    presets: [source],
+  });
+  await Promise.all([page.ready, redirected.ready]);
   try {
-    const snapshot = await root.run(loadSnapshot);
-    if (snapshot.private) throw snapshot;
-    await root.run(loadSnapshot);
+    const account = await page.run(checkAccount);
+    if (account !== null) throw account;
+    await redirected.run(loadSnapshot);
     expect(loads).toBe(1);
   } finally {
     stop.abort();
-    expect((await root.closed).status).toBe("success");
+    expect((await page.closed).status).toBe("success");
+    expect((await redirected.closed).status).toBe("success");
   }
 });
+
 test("sign-in, an old stream account event, and route loads fetch one signed-in snapshot", async () => {
   const stop = new AbortController();
   let cookie = "";

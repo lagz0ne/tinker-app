@@ -88,6 +88,7 @@ The profile shows your email and the last result.
 
 The stream checks auth at open, once per wake, and on heartbeats.
 Routes reuse the tab's snapshot while sync keeps it current.
+A signed-out private route checks only the account before redirecting.
 Account exit cancels waits and starts a new snapshot lifetime.
 
 ## Checks
@@ -137,9 +138,11 @@ The schema check proves generation adds no duplicate tables.
 - Finished traces and Pino logs reach their HTTP receivers.
 - Storage failure keeps bounded records for retry.
 - Browser ingest refuses foreign origins, bad shapes, and large bodies.
+- Owner close flushes finished records without a scheduled browser timer.
+- A stuck receiver is aborted by the owned Core clock during close.
 - Stalled uploads and storage requests stop with their owner.
 - A stream checks the session once at open and once for the next wake.
-- A signed-out private redirect and its public loader share one snapshot.
+- A signed-out private redirect loads one snapshot across separate renders.
 - Sign-in, an old stream account event, and route loads fetch one signed-in snapshot.
 
 ## Limits

@@ -3,8 +3,8 @@ import { ProfilePage } from "../frontend/App.tsx";
 export const Route = createFileRoute("/profile")({
   gcTime: 0,
   beforeLoad: async ({ context }) => {
-    const snapshot = await context.bootstrap();
-    if (!snapshot.private) throw redirect({ to: "/" });
+    if ((await context.account()) === null) throw redirect({ to: "/" });
+    await context.bootstrap();
   },
   component: ProfilePage,
 });

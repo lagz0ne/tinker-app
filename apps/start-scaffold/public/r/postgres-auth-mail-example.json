@@ -174,7 +174,7 @@
     },
     {
       "path": "src/routes/__root.tsx",
-      "content": "import type { Sync } from \"../contracts/sync.ts\";\nimport { createRootRouteWithContext, HeadContent, Scripts, Outlet } from \"@tanstack/react-router\";\nimport styleUrl from \"../style.css?url\";\nexport const Route = createRootRouteWithContext<{ bootstrap: () => Promise<Sync.Snapshot> }>()({\n  head: () => ({\n    meta: [\n      { charSet: \"utf-8\" },\n      { name: \"viewport\", content: \"width=device-width, initial-scale=1\" },\n      { title: \"Tinkered · Start proof\" },\n    ],\n    links: [{ rel: \"stylesheet\", href: styleUrl }],\n  }),\n  component: () => <Outlet />,\n  shellComponent: ({ children }) => (\n    <html lang=\"en\">\n      <head>\n        <HeadContent />\n      </head>\n      <body>\n        {children}\n        <Scripts />\n      </body>\n    </html>\n  ),\n});\n",
+      "content": "import type { Sync } from \"../contracts/sync.ts\";\nimport { createRootRouteWithContext, HeadContent, Scripts, Outlet } from \"@tanstack/react-router\";\nimport styleUrl from \"../style.css?url\";\nexport const Route = createRootRouteWithContext<{\n  bootstrap: () => Promise<Sync.Snapshot>;\n  account: () => Promise<string | null>;\n}>()({\n  head: () => ({\n    meta: [\n      { charSet: \"utf-8\" },\n      { name: \"viewport\", content: \"width=device-width, initial-scale=1\" },\n      { title: \"Your Start app\" },\n    ],\n    links: [{ rel: \"stylesheet\", href: styleUrl }],\n  }),\n  component: () => <Outlet />,\n  shellComponent: ({ children }) => (\n    <html lang=\"en\">\n      <head>\n        <HeadContent />\n      </head>\n      <body>\n        {children}\n        <Scripts />\n      </body>\n    </html>\n  ),\n});\n",
       "type": "registry:file",
       "target": "~/src/routes/__root.tsx"
     },
@@ -192,13 +192,13 @@
     },
     {
       "path": "src/routes/profile.tsx",
-      "content": "import { createFileRoute, redirect } from \"@tanstack/react-router\";\nimport { ProfilePage } from \"../frontend/App.tsx\";\nexport const Route = createFileRoute(\"/profile\")({\n  gcTime: 0,\n  beforeLoad: async ({ context }) => {\n    const snapshot = await context.bootstrap();\n    if (!snapshot.private) throw redirect({ to: \"/\" });\n  },\n  component: ProfilePage,\n});\n",
+      "content": "import { createFileRoute, redirect } from \"@tanstack/react-router\";\nimport { ProfilePage } from \"../frontend/App.tsx\";\nexport const Route = createFileRoute(\"/profile\")({\n  gcTime: 0,\n  beforeLoad: async ({ context }) => {\n    if ((await context.account()) === null) throw redirect({ to: \"/\" });\n    await context.bootstrap();\n  },\n  component: ProfilePage,\n});\n",
       "type": "registry:file",
       "target": "~/src/routes/profile.tsx"
     },
     {
       "path": "src/routes/todos.tsx",
-      "content": "import { createFileRoute, redirect } from \"@tanstack/react-router\";\nimport { Todos } from \"../frontend/Todos.tsx\";\nexport const Route = createFileRoute(\"/todos\")({\n  gcTime: 0,\n  beforeLoad: async ({ context }) => {\n    const snapshot = await context.bootstrap();\n    if (!snapshot.private) throw redirect({ to: \"/\" });\n  },\n  component: Todos,\n});\n",
+      "content": "import { createFileRoute, redirect } from \"@tanstack/react-router\";\nimport { Todos } from \"../frontend/Todos.tsx\";\nexport const Route = createFileRoute(\"/todos\")({\n  gcTime: 0,\n  beforeLoad: async ({ context }) => {\n    if ((await context.account()) === null) throw redirect({ to: \"/\" });\n    await context.bootstrap();\n  },\n  component: Todos,\n});\n",
       "type": "registry:file",
       "target": "~/src/routes/todos.tsx"
     },

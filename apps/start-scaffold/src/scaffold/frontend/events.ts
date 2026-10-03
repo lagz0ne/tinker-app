@@ -33,6 +33,11 @@ export const snapshotLoader = resource({
       async ready() {
         await changing?.promise;
       },
+      async account(signal: AbortSignal) {
+        await changing?.promise;
+        if (loadedVersion === sync.capture().version) return sync.cursors().accountId;
+        return source.account({ signal });
+      },
       async load(signal: AbortSignal): Promise<Sync.Snapshot> {
         await changing?.promise;
         const token = sync.capture();
@@ -62,6 +67,11 @@ export const loadSnapshot = operation({
   label: "sync.load",
   depends: { snapshots: snapshotLoader },
   run: ({ snapshots }, ctx) => snapshots.load(ctx.signal),
+});
+export const checkAccount = operation({
+  label: "sync.checkAccount",
+  depends: { snapshots: snapshotLoader },
+  run: ({ snapshots }, ctx) => snapshots.account(ctx.signal),
 });
 /** Native framing stays in EventSource. Overflow discards unapplied frames and replays. */
 const eventSource = resource({
