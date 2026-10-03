@@ -10,13 +10,26 @@ export const notifications = resource({
     let broken = false;
     let connection:
       | Promise<
-          { kind: "connected"; close: () => Promise<void> } | { kind: "failed"; error: unknown }
+          | { kind: "connected"; close: () => void | Promise<void> }
+          | { kind: "failed"; error: unknown }
         >
       | undefined;
-    const watchers = new Set<() => void>();
+    const watchers = new Set<{
+      opened: NonNullable<typeof connection>;
+      closed: boolean;
+      disconnected?: () => void;
+      waiting?: ReturnType<typeof Promise.withResolvers<void>>;
+    }>();
     const wake = () => {
       revision += 1;
-      for (const notify of watchers) notify();
+      for (const subscriber of watchers) {
+        if (broken || subscriber.opened !== connection) subscriber.disconnected?.();
+        subscriber.waiting?.resolve();
+      }
+    };
+    const listenerFailed = () => {
+      broken = true;
+      wake();
     };
     ctx.defer(async () => {
       broken = true;
@@ -29,55 +42,64 @@ export const notifications = resource({
         if (!connection || broken) {
           const previous = connection;
           broken = false;
-          connection = (async () => {
+          connection = Promise.resolve().then(async () => {
             const old = await previous;
             if (old?.kind === "connected") await old.close();
             try {
               return {
                 kind: "connected" as const,
-                close: await database.listen(wake, () => {
-                  broken = true;
-                  wake();
-                }),
+                close: await database.listen(wake, listenerFailed),
               };
             } catch (error) {
               broken = true;
               return { kind: "failed" as const, error };
             }
-          })();
+          });
         }
         const opened = connection;
         const connected = await opened;
         if (connected.kind === "failed") throw connected.error;
         if (broken || opened !== connection) raise("StreamDisconnected", {});
-        let closed = false;
-        let waiting: (() => void) | undefined;
-        const notify = () => {
-          if (broken || opened !== connection) disconnected?.();
-          waiting?.();
-        };
-        watchers.add(notify);
-        return {
-          revision: () => revision,
-          ended: () => closed || broken || opened !== connection,
-          close() {
-            closed = true;
-            watchers.delete(notify);
-            waiting?.();
-          },
-          async wait(after: number, signal: AbortSignal) {
-            if (closed || broken || after !== revision || signal.aborted) return;
-            const changed = Promise.withResolvers<void>();
-            waiting = () => changed.resolve();
-            signal.addEventListener("abort", notify, { once: true });
-            try {
-              await changed.promise;
-            } finally {
-              signal.removeEventListener("abort", notify);
-              waiting = undefined;
-            }
-          },
-        };
+        const subscriber = { opened, closed: false, disconnected };
+        watchers.add(subscriber);
+        return subscriber;
+      },
+      revision() {
+        return revision;
+      },
+      ended(subscriber: { opened: NonNullable<typeof connection>; closed: boolean }) {
+        return subscriber.closed || broken || subscriber.opened !== connection;
+      },
+      close(subscriber: {
+        opened: NonNullable<typeof connection>;
+        closed: boolean;
+        waiting?: ReturnType<typeof Promise.withResolvers<void>>;
+        disconnected?: () => void;
+      }) {
+        subscriber.closed = true;
+        watchers.delete(subscriber);
+        subscriber.waiting?.resolve();
+      },
+      async wait(
+        subscriber: {
+          opened: NonNullable<typeof connection>;
+          closed: boolean;
+          waiting?: ReturnType<typeof Promise.withResolvers<void>>;
+        },
+        after: number,
+        signal: AbortSignal,
+      ) {
+        if (subscriber.closed || broken || after !== revision || signal.aborted) return;
+        const changed = Promise.withResolvers<void>();
+        subscriber.waiting = changed;
+        const notify = () => changed.resolve();
+        signal.addEventListener("abort", notify, { once: true });
+        try {
+          await changed.promise;
+        } finally {
+          signal.removeEventListener("abort", notify);
+          subscriber.waiting = undefined;
+        }
       },
     };
   },

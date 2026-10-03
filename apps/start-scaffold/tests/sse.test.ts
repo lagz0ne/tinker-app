@@ -93,15 +93,16 @@ test("SQL notifications wake after commit, stay silent on rollback, and survive 
   await root.ready;
   try {
     await root.run(migrate);
-    const subscription = await (await root.resolve(notifications)).subscribe();
-    const before = subscription.revision();
+    const feed = await root.resolve(notifications);
+    const subscription = await feed.subscribe();
+    const before = feed.revision();
     const refused = await root.settle(rollBackEvent);
     if (refused.status !== "failed" || !isError(refused.error, "Rollback")) throw refused;
-    expect(subscription.revision()).toBe(before);
+    expect(feed.revision()).toBe(before);
     await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
-    await subscription.wait(before, stop.signal);
-    expect(subscription.revision()).toBeGreaterThan(before);
-    subscription.close();
+    await feed.wait(subscription, before, stop.signal);
+    expect(feed.revision()).toBeGreaterThan(before);
+    feed.close(subscription);
   } finally {
     stop.abort();
     expect((await root.closed).status).toBe("success");
@@ -250,12 +251,15 @@ test("reconnecting from applied cursors finishes a save whose final event commit
       run: async ({ sync }, ctx) =>
         sync.execute(
           executionId,
-          async () => {
-            await server.run(saveProfile, {
-              input: { executionId, profile: { name: "Saved while offline" } },
-              tags: requestHeaders(ada),
-            });
-            return { kind: "accepted", executionId };
+          {
+            data: undefined,
+            send: async () => {
+              await server.run(saveProfile, {
+                input: { executionId, profile: { name: "Saved while offline" } },
+                tags: requestHeaders(ada),
+              });
+              return { kind: "accepted", executionId };
+            },
           },
           ctx.signal,
         ),

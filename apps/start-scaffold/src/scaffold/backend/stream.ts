@@ -4,7 +4,6 @@ import { notifications } from "./notifications.ts";
 import { backendStop, requestStop } from "./lifetime.ts";
 import { streamRequest, streamCursor } from "../protocol.ts";
 import type { Stream } from "../protocol.ts";
-import type { Sync } from "../sync.ts";
 import { raise } from "../errors.ts";
 /** Cookie caches and session refresh are disabled on this long-lived request. */
 const liveAccount = operation({
@@ -33,7 +32,7 @@ export const eventStream = resource({
       if (ended) return;
       ended = true;
       stop.abort();
-      subscription?.close();
+      if (subscription) notifications.close(subscription);
       output?.close();
     };
     signal.addEventListener("abort", close, { once: true });
@@ -45,11 +44,11 @@ export const eventStream = resource({
       async open(initial: Stream.Cursor) {
         subscription = await notifications.subscribe(close);
         if (signal.aborted) {
-          subscription.close();
+          notifications.close(subscription);
           raise("Cancelled", {});
         }
         const changes = subscription;
-        const openingWake = changes.revision();
+        const openingWake = notifications.revision();
         const initialAccount = await account.run();
         if (initial.private && initial.private.accountId !== initialAccount)
           raise("StreamDenied", {});
@@ -64,83 +63,6 @@ export const eventStream = resource({
         const expectedAccount = cursor.private?.accountId ?? null;
         let authorizedWake = initialAccount === expectedAccount ? openingWake : -1;
         let greeted = false;
-        const delivery = {
-          alive() {
-            if (changes.ended() || ctx.clock.currentTimeMillis() >= lease) close();
-            return !ended;
-          },
-          async authorize(heartbeat = false) {
-            const wake = changes.revision();
-            if (!heartbeat && wake === authorizedWake) return !ended;
-            const current = await account.run();
-            authorizedWake = wake;
-            if (ended) return false;
-            if (current === expectedAccount) return true;
-            output?.enqueue(encoder.encode('event: account\ndata: {"kind":"account-change"}\n\n'));
-            close();
-            return false;
-          },
-          frame(rows: Sync.Envelope[]) {
-            for (const row of rows) {
-              if (row.stream === "public") cursor.public = row.revision;
-              else if (cursor.private) cursor.private.revision = row.revision;
-            }
-            return encoder.encode(
-              `event: changes\nid: ${JSON.stringify(cursor)}\ndata: ${JSON.stringify({ kind: "changes", events: rows })}\n\n`,
-            );
-          },
-          async replay() {
-            const wake = changes.revision();
-            if (wake === afterWake) return;
-            const rows = await database
-              .select()
-              .from(event)
-              .where(
-                or(
-                  and(eq(event.stream, "public"), gt(event.revision, cursor.public)),
-                  cursor.private
-                    ? and(
-                        eq(event.stream, cursor.private.accountId),
-                        gt(event.revision, cursor.private.revision),
-                      )
-                    : undefined,
-                ),
-              )
-              .orderBy(asc(event.stream), asc(event.revision))
-              .limit(100);
-            if (!(await delivery.authorize())) return;
-            if (rows.length) return delivery.frame(rows);
-            afterWake = wake;
-          },
-          async wait() {
-            if (ended || changes.revision() !== afterWake) return;
-            if (!greeted) {
-              greeted = true;
-              return encoder.encode(": connected\n\n");
-            }
-            const waiting = new AbortController();
-            const waitingSignal = AbortSignal.any([signal, waiting.signal]);
-            try {
-              const outcome = await Promise.race([
-                changes.wait(afterWake, waitingSignal).then(() => "changed"),
-                ctx.clock.sleep(10_000, waitingSignal).then(() => "heartbeat"),
-              ]);
-              if (outcome === "heartbeat" && (await delivery.authorize(true)))
-                return encoder.encode(": heartbeat\n\n");
-            } finally {
-              waiting.abort();
-            }
-          },
-          async next(): Promise<Uint8Array | undefined> {
-            while (delivery.alive()) {
-              if (!(await delivery.authorize())) return;
-              const frame = await delivery.replay();
-              if (frame) return frame;
-              const heartbeat = await delivery.wait();
-              if (heartbeat && (await delivery.authorize())) return heartbeat;
-            }
-          },
-        };
         const body = new ReadableStream<Uint8Array>(
           {
             start(controller) {
@@ -150,8 +72,124 @@ export const eventStream = resource({
             },
             async pull(controller) {
               try {
-                const frame = await delivery.next();
-                if (frame && !ended) controller.enqueue(frame);
+                while (!ended) {
+                  const wake = await Promise.resolve().then(async () => {
+                    if (notifications.ended(changes) || ctx.clock.currentTimeMillis() >= lease) {
+                      close();
+                      return notifications.revision();
+                    }
+                    const wake = notifications.revision();
+                    if (wake !== authorizedWake) {
+                      const current = await account.run();
+                      authorizedWake = wake;
+                      if (ended) return wake;
+                      if (current !== expectedAccount) {
+                        output?.enqueue(
+                          encoder.encode('event: account\ndata: {"kind":"account-change"}\n\n'),
+                        );
+                        close();
+                      }
+                    }
+                    return notifications.revision();
+                  });
+                  if (ended) return;
+                  const replayed = await Promise.resolve().then(async () => {
+                    if (wake === afterWake) return false;
+                    const rows = await database
+                      .select()
+                      .from(event)
+                      .where(
+                        or(
+                          and(eq(event.stream, "public"), gt(event.revision, cursor.public)),
+                          cursor.private
+                            ? and(
+                                eq(event.stream, cursor.private.accountId),
+                                gt(event.revision, cursor.private.revision),
+                              )
+                            : undefined,
+                        ),
+                      )
+                      .orderBy(asc(event.stream), asc(event.revision))
+                      .limit(100);
+                    await Promise.resolve().then(async () => {
+                      const replayWake = notifications.revision();
+                      if (replayWake === authorizedWake) return;
+                      const current = await account.run();
+                      authorizedWake = replayWake;
+                      if (ended) return;
+                      if (current !== expectedAccount) {
+                        output?.enqueue(
+                          encoder.encode('event: account\ndata: {"kind":"account-change"}\n\n'),
+                        );
+                        close();
+                      }
+                    });
+                    if (ended) return true;
+                    if (!rows.length) {
+                      afterWake = wake;
+                      return false;
+                    }
+                    for (const row of rows) {
+                      if (row.stream === "public") cursor.public = row.revision;
+                      else if (cursor.private) cursor.private.revision = row.revision;
+                    }
+                    controller.enqueue(
+                      encoder.encode(
+                        `event: changes\nid: ${JSON.stringify(cursor)}\ndata: ${JSON.stringify({ kind: "changes", events: rows })}\n\n`,
+                      ),
+                    );
+                    return true;
+                  });
+                  if (replayed) return;
+                  const delivered = await Promise.resolve().then(async () => {
+                    if (ended || notifications.revision() !== afterWake) return false;
+                    if (!greeted) {
+                      greeted = true;
+                      controller.enqueue(encoder.encode(": connected\n\n"));
+                      return true;
+                    }
+                    const waiting = new AbortController();
+                    const waitingSignal = AbortSignal.any([signal, waiting.signal]);
+                    try {
+                      const outcome = await Promise.race([
+                        notifications.wait(changes, afterWake, waitingSignal).then(() => "changed"),
+                        ctx.clock.sleep(10_000, waitingSignal).then(() => "heartbeat"),
+                      ]);
+                      if (outcome !== "heartbeat") return false;
+                      await Promise.resolve().then(async () => {
+                        const heartbeatWake = notifications.revision();
+                        const current = await account.run();
+                        authorizedWake = heartbeatWake;
+                        if (ended) return;
+                        if (current !== expectedAccount) {
+                          output?.enqueue(
+                            encoder.encode('event: account\ndata: {"kind":"account-change"}\n\n'),
+                          );
+                          close();
+                        }
+                      });
+                      await Promise.resolve().then(async () => {
+                        if (ended) return;
+                        const latestWake = notifications.revision();
+                        if (latestWake === authorizedWake) return;
+                        const latestAccount = await account.run();
+                        authorizedWake = latestWake;
+                        if (ended) return;
+                        if (latestAccount !== expectedAccount) {
+                          output?.enqueue(
+                            encoder.encode('event: account\ndata: {"kind":"account-change"}\n\n'),
+                          );
+                          close();
+                        }
+                      });
+                      if (!ended) controller.enqueue(encoder.encode(": heartbeat\n\n"));
+                      return true;
+                    } finally {
+                      waiting.abort();
+                    }
+                  });
+                  if (delivered) return;
+                }
               } catch (error) {
                 if (signal.aborted) {
                   close();
@@ -159,7 +197,7 @@ export const eventStream = resource({
                 }
                 ended = true;
                 stop.abort();
-                changes.close();
+                notifications.close(changes);
                 controller.error(error);
               }
             },

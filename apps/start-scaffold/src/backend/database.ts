@@ -14,27 +14,35 @@ export const database = resource({
       import("drizzle-orm/node-postgres"),
     ]);
     const client = new pg.Pool({ connectionString: settings.url });
-    ctx.defer(() => client.end());
+    const listeners = new Set<AbortController>();
+    ctx.defer(async () => {
+      for (const stop of listeners) stop.abort();
+      await client.end();
+    });
     return Object.assign(drizzle({ client }), {
       async listen(wake: () => void, disconnected: () => void) {
         const listener = await client.connect();
         listener.on("notification", wake);
         listener.on("error", disconnected);
         listener.on("end", disconnected);
-        let released = false;
-        const close = async () => {
-          if (released) return;
-          released = true;
-          listener.removeListener("notification", wake);
-          listener.removeListener("error", disconnected);
-          listener.removeListener("end", disconnected);
-          listener.release(true);
-        };
+        const stop = new AbortController();
+        listeners.add(stop);
+        stop.signal.addEventListener(
+          "abort",
+          () => {
+            listeners.delete(stop);
+            listener.removeListener("notification", wake);
+            listener.removeListener("error", disconnected);
+            listener.removeListener("end", disconnected);
+            listener.release(true);
+          },
+          { once: true },
+        );
         try {
           await listener.query("LISTEN start_sync");
-          return close;
+          return stop.abort.bind(stop);
         } catch (error) {
-          await close();
+          stop.abort();
           throw error;
         }
       },
