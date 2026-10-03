@@ -114,6 +114,8 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   const stop = new AbortController();
   let cookie = "";
   let loads = 0;
+  const sent = Promise.withResolvers<void>();
+  const allowed = Promise.withResolvers<void>();
   const server = createScope({
     signal: stop.signal,
     tags: settings,
@@ -131,6 +133,8 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
           baseURL: "http://localhost:4318",
           fetchOptions: {
             customFetchImpl: async (url, init) => {
+              sent.resolve();
+              await allowed.promise;
               const response = await server.run(handleAuth, {
                 input: new Request(url, init),
                 tags: requestHeaders(new Headers({ cookie })),
@@ -159,7 +163,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   try {
     const client = await browser.resolve(syncClient);
     const oldVersion = client.capture().version;
-    await browser.run(signIn, {
+    const signingIn = browser.run(signIn, {
       input: {
         mode: "signup",
         name: "Ada",
@@ -167,6 +171,11 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
         password: "safe-password-42",
       },
     });
+    await sent.promise;
+    const reconnect = browser.run(refreshAccount);
+    const route = browser.run(loadSnapshot);
+    allowed.resolve();
+    await Promise.all([signingIn, reconnect, route]);
     await browser.run(receiveMessage, {
       rawInput: { data: '{"kind":"account-change"}', version: oldVersion },
     });
@@ -174,6 +183,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
     await Promise.all([browser.run(loadSnapshot), browser.run(loadSnapshot)]);
     expect(loads).toBe(1);
   } finally {
+    allowed.resolve();
     stop.abort();
     expect((await browser.closed).status).toBe("success");
     expect((await server.closed).status).toBe("success");

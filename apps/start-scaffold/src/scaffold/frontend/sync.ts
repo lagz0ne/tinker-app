@@ -49,6 +49,7 @@ export const syncClient = resource({
         if (local.size > 0) return;
         accountId = nextId;
         client.merge(snapshot);
+        return owner.capture().version;
       },
       merge(snapshot: Sync.Snapshot) {
         const publicRevision = cursors.get("public") ?? -1;

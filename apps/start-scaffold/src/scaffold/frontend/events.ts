@@ -13,7 +13,7 @@ export const snapshotSource = resource({
     account: (options: { signal: AbortSignal }) => getAccount(options),
   }),
 });
-/** One tab shares a load until account exit; auth holds reconnects until its cookie is set. */
+/** One tab shares a load until account exit; auth holds reconnects until its new snapshot is applied. */
 export const snapshotLoader = resource({
   label: "sync.snapshotLoader",
   depends: { sync: syncClient, apply: applyBootstrap, source: snapshotSource },
@@ -21,13 +21,43 @@ export const snapshotLoader = resource({
     let loadedVersion = -1;
     let loading: { version: number; promise: Promise<Sync.Snapshot> } | undefined;
     let changing: ReturnType<typeof Promise.withResolvers<void>> | undefined;
+    const load = async (signal: AbortSignal): Promise<Sync.Snapshot> => {
+      const token = sync.capture();
+      if (loadedVersion === token.version) return sync.snapshot();
+      if (loading?.version === token.version) return loading.promise;
+      const request = {
+        version: token.version,
+        promise: (async () => {
+          const snapshot = await source.load({ signal });
+          const version = await apply.run({ rawInput: { snapshot, version: token.version } });
+          if (version !== undefined) loadedVersion = version;
+          return sync.snapshot();
+        })(),
+      };
+      loading = request;
+      try {
+        return await request.promise;
+      } finally {
+        if (loading === request) loading = undefined;
+      }
+    };
     return {
       beginAccountChange() {
         changing = Promise.withResolvers<void>();
         const change = changing;
-        return () => {
+        const close = () => {
           if (changing === change) changing = undefined;
           change.resolve();
+        };
+        return {
+          close,
+          async complete(signal: AbortSignal) {
+            try {
+              return await load(signal);
+            } finally {
+              close();
+            }
+          },
         };
       },
       async ready() {
@@ -38,27 +68,9 @@ export const snapshotLoader = resource({
         if (loadedVersion === sync.capture().version) return sync.cursors().accountId;
         return source.account({ signal });
       },
-      async load(signal: AbortSignal): Promise<Sync.Snapshot> {
+      async load(signal: AbortSignal) {
         await changing?.promise;
-        const token = sync.capture();
-        if (loadedVersion === token.version) return sync.snapshot();
-        if (loading?.version === token.version) return loading.promise;
-        const request = {
-          version: token.version,
-          promise: (async () => {
-            const snapshot = await source.load({ signal });
-            const current = token.version === sync.capture().version;
-            await apply.run({ rawInput: { snapshot, version: token.version } });
-            if (current) loadedVersion = sync.capture().version;
-            return sync.snapshot();
-          })(),
-        };
-        loading = request;
-        try {
-          return await request.promise;
-        } finally {
-          if (loading === request) loading = undefined;
-        }
+        return load(signal);
       },
     };
   },
