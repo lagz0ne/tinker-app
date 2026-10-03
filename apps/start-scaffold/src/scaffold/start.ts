@@ -22,7 +22,7 @@ const middleware = createMiddleware().server(async ({ context, request, next }) 
   });
   let closed: Promise<void> | undefined;
   const finish = (graceful: boolean) =>
-    (closed ??= session.close({ graceful }).then((end) => {
+    (closed ??= Promise.resolve(session.close({ graceful })).then((end) => {
       if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
     }));
   try {

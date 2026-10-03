@@ -45,7 +45,7 @@ export async function getRouter() {
   const sync = await app.resolve(syncClient);
   let closed: Promise<void> | undefined;
   const close = () =>
-    (closed ??= (async () => {
+    (closed ??= Promise.resolve().then(async () => {
       await app.ready;
       stop.abort();
       const end = await app.closed;
@@ -55,7 +55,7 @@ export async function getRouter() {
       if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
       if (toolEnd.status === "failed") throw toolEnd.error;
       if (toolEnd.teardownErrors?.length) throw toolEnd.teardownErrors.at(0);
-    })());
+    }));
   bindTabClose(close);
   if (import.meta.hot) import.meta.hot.dispose(close);
   return Object.assign(

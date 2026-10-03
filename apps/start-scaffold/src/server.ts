@@ -17,12 +17,13 @@ import type { getRouter } from "./router.tsx";
 import { responseBodies } from "./scaffold/backend/body.server.ts";
 import { setup } from "./scaffold/backend/entry.server.ts";
 const renderRequest = createStartFetch(async (context) => {
-  const bodies = (await (entry.owned ??= start())).requestContext.scope.resolve(responseBodies);
+  const { requestContext } = await (entry.owned ??= start());
+  const bodies = requestContext.scope.resolve(responseBodies);
   const router = context.router as Awaited<ReturnType<typeof getRouter>>;
   try {
     const output = await renderStartStream(context);
-    if (output instanceof Response) return bodies.hold(output, () => router.close());
-    return { ...output, response: await bodies.hold(output.response, () => router.close()) };
+    if (output instanceof Response) return bodies.hold(output, router.close);
+    return { ...output, response: await bodies.hold(output.response, router.close) };
   } catch (error) {
     await router.close();
     throw error;
@@ -79,7 +80,7 @@ async function start() {
   }
   let closed: Promise<void> | undefined;
   const close = () =>
-    (closed ??= (async () => {
+    (closed ??= Promise.resolve().then(async () => {
       stop.abort();
       const end = await app.closed;
       toolStop.abort();
@@ -88,7 +89,7 @@ async function start() {
       if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
       if (toolEnd.status === "failed") throw toolEnd.error;
       if (toolEnd.teardownErrors?.length) throw toolEnd.teardownErrors.at(0);
-    })());
+    }));
   if (import.meta.hot) import.meta.hot.dispose(close);
   return {
     requestContext: app.resolve(startRequests),
