@@ -13,7 +13,7 @@ export const getTodos = createServerFn({ method: "GET" })
   });
 export const updateTodo = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
-  .inputValidator(readTodoCommand)
+  .validator(readTodoCommand)
   .handler(async ({ context, data }) =>
     readReceipt(await context.session.settle(changeTodo, { input: data, signal: context.signal })),
   );

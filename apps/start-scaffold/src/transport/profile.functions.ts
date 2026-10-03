@@ -12,13 +12,13 @@ export const getProfile = createServerFn({ method: "GET" })
   );
 export const updateProfile = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
-  .inputValidator(readProfileCommand)
+  .validator(readProfileCommand)
   .handler(async ({ context, data }) =>
     readReceipt(await context.session.settle(saveProfile, { input: data, signal: context.signal })),
   );
 export const retryProfileNotification = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
-  .inputValidator(readRetry)
+  .validator(readRetry)
   .handler(async ({ context, data }) =>
     readReceipt(
       await context.session.settle(retryNotification, { input: data, signal: context.signal }),

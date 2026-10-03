@@ -174,7 +174,7 @@ The allowed calls are:
 - Drizzle table, column, and index declarations.
 - createIsomorphicFn, createServerFn, createMiddleware, createFileRoute,
   createRootRouteWithContext, createStartHandler, createStart, and cva.
-- Their server, client, middleware, inputValidator, and handler declaration steps.
+- Their server, client, middleware, validator, and handler declaration steps.
 - Object.assign joining a declared Core unit with metadata.
 - Only in src/client.tsx: React's startTransition and hydrateRoot for the native entry.
 

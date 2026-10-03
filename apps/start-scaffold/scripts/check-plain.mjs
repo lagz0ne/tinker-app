@@ -332,7 +332,7 @@ function callbackArgument(call, arg) {
   const index = callbackIndex(call, arg);
   const { signature, param } = callbackSlot(call, index);
   if (!param || index < 0) return false;
-  if (nameOf(call.expression).endsWith(".inputValidator")) return true;
+  if (nameOf(call.expression).endsWith(".validator")) return true;
   const type = callbackType(signature, param, index, arg);
   return type && !(type.flags & ts.TypeFlags.Any) && callable(type);
 }
@@ -664,7 +664,7 @@ function chainedDeclaration(node) {
   if (!ts.isPropertyAccessExpression(node.expression)) return false;
   const chain = node.expression.expression;
   return (
-    ["server", "client", "middleware", "handler", "inputValidator"].includes(
+    ["server", "client", "middleware", "handler", "validator"].includes(
       node.expression.name.text,
     ) &&
     ts.isCallExpression(chain) &&

@@ -5,7 +5,7 @@ import { startRequests } from "../scaffold/start.ts";
 import { readReceipt } from "./result.server.ts";
 export const updateCounter = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
-  .inputValidator(readExecution)
+  .validator(readExecution)
   .handler(async ({ context, data }) =>
     readReceipt(
       await context.session.settle(incrementCounter, { input: data, signal: context.signal }),
