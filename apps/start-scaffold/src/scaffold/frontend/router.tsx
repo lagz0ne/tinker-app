@@ -4,7 +4,7 @@ import { syncClient, applyBootstrap } from "./sync.ts";
 import { readSnapshot } from "@/lib/tinker";
 import { createRouter } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
-import { createScope } from "@tinker/core";
+import { createScope, resource } from "@tinker/core";
 import { ScopeProvider } from "@tinker/react";
 import { routeTree } from "@/routeTree.gen";
 import { frontendSpans } from "../telemetry/state.ts";
@@ -15,16 +15,20 @@ const readTelemetrySettings = createIsomorphicFn()
     return { ...readSettings({ ...process.env }).telemetry, side: "ssr" as const };
   })
   .client(() => ({ side: "browser" as const, service: "start-scaffold", level: "info" as const }));
-const bindTabClose = createIsomorphicFn()
-  .server((_close: () => Promise<void>) => undefined)
-  .client((close: () => Promise<void>) => {
-    const leave = (event: PageTransitionEvent) => {
-      if (!event.persisted) return close();
-    };
-    window.addEventListener("pagehide", leave);
-    if (import.meta.hot)
-      import.meta.hot.dispose(() => window.removeEventListener("pagehide", leave));
-  });
+const tabLifetime = resource({
+  label: "router.tabLifetime",
+  factory: (_deps, ctx) => ({
+    bind: createIsomorphicFn()
+      .server((_close: () => Promise<void>) => undefined)
+      .client((close: () => Promise<void>) => {
+        const leave = (event: PageTransitionEvent) => {
+          if (!event.persisted) return close();
+        };
+        window.addEventListener("pagehide", leave);
+        ctx.defer(() => window.removeEventListener("pagehide", leave));
+      }),
+  }),
+});
 /** Start calls this once per server render and once per browser tab. */
 export async function getRouter() {
   const toolStop = new AbortController();
@@ -56,7 +60,7 @@ export async function getRouter() {
       if (toolEnd.status === "failed") throw toolEnd.error;
       if (toolEnd.teardownErrors?.length) throw toolEnd.teardownErrors.at(0);
     }));
-  bindTabClose(close);
+  app.resolve(tabLifetime).bind(close);
   if (import.meta.hot) import.meta.hot.dispose(close);
   return Object.assign(
     createRouter({
