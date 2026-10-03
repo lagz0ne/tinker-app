@@ -199,6 +199,9 @@ Domain tests do not boot the Start stack.
 - Concurrent native renders keep their request headers and sessions apart.
 - A body ending or being cancelled closes its session and active work.
 - Browser import guards and cold backend imports protect the build split.
+- A stream checks the session once at open and once for the next wake.
+- A signed-out private redirect and its public loader share one snapshot.
+- Sign-in, an old stream account event, and route loads fetch one signed-in snapshot.
 - Commit wakes SSE; rollback publishes no wake.
 - SSE replays saved events and refuses another account's cursor.
 - A revoked session receives no queued private rows.

@@ -3,16 +3,65 @@ import { tabStop } from "./owner.ts";
 import { getBootstrap, getAccount } from "../sync.functions.ts";
 import { syncClient, applyBootstrap } from "./sync.ts";
 import { readStreamMessage } from "@/lib/tinker";
+import type { Sync } from "../sync.ts";
 import type { Stream } from "../protocol.ts";
+/** The network client is replaced only in scope tests. */
+export const snapshotSource = resource({
+  label: "sync.snapshotSource",
+  factory: () => ({
+    load: (options: { signal: AbortSignal }) => getBootstrap(options),
+    account: (options: { signal: AbortSignal }) => getAccount(options),
+  }),
+});
+/** One tab shares a load until account exit; auth holds reconnects until its cookie is set. */
+export const snapshotLoader = resource({
+  label: "sync.snapshotLoader",
+  depends: { sync: syncClient, apply: applyBootstrap, source: snapshotSource },
+  factory: async ({ sync, apply, source }) => {
+    let loadedVersion = -1;
+    let loading: { version: number; promise: Promise<Sync.Snapshot> } | undefined;
+    let changing: ReturnType<typeof Promise.withResolvers<void>> | undefined;
+    return {
+      beginAccountChange() {
+        changing = Promise.withResolvers<void>();
+        const change = changing;
+        return () => {
+          if (changing === change) changing = undefined;
+          change.resolve();
+        };
+      },
+      async ready() {
+        await changing?.promise;
+      },
+      async load(signal: AbortSignal): Promise<Sync.Snapshot> {
+        await changing?.promise;
+        const token = sync.capture();
+        if (loadedVersion === token.version) return sync.snapshot();
+        if (loading?.version === token.version) return loading.promise;
+        const request = {
+          version: token.version,
+          promise: (async () => {
+            const snapshot = await source.load({ signal });
+            const current = token.version === sync.capture().version;
+            await apply.run({ rawInput: { snapshot, version: token.version } });
+            if (current) loadedVersion = sync.capture().version;
+            return sync.snapshot();
+          })(),
+        };
+        loading = request;
+        try {
+          return await request.promise;
+        } finally {
+          if (loading === request) loading = undefined;
+        }
+      },
+    };
+  },
+});
 export const loadSnapshot = operation({
   label: "sync.load",
-  depends: { sync: syncClient, apply: applyBootstrap },
-  run: async ({ sync, apply }, ctx) => {
-    const token = sync.capture();
-    const snapshot = await getBootstrap({ signal: ctx.signal });
-    await apply.run({ rawInput: { snapshot, version: token.version } });
-    return snapshot;
-  },
+  depends: { snapshots: snapshotLoader },
+  run: ({ snapshots }, ctx) => snapshots.load(ctx.signal),
 });
 /** Native framing stays in EventSource. Overflow discards unapplied frames and replays. */
 const eventSource = resource({
@@ -84,8 +133,14 @@ export const receiveMessage = operation({
 });
 const consumeConnection = operation({
   label: "sync.connection",
-  depends: { sync: syncClient, source: eventSource, receive: receiveMessage },
-  run: async ({ sync, source, receive }, ctx) => {
+  depends: {
+    sync: syncClient,
+    source: eventSource,
+    receive: receiveMessage,
+    snapshots: snapshotLoader,
+  },
+  run: async ({ sync, source, receive, snapshots }, ctx) => {
+    await snapshots.ready();
     const token = sync.capture();
     const cursors = sync.cursors();
     const connection = source.connect(
@@ -112,12 +167,18 @@ const consumeConnection = operation({
   },
 });
 /** Connection refresh checks identity only; the same account keeps its applied event cursors. */
-const refreshAccount = operation({
+export const refreshAccount = operation({
   label: "sync.refreshAccount",
-  depends: { sync: syncClient, load: loadSnapshot },
-  run: async ({ sync, load }, ctx) => {
+  depends: {
+    sync: syncClient,
+    load: loadSnapshot,
+    source: snapshotSource,
+    snapshots: snapshotLoader,
+  },
+  run: async ({ sync, load, source, snapshots }, ctx) => {
+    await snapshots.ready();
     const version = sync.capture().version;
-    const accountId = await getAccount({ signal: ctx.signal });
+    const accountId = await source.account({ signal: ctx.signal });
     if (version !== sync.capture().version) return;
     if (accountId !== sync.cursors().accountId) {
       sync.leave();

@@ -49,6 +49,7 @@ export const eventStream = resource({
           raise("Cancelled", {});
         }
         const changes = subscription;
+        const openingWake = changes.revision();
         const initialAccount = await account.run();
         if (initial.private && initial.private.accountId !== initialAccount)
           raise("StreamDenied", {});
@@ -60,16 +61,21 @@ export const eventStream = resource({
         const lease = ctx.clock.currentTimeMillis() + 30_000;
         const encoder = new TextEncoder();
         let afterWake = -1;
+        const expectedAccount = cursor.private?.accountId ?? null;
+        let authorizedWake = initialAccount === expectedAccount ? openingWake : -1;
         let greeted = false;
         const delivery = {
           alive() {
             if (changes.ended() || ctx.clock.currentTimeMillis() >= lease) close();
             return !ended;
           },
-          async authorize() {
+          async authorize(heartbeat = false) {
+            const wake = changes.revision();
+            if (!heartbeat && wake === authorizedWake) return !ended;
             const current = await account.run();
+            authorizedWake = wake;
             if (ended) return false;
-            if (current === (cursor.private?.accountId ?? null)) return true;
+            if (current === expectedAccount) return true;
             output?.enqueue(encoder.encode('event: account\ndata: {"kind":"account-change"}\n\n'));
             close();
             return false;
@@ -119,7 +125,8 @@ export const eventStream = resource({
                 changes.wait(afterWake, waitingSignal).then(() => "changed"),
                 ctx.clock.sleep(10_000, waitingSignal).then(() => "heartbeat"),
               ]);
-              if (outcome === "heartbeat") return encoder.encode(": heartbeat\n\n");
+              if (outcome === "heartbeat" && (await delivery.authorize(true)))
+                return encoder.encode(": heartbeat\n\n");
             } finally {
               waiting.abort();
             }

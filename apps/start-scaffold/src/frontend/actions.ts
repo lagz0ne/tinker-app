@@ -15,7 +15,7 @@ import {
   profileResult,
 } from "./state.ts";
 import { syncClient } from "../scaffold/frontend/sync.ts";
-import { loadSnapshot } from "../scaffold/frontend/events.ts";
+import { loadSnapshot, snapshotLoader } from "../scaffold/frontend/events.ts";
 import { readCredentials } from "../contracts/credentials.ts";
 import { readProfileInput } from "../contracts/profile.ts";
 import { raise } from "../errors.ts";
@@ -36,19 +36,23 @@ export const signIn = operation({
     client: authClient,
     sync: syncClient,
     load: loadSnapshot,
+    snapshots: snapshotLoader,
     pending: pending.controller,
     notice: notice.controller,
   },
-  run: async ({ client, sync, load, pending, notice }, ctx) => {
+  run: async ({ client, sync, load, snapshots, pending, notice }, ctx) => {
     pending.set(true);
     notice.set("");
     ctx.defer(() => pending.set(false));
+    const finish = snapshots.beginAccountChange();
+    ctx.defer(finish);
     sync.leave();
     const result =
       ctx.input.mode === "signup"
         ? await client.signUp.email(ctx.input, { signal: ctx.signal })
         : await client.signIn.email(ctx.input, { signal: ctx.signal });
     if (result.error) raise("AuthFailed", { message: result.error.message ?? "Sign in failed." });
+    finish();
     await load.run();
     notice.set("You are signed in. Open your profile or private list.");
     ctx.log("account.signedIn");
