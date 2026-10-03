@@ -41,48 +41,49 @@ export const telemetry = extension({
 const logWriter = resource({
   label: "telemetry.writer",
   depends: { settings: telemetrySettings.required, queue },
-  factory: createIsomorphicFn()
-    .server(async ({ settings, queue }, ctx): Promise<pino.Logger> => {
-      const { default: pino } = await import("pino");
-      const local = pino.destination({ dest: 1, sync: true });
-      return pino(
-        {
+  factory: async ({ settings, queue }, ctx) =>
+    createIsomorphicFn()
+      .server(async (): Promise<pino.Logger> => {
+        const { default: pino } = await import("pino");
+        const local = pino.destination({ dest: 1, sync: true });
+        return pino(
+          {
+            level: settings.level,
+            base: { service: settings.service, side: settings.side },
+            timestamp: () => `,"time":${ctx.clock.currentTimeMillis()}`,
+          },
+          {
+            write(line: string) {
+              local.write(line);
+              queue.ingest({ traces: [], logs: [logRecord.parse(JSON.parse(line))] });
+            },
+          },
+        );
+      })
+      .client(async (): Promise<pino.Logger> => {
+        const { default: pino } = await import("pino");
+        const local = pino({ level: settings.level, browser: { asObject: true } });
+        return pino({
           level: settings.level,
           base: { service: settings.service, side: settings.side },
-          timestamp: () => `,"time":${ctx.clock.currentTimeMillis()}`,
-        },
-        {
-          write(line: string) {
-            local.write(line);
-            queue.ingest({ traces: [], logs: [logRecord.parse(JSON.parse(line))] });
+          browser: {
+            asObject: true,
+            write(raw: unknown) {
+              const record = logRecord.parse(raw);
+              queue.ingest({ traces: [], logs: [record] });
+              const write =
+                record.level >= 50
+                  ? local.error
+                  : record.level >= 40
+                    ? local.warn
+                    : record.level >= 30
+                      ? local.info
+                      : local.debug;
+              write.call(local, record);
+            },
           },
-        },
-      );
-    })
-    .client(async ({ settings, queue }): Promise<pino.Logger> => {
-      const { default: pino } = await import("pino");
-      const local = pino({ level: settings.level, browser: { asObject: true } });
-      return pino({
-        level: settings.level,
-        base: { service: settings.service, side: settings.side },
-        browser: {
-          asObject: true,
-          write(raw: unknown) {
-            const record = logRecord.parse(raw);
-            queue.ingest({ traces: [], logs: [record] });
-            const write =
-              record.level >= 50
-                ? local.error
-                : record.level >= 40
-                  ? local.warn
-                  : record.level >= 30
-                    ? local.info
-                    : local.debug;
-            write.call(local, record);
-          },
-        },
-      }).child({ service: settings.service, side: settings.side });
-    }),
+        }).child({ service: settings.service, side: settings.side });
+      })(),
 });
 export const observer = resource({
   label: "telemetry.observer",

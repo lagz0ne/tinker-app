@@ -7,9 +7,9 @@ import type { Telemetry } from "./records.ts";
 export const delivery = resource({
   label: "telemetry.delivery",
   depends: { settings: telemetrySettings.required },
-  factory: createIsomorphicFn()
-    .server(({ settings }) => ({
-      async send(batch: Telemetry.Batch, signal: AbortSignal): Promise<Telemetry.Delivery> {
+  factory: ({ settings }) => {
+    const send = createIsomorphicFn()
+      .server(async (batch: Telemetry.Batch, signal: AbortSignal): Promise<Telemetry.Delivery> => {
         if (settings.side === "browser") return { traces: true, logs: true };
         const logs = new URL(settings.logs);
         logs.searchParams.set("_time_field", "time");
@@ -74,10 +74,8 @@ export const delivery = resource({
               }),
         ]);
         return { traces: tracesAccepted, logs: logsAccepted };
-      },
-    }))
-    .client(() => ({
-      async send(batch: Telemetry.Batch, signal: AbortSignal): Promise<Telemetry.Delivery> {
+      })
+      .client(async (batch: Telemetry.Batch, signal: AbortSignal): Promise<Telemetry.Delivery> => {
         try {
           const response = await fetch("/api/telemetry", {
             method: "POST",
@@ -93,6 +91,7 @@ export const delivery = resource({
         } catch {
           return { traces: false, logs: false };
         }
-      },
-    })),
+      });
+    return { send };
+  },
 });
