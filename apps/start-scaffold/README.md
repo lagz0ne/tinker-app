@@ -130,6 +130,8 @@ The schema check proves generation adds no duplicate tables.
 - Events before receipts finish waits after saved records are applied.
 - Replayed events and old snapshots keep newer records and drafts.
 - Account exit stops waits and ignores late old responses.
+- Binding after the factory ends closes the tab once on a real page hide.
+- The server side has no page and binds without listening.
 - Failed mail keeps the name and retry sends only mail.
 - Committed profile work finishes after its request exits.
 - Saved names stay readable while duplicate requests share a send.
@@ -141,6 +143,7 @@ The schema check proves generation adds no duplicate tables.
 - A quiet private stream closes at the heartbeat after sign-out.
 - A final result replay completes a wait after disconnect.
 - Finished traces and Pino logs reach their HTTP receivers.
+- Telemetry sends through the scope-bound HTTP backend.
 - Storage failure keeps bounded records for retry.
 - Accepted telemetry frees the byte budget for later records.
 - Browser ingest refuses foreign origins, bad shapes, and large bodies.

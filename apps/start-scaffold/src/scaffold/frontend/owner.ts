@@ -12,7 +12,7 @@ export const tabLifetime = resource({
   factory: ({ target }, ctx) => {
     let close: (() => Promise<void>) | undefined;
     const leave = (event: Event) => {
-      if (!(event as PageTransitionEvent).persisted) return close?.();
+      if (!("persisted" in event) || !event.persisted) return close?.();
     };
     target?.addEventListener("pagehide", leave);
     ctx.defer(() => target?.removeEventListener("pagehide", leave));

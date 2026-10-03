@@ -5,6 +5,7 @@ import { makeTestClock } from "@tinker/core/testing";
 import {
   telemetry,
   telemetrySettings,
+  telemetryBackend,
   observer,
   flushTelemetry,
   ingestTelemetry,
@@ -445,6 +446,40 @@ test("accepted telemetry frees the byte budget for later records", async () => {
       await tools.run(flushTelemetry);
     }
     expect(tools.resolve(exportHealth)).toEqual({ kind: "idle", pending: 0, dropped: 0 });
+  } finally {
+    stop.abort();
+    await tools.closed;
+    await receiver.close();
+  }
+});
+
+test("telemetry sends through the scope-bound HTTP backend", async () => {
+  const receiver = await new Receiver().start();
+  const stop = new AbortController();
+  const tools = createScope({
+    signal: stop.signal,
+    extensions: [telemetry],
+    tags: [
+      telemetrySettings({
+        side: "ssr",
+        service: "test-start",
+        level: "info",
+        traces: `${receiver.url}/unused`,
+        logs: `${receiver.url}/unused`,
+      }),
+      telemetryBackend((_input, init) => fetch(`${receiver.url}/selected`, init)),
+    ],
+  });
+  try {
+    await tools.ready;
+    tools.run(ingestTelemetry, {
+      input: {
+        traces: [],
+        logs: [{ time: 1, level: 30, msg: "bound backend", service: "test-start", side: "ssr" }],
+      },
+    });
+    await tools.run(flushTelemetry);
+    expect(receiver.requests.map((request) => request.path)).toEqual(["/selected"]);
   } finally {
     stop.abort();
     await tools.closed;

@@ -6,6 +6,7 @@ import { encodeValue, logRecord, telemetryBatch } from "./records.ts";
 import type { Telemetry } from "./records.ts";
 import { queue } from "./queue.ts";
 import { telemetrySettings } from "./state.ts";
+export { telemetryBackend } from "./delivery.ts";
 export { telemetrySettings, exportHealth } from "./state.ts";
 export type { Telemetry } from "./records.ts";
 
