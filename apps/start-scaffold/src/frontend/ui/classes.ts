@@ -4,6 +4,6 @@ import { twMerge } from "tailwind-merge";
 /**
  * @param inputs - From view class values; why: merge only these styles.
  */
-export function cn(inputs: ClassValue[]) {
+export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
