@@ -16,10 +16,14 @@ import { defaultStreamHandler as renderStartStream } from "@tanstack/react-start
 import type { getRouter } from "./router.tsx";
 import { responseBodies } from "./scaffold/backend/body.server.ts";
 import { setup } from "./scaffold/backend/entry.server.ts";
+import { raise } from "./scaffold/errors.ts";
 const renderRequest = createStartFetch(async (context) => {
   const { requestContext } = await (entry.owned ??= start());
   const bodies = requestContext.scope.resolve(responseBodies);
-  const router = context.router as Awaited<ReturnType<typeof getRouter>>;
+  const router: typeof context.router & {
+    close?: Awaited<ReturnType<typeof getRouter>>["close"];
+  } = context.router;
+  if (typeof router.close !== "function") raise("StartScopeMissing", {});
   try {
     const output = await renderStartStream(context);
     if (output instanceof Response) return bodies.hold(output, router.close);
@@ -98,8 +102,10 @@ async function start() {
   };
 }
 
-const entry = {
-  owned: undefined as ReturnType<typeof start> | undefined,
+const entry: {
+  owned?: ReturnType<typeof start>;
+  fetch(request: Request): ReturnType<typeof renderRequest>;
+} = {
   async fetch(request: Request) {
     const { requestContext } = await (entry.owned ??= start());
     return renderRequest(request, { context: requestContext });

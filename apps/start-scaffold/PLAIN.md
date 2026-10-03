@@ -124,6 +124,7 @@ Tests and generated files do not count.
     - `src/scaffold/frontend/sync.ts#client.execute`
     - `src/scaffold/frontend/sync.ts#client.wait`
     - `src/scaffold/start.ts#middleware.callback`
+    - `src/server.ts#renderRequest.callback`
 
 - **src/scaffold/sync.ts#readExecution**
   - `raw`: `unknown`. From a mutation request; why: validate its execution ID.
