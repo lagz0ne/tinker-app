@@ -13,7 +13,9 @@ Do not boot Start to test an operation.
 
 `tests/presets.ts` replaces database and mail resources.
 The database runs real queries with PGlite.
-Mail presets accept, hold, or refuse sends like a client.
+`proofMail` only records sends; it does not deliver mail.
+Held and refused mail use inline `preset(mail, ...)` fixtures.
+See `tests/sync.test.ts` for both.
 Use `preset` from `@tinker/core/testing` only in tests.
 Never import that entry from app source.
 Do not use mocks, spies, global patches, or sleep waits.

@@ -9,6 +9,16 @@ Use this when changing imports or app wiring.
 Never edit `src/scaffold/` to add a feature.
 It is fixed source updated through the registry.
 
+App code may import fixed scaffold exports.
+It must never edit them.
+Examples used by the app:
+
+- `eventHistory`: `src/scaffold/backend/events.ts`.
+- `syncClient`: `src/scaffold/frontend/sync.ts`.
+- `startRequests`: `src/scaffold/start.ts`.
+- `readResult`: `src/scaffold/backend/result.server.ts`.
+
+The seam check guards only imports from scaffold to app.
 The scaffold reads your values through:
 
 ```ts

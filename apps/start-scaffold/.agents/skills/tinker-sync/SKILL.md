@@ -34,3 +34,22 @@ Retry uses the same execution ID for a lost reply.
 Mail retry uses a new ID and keeps the old profile save.
 Account exit cancels waits and ignores old responses.
 Keep drafts apart from saved records.
+
+Every sign-in action must hold reconnects during auth.
+Depend on `snapshotLoader` from
+`src/scaffold/frontend/events.ts` as `snapshots`.
+Follow `signIn` in `src/frontend/actions.ts`:
+
+```ts
+const change = snapshots.beginAccountChange();
+ctx.defer(change.close);
+sync.leave();
+```
+
+After auth succeeds, apply its snapshot before releasing:
+
+```ts
+await change.complete(ctx.signal);
+```
+
+Skipping this hold can load the snapshot twice.

@@ -28,8 +28,28 @@ npm run db:generate
 
 A private operation depends on `currentUser`.
 Take the owner from that user, never from caller input.
-Store the change and event in the same transaction.
-Use the execution ID to refuse repeated saved effects.
+Use `eventHistory` from `src/scaffold/backend/events.ts`.
+In one transaction, `lock` orders writes to the stream.
+`find` checks the execution ID before any saved effect.
+`append` stores the events with the saved change.
+See `changeTodo` in `src/backend/todos.ts`.
+A repeated execution ID must not repeat saved effects.
+
+Export backend operations from `src/backend/index.ts`.
+Tests import `@tinker-start-scaffold/backend`.
+Export frontend operations from `src/frontend/index.ts`.
+
+Use this private guard from `src/routes/todos.tsx`:
+
+```ts
+beforeLoad: async ({ context }) => {
+  if ((await context.account()) === null) {
+    throw redirect({ to: "/" });
+  }
+  await context.bootstrap();
+},
+```
+
 Extend `Register` through `src/lib/tinker.ts`.
 Add data and its change reader before adding the page.
 Run the build, types, tests, and schema check.
