@@ -87,7 +87,8 @@ Retry sends mail without saving the name again.
 The profile shows your email and the last result.
 
 The stream checks auth at open, once per wake, and on heartbeats.
-Routes reuse the tab's snapshot while sync keeps it current.
+Private route guards check the account with the server each time.
+Route loads reuse the tab's snapshot while the account stays the same.
 A signed-out private route checks only the account before redirecting.
 Account exit cancels waits and starts a new snapshot lifetime.
 
@@ -143,6 +144,7 @@ The schema check proves generation adds no duplicate tables.
 - Stalled uploads and storage requests stop with their owner.
 - A stream checks the session once at open and once for the next wake.
 - A signed-out private redirect loads one snapshot across separate renders.
+- A private route check clears cached records after another tab signs out.
 - Sign-in, an old stream account event, and route loads fetch one signed-in snapshot.
 
 ## Limits

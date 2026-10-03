@@ -65,8 +65,9 @@ export const snapshotLoader = resource({
       },
       async account(signal: AbortSignal) {
         await changing?.promise;
-        if (loadedVersion === sync.capture().version) return sync.cursors().accountId;
-        return source.account({ signal });
+        const accountId = await source.account({ signal });
+        if (accountId !== sync.cursors().accountId) sync.leave();
+        return accountId;
       },
       async load(signal: AbortSignal) {
         await changing?.promise;

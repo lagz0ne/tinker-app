@@ -189,3 +189,65 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
     expect((await server.closed).status).toBe("success");
   }
 });
+
+test("a private route check clears cached records after another tab signs out", async () => {
+  const stop = new AbortController();
+  let cookie = "";
+  const server = createScope({
+    signal: stop.signal,
+    tags: settings,
+    presets: [proofDatabase, proofMail],
+  });
+  const browser = createScope({
+    signal: stop.signal,
+    extensions: [accountOwner],
+    tags: tabStop(stop.signal),
+    presets: [
+      preset(snapshotSource, () => ({
+        async load() {
+          return server.run(bootstrap, { tags: requestHeaders(new Headers({ cookie })) });
+        },
+        async account() {
+          return server.run(readAccount, { tags: requestHeaders(new Headers({ cookie })) });
+        },
+      })),
+    ],
+  });
+  await Promise.all([server.ready, browser.ready]);
+  try {
+    await server.run(migrate);
+    const response = await server.run(handleAuth, {
+      tags: requestHeaders(new Headers()),
+      input: new Request("http://localhost:4318/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://localhost:4318" },
+        body: JSON.stringify({
+          name: "Ada",
+          email: "ada@example.com",
+          password: "safe-password-42",
+        }),
+      }),
+    });
+    cookie = response.headers
+      .getSetCookie()
+      .map((value) => value.split(";").at(0))
+      .join("; ");
+    const loaded = await browser.run(loadSnapshot);
+    expect(loaded.private?.profile.name).toBe("Ada");
+    await server.run(handleAuth, {
+      tags: requestHeaders(new Headers({ cookie })),
+      input: new Request("http://localhost:4318/api/auth/sign-out", {
+        method: "POST",
+        headers: { cookie, origin: "http://localhost:4318" },
+      }),
+    });
+    cookie = "";
+    expect(await browser.run(checkAccount)).toBeNull();
+    expect((await browser.resolve(syncClient)).snapshot().private).toBeNull();
+    expect((await browser.run(loadSnapshot)).private).toBeNull();
+  } finally {
+    stop.abort();
+    expect((await browser.closed).status).toBe("success");
+    expect((await server.closed).status).toBe("success");
+  }
+});
