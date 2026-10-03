@@ -14,6 +14,21 @@ A read with no shared saved state can use a read operation.
 See `saveName` in `src/frontend/actions.ts`.
 It makes an execution ID with `ctx.random.uuid()`.
 `sync.execute` registers the wait before sending.
+Pass the native send function with its data record:
+
+```ts
+const executionId = ctx.random.uuid();
+const completed = await sync.execute(
+  executionId,
+  {
+    send: updateProfile,
+    data: { executionId, profile: ctx.input },
+  },
+  ctx.signal,
+);
+```
+
+Do not add a signal-taking helper around the native send.
 The server returns that ID as its receipt.
 Saved events update data, then the final result ends the wait.
 Remote events update data without a local wait.
@@ -42,14 +57,14 @@ Follow `signIn` in `src/frontend/actions.ts`:
 
 ```ts
 const change = snapshots.beginAccountChange();
-ctx.defer(change.close);
+ctx.defer(() => snapshots.endAccountChange(change));
 sync.leave();
 ```
 
 After auth succeeds, apply its snapshot before releasing:
 
 ```ts
-await change.complete(ctx.signal);
+await snapshots.completeAccountChange(ctx.signal, change);
 ```
 
 Skipping this hold can load the snapshot twice.
