@@ -91,6 +91,7 @@ Private route guards check the account with the server each time.
 Route loads reuse the tab's snapshot while the account stays the same.
 A signed-out private route checks only the account before redirecting.
 Account exit cancels waits and starts a new snapshot lifetime.
+Scope close cancels response readers left open by their consumer.
 
 ## Checks
 
@@ -175,10 +176,21 @@ A runtime-only overwrite does not update them.
   Export the message body schema as `streamMessage`.
   The fixed receive operation owns JSON parsing; remove the old `readStreamMessage` helper.
 - Replace a custom import of `holdResponse` with `responseBodies`.
-  Its resource method holds the body for the native request:
+  Its resource owns open readers and cancels them during scope close.
+- Native database listen may return a synchronous release callback.
+  Its handle type permits void or Promise<void>.
+  Notifications return subscription records; invoke wait and close on their resource.
+- The snapshot resource owns account-change completion.
+  Use endAccountChange and completeAccountChange on that resource.
+- Pass a native send function and its data record to sync.execute.
+  Remove signal-taking arrow helpers at its callers.
+- The telemetry queue exposes only ingest, start, flush, and close.
+  Its close hook ends scheduling; remove calls to stopSchedule.
+
+The server entry holds the body for the native request:
 
 ```ts
-const bodies = session.resolve(responseBodies);
+const bodies = requestContext.scope.resolve(responseBodies);
 return bodies.hold(response, finish);
 ```
 

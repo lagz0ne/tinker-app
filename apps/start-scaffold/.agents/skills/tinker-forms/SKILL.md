@@ -30,6 +30,7 @@ Never pass a scope or context bag to a helper.
 
 ## Plain functions are rare
 
+Follow ADR 0099 and ADR 0100.
 Start strict; loosen only through a new decision.
 No classes.
 A plain function must meet every rule:
@@ -37,60 +38,91 @@ A plain function must meet every rule:
 - Pure: no IO, await, time, random, signal, or held state.
 - Plain value params only.
   No Core handle, controller, ctx, clock, signal, IO object, or callback.
+  No any or unconstrained type param.
+  Option bags carrying a signal fail too, including library types.
+  Unknown is allowed for door readers and error guards.
+  Never cast a plain value to a forbidden type inside a plain body.
 - At most three params, each the smallest value needed.
-- At least two call sites in src; tests do not count.
-  A callback passed to its caller counts as a site.
-  One caller means inline it at that caller.
+- At least two distinct callers in src; tests do not count.
+  Direct calls and typed callback registrations count.
+  Repeated calls by one caller count once.
+  Self-calls, imports, re-exports, and value uses do not count.
+  One caller means inline it.
 - TSDoc names where each param comes from and why it is needed.
   Use `@param value - From the form; why: read its name.`
 - Each kept function appears in `PLAIN.md`.
-  Keep the list small; it should only shrink.
+  The script's `PLAIN_MAX` is 17.
+  Raising that cap needs a new decision.
+  Regenerating the list cannot raise the cap.
+
+Object methods and arrow properties follow every plain rule too.
+Being somewhere inside a unit call gives no exception.
+Only the members of a resource factory's returned object are owned methods.
+This includes its arrow body or a local object returned by that factory.
+Object.assign may add native methods to that returned value.
+A hidden object inside a method is still plain work.
+Return only the public methods callers need.
+Never expose a send method that bypasses flush dedupe.
+
+Core callbacks are direct run, factory, input, and hooks members of a unit's options object.
+An extension hook may return its public value, just as a resource factory does.
+Other inline callbacks are allowed only in a callback slot whose callee is outside src, or a JSX attribute.
+A native options object may supply that native callee's named callbacks.
+A named event or lifetime callback must be registered with its native owner.
+Named callbacks in native lifetime slots on a resource's public value keep that owner's contract.
+Inline callbacks passed to a resource method follow the plain rule.
+Pass the native send function and its data record to sync.execute.
+Object.freeze, value coercion, fallback expressions, and a local helper call give no exception.
+A native callback's IO still needs a resource, operation, or hook body to own it.
 
 A schema used once stays a schema.
-Pass it as the operation input instead of adding a parse helper.
 Put JSON parsing in the operation's input callback.
 A throw inside a schema transform can escape its standard validator.
 The input callback lets Core return a managed input failure.
-Named helpers inside a factory follow the same rule.
-Methods owned by a resource keep its private work.
-Core run, factory, input, and hook callbacks meet Core's contract.
-Native framework and event callbacks meet their caller's contract.
-A named callback gets this rule only when handed to that caller.
-Returning a callback is allowed only from its resource or entry.
-These are callbacks, not a place for free service factories.
 
 A React component has a capital name, a JSX body, and at most one props param.
-Only render work and hook calls belong there.
+Its props cannot hold Core handles, ctx, clock, signals, scope, or controllers.
+Props callbacks are allowed.
+No await in its own body; render data and use hooks.
 Its nested helpers still follow the plain rule.
-The only root factories are Start's server entry and client router factory.
-Their private close callbacks own their root's end.
-This exception does not cover any helper module.
 
-The queue used to take a clock and controller outside the graph:
+Plain bodies also reject Date, performance.now, crypto, console, global fetch,
+and local or session storage.
+Review still checks hidden library effects and each param's size.
 
-```ts
-const owned = new TelemetryQueue(settings, ctx.clock, health);
-```
-
-Now the resource's method reads its own clock in place:
+The old queue exposed a private clock helper:
 
 ```ts
 async runTimer(flush: () => Promise<void>) {
-  while (!stopTimer.signal.aborted) {
-    try {
-      await ctx.clock.sleep(1000, stopTimer.signal);
-    } catch (error) {
-      if (!stopTimer.signal.aborted) throw error;
-      return;
-    }
-    if (!stopTimer.signal.aborted) await flush();
-  }
+  await ctx.clock.sleep(1000, stopTimer.signal);
+  await flush();
+},
+```
+
+The final public start method owns its timer promise instead:
+
+```ts
+start(flush: () => Promise<void>) {
+  if (settings.side !== "ssr")
+    timer = Promise.resolve().then(async () => {
+      while (!stopTimer.signal.aborted) {
+        try {
+          await ctx.clock.sleep(1000, stopTimer.signal);
+        } catch (error) {
+          if (!stopTimer.signal.aborted) throw error;
+          return;
+        }
+        if (!stopTimer.signal.aborted) await flush();
+      }
+    });
 },
 ```
 
 This is the shipped method in `src/scaffold/telemetry/queue.ts`.
-Its resource owns the queue, stop signals, and pending promises.
-There is no class or helper with clock params.
+It may take a callback because its resource owns the timer promise,
+stops the signal, and awaits that promise during close.
+A plain function has no such owner, so it may not take a callback.
+The queue returns only ingest, start, flush, and close.
 
 ## Services stay in the graph
 
@@ -98,29 +130,51 @@ A service must never exist outside the graph of primitives.
 A resource owns each long-lived server, client, connection, clock, timer,
 watcher, queue, and cache.
 An operation may own short-lived work for its call.
-A module declares units; it never starts clients or stores a live handle.
 A plain function never starts or retains a service.
+Only code inside a factory, run, or hook body has graph ownership.
+An option value evaluated at import has none.
 
-Only these files call `createScope`:
+Only these files may reference Core createScope:
 
-- `src/server.ts`: the process entry owns both roots and stop signals.
-- `src/router.tsx`: the client router entry.
-- `src/scaffold/frontend/router.tsx`: its fixed implementation.
+- `src/server.ts`: inside start, which owns both roots and stop signals.
+- `src/router.tsx`: inside getRouter, the client entry.
+- `src/scaffold/frontend/router.tsx`: inside getRouter, its fixed implementation.
 
-No helper exports a scope getter or returns a scope.
-No module-level let holds a scope or handle.
-The server entry keeps its lazy start promise in its entry object.
-It owns creation and close there; importing it starts no clients.
-The fixed backend entry file declares only the setup extension.
+Imports alone are allowed.
+Aliases, parentheses, casts, arrays, call, and Reflect.apply give no exception.
+No module-level root creation, even in an entry file.
+No helper exports a scope, a scope getter, or a start function.
+Exported accessors and arrow properties returning a scope fail too.
+
+Outside entries, no module-level let or const may hold a live Core handle,
+AbortController, or native client, including nested and promised values.
+Declared Core units are allowed; resolved live handles are not.
+Only the server entry's entry.owned lazy promise may retain its root context.
+Importing it starts no clients.
+The fixed backend entry declares only the setup extension.
+
+At module scope, calls and new expressions fail unless they declare app setup.
+The allowed calls are:
+
+- Core tag, data, resource, operation, and extension declarations.
+- Zod schema declarations and Drizzle table, column, and index declarations.
+- createIsomorphicFn, createServerFn, createMiddleware, createFileRoute,
+  createRootRouteWithContext, createStartHandler, createStart, and cva.
+- Their server, client, middleware, inputValidator, and handler declaration steps.
+- Object.assign joining a declared Core unit with metadata.
+- Only in src/client.tsx: React's startTransition and hydrateRoot for the native entry.
+
+Everything else needs an owner before it runs.
+The responseBodies resource tracks open native readers.
+Its deferred close cancels any reader the consumer left open.
 
 ## Check
 
 Run `npm run check:plain -- --prove` after changing this rule.
-Each planted failure must fail by its rule name.
+Every planted failure must exit 1 by its rule name.
 Run `npm run check:plain` before review.
 Use `npm run check:plain -- --list` to inspect the list.
-Copy that output into `PLAIN.md` only after reviewing every entry.
-The check reads src and skips `.gen`, `.generated`, and declaration files.
-It follows imported names and type aliases.
-It checks params, docs, sites, classes, roots, and known service creation.
-Review still checks purity and each param's size.
+Review every entry before copying that output into `PLAIN.md`.
+The list and code must agree; the cap still applies to list output.
+The check reads src and skips .gen, .generated, and declaration files.
+It follows symbols, imports, aliases, and library signal properties.

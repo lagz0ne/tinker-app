@@ -32,7 +32,7 @@ The fixed middleware bridge stays bound to its scope and fails when unbound.
 
 No classes.
 Plain functions are rare; read the strict rule in tinker-forms.
-Keep each one pure, with at most three plain value params and two call sites.
+Keep each one pure, with at most three plain value params and two distinct callers.
 Its TSDoc names each param's source and need.
 List it in `PLAIN.md`; one caller means inline it.
 No helper takes a Core handle, controller, ctx, clock, signal, or IO object.
@@ -44,7 +44,13 @@ Resources own long-lived clients, connections, clocks, timers, and queues.
 Only `src/server.ts`, `src/router.tsx`, and its fixed router part create roots.
 The entry owns each root and its stop signal.
 No helper module keeps a scope singleton or exports a scope getter.
-No module-level let holds a live scope or handle.
+No module-level let or const holds a live handle, stop controller, or native client.
+Only start and getRouter may reference createScope inside the listed entries.
+Module calls are restricted to the declaration list in tinker-forms.
+Only a factory's returned public methods get its owned-method exception.
+Hidden object methods and arrow properties follow the plain rule.
+React props cannot carry Core handles or signals; components cannot await.
+The plain-function cap is 17; raising it needs a decision.
 
 Keep fixed setup under `src/scaffold/` and feature units in userland.
 
