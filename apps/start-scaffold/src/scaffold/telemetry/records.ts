@@ -98,21 +98,3 @@ export function encodeValue(value: unknown): string {
     return "[Unserializable]";
   }
 }
-
-/**
- * @param attributes - From span or event attributes; why: bound each wire field.
- */
-export function encodeFields(attributes: Record<string, unknown>) {
-  return Object.entries(attributes)
-    .slice(0, 31)
-    .map(([key, value]) => ({
-      key: key.slice(0, 256),
-      value: { stringValue: encodeValue(value) },
-    }));
-}
-/**
- * @param time - From a span or event epoch time; why: change milliseconds to wire nanoseconds.
- */
-export function encodeNanos(time: number) {
-  return (BigInt(Math.trunc(time)) * 1_000_000n).toString();
-}

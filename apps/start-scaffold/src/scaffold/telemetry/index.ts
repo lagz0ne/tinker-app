@@ -2,7 +2,7 @@ import type pino from "pino";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { data, extension, operation, resource } from "@tinker/core";
 import type { Observe } from "@tinker/core";
-import { encodeFields, encodeNanos, encodeValue, logRecord, telemetryBatch } from "./records.ts";
+import { encodeValue, logRecord, telemetryBatch } from "./records.ts";
 import type { Telemetry } from "./records.ts";
 import { queue } from "./queue.ts";
 import { telemetrySettings } from "./state.ts";
@@ -28,11 +28,11 @@ export const telemetry = extension({
     async start(event) {
       const owned = event.resolve(queue);
       const flush = event.controller(flushTelemetry);
-      owned.start(() => flush.run());
+      owned.start(flush.run.bind(flush));
       await event.next();
     },
     async close(event) {
-      event.resolve(queue).stopSchedule();
+      await event.resolve(queue).close();
       return event.next();
     },
   },
@@ -115,16 +115,26 @@ export const observer = resource({
             flags: span.sampled ? 1 : 0,
             name: span.name.slice(0, 256),
             kind: 1,
-            startTimeUnixNano: encodeNanos(span.start),
-            endTimeUnixNano: encodeNanos(span.end ?? span.start),
+            startTimeUnixNano: (BigInt(Math.trunc(span.start)) * 1_000_000n).toString(),
+            endTimeUnixNano: (BigInt(Math.trunc(span.end ?? span.start)) * 1_000_000n).toString(),
             attributes: [
-              ...encodeFields(span.attributes),
+              ...Object.entries(span.attributes)
+                .slice(0, 31)
+                .map(([key, value]) => ({
+                  key: key.slice(0, 256),
+                  value: { stringValue: encodeValue(value) },
+                })),
               { key: "tinker.kind", value: { stringValue: span.kind } },
             ],
             events: span.events.slice(0, 32).map((event) => ({
               name: event.name.slice(0, 256),
-              timeUnixNano: encodeNanos(event.time),
-              attributes: encodeFields(event.attributes),
+              timeUnixNano: (BigInt(Math.trunc(event.time)) * 1_000_000n).toString(),
+              attributes: Object.entries(event.attributes)
+                .slice(0, 31)
+                .map(([key, value]) => ({
+                  key: key.slice(0, 256),
+                  value: { stringValue: encodeValue(value) },
+                })),
             })),
             status:
               span.status === "failed"
