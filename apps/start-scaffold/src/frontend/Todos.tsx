@@ -24,7 +24,7 @@ const saveTodo = operation({
     const executionId = ctx.random.uuid();
     await sync.execute(
       executionId,
-      (signal) => updateTodo({ data: { executionId, change: ctx.input }, signal }),
+      { send: updateTodo, data: { executionId, change: ctx.input } },
       ctx.signal,
     );
   },

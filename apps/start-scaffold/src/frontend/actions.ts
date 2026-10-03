@@ -36,14 +36,14 @@ export const signIn = operation({
     notice.set("");
     ctx.defer(() => pending.set(false));
     const change = snapshots.beginAccountChange();
-    ctx.defer(change.close);
+    ctx.defer(() => snapshots.endAccountChange(change));
     sync.leave();
     const result =
       ctx.input.mode === "signup"
         ? await client.signUp.email(ctx.input, { signal: ctx.signal })
         : await client.signIn.email(ctx.input, { signal: ctx.signal });
     if (result.error) raise("AuthFailed", { message: result.error.message ?? "Sign in failed." });
-    await change.complete(ctx.signal);
+    await snapshots.completeAccountChange(ctx.signal, change);
     notice.set("You are signed in. Open your profile or private list.");
     ctx.log("account.signedIn");
   },
@@ -65,7 +65,7 @@ export const saveName = operation({
     const executionId = ctx.random.uuid();
     const completed = await sync.execute(
       executionId,
-      (signal) => updateProfile({ data: { executionId, profile: ctx.input }, signal }),
+      { send: updateProfile, data: { executionId, profile: ctx.input } },
       ctx.signal,
     );
     result.set({ executionId, result: completed });
@@ -93,8 +93,7 @@ export const retryMail = operation({
     const executionId = ctx.random.uuid();
     const completed = await sync.execute(
       executionId,
-      (signal) =>
-        retryProfileNotification({ data: { executionId, previousExecutionId: ctx.input }, signal }),
+      { send: retryProfileNotification, data: { executionId, previousExecutionId: ctx.input } },
       ctx.signal,
     );
     result.set({ executionId, result: completed });

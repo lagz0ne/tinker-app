@@ -32,9 +32,12 @@ test("an event before its receipt finishes only after saved records are applied"
     run: async ({ sync }, ctx) =>
       sync.execute(
         executionId,
-        () => {
-          sent.resolve();
-          return receipt.promise;
+        {
+          data: undefined,
+          send: () => {
+            sent.resolve();
+            return receipt.promise;
+          },
         },
         ctx.signal,
       ),
@@ -129,9 +132,12 @@ test("account exit stops local waits and ignores an old account's late response"
     run: async ({ sync }, ctx) =>
       sync.execute(
         executionId,
-        async () => {
-          sent.resolve();
-          return { kind: "accepted", executionId };
+        {
+          data: undefined,
+          send: async () => {
+            sent.resolve();
+            return { kind: "accepted", executionId };
+          },
         },
         ctx.signal,
       ),

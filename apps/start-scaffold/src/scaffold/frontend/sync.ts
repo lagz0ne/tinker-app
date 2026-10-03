@@ -95,9 +95,12 @@ export const syncClient = resource({
           waiters.delete(executionId);
         }
       },
-      async execute(
+      async execute<T>(
         executionId: string,
-        send: (signal: AbortSignal) => Promise<Sync.Reply>,
+        request: {
+          data: T;
+          send: (options: { data: T; signal: AbortSignal }) => Promise<Sync.Reply>;
+        },
         callSignal: AbortSignal,
       ): Promise<Sync.Result> {
         const token = owner.capture();
@@ -108,7 +111,7 @@ export const syncClient = resource({
             if (signal.aborted) raise("Cancelled", {});
             let reply: Sync.Reply;
             try {
-              reply = await send(signal);
+              reply = await request.send({ data: request.data, signal });
             } catch (error) {
               if (signal.aborted) throw error;
               ctx.log("sync.reconnecting");

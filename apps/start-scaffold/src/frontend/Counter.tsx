@@ -10,11 +10,7 @@ const increase = operation({
   depends: { sync: syncClient },
   run: async ({ sync }, ctx) => {
     const executionId = ctx.random.uuid();
-    await sync.execute(
-      executionId,
-      (signal) => updateCounter({ data: { executionId }, signal }),
-      ctx.signal,
-    );
+    await sync.execute(executionId, { send: updateCounter, data: { executionId } }, ctx.signal);
   },
 });
 export function Counter() {

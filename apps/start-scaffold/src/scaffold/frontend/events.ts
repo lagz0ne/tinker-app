@@ -22,46 +22,42 @@ export const snapshotLoader = resource({
     let loadedVersion = -1;
     let loading: { version: number; promise: Promise<Sync.Snapshot> } | undefined;
     let changing: ReturnType<typeof Promise.withResolvers<void>> | undefined;
-    const loadingSnapshot = {
-      async load(signal: AbortSignal): Promise<Sync.Snapshot> {
-        const token = sync.capture();
-        if (loadedVersion === token.version) return sync.snapshot();
-        if (loading?.version === token.version) return loading.promise;
-        const request = {
-          version: token.version,
-          promise: (async () => {
-            const snapshot = await source.load({ signal });
-            const version = await apply.run({ rawInput: { snapshot, version: token.version } });
-            if (version !== undefined) loadedVersion = version;
-            return sync.snapshot();
-          })(),
-        };
-        loading = request;
-        try {
-          return await request.promise;
-        } finally {
-          if (loading === request) loading = undefined;
-        }
-      },
-    };
     return {
       beginAccountChange() {
         changing = Promise.withResolvers<void>();
-        const change = changing;
-        const close = () => {
+        return changing;
+      },
+      endAccountChange(change: ReturnType<typeof Promise.withResolvers<void>>) {
+        if (changing === change) changing = undefined;
+        change.resolve();
+      },
+      async completeAccountChange(
+        signal: AbortSignal,
+        change: ReturnType<typeof Promise.withResolvers<void>>,
+      ) {
+        try {
+          const token = sync.capture();
+          if (loadedVersion === token.version) return sync.snapshot();
+          if (loading?.version === token.version) return loading.promise;
+          const request = {
+            version: token.version,
+            promise: Promise.resolve().then(async () => {
+              const snapshot = await source.load({ signal });
+              const version = await apply.run({ rawInput: { snapshot, version: token.version } });
+              if (version !== undefined) loadedVersion = version;
+              return sync.snapshot();
+            }),
+          };
+          loading = request;
+          try {
+            return await request.promise;
+          } finally {
+            if (loading === request) loading = undefined;
+          }
+        } finally {
           if (changing === change) changing = undefined;
           change.resolve();
-        };
-        return {
-          close,
-          async complete(signal: AbortSignal) {
-            try {
-              return await loadingSnapshot.load(signal);
-            } finally {
-              close();
-            }
-          },
-        };
+        }
       },
       async ready() {
         await changing?.promise;
@@ -74,7 +70,24 @@ export const snapshotLoader = resource({
       },
       async load(signal: AbortSignal) {
         await changing?.promise;
-        return loadingSnapshot.load(signal);
+        const token = sync.capture();
+        if (loadedVersion === token.version) return sync.snapshot();
+        if (loading?.version === token.version) return loading.promise;
+        const request = {
+          version: token.version,
+          promise: Promise.resolve().then(async () => {
+            const snapshot = await source.load({ signal });
+            const version = await apply.run({ rawInput: { snapshot, version: token.version } });
+            if (version !== undefined) loadedVersion = version;
+            return sync.snapshot();
+          }),
+        };
+        loading = request;
+        try {
+          return await request.promise;
+        } finally {
+          if (loading === request) loading = undefined;
+        }
       },
     };
   },
@@ -95,24 +108,28 @@ const eventSource = resource({
   factory: (_deps, ctx) => {
     let close: (() => void) | undefined;
     ctx.defer(() => close?.());
+    let source: EventSource | undefined;
+    let signal: AbortSignal | undefined;
+    const queue: string[] = [];
+    let ended = true;
+    let waiting: ReturnType<typeof Promise.withResolvers<void>> | undefined;
     return {
-      connect(cursor: Stream.Cursor, signal: AbortSignal) {
+      connect(cursor: Stream.Cursor, stop: AbortSignal) {
         close?.();
-        const source = new EventSource(
-          `/api/sync?cursor=${encodeURIComponent(JSON.stringify(cursor))}`,
-        );
-        const queue: string[] = [];
-        let ended = false;
-        let waiting: (() => void) | undefined;
-        close = () => {
+        signal = stop;
+        source = new EventSource(`/api/sync?cursor=${encodeURIComponent(JSON.stringify(cursor))}`);
+        ended = false;
+        const connection = source;
+        const connectionSignal = signal;
+        const closeConnection = () => {
           if (ended) return;
           ended = true;
-          source.close();
+          connection.close();
           queue.length = 0;
-          signal.removeEventListener("abort", closeConnection);
-          waiting?.();
+          connectionSignal.removeEventListener("abort", closeConnection);
+          waiting?.resolve();
         };
-        const closeConnection = close;
+        close = closeConnection;
         const receive = (event: MessageEvent<string>) => {
           if (ended) return;
           if (queue.length >= 8) {
@@ -120,25 +137,25 @@ const eventSource = resource({
             return;
           }
           queue.push(event.data);
-          waiting?.();
+          waiting?.resolve();
         };
         source.addEventListener("changes", receive);
         source.addEventListener("account", receive);
         source.addEventListener("error", closeConnection);
         signal.addEventListener("abort", closeConnection, { once: true });
         if (signal.aborted) closeConnection();
-        return {
-          close: closeConnection,
-          async next() {
-            while (!ended && queue.length === 0) {
-              const received = Promise.withResolvers<void>();
-              waiting = () => received.resolve();
-              await received.promise;
-              waiting = undefined;
-            }
-            return ended ? undefined : queue.shift();
-          },
-        };
+      },
+      close() {
+        close?.();
+      },
+      async next() {
+        while (!ended && queue.length === 0) {
+          const received = Promise.withResolvers<void>();
+          waiting = received;
+          await received.promise;
+          waiting = undefined;
+        }
+        return ended ? undefined : queue.shift();
       },
     };
   },
@@ -172,7 +189,7 @@ const consumeConnection = operation({
     await snapshots.ready();
     const token = sync.capture();
     const cursors = sync.cursors();
-    const connection = source.connect(
+    source.connect(
       {
         public: Math.max(0, cursors.publicRevision),
         private:
@@ -184,14 +201,14 @@ const consumeConnection = operation({
     );
     try {
       for (;;) {
-        const data = await connection.next();
+        const data = await source.next();
         if (data === undefined) return false;
         const applied = await receive.settle({ rawInput: { data, version: token.version } });
         if (applied.status !== "success") return false;
         if (applied.value) return true;
       }
     } finally {
-      connection.close();
+      source.close();
     }
   },
 });
