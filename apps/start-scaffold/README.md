@@ -135,6 +135,7 @@ The schema check proves generation adds no duplicate tables.
 - Commit wakes SSE; rollback publishes no wake.
 - SSE replays saved events and refuses another account's cursor.
 - A revoked session receives no queued private rows.
+- A quiet private stream closes at the heartbeat after sign-out.
 - A final result replay completes a wait after disconnect.
 - Finished traces and Pino logs reach their HTTP receivers.
 - Storage failure keeps bounded records for retry.

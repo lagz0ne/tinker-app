@@ -1,6 +1,6 @@
 import { test, expect } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
-import { preset } from "@tinker/core/testing";
+import { preset, makeTestClock } from "@tinker/core/testing";
 import { proofDatabase, proofMail } from "@tinker-start-scaffold/testing";
 import {
   database,
@@ -72,6 +72,15 @@ const rollBackEvent = operation({
       );
       raise("Rollback", {});
     });
+  },
+});
+/** Session wakes hide the heartbeat fallback; only this test database drops that trigger. */
+const disableSessionWake = operation({
+  label: "test.disableSessionWake",
+  depends: { database },
+  run: async ({ database }) => {
+    const { sql } = await import("drizzle-orm");
+    await database.execute(sql`DROP TRIGGER sync_session_changed ON session`);
   },
 });
 test("SQL notifications wake after commit, stay silent on rollback, and survive a read before waiting", async () => {
@@ -295,5 +304,49 @@ test("reconnecting from applied cursors finishes a save whose final event commit
     stop.abort();
     expect((await browser.closed).status).toBe("success");
     expect((await server.closed).status).toBe("success");
+  }
+});
+
+test("a quiet private stream closes at the heartbeat after sign-out", async () => {
+  const stop = new AbortController();
+  const clock = makeTestClock();
+  const root = createScope({
+    signal: stop.signal,
+    clock,
+    tags: [...settings, backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [proofDatabase, proofMail],
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+    await root.run(disableSessionWake);
+    const ada = headers(
+      await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
+    );
+    const snapshot = await root.run(bootstrapPrivate, { tags: requestHeaders(ada) });
+    const owner = root.createSession({ tags: requestHeaders(ada) });
+    const response = await owner.run(openSync, {
+      input: { public: 0, private: { accountId: snapshot.stream, revision: snapshot.revision } },
+    });
+    const reader = response.body?.getReader();
+    if (!reader) throw response;
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe(": connected\n\n");
+    const waiting = reader.read();
+    await root.run(handleAuth, {
+      tags: requestHeaders(ada),
+      input: new Request("http://localhost:4318/api/auth/sign-out", {
+        method: "POST",
+        headers: new Headers([...ada, ["origin", "http://localhost:4318"]]),
+      }),
+    });
+    clock.advance(10_000);
+    expect(new TextDecoder().decode((await waiting).value)).toBe(
+      'event: account\ndata: {"kind":"account-change"}\n\n',
+    );
+    expect((await reader.read()).done).toBe(true);
+    expect((await owner.close({ graceful: true })).status).toBe("success");
+  } finally {
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
   }
 });
