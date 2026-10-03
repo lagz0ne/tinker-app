@@ -4,7 +4,6 @@ import {
   snapshotEnvelope,
   batchEnvelope,
   bootstrapEnvelope,
-  streamInput,
 } from "../scaffold/sync.ts";
 export { readExecution, readCursor, readPrivateCursor, readRetry } from "../scaffold/sync.ts";
 export type { Sync } from "../scaffold/sync.ts";
@@ -69,7 +68,7 @@ const batchInput = batchEnvelope.extend({
   events: z.array(event),
 });
 export const readBatch = batchInput;
-const streamMessage = z.discriminatedUnion("kind", [
+export const streamMessage = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("changes"), events: z.array(event).max(100) }),
   z.object({ kind: z.literal("account-change") }),
 ]);
@@ -78,6 +77,3 @@ export const readFeatureResult = result;
  * @param raw - From a saved event row; why: validate its feature body before replay.
  */
 export const readFeatureEvent = (raw: unknown) => event.parse(raw);
-export const readStreamMessage = streamInput.transform(({ version, data }) => {
-  return { version, message: streamMessage.parse(JSON.parse(data)) };
-});

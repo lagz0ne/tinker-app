@@ -172,7 +172,15 @@ try {
     const lock = JSON.parse(await readFile(join(consumer, "package-lock.json"), "utf8"));
     assert.equal(lock.packages[`node_modules/@tinker/${name}`].resolved, `file:${name}.tgz`);
   }
-  for (const task of ["build", "typecheck", "test", "test:seam", "test:boundary", "test:schema"]) {
+  for (const task of [
+    "build",
+    "typecheck",
+    "test",
+    "check:plain",
+    "test:seam",
+    "test:boundary",
+    "test:schema",
+  ]) {
     await run(["run", task], consumer, installed, task);
   }
   const copied = await hashes();
@@ -212,7 +220,7 @@ try {
     consumerTypes: "passed",
     dependencies: "Core and React packed tarballs; independent npm install; no workspace links",
     projectTests: "passed",
-    projectGates: "seam, browser imports, schema passed",
+    projectGates: "plain, seam, browser imports, schema passed",
     skills: "all five, plus AGENTS.md",
     maintainerFiles: "none",
     proofMode: "none",

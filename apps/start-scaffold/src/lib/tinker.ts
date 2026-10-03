@@ -1,5 +1,5 @@
 export { records } from "../frontend/records.ts";
-export { readBatch, readBootstrap, readSnapshot, readStreamMessage } from "../contracts/sync.ts";
+export { readBatch, readBootstrap, readSnapshot, streamMessage } from "../contracts/sync.ts";
 import type { FeatureSync } from "../contracts/sync.ts";
 /** This app fills the scaffold's open registry with its own bodies. */
 declare module "../scaffold/sync.ts" {

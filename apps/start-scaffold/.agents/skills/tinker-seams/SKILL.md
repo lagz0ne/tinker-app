@@ -17,6 +17,7 @@ Examples used by the app:
 - `syncClient`: `src/scaffold/frontend/sync.ts`.
 - `startRequests`: `src/scaffold/start.ts`.
 - `readResult`: `src/scaffold/backend/result.server.ts`.
+- `responseBodies`: `src/scaffold/backend/body.server.ts`.
 
 The seam check guards only imports from scaffold to app.
 The scaffold reads your values through:
@@ -41,6 +42,7 @@ After changing wiring:
 ```bash
 npm run build
 npm run typecheck
+npm run check:plain
 npm run test:seam
 npm run test:boundary
 npm run test:schema

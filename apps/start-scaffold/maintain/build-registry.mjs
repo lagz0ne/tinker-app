@@ -40,7 +40,7 @@ for (const name of [
 ])
   delete pkg.scripts[name];
 pkg.scripts.check =
-  "vp check && vp run typecheck && vp run test && vp run test:seam && vp run test:boundary && vp run test:schema";
+  "vp check && vp run typecheck && vp run test && vp run check:plain && vp run test:seam && vp run test:boundary && vp run test:schema";
 await writeFile(join(app, "starter.package.json"), JSON.stringify(pkg, null, 2) + "\n");
 const vp = join(root, "node_modules/.bin/vp");
 for (const args of [

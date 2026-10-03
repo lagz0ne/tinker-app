@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eventEnvelope, snapshotEnvelope, batchEnvelope, bootstrapEnvelope, streamInput } from "./scaffold/sync.ts";
+import { eventEnvelope, snapshotEnvelope, batchEnvelope, bootstrapEnvelope } from "./scaffold/sync.ts";
 const note = z.object({ text: z.string() });
 const result = z.object({ kind: z.literal("saved"), text: z.string() });
 const snapshot = snapshotEnvelope.extend({
@@ -16,16 +16,12 @@ export declare namespace Notes {
   type Public = z.infer<typeof snapshot>["public"];
   type Private = NonNullable<z.infer<typeof snapshot>["private"]>;
 }
-export const readSnapshot = (raw: unknown) => snapshot.parse(raw);
+export const readSnapshot = snapshot;
 const bootstrap = bootstrapEnvelope.extend({ snapshot });
-export const readBootstrap = (raw: unknown) => bootstrap.parse(raw);
+export const readBootstrap = bootstrap;
 const batch = batchEnvelope.extend({ events: z.array(event) });
-export const readBatch = (raw: unknown) => batch.parse(raw);
-const message = z.discriminatedUnion("kind", [
+export const readBatch = batch;
+export const streamMessage = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("changes"), events: z.array(event).max(100) }),
   z.object({ kind: z.literal("account-change") }),
 ]);
-export function readStreamMessage(raw: unknown) {
-  const { version, data } = streamInput.parse(raw);
-  return { version, message: message.parse(JSON.parse(data)) };
-}

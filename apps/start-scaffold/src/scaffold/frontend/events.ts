@@ -2,7 +2,8 @@ import { operation, extension, resource } from "@tinker/core";
 import { tabStop } from "./owner.ts";
 import { getBootstrap, getAccount } from "../sync.functions.ts";
 import { syncClient, applyBootstrap } from "./sync.ts";
-import { readStreamMessage } from "@/lib/tinker";
+import { streamMessage } from "@/lib/tinker";
+import { streamInput } from "../sync.ts";
 import type { Sync } from "../sync.ts";
 import type { Stream } from "../protocol.ts";
 /** The network client is replaced only in scope tests. */
@@ -144,7 +145,10 @@ const eventSource = resource({
 });
 export const receiveMessage = operation({
   label: "sync.receive",
-  input: readStreamMessage,
+  input: (raw: unknown) => {
+    const { version, data } = streamInput.parse(raw);
+    return { version, message: streamMessage.parse(JSON.parse(data)) };
+  },
   depends: { sync: syncClient },
   run: async ({ sync }, ctx) => {
     if (ctx.input.version !== sync.capture().version) return false;

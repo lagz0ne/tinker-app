@@ -429,7 +429,7 @@ test("accepted telemetry frees the byte budget for later records", async () => {
   await tools.ready;
   try {
     for (let round = 0; round < 40; round += 1) {
-      await tools.run(ingestTelemetry, {
+      tools.run(ingestTelemetry, {
         input: {
           traces: [],
           logs: Array.from({ length: 8 }, () => ({

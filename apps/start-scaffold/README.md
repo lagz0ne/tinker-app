@@ -139,6 +139,7 @@ The schema check proves generation adds no duplicate tables.
 - A final result replay completes a wait after disconnect.
 - Finished traces and Pino logs reach their HTTP receivers.
 - Storage failure keeps bounded records for retry.
+- Accepted telemetry frees the byte budget for later records.
 - Browser ingest refuses foreign origins, bad shapes, and large bodies.
 - Owner close flushes finished records without a scheduled browser timer.
 - A stuck receiver is aborted by the owned Core clock during close.

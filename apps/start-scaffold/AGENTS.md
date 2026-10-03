@@ -30,18 +30,22 @@ The fixed middleware bridge stays bound to its scope and fails when unbound.
 
 ## Code outside the four forms
 
-A different form needs a reason why none of the four can own the work.
-Put that reason in TSDoc beside the declaration.
-Shorter code or a familiar service class is not a reason.
-Do not add a helper that runs or wires a feature graph.
+No classes.
+Plain functions are rare; read the strict rule in tinker-forms.
+Keep each one pure, with at most three plain value params and two call sites.
+Its TSDoc names each param's source and need.
+List it in `PLAIN.md`; one caller means inline it.
+No helper takes a Core handle, controller, ctx, clock, signal, or IO object.
+React components and native callbacks keep only their caller's contract.
+Their helpers still follow the strict rule.
 
-Framework entries and adapters meet the native framework's contract.
-React components render data and invoke operations with React hooks.
-Input readers validate raw values at the operation or network door.
-Error declarations, database schemas, and wire encoders describe values.
-They must stay free of app effects and mutable app state.
+A service must never exist outside the graph of primitives.
+Resources own long-lived clients, connections, clocks, timers, and queues.
+Only `src/server.ts`, `src/router.tsx`, and its fixed router part create roots.
+The entry owns each root and its stop signal.
+No helper module keeps a scope singleton or exports a scope getter.
+No module-level let holds a live scope or handle.
 
-Review every other form against the four choices before keeping it.
 Keep fixed setup under `src/scaffold/` and feature units in userland.
 
 ## App skills
@@ -60,7 +64,20 @@ Read the skill for the work you are doing:
   when adding or fixing behavior; test through small scopes.
 
 Run the build before the type check and tests.
-Run seam, browser import, and schema checks after wiring changes.
+Run the shipped checks before review:
+
+```bash
+npm run build
+npm run typecheck
+npm run test
+npm run check:plain
+npm run check:plain -- --prove
+npm run test:seam
+npm run test:boundary
+npm run test:schema
+```
+
+Run the repo's lint and strict style census when present.
 Settings come from `.env`; local services use `compose.yml`.
 
 ## TanStack setup

@@ -2,7 +2,7 @@ import { operation, resource } from "@tinker/core";
 import { auth, requestHeaders, database } from "@/lib/tinker.server";
 import { notifications } from "./notifications.ts";
 import { backendStop, requestStop } from "./lifetime.ts";
-import { readStreamRequest } from "../protocol.ts";
+import { streamRequest, streamCursor } from "../protocol.ts";
 import type { Stream } from "../protocol.ts";
 import type { Sync } from "../sync.ts";
 import { raise } from "../errors.ts";
@@ -183,7 +183,11 @@ export const eventStream = resource({
 });
 export const openSync = operation({
   label: "sync.open",
-  input: readStreamRequest,
+  input: (raw: unknown) => {
+    const { search, lastEventId } = streamRequest.parse(raw);
+    const supplied = lastEventId || new URLSearchParams(search).get("cursor");
+    return streamCursor.parse(supplied ? JSON.parse(supplied) : { public: 0, private: null });
+  },
   depends: { stream: eventStream },
   run: async ({ stream }, ctx) => stream.open(ctx.input),
 });

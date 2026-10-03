@@ -95,11 +95,6 @@
           "target": "~/src/scaffold/sync.functions.ts"
         },
         {
-          "path": "src/scaffold/telemetry/delivery.server.ts",
-          "type": "registry:file",
-          "target": "~/src/scaffold/telemetry/delivery.server.ts"
-        },
-        {
           "path": "src/scaffold/telemetry/delivery.ts",
           "type": "registry:file",
           "target": "~/src/scaffold/telemetry/delivery.ts"
@@ -434,7 +429,7 @@
         },
         {
           "path": "src/server.ts",
-          "type": "registry:file",
+          "type": "registry:lib",
           "target": "~/src/server.ts"
         },
         {
@@ -581,6 +576,16 @@
           "path": ".agents/skills/tinker-testing/SKILL.md",
           "type": "registry:file",
           "target": "~/.agents/skills/tinker-testing/SKILL.md"
+        },
+        {
+          "path": "scripts/check-plain.mjs",
+          "type": "registry:file",
+          "target": "~/scripts/check-plain.mjs"
+        },
+        {
+          "path": "PLAIN.md",
+          "type": "registry:file",
+          "target": "~/PLAIN.md"
         }
       ],
       "meta": {

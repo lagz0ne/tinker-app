@@ -1,5 +1,5 @@
 import { z } from "zod";
-const cursor = z
+export const streamCursor = z
   .object({
     public: z.number().int().min(0),
     private: z
@@ -9,14 +9,9 @@ const cursor = z
   })
   .strict();
 export declare namespace Stream {
-  type Cursor = z.infer<typeof cursor>;
+  type Cursor = z.infer<typeof streamCursor>;
 }
-const request = z.object({
+export const streamRequest = z.object({
   search: z.string().max(2048),
   lastEventId: z.string().max(2048).nullable(),
-});
-/** Last-Event-ID is only a cursor; the server separately authorizes its private account. */
-export const readStreamRequest = request.transform(({ search, lastEventId }) => {
-  const supplied = lastEventId || new URLSearchParams(search).get("cursor");
-  return cursor.parse(supplied ? JSON.parse(supplied) : { public: 0, private: null });
 });
