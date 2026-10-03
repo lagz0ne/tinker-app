@@ -2,16 +2,8 @@ import { Counter } from "./Counter.tsx";
 import { Link, Navigate } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
 import type { Profile } from "../contracts/profile.ts";
-import { profile, nameDraft, pending, notice, toolRows, authMode, profileResult } from "./state.ts";
-import {
-  signIn,
-  signOut,
-  saveName,
-  refreshTools,
-  setAuthMode,
-  editName,
-  retryMail,
-} from "./actions.ts";
+import { profile, nameDraft, pending, notice, authMode, profileResult } from "./state.ts";
+import { signIn, signOut, saveName, setAuthMode, editName, retryMail } from "./actions.ts";
 import { isError } from "../errors.ts";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
@@ -178,60 +170,13 @@ function ProfileForm({ value }: { value: Profile.Value }) {
     </form>
   );
 }
-function Tools() {
-  const rows = useData(toolRows);
-  const refresh = useRun(refreshTools);
-  return (
-    <details className="mt-10 border-t pt-5">
-      <summary className="cursor-pointer text-sm font-semibold">See what ran</summary>
-      <p className="my-4 text-sm text-muted-foreground">
-        Completed Core spans. This is a snapshot, not a live view of all nodes.
-      </p>
-      <Button variant="outline" size="sm" onClick={() => refresh.run()}>
-        Refresh spans
-      </Button>
-      <div className="mt-5 grid gap-6 sm:grid-cols-2">
-        {(["backend", "frontend"] as const).map((side) => (
-          <section key={side} className="min-w-0">
-            <h3 className="font-semibold capitalize">{side}</h3>
-            <p className="mb-3 mt-1 text-xs text-muted-foreground">
-              {rows[side].length} completed spans ·{" "}
-              {rows[side].filter((row) => row.status === "failed").length} failed
-            </p>
-            <ol>
-              {rows[side]
-                .slice(-14)
-                .reverse()
-                .map((row) => (
-                  <li key={row.id} className="flex justify-between gap-3 border-b py-2 text-xs">
-                    <span className="min-w-0 break-words">
-                      {row.name}
-                      <small className="block text-muted-foreground">{row.kind}</small>
-                    </span>
-                    <span className="shrink-0 text-right">
-                      {row.status}
-                      <small className="block text-muted-foreground">
-                        {row.duration.toFixed(1)} ms
-                      </small>
-                    </span>
-                  </li>
-                ))}
-            </ol>
-          </section>
-        ))}
-      </div>
-    </details>
-  );
-}
 export function App() {
   const current = useData(profile);
   const message = useData(notice);
   return (
     <main className="mx-auto max-w-2xl space-y-6 px-5 py-8">
       <header>
-        <p className="text-xs font-semibold tracking-widest text-muted-foreground">
-          TINKERED / SYNC PROOF
-        </p>
+        <p className="text-xs font-semibold tracking-widest text-muted-foreground">STARTER</p>
         <h1 className="mt-3 text-2xl font-semibold">A shared counter. Your private space.</h1>
       </header>
       <Counter />
@@ -259,11 +204,6 @@ export function App() {
           </p>
         </CardContent>
       </Card>
-      <p className="text-xs leading-5 text-muted-foreground">
-        Local proof uses a PostgreSQL engine in memory. Restarting clears data. Mail is recorded; no
-        inbox delivery. Open two tabs to see shared changes.
-      </p>
-      {import.meta.env.DEV && <Tools />}
     </main>
   );
 }
@@ -292,7 +232,6 @@ export function ProfilePage() {
           </p>
         </CardContent>
       </Card>
-      {import.meta.env.DEV && <Tools />}
     </main>
   );
 }

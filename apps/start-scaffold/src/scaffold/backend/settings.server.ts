@@ -15,8 +15,8 @@ const liveSettings = z.object({
   DATABASE_URL: z.string().min(1),
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().int().positive(),
-  SMTP_USER: z.string().min(1),
-  SMTP_PASSWORD: z.string().min(1),
+  SMTP_USER: z.string(),
+  SMTP_PASSWORD: z.string(),
   SMTP_FROM: z.email(),
 });
 export function readSettings(env: NodeJS.ProcessEnv) {
@@ -30,30 +30,11 @@ export function readSettings(env: NodeJS.ProcessEnv) {
     traces: telemetry.data.VICTORIA_TRACES_URL,
     logs: telemetry.data.VICTORIA_LOGS_URL,
   } as const;
-  if (env.START_PROOF_MODE === "1")
-    return {
-      proof: true,
-      telemetry: storage,
-      origin: env.PUBLIC_ORIGIN ?? {
-        allowedHosts: ["localhost:*", "127.0.0.1:*", "*.tini.works"],
-        fallback: "http://localhost:4318",
-      },
-      secret: "local-proof-only-change-this-secret-before-live-use",
-      database: { url: "postgres://proof", migrations: "drizzle" },
-      mail: {
-        host: "proof",
-        port: 25,
-        user: "proof",
-        password: "proof",
-        from: "proof@example.com",
-      },
-    };
   const parsed = liveSettings.safeParse(env);
   if (!parsed.success)
     raise("BadSettings", { keys: parsed.error.issues.map((issue) => issue.path.join(".")) });
   const value = parsed.data;
   return {
-    proof: false,
     telemetry: storage,
     origin: value.PUBLIC_ORIGIN,
     secret: value.AUTH_SECRET,

@@ -10,7 +10,14 @@ if (import.meta.main) {
   const proof = await mkdtemp(join(tmpdir(), "start-native-middleware-"));
   const previousDirectory = process.cwd();
   try {
-    for (const name of ["src", "drizzle", "package.json", "vite.config.ts", "tsconfig.json"]) {
+    for (const name of [
+      "src",
+      "tests",
+      "drizzle",
+      "package.json",
+      "vite.config.ts",
+      "tsconfig.json",
+    ]) {
       await cp(join(source, name), join(proof, name), { recursive: true });
     }
     await symlink(join(source, "node_modules"), join(proof, "node_modules"), "dir");
@@ -105,10 +112,28 @@ export const Route = createFileRoute("/proof/write")({server: {
 }});
 `,
     );
+    const entry = join(proof, "src/scaffold/backend/entry.server.ts");
+    await writeFile(
+      entry,
+      'import { proofDatabase, proofMail } from "../../../tests/presets.ts";\n' +
+        (await readFile(entry, "utf8")).replace(
+          "extensions: [setup, startRequests],",
+          "extensions: [setup, startRequests], presets: [proofDatabase, proofMail],",
+        ),
+    );
     const build = spawnSync("vp", ["build"], { cwd: proof, encoding: "utf8" });
     assert.equal(build.status, 0, build.stdout + build.stderr);
     process.chdir(proof);
-    process.env.START_PROOF_MODE = "1";
+    Object.assign(process.env, {
+      PUBLIC_ORIGIN: "http://localhost:4318",
+      AUTH_SECRET: "local-proof-only-secret-with-thirty-two-letters",
+      DATABASE_URL: "postgres://proof",
+      SMTP_HOST: "proof",
+      SMTP_PORT: "25",
+      SMTP_USER: "",
+      SMTP_PASSWORD: "",
+      SMTP_FROM: "proof@example.com",
+    });
     const app = await import(pathToFileURL(join(proof, "dist/server/server.js")).href);
     try {
       const results = await Promise.all(

@@ -44,6 +44,25 @@ They must stay free of app effects and mutable app state.
 Review every other form against the four choices before keeping it.
 Keep fixed setup under `src/scaffold/` and feature units in userland.
 
+## App skills
+
+Read the skill for the work you are doing:
+
+- [tinker-forms](.agents/skills/tinker-forms/SKILL.md):
+  before adding app code; choose its owner.
+- [tinker-seams](.agents/skills/tinker-seams/SKILL.md):
+  when changing imports or wiring; never edit `src/scaffold/`.
+- [tinker-feature](.agents/skills/tinker-feature/SKILL.md):
+  when adding a feature; follow todos from table to page.
+- [tinker-sync](.agents/skills/tinker-sync/SKILL.md):
+  when saving or sharing state; use events and execution waits.
+- [tinker-testing](.agents/skills/tinker-testing/SKILL.md):
+  when adding or fixing behavior; test through small scopes.
+
+Run the build before the type check and tests.
+Run seam, browser import, and schema checks after wiring changes.
+Settings come from `.env`; local services use `compose.yml`.
+
 ## TanStack setup
 
 Start already ships these skills with its installed packages.

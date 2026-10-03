@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, realpath, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -33,9 +33,17 @@ const server = createServer((request, response) => {
 await new Promise((done) => server.listen(0, "127.0.0.1", done));
 const address = server.address();
 assert.ok(address && typeof address !== "string");
-const consumer = await mkdtemp(join(tmpdir(), "tinker-start-registry-"));
-async function run(args, cwd = consumer) {
-  const child = spawn("vp", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+const consumer = await mkdtemp(join(tmpdir(), "start-refine-consumer-"));
+const repo = resolve(app, "../..");
+const vp = join(repo, "node_modules/.bin/vp");
+const gates = [];
+let step = 0;
+async function run(args, cwd = consumer, command = vp, name = args.join("-")) {
+  const child = spawn(command, args, {
+    cwd,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, PATH: `${join(consumer, "node_modules/.bin")}:${process.env.PATH}` },
+  });
   let output = "";
   child.stdout.on("data", (data) => (output += data));
   child.stderr.on("data", (data) => (output += data));
@@ -43,10 +51,13 @@ async function run(args, cwd = consumer) {
     child.once("error", reject);
     child.once("close", done);
   });
-  if (args[0] === "build")
-    await writeFile(join(tmpdir(), "start-seam-consumer-build.log"), output + `\nEXIT ${code}\n`);
-  if (args[0] === "exec")
-    await writeFile(join(tmpdir(), "start-seam-consumer-types.log"), output + `\nEXIT ${code}\n`);
+  const log = join(
+    tmpdir(),
+    `start-refine-consumer-${++step}-${name.replaceAll(/[^a-z0-9-]/gi, "_")}.log`,
+  );
+  await writeFile(log, output + `\nEXIT ${code}\n`);
+  gates.push({ name, code, log });
+  console.log(`${name}: EXIT ${code}; ${log}`);
   assert.equal(code, 0, output);
   return output;
 }
@@ -72,14 +83,28 @@ async function hashes(folder = consumer, prefix = "") {
   return rows.sort(([a], [b]) => a.localeCompare(b));
 }
 try {
-  /** Existing Start dependencies are borrowed; this check owns only the copied source. */
-  const packageInfo = JSON.parse(await readFile(join(app, "package.json"), "utf8"));
-  await writeFile(join(consumer, "package.json"), JSON.stringify(packageInfo, null, 2));
+  for (const name of ["core", "react"]) {
+    await run(
+      ["--dir", join(repo, "packages", name), "pack", "--out", join(consumer, `${name}.tgz`)],
+      repo,
+      "pnpm",
+      `pack-${name}`,
+    );
+  }
+  await writeFile(
+    join(consumer, "package.json"),
+    JSON.stringify({ name: "clean-start-consumer", private: true, type: "module" }),
+  );
+  await run(
+    ["install", "./core.tgz", "./react.tgz", "react@^19.3.0"],
+    consumer,
+    "npm",
+    "install-tarballs",
+  );
   const components = JSON.parse(await readFile(join(app, "components.json"), "utf8"));
   components.aliases.lib = "@/app-lib";
   await writeFile(join(consumer, "components.json"), JSON.stringify(components, null, 2));
   await writeFile(join(consumer, "tsconfig.json"), await readFile(join(app, "tsconfig.json")));
-  await symlink(join(app, "node_modules"), join(consumer, "node_modules"), "dir");
   const cli = ["dlx", "--", "shadcn@4.21.0"];
   await run([
     ...cli,
@@ -92,7 +117,9 @@ try {
     for (const file of item.files) {
       assert.equal(
         await readFile(join(consumer, consumerTarget(file)), "utf8"),
-        (await readFile(join(app, file.path), "utf8")).replaceAll("@/lib/", "@/app-lib/"),
+        file.type === "registry:lib"
+          ? (await readFile(join(app, file.path), "utf8")).replaceAll("@/lib/", "@/app-lib/")
+          : await readFile(join(app, file.path), "utf8"),
       );
     }
   }
@@ -129,15 +156,47 @@ try {
   for (const file of fixed.files) {
     assert.equal(
       await readFile(join(consumer, consumerTarget(file)), "utf8"),
-      (await readFile(join(app, file.path), "utf8")).replaceAll("@/lib/", "@/app-lib/"),
+      file.type === "registry:lib"
+        ? (await readFile(join(app, file.path), "utf8")).replaceAll("@/lib/", "@/app-lib/")
+        : await readFile(join(app, file.path), "utf8"),
     );
   }
   assert.deepEqual(
     await Promise.all(seams.map((file) => readFile(join(consumer, file), "utf8"))),
     editedSeams,
   );
-  await run(["build"]);
-  await run(["exec", "tsc", "--noEmit"]);
+  await run(["install"], consumer, "npm", "install-starter");
+  const installed = join(consumer, "node_modules/.bin/vp");
+  for (const name of ["core", "react"]) {
+    assert.ok((await realpath(join(consumer, "node_modules/@tinker", name))).startsWith(consumer));
+    const lock = JSON.parse(await readFile(join(consumer, "package-lock.json"), "utf8"));
+    assert.equal(lock.packages[`node_modules/@tinker/${name}`].resolved, `file:${name}.tgz`);
+  }
+  for (const task of ["build", "typecheck", "test", "test:seam", "test:boundary", "test:schema"]) {
+    await run(["run", task], consumer, installed, task);
+  }
+  const copied = await hashes();
+  assert.ok(!copied.some(([path]) => path.startsWith("maintain/") || path === "src/proof.ts"));
+  for (const item of manifest.items) {
+    for (const file of item.files) {
+      assert.ok(
+        !(await readFile(join(consumer, consumerTarget(file)), "utf8")).includes(
+          "START_PROOF_MODE",
+        ),
+        file.path,
+      );
+    }
+  }
+  for (const name of [
+    "tinker-forms",
+    "tinker-seams",
+    "tinker-feature",
+    "tinker-sync",
+    "tinker-testing",
+  ]) {
+    assert.ok(await readFile(join(consumer, ".agents/skills", name, "SKILL.md"), "utf8"));
+  }
+  assert.ok(await readFile(join(consumer, "AGENTS.md"), "utf8"));
   const proof = {
     cli: "shadcn@4.21.0",
     items: manifest.items.length,
@@ -151,11 +210,16 @@ try {
     editedFeature: "unchanged",
     consumerBuild: "passed",
     consumerTypes: "passed",
-    prerequisites:
-      "Existing Start dependencies and built workspace Core/React; dependency install is not tested.",
+    dependencies: "Core and React packed tarballs; independent npm install; no workspace links",
+    projectTests: "passed",
+    projectGates: "seam, browser imports, schema passed",
+    skills: "all five, plus AGENTS.md",
+    maintainerFiles: "none",
+    proofMode: "none",
+    gates,
   };
   await writeFile(
-    join(tmpdir(), "start-seam-registry-proof.json"),
+    join(tmpdir(), "start-refine-consumer-proof.json"),
     JSON.stringify(proof, null, 2) + "\n",
   );
   console.log(JSON.stringify(proof));

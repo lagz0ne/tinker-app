@@ -1,5 +1,4 @@
 import { operation, resource, tag } from "@tinker/core";
-import { preset } from "@tinker/core/testing";
 import type { Database } from "./scaffold/backend/database.ts";
 import type { BetterAuthPlugin } from "better-auth";
 import type { Sync } from "./scaffold/sync.ts";
@@ -34,11 +33,3 @@ export const bootstrap = operation({
   label: "note.bootstrap",
   run: (): Sync.Snapshot => ({ public: { stream: "public", revision: 0, note: { text: "hello" } }, private: null }),
 });
-/** The compile fixture retains the proof host's explicit test-only preset shape. */
-export const proofDatabase = preset(database, async (_deps, ctx): Promise<Database.Handle> => {
-  const [{ PGlite }, { drizzle }] = await Promise.all([import("@electric-sql/pglite"), import("drizzle-orm/pglite")]);
-  const client = await PGlite.create();
-  ctx.defer(() => client.close());
-  return Object.assign(drizzle({ client }), { listen: async (wake: () => void) => client.listen("start_sync", wake) });
-});
-export const proofMail = proofDatabase;

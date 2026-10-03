@@ -9,12 +9,12 @@ const fixture = await mkdtemp(join(tmpdir(), "start-seam-note-"));
 try {
   await mkdir(join(fixture, "src/lib"), { recursive: true });
   await cp(join(app, "src/scaffold"), join(fixture, "src/scaffold"), { recursive: true });
-  for (const file of await readdir(join(app, "scripts/fixtures/note-app"))) {
+  for (const file of await readdir(join(app, "maintain/fixtures/note-app"))) {
     const name = file.replace(/\.txt$/, "");
     const target = name.startsWith("tinker.") ? `src/lib/${name}` : `src/${name}`;
     await writeFile(
       join(fixture, target),
-      await readFile(join(app, "scripts/fixtures/note-app", file)),
+      await readFile(join(app, "maintain/fixtures/note-app", file)),
     );
   }
   await writeFile(join(fixture, "package.json"), '{"type":"module"}\n');

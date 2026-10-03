@@ -1,7 +1,7 @@
 import { test, expect, onTestFinished } from "vite-plus/test";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { proofDatabase, proofMail } from "@tinker-start-scaffold/proof";
+import { proofDatabase, proofMail } from "@tinker-start-scaffold/testing";
 import {
   authSettings,
   databaseSettings,

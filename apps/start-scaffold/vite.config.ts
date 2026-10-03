@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  server: { host: process.env.HOST ?? "127.0.0.1", port: Number(process.env.PORT ?? 4318) },
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   plugins: [
     tanstackStart({

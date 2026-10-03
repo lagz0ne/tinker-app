@@ -2,19 +2,21 @@ import assert from "node:assert/strict";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-const { parseSync } = createRequire(new URL("../../../tools/jev/package.json", import.meta.url))(
-  "oxc-parser",
-);
+import { parseSync } from "oxc-parser";
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageName = JSON.parse(await readFile(join(app, "package.json"), "utf8")).name;
 const root = resolve(
   process.argv.slice(2).find((arg) => arg !== "--prove") ?? resolve(app, "src/scaffold"),
 );
-const seams = new Set(["@/lib/tinker", "@/lib/tinker.server", "@/routeTree.gen"]);
+const config = JSON.parse(await readFile(join(app, "components.json"), "utf8"));
+const seams = new Set([
+  `${config.aliases.lib}/tinker`,
+  `${config.aliases.lib}/tinker.server`,
+  "@/routeTree.gen",
+]);
 const sourceKinds = new Set([
   "ImportDeclaration",
   "ExportNamedDeclaration",

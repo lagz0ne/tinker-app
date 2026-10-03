@@ -7,6 +7,7 @@ export {
   requestHeaders,
   readAccount,
 } from "./auth.ts";
+export type { Database } from "./database.ts";
 export { database, databaseSettings, migrate } from "./database.ts";
 export { mail, mailSettings, sendMail } from "./mail.ts";
 export type { Mail } from "./mail.ts";

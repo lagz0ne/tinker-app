@@ -1,12 +1,5 @@
 import { createScope, extension } from "@tinker/core";
-import {
-  authSettings,
-  databaseSettings,
-  mailSettings,
-  migrate,
-  proofDatabase,
-  proofMail,
-} from "@/lib/tinker.server";
+import { authSettings, databaseSettings, mailSettings, migrate } from "@/lib/tinker.server";
 import {
   history,
   observer,
@@ -45,10 +38,9 @@ async function start() {
     signal: stop.signal,
     observe: await tools.resolve(observer),
     extensions: [setup, startRequests],
-    presets: settings.proof ? [proofDatabase, proofMail] : [],
     tags: [
       backendStop(stop.signal),
-      telemetryOrigin(typeof settings.origin === "string" ? settings.origin : null),
+      telemetryOrigin(settings.origin),
       browserTelemetry(async (batch) => {
         await Promise.resolve(
           ingest.run({

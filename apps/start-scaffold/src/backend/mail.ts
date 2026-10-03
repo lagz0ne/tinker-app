@@ -16,7 +16,7 @@ export const mail = resource({
       host: settings.host,
       port: settings.port,
       secure: settings.port === 465,
-      auth: { user: settings.user, pass: settings.password },
+      auth: settings.user ? { user: settings.user, pass: settings.password } : undefined,
     });
     ctx.defer(() => transport.close());
     return {

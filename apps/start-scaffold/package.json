@@ -9,25 +9,25 @@
     "./transport": "./src/scaffold/backend/index.server.ts",
     "./telemetry": "./src/scaffold/telemetry/index.ts",
     "./sync": "./src/scaffold/frontend/index.ts",
-    "./proof": "./src/proof.ts"
+    "./testing": "./tests/presets.ts"
   },
   "scripts": {
-    "dev": "START_PROOF_MODE=1 vp dev --host ${HOST:-127.0.0.1} --port ${PORT:-4318}",
+    "dev": "node --env-file=.env node_modules/vite-plus/bin/vp dev",
     "build": "vp build",
-    "start": "node scripts/serve.mjs",
+    "start": "node --env-file=.env scripts/serve.mjs",
     "test": "vp test",
     "db:generate": "drizzle-kit generate",
     "test:boundary": "node scripts/check-boundary.mjs",
-    "test:imports": "node scripts/check-imports.mjs",
-    "test:middleware": "node scripts/check-middleware.mjs",
-    "registry:build": "vp dlx -- shadcn@4.21.0 build && vp fmt public/r",
-    "test:registry": "node scripts/check-registry.mjs",
+    "test:imports": "node maintain/check-imports.mjs",
+    "test:middleware": "node maintain/check-middleware.mjs",
+    "registry:build": "node maintain/build-registry.mjs",
+    "test:registry": "node maintain/check-registry.mjs",
     "test:seam": "node scripts/check-seam.mjs --prove",
-    "test:seam:fixture": "node scripts/check-seam-fixture.mjs",
-    "test:schema": "node scripts/check-schema.mjs"
+    "test:seam:fixture": "node maintain/check-seam-fixture.mjs",
+    "test:schema": "node scripts/check-schema.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@electric-sql/pglite": "catalog:",
     "@hono/node-server": "1.19.17",
     "@radix-ui/react-slot": "1.3.3",
     "@tanstack/react-router": "1.170.41",
@@ -47,6 +47,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "catalog:",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "catalog:",
     "@types/nodemailer": "^7.0.11",
@@ -55,6 +56,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "npm:^4.3.4",
     "drizzle-kit": "catalog:",
+    "oxc-parser": "catalog:",
     "tailwindcss": "4.3.3",
     "typescript": "catalog:",
     "vite": "catalog:",

@@ -1,19 +1,7 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
-import {
-  updateProfile,
-  getBackendSpans,
-  retryProfileNotification,
-} from "../transport/profile.functions.ts";
-import {
-  nameDraft,
-  pending,
-  notice,
-  toolRows,
-  frontendSpans,
-  authMode,
-  profileResult,
-} from "./state.ts";
+import { updateProfile, retryProfileNotification } from "../transport/profile.functions.ts";
+import { nameDraft, pending, notice, authMode, profileResult } from "./state.ts";
 import { syncClient } from "../scaffold/frontend/sync.ts";
 import { loadSnapshot, snapshotLoader } from "../scaffold/frontend/events.ts";
 import { readCredentials } from "../contracts/credentials.ts";
@@ -125,13 +113,6 @@ export const signOut = operation({
     if (result.error) raise("AuthFailed", { message: result.error.message ?? "Sign out failed." });
     sync.leave();
     notice.set("You are signed out. Committed changes remain saved.");
-  },
-});
-export const refreshTools = operation({
-  label: "refreshTools",
-  depends: { rows: toolRows.controller, read: frontendSpans },
-  run: async ({ rows, read }) => {
-    rows.set({ backend: await getBackendSpans(), frontend: read() });
   },
 });
 export const setAuthMode = operation({

@@ -151,7 +151,7 @@
         }
       ],
       "meta": {
-        "version": "0.4.0",
+        "version": "0.5.0",
         "contractVersion": 3,
         "ownership": "fixed",
         "update": "Review the dry run before overwriting. User values enter through the lib seams."
@@ -410,7 +410,7 @@
         }
       ],
       "meta": {
-        "version": "0.4.0",
+        "version": "0.5.0",
         "ownership": "userland",
         "update": "These are your files. Never overwrite this item to update setup."
       }
@@ -419,18 +419,13 @@
       "name": "starter",
       "type": "registry:block",
       "title": "Public and private Start application",
-      "description": "Install into a Start project with the documented package prerequisites. One chosen Postgres/auth/SMTP graph.",
+      "description": "Install a Start project with auth, counter, profile, private todos, tests, and local services.",
       "registryDependencies": ["@tinker-start/runtime", "@tinker-start/postgres-auth-mail-example"],
       "files": [
         {
           "path": "src/client.tsx",
           "type": "registry:file",
           "target": "~/src/client.tsx"
-        },
-        {
-          "path": "src/proof.ts",
-          "type": "registry:file",
-          "target": "~/src/proof.ts"
         },
         {
           "path": "src/router.tsx",
@@ -478,21 +473,120 @@
           "target": "~/src/routes/api.telemetry.ts"
         },
         {
-          "path": "compose.victoria.yml",
-          "type": "registry:file",
-          "target": "~/compose.victoria.yml"
-        },
-        {
           "path": "AGENTS.md",
           "type": "registry:file",
           "target": "~/AGENTS.md"
+        },
+        {
+          "path": "compose.yml",
+          "type": "registry:file",
+          "target": "~/compose.yml"
+        },
+        {
+          "path": "README.md",
+          "type": "registry:file",
+          "target": "~/README.md"
+        },
+        {
+          "path": "vitest.config.ts",
+          "type": "registry:file",
+          "target": "~/vitest.config.ts"
+        },
+        {
+          "path": "starter.package.json",
+          "type": "registry:file",
+          "target": "~/package.json"
+        },
+        {
+          "path": "scripts/check-seam.mjs",
+          "type": "registry:file",
+          "target": "~/scripts/check-seam.mjs"
+        },
+        {
+          "path": "scripts/check-boundary.mjs",
+          "type": "registry:file",
+          "target": "~/scripts/check-boundary.mjs"
+        },
+        {
+          "path": "scripts/check-schema.mjs",
+          "type": "registry:file",
+          "target": "~/scripts/check-schema.mjs"
+        },
+        {
+          "path": "tests/backend.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/backend.test.ts"
+        },
+        {
+          "path": "tests/presets.ts",
+          "type": "registry:file",
+          "target": "~/tests/presets.ts"
+        },
+        {
+          "path": "tests/sse.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/sse.test.ts"
+        },
+        {
+          "path": "tests/sync-client.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/sync-client.test.ts"
+        },
+        {
+          "path": "tests/sync.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/sync.test.ts"
+        },
+        {
+          "path": "tests/telemetry.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/telemetry.test.ts"
+        },
+        {
+          "path": "tests/todos.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/todos.test.ts"
+        },
+        {
+          "path": "tests/transport.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/transport.test.ts"
+        },
+        {
+          "path": "tests/waste.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/waste.test.ts"
+        },
+        {
+          "path": ".agents/skills/tinker-feature/SKILL.md",
+          "type": "registry:file",
+          "target": "~/.agents/skills/tinker-feature/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/tinker-forms/SKILL.md",
+          "type": "registry:file",
+          "target": "~/.agents/skills/tinker-forms/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/tinker-seams/SKILL.md",
+          "type": "registry:file",
+          "target": "~/.agents/skills/tinker-seams/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/tinker-sync/SKILL.md",
+          "type": "registry:file",
+          "target": "~/.agents/skills/tinker-sync/SKILL.md"
+        },
+        {
+          "path": ".agents/skills/tinker-testing/SKILL.md",
+          "type": "registry:file",
+          "target": "~/.agents/skills/tinker-testing/SKILL.md"
         }
       ],
       "meta": {
-        "version": "0.4.0",
+        "version": "0.5.0",
         "ownership": "install-only",
-        "prerequisites": "Use the dependencies and devDependencies in this app package.json; Core and React are workspace packages, not an npm release.",
-        "proof": "Proof presets load with the server seam. PGlite loads inside its factory and runs only in proof mode. Production resources use pg and SMTP."
+        "prerequisites": "Install packed Core and React releases first; package.json supplies all other dependencies and project checks."
       }
     }
   ]

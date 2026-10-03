@@ -1,7 +1,7 @@
 import { preset } from "@tinker/core/testing";
-import { database } from "./backend/database.ts";
-import { mail } from "./backend/mail.ts";
-import type { Database } from "./backend/database.ts";
+import { database } from "@tinker-start-scaffold/backend";
+import { mail } from "@tinker-start-scaffold/backend";
+import type { Database } from "@tinker-start-scaffold/backend";
 /** Explicit local proof wiring; production factories always use Postgres and SMTP. */
 export const proofDatabase = preset(database, async (_deps, ctx): Promise<Database.Handle> => {
   const [{ PGlite }, { drizzle }] = await Promise.all([

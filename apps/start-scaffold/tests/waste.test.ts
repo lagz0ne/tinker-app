@@ -2,7 +2,7 @@ import { test, expect } from "vite-plus/test";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { createAuthClient } from "better-auth/react";
-import { proofDatabase, proofMail } from "@tinker-start-scaffold/proof";
+import { proofDatabase, proofMail } from "@tinker-start-scaffold/testing";
 import {
   databaseSettings,
   mailSettings,

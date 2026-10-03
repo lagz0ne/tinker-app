@@ -1,4 +1,4 @@
-import { proofDatabase, proofMail } from "@tinker-start-scaffold/proof";
+import { proofDatabase, proofMail } from "@tinker-start-scaffold/testing";
 import { test, expect } from "vite-plus/test";
 import { createScope, isError as isCoreError } from "@tinker/core";
 import {
