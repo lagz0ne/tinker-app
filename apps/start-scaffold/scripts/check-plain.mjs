@@ -9,6 +9,8 @@ import ts from "typescript-api";
 const PLAIN_MAX = 17;
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(process.argv.slice(2).find((arg) => !arg.startsWith("--")) ?? app);
+// TypeScript resolves types from the working folder; run from the project root.
+process.chdir(root);
 const entries = new Set(["src/server.ts", "src/router.tsx", "src/scaffold/frontend/router.tsx"]);
 const failures = [];
 const files = [];
