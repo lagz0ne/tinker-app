@@ -112,10 +112,10 @@ export const Route = createFileRoute("/proof/write")({server: {
 }});
 `,
     );
-    const entry = join(proof, "src/scaffold/backend/entry.server.ts");
+    const entry = join(proof, "src/server.ts");
     await writeFile(
       entry,
-      'import { proofDatabase, proofMail } from "../../../tests/presets.ts";\n' +
+      'import { proofDatabase, proofMail } from "../tests/presets.ts";\n' +
         (await readFile(entry, "utf8")).replace(
           "extensions: [setup, startRequests],",
           "extensions: [setup, startRequests], presets: [proofDatabase, proofMail],",

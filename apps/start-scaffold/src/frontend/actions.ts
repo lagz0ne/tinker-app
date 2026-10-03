@@ -4,7 +4,7 @@ import { updateProfile, retryProfileNotification } from "../transport/profile.fu
 import { nameDraft, pending, notice, authMode, profileResult } from "./state.ts";
 import { syncClient } from "../scaffold/frontend/sync.ts";
 import { snapshotLoader } from "../scaffold/frontend/events.ts";
-import { readCredentials } from "../contracts/credentials.ts";
+import { credentials } from "../contracts/credentials.ts";
 import { readProfileInput } from "../contracts/profile.ts";
 import { raise } from "../errors.ts";
 const notificationId = z.uuid();
@@ -19,7 +19,11 @@ export const authClient = resource({
 });
 export const signIn = operation({
   label: "signIn",
-  input: readCredentials,
+  input: (raw: unknown) => {
+    const parsed = credentials.safeParse(raw);
+    if (!parsed.success) raise("BadInput", { reason: "Check your email and password." });
+    return parsed.data;
+  },
   depends: {
     client: authClient,
     sync: syncClient,

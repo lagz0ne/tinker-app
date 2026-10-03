@@ -1,6 +1,6 @@
 import { test, expect } from "vite-plus/test";
 import { createScope, operation, extension } from "@tinker/core";
-import { startRequests, holdResponse, readResult } from "@tinker-start-scaffold/transport";
+import { startRequests, responseBodies, readResult } from "@tinker-start-scaffold/transport";
 import { isError, raise } from "@tinker-start-scaffold/backend";
 
 const waitForCancellation = operation({
@@ -53,16 +53,20 @@ test("the request stays open until its stream ends or is cancelled", async () =>
   await root.ready;
   try {
     const session = root.createSession();
-    const response = await holdResponse(new Response("hello"), async (graceful) => {
-      await session.close({ graceful });
-    });
+    const response = await root
+      .resolve(responseBodies)
+      .hold(new Response("hello"), async (graceful) => {
+        await session.close({ graceful });
+      });
     expect(ended).toBe(0);
     expect(await response.text()).toBe("hello");
     expect(ended).toBe(1);
     const second = root.createSession();
-    const cancelled = await holdResponse(new Response(new ReadableStream()), async (graceful) => {
-      await second.close({ graceful });
-    });
+    const cancelled = await root
+      .resolve(responseBodies)
+      .hold(new Response(new ReadableStream()), async (graceful) => {
+        await second.close({ graceful });
+      });
     await cancelled.body?.cancel();
     expect(ended).toBe(2);
   } finally {
@@ -89,9 +93,11 @@ test("cancelling a body aborts active work before a pending pull can close grace
         },
       );
     await started.promise;
-    const response = await holdResponse(new Response(new ReadableStream()), async (graceful) => {
-      await session.close({ graceful });
-    });
+    const response = await root
+      .resolve(responseBodies)
+      .hold(new Response(new ReadableStream()), async (graceful) => {
+        await session.close({ graceful });
+      });
     await response.body?.cancel();
     expect(await work).toBe("cancelled");
   } finally {

@@ -1,5 +1,8 @@
 import type { RunResult } from "@tinker/core";
 import { isError, raise } from "../errors.ts";
+/**
+ * @param result - From a settled mutation; why: turn its result into a network receipt.
+ */
 export function readReceipt(result: RunResult<{ executionId: string }>) {
   if (result.status === "success")
     return { kind: "accepted" as const, executionId: result.value.executionId };

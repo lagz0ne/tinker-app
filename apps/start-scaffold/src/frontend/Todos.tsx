@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { data, operation, isError as isCoreError } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
@@ -44,23 +45,25 @@ const showFailure = operation({
     });
   },
 });
+const attemptTodo = operation({
+  label: "todos.attempt",
+  input: z.unknown(),
+  depends: { save: saveTodo, failure: showFailure },
+  run: async ({ save, failure }, ctx) => {
+    const result = await save.settle({ rawInput: ctx.input });
+    if (result.status === "success") return true;
+    if (result.status === "failed") failure.run({ rawInput: result.error });
+    else failure.run({ rawInput: undefined });
+    return false;
+  },
+});
 export function Todos() {
   const rows = useData(todos);
   const account = useData(profile);
   const loading = useRouterState({ select: (state) => state.isLoading });
   const state = useData(flow);
-  const save = useRun(saveTodo);
-  const failure = useRun(showFailure);
+  const save = useRun(attemptTodo);
   const busy = state.kind === "saving" || loading;
-  async function change(input: unknown) {
-    try {
-      await save.runAsync({ rawInput: input });
-      return true;
-    } catch (error) {
-      failure.run({ rawInput: error });
-      return false;
-    }
-  }
   if (account === null) return <Navigate to="/" />;
   return (
     <main className="mx-auto max-w-2xl px-5 py-8 sm:py-12">
@@ -92,7 +95,11 @@ export function Todos() {
             onSubmit={async (event) => {
               event.preventDefault();
               const form = event.currentTarget;
-              if (await change({ kind: "add", title: new FormData(form).get("title") }))
+              if (
+                await save.runAsync({
+                  rawInput: { kind: "add", title: new FormData(form).get("title") },
+                })
+              )
                 form.reset();
             }}
           >
@@ -125,7 +132,9 @@ export function Todos() {
                       checked={row.done}
                       disabled={busy}
                       onChange={(event) =>
-                        change({ kind: "setDone", id: row.id, done: event.target.checked })
+                        save.runAsync({
+                          rawInput: { kind: "setDone", id: row.id, done: event.target.checked },
+                        })
                       }
                       className="size-4 shrink-0 accent-primary"
                     />
@@ -145,7 +154,7 @@ export function Todos() {
                     size="sm"
                     disabled={busy}
                     aria-label={`Delete ${row.title}`}
-                    onClick={() => change({ kind: "delete", id: row.id })}
+                    onClick={() => save.runAsync({ rawInput: { kind: "delete", id: row.id } })}
                   >
                     Delete
                   </Button>

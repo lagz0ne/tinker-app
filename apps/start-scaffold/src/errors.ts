@@ -16,12 +16,17 @@ export declare namespace Errors {
       : never;
   type Of<N extends Name> = Error & { kind: N; payload: Payload<N> };
 }
-export function fail<N extends Errors.Name>(kind: N, payload: Errors.Payload<N>): Errors.Of<N> {
-  return Object.assign(new Error(kind), { kind, payload });
-}
+/**
+ * @param kind - From the failing caller; why: choose the managed error.
+ * @param payload - From the failing caller; why: keep facts for that error.
+ */
 export function raise<N extends Errors.Name>(kind: N, payload: Errors.Payload<N>): never {
-  throw fail(kind, payload);
+  throw Object.assign(new Error(kind), { kind, payload });
 }
+/**
+ * @param error - From a caught failure; why: narrow its payload.
+ * @param kind - From the caller; why: select the expected error.
+ */
 export function isError<N extends Errors.Name>(error: unknown, kind: N): error is Errors.Of<N> {
   return error instanceof Error && "kind" in error && error.kind === kind;
 }

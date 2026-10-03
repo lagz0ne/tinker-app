@@ -17,6 +17,9 @@ const todoChange = z.discriminatedUnion("kind", [
     .object({ kind: z.literal("delete"), id: z.number().int().positive().max(2_147_483_647) })
     .strict(),
 ]);
+/**
+ * @param raw - From the todo command or form; why: validate one todo change.
+ */
 export function readTodoChange(raw: unknown): Todos.Change {
   const result = todoChange.safeParse(raw);
   if (!result.success)

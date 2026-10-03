@@ -12,7 +12,7 @@ import { history, observer, telemetry, telemetrySettings } from "../telemetry/in
 const readTelemetrySettings = createIsomorphicFn()
   .server(async () => {
     const { readSettings } = await import("../backend/settings.server.ts");
-    return { ...readSettings(process.env).telemetry, side: "ssr" as const };
+    return { ...readSettings({ ...process.env }).telemetry, side: "ssr" as const };
   })
   .client(() => ({ side: "browser" as const, service: "start-scaffold", level: "info" as const }));
 const bindTabClose = createIsomorphicFn()
@@ -64,7 +64,7 @@ export async function getRouter() {
       context: { bootstrap: () => app.run(loadSnapshot), account: () => app.run(checkAccount) },
       dehydrate: () => sync.snapshot(),
       hydrate: async (raw) => {
-        const snapshot = readSnapshot(raw);
+        const snapshot = readSnapshot.parse(raw);
         await app.run(applyBootstrap, { input: { snapshot, version: sync.capture().version } });
         app.resolve(syncStreaming).start();
       },

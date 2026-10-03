@@ -411,3 +411,43 @@ test("scope exit cancels an unfinished telemetry request body", async () => {
   expect(await app.closed).toMatchObject({ status: "success", teardownErrors: undefined });
   expect(cancelled).toBe(true);
 });
+
+test("accepted telemetry frees the byte budget for later records", async () => {
+  const receiver = await new Receiver().start();
+  const stop = new AbortController();
+  const tools = createScope({
+    signal: stop.signal,
+    extensions: [telemetry],
+    tags: telemetrySettings({
+      side: "ssr",
+      service: "test-start",
+      level: "info",
+      traces: `${receiver.url}/traces`,
+      logs: `${receiver.url}/logs`,
+    }),
+  });
+  await tools.ready;
+  try {
+    for (let round = 0; round < 40; round += 1) {
+      await tools.run(ingestTelemetry, {
+        input: {
+          traces: [],
+          logs: Array.from({ length: 8 }, () => ({
+            time: 0,
+            level: 30,
+            msg: "x".repeat(2048),
+            service: "test-start",
+            side: "ssr" as const,
+            attributes: { value: "x".repeat(2048) },
+          })),
+        },
+      });
+      await tools.run(flushTelemetry);
+    }
+    expect(tools.resolve(exportHealth)).toEqual({ kind: "idle", pending: 0, dropped: 0 });
+  } finally {
+    stop.abort();
+    await tools.closed;
+    await receiver.close();
+  }
+});

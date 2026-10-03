@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { Observe } from "@tinker/core";
 
 const attribute = z.strictObject({
   key: z.string().max(256),
@@ -84,7 +83,9 @@ export declare namespace Telemetry {
   type Delivery = { traces: boolean; logs: boolean };
 }
 
-/** Core attributes may contain bigint or cycles; one bad field must not lose its record. */
+/** Core attributes may contain bigint or cycles; one bad field must not lose its record.
+ * @param value - From a span or log attribute; why: bound and safely encode its wire value.
+ */
 export function encodeValue(value: unknown): string {
   if (typeof value === "bigint") return value.toString().slice(0, 2048);
   try {
@@ -98,38 +99,20 @@ export function encodeValue(value: unknown): string {
   }
 }
 
-/** Core owns the epoch clock and W3C identities; this only changes the wire units. */
-export function encodeSpan(span: Observe.Span, side: Telemetry.Side): Telemetry.Span {
-  const fields = (attributes: Record<string, unknown>) =>
-    Object.entries(attributes)
-      .slice(0, 31)
-      .map(([key, value]) => ({
-        key: key.slice(0, 256),
-        value: { stringValue: encodeValue(value) },
-      }));
-  const nanos = (time: number) => (BigInt(Math.trunc(time)) * 1_000_000n).toString();
-  return {
-    side,
-    traceId: span.traceId,
-    spanId: span.spanId,
-    parentSpanId: span.parentSpanId,
-    flags: span.sampled ? 1 : 0,
-    name: span.name.slice(0, 256),
-    kind: 1,
-    startTimeUnixNano: nanos(span.start),
-    endTimeUnixNano: nanos(span.end ?? span.start),
-    attributes: [
-      ...fields(span.attributes),
-      { key: "tinker.kind", value: { stringValue: span.kind } },
-    ],
-    events: span.events.slice(0, 32).map((event) => ({
-      name: event.name.slice(0, 256),
-      timeUnixNano: nanos(event.time),
-      attributes: fields(event.attributes),
-    })),
-    status:
-      span.status === "failed"
-        ? { code: 2, message: String(span.error).slice(0, 2048) }
-        : { code: 1 },
-  };
+/**
+ * @param attributes - From span or event attributes; why: bound each wire field.
+ */
+export function encodeFields(attributes: Record<string, unknown>) {
+  return Object.entries(attributes)
+    .slice(0, 31)
+    .map(([key, value]) => ({
+      key: key.slice(0, 256),
+      value: { stringValue: encodeValue(value) },
+    }));
+}
+/**
+ * @param time - From a span or event epoch time; why: change milliseconds to wire nanoseconds.
+ */
+export function encodeNanos(time: number) {
+  return (BigInt(Math.trunc(time)) * 1_000_000n).toString();
 }

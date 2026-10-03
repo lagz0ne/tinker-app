@@ -18,14 +18,20 @@ export declare namespace Sync {
   type Reply = { kind: "accepted"; executionId: string } | { kind: "rejected"; message: string };
 }
 const executionInput = z.object({ executionId: z.uuid() }).strict();
+/**
+ * @param raw - From a mutation request; why: validate its execution ID.
+ */
 export const readExecution = (raw: unknown) => executionInput.parse(raw);
 const cursorInput = z.object({ after: z.number().int().min(0) }).strict();
-export const readCursor = (raw: unknown) => cursorInput.parse(raw);
+export const readCursor = cursorInput;
 const privateCursorInput = z
   .object({ accountId: z.string().min(1), after: z.number().int().min(0) })
   .strict();
-export const readPrivateCursor = (raw: unknown) => privateCursorInput.parse(raw);
+export const readPrivateCursor = privateCursorInput;
 const retryInput = z.object({ executionId: z.uuid(), previousExecutionId: z.uuid() }).strict();
+/**
+ * @param raw - From a retry request; why: validate both execution IDs.
+ */
 export const readRetry = (raw: unknown) => retryInput.parse(raw);
 /** Bodies are opaque here; the app's network readers validate them. */
 export const eventEnvelope = z.object({

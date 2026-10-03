@@ -19,7 +19,10 @@ const liveSettings = z.object({
   SMTP_PASSWORD: z.string(),
   SMTP_FROM: z.email(),
 });
-export function readSettings(env: NodeJS.ProcessEnv) {
+/**
+ * @param env - From the entry environment values; why: validate app settings once.
+ */
+export function readSettings(env: Record<string, string | undefined>) {
   const telemetry = telemetrySettings.safeParse(env);
   if (!telemetry.success)
     raise("BadSettings", { keys: telemetry.error.issues.map((issue) => issue.path.join(".")) });

@@ -8,6 +8,9 @@ import { isError } from "../errors.ts";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card.tsx";
+/**
+ * @param error - From a form action failure; why: pick the shown message.
+ */
 function errorText(error: unknown) {
   if (isError(error, "AuthFailed")) return error.payload.message;
   if (isError(error, "WriteRejected")) return error.payload.message;

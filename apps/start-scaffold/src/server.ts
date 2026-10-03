@@ -1,23 +1,110 @@
+import { createScope } from "@tinker/core";
+import { authSettings, databaseSettings, mailSettings } from "@/lib/tinker.server";
+import {
+  history,
+  observer,
+  telemetry,
+  telemetrySettings,
+  ingestTelemetry,
+} from "./scaffold/telemetry/index.ts";
+import { startRequests } from "./scaffold/start.ts";
+import { browserTelemetry, telemetryOrigin } from "./scaffold/telemetry/ingest.server.ts";
+import { readSettings } from "./scaffold/backend/settings.server.ts";
+import { backendStop } from "./scaffold/backend/lifetime.ts";
 import { createStartHandler as createStartFetch } from "@tanstack/react-start/server";
 import { defaultStreamHandler as renderStartStream } from "@tanstack/react-start/server";
 import type { getRouter } from "./router.tsx";
-import { holdResponse } from "./scaffold/backend/body.server.ts";
-import { getBackend, closeBackend } from "./scaffold/backend/entry.server.ts";
+import { responseBodies } from "./scaffold/backend/body.server.ts";
+import { setup } from "./scaffold/backend/entry.server.ts";
 const renderRequest = createStartFetch(async (context) => {
+  const bodies = (await (entry.owned ??= start())).requestContext.scope.resolve(responseBodies);
   const router = context.router as Awaited<ReturnType<typeof getRouter>>;
   try {
     const output = await renderStartStream(context);
-    if (output instanceof Response) return holdResponse(output, () => router.close());
-    return { ...output, response: await holdResponse(output.response, () => router.close()) };
+    if (output instanceof Response) return bodies.hold(output, () => router.close());
+    return { ...output, response: await bodies.hold(output.response, () => router.close()) };
   } catch (error) {
     await router.close();
     throw error;
   }
 });
-export default {
+/** The Start entry owns the process roots and their stop signals. */
+async function start() {
+  const settings = readSettings({ ...process.env });
+  const { tanstackStartCookies } = await import("better-auth/tanstack-start");
+  const toolStop = new AbortController();
+  const tools = createScope({
+    signal: toolStop.signal,
+    extensions: [telemetry],
+    tags: telemetrySettings(settings.telemetry),
+  });
+  await tools.ready;
+  const ingest = tools.controller(ingestTelemetry);
+  const stop = new AbortController();
+  const app = createScope({
+    signal: stop.signal,
+    observe: await tools.resolve(observer),
+    extensions: [setup, startRequests],
+    tags: [
+      backendStop(stop.signal),
+      telemetryOrigin(settings.origin),
+      browserTelemetry(async (batch) => {
+        await Promise.resolve(
+          ingest.run({
+            input: {
+              traces: batch.traces,
+              logs: batch.logs.map((record) => ({
+                ...record,
+                service: settings.telemetry.service,
+              })),
+            },
+          }),
+        );
+      }),
+      databaseSettings(settings.database),
+      mailSettings(settings.mail),
+      authSettings({
+        origin: settings.origin,
+        secret: settings.secret,
+        plugins: [tanstackStartCookies()],
+      }),
+    ],
+  });
+  try {
+    await app.ready;
+  } catch (error) {
+    toolStop.abort();
+    await tools.closed;
+    throw error;
+  }
+  let closed: Promise<void> | undefined;
+  const close = () =>
+    (closed ??= (async () => {
+      stop.abort();
+      const end = await app.closed;
+      toolStop.abort();
+      const toolEnd = await tools.closed;
+      if (end.status === "failed") throw end.error;
+      if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
+      if (toolEnd.status === "failed") throw toolEnd.error;
+      if (toolEnd.teardownErrors?.length) throw toolEnd.teardownErrors.at(0);
+    })());
+  if (import.meta.hot) import.meta.hot.dispose(close);
+  return {
+    requestContext: app.resolve(startRequests),
+    close,
+    readHistory: () => tools.resolve(history),
+  };
+}
+
+const entry = {
+  owned: undefined as ReturnType<typeof start> | undefined,
   async fetch(request: Request) {
-    const { requestContext } = await getBackend();
+    const { requestContext } = await (entry.owned ??= start());
     return renderRequest(request, { context: requestContext });
   },
 };
-export const close = closeBackend;
+export default entry;
+export async function close() {
+  if (entry.owned) await (await entry.owned).close();
+}

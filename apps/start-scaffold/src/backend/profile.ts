@@ -140,7 +140,7 @@ export const retryNotification = operation({
       if (
         !previous?.notification ||
         !previous.result ||
-        readFeatureResult(previous.result).kind !== "partial"
+        readFeatureResult.parse(previous.result).kind !== "partial"
       )
         raise("RetryNotAvailable", {});
       await tx.insert(execution).values({

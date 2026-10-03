@@ -1,30 +1,15 @@
 import type pino from "pino";
 import { createIsomorphicFn } from "@tanstack/react-start";
-import { data, extension, operation, resource, tag } from "@tinker/core";
-import type { Observe, Clock } from "@tinker/core";
-import { encodeSpan, encodeValue, logRecord, telemetryBatch } from "./records.ts";
+import { data, extension, operation, resource } from "@tinker/core";
+import type { Observe } from "@tinker/core";
+import { encodeFields, encodeNanos, encodeValue, logRecord, telemetryBatch } from "./records.ts";
 import type { Telemetry } from "./records.ts";
-import { TelemetryQueue } from "./queue.ts";
+import { queue } from "./queue.ts";
+import { telemetrySettings } from "./state.ts";
+export { telemetrySettings, exportHealth } from "./state.ts";
 export type { Telemetry } from "./records.ts";
 
 export const history = data<Telemetry.Row[]>({ label: "telemetry.history", initial: [] });
-export const exportHealth = data<Telemetry.Health>({
-  label: "telemetry.exportHealth",
-  initial: { kind: "idle", pending: 0, dropped: 0 },
-});
-export const telemetrySettings = tag<Telemetry.Settings>({
-  label: "telemetry.settings",
-});
-const queue = resource({
-  label: "telemetry.queue",
-  target: "scope",
-  depends: { settings: telemetrySettings.required, health: exportHealth.controller },
-  factory: ({ settings, health }, ctx) => {
-    const owned = new TelemetryQueue(settings, ctx.clock, health);
-    ctx.defer(() => owned.close());
-    return owned;
-  },
-});
 /** Transfers the records to the telemetry root; callers must not edit them afterward. */
 export const ingestTelemetry = operation({
   label: "telemetry.ingest",
@@ -53,36 +38,28 @@ export const telemetry = extension({
   },
 });
 
-const createWriter = createIsomorphicFn()
-  .server(
-    async (
-      settings: Telemetry.Settings,
-      clock: Clock.Handle,
-      accept: (record: Telemetry.Log) => void,
-    ): Promise<pino.Logger> => {
+const logWriter = resource({
+  label: "telemetry.writer",
+  depends: { settings: telemetrySettings.required, queue },
+  factory: createIsomorphicFn()
+    .server(async ({ settings, queue }, ctx): Promise<pino.Logger> => {
       const { default: pino } = await import("pino");
       const local = pino.destination({ dest: 1, sync: true });
       return pino(
         {
           level: settings.level,
           base: { service: settings.service, side: settings.side },
-          timestamp: () => `,"time":${clock.currentTimeMillis()}`,
+          timestamp: () => `,"time":${ctx.clock.currentTimeMillis()}`,
         },
         {
           write(line: string) {
             local.write(line);
-            accept(logRecord.parse(JSON.parse(line)));
+            queue.ingest({ traces: [], logs: [logRecord.parse(JSON.parse(line))] });
           },
         },
       );
-    },
-  )
-  .client(
-    async (
-      settings: Telemetry.Settings,
-      _clock: Clock.Handle,
-      accept: (record: Telemetry.Log) => void,
-    ): Promise<pino.Logger> => {
+    })
+    .client(async ({ settings, queue }): Promise<pino.Logger> => {
       const { default: pino } = await import("pino");
       const local = pino({ level: settings.level, browser: { asObject: true } });
       return pino({
@@ -92,7 +69,7 @@ const createWriter = createIsomorphicFn()
           asObject: true,
           write(raw: unknown) {
             const record = logRecord.parse(raw);
-            accept(record);
+            queue.ingest({ traces: [], logs: [record] });
             const write =
               record.level >= 50
                 ? local.error
@@ -105,13 +82,7 @@ const createWriter = createIsomorphicFn()
           },
         },
       }).child({ service: settings.service, side: settings.side });
-    },
-  );
-const logWriter = resource({
-  label: "telemetry.writer",
-  depends: { settings: telemetrySettings.required, queue },
-  factory: ({ settings, queue }, ctx) =>
-    createWriter(settings, ctx.clock, (record) => queue.ingest({ traces: [], logs: [record] })),
+    }),
 });
 export const observer = resource({
   label: "telemetry.observer",
@@ -134,7 +105,35 @@ export const observer = resource({
         duration: (span.end ?? span.start) - span.start,
       };
       rows.update((old) => [...old.slice(-79), row]);
-      queue.ingest({ traces: [encodeSpan(span, settings.side)], logs: [] });
+      queue.ingest({
+        traces: [
+          {
+            side: settings.side,
+            traceId: span.traceId,
+            spanId: span.spanId,
+            parentSpanId: span.parentSpanId,
+            flags: span.sampled ? 1 : 0,
+            name: span.name.slice(0, 256),
+            kind: 1,
+            startTimeUnixNano: encodeNanos(span.start),
+            endTimeUnixNano: encodeNanos(span.end ?? span.start),
+            attributes: [
+              ...encodeFields(span.attributes),
+              { key: "tinker.kind", value: { stringValue: span.kind } },
+            ],
+            events: span.events.slice(0, 32).map((event) => ({
+              name: event.name.slice(0, 256),
+              timeUnixNano: encodeNanos(event.time),
+              attributes: encodeFields(event.attributes),
+            })),
+            status:
+              span.status === "failed"
+                ? { code: 2, message: String(span.error).slice(0, 2048) }
+                : { code: 1 },
+          },
+        ],
+        logs: [],
+      });
       writer.info({ traceId: span.traceId, spanId: span.spanId }, "core.span");
     },
     log(entry) {

@@ -62,20 +62,22 @@ const snapshot = snapshotEnvelope.extend({
     })
     .nullable(),
 });
-export const readSnapshot = (raw: unknown) => snapshot.parse(raw);
+export const readSnapshot = snapshot;
 const bootstrapInput = bootstrapEnvelope.extend({ snapshot });
-export const readBootstrap = (raw: unknown) => bootstrapInput.parse(raw);
+export const readBootstrap = bootstrapInput;
 const batchInput = batchEnvelope.extend({
   events: z.array(event),
 });
-export const readBatch = (raw: unknown) => batchInput.parse(raw);
+export const readBatch = batchInput;
 const streamMessage = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("changes"), events: z.array(event).max(100) }),
   z.object({ kind: z.literal("account-change") }),
 ]);
-export const readFeatureResult = (raw: unknown) => result.parse(raw);
+export const readFeatureResult = result;
+/**
+ * @param raw - From a saved event row; why: validate its feature body before replay.
+ */
 export const readFeatureEvent = (raw: unknown) => event.parse(raw);
-export function readStreamMessage(raw: unknown) {
-  const { version, data } = streamInput.parse(raw);
+export const readStreamMessage = streamInput.transform(({ version, data }) => {
   return { version, message: streamMessage.parse(JSON.parse(data)) };
-}
+});

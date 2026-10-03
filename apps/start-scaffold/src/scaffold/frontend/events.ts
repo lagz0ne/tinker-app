@@ -21,25 +21,27 @@ export const snapshotLoader = resource({
     let loadedVersion = -1;
     let loading: { version: number; promise: Promise<Sync.Snapshot> } | undefined;
     let changing: ReturnType<typeof Promise.withResolvers<void>> | undefined;
-    const load = async (signal: AbortSignal): Promise<Sync.Snapshot> => {
-      const token = sync.capture();
-      if (loadedVersion === token.version) return sync.snapshot();
-      if (loading?.version === token.version) return loading.promise;
-      const request = {
-        version: token.version,
-        promise: (async () => {
-          const snapshot = await source.load({ signal });
-          const version = await apply.run({ rawInput: { snapshot, version: token.version } });
-          if (version !== undefined) loadedVersion = version;
-          return sync.snapshot();
-        })(),
-      };
-      loading = request;
-      try {
-        return await request.promise;
-      } finally {
-        if (loading === request) loading = undefined;
-      }
+    const loadingSnapshot = {
+      async load(signal: AbortSignal): Promise<Sync.Snapshot> {
+        const token = sync.capture();
+        if (loadedVersion === token.version) return sync.snapshot();
+        if (loading?.version === token.version) return loading.promise;
+        const request = {
+          version: token.version,
+          promise: (async () => {
+            const snapshot = await source.load({ signal });
+            const version = await apply.run({ rawInput: { snapshot, version: token.version } });
+            if (version !== undefined) loadedVersion = version;
+            return sync.snapshot();
+          })(),
+        };
+        loading = request;
+        try {
+          return await request.promise;
+        } finally {
+          if (loading === request) loading = undefined;
+        }
+      },
     };
     return {
       beginAccountChange() {
@@ -53,7 +55,7 @@ export const snapshotLoader = resource({
           close,
           async complete(signal: AbortSignal) {
             try {
-              return await load(signal);
+              return await loadingSnapshot.load(signal);
             } finally {
               close();
             }
@@ -71,7 +73,7 @@ export const snapshotLoader = resource({
       },
       async load(signal: AbortSignal) {
         await changing?.promise;
-        return load(signal);
+        return loadingSnapshot.load(signal);
       },
     };
   },
@@ -90,11 +92,11 @@ export const checkAccount = operation({
 const eventSource = resource({
   label: "sync.eventSource",
   factory: (_deps, ctx) => {
-    let close = () => {};
-    ctx.defer(() => close());
+    let close: (() => void) | undefined;
+    ctx.defer(() => close?.());
     return {
       connect(cursor: Stream.Cursor, signal: AbortSignal) {
-        close();
+        close?.();
         const source = new EventSource(
           `/api/sync?cursor=${encodeURIComponent(JSON.stringify(cursor))}`,
         );

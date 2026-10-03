@@ -3,7 +3,7 @@ import { extension } from "@tinker/core";
 import type { Scope } from "@tinker/core";
 import { requestHeaders } from "@/lib/tinker.server";
 import { raise } from "./errors.ts";
-import { holdResponse } from "./backend/body.server.ts";
+import { responseBodies } from "./backend/body.server.ts";
 import { requestStop } from "./backend/lifetime.ts";
 
 /** Start merges this registry to type the context supplied by the server entry. */
@@ -27,7 +27,10 @@ const middleware = createMiddleware().server(async ({ context, request, next }) 
     }));
   try {
     const result = await next({ context: { session, signal: request.signal } });
-    return { ...result, response: await holdResponse(result.response, finish) };
+    return {
+      ...result,
+      response: await session.resolve(responseBodies).hold(result.response, finish),
+    };
   } catch (error) {
     await finish(false);
     throw error;
