@@ -105,3 +105,26 @@ test("cancelling a body aborts active work before a pending pull can close grace
     expect((await root.closed).status).toBe("success");
   }
 }, 1000);
+
+test("scope shutdown cancels response bodies left open", async () => {
+  const stop = new AbortController();
+  const root = createScope({ signal: stop.signal });
+  await root.ready;
+  let cancelled = false;
+  let finished: boolean | undefined;
+  await root.resolve(responseBodies).hold(
+    new Response(
+      new ReadableStream({
+        cancel() {
+          cancelled = true;
+        },
+      }),
+    ),
+    async (graceful) => {
+      finished = graceful;
+    },
+  );
+  stop.abort();
+  expect((await root.closed).status).toBe("success");
+  expect({ cancelled, finished }).toEqual({ cancelled: true, finished: false });
+});
