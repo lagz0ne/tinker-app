@@ -122,14 +122,29 @@ function enclosingFunction(node) {
   for (let parent = node.parent; parent; parent = parent.parent)
     if (isFunction(parent)) return parent;
 }
-function isEntry(node) {
-  const path = pathOf(node),
-    name = nameOf(functionName(node));
+function serverFetchEntry(node) {
+  if (nameOf(functionName(node)) !== "fetch" || !ts.isMethodDeclaration(node)) return false;
+  const object = node.parent;
+  if (!ts.isObjectLiteralExpression(object) || !moduleBinding(object.parent)) return false;
+  return nameOf(object.parent.name) === "entry";
+}
+function topLevelEntry(node, names) {
   return (
-    (path === "src/server.ts" && ["start", "close", "fetch"].includes(name)) ||
-    (["src/router.tsx", "src/scaffold/frontend/router.tsx"].includes(path) && name === "getRouter")
+    ts.isFunctionDeclaration(node) &&
+    node.parent === node.getSourceFile() &&
+    names.includes(nameOf(functionName(node)))
   );
 }
+function isEntry(node) {
+  const path = pathOf(node);
+  if (path === "src/server.ts")
+    return topLevelEntry(node, ["start", "close"]) || serverFetchEntry(node);
+  return (
+    ["src/router.tsx", "src/scaffold/frontend/router.tsx"].includes(path) &&
+    topLevelEntry(node, ["getRouter"])
+  );
+}
+
 function isComponent(node) {
   if (
     !node.getSourceFile().fileName.endsWith(".tsx") ||
@@ -170,22 +185,10 @@ function optionsMember(node) {
   return hookOptions(member.parent);
 }
 
-function factoryProperty(node) {
-  return (
-    ts.isPropertyAssignment(node) &&
-    nameOf(node.name) === "factory" &&
-    ts.isObjectLiteralExpression(node.parent) &&
-    directOptions(node.parent)
-  );
-}
 function factoryBody(node) {
-  if (optionsMember(node) && nameOf(functionName(node)) === "factory") return true;
-  if (!isFunction(node)) return false;
-  for (let parent = node.parent; parent; parent = parent.parent) {
-    if (isFunction(parent) || ts.isStatement(parent)) return false;
-    if (factoryProperty(parent)) return true;
-  }
-  return false;
+  if (!optionsMember(node) || nameOf(functionName(node)) !== "factory") return false;
+  const member = ts.isPropertyAssignment(node.parent) ? node.parent : node;
+  return coreSymbol(member.parent.parent.expression, "resource");
 }
 
 function directReturn(expression, owner) {
@@ -694,6 +697,11 @@ function serviceAllocation(node) {
       ))
   );
 }
+function entryStopAllocation(node) {
+  if (!ts.isNewExpression(node) || nameOf(node.expression) !== "AbortController") return false;
+  const owner = enclosingFunction(node);
+  return entries.has(pathOf(node)) && owner && topLevelEntry(owner, ["start", "getRouter"]);
+}
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
@@ -701,7 +709,7 @@ function checkService(node) {
     return;
   }
   if (!serviceAllocation(node) || graphOwner(node)) return;
-  if (entries.has(pathOf(node))) return;
+  if (entryStopAllocation(node)) return;
   fail(node, "service-owner");
 }
 function callerOf(use) {
@@ -1219,8 +1227,9 @@ if (process.argv.includes("--prove")) {
     await symlink(join(root, "node_modules"), join(planted, "node_modules"), "dir");
     for (const [name, rule, source, file = "src/plain-probe.ts"] of cases) {
       const path = join(planted, file);
-      const original =
-        file === "src/scaffold/frontend/router.tsx" ? await readFile(path, "utf8") : "";
+      const original = ["src/scaffold/frontend/router.tsx", "src/server.ts"].includes(file)
+        ? await readFile(path, "utf8")
+        : "";
       await writeFile(path, original + source + "\n");
       if (name === "list") await writeFile(join(planted, "PLAIN.md"), "wrong list\n");
       const red = spawnSync(

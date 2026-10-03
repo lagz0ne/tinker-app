@@ -65,6 +65,13 @@ Return only the public methods callers need.
 Never expose a send method that bypasses flush dedupe.
 
 Core callbacks are direct run, factory, input, and hooks members of a unit's options object.
+Wrapping a factory callback in Object.freeze gives no exception.
+Only the resource unit's direct factory grants owned public methods.
+Process entries are top-level start and close in src/server.ts,
+plus its module-level entry object's fetch method.
+The router entry is a top-level getRouter in its listed entry files.
+Names alone grant no entry exception.
+The returned public native methods of these entries keep their entry contract.
 An extension hook may return its public value, just as a resource factory does.
 Other inline callbacks are allowed only in a callback slot whose callee is outside src, or a JSX attribute.
 A native options object may supply that native callee's named callbacks.
@@ -132,6 +139,8 @@ watcher, queue, and cache.
 An operation may own short-lived work for its call.
 A plain function never starts or retains a service.
 Only code inside a factory, run, or hook body has graph ownership.
+The root entry may create only its root stop controllers outside that graph.
+The tabLifetime resource owns the pagehide listener and removes it on close.
 An option value evaluated at import has none.
 
 Only these files may reference Core createScope:
