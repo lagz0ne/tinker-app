@@ -497,7 +497,7 @@ function skipType(type, seen, depth) {
 function contains(type, mode, seen = new Set(), depth = 0) {
   if (skipType(type, seen, depth)) return false;
   seen.add(type);
-  if (unitType(type)) return false;
+  if (unitType(type)) return ["plain", "react"].includes(mode);
   if (forbiddenTypeName(type, mode) || coreHandleType(type)) return true;
   return nestedTypeContains(type, mode, seen, depth);
 }
@@ -919,6 +919,34 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "entry-hidden-fetch",
+      "plain-param",
+      "const helpers = {async fetch(signal: AbortSignal) { await Promise.resolve(signal); }};",
+      "src/server.ts",
+    ],
+    [
+      "wrapped-factory",
+      "unnamed-plain",
+      'import {resource} from "@tinker/core"; const probe = resource({factory: Object.freeze(async (clock: unknown, signal: AbortSignal, a: number, b: number) => { await Promise.resolve(signal); })});',
+    ],
+    [
+      "entry-service",
+      "service-owner",
+      'import {createIsomorphicFn} from "@tanstack/react-start"; const hiddenService = createIsomorphicFn().server(() => new BroadcastChannel("x"));',
+      "src/server.ts",
+    ],
+    [
+      "entry-hidden-controller",
+      "service-owner",
+      'import {createIsomorphicFn} from "@tanstack/react-start"; const hiddenStop = createIsomorphicFn().server(() => new AbortController());',
+      "src/server.ts",
+    ],
+    [
+      "unit-param",
+      "plain-param",
+      'import type {Resource} from "@tinker/core"; function probe(value: Resource.Handle<unknown>) {return value;} probe(null!); probe(null!);',
+    ],
     ["class", "no-class", "class Probe {}"],
     [
       "clock",

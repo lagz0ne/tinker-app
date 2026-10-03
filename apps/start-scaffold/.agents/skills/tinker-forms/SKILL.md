@@ -157,7 +157,7 @@ Exported accessors and arrow properties returning a scope fail too.
 
 Outside entries, no module-level let or const may hold a live Core handle,
 AbortController, or native client, including nested and promised values.
-Declared Core units are allowed; resolved live handles are not.
+Declared Core units may live at module scope; their handles are forbidden in plain params and React props.
 Only the server entry's entry.owned lazy promise may retain its root context.
 Importing it starts no clients.
 The fixed backend entry declares only the setup extension.
