@@ -11,23 +11,6 @@ export const delivery = resource({
     .server(({ settings }) => ({
       async send(batch: Telemetry.Batch, signal: AbortSignal): Promise<Telemetry.Delivery> {
         if (settings.side === "browser") return { traces: true, logs: true };
-        const requests = {
-          async post(url: string, body: string, contentType: string) {
-            try {
-              const response = await fetch(url, {
-                method: "POST",
-                headers: { "content-type": contentType },
-                body,
-                signal,
-                redirect: "error",
-              });
-              await response.body?.cancel();
-              return response.ok;
-            } catch {
-              return false;
-            }
-          },
-        };
         const logs = new URL(settings.logs);
         logs.searchParams.set("_time_field", "time");
         logs.searchParams.set("_msg_field", "msg");
@@ -35,37 +18,60 @@ export const delivery = resource({
         const [tracesAccepted, logsAccepted] = await Promise.all([
           batch.traces.length === 0
             ? true
-            : requests.post(
-                settings.traces,
-                JSON.stringify({
-                  resourceSpans: ["server", "browser", "ssr"].flatMap((side) => {
-                    const spans = batch.traces
-                      .filter((span) => span.side === side)
-                      .map(({ side: _side, ...span }) => span);
-                    return spans.length
-                      ? [
-                          {
-                            resource: {
-                              attributes: [
-                                { key: "service.name", value: { stringValue: settings.service } },
-                                { key: "tinker.side", value: { stringValue: side } },
-                              ],
-                            },
-                            scopeSpans: [{ scope: { name: "tinker.start" }, spans }],
-                          },
-                        ]
-                      : [];
-                  }),
-                }),
-                "application/json",
-              ),
+            : Promise.resolve().then(async () => {
+                try {
+                  const response = await fetch(settings.traces, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    signal,
+                    redirect: "error",
+                    body: JSON.stringify({
+                      resourceSpans: ["server", "browser", "ssr"].flatMap((side) => {
+                        const spans = batch.traces
+                          .filter((span) => span.side === side)
+                          .map(({ side: _side, ...span }) => span);
+                        return spans.length
+                          ? [
+                              {
+                                resource: {
+                                  attributes: [
+                                    {
+                                      key: "service.name",
+                                      value: { stringValue: settings.service },
+                                    },
+                                    { key: "tinker.side", value: { stringValue: side } },
+                                  ],
+                                },
+                                scopeSpans: [{ scope: { name: "tinker.start" }, spans }],
+                              },
+                            ]
+                          : [];
+                      }),
+                    }),
+                  });
+                  await response.body?.cancel();
+                  return response.ok;
+                } catch {
+                  return false;
+                }
+              }),
           batch.logs.length === 0
             ? true
-            : requests.post(
-                logs.href,
-                batch.logs.map((record) => JSON.stringify(record)).join("\n"),
-                "application/stream+json",
-              ),
+            : Promise.resolve().then(async () => {
+                try {
+                  const response = await fetch(logs.href, {
+                    method: "POST",
+                    headers: { "content-type": "application/stream+json" },
+                    signal,
+                    redirect: "error",
+                    body: batch.logs.map((record) => JSON.stringify(record)).join("\n"),
+                  });
+                  await response.body?.cancel();
+                  return response.ok;
+                } catch {
+                  return false;
+                }
+              }),
         ]);
         return { traces: tracesAccepted, logs: logsAccepted };
       },
