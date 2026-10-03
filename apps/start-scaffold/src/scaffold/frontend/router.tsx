@@ -1,10 +1,10 @@
-import { accountOwner, tabStop } from "./owner.ts";
+import { accountOwner, tabStop, pageEvents, tabLifetime } from "./owner.ts";
 import { syncStreaming, loadSnapshot, checkAccount } from "./events.ts";
 import { syncClient, applyBootstrap } from "./sync.ts";
 import { readSnapshot } from "@/lib/tinker";
 import { createRouter } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
-import { createScope, resource } from "@tinker/core";
+import { createScope } from "@tinker/core";
 import { ScopeProvider } from "@tinker/react";
 import { routeTree } from "@/routeTree.gen";
 import { frontendSpans } from "../telemetry/state.ts";
@@ -15,20 +15,9 @@ const readTelemetrySettings = createIsomorphicFn()
     return { ...readSettings({ ...process.env }).telemetry, side: "ssr" as const };
   })
   .client(() => ({ side: "browser" as const, service: "start-scaffold", level: "info" as const }));
-const tabLifetime = resource({
-  label: "router.tabLifetime",
-  factory: (_deps, ctx) => ({
-    bind: createIsomorphicFn()
-      .server((_close: () => Promise<void>) => undefined)
-      .client((close: () => Promise<void>) => {
-        const leave = (event: PageTransitionEvent) => {
-          if (!event.persisted) return close();
-        };
-        window.addEventListener("pagehide", leave);
-        ctx.defer(() => window.removeEventListener("pagehide", leave));
-      }),
-  }),
-});
+const readPage = createIsomorphicFn()
+  .server((): EventTarget | undefined => undefined)
+  .client(() => window);
 /** Start calls this once per server render and once per browser tab. */
 export async function getRouter() {
   const toolStop = new AbortController();
@@ -43,7 +32,11 @@ export async function getRouter() {
     signal: stop.signal,
     extensions: [accountOwner, syncStreaming],
     observe: await tools.resolve(observer),
-    tags: [frontendSpans(() => tools.resolve(history)), tabStop(stop.signal)],
+    tags: [
+      frontendSpans(() => tools.resolve(history)),
+      tabStop(stop.signal),
+      pageEvents(readPage()),
+    ],
   });
   await app.ready;
   const sync = await app.resolve(syncClient);
