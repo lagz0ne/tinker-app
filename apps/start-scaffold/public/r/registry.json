@@ -7,7 +7,7 @@
       "name": "runtime",
       "type": "registry:file",
       "title": "Start scope and sync setup",
-      "description": "Update src/scaffold only. Native middleware, scope lifetime, SSE replay, execution waits, and bounded Victoria export.",
+      "description": "Update src/scaffold only. Native middleware, scope lifetime, outgoing HTTP, SSE replay, execution waits, and bounded Victoria export.",
       "files": [
         {
           "path": "src/scaffold/backend/body.server.ts",
@@ -23,6 +23,11 @@
           "path": "src/scaffold/backend/events.ts",
           "type": "registry:file",
           "target": "~/src/scaffold/backend/events.ts"
+        },
+        {
+          "path": "src/scaffold/backend/http.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/http.ts"
         },
         {
           "path": "src/scaffold/backend/index.server.ts",
@@ -511,6 +516,11 @@
           "path": "tests/backend.test.ts",
           "type": "registry:file",
           "target": "~/tests/backend.test.ts"
+        },
+        {
+          "path": "tests/http.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/http.test.ts"
         },
         {
           "path": "tests/presets.ts",
