@@ -1,4 +1,3 @@
-import { requestHeaders } from "@tinker-start-scaffold/transport";
 import { test, expect } from "vite-plus/test";
 import { createScope } from "@tinker/core";
 import {
@@ -14,7 +13,7 @@ import {
   backendStop,
   requestStop,
 } from "@tinker-start-scaffold/transport";
-import { proofDatabase, proofMail } from "@tinker-start-scaffold/testing";
+import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
 import { Route as telemetryRoute } from "../src/routes/api.telemetry.ts";
 import { Route as syncRoute } from "../src/routes/api.sync.ts";
 

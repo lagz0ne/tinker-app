@@ -11,4 +11,3 @@ export { http, httpRequest } from "./http.ts";
 export { httpBackend } from "../http-backend.ts";
 
 export { handleAuth } from "./auth.server.ts";
-export { requestHeaders } from "./headers.server.ts";

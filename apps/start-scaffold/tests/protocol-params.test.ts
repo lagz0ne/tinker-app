@@ -1,4 +1,3 @@
-import { requestHeaders } from "@tinker-start-scaffold/transport";
 import { test, expect } from "vite-plus/test";
 import { createScope } from "@tinker/core";
 import {
@@ -17,7 +16,7 @@ import {
   authSettings,
   migrate,
 } from "@tinker-start-scaffold/backend";
-import { proofDatabase, proofMail } from "@tinker-start-scaffold/testing";
+import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
 
 test("telemetry takes a plain batch and returns no HTTP reply", async () => {
   const accepted: unknown[] = [];

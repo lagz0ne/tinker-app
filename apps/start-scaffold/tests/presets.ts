@@ -19,3 +19,5 @@ export const proofMail = preset(mail, async (_deps, ctx) => ({
     ctx.log("mail.recorded", { delivered: false });
   },
 }));
+
+export { requestHeaders } from "../src/scaffold/backend/headers.server.ts";

@@ -1,5 +1,5 @@
-import { handleAuth, requestHeaders } from "@tinker-start-scaffold/transport";
-import { proofDatabase, proofMail } from "@tinker-start-scaffold/testing";
+import { handleAuth } from "@tinker-start-scaffold/transport";
+import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
 import { test, expect } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";

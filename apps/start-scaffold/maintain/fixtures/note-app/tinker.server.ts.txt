@@ -1,1 +1,1 @@
-export { database, databaseSettings, auth, authSettings, requestHeaders, mailSettings, migrate, bootstrap, readAccount } from "../server.ts";
+export { database, databaseSettings, auth, authSettings, mailSettings, migrate, bootstrap, readAccount } from "../server.ts";

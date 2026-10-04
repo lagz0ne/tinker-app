@@ -17,7 +17,6 @@ export const authSettings = tag<{
   secret: string;
   plugins: BetterAuthPlugin[];
 }>({ label: "note.auth.settings" });
-export const requestHeaders = tag<Headers>({ label: "note.headers" });
 export const auth = resource({
   label: "note.auth",
   depends: { settings: authSettings },

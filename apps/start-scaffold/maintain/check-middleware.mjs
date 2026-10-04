@@ -64,7 +64,7 @@ export const readProof = createServerFn({method: "GET"})
       join(proof, "src/proof.server.ts"),
       `
 import { operation } from "@tinker/core";
-import { requestHeaders } from "./backend/index.ts";
+import { requestHeaders } from "./scaffold/backend/headers.server.ts";
 export const readProofUser = operation({
   label: "test.nativeRequest",
   depends: {headers: requestHeaders},

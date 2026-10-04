@@ -162,10 +162,14 @@ The schema check proves generation adds no duplicate tables.
 - An HTTP request after backendStop or requestStop ends fails before sending.
 - Forced root and session closes still cancel a never-answering HTTP request.
 - Backend stop settles HTTP while other running work finishes.
-- A graceful close alone cannot stop a pending HTTP wait without a stop signal.
 - Storage failure keeps bounded records for retry.
 - Accepted telemetry frees the byte budget for later records.
 - Browser ingest refuses foreign origins, bad shapes, and large bodies.
+- Telemetry routes keep each input case's status, headers, and body.
+- Telemetry operations take a plain batch and return no HTTP reply.
+- A stopped telemetry backend raises a managed error before ingest.
+- Sync operations take a cursor param and return the owned body stream.
+- Sync routes keep open, Last-Event-ID precedence, and bad cursor replies.
 - Owner close flushes finished records without a scheduled browser timer.
 - A stuck receiver is aborted by the owned Core clock during close.
 - Stalled uploads and storage requests stop with their owner.
@@ -176,6 +180,8 @@ The schema check proves generation adds no duplicate tables.
 
 ## Limits
 
+A graceful close alone cannot stop a pending HTTP wait without a stop signal.
+Core has no session close-start hook for that case.
 Event history has no retention rule yet.
 SSE replays stored events; it is not a durable job queue.
 A crash after commit can leave mail without a final result.

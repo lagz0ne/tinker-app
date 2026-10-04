@@ -8,6 +8,13 @@ description: Prove app promises through small scopes.
 Use this when adding or fixing app behavior.
 Read `tests/todos.test.ts` for a full example.
 Import exported operations from the app's package seams.
+Bind raw request headers only through the testing entry:
+
+```ts
+import { requestHeaders } from "@tinker-start-scaffold/testing";
+```
+
+App code uses principal or currentUser.
 Do not import private source files.
 Do not boot Start to test an operation.
 

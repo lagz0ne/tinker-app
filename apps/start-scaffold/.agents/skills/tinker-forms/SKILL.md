@@ -89,10 +89,13 @@ App imports cannot load the named HTTP clients or raw sockets:
 - node:dgram and dgram.
 
 The ban also covers literal subpaths, re-exports, import(), and require().
-Type-only imports are allowed, including import { type X }.
+Computed import() and require() paths fail outside src/scaffold/.
+So do createRequire imports, aliases, and uses.
+Type-only imports and exports are allowed, including import { type X }.
 A mixed import, default value import, or empty import still fails.
 Outside src/scaffold/, XMLHttpRequest constructors and global value uses fail too.
 So do navigator.sendBeacon calls and value uses, including literal bracket access.
+Destructured browser globals fail too.
 Native WebSocket and EventSource stay allowed for userland sync transports (ADR 0048).
 Their resources own and close the connection through ctx.defer.
 A feature operation depends on the request controller:
@@ -100,26 +103,48 @@ A feature operation depends on the request controller:
 ```ts
 import { operation } from "@tinker/core";
 import { httpRequest } from "@/lib/tinker.server";
+import { raise } from "@/errors";
 
 export const postNotice = operation({
   label: "postNotice",
   depends: { request: httpRequest.controller },
-  run: ({ request }) =>
-    request.run({
+  run: async ({ request }) => {
+    const reply = await request.run({
       rawInput: {
         url: "https://api.example.com/notices",
         method: "POST",
         headers: { "content-type": "text/plain" },
         body: "The order is ready.",
       },
-    }),
+    });
+    if (reply.status < 200 || reply.status >= 300) raise("NotificationFailed", {});
+    return { sent: true };
+  },
 });
 ```
 
-Use the returned status to choose the feature's next step.
+Map the HTTP reply to a feature value or managed error.
+Here callers get a sent value or NotificationFailed.
 Pass request values through rawInput so the schema checks them once.
 The schema marks the result as checked; typed input accepts only that marked shape.
 The request uses its own ctx.signal.
+
+## Requests and replies
+
+Start routes own both directions of HTTP (ADR 0103).
+The route reads params, headers, and the wire body.
+It maps a value or error to status, headers, and the wire body.
+Operations take plain params and return values or raise managed errors.
+The plain check rejects a Request input or Response output.
+
+The telemetry route checks origin and bounded browser records.
+Its operation takes a batch and returns no reply.
+The sync route reads the cursor and Last-Event-ID.
+Its operation takes { cursor } and returns the owned body stream.
+The route adds the SSE headers.
+The named handleAuth mount is the only exception.
+It lives in scaffold protocol code and calls better-auth's HTTP handler.
+Raw request headers stay inside that protocol code and auth.
 
 ## Plain functions are rare
 
