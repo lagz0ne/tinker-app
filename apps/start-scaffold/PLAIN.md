@@ -117,6 +117,7 @@ Tests and generated files do not count.
     - `src/scaffold/backend/events.ts#append`
     - `src/scaffold/backend/events.ts#find`
     - `src/scaffold/backend/events.ts#lock`
+    - `src/scaffold/backend/http.ts#httpRequest.run.callback1`
     - `src/scaffold/backend/notifications.ts#subscribe`
     - `src/scaffold/backend/result.server.ts#readResult`
     - `src/scaffold/backend/settings.server.ts#readSettings`

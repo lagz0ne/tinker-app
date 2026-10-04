@@ -7,3 +7,4 @@ export { notifications } from "./notifications.ts";
 export { browserTelemetry, receiveTelemetry, telemetryOrigin } from "../telemetry/ingest.server.ts";
 
 export { backendStop, requestStop } from "./lifetime.ts";
+export { httpBackend, http, httpRequest } from "./http.ts";
