@@ -58,9 +58,8 @@ test("a stream checks the session once at open and once for the next wake", asyn
   try {
     await root.run(migrate);
     await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
-    const response = await root.run(openSync, { input: { public: 0, private: null } });
-    const reader = response.body?.getReader();
-    if (!reader) throw response;
+    const response = await root.run(openSync, { input: { cursor: { public: 0, private: null } } });
+    const reader = response.getReader();
     await reader.read();
     await reader.read();
     const waiting = reader.read();

@@ -1,8 +1,9 @@
+import { z } from "zod";
 import { operation, resource } from "@tinker/core";
 import { auth, requestHeaders, database } from "@/lib/tinker.server";
 import { notifications } from "./notifications.ts";
 import { backendStop, requestStop } from "./lifetime.ts";
-import { streamRequest, streamCursor } from "../protocol.ts";
+import { streamCursor } from "../protocol.ts";
 import type { Stream } from "../protocol.ts";
 import { raise } from "../errors.ts";
 /** Cookie caches and session refresh are disabled on this long-lived request. */
@@ -208,24 +209,14 @@ export const eventStream = resource({
           },
           { highWaterMark: 0 },
         );
-        return new Response(body, {
-          headers: {
-            "Content-Type": "text/event-stream; charset=utf-8",
-            "Cache-Control": "no-store",
-            "X-Accel-Buffering": "no",
-          },
-        });
+        return body;
       },
     };
   },
 });
 export const openSync = operation({
   label: "sync.open",
-  input: (raw: unknown) => {
-    const { search, lastEventId } = streamRequest.parse(raw);
-    const supplied = lastEventId || new URLSearchParams(search).get("cursor");
-    return streamCursor.parse(supplied ? JSON.parse(supplied) : { public: 0, private: null });
-  },
+  input: z.object({ cursor: streamCursor }),
   depends: { stream: eventStream },
-  run: async ({ stream }, ctx) => stream.open(ctx.input),
+  run: async ({ stream }, ctx) => stream.open(ctx.input.cursor),
 });

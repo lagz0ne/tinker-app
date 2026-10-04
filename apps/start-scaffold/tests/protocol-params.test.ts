@@ -6,8 +6,18 @@ import {
   backendStop,
   requestStop,
   telemetryOrigin,
+  openSync,
 } from "@tinker-start-scaffold/transport";
-import { isError, raise } from "@tinker-start-scaffold/backend";
+import {
+  isError,
+  raise,
+  databaseSettings,
+  mailSettings,
+  authSettings,
+  migrate,
+  requestHeaders,
+} from "@tinker-start-scaffold/backend";
+import { proofDatabase, proofMail } from "@tinker-start-scaffold/testing";
 
 test("telemetry takes a plain batch and returns no HTTP reply", async () => {
   const accepted: unknown[] = [];
@@ -52,6 +62,45 @@ test("telemetry raises a managed error after backend stop", async () => {
     if (result.status !== "failed" || !isError(result.error, "Cancelled")) throw result;
     expect(result.error.payload).toEqual({});
   } finally {
+    await root.close({ graceful: true });
+  }
+});
+
+test("sync takes a cursor param and returns the body stream", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [
+      databaseSettings({ url: "postgres://proof", migrations: "drizzle" }),
+      mailSettings({
+        host: "proof",
+        port: 25,
+        user: "proof",
+        password: "proof",
+        from: "proof@example.com",
+      }),
+      authSettings({
+        origin: "http://localhost:4318",
+        secret: "test-secret-with-at-least-thirty-two-letters",
+        plugins: [],
+      }),
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
+    presets: [proofDatabase, proofMail],
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+    const result = await root.settle(openSync, {
+      rawInput: { cursor: { public: 4, private: null } },
+    });
+    if (result.status !== "success") throw result;
+    const reader = result.value.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe(": connected\n\n");
+    await reader.cancel();
+  } finally {
+    stop.abort();
     await root.close({ graceful: true });
   }
 });
