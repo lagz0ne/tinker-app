@@ -1058,11 +1058,35 @@ function nativeDomSymbol(symbol, name) {
     symbol.declarations?.some((decl) => decl.getSourceFile().fileName.endsWith("lib.dom.d.ts"))
   );
 }
-function wireType(type, name) {
+function wireType(type, name, seen = new Set()) {
+  if (!type || seen.has(type)) return false;
+  seen.add(type);
+  if (nativeDomSymbol(type.symbol, name)) return true;
+  if (primitiveType(type) || callable(type)) return false;
+  return nestedWireType(type, name, seen);
+}
+function nestedWireType(type, name, seen) {
   const awaited = checker.getAwaitedType(type);
-  if (awaited && awaited !== type) return wireType(awaited, name);
-  if (type.isUnionOrIntersection()) return type.types.some((part) => wireType(part, name));
-  return nativeDomSymbol(type.symbol, name);
+  if (awaited && awaited !== type && wireType(awaited, name, seen)) return true;
+  if (type.isUnionOrIntersection()) return type.types.some((part) => wireType(part, name, seen));
+  return wireTypeArguments(type, name, seen) || wireProperties(type, name, seen);
+}
+function wireTypeArguments(type, name, seen) {
+  return (
+    type.flags & ts.TypeFlags.Object &&
+    type.objectFlags & ts.ObjectFlags.Reference &&
+    checker.getTypeArguments(type).some((part) => wireType(part, name, seen))
+  );
+}
+function wireProperties(type, name, seen) {
+  return checker.getPropertiesOfType(type).some((property) => {
+    const declaration = property.valueDeclaration ?? property.declarations?.at(0);
+    return (
+      declaration &&
+      files.includes(declaration.getSourceFile().fileName) &&
+      wireType(checker.getTypeOfSymbolAtLocation(property, declaration), name, seen)
+    );
+  });
 }
 function variableInitializer(symbol) {
   const declaration = symbol?.valueDeclaration;
@@ -1071,10 +1095,21 @@ function variableInitializer(symbol) {
 function requestSchema(node, seen = new Set()) {
   if (!node || seen.has(node)) return false;
   seen.add(node);
+  const schema = checker.getTypeAtLocation(node);
+  const output = schema.getProperty("_output");
+  if (output && wireType(checker.getTypeOfSymbolAtLocation(output, node), "Request")) return true;
   let request = false;
   walk(node, (child) => {
     const symbol = locationSymbol(child);
-    if (nativeDomSymbol(symbol, "Request")) request = true;
+    const type = checker.getTypeAtLocation(child);
+    if (
+      nativeDomSymbol(symbol, "Request") ||
+      wireType(type, "Request") ||
+      type
+        .getConstructSignatures()
+        .some((signature) => wireType(checker.getReturnTypeOfSignature(signature), "Request"))
+    )
+      request = true;
     if (ts.isIdentifier(child) && requestSchema(variableInitializer(symbol), seen)) request = true;
   });
   return request;
@@ -1083,15 +1118,30 @@ function checkOperationInput(input) {
   if (requestSchema(input))
     fail(input, "operation-wire-input: requests belong to the protocol layer");
 }
+function functionImplementation(node, seen = new Set()) {
+  node = unwrap(node);
+  if (!node || seen.has(node)) return undefined;
+  seen.add(node);
+  if (isFunction(node)) return node;
+  const symbol = locationSymbol(node);
+  if (symbol?.valueDeclaration && isFunction(symbol.valueDeclaration))
+    return symbol.valueDeclaration;
+  return functionImplementation(variableInitializer(symbol), seen);
+}
 function checkOperationOutput(run) {
   if (!run) return;
-  const signatures = checker.getTypeAtLocation(run.initializer ?? run).getCallSignatures();
-  if (
-    signatures.some((signature) =>
-      wireType(checker.getReturnTypeOfSignature(signature), "Response"),
-    )
-  )
-    fail(run, "operation-wire-output: replies belong to the protocol layer");
+  const expression = run.initializer ?? (ts.isShorthandPropertyAssignment(run) ? run.name : run);
+  const signatures = checker.getTypeAtLocation(expression).getCallSignatures();
+  let response = signatures.some((signature) =>
+    wireType(checker.getReturnTypeOfSignature(signature), "Response"),
+  );
+  const implementation = functionImplementation(expression);
+  if (implementation?.body)
+    walk(implementation.body, (child) => {
+      if (ts.isExpression(child) && wireType(checker.getTypeAtLocation(child), "Response"))
+        response = true;
+    });
+  if (response) fail(run, "operation-wire-output: replies belong to the protocol layer");
 }
 function authProtocolException(node) {
   return (
@@ -1108,7 +1158,14 @@ function checkOperationWire(node) {
   )
     return;
   const options = node.arguments[0];
-  if (!options || !ts.isObjectLiteralExpression(options)) return;
+  if (
+    !options ||
+    !ts.isObjectLiteralExpression(options) ||
+    options.properties.some(ts.isSpreadAssignment)
+  ) {
+    fail(node, "operation-options: use a plain object literal without spreads");
+    return;
+  }
   checkOperationInput(propertyOf(options, "input")?.initializer);
   checkOperationOutput(propertyOf(options, "run"));
 }
@@ -1157,6 +1214,52 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "operation-response-callback",
+      "operation-wire-output",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => new Promise((resolve) => resolve(new Response()))});',
+    ],
+    [
+      "operation-response-cast",
+      "operation-wire-output",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => new Response() as unknown});',
+    ],
+    [
+      "operation-response-array",
+      "operation-wire-output",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => [new Response()]});',
+    ],
+    [
+      "operation-response-object",
+      "operation-wire-output",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => ({reply: new Response()})});',
+    ],
+    [
+      "operation-request-destructured",
+      "operation-wire-input",
+      'import {operation} from "@tinker/core"; import {z} from "zod"; const {Request: Req} = globalThis; const probe = operation({input: z.instanceof(Req), run: (_deps, ctx) => ctx.input.url});',
+    ],
+    [
+      "operation-request-type-alias",
+      "operation-wire-input",
+      'import {operation} from "@tinker/core"; import {z} from "zod"; type R = Request; const probe = operation({input: z.custom<R>(), run: (_deps, ctx) => ctx.input.url});',
+    ],
+    [
+      "operation-options-spread",
+      "operation-options",
+      'import {operation} from "@tinker/core"; const opts = {}; const run = () => 1; const probe = operation({...opts, run});',
+    ],
+    [
+      "operation-options-variable",
+      "operation-options",
+      'import {operation} from "@tinker/core"; const opts = {run: () => 1}; const probe = operation(opts);',
+    ],
+    [
+      "operation-response-typed-callback",
+      "operation-wire-output",
+      'import {operation} from "@tinker/core"; declare const reply: Response; const probe = operation({run: () => { const ignored = Promise.resolve().then(() => reply); return 1; }});',
+    ],
+
     [
       "dynamic-require-alias",
       "http-client",
