@@ -48,7 +48,7 @@
     },
     {
       "path": "src/scaffold/backend/index.server.ts",
-      "content": "export { startRequests } from \"../start.ts\";\nexport { readResult } from \"./result.server.ts\";\nexport { responseBodies } from \"./body.server.ts\";\nexport { openSync, eventStream } from \"./stream.ts\";\nexport { notifications } from \"./notifications.ts\";\n\nexport { browserTelemetry, receiveTelemetry, telemetryOrigin } from \"../telemetry/ingest.server.ts\";\n\nexport { backendStop, requestStop } from \"./lifetime.ts\";\nexport { http, httpRequest } from \"./http.ts\";\nexport { httpBackend } from \"../http-backend.ts\";\n\nexport { handleAuth } from \"./auth.server.ts\";\n",
+      "content": "export { startRequests } from \"../start.ts\";\nexport { readResult } from \"./result.server.ts\";\nexport { responseBodies } from \"./body.server.ts\";\nexport { openSync, eventStream } from \"./stream.ts\";\nexport { notifications } from \"./notifications.ts\";\n\nexport { browserTelemetry, receiveTelemetry, telemetryOrigin } from \"../telemetry/ingest.server.ts\";\n\nexport { backendStop, requestStop } from \"./lifetime.ts\";\nexport { http, httpRequest } from \"./http.ts\";\nexport { httpBackend } from \"../http-backend.ts\";\n",
       "type": "registry:file",
       "target": "~/src/scaffold/backend/index.server.ts"
     },
