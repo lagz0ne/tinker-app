@@ -1,6 +1,6 @@
 export declare namespace Errors {
   type Payloads = {
-    HttpRequestFailed: { url: string; method: string; cause: unknown };
+    HttpRequestFailed: { method: string; path: string };
     StreamMissing: Record<string, never>;
     StreamDenied: Record<string, never>;
     StreamDisconnected: Record<string, never>;

@@ -38,6 +38,7 @@ It records the reply status.
 The result has status, headers, and body text.
 A non-2xx reply is a normal result.
 A network failure raises the managed HttpRequestFailed error.
+Its payload has only method and path; query strings and native causes stay out.
 Closing the caller or resource aborts the request, including body reading.
 Tests bind httpBackend to a fake; never patch global fetch.
 Only the fixed src/scaffold/backend/http.ts calls built-in fetch.

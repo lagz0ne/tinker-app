@@ -141,8 +141,8 @@ test("a bound HTTP backend gets the request and returns text without network", a
   }
 });
 
-test("a network failure returns the managed HTTP error", async () => {
-  const cause = new TypeError("connection refused");
+test("a network failure keeps only method and path in the managed HTTP error", async () => {
+  const cause = new TypeError("connection refused: https://example.test/x?token=hidden");
   const stop = new AbortController();
   const scope = createScope({
     signal: stop.signal,
@@ -155,11 +155,11 @@ test("a network failure returns the managed HTTP error", async () => {
   await scope.ready;
   try {
     const result = await scope.settle(httpRequest, {
-      input: { url: "https://example.test/x", method: "GET" },
+      input: { url: "https://example.test/x?token=hidden", method: "GET" },
     });
     if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
     if (!isError(result.error, "HttpRequestFailed")) throw result.error;
-    expect(result.error.payload).toEqual({ url: "https://example.test/x", method: "GET", cause });
+    expect(result.error.payload).toEqual({ method: "GET", path: "/x" });
   } finally {
     stop.abort();
     expect((await scope.closed).status).toBe("success");

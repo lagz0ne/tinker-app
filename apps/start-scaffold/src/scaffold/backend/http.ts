@@ -64,9 +64,9 @@ export const httpRequest = operation({
         const response = await http.send(url, { method, headers, body, signal: ctx.signal });
         if (span) span.attributes["http.response.status_code"] = response.status;
         return response;
-      } catch (cause) {
+      } catch {
         ctx.signal.throwIfAborted();
-        raise("HttpRequestFailed", { url, method, cause });
+        raise("HttpRequestFailed", { method, path });
       }
     });
   },
