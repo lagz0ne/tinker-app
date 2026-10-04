@@ -704,29 +704,44 @@ function entryStopAllocation(node) {
   const owner = enclosingFunction(node);
   return entries.has(pathOf(node)) && owner && topLevelEntry(owner, ["start", "getRouter"]);
 }
-function fetchCall(node) {
-  return ts.isCallExpression(node) && nameOf(unwrap(node.expression)) === "fetch";
+const builtinFetch = checker.resolveName("fetch", undefined, ts.SymbolFlags.Value, false);
+assert.ok(builtinFetch, "the project must declare built-in fetch");
+const fetchDeclarations = new Set(builtinFetch.declarations);
+function typeReference(node) {
+  for (let parent = node.parent; parent; parent = parent.parent)
+    if (ts.isTypeNode(parent)) return true;
+  return false;
 }
-function globalFetchProperty(node) {
+function backendDefault(node) {
+  const fn = enclosingFunction(node);
+  if (!fn || !ts.isPropertyAssignment(fn.parent)) return false;
+  const property = fn.parent;
+  const call = property.parent.parent;
+  if (!ts.isCallExpression(call) || !ts.isVariableDeclaration(call.parent)) return false;
   return (
-    ts.isPropertyAccessExpression(node) &&
-    nameOf(unwrap(node.expression)) === "globalThis" &&
-    node.name.text === "fetch"
+    nameOf(property.name) === "default" &&
+    nameOf(call.parent.name) === "httpBackend" &&
+    coreSymbol(call.expression, "tag")
   );
 }
-function globalFetchElement(node) {
-  return (
-    ts.isElementAccessExpression(node) &&
-    nameOf(unwrap(node.expression)) === "globalThis" &&
-    ts.isStringLiteral(node.argumentExpression) &&
-    node.argumentExpression.text === "fetch"
-  );
+function fetchSymbol(node) {
+  if (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression))
+    return checker.getTypeAtLocation(node.expression).getProperty(node.argumentExpression.text);
+  return locationSymbol(node);
+}
+function builtinFetchReference(node) {
+  if (
+    !ts.isIdentifier(node) &&
+    !ts.isPropertyAccessExpression(node) &&
+    !ts.isElementAccessExpression(node)
+  )
+    return false;
+  return fetchSymbol(node)?.declarations?.some((decl) => fetchDeclarations.has(decl));
 }
 function checkFetch(node) {
-  if (pathOf(node) === "src/scaffold/backend/http.ts") return;
-  if (fetchCall(node)) fail(node, "http-request: use httpRequest.controller instead of fetch");
-  if (globalFetchProperty(node) || globalFetchElement(node))
-    fail(node, "http-request: use httpRequest.controller instead of globalThis.fetch");
+  if (typeReference(node) || !builtinFetchReference(node)) return;
+  if (pathOf(node) === "src/scaffold/backend/http.ts" && backendDefault(node)) return;
+  fail(node, "http-request: use httpRequest.controller instead of built-in fetch");
 }
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
@@ -946,6 +961,31 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "fetch-tag-value",
+      "http-request",
+      'import {tag} from "@tinker/core"; const probe = tag({default: fetch});',
+    ],
+    [
+      "fetch-alias",
+      "http-request",
+      'import {operation} from "@tinker/core"; const send = fetch; const probe = operation({run: () => send("https://example.test/x")});',
+    ],
+    [
+      "window-fetch",
+      "http-request",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => window.fetch("https://example.test/x")});',
+    ],
+    [
+      "self-fetch",
+      "http-request",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => self.fetch("https://example.test/x")});',
+    ],
+    [
+      "destructured-fetch",
+      "http-request",
+      'import {operation} from "@tinker/core"; const {fetch: f} = globalThis; const probe = operation({run: () => f("https://example.test/x")});',
+    ],
     [
       "operation-fetch",
       "http-request",
@@ -1310,12 +1350,18 @@ if (process.argv.includes("--prove")) {
     ],
     ["list", "plain-list", "export const probe = 1;"],
   ];
+  const names = process.argv
+    .find((arg) => arg.startsWith("--cases="))
+    ?.slice(8)
+    .split(",");
+  const selected = names ? cases.filter(([name]) => names.includes(name)) : cases;
+  if (names) assert.equal(selected.length, names.length, "unknown planted case");
   try {
     await cp(join(root, "src"), join(planted, "src"), { recursive: true });
     for (const file of ["tsconfig.json", "PLAIN.md"])
       await cp(join(root, file), join(planted, file));
     await symlink(join(root, "node_modules"), join(planted, "node_modules"), "dir");
-    for (const [name, rule, source, file = "src/plain-probe.ts"] of cases) {
+    for (const [name, rule, source, file = "src/plain-probe.ts"] of selected) {
       const path = join(planted, file);
       const original = ["src/scaffold/frontend/router.tsx", "src/server.ts"].includes(file)
         ? await readFile(path, "utf8")
@@ -1337,7 +1383,7 @@ if (process.argv.includes("--prove")) {
       else await rm(path);
       console.log(`PASS: ${name} ${rule} EXIT 1; ${log}`);
     }
-    console.log(`Plain proof passed: ${cases.length} planted failures.`);
+    console.log(`Plain proof passed: ${selected.length} planted failures.`);
   } finally {
     await rm(planted, { recursive: true, force: true });
   }
