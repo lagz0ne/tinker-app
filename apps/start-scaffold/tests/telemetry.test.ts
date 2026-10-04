@@ -12,7 +12,6 @@ import {
 } from "@tinker-start-scaffold/telemetry";
 import {
   httpBackend,
-  receiveTelemetry,
   browserTelemetry,
   telemetryOrigin,
   backendStop,
@@ -20,6 +19,12 @@ import {
 } from "@tinker-start-scaffold/transport";
 import { raise } from "@tinker-start-scaffold/backend";
 import type { Telemetry } from "@tinker-start-scaffold/telemetry";
+
+import { Route } from "../src/routes/api.telemetry.ts";
+const handlers = Route.options.server?.handlers;
+if (!handlers || typeof handlers === "function" || typeof handlers.POST !== "function")
+  raise("BadInput", { reason: "Expected telemetry route" });
+const post = handlers.POST;
 
 class Receiver {
   requests: { path: string; body: string }[] = [];
@@ -279,14 +284,22 @@ test("browser ingest accepts only same-origin bounded browser records", async ()
     traces: [],
     logs: [{ time: 1, level: 30, msg: "browser record", side: "browser", service: "test-start" }],
   };
-  const send = (body: string, origin = "https://localhost") =>
-    app.run(receiveTelemetry, {
-      input: new Request("http://localhost/api/telemetry", {
-        method: "POST",
-        headers: { origin, "content-type": "application/json" },
-        body,
-      }),
+  const send = async (body: string, origin = "https://localhost") => {
+    const request = new Request("http://localhost/api/telemetry", {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body,
     });
+    const response = await post({
+      request,
+      context: { session: app, signal: request.signal },
+      params: {},
+      pathname: "/api/telemetry",
+      next: () => raise("BadInput", { reason: "Expected reply" }),
+    });
+    if (!(response instanceof Response)) throw response;
+    return response;
+  };
   try {
     expect((await send(JSON.stringify(valid))).status).toBe(202);
     expect((await send(JSON.stringify(valid), "http://other.test")).status).toBe(403);
@@ -402,13 +415,18 @@ test("scope exit cancels an unfinished telemetry request body", async () => {
     ],
   });
   await app.ready;
-  const work = app.settle(receiveTelemetry, { input: request });
+  const work = post({
+    request,
+    context: { session: app, signal: request.signal },
+    params: {},
+    pathname: "/api/telemetry",
+    next: () => raise("BadInput", { reason: "Expected reply" }),
+  });
   await entered.promise;
   stop.abort();
   const result = await work;
-  if (result.status !== "success")
-    raise("BadInput", { reason: "Body close did not return a response" });
-  expect(result.value.status).toBe(503);
+  if (!(result instanceof Response)) throw result;
+  expect(result.status).toBe(503);
   expect(await app.closed).toMatchObject({ status: "success", teardownErrors: undefined });
   expect(cancelled).toBe(true);
 });
