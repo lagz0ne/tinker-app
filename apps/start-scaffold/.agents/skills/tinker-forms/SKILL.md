@@ -47,6 +47,9 @@ Telemetry sends through httpBackend directly so it does not trace itself.
 The fixed HTTP file is safe on both server and browser.
 The build's file exception permits that one file only.
 
+Only fixed scaffold code may use the http resource directly.
+App seams export httpBackend and httpRequest.
+The plain check rejects app references to the raw http resource.
 A feature operation depends on the request controller:
 
 ```ts

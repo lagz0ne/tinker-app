@@ -22,4 +22,4 @@ export {
   replayPublic,
   replayPrivate,
 } from "./sync.ts";
-export { httpBackend, http, httpRequest } from "../scaffold/backend/http.ts";
+export { httpBackend, httpRequest } from "../scaffold/backend/http.ts";

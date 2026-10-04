@@ -743,6 +743,20 @@ function checkFetch(node) {
   if (pathOf(node) === "src/scaffold/backend/http.ts" && backendDefault(node)) return;
   fail(node, "http-request: use httpRequest.controller instead of built-in fetch");
 }
+function httpResourceReference(node) {
+  if (!ts.isIdentifier(node)) return false;
+  return locationSymbol(node)?.declarations?.some(
+    (decl) =>
+      ts.isVariableDeclaration(decl) &&
+      pathOf(decl) === "src/scaffold/backend/http.ts" &&
+      nameOf(decl.name) === "http",
+  );
+}
+function checkHttpResource(node) {
+  if (pathOf(node).startsWith("src/scaffold/") || typeReference(node)) return;
+  if (httpResourceReference(node))
+    fail(node, "http-resource: app code must depend on httpRequest.controller");
+}
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
@@ -927,6 +941,7 @@ for (const source of sources) {
     fail(source, ts.flattenDiagnosticMessageText(error.messageText, " "));
   walk(source, (node) => {
     checkFetch(node);
+    checkHttpResource(node);
     checkService(node);
     checkRoots(node);
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) fail(node, "no-class");
@@ -961,6 +976,12 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "http-resource-dependency",
+      "http-resource",
+      'import {operation} from "@tinker/core"; import {http as client} from "./scaffold/backend/http.ts"; const probe = operation({depends: {client}, run: ({client}) => client.send("https://example.test/x", {method: "GET", signal: new AbortController().signal})});',
+    ],
+    ["http-resource-export", "http-resource", 'export {http} from "./scaffold/backend/http.ts";'],
     [
       "fetch-tag-value",
       "http-request",

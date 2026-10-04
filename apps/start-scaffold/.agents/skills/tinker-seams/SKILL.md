@@ -18,7 +18,7 @@ Examples used by the app:
 - `startRequests`: `src/scaffold/start.ts`.
 - `readResult`: `src/scaffold/backend/result.server.ts`.
 - `responseBodies`: `src/scaffold/backend/body.server.ts`.
-- `httpBackend`, `http`, and `httpRequest`: `src/scaffold/backend/http.ts`.
+- `httpBackend` and `httpRequest`: `src/scaffold/backend/http.ts`.
 
 The seam check guards only imports from scaffold to app.
 The scaffold reads your values through:
