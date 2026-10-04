@@ -159,6 +159,9 @@ The schema check proves generation adds no duplicate tables.
 - With startRequests, graceful session close stops a never-answering HTTP request.
 - An HTTP request started after graceful close begins fails before sending.
 - Forced root and session closes still cancel a never-answering HTTP request.
+- Graceful root close stops HTTP waits in nested sessions.
+- Graceful session close stops its nested HTTP wait and leaves siblings open.
+- Graceful HTTP shutdown lets other running work finish.
 - Storage failure keeps bounded records for retry.
 - Accepted telemetry frees the byte budget for later records.
 - Browser ingest refuses foreign origins, bad shapes, and large bodies.

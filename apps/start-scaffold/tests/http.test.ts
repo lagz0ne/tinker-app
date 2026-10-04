@@ -554,3 +554,101 @@ test("forced root and session closes still cancel a never-answering HTTP request
     expect((await scope.closed).status).toBe(where === "root" ? "cancelled" : "success");
   }
 }, 2000);
+
+test("graceful root close stops HTTP waits in nested sessions", async () => {
+  const backend = createHeldBackend();
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    extensions: [startRequests],
+    tags: [backend.binding],
+  });
+  await scope.ready;
+  const child = scope.createSession().createSession();
+  const sending = child.settle(httpRequest, {
+    rawInput: { url: "https://slow.test/x", method: "GET" },
+  });
+  await backend.started;
+  const closing = scope.close({ graceful: true });
+  const result = await sending;
+  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  expect(result.error.payload).toMatchObject({ method: "GET", path: "/x" });
+  expect((await closing).status).toBe("success");
+  expect((await scope.closed).status).toBe("success");
+}, 2000);
+
+test("graceful session close stops its nested HTTP wait and leaves siblings open", async () => {
+  const first = createHeldBackend();
+  const second = createHeldBackend();
+  const siblingSignal = Promise.withResolvers<AbortSignal>();
+  const stop = new AbortController();
+  const scope = createScope({ signal: stop.signal, extensions: [startRequests] });
+  await scope.ready;
+  const parent = scope.createSession({ tags: first.binding });
+  const child = parent.createSession();
+  const sibling = scope.createSession({
+    tags: httpBackend((url, init) => {
+      const signal = init?.signal;
+      if (!signal) raise("BadInput", { reason: "request must have a signal" });
+      siblingSignal.resolve(signal);
+      return second.binding.value(url, init);
+    }),
+  });
+  const input = { url: "https://slow.test/x", method: "GET" };
+  const sending = child.settle(httpRequest, { rawInput: input });
+  const other = sibling.settle(httpRequest, { rawInput: input });
+  await first.started;
+  await second.started;
+  const signal = await siblingSignal.promise;
+  const closing = parent.close({ graceful: true });
+  const result = await sending;
+  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  expect((await closing).status).toBe("success");
+  expect(signal.aborted).toBe(false);
+  await sibling.close();
+  expect((await other).status).toBe("cancelled");
+  stop.abort();
+  expect((await scope.closed).status).toBe("success");
+}, 2000);
+
+test("graceful HTTP shutdown lets other running work finish", async () => {
+  const backend = createHeldBackend();
+  const started = Promise.withResolvers<AbortSignal>();
+  const finish = Promise.withResolvers<number>();
+  const waiting = operation({
+    label: "test.other-work",
+    run: (_deps, ctx) => {
+      started.resolve(ctx.signal);
+      return finish.promise;
+    },
+  });
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    extensions: [startRequests],
+    tags: backend.binding,
+  });
+  await scope.ready;
+  const working = scope.run(waiting);
+  const signal = await started.promise;
+  const sending = scope.settle(httpRequest, {
+    rawInput: { url: "https://slow.test/x", method: "GET" },
+  });
+  await backend.started;
+  let closed = false;
+  const closing = scope.close({ graceful: true }).then((end) => {
+    closed = true;
+    return end;
+  });
+  const result = await sending;
+  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  expect(signal.aborted).toBe(false);
+  expect(closed).toBe(false);
+  finish.resolve(42);
+  expect(await working).toBe(42);
+  expect((await closing).status).toBe("success");
+  expect((await scope.closed).status).toBe("success");
+}, 2000);
