@@ -51,9 +51,10 @@ function unwrap(node) {
   return node;
 }
 function locationSymbol(node) {
-  const symbol = ts.isShorthandPropertyAssignment(node.parent)
-    ? checker.getShorthandAssignmentValueSymbol(node.parent)
-    : checker.getSymbolAtLocation(node);
+  const symbol =
+    node.parent && ts.isShorthandPropertyAssignment(node.parent)
+      ? checker.getShorthandAssignmentValueSymbol(node.parent)
+      : checker.getSymbolAtLocation(node);
   return symbol?.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
 }
 function identifierInitializer(decl) {
@@ -721,7 +722,7 @@ const browserHttpDeclarations = new Set([
 ]);
 function typeReference(node) {
   for (let parent = node.parent; parent; parent = parent.parent)
-    if (ts.isTypeNode(parent)) return true;
+    if (ts.isTypeNode(parent) || typeOnlyImport(parent)) return true;
   return false;
 }
 function backendDefault(node) {
@@ -737,6 +738,10 @@ function backendDefault(node) {
   );
 }
 function referenceSymbol(node) {
+  if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent))
+    return checker
+      .getTypeAtLocation(node.parent)
+      .getProperty(nameOf(node.propertyName ?? node.name));
   if (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression))
     return checker.getTypeAtLocation(node.expression).getProperty(node.argumentExpression.text);
   return locationSymbol(node);
@@ -744,6 +749,7 @@ function referenceSymbol(node) {
 function nativeReference(node, declarations) {
   if (
     !ts.isIdentifier(node) &&
+    !ts.isBindingElement(node) &&
     !ts.isPropertyAccessExpression(node) &&
     !ts.isElementAccessExpression(node)
   )
@@ -798,28 +804,68 @@ const httpClients = [
   "dgram",
   "node:dgram",
 ];
+function requireReference(node) {
+  const symbol = symbolOf(node);
+  return (
+    symbol?.name === "require" &&
+    symbol.declarations?.some((decl) =>
+      decl.getSourceFile().fileName.endsWith("@types/node/module.d.ts"),
+    )
+  );
+}
 function importSpecifier(node) {
   if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier;
   if (ts.isImportEqualsDeclaration(node))
     return ts.isExternalModuleReference(node.moduleReference)
       ? node.moduleReference.expression
       : undefined;
-  if (ts.isCallExpression(node) && ["import", "require"].includes(nameOf(node.expression)))
+  if (
+    ts.isCallExpression(node) &&
+    (["import", "require"].includes(nameOf(node.expression)) || requireReference(node.expression))
+  )
     return node.arguments[0];
 }
+function typeOnlyExport(node) {
+  if (node.isTypeOnly) return true;
+  return (
+    node.exportClause &&
+    ts.isNamedExports(node.exportClause) &&
+    node.exportClause.elements.length > 0 &&
+    node.exportClause.elements.every((binding) => binding.isTypeOnly)
+  );
+}
 function typeOnlyImport(node) {
+  if (ts.isExportDeclaration(node)) return typeOnlyExport(node);
   if (!ts.isImportDeclaration(node)) return false;
-  const clause = node.importClause;
+  return typeOnlyClause(node.importClause);
+}
+function typeOnlyClause(clause) {
   if (!clause) return false;
   if (clause.isTypeOnly) return true;
   const bindings = clause.namedBindings;
   if (clause.name || !bindings || !ts.isNamedImports(bindings)) return false;
   return bindings.elements.length > 0 && bindings.elements.every((binding) => binding.isTypeOnly);
 }
+function createRequireReference(node) {
+  const symbol = referenceSymbol(node);
+  return (
+    symbol?.name === "createRequire" &&
+    symbol.declarations?.some((decl) =>
+      decl.getSourceFile().fileName.endsWith("@types/node/module.d.ts"),
+    )
+  );
+}
 function checkHttpImport(node) {
-  if (pathOf(node).startsWith("src/scaffold/") || typeOnlyImport(node)) return;
+  if (pathOf(node).startsWith("src/scaffold/") || typeOnlyImport(node) || typeReference(node))
+    return;
   const specifier = importSpecifier(node);
-  if (!specifier || !ts.isStringLiteralLike(specifier)) return;
+  if (createRequireReference(node))
+    fail(node, "http-client: createRequire is not allowed outside the scaffold");
+  if (!specifier) return;
+  if (!ts.isStringLiteralLike(specifier)) {
+    fail(node, "http-client: module loads must use a literal path");
+    return;
+  }
   if (
     httpClients.some(
       (client) => specifier.text === client || specifier.text.startsWith(`${client}/`),
@@ -1006,10 +1052,72 @@ function checkFunction(node) {
   checkPlainFunction(node);
 }
 
+function nativeDomSymbol(symbol, name) {
+  return (
+    symbol?.name === name &&
+    symbol.declarations?.some((decl) => decl.getSourceFile().fileName.endsWith("lib.dom.d.ts"))
+  );
+}
+function wireType(type, name) {
+  const awaited = checker.getAwaitedType(type);
+  if (awaited && awaited !== type) return wireType(awaited, name);
+  if (type.isUnionOrIntersection()) return type.types.some((part) => wireType(part, name));
+  return nativeDomSymbol(type.symbol, name);
+}
+function variableInitializer(symbol) {
+  const declaration = symbol?.valueDeclaration;
+  return declaration && ts.isVariableDeclaration(declaration) ? declaration.initializer : undefined;
+}
+function requestSchema(node, seen = new Set()) {
+  if (!node || seen.has(node)) return false;
+  seen.add(node);
+  let request = false;
+  walk(node, (child) => {
+    const symbol = locationSymbol(child);
+    if (nativeDomSymbol(symbol, "Request")) request = true;
+    if (ts.isIdentifier(child) && requestSchema(variableInitializer(symbol), seen)) request = true;
+  });
+  return request;
+}
+function checkOperationInput(input) {
+  if (requestSchema(input))
+    fail(input, "operation-wire-input: requests belong to the protocol layer");
+}
+function checkOperationOutput(run) {
+  if (!run) return;
+  const signatures = checker.getTypeAtLocation(run.initializer ?? run).getCallSignatures();
+  if (
+    signatures.some((signature) =>
+      wireType(checker.getReturnTypeOfSignature(signature), "Response"),
+    )
+  )
+    fail(run, "operation-wire-output: replies belong to the protocol layer");
+}
+function authProtocolException(node) {
+  return (
+    pathOf(node) === "src/scaffold/backend/auth.server.ts" &&
+    ts.isVariableDeclaration(node.parent) &&
+    nameOf(node.parent.name) === "handleAuth"
+  );
+}
+function checkOperationWire(node) {
+  if (
+    !ts.isCallExpression(node) ||
+    !coreSymbol(node.expression, "operation") ||
+    authProtocolException(node)
+  )
+    return;
+  const options = node.arguments[0];
+  if (!options || !ts.isObjectLiteralExpression(options)) return;
+  checkOperationInput(propertyOf(options, "input")?.initializer);
+  checkOperationOutput(propertyOf(options, "run"));
+}
+
 for (const source of sources) {
   for (const error of program.getSyntacticDiagnostics(source))
     fail(source, ts.flattenDiagnosticMessageText(error.messageText, " "));
   walk(source, (node) => {
+    checkOperationWire(node);
     checkFetch(node);
     checkBrowserHttp(node);
     checkHttpResource(node);
@@ -1049,6 +1157,77 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "dynamic-require-alias",
+      "http-client",
+      'import {operation} from "@tinker/core"; const load = require; const moduleName = "node:http"; const probe = operation({run: () => load(moduleName)});',
+    ],
+    [
+      "create-require-destructured",
+      "http-client",
+      'import {operation} from "@tinker/core"; const probe = operation({run: async () => { const {createRequire} = await import("node:module"); return createRequire(import.meta.url); }});',
+    ],
+    [
+      "operation-request",
+      "operation-wire-input",
+      'import {operation} from "@tinker/core"; import {z} from "zod"; const probe = operation({input: z.instanceof(Request), run: (_deps, ctx) => ctx.input.url});',
+    ],
+    [
+      "operation-request-alias",
+      "operation-wire-input",
+      'import {operation as op} from "@tinker/core"; import {z} from "zod"; const schema = z.instanceof(Request); const probe = op({input: schema, run: (_deps, ctx) => ctx.input.url});',
+    ],
+    [
+      "operation-response",
+      "operation-wire-output",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => new Response()});',
+    ],
+    [
+      "operation-response-async",
+      "operation-wire-output",
+      'import {operation} from "@tinker/core"; const probe = operation({run: async () => new Response()});',
+    ],
+    [
+      "operation-response-union",
+      "operation-wire-output",
+      'import {operation} from "@tinker/core"; const probe = operation({run: (_deps, ctx) => ctx.random.next() ? new Response() : null});',
+    ],
+    [
+      "destructured-fetch-shorthand",
+      "http-request",
+      'import {operation} from "@tinker/core"; const {fetch} = globalThis; const probe = operation({run: () => fetch("https://example.test")});',
+    ],
+    [
+      "destructured-beacon",
+      "http-client",
+      'import {operation} from "@tinker/core"; const {sendBeacon} = navigator; const probe = operation({run: () => sendBeacon("https://example.test", "x")});',
+    ],
+    [
+      "destructured-xhr",
+      "http-client",
+      'import {operation} from "@tinker/core"; const {XMLHttpRequest} = globalThis; const probe = operation({run: () => new XMLHttpRequest()});',
+    ],
+    [
+      "dynamic-import",
+      "http-client",
+      'import {operation} from "@tinker/core"; const moduleName = "node:http"; const probe = operation({run: () => import(moduleName)});',
+    ],
+    [
+      "dynamic-require",
+      "http-client",
+      'import {operation} from "@tinker/core"; const moduleName = "node:http"; const probe = operation({run: () => require(moduleName)});',
+    ],
+    [
+      "create-require",
+      "http-client",
+      'import {createRequire} from "node:module"; import {operation} from "@tinker/core"; const probe = operation({run: () => createRequire(import.meta.url)});',
+    ],
+    [
+      "create-require-namespace",
+      "http-client",
+      'import * as mod from "node:module"; import {operation} from "@tinker/core"; const probe = operation({run: () => mod.createRequire(import.meta.url)});',
+    ],
+    ["type-export-client", null, 'export type { ClientRequest } from "node:http";'],
     ["client-net", "http-client", 'import * as client from "net"; export { client };'],
     ["client-tls", "http-client", 'import * as client from "tls"; export { client };'],
     ["client-dgram", "http-client", 'import * as client from "dgram"; export { client };'],
