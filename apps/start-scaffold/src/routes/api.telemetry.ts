@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { startRequests } from "../scaffold/start.ts";
 import { receiveTelemetry, telemetryOrigin } from "../scaffold/telemetry/ingest.server.ts";
 import { telemetryBatch } from "../scaffold/telemetry/records.ts";
+import type { Telemetry } from "../scaffold/telemetry/records.ts";
 import { requestBody } from "../scaffold/backend/request-body.server.ts";
 import { readResult } from "../scaffold/backend/result.server.ts";
 import { isError } from "../errors.ts";
@@ -25,52 +26,48 @@ export const Route = createFileRoute("/api/telemetry")({
                 "https:$1",
               )
             : new URL(origin).origin;
-        if (request.headers.get("origin") !== expected) return new Response(null, { status: 403 });
+        const bodyStream = request.body;
         const [contentType] = String(request.headers.get("content-type")).split(";");
-        if (contentType !== "application/json") return new Response(null, { status: 415 });
-        if (Number(request.headers.get("content-length")) > 65_536)
-          return new Response(null, { status: 413 });
-        const batch = await Promise.resolve().then(async () => {
-          if (request.body === null) return new Response(null, { status: 400 });
-          const bodyOwner = context.session.resolve(requestBody);
-          const signal = bodyOwner.signal;
-          const reader = bodyOwner.open(request.body);
-          try {
-            let bytes = 0;
-            const chunks: Uint8Array<ArrayBuffer>[] = [];
-            while (!signal.aborted) {
-              const next = await reader.read();
-              if (next.done) break;
-              bytes += next.value.byteLength;
-              if (bytes > 65_536) {
-                await reader.cancel();
-                return new Response(null, { status: 413 });
-              }
-              chunks.push(next.value);
+        const rejected = [
+          { failed: request.headers.get("origin") !== expected, status: 403 },
+          { failed: contentType !== "application/json", status: 415 },
+          { failed: Number(request.headers.get("content-length")) > 65_536, status: 413 },
+          { failed: bodyStream === null, status: 400 },
+        ].find(({ failed }) => failed);
+        if (rejected) return new Response(null, { status: rejected.status });
+        const bodyOwner = context.session.resolve(requestBody);
+        const signal = bodyOwner.signal;
+        const reader = bodyOwner.open(bodyStream!);
+        let batch: Telemetry.Batch;
+        try {
+          let bytes = 0;
+          const chunks: Uint8Array<ArrayBuffer>[] = [];
+          for (let next = await reader.read(); !next.done; next = await reader.read()) {
+            bytes += next.value.byteLength;
+            if (bytes > 65_536) {
+              await reader.cancel();
+              return new Response(null, { status: 413 });
             }
-            if (signal.aborted) return new Response(null, { status: 503 });
-            const body = await new Blob(chunks).arrayBuffer();
-            return Promise.resolve().then(() => {
-              try {
-                const parsed = browserBatch.safeParse(
-                  JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body)),
-                );
-                return parsed.success ? parsed.data : new Response(null, { status: 400 });
-              } catch {
-                return new Response(null, { status: 400 });
-              }
-            });
-          } finally {
-            await bodyOwner.release();
+            chunks.push(next.value);
           }
-        });
-        if (batch instanceof Response) return batch;
+          if (signal.aborted) return new Response(null, { status: 503 });
+          const body = await new Blob(chunks).arrayBuffer();
+          try {
+            batch = browserBatch.parse(
+              JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body)),
+            );
+          } catch {
+            return new Response(null, { status: 400 });
+          }
+        } finally {
+          await bodyOwner.release();
+        }
         const result = await context.session.settle(receiveTelemetry, {
           input: batch,
           signal: context.signal,
         });
-        if (result.status === "failed" && isError(result.error, "Cancelled"))
-          return new Response(null, { status: 503 });
+        const { error } = { error: undefined, ...result };
+        if (isError(error, "Cancelled")) return new Response(null, { status: 503 });
         readResult(result);
         return new Response(null, { status: 202, headers: { "Cache-Control": "no-store" } });
       },
