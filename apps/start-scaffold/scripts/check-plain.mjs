@@ -1246,6 +1246,12 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
     [
+      "operation-request-custom-reader",
+      "operation-wire-input",
+      'import {operation} from "@tinker/core"; import {z} from "zod"; type R = Request; const probe = operation({input: (value: unknown) => z.custom<R>().parse(value), run: (_deps, ctx) => ctx.input.url});',
+    ],
+
+    [
       "mounted-auth-bracket",
       "protocol-auth",
       'import {operation} from "@tinker/core"; import * as protocol from "@tinker-start-scaffold/testing"; const probe = operation({depends: {mounted: protocol["handleAuth"].controller}, run: () => 1});',
@@ -1329,12 +1335,12 @@ if (process.argv.includes("--prove")) {
     [
       "operation-options-spread",
       "operation-options",
-      'import {operation} from "@tinker/core"; const opts = {}; const run = () => 1; const probe = operation({...opts, run});',
+      'import {operation} from "@tinker/core"; const opts = {}; const run = String; const probe = operation({...opts, run});',
     ],
     [
       "operation-options-variable",
       "operation-options",
-      'import {operation} from "@tinker/core"; const opts = {run: () => 1}; const probe = operation(opts);',
+      'import {operation} from "@tinker/core"; const opts = {run: String}; const probe = operation(opts);',
     ],
     [
       "operation-response-typed-callback",
