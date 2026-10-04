@@ -9,7 +9,8 @@
     "./transport": "./src/scaffold/backend/index.server.ts",
     "./telemetry": "./src/scaffold/telemetry/index.ts",
     "./sync": "./src/scaffold/frontend/index.ts",
-    "./testing": "./tests/presets.ts"
+    "./testing": "./tests/presets.ts",
+    "./routes": "./src/transport/routes.server.ts"
   },
   "scripts": {
     "dev": "node --env-file=.env node_modules/vite-plus/bin/vp dev",
