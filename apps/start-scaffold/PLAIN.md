@@ -62,6 +62,7 @@ Tests and generated files do not count.
     - `src/frontend/App.tsx#errorText`
     - `src/frontend/Todos.tsx#showFailure.input`
     - `src/routes/api.sync.ts#Route.GET`
+    - `src/routes/api.telemetry.ts#Route.POST`
     - `src/transport/result.server.ts#readReceipt`
 
 - **src/frontend/App.tsx#errorText**
@@ -125,6 +126,7 @@ Tests and generated files do not count.
     - `src/scaffold/frontend/sync.ts#client.execute`
     - `src/scaffold/frontend/sync.ts#client.wait`
     - `src/scaffold/start.ts#middleware.callback`
+    - `src/scaffold/telemetry/ingest.server.ts#receiveTelemetry.run`
     - `src/server.ts#renderRequest.callback`
 
 - **src/scaffold/sync.ts#readExecution**

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { startRequests } from "../scaffold/start.ts";
 import { receiveTelemetry, telemetryOrigin } from "../scaffold/telemetry/ingest.server.ts";
 import { telemetryBatch } from "../scaffold/telemetry/records.ts";
-import { backendStop, requestStop } from "../scaffold/backend/lifetime.ts";
+import { requestBody } from "../scaffold/backend/request-body.server.ts";
 import { readResult } from "../scaffold/backend/result.server.ts";
 import { isError } from "../errors.ts";
 
@@ -32,17 +32,9 @@ export const Route = createFileRoute("/api/telemetry")({
           return new Response(null, { status: 413 });
         const batch = await Promise.resolve().then(async () => {
           if (request.body === null) return new Response(null, { status: 400 });
-          const signal = AbortSignal.any([
-            context.session.resolve(backendStop),
-            context.session.resolve(requestStop),
-            context.signal,
-          ]);
-          const reader = request.body.getReader();
-          let cancellation: Promise<void> | undefined;
-          const cancel = () => {
-            cancellation ??= reader.cancel();
-          };
-          signal.addEventListener("abort", cancel, { once: true });
+          const bodyOwner = context.session.resolve(requestBody);
+          const signal = bodyOwner.signal;
+          const reader = bodyOwner.open(request.body);
           try {
             let bytes = 0;
             const chunks: Uint8Array<ArrayBuffer>[] = [];
@@ -69,10 +61,7 @@ export const Route = createFileRoute("/api/telemetry")({
               }
             });
           } finally {
-            signal.removeEventListener("abort", cancel);
-            if (signal.aborted) cancel();
-            await cancellation;
-            reader.releaseLock();
+            await bodyOwner.release();
           }
         });
         if (batch instanceof Response) return batch;
