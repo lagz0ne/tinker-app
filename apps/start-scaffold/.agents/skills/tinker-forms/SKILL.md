@@ -70,11 +70,14 @@ The plain check rejects app references to http and httpBackend.
 Only fixed scaffold code may send through the backend tag.
 App imports cannot load the named HTTP clients or raw sockets:
 
-- node:http, node:https, http, https.
+- node:http, node:https, node:http2, http, https, http2.
+- ws and ofetch.
 - undici, axios, ky, node-fetch, got, superagent.
 - node:net and node:tls.
 
 The ban also covers literal subpaths, re-exports, import(), and require().
+Type-only imports are allowed, including import { type X }.
+A mixed import, default value import, or empty import still fails.
 A feature operation depends on the request controller:
 
 ```ts
@@ -259,6 +262,7 @@ Its deferred close cancels any reader the consumer left open.
 
 Run `npm run check:plain -- --prove` after changing this rule.
 Every planted failure must exit 1 by its rule name.
+Each allowed type-only import must exit 0.
 Run `npm run check:plain` before review.
 Use `npm run check:plain -- --list` to inspect the list.
 Review every entry before copying that output into `PLAIN.md`.

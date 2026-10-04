@@ -214,3 +214,6 @@ Tests bind that tag through the fixed scaffold transport seam.
 
 App imports of the named HTTP clients and raw sockets fail the plain check.
 Literal subpaths, re-exports, dynamic import, and require use the same ban.
+The client list includes node:http2, http2, ws, and ofetch.
+Type-only imports are allowed, including import { type X }.
+Imports that keep a value or only send code still fail.

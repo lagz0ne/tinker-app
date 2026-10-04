@@ -788,8 +788,17 @@ function importSpecifier(node) {
   if (ts.isCallExpression(node) && ["import", "require"].includes(nameOf(node.expression)))
     return node.arguments[0];
 }
+function typeOnlyImport(node) {
+  if (!ts.isImportDeclaration(node)) return false;
+  const clause = node.importClause;
+  if (!clause) return false;
+  if (clause.isTypeOnly) return true;
+  const bindings = clause.namedBindings;
+  if (clause.name || !bindings || !ts.isNamedImports(bindings)) return false;
+  return bindings.elements.length > 0 && bindings.elements.every((binding) => binding.isTypeOnly);
+}
 function checkHttpImport(node) {
-  if (pathOf(node).startsWith("src/scaffold/")) return;
+  if (pathOf(node).startsWith("src/scaffold/") || typeOnlyImport(node)) return;
   const specifier = importSpecifier(node);
   if (!specifier || !ts.isStringLiteralLike(specifier)) return;
   if (
@@ -1020,6 +1029,27 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "client-import-type",
+      null,
+      'import type { ClientHttp2Session } from "node:http2"; export type Probe = ClientHttp2Session;',
+    ],
+    [
+      "client-named-import-type",
+      null,
+      'import { type IncomingMessage, type ServerResponse } from "node:http"; export type Probe = IncomingMessage | ServerResponse;',
+    ],
+    [
+      "client-mixed-import",
+      "http-client",
+      'import { type IncomingMessage, request } from "node:http"; export { request }; export type Probe = IncomingMessage;',
+    ],
+    [
+      "client-default-and-type",
+      "http-client",
+      'import client, { type AxiosInstance } from "axios"; export { client }; export type Probe = AxiosInstance;',
+    ],
+    ["client-empty-import", "http-client", 'import {} from "node:http";'],
     [
       "client-node-http2",
       "http-client",
@@ -1549,13 +1579,13 @@ if (process.argv.includes("--prove")) {
       );
       const log = join(tmpdir(), `start-plain-proof-${name}.log`);
       await writeFile(log, red.stdout + red.stderr + `\nEXIT ${red.status}\n`);
-      assert.equal(red.status, 1, name);
-      assert.ok(red.stderr.includes(rule), `${name}: must fail by ${rule}`);
+      assert.equal(red.status, rule ? 1 : 0, name);
+      if (rule) assert.ok(red.stderr.includes(rule), `${name}: must fail by ${rule}`);
       if (original) await writeFile(path, original);
       else await rm(path);
-      console.log(`PASS: ${name} ${rule} EXIT 1; ${log}`);
+      console.log(`PASS: ${name} ${rule ?? "allowed"} EXIT ${red.status}; ${log}`);
     }
-    console.log(`Plain proof passed: ${selected.length} planted failures.`);
+    console.log(`Plain proof passed: ${selected.length} planted cases.`);
   } finally {
     await rm(planted, { recursive: true, force: true });
   }
