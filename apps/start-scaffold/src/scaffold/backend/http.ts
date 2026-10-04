@@ -15,6 +15,12 @@ const requestShape = z
   })
   .brand<"HttpRequest">();
 
+const failureShape = z.object({
+  name: z.string().optional(),
+  code: z.string().optional(),
+  cause: z.object({ name: z.string().optional(), code: z.string().optional() }).optional(),
+});
+
 /** A session owns each request through body reading, including on graceful close. */
 export const http = resource({
   label: "http",
@@ -69,9 +75,19 @@ export const httpRequest = operation({
         const response = await http.send(url, { method, headers, body, signal: ctx.signal });
         if (span) span.attributes["http.response.status_code"] = response.status;
         return response;
-      } catch {
+      } catch (cause) {
         ctx.signal.throwIfAborted();
-        raise("HttpRequestFailed", { method, path });
+        const failure = failureShape.safeParse(cause);
+        if (!failure.success) raise("HttpRequestFailed", { method, path });
+        const details = failure.data.cause ?? failure.data;
+        raise("HttpRequestFailed", {
+          method,
+          path,
+          cause: {
+            name: details.name ?? failure.data.name,
+            code: details.code ?? failure.data.code,
+          },
+        });
       }
     });
   },

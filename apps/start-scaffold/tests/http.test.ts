@@ -142,25 +142,45 @@ test("a bound HTTP backend gets the request and returns text without network", a
   }
 });
 
-test("a network failure keeps only method and path in the managed HTTP error", async () => {
-  const cause = new TypeError("connection refused: https://example.test/x?token=hidden");
+test("network failures keep method, path, and only cause name and code", async () => {
+  const failures = [
+    Object.assign(new TypeError("connection refused: https://example.test/x?token=hidden"), {
+      code: "ECONNREFUSED",
+      url: "https://example.test/x?token=hidden",
+    }),
+    new TypeError("fetch failed: https://example.test/x?token=hidden", {
+      cause: Object.assign(new Error("DNS failed: https://example.test/x?token=hidden"), {
+        code: "ENOTFOUND",
+        url: "https://example.test/x?token=hidden",
+      }),
+    }),
+  ];
   const stop = new AbortController();
   const scope = createScope({
     signal: stop.signal,
     tags: [
       httpBackend(async () => {
-        throw cause;
+        throw failures.shift();
       }),
     ],
   });
   await scope.ready;
   try {
-    const result = await scope.settle(httpRequest, {
-      rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
-    });
-    if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
-    if (!isError(result.error, "HttpRequestFailed")) throw result.error;
-    expect(result.error.payload).toEqual({ method: "GET", path: "/x" });
+    for (const cause of [
+      { name: "TypeError", code: "ECONNREFUSED" },
+      { name: "Error", code: "ENOTFOUND" },
+    ]) {
+      const result = await scope.settle(httpRequest, {
+        rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
+      });
+      if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+      if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+      expect(result.error.payload).toEqual({
+        method: "GET",
+        path: "/x",
+        cause,
+      });
+    }
   } finally {
     stop.abort();
     expect((await scope.closed).status).toBe("success");

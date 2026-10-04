@@ -43,7 +43,19 @@ Each set-cookie value stays separate, including a date with a comma.
 Other native header values stay joined inside one array entry.
 A non-2xx reply is a normal result.
 A network failure raises the managed HttpRequestFailed error.
-Its payload has only method and path; query strings and native causes stay out.
+Its payload keeps method and path, plus only the cause's string name and code.
+Native fetch can wrap a socket error; its inner name and code take precedence.
+Messages, URLs, and the native cause object stay out.
+For example:
+
+```ts
+{
+  method: "GET",
+  path: "/x",
+  cause: { name: "Error", code: "ECONNREFUSED" },
+}
+```
+
 Closing the caller or resource aborts the request, including body reading.
 Tests bind httpBackend to a fake; never patch global fetch.
 Only the default in src/scaffold/http-backend.ts uses built-in fetch.

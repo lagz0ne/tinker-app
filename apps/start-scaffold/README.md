@@ -150,7 +150,7 @@ The schema check proves generation adds no duplicate tables.
 - Closing the HTTP resource aborts requests still in flight.
 - A bound HTTP backend gets the request and returns text without network.
 - HTTP replies keep each set-cookie value and joined repeated headers.
-- A network failure keeps only method and path in the managed HTTP error.
+- Network failures keep method, path, and only cause name and code.
 - Closing the caller aborts HTTP body reading.
 - Storage failure keeps bounded records for retry.
 - Accepted telemetry frees the byte budget for later records.
