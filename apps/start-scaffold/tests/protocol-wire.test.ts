@@ -14,8 +14,7 @@ import {
   requestStop,
 } from "@tinker-start-scaffold/transport";
 import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
-import { Route as telemetryRoute } from "../src/routes/api.telemetry.ts";
-import { Route as syncRoute } from "../src/routes/api.sync.ts";
+import { telemetryRoute, syncRoute } from "@tinker-start-scaffold/routes";
 
 const telemetryHandlers = telemetryRoute.options.server?.handlers;
 const syncHandlers = syncRoute.options.server?.handlers;

@@ -20,7 +20,7 @@ import {
 import { raise } from "@tinker-start-scaffold/backend";
 import type { Telemetry } from "@tinker-start-scaffold/telemetry";
 
-import { Route } from "../src/routes/api.telemetry.ts";
+import { telemetryRoute as Route } from "@tinker-start-scaffold/routes";
 const handlers = Route.options.server?.handlers;
 if (!handlers || typeof handlers === "function" || typeof handlers.POST !== "function")
   raise("BadInput", { reason: "Expected telemetry route" });
