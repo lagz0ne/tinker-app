@@ -704,6 +704,30 @@ function entryStopAllocation(node) {
   const owner = enclosingFunction(node);
   return entries.has(pathOf(node)) && owner && topLevelEntry(owner, ["start", "getRouter"]);
 }
+function fetchCall(node) {
+  return ts.isCallExpression(node) && nameOf(unwrap(node.expression)) === "fetch";
+}
+function globalFetchProperty(node) {
+  return (
+    ts.isPropertyAccessExpression(node) &&
+    nameOf(unwrap(node.expression)) === "globalThis" &&
+    node.name.text === "fetch"
+  );
+}
+function globalFetchElement(node) {
+  return (
+    ts.isElementAccessExpression(node) &&
+    nameOf(unwrap(node.expression)) === "globalThis" &&
+    ts.isStringLiteral(node.argumentExpression) &&
+    node.argumentExpression.text === "fetch"
+  );
+}
+function checkFetch(node) {
+  if (pathOf(node) === "src/scaffold/backend/http.ts") return;
+  if (fetchCall(node)) fail(node, "http-request: use httpRequest.controller instead of fetch");
+  if (globalFetchProperty(node) || globalFetchElement(node))
+    fail(node, "http-request: use httpRequest.controller instead of globalThis.fetch");
+}
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
@@ -887,6 +911,7 @@ for (const source of sources) {
   for (const error of program.getSyntacticDiagnostics(source))
     fail(source, ts.flattenDiagnosticMessageText(error.messageText, " "));
   walk(source, (node) => {
+    checkFetch(node);
     checkService(node);
     checkRoots(node);
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) fail(node, "no-class");
@@ -921,6 +946,41 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "operation-fetch",
+      "http-request",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => fetch("https://example.test/x")});',
+    ],
+    [
+      "resource-fetch",
+      "http-request",
+      'import {resource} from "@tinker/core"; const probe = resource({factory: () => ({send: () => fetch("https://example.test/x")})});',
+    ],
+    [
+      "callback-fetch",
+      "http-request",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => Promise.resolve().then(() => fetch("https://example.test/x"))});',
+    ],
+    [
+      "parenthesized-fetch",
+      "http-request",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => (fetch)("https://example.test/x")});',
+    ],
+    [
+      "global-fetch-reference",
+      "http-request",
+      'import {tag} from "@tinker/core"; const probe = tag({default: globalThis.fetch});',
+    ],
+    [
+      "global-fetch-call",
+      "http-request",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => globalThis.fetch("https://example.test/x")});',
+    ],
+    [
+      "global-fetch-element",
+      "http-request",
+      'import {tag} from "@tinker/core"; const probe = tag({default: globalThis["fetch"]});',
+    ],
     [
       "entry-hidden-fetch",
       "plain-param",

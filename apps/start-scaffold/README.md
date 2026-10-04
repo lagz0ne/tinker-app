@@ -143,7 +143,7 @@ The schema check proves generation adds no duplicate tables.
 - A quiet private stream closes at the heartbeat after sign-out.
 - A final result replay completes a wait after disconnect.
 - Finished traces and Pino logs reach their HTTP receivers.
-- Telemetry sends through the scope-bound HTTP backend.
+- Telemetry uses the HTTP backend without tracing its own requests.
 - Each HTTP request has one named child span with its status.
 - Closing the HTTP resource aborts requests still in flight.
 - A bound HTTP backend gets the request and returns text without network.

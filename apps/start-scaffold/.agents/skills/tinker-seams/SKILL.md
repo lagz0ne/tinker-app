@@ -18,6 +18,7 @@ Examples used by the app:
 - `startRequests`: `src/scaffold/start.ts`.
 - `readResult`: `src/scaffold/backend/result.server.ts`.
 - `responseBodies`: `src/scaffold/backend/body.server.ts`.
+- `httpBackend`, `http`, and `httpRequest`: `src/scaffold/backend/http.ts`.
 
 The seam check guards only imports from scaffold to app.
 The scaffold reads your values through:
@@ -31,6 +32,10 @@ Fill the open `Register` in `src/lib/tinker.ts`.
 It supplies change, result, public, and private bodies.
 See `src/contracts/sync.ts` for the current bodies.
 Put raw-input readers in `src/contracts/`.
+
+Feature HTTP operations import httpRequest through src/lib/tinker.server.ts.
+Export those operations from src/backend/index.ts for scope tests.
+The fixed telemetry sender uses httpBackend directly to avoid tracing itself.
 
 Server imports belong in server functions and routes.
 Never import `tinker.server` into a browser view.

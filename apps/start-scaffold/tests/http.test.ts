@@ -177,21 +177,24 @@ test("closing the caller aborts HTTP body reading", async () => {
         const signal = init?.signal;
         if (!signal) raise("BadInput", { reason: "request must have a signal" });
         return new Response(
-          new ReadableStream({
-            start(controller) {
-              signal.addEventListener(
-                "abort",
-                () => {
-                  cancelled.resolve();
-                  controller.error(signal.reason);
-                },
-                { once: true },
-              );
+          new ReadableStream(
+            {
+              start(controller) {
+                signal.addEventListener(
+                  "abort",
+                  () => {
+                    cancelled.resolve();
+                    controller.error(signal.reason);
+                  },
+                  { once: true },
+                );
+              },
+              pull() {
+                reading.resolve();
+              },
             },
-            pull() {
-              reading.resolve();
-            },
-          }),
+            { highWaterMark: 0 },
+          ),
         );
       }),
     ],

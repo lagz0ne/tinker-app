@@ -28,6 +28,48 @@ React views render data and invoke operations through hooks.
 Readers validate raw input once at the door.
 Never pass a scope or context bag to a helper.
 
+## Outgoing HTTP
+
+Use httpRequest for each outgoing request.
+It wraps built-in fetch through the http resource and httpBackend tag.
+Each call is a child operation with an HTTP span and a graph edge.
+The span name has the method and path, with no query string.
+It records the reply status.
+The result has status, headers, and body text.
+A non-2xx reply is a normal result.
+A network failure raises the managed HttpRequestFailed error.
+Closing the caller or resource aborts the request, including body reading.
+Tests bind httpBackend to a fake; never patch global fetch.
+Only the fixed src/scaffold/backend/http.ts calls built-in fetch.
+The plain check bans fetch calls and globalThis.fetch in other src files.
+Telemetry sends through httpBackend directly so it does not trace itself.
+The fixed HTTP file is safe on both server and browser.
+The build's file exception permits that one file only.
+
+A feature operation depends on the request controller:
+
+```ts
+import { operation } from "@tinker/core";
+import { httpRequest } from "@/lib/tinker.server";
+
+export const postNotice = operation({
+  label: "postNotice",
+  depends: { request: httpRequest.controller },
+  run: ({ request }) =>
+    request.run({
+      input: {
+        url: "https://api.example.com/notices",
+        method: "POST",
+        headers: { "content-type": "text/plain" },
+        body: "The order is ready.",
+      },
+    }),
+});
+```
+
+Use the returned status to choose the feature's next step.
+Pass only request values; the request uses its own ctx.signal.
+
 ## Plain functions are rare
 
 Follow ADR 0099 and ADR 0100.

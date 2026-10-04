@@ -5,7 +5,7 @@ import { makeTestClock } from "@tinker/core/testing";
 import {
   telemetry,
   telemetrySettings,
-  telemetryBackend,
+  httpBackend,
   observer,
   flushTelemetry,
   ingestTelemetry,
@@ -453,21 +453,25 @@ test("accepted telemetry frees the byte budget for later records", async () => {
   }
 });
 
-test("telemetry sends through the scope-bound HTTP backend", async () => {
-  const receiver = await new Receiver().start();
+test("telemetry uses the HTTP backend without tracing its own requests", async () => {
+  const calls: Parameters<typeof fetch>[0][] = [];
   const stop = new AbortController();
   const tools = createScope({
     signal: stop.signal,
     extensions: [telemetry],
+    observe: { history: 30 },
     tags: [
       telemetrySettings({
         side: "ssr",
         service: "test-start",
         level: "info",
-        traces: `${receiver.url}/unused`,
-        logs: `${receiver.url}/unused`,
+        traces: "https://no-network.invalid/traces",
+        logs: "https://no-network.invalid/logs",
       }),
-      telemetryBackend((_input, init) => fetch(`${receiver.url}/selected`, init)),
+      httpBackend(async (url) => {
+        calls.push(url);
+        return new Response(null, { status: 202 });
+      }),
     ],
   });
   try {
@@ -479,10 +483,19 @@ test("telemetry sends through the scope-bound HTTP backend", async () => {
       },
     });
     await tools.run(flushTelemetry);
-    expect(receiver.requests.map((request) => request.path)).toEqual(["/selected"]);
+    expect(calls).toEqual([
+      "https://no-network.invalid/logs?_time_field=time&_msg_field=msg&_stream_fields=service%2Cside",
+    ]);
+    expect(
+      tools
+        .spans()
+        .filter(
+          (span) =>
+            span.name === "http" || span.name === "http.request" || span.name.startsWith("http "),
+        ),
+    ).toEqual([]);
   } finally {
     stop.abort();
     await tools.closed;
-    await receiver.close();
   }
 });

@@ -18,6 +18,9 @@ Choose one of these four forms before adding app work.
 
 Feature entry points are declared units, not service factories or helpers.
 An action must run through an operation to get observation and cancellation.
+Outgoing HTTP uses httpRequest.controller; never call fetch from app code.
+The http resource owns requests and wraps built-in fetch through httpBackend.
+Tests bind that tag; telemetry uses it directly to avoid tracing its own sends.
 A resource may retain native handles and private work state.
 Keep saved records and visible state in data.
 Do not hide a feature action behind an unobserved resource method.

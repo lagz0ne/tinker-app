@@ -35,6 +35,10 @@ In one transaction, `lock` orders writes to the stream.
 See `changeTodo` in `src/backend/todos.ts`.
 A repeated execution ID must not repeat saved effects.
 
+For outgoing HTTP, depend on httpRequest.controller and run it.
+The filled request example is in tinker-forms.
+Never call built-in fetch from feature code.
+
 Export backend operations from `src/backend/index.ts`.
 Tests import `@tinker-start-scaffold/backend`.
 Export frontend operations from `src/frontend/index.ts`.

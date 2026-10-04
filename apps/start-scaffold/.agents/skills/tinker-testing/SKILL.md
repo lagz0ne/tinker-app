@@ -43,6 +43,40 @@ try {
 
 Give `settings` the database, auth, and mail tags.
 The worked tests show their filled values.
+For outgoing HTTP, bind httpBackend through the backend seam:
+
+```ts
+const stop = new AbortController();
+const app = createScope({
+  signal: stop.signal,
+  tags: [httpBackend(async () => new Response("saved", { status: 201 }))],
+});
+await app.ready;
+try {
+  expect(
+    await app.run(httpRequest, {
+      input: {
+        url: "https://no-network.invalid/notices",
+        method: "POST",
+        body: "The order is ready.",
+      },
+    }),
+  ).toEqual({
+    status: 201,
+    headers: {
+      "content-type": "text/plain;charset=UTF-8",
+    },
+    body: "saved",
+  });
+} finally {
+  stop.abort();
+  await app.closed;
+}
+```
+
+Import httpBackend and httpRequest from the backend seam.
+Bind the fake in the test's scope; never replace global fetch.
+
 One test names one public cause and decisive outcome.
 A bug test must fail without the fix.
 Count calls or spans to prove less work; never time them.

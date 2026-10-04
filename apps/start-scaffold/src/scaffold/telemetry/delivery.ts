@@ -1,15 +1,13 @@
-import { resource, tag } from "@tinker/core";
+import { resource } from "@tinker/core";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { telemetrySettings } from "./state.ts";
 import type { Telemetry } from "./records.ts";
-
-/** The queue owns retry and stop; delivery uses the scope's native HTTP backend. */
-export const telemetryBackend = tag({ label: "telemetry.backend", default: fetch });
+import { httpBackend } from "../backend/http.ts";
 
 /** The server factory keeps storage URLs out of the browser. */
 export const delivery = resource({
   label: "telemetry.delivery",
-  depends: { settings: telemetrySettings.required, backend: telemetryBackend },
+  depends: { settings: telemetrySettings.required, backend: httpBackend },
   factory: ({ settings, backend }) => {
     const send = createIsomorphicFn()
       .server(async (batch: Telemetry.Batch, signal: AbortSignal): Promise<Telemetry.Delivery> => {
