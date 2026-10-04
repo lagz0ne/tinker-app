@@ -207,3 +207,7 @@ return bodies.hold(response, finish);
 
 Then run the checks above.
 Review the dry run before any fixed-source overwrite.
+
+App code uses only httpRequest for outgoing HTTP.
+The plain check refuses app references to httpBackend, including aliased dependencies.
+Tests bind that tag through the fixed scaffold transport seam.

@@ -18,7 +18,6 @@ Examples used by the app:
 - `startRequests`: `src/scaffold/start.ts`.
 - `readResult`: `src/scaffold/backend/result.server.ts`.
 - `responseBodies`: `src/scaffold/backend/body.server.ts`.
-- `httpBackend`: `src/scaffold/http-backend.ts`.
 - `httpRequest`: `src/scaffold/backend/http.ts`.
 
 The seam check guards only imports from scaffold to app.
@@ -36,6 +35,8 @@ Put raw-input readers in `src/contracts/`.
 
 Feature HTTP operations import httpRequest through src/lib/tinker.server.ts.
 Export those operations from src/backend/index.ts for scope tests.
+Tests bind httpBackend through the fixed transport seam.
+App code cannot reference that tag, even through a fixed scaffold export.
 The fixed telemetry sender uses httpBackend directly to avoid tracing itself.
 
 Server imports belong in server functions and routes.

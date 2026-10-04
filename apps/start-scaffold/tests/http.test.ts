@@ -1,7 +1,7 @@
 import { expect, test } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
-import { httpBackend, httpRequest, isError, raise } from "@tinker-start-scaffold/backend";
-import { http } from "@tinker-start-scaffold/transport";
+import { httpRequest, isError, raise } from "@tinker-start-scaffold/backend";
+import { http, httpBackend } from "@tinker-start-scaffold/transport";
 
 const post = operation({
   label: "test.post",

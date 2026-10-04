@@ -5,13 +5,13 @@ import { makeTestClock } from "@tinker/core/testing";
 import {
   telemetry,
   telemetrySettings,
-  httpBackend,
   observer,
   flushTelemetry,
   ingestTelemetry,
   exportHealth,
 } from "@tinker-start-scaffold/telemetry";
 import {
+  httpBackend,
   receiveTelemetry,
   browserTelemetry,
   telemetryOrigin,

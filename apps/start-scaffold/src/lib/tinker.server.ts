@@ -3,4 +3,3 @@ export { auth, authSettings, requestHeaders, readAccount } from "../backend/auth
 export { mailSettings } from "../backend/mail.ts";
 export { bootstrap } from "../backend/sync.ts";
 export { httpRequest } from "../scaffold/backend/http.ts";
-export { httpBackend } from "../scaffold/http-backend.ts";

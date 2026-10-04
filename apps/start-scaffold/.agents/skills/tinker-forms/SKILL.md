@@ -53,8 +53,9 @@ Only the shared backend tag file is safe on server and browser.
 The HTTP resource and request stay behind the backend import guard.
 
 Only fixed scaffold code may use the http resource directly.
-App seams export httpBackend and httpRequest.
-The plain check rejects app references to the raw http resource.
+App seams export only httpRequest.
+The plain check rejects app references to http and httpBackend.
+Only fixed scaffold code may send through the backend tag.
 A feature operation depends on the request controller:
 
 ```ts

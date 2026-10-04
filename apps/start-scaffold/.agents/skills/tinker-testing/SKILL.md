@@ -43,7 +43,7 @@ try {
 
 Give `settings` the database, auth, and mail tags.
 The worked tests show their filled values.
-For outgoing HTTP, bind httpBackend through the backend seam:
+For outgoing HTTP, bind httpBackend through the fixed transport seam:
 
 ```ts
 const stop = new AbortController();
@@ -74,7 +74,8 @@ try {
 }
 ```
 
-Import httpBackend and httpRequest from the backend seam.
+Import httpBackend from @tinker-start-scaffold/transport.
+Import httpRequest from @tinker-start-scaffold/backend.
 Bind the fake in the test's scope; never replace global fetch.
 
 One test names one public cause and decisive outcome.

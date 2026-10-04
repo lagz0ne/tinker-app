@@ -745,19 +745,21 @@ function checkFetch(node) {
   if (pathOf(node) === "src/scaffold/http-backend.ts" && backendDefault(node)) return;
   fail(node, "http-request: use httpRequest.controller instead of built-in fetch");
 }
-function httpResourceReference(node) {
+function httpUnitReference(node, file, name) {
   if (!ts.isIdentifier(node)) return false;
   return locationSymbol(node)?.declarations?.some(
-    (decl) =>
-      ts.isVariableDeclaration(decl) &&
-      pathOf(decl) === "src/scaffold/backend/http.ts" &&
-      nameOf(decl.name) === "http",
+    (decl) => ts.isVariableDeclaration(decl) && pathOf(decl) === file && nameOf(decl.name) === name,
   );
 }
 function checkHttpResource(node) {
   if (pathOf(node).startsWith("src/scaffold/") || typeReference(node)) return;
-  if (httpResourceReference(node))
+  if (httpUnitReference(node, "src/scaffold/backend/http.ts", "http"))
     fail(node, "http-resource: app code must depend on httpRequest.controller");
+}
+function checkHttpBackend(node) {
+  if (pathOf(node).startsWith("src/scaffold/")) return;
+  if (httpUnitReference(node, "src/scaffold/http-backend.ts", "httpBackend"))
+    fail(node, "http-backend: app code must depend on httpRequest.controller");
 }
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
@@ -944,6 +946,7 @@ for (const source of sources) {
   walk(source, (node) => {
     checkFetch(node);
     checkHttpResource(node);
+    checkHttpBackend(node);
     checkService(node);
     checkRoots(node);
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) fail(node, "no-class");
@@ -978,6 +981,11 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "http-backend-dependency",
+      "http-backend",
+      'import {operation} from "@tinker/core"; import {httpBackend as backend} from "./scaffold/http-backend.ts"; const probe = operation({depends: {send: backend}, run: ({send}) => send("https://example.test/x")});',
+    ],
     [
       "http-resource-dependency",
       "http-resource",
