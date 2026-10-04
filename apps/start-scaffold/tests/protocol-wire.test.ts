@@ -1,14 +1,18 @@
 import { test, expect } from "vite-plus/test";
-import { createScope } from "@tinker/core";
+import { createScope, isError as isCoreError } from "@tinker/core";
+import { preset } from "@tinker/core/testing";
+import * as transport from "@tinker-start-scaffold/transport";
 import {
   databaseSettings,
   mailSettings,
   authSettings,
   migrate,
   raise,
+  isError,
 } from "@tinker-start-scaffold/backend";
 import {
   browserTelemetry,
+  eventStream,
   telemetryOrigin,
   backendStop,
   requestStop,
@@ -29,6 +33,11 @@ const telemetryPost = telemetryHandlers.POST;
 const syncGet = syncHandlers.GET;
 if (typeof telemetryPost !== "function" || typeof syncGet !== "function")
   raise("BadInput", { reason: "Expected route methods" });
+class UnreadableRequest extends Request {
+  override get url(): string {
+    return raise("BadInput", { reason: "request read failed" });
+  }
+}
 const batch = { logs: [], traces: [] };
 
 function telemetryRequest(row: {
@@ -175,6 +184,82 @@ test("sync wire keeps open, Last-Event-ID precedence, and bad cursor replies", a
     }
   } finally {
     stop.abort();
+    expect((await root.close({ graceful: true })).status).toBe("success");
+  }
+});
+
+test("the public transport entry keeps the mounted auth handler private", () => {
+  expect("handleAuth" in transport).toBe(false);
+});
+
+test("sync does not turn a request read failure into a bad cursor reply", async () => {
+  const root = createScope();
+  await root.ready;
+  const session = root.createSession();
+  try {
+    const request = new UnreadableRequest("http://localhost/api/sync");
+    const outcome = await Promise.resolve(
+      syncGet({
+        request,
+        context: { session, signal: request.signal },
+        params: {},
+        pathname: "/api/sync",
+        next: () => raise("BadInput", { reason: "Route must reply" }),
+      }),
+    ).catch((error: unknown) => error);
+    if (!isError(outcome, "BadInput")) throw outcome;
+    expect(outcome.payload).toEqual({ reason: "request read failed" });
+  } finally {
+    expect((await root.close({ graceful: true })).status).toBe("success");
+  }
+});
+
+test("sync does not turn a downstream validation failure into a bad cursor reply", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [
+      databaseSettings({ url: "postgres://proof", migrations: "drizzle" }),
+      mailSettings({
+        host: "proof",
+        port: 25,
+        user: "proof",
+        password: "proof",
+        from: "proof@example.com",
+      }),
+      authSettings({
+        origin: "http://localhost:4318",
+        secret: "test-secret-with-at-least-thirty-two-letters",
+        plugins: [],
+      }),
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
+    presets: [
+      proofDatabase,
+      proofMail,
+      preset(eventStream, async (_deps, ctx) => ({
+        open: async () =>
+          ctx.raise("DataValidationFailed", { label: "stream.failed", cause: "proof" }),
+      })),
+    ],
+  });
+  await root.ready;
+  const session = root.createSession();
+  try {
+    const request = new Request("http://localhost/api/sync");
+    const outcome = await Promise.resolve(
+      syncGet({
+        request,
+        context: { session, signal: request.signal },
+        params: {},
+        pathname: "/api/sync",
+        next: () => raise("BadInput", { reason: "Route must reply" }),
+      }),
+    ).catch((error: unknown) => error);
+    if (!isCoreError(outcome, "DataValidationFailed")) throw outcome;
+    expect(outcome.payload.label).toBe("stream.failed");
+  } finally {
     expect((await root.close({ graceful: true })).status).toBe("success");
   }
 });

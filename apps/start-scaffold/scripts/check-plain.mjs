@@ -55,6 +55,9 @@ function locationSymbol(node) {
     node.parent && ts.isShorthandPropertyAssignment(node.parent)
       ? checker.getShorthandAssignmentValueSymbol(node.parent)
       : checker.getSymbolAtLocation(node);
+  return aliasTarget(symbol);
+}
+function aliasTarget(symbol) {
   return symbol?.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
 }
 function identifierInitializer(decl) {
@@ -790,7 +793,9 @@ function protocolUnitReference(node, file, name) {
     !ts.isElementAccessExpression(node)
   )
     return false;
-  return referenceSymbol(node)?.declarations?.some(
+  const symbol = referenceSymbol(node);
+  const target = aliasTarget(symbol);
+  return target?.declarations?.some(
     (decl) => ts.isVariableDeclaration(decl) && pathOf(decl) === file && nameOf(decl.name) === name,
   );
 }
@@ -799,6 +804,12 @@ function checkRequestHeaders(node) {
   if (file.startsWith("src/scaffold/") || file === "src/backend/auth.ts") return;
   if (protocolUnitReference(node, "src/scaffold/backend/headers.server.ts", "requestHeaders"))
     fail(node, "protocol-headers: app code must use principal or currentUser");
+}
+function checkMountedAuth(node) {
+  const file = pathOf(node);
+  if (["src/scaffold/backend/auth.server.ts", "src/routes/api.auth.$.ts"].includes(file)) return;
+  if (protocolUnitReference(node, "src/scaffold/backend/auth.server.ts", "handleAuth"))
+    fail(node, "protocol-auth: only the auth route may use the mounted handler");
 }
 const httpClients = [
   "node:http",
@@ -1198,6 +1209,7 @@ for (const source of sources) {
     checkHttpResource(node);
     checkHttpBackend(node);
     checkRequestHeaders(node);
+    checkMountedAuth(node);
     checkHttpImport(node);
     checkService(node);
     checkRoots(node);
@@ -1233,6 +1245,38 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "mounted-auth-bracket",
+      "protocol-auth",
+      'import {operation} from "@tinker/core"; import * as protocol from "@tinker-start-scaffold/testing"; const probe = operation({depends: {mounted: protocol["handleAuth"].controller}, run: () => 1});',
+      "src/backend/plain-probe.ts",
+    ],
+    [
+      "request-headers-bracket",
+      "protocol-headers",
+      'import {operation} from "@tinker/core"; import * as protocol from "@tinker-start-scaffold/testing"; const probe = operation({depends: {headers: protocol["requestHeaders"]}, run: ({headers}) => headers.get("x")});',
+      "src/backend/plain-probe.ts",
+    ],
+
+    [
+      "mounted-auth-testing",
+      "protocol-auth",
+      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker-start-scaffold/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      "src/backend/plain-probe.ts",
+    ],
+    [
+      "mounted-auth-direct",
+      "protocol-auth",
+      'import {operation} from "@tinker/core"; import {handleAuth} from "../scaffold/backend/auth.server.ts"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      "src/backend/plain-probe.ts",
+    ],
+    [
+      "mounted-auth-scaffold",
+      "protocol-auth",
+      'import {operation} from "@tinker/core"; import {handleAuth} from "./backend/auth.server.ts"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      "src/scaffold/plain-probe.ts",
+    ],
+
     [
       "request-headers-testing",
       "protocol-headers",

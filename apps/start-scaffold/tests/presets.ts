@@ -21,3 +21,4 @@ export const proofMail = preset(mail, async (_deps, ctx) => ({
 }));
 
 export { requestHeaders } from "../src/scaffold/backend/headers.server.ts";
+export { handleAuth } from "../src/scaffold/backend/auth.server.ts";

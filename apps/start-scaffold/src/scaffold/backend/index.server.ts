@@ -9,5 +9,3 @@ export { browserTelemetry, receiveTelemetry, telemetryOrigin } from "../telemetr
 export { backendStop, requestStop } from "./lifetime.ts";
 export { http, httpRequest } from "./http.ts";
 export { httpBackend } from "../http-backend.ts";
-
-export { handleAuth } from "./auth.server.ts";

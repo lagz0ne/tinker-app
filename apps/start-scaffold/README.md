@@ -170,6 +170,9 @@ The schema check proves generation adds no duplicate tables.
 - A stopped telemetry backend raises a managed error before ingest.
 - Sync operations take a cursor param and return the owned body stream.
 - Sync routes keep open, Last-Event-ID precedence, and bad cursor replies.
+- Sync request read failures pass through the cursor check.
+- Sync downstream validation failures pass through without a bad cursor reply.
+- The public transport entry keeps the mounted auth handler private.
 - Owner close flushes finished records without a scheduled browser timer.
 - A stuck receiver is aborted by the owned Core clock during close.
 - Stalled uploads and storage requests stop with their owner.

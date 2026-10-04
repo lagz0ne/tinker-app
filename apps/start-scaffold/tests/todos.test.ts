@@ -1,4 +1,4 @@
-import { handleAuth } from "@tinker-start-scaffold/transport";
+import { handleAuth } from "@tinker-start-scaffold/testing";
 import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
 import { test, expect } from "vite-plus/test";
 import { createScope, isError as isCoreError } from "@tinker/core";
