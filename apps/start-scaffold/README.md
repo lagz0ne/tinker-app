@@ -162,6 +162,7 @@ The schema check proves generation adds no duplicate tables.
 - Graceful root close stops HTTP waits in nested sessions.
 - Graceful session close stops its nested HTTP wait and leaves siblings open.
 - Graceful HTTP shutdown lets other running work finish.
+- HTTP cleanup can close its own owner without a hang.
 - Storage failure keeps bounded records for retry.
 - Accepted telemetry frees the byte budget for later records.
 - Browser ingest refuses foreign origins, bad shapes, and large bodies.

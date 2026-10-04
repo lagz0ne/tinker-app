@@ -652,3 +652,32 @@ test("graceful HTTP shutdown lets other running work finish", async () => {
   expect((await closing).status).toBe("success");
   expect((await scope.closed).status).toBe("success");
 }, 2000);
+
+test("HTTP cleanup can close its own owner without a hang", async () => {
+  for (const where of ["root", "session"]) {
+    const started = Promise.withResolvers<void>();
+    const finish = Promise.withResolvers<void>();
+    const waiting = operation({
+      label: "test.cleanup-work",
+      run: () => {
+        started.resolve();
+        return finish.promise;
+      },
+    });
+    const stop = new AbortController();
+    const scope = createScope({ signal: stop.signal, extensions: [startRequests] });
+    await scope.ready;
+    const target = where === "root" ? scope : scope.createSession();
+    const working = target.run(waiting);
+    await started.promise;
+    target.onClose(async () => {
+      expect((await target.close({ graceful: true })).status).toBe("success");
+    });
+    const closing = target.close({ graceful: true });
+    finish.resolve();
+    await working;
+    expect((await closing).status).toBe("success");
+    stop.abort();
+    expect((await scope.closed).status).toBe("success");
+  }
+}, 2000);

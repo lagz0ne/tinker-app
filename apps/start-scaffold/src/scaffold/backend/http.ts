@@ -65,7 +65,7 @@ const httpScopes = resource({
   } => {
     let close: Scope.Handle["close"];
     let createSession: Scope.Handle["createSession"];
-    let closing: Promise<Scope.Result> | undefined;
+    let phase: "open" | "closing" = "open";
     const children = new Set<{ stop(): void }>();
     ctx.defer(() => children.clear());
     const owned = {
@@ -80,9 +80,11 @@ const httpScopes = resource({
         for (const child of children) child.stop();
       },
       close(this: void, options?: Scope.CloseOptions) {
-        if (closing) return closing;
-        if (options?.graceful) owned.stop();
-        return (closing = close(options));
+        if (phase === "open") {
+          phase = "closing";
+          if (options?.graceful) owned.stop();
+        }
+        return close(options);
       },
       createSession(this: void, options?: Scope.Options) {
         const child = createSession(options);
