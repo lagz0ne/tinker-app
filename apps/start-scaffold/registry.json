@@ -15,6 +15,11 @@
           "target": "~/src/scaffold/backend/body.server.ts"
         },
         {
+          "path": "src/scaffold/backend/database.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/database.ts"
+        },
+        {
           "path": "src/scaffold/backend/entry.server.ts",
           "type": "registry:lib",
           "target": "~/src/scaffold/backend/entry.server.ts"
@@ -60,6 +65,16 @@
           "target": "~/src/scaffold/backend/stream.ts"
         },
         {
+          "path": "src/scaffold/backend/sync.schema.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/backend/sync.schema.ts"
+        },
+        {
+          "path": "src/scaffold/errors.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/errors.ts"
+        },
+        {
           "path": "src/scaffold/frontend/events.ts",
           "type": "registry:lib",
           "target": "~/src/scaffold/frontend/events.ts"
@@ -85,6 +100,11 @@
           "target": "~/src/scaffold/frontend/sync.ts"
         },
         {
+          "path": "src/scaffold/http-backend.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/http-backend.ts"
+        },
+        {
           "path": "src/scaffold/protocol.ts",
           "type": "registry:file",
           "target": "~/src/scaffold/protocol.ts"
@@ -98,6 +118,11 @@
           "path": "src/scaffold/sync.functions.ts",
           "type": "registry:lib",
           "target": "~/src/scaffold/sync.functions.ts"
+        },
+        {
+          "path": "src/scaffold/sync.ts",
+          "type": "registry:file",
+          "target": "~/src/scaffold/sync.ts"
         },
         {
           "path": "src/scaffold/telemetry/delivery.ts",
@@ -123,26 +148,6 @@
           "path": "src/scaffold/telemetry/records.ts",
           "type": "registry:file",
           "target": "~/src/scaffold/telemetry/records.ts"
-        },
-        {
-          "path": "src/scaffold/backend/database.ts",
-          "type": "registry:file",
-          "target": "~/src/scaffold/backend/database.ts"
-        },
-        {
-          "path": "src/scaffold/backend/sync.schema.ts",
-          "type": "registry:file",
-          "target": "~/src/scaffold/backend/sync.schema.ts"
-        },
-        {
-          "path": "src/scaffold/errors.ts",
-          "type": "registry:file",
-          "target": "~/src/scaffold/errors.ts"
-        },
-        {
-          "path": "src/scaffold/sync.ts",
-          "type": "registry:file",
-          "target": "~/src/scaffold/sync.ts"
         },
         {
           "path": "src/scaffold/telemetry/state.ts",
