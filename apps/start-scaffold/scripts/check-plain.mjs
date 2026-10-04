@@ -745,8 +745,11 @@ function referenceSymbol(node) {
     return checker
       .getTypeAtLocation(node.parent)
       .getProperty(nameOf(node.propertyName ?? node.name));
-  if (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression))
-    return checker.getTypeAtLocation(node.expression).getProperty(node.argumentExpression.text);
+  if (ts.isElementAccessExpression(node)) {
+    const key = checker.getTypeAtLocation(node.argumentExpression);
+    if (key.isStringLiteral())
+      return checker.getTypeAtLocation(node.expression).getProperty(key.value);
+  }
   return locationSymbol(node);
 }
 function nativeReference(node, declarations) {
@@ -770,10 +773,7 @@ function checkBrowserHttp(node) {
     fail(node, "http-client: app HTTP must use httpRequest.controller");
 }
 function httpUnitReference(node, file, name) {
-  if (!ts.isIdentifier(node)) return false;
-  return locationSymbol(node)?.declarations?.some(
-    (decl) => ts.isVariableDeclaration(decl) && pathOf(decl) === file && nameOf(decl.name) === name,
-  );
+  return protocolUnitReference(node, file, name);
 }
 function checkHttpResource(node) {
   if (pathOf(node).startsWith("src/scaffold/") || typeReference(node)) return;
@@ -1245,6 +1245,17 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "request-headers-constant-key",
+      "protocol-headers",
+      'import {operation} from "@tinker/core"; import * as t from "@tinker-start-scaffold/testing"; const key = "requestHeaders" as const; const probe = operation({depends: {headers: t[key]}, run: ({headers}) => headers.get("x")});',
+      "src/backend/plain-probe.ts",
+    ],
+    [
+      "http-backend-constant-key",
+      "http-backend",
+      'import {operation} from "@tinker/core"; import * as t from "./scaffold/http-backend.ts"; const key = "httpBackend" as const; const probe = operation({depends: {send: t[key]}, run: () => 1});',
+    ],
     [
       "operation-request-custom-reader",
       "operation-wire-input",
