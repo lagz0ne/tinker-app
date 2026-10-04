@@ -24,7 +24,7 @@
     },
     {
       "path": "src/backend/index.ts",
-      "content": "export {\n  auth,\n  authSettings,\n  handleAuth,\n  principal,\n  currentUser,\n  requestHeaders,\n  readAccount,\n} from \"./auth.ts\";\nexport type { Database } from \"./database.ts\";\nexport { database, databaseSettings, migrate } from \"./database.ts\";\nexport { mail, mailSettings, sendMail } from \"./mail.ts\";\nexport type { Mail } from \"./mail.ts\";\nexport { readProfile, saveProfile, retryNotification } from \"./profile.ts\";\nexport { isError, raise } from \"../errors.ts\";\nexport { listTodos, changeTodo } from \"./todos.ts\";\nexport { incrementCounter } from \"./counter.ts\";\nexport {\n  bootstrap,\n  bootstrapPublic,\n  bootstrapPrivate,\n  replayPublic,\n  replayPrivate,\n} from \"./sync.ts\";\nexport { httpRequest } from \"../scaffold/backend/http.ts\";\nexport { httpBackend } from \"../scaffold/http-backend.ts\";\n",
+      "content": "export {\n  auth,\n  authSettings,\n  handleAuth,\n  principal,\n  currentUser,\n  requestHeaders,\n  readAccount,\n} from \"./auth.ts\";\nexport type { Database } from \"./database.ts\";\nexport { database, databaseSettings, migrate } from \"./database.ts\";\nexport { mail, mailSettings, sendMail } from \"./mail.ts\";\nexport type { Mail } from \"./mail.ts\";\nexport { readProfile, saveProfile, retryNotification } from \"./profile.ts\";\nexport { isError, raise } from \"../errors.ts\";\nexport { listTodos, changeTodo } from \"./todos.ts\";\nexport { incrementCounter } from \"./counter.ts\";\nexport {\n  bootstrap,\n  bootstrapPublic,\n  bootstrapPrivate,\n  replayPublic,\n  replayPrivate,\n} from \"./sync.ts\";\nexport { httpRequest } from \"../scaffold/backend/http.ts\";\n",
       "type": "registry:file",
       "target": "~/src/backend/index.ts"
     },
@@ -282,7 +282,7 @@
     },
     {
       "path": "src/lib/tinker.server.ts",
-      "content": "export { database, databaseSettings, migrate } from \"../backend/database.ts\";\nexport { auth, authSettings, requestHeaders, readAccount } from \"../backend/auth.ts\";\nexport { mailSettings } from \"../backend/mail.ts\";\nexport { bootstrap } from \"../backend/sync.ts\";\nexport { httpRequest } from \"../scaffold/backend/http.ts\";\nexport { httpBackend } from \"../scaffold/http-backend.ts\";\n",
+      "content": "export { database, databaseSettings, migrate } from \"../backend/database.ts\";\nexport { auth, authSettings, requestHeaders, readAccount } from \"../backend/auth.ts\";\nexport { mailSettings } from \"../backend/mail.ts\";\nexport { bootstrap } from \"../backend/sync.ts\";\nexport { httpRequest } from \"../scaffold/backend/http.ts\";\n",
       "type": "registry:file",
       "target": "@lib/tinker.server.ts"
     },
