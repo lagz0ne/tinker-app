@@ -6,6 +6,7 @@ import { mkdtemp, readFile, readdir, rm, realpath, writeFile } from "node:fs/pro
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { checkServe } from "./check-serve.mjs";
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(await readFile(join(app, "registry.json"), "utf8"));
@@ -184,6 +185,7 @@ try {
     await run(["run", task], consumer, installed, task);
   }
   const copied = await hashes();
+  await checkServe(consumer);
   assert.ok(!copied.some(([path]) => path.startsWith("maintain/") || path === "src/proof.ts"));
   for (const item of manifest.items) {
     for (const file of item.files) {
@@ -217,6 +219,7 @@ try {
     setupUpdate: "passed",
     editedFeature: "unchanged",
     consumerBuild: "passed",
+    consumerNativeResponse: "status 200; body { ok: true }",
     consumerTypes: "passed",
     dependencies: "Core and React packed tarballs; independent npm install; no workspace links",
     projectTests: "passed",

@@ -21,6 +21,7 @@
     "test:boundary": "node scripts/check-boundary.mjs",
     "test:imports": "node maintain/check-imports.mjs",
     "test:middleware": "node maintain/check-middleware.mjs",
+    "test:serve": "node maintain/check-serve.mjs",
     "registry:build": "node maintain/build-registry.mjs",
     "test:registry": "node maintain/check-registry.mjs",
     "test:seam": "node scripts/check-seam.mjs --prove",

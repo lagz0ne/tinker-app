@@ -35,6 +35,7 @@ for (const name of [
   "registry:build",
   "test:registry",
   "test:middleware",
+  "test:serve",
   "test:imports",
   "test:seam:fixture",
 ])
