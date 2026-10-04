@@ -187,6 +187,110 @@ test("network failures keep method, path, and only cause name and code", async (
   }
 });
 
+test("an abort failure keeps its numeric code without its message", async () => {
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    tags: [
+      httpBackend(async () => {
+        throw new DOMException("abort at https://example.test/x?token=hidden", "AbortError");
+      }),
+    ],
+  });
+  await scope.ready;
+  try {
+    const result = await scope.settle(httpRequest, {
+      rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
+    });
+    if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+    if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+    expect(result.error.payload).toEqual({
+      method: "GET",
+      path: "/x",
+      cause: { name: "AbortError", code: 20 },
+    });
+  } finally {
+    stop.abort();
+    expect((await scope.closed).status).toBe("success");
+  }
+});
+
+test("a string cause keeps the outer error name and code without private text", async () => {
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    tags: [
+      httpBackend(async () => {
+        throw Object.assign(
+          new TypeError("fetch failed: https://example.test/x?token=hidden", {
+            cause: "DNS failed: https://example.test/x?token=hidden",
+          }),
+          { code: "ENOTFOUND", url: "https://example.test/x?token=hidden" },
+        );
+      }),
+    ],
+  });
+  await scope.ready;
+  try {
+    const result = await scope.settle(httpRequest, {
+      rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
+    });
+    if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+    if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+    expect(result.error.payload).toEqual({
+      method: "GET",
+      path: "/x",
+      cause: { name: "TypeError", code: "ENOTFOUND" },
+    });
+  } finally {
+    stop.abort();
+    expect((await scope.closed).status).toBe("success");
+  }
+});
+
+test("network failures keep readable cause fields when the other field has a wrong type", async () => {
+  const failures = [
+    Object.assign(
+      new TypeError("https://example.test/x?token=hidden", {
+        cause: { name: 42, code: "ENOTFOUND", message: "secret", url: "https://secret.test" },
+      }),
+      { code: "EFAIL" },
+    ),
+    Object.assign(
+      new TypeError("https://example.test/x?token=hidden", {
+        cause: { name: "LookupError", code: { message: "secret" }, url: "https://secret.test" },
+      }),
+      { code: "EFAIL" },
+    ),
+  ];
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    tags: [
+      httpBackend(async () => {
+        throw failures.shift();
+      }),
+    ],
+  });
+  await scope.ready;
+  try {
+    for (const cause of [
+      { name: "TypeError", code: "ENOTFOUND" },
+      { name: "LookupError", code: "EFAIL" },
+    ]) {
+      const result = await scope.settle(httpRequest, {
+        rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
+      });
+      if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+      if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+      expect(result.error.payload).toEqual({ method: "GET", path: "/x", cause });
+    }
+  } finally {
+    stop.abort();
+    expect((await scope.closed).status).toBe("success");
+  }
+});
+
 test("closing the caller aborts HTTP body reading", async () => {
   const reading = Promise.withResolvers<void>();
   const cancelled = Promise.withResolvers<void>();

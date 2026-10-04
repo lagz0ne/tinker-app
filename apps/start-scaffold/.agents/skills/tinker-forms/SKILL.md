@@ -43,8 +43,12 @@ Each set-cookie value stays separate, including a date with a comma.
 Other native header values stay joined inside one array entry.
 A non-2xx reply is a normal result.
 A network failure raises the managed HttpRequestFailed error.
-Its payload keeps method and path, plus only the cause's string name and code.
-Native fetch can wrap a socket error; its inner name and code take precedence.
+Its payload keeps method and path, plus only the cause's name and code.
+The name is a string; the code is a number or a string.
+Each field is read on its own, so a wrong type cannot discard the other field.
+Native fetch can wrap a socket error; its readable inner fields take precedence.
+If an inner field cannot be read, keep the readable outer field.
+A string cause is dropped; the outer name and code remain.
 Messages, URLs, and the native cause object stay out.
 For example:
 

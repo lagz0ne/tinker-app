@@ -3,7 +3,7 @@ export declare namespace Errors {
     HttpRequestFailed: {
       method: string;
       path: string;
-      cause?: { name?: string; code?: string };
+      cause?: { name?: string; code?: string | number };
     };
     StreamMissing: Record<string, never>;
     StreamDenied: Record<string, never>;

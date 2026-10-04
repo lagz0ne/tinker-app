@@ -151,6 +151,9 @@ The schema check proves generation adds no duplicate tables.
 - A bound HTTP backend gets the request and returns text without network.
 - HTTP replies keep each set-cookie value and joined repeated headers.
 - Network failures keep method, path, and only cause name and code.
+- An abort failure keeps its numeric code without its message.
+- A string cause keeps the outer error name and code without private text.
+- Network failures keep readable cause fields when the other field has a wrong type.
 - Closing the caller aborts HTTP body reading.
 - Storage failure keeps bounded records for retry.
 - Accepted telemetry frees the byte budget for later records.
