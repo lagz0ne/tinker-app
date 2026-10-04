@@ -1,8 +1,8 @@
-import { extension, operation, resource } from "@tinker/core";
-import type { Scope } from "@tinker/core";
+import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 import { raise } from "../errors.ts";
 import { httpBackend } from "../http-backend.ts";
+import { backendStop, requestStop } from "./lifetime.ts";
 
 const requestShape = z
   .strictObject({
@@ -16,23 +16,31 @@ const requestShape = z
   })
   .brand<"HttpRequest">();
 
-/** startRequests stops session-owned HTTP waits before a graceful close joins work. */
+/** Backend stop and request end abort HTTP before graceful shutdown joins work.
+ * A direct graceful close without an aborted stop tag cannot stop a pending wait:
+ * Core has no session close-start hook. Forced close and resource cleanup still abort. */
 export const http = resource({
   label: "http",
   target: "session",
-  depends: { send: httpBackend },
-  factory: ({ send }, ctx) => {
+  depends: {
+    send: httpBackend,
+    backendStop: backendStop.optional,
+    requestStop: requestStop.optional,
+  },
+  factory: ({ send, backendStop, requestStop }, ctx) => {
     const stop = new AbortController();
     ctx.defer(() => stop.abort());
     return {
-      close() {
-        stop.abort();
-      },
       async send(url: string, init: RequestInit & { signal: AbortSignal }) {
         stop.signal.throwIfAborted();
         const response = await send(url, {
           ...init,
-          signal: AbortSignal.any([init.signal, stop.signal]),
+          signal: AbortSignal.any([
+            init.signal,
+            stop.signal,
+            ...(backendStop.present ? [backendStop.value] : []),
+            ...(requestStop.present ? [requestStop.value] : []),
+          ]),
         });
         return {
           status: response.status,
@@ -46,69 +54,6 @@ export const http = resource({
         };
       },
     };
-  },
-});
-
-/** Core close hooks are root-only; this resource binds the same rule to child handles. */
-const httpScopes = resource({
-  label: "http.scopes",
-  target: "session",
-  depends: { requests: http },
-  factory: (
-    { requests },
-    ctx,
-  ): {
-    bind(scope: Scope.Handle): void;
-    stop(): void;
-    close(options?: Scope.CloseOptions): Promise<Scope.Result>;
-    createSession(options?: Scope.Options): Scope.Handle;
-  } => {
-    let close: Scope.Handle["close"];
-    let createSession: Scope.Handle["createSession"];
-    let phase: "open" | "closing" = "open";
-    const children = new Set<{ stop(): void }>();
-    ctx.defer(() => children.clear());
-    const owned = {
-      bind(this: void, scope: Scope.Handle) {
-        close = scope.close.bind(scope);
-        createSession = scope.createSession.bind(scope);
-        scope.close = owned.close;
-        scope.createSession = owned.createSession;
-      },
-      stop(this: void) {
-        requests.close();
-        for (const child of children) child.stop();
-      },
-      close(this: void, options?: Scope.CloseOptions) {
-        if (phase === "open") {
-          phase = "closing";
-          if (options?.graceful) owned.stop();
-        }
-        return close(options);
-      },
-      createSession(this: void, options?: Scope.Options) {
-        const child = createSession(options);
-        const childOwner = child.resolve(httpScopes);
-        childOwner.bind(child);
-        children.add(childOwner);
-        child.onClose(() => {
-          children.delete(childOwner);
-        });
-        return child;
-      },
-    };
-    return owned;
-  },
-});
-
-/** startRequests composes this server hook without exporting the bound scope adapter. */
-export const httpClosing = extension({
-  label: "http.closing",
-  hooks: {
-    async start(event) {
-      event.resolve(httpScopes).bind(event.scope);
-      await event.next();
-    },
   },
 });
 

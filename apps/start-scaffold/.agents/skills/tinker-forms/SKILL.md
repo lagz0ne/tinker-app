@@ -61,11 +61,14 @@ For example:
 ```
 
 Closing the caller or resource aborts the request, including body reading.
-The shipped startRequests extension stops HTTP waits before graceful close joins work.
-It binds the root and sessions made with createSession, including nested sessions.
-HTTP waits fail with HttpRequestFailed; a forced close still returns cancelled.
+The backendStop tag ends HTTP when server shutdown starts.
+The requestStop tag ends that request's HTTP when its signal aborts.
+Both reach sessions made by Core for calls with signal or tags.
+HTTP waits fail with HttpRequestFailed; caller cancellation returns cancelled.
+A direct graceful close with no stop signal cannot stop a pending HTTP wait.
+Core has no session close-start hook for that case.
 Other running work keeps its graceful close rule.
-Small-scope tests of graceful HTTP close install startRequests too.
+Small-scope tests may leave the two stop tags unbound.
 Tests bind httpBackend to a fake; never patch global fetch.
 Only the default in src/scaffold/http-backend.ts uses built-in fetch.
 The plain check bans other built-in fetch value uses across src.

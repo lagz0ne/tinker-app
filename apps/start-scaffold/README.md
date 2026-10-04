@@ -155,14 +155,13 @@ The schema check proves generation adds no duplicate tables.
 - A string cause keeps the outer error name and code without private text.
 - Network failures keep readable cause fields when the other field has a wrong type.
 - Closing the caller aborts HTTP body reading.
-- With startRequests, graceful root close stops a never-answering HTTP request.
-- With startRequests, graceful session close stops a never-answering HTTP request.
-- An HTTP request started after graceful close begins fails before sending.
+- Backend stop settles a server function's signalled HTTP call.
+- Backend stop settles HTTP in a root call with signal or tags.
+- Request end settles its tagged HTTP call and leaves siblings open.
+- Ending the server function's call signal still cancels its HTTP work.
 - Forced root and session closes still cancel a never-answering HTTP request.
-- Graceful root close stops HTTP waits in nested sessions.
-- Graceful session close stops its nested HTTP wait and leaves siblings open.
-- Graceful HTTP shutdown lets other running work finish.
-- HTTP cleanup can close its own owner without a hang.
+- Backend stop settles HTTP while other running work finishes.
+- A graceful close alone cannot stop a pending HTTP wait without a stop signal.
 - Storage failure keeps bounded records for retry.
 - Accepted telemetry frees the byte budget for later records.
 - Browser ingest refuses foreign origins, bad shapes, and large bodies.
