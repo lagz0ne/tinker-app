@@ -61,6 +61,11 @@ For example:
 ```
 
 Closing the caller or resource aborts the request, including body reading.
+The shipped startRequests extension stops HTTP waits before graceful close joins work.
+It binds the root and sessions made with createSession, including nested sessions.
+HTTP waits fail with HttpRequestFailed; a forced close still returns cancelled.
+Other running work keeps its graceful close rule.
+Small-scope tests of graceful HTTP close install startRequests too.
 Tests bind httpBackend to a fake; never patch global fetch.
 Only the default in src/scaffold/http-backend.ts uses built-in fetch.
 The plain check bans other built-in fetch value uses across src.

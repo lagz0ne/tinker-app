@@ -1,4 +1,4 @@
-import { createMiddleware } from "@tanstack/react-start";
+import { createIsomorphicFn, createMiddleware } from "@tanstack/react-start";
 import { extension } from "@tinker/core";
 import type { Scope } from "@tinker/core";
 import { requestHeaders } from "@/lib/tinker.server";
@@ -43,7 +43,12 @@ export const startRequests = Object.assign(
     label: "start.requests",
     hooks: {
       async start(event) {
-        await event.next();
+        await createIsomorphicFn()
+          .server(async () => {
+            const { httpClosing } = await import("./backend/http.ts");
+            await httpClosing.hooks!.start!(event);
+          })
+          .client(() => event.next())();
         return { scope: event.scope };
       },
     },

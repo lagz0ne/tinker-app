@@ -1,4 +1,5 @@
-import { operation, resource } from "@tinker/core";
+import { extension, operation, resource } from "@tinker/core";
+import type { Scope } from "@tinker/core";
 import { z } from "zod";
 import { raise } from "../errors.ts";
 import { httpBackend } from "../http-backend.ts";
@@ -15,40 +16,97 @@ const requestShape = z
   })
   .brand<"HttpRequest">();
 
-/** A session owns each request through body reading, including on graceful close. */
+/** startRequests stops session-owned HTTP waits before a graceful close joins work. */
 export const http = resource({
   label: "http",
   target: "session",
   depends: { send: httpBackend },
   factory: ({ send }, ctx) => {
-    const requests = new Set<AbortController>();
-    ctx.defer(() => {
-      for (const request of requests) request.abort();
-    });
+    const stop = new AbortController();
+    ctx.defer(() => stop.abort());
     return {
+      close() {
+        stop.abort();
+      },
       async send(url: string, init: RequestInit & { signal: AbortSignal }) {
-        const stop = new AbortController();
-        requests.add(stop);
-        try {
-          const response = await send(url, {
-            ...init,
-            signal: AbortSignal.any([init.signal, stop.signal]),
-          });
-          return {
-            status: response.status,
-            headers: Object.fromEntries(
-              Array.from(response.headers, ([name, value]): [string, string[]] => [
-                name,
-                name === "set-cookie" ? response.headers.getSetCookie() : [value],
-              ]),
-            ),
-            body: await response.text(),
-          };
-        } finally {
-          requests.delete(stop);
-        }
+        stop.signal.throwIfAborted();
+        const response = await send(url, {
+          ...init,
+          signal: AbortSignal.any([init.signal, stop.signal]),
+        });
+        return {
+          status: response.status,
+          headers: Object.fromEntries(
+            Array.from(response.headers, ([name, value]): [string, string[]] => [
+              name,
+              name === "set-cookie" ? response.headers.getSetCookie() : [value],
+            ]),
+          ),
+          body: await response.text(),
+        };
       },
     };
+  },
+});
+
+/** Core close hooks are root-only; this resource binds the same rule to child handles. */
+const httpScopes = resource({
+  label: "http.scopes",
+  target: "session",
+  depends: { requests: http },
+  factory: (
+    { requests },
+    ctx,
+  ): {
+    bind(scope: Scope.Handle): void;
+    stop(): void;
+    close(options?: Scope.CloseOptions): Promise<Scope.Result>;
+    createSession(options?: Scope.Options): Scope.Handle;
+  } => {
+    let close: Scope.Handle["close"];
+    let createSession: Scope.Handle["createSession"];
+    let closing: Promise<Scope.Result> | undefined;
+    const children = new Set<{ stop(): void }>();
+    ctx.defer(() => children.clear());
+    const owned = {
+      bind(this: void, scope: Scope.Handle) {
+        close = scope.close.bind(scope);
+        createSession = scope.createSession.bind(scope);
+        scope.close = owned.close;
+        scope.createSession = owned.createSession;
+      },
+      stop(this: void) {
+        requests.close();
+        for (const child of children) child.stop();
+      },
+      close(this: void, options?: Scope.CloseOptions) {
+        if (closing) return closing;
+        if (options?.graceful) owned.stop();
+        return (closing = close(options));
+      },
+      createSession(this: void, options?: Scope.Options) {
+        const child = createSession(options);
+        const childOwner = child.resolve(httpScopes);
+        childOwner.bind(child);
+        children.add(childOwner);
+        child.onClose(() => {
+          children.delete(childOwner);
+        });
+        return child;
+      },
+    };
+    return owned;
+  },
+});
+
+/** startRequests composes this server hook without exporting the bound scope adapter. */
+export const httpClosing = extension({
+  label: "http.closing",
+  hooks: {
+    async start(event) {
+      event.resolve(httpScopes).bind(event.scope);
+      await event.next();
+    },
   },
 });
 

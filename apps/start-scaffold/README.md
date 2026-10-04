@@ -155,6 +155,10 @@ The schema check proves generation adds no duplicate tables.
 - A string cause keeps the outer error name and code without private text.
 - Network failures keep readable cause fields when the other field has a wrong type.
 - Closing the caller aborts HTTP body reading.
+- With startRequests, graceful root close stops a never-answering HTTP request.
+- With startRequests, graceful session close stops a never-answering HTTP request.
+- An HTTP request started after graceful close begins fails before sending.
+- Forced root and session closes still cancel a never-answering HTTP request.
 - Storage failure keeps bounded records for retry.
 - Accepted telemetry frees the byte budget for later records.
 - Browser ingest refuses foreign origins, bad shapes, and large bodies.
