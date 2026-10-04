@@ -56,6 +56,13 @@ Only fixed scaffold code may use the http resource directly.
 App seams export only httpRequest.
 The plain check rejects app references to http and httpBackend.
 Only fixed scaffold code may send through the backend tag.
+App imports cannot load the named HTTP clients or raw sockets:
+
+- node:http, node:https, http, https.
+- undici, axios, ky, node-fetch, got, superagent.
+- node:net and node:tls.
+
+The ban also covers literal subpaths, re-exports, import(), and require().
 A feature operation depends on the request controller:
 
 ```ts

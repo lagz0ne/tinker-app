@@ -211,3 +211,6 @@ Review the dry run before any fixed-source overwrite.
 App code uses only httpRequest for outgoing HTTP.
 The plain check refuses app references to httpBackend, including aliased dependencies.
 Tests bind that tag through the fixed scaffold transport seam.
+
+App imports of the named HTTP clients and raw sockets fail the plain check.
+Literal subpaths, re-exports, dynamic import, and require use the same ban.

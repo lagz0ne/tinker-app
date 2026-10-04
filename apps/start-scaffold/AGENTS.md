@@ -22,6 +22,7 @@ Outgoing HTTP uses httpRequest.controller; never call fetch from app code.
 The http resource owns requests and wraps built-in fetch through httpBackend.
 App code cannot reference http or httpBackend; use only httpRequest.
 Tests bind the tag through the fixed scaffold seam.
+The plain check bans app imports of the named HTTP clients and raw sockets.
 Telemetry uses it directly to avoid tracing its own sends.
 A resource may retain native handles and private work state.
 Keep saved records and visible state in data.

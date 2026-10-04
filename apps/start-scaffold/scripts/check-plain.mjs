@@ -761,6 +761,40 @@ function checkHttpBackend(node) {
   if (httpUnitReference(node, "src/scaffold/http-backend.ts", "httpBackend"))
     fail(node, "http-backend: app code must depend on httpRequest.controller");
 }
+const httpClients = [
+  "node:http",
+  "node:https",
+  "http",
+  "https",
+  "undici",
+  "axios",
+  "ky",
+  "node-fetch",
+  "got",
+  "superagent",
+  "node:net",
+  "node:tls",
+];
+function importSpecifier(node) {
+  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier;
+  if (ts.isImportEqualsDeclaration(node))
+    return ts.isExternalModuleReference(node.moduleReference)
+      ? node.moduleReference.expression
+      : undefined;
+  if (ts.isCallExpression(node) && ["import", "require"].includes(nameOf(node.expression)))
+    return node.arguments[0];
+}
+function checkHttpImport(node) {
+  if (pathOf(node).startsWith("src/scaffold/")) return;
+  const specifier = importSpecifier(node);
+  if (!specifier || !ts.isStringLiteralLike(specifier)) return;
+  if (
+    httpClients.some(
+      (client) => specifier.text === client || specifier.text.startsWith(`${client}/`),
+    )
+  )
+    fail(node, "http-client: app HTTP must use httpRequest.controller");
+}
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
@@ -947,6 +981,7 @@ for (const source of sources) {
     checkFetch(node);
     checkHttpResource(node);
     checkHttpBackend(node);
+    checkHttpImport(node);
     checkService(node);
     checkRoots(node);
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) fail(node, "no-class");
@@ -981,6 +1016,88 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "client-node-http",
+      "http-client",
+      'import * as client from "node:http"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-node-https",
+      "http-client",
+      'import * as client from "node:https"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-http",
+      "http-client",
+      'import * as client from "http"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-https",
+      "http-client",
+      'import * as client from "https"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-undici",
+      "http-client",
+      'import * as client from "undici"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-axios",
+      "http-client",
+      'import * as client from "axios"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-ky",
+      "http-client",
+      'import * as client from "ky"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-node-fetch",
+      "http-client",
+      'import * as client from "node-fetch"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-got",
+      "http-client",
+      'import * as client from "got"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-superagent",
+      "http-client",
+      'import * as client from "superagent"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-node-net",
+      "http-client",
+      'import * as client from "node:net"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-node-tls",
+      "http-client",
+      'import * as client from "node:tls"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    ["client-reexport", "http-client", 'export * from "node:https";'],
+    [
+      "client-dynamic",
+      "http-client",
+      'import {operation} from "@tinker/core"; const probe = operation({run: async () => (await import("node:https")).request("https://example.test/x")});',
+    ],
+    [
+      "client-require",
+      "http-client",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => require("node:http").request("https://example.test/x")});',
+    ],
+    [
+      "client-import-equals",
+      "http-client",
+      'import client = require("node:https"); import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+    [
+      "client-subpath",
+      "http-client",
+      'import * as client from "axios/unsafe/adapters/http.js"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.request("https://example.test/x")});',
+    ],
+
     [
       "http-backend-dependency",
       "http-backend",
