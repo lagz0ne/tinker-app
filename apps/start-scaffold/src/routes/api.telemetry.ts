@@ -32,12 +32,12 @@ export const Route = createFileRoute("/api/telemetry")({
           { failed: request.headers.get("origin") !== expected, status: 403 },
           { failed: contentType !== "application/json", status: 415 },
           { failed: Number(request.headers.get("content-length")) > 65_536, status: 413 },
-          { failed: bodyStream === null, status: 400 },
         ].find(({ failed }) => failed);
         if (rejected) return new Response(null, { status: rejected.status });
+        if (bodyStream === null) return new Response(null, { status: 400 });
         const bodyOwner = context.session.resolve(requestBody);
         const signal = bodyOwner.signal;
-        const reader = bodyOwner.open(bodyStream!);
+        const reader = bodyOwner.open(bodyStream);
         let batch: Telemetry.Batch;
         try {
           let bytes = 0;
@@ -62,14 +62,14 @@ export const Route = createFileRoute("/api/telemetry")({
         } finally {
           await bodyOwner.release();
         }
-        const result = await context.session.settle(receiveTelemetry, {
-          input: batch,
-          signal: context.signal,
+        return Promise.resolve(
+          context.session.settle(receiveTelemetry, { input: batch, signal: context.signal }),
+        ).then((result) => {
+          if (result.status === "failed" && isError(result.error, "Cancelled"))
+            return new Response(null, { status: 503 });
+          readResult(result);
+          return new Response(null, { status: 202, headers: { "Cache-Control": "no-store" } });
         });
-        const { error } = { error: undefined, ...result };
-        if (isError(error, "Cancelled")) return new Response(null, { status: 503 });
-        readResult(result);
-        return new Response(null, { status: 202, headers: { "Cache-Control": "no-store" } });
       },
     },
   },

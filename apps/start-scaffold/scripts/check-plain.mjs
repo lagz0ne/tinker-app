@@ -1166,7 +1166,10 @@ function functionImplementation(node, seen = new Set()) {
     return symbol.valueDeclaration;
   return functionImplementation(variableInitializer(symbol), seen);
 }
-function checkOperationOutput(run) {
+function checkOperationInputCast(node) {
+  if (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) checkOperationInput(node.type);
+}
+function checkOperationRun(run) {
   if (!run) return;
   const expression = run.initializer ?? (ts.isShorthandPropertyAssignment(run) ? run.name : run);
   const signatures = checker.getTypeAtLocation(expression).getCallSignatures();
@@ -1176,6 +1179,7 @@ function checkOperationOutput(run) {
   const implementation = functionImplementation(expression);
   if (implementation?.body)
     walk(implementation.body, (child) => {
+      checkOperationInputCast(child);
       if (ts.isExpression(child) && wireType(checker.getTypeAtLocation(child), "Response"))
         response = true;
     });
@@ -1205,7 +1209,7 @@ function checkOperationWire(node) {
     return;
   }
   checkOperationInput(propertyOf(options, "input")?.initializer);
-  checkOperationOutput(propertyOf(options, "run"));
+  checkOperationRun(propertyOf(options, "run"));
 }
 
 for (const source of sources) {
@@ -1255,6 +1259,11 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "operation-request-input-cast",
+      "operation-wire-input",
+      'import {operation} from "@tinker/core"; import {z} from "zod"; const probe = operation({input: z.unknown(), run: (_deps, ctx) => (ctx.input as Request).url});',
+    ],
     [
       "response-resource-unknown",
       "protocol-response",
