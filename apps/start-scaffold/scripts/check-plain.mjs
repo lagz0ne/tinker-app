@@ -591,6 +591,8 @@ function zodDeclaration(node, file) {
       "nonnegative",
       "regex",
       "trim",
+      "toUpperCase",
+      "brand",
       "optional",
       "nullable",
       "strict",

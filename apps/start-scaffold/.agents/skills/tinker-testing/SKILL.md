@@ -55,7 +55,7 @@ await app.ready;
 try {
   expect(
     await app.run(httpRequest, {
-      input: {
+      rawInput: {
         url: "https://no-network.invalid/notices",
         method: "POST",
         body: "The order is ready.",

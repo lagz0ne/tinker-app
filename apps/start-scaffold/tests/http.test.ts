@@ -7,7 +7,7 @@ const post = operation({
   label: "test.post",
   depends: { request: httpRequest.controller },
   run: ({ request }) =>
-    request.run({ input: { url: "https://example.test/x?secret=1", method: "POST" } }),
+    request.run({ rawInput: { url: "https://example.test/x?secret=1", method: "POST" } }),
 });
 
 test("an HTTP request makes one named child span with its status", async () => {
@@ -113,7 +113,7 @@ test("a bound HTTP backend gets the request and returns text without network", a
   try {
     expect(
       await scope.run(httpRequest, {
-        input: {
+        rawInput: {
           url: "https://no-network.invalid/x",
           method: "POST",
           headers: { "x-request": "yes" },
@@ -156,7 +156,7 @@ test("a network failure keeps only method and path in the managed HTTP error", a
   await scope.ready;
   try {
     const result = await scope.settle(httpRequest, {
-      input: { url: "https://example.test/x?token=hidden", method: "GET" },
+      rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
     });
     if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
     if (!isError(result.error, "HttpRequestFailed")) throw result.error;
@@ -209,4 +209,60 @@ test("closing the caller aborts HTTP body reading", async () => {
   expect((await result).status).toBe("cancelled");
   stop.abort();
   expect((await scope.closed).status).toBe("success");
+});
+
+test("an HTTP method is normalized once for sending and spans", async () => {
+  const methods: (string | undefined)[] = [];
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    observe: { history: 20 },
+    tags: [
+      httpBackend(async (_url, init) => {
+        methods.push(init?.method);
+        return new Response(null, { status: 204 });
+      }),
+    ],
+  });
+  await scope.ready;
+  try {
+    for (const method of ["patch", "x!#$%&'*+-.^_`|~09"])
+      await scope.run(httpRequest, { rawInput: { url: "https://example.test/x", method } });
+    expect(methods).toEqual(["PATCH", "X!#$%&'*+-.^_`|~09"]);
+    expect(
+      scope
+        .spans()
+        .filter((span) => span.kind === "manual")
+        .map((span) => span.name),
+    ).toEqual(["http PATCH /x", "http X!#$%&'*+-.^_`|~09 /x"]);
+  } finally {
+    stop.abort();
+    expect((await scope.closed).status).toBe("success");
+  }
+});
+
+test("an HTTP method rejects non-token characters before sending", async () => {
+  let sent = 0;
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    tags: [
+      httpBackend(async () => {
+        sent += 1;
+        return new Response(null, { status: 204 });
+      }),
+    ],
+  });
+  await scope.ready;
+  try {
+    for (const method of ["", "GE T", "GET\r\n", "MÉTHOD", "()"])
+      expect(
+        (await scope.settle(httpRequest, { rawInput: { url: "https://example.test/x", method } }))
+          .status,
+      ).toBe("failed");
+    expect(sent).toBe(0);
+  } finally {
+    stop.abort();
+    expect((await scope.closed).status).toBe("success");
+  }
 });

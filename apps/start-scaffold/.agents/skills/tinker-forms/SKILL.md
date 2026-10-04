@@ -35,6 +35,8 @@ It wraps built-in fetch through the http resource and httpBackend tag.
 Each call is a child operation with an HTTP span and a graph edge.
 The span name has the method and path, with no query string.
 It records the reply status.
+The method accepts HTTP token characters and becomes upper-case at input.
+The backend and span use that same checked method.
 The result has status, headers, and body text.
 A non-2xx reply is a normal result.
 A network failure raises the managed HttpRequestFailed error.
@@ -61,7 +63,7 @@ export const postNotice = operation({
   depends: { request: httpRequest.controller },
   run: ({ request }) =>
     request.run({
-      input: {
+      rawInput: {
         url: "https://api.example.com/notices",
         method: "POST",
         headers: { "content-type": "text/plain" },
@@ -72,7 +74,9 @@ export const postNotice = operation({
 ```
 
 Use the returned status to choose the feature's next step.
-Pass only request values; the request uses its own ctx.signal.
+Pass request values through rawInput so the schema checks them once.
+The schema marks the result as checked; typed input accepts only that marked shape.
+The request uses its own ctx.signal.
 
 ## Plain functions are rare
 
@@ -215,7 +219,7 @@ The allowed calls are:
 - Zod builders: string, number, boolean, unknown, email, url, uuid, object,
   strictObject, literal, enum, array, record, union, discriminatedUnion, and instanceof.
   Their min, max, int, positive, nonnegative, regex, trim, optional, nullable,
-  strict, loose, default, or, refine, and extend declaration steps.
+  strict, loose, default, or, refine, extend, toUpperCase, and brand declaration steps.
   Parse and safeParse run only inside owned work or a plain reader.
 - Drizzle table, column, and index declarations.
 - createIsomorphicFn, createServerFn, createMiddleware, createFileRoute,

@@ -145,6 +145,8 @@ The schema check proves generation adds no duplicate tables.
 - Finished traces and Pino logs reach their HTTP receivers.
 - Telemetry uses the HTTP backend without tracing its own requests.
 - Each HTTP request has one named child span with its status.
+- An HTTP method is normalized once for sending and spans.
+- An HTTP method rejects non-token characters before sending.
 - Closing the HTTP resource aborts requests still in flight.
 - A bound HTTP backend gets the request and returns text without network.
 - A network failure keeps only method and path in the managed HTTP error.

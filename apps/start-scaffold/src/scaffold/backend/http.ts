@@ -2,12 +2,17 @@ import { operation, resource, tag } from "@tinker/core";
 import { z } from "zod";
 import { raise } from "../errors.ts";
 
-const requestShape = z.strictObject({
-  url: z.url({ protocol: /^https?$/ }),
-  method: z.string(),
-  headers: z.record(z.string(), z.string()).optional(),
-  body: z.string().optional(),
-});
+const requestShape = z
+  .strictObject({
+    url: z.url({ protocol: /^https?$/ }),
+    method: z
+      .string()
+      .regex(/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/)
+      .toUpperCase(),
+    headers: z.record(z.string(), z.string()).optional(),
+    body: z.string().optional(),
+  })
+  .brand<"HttpRequest">();
 
 /** Tests bind this tag; app code sends through httpRequest instead. */
 export const httpBackend = tag<typeof fetch>({
@@ -55,9 +60,9 @@ export const httpRequest = operation({
   run: ({ http }, ctx) => {
     const { url, method, headers, body } = ctx.input;
     const path = new URL(url).pathname;
-    return ctx.obs.child(`http ${method.toUpperCase()} ${path}`, async (span) => {
+    return ctx.obs.child(`http ${method} ${path}`, async (span) => {
       if (span) {
-        span.attributes["http.request.method"] = method.toUpperCase();
+        span.attributes["http.request.method"] = method;
         span.attributes["url.path"] = path;
       }
       try {
