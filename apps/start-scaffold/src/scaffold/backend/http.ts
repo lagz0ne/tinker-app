@@ -32,16 +32,14 @@ export const http = resource({
     ctx.defer(() => stop.abort());
     return {
       async send(url: string, init: RequestInit & { signal: AbortSignal }) {
-        stop.signal.throwIfAborted();
-        const response = await send(url, {
-          ...init,
-          signal: AbortSignal.any([
-            init.signal,
-            stop.signal,
-            ...(backendStop.present ? [backendStop.value] : []),
-            ...(requestStop.present ? [requestStop.value] : []),
-          ]),
-        });
+        const signal = AbortSignal.any([
+          init.signal,
+          stop.signal,
+          ...(backendStop.present ? [backendStop.value] : []),
+          ...(requestStop.present ? [requestStop.value] : []),
+        ]);
+        signal.throwIfAborted();
+        const response = await send(url, { ...init, signal });
         return {
           status: response.status,
           headers: Object.fromEntries(

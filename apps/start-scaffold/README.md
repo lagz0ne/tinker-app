@@ -159,6 +159,7 @@ The schema check proves generation adds no duplicate tables.
 - Backend stop settles HTTP in a root call with signal or tags.
 - Request end settles its tagged HTTP call and leaves siblings open.
 - Ending the server function's call signal still cancels its HTTP work.
+- An HTTP request after backendStop or requestStop ends fails before sending.
 - Forced root and session closes still cancel a never-answering HTTP request.
 - Backend stop settles HTTP while other running work finishes.
 - A graceful close alone cannot stop a pending HTTP wait without a stop signal.

@@ -547,6 +547,36 @@ test("ending the server function's call signal still cancels its HTTP work", asy
   expect(await scope.closed).toEqual({ status: "success" });
 }, 2000);
 
+for (const end of [backendStop, requestStop]) {
+  test(`an HTTP request after ${end.label} ends fails before sending`, async () => {
+    let sent = 0;
+    const stop = new AbortController();
+    const ended = new AbortController();
+    const scope = createScope({
+      signal: stop.signal,
+      tags: httpBackend(async () => {
+        sent += 1;
+        return new Response("too late");
+      }),
+    });
+    await scope.ready;
+    ended.abort();
+    try {
+      const result = await scope.settle(httpRequest, {
+        rawInput: { url: "https://slow.test/late", method: "GET" },
+        tags: end(ended.signal),
+      });
+      if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+      if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+      expect(result.error.payload).toMatchObject({ method: "GET", path: "/late" });
+      expect(sent).toBe(0);
+    } finally {
+      stop.abort();
+      expect(await scope.closed).toEqual({ status: "success" });
+    }
+  }, 2000);
+}
+
 test("forced root and session closes still cancel a never-answering HTTP request", async () => {
   for (const where of ["root", "session"]) {
     const backend = createHeldBackend();
