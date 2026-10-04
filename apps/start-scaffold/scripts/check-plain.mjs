@@ -782,6 +782,24 @@ function checkHttpBackend(node) {
   if (httpUnitReference(node, "src/scaffold/http-backend.ts", "httpBackend"))
     fail(node, "http-backend: app code must depend on httpRequest.controller");
 }
+function protocolUnitReference(node, file, name) {
+  if (
+    !ts.isIdentifier(node) &&
+    !ts.isBindingElement(node) &&
+    !ts.isPropertyAccessExpression(node) &&
+    !ts.isElementAccessExpression(node)
+  )
+    return false;
+  return referenceSymbol(node)?.declarations?.some(
+    (decl) => ts.isVariableDeclaration(decl) && pathOf(decl) === file && nameOf(decl.name) === name,
+  );
+}
+function checkRequestHeaders(node) {
+  const file = pathOf(node);
+  if (file.startsWith("src/scaffold/") || file === "src/backend/auth.ts") return;
+  if (protocolUnitReference(node, "src/scaffold/backend/headers.server.ts", "requestHeaders"))
+    fail(node, "protocol-headers: app code must use principal or currentUser");
+}
 const httpClients = [
   "node:http",
   "node:https",
@@ -1179,6 +1197,7 @@ for (const source of sources) {
     checkBrowserHttp(node);
     checkHttpResource(node);
     checkHttpBackend(node);
+    checkRequestHeaders(node);
     checkHttpImport(node);
     checkService(node);
     checkRoots(node);
@@ -1214,6 +1233,25 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "request-headers-testing",
+      "protocol-headers",
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker-start-scaffold/testing"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      "src/backend/plain-probe.ts",
+    ],
+    [
+      "request-headers-direct",
+      "protocol-headers",
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "../scaffold/backend/headers.server.ts"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      "src/backend/plain-probe.ts",
+    ],
+    [
+      "request-headers-scaffold",
+      null,
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "./backend/headers.server.ts"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      "src/scaffold/plain-probe.ts",
+    ],
+
     [
       "operation-response-callback",
       "operation-wire-output",
@@ -1910,8 +1948,9 @@ if (process.argv.includes("--prove")) {
   if (names) assert.equal(selected.length, names.length, "unknown planted case");
   try {
     await cp(join(root, "src"), join(planted, "src"), { recursive: true });
-    for (const file of ["tsconfig.json", "PLAIN.md"])
+    for (const file of ["tsconfig.json", "PLAIN.md", "package.json"])
       await cp(join(root, file), join(planted, file));
+    await cp(join(root, "tests"), join(planted, "tests"), { recursive: true });
     await symlink(join(root, "node_modules"), join(planted, "node_modules"), "dir");
     for (const [name, rule, source, file = "src/plain-probe.ts"] of selected) {
       const path = join(planted, file);
