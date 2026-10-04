@@ -46,11 +46,11 @@ A network failure raises the managed HttpRequestFailed error.
 Its payload has only method and path; query strings and native causes stay out.
 Closing the caller or resource aborts the request, including body reading.
 Tests bind httpBackend to a fake; never patch global fetch.
-Only the fixed src/scaffold/backend/http.ts calls built-in fetch.
-The plain check bans fetch calls and globalThis.fetch in other src files.
+Only the default in src/scaffold/http-backend.ts uses built-in fetch.
+The plain check bans other built-in fetch value uses across src.
 Telemetry sends through httpBackend directly so it does not trace itself.
-The fixed HTTP file is safe on both server and browser.
-The build's file exception permits that one file only.
+Only the shared backend tag file is safe on server and browser.
+The HTTP resource and request stay behind the backend import guard.
 
 Only fixed scaffold code may use the http resource directly.
 App seams export httpBackend and httpRequest.

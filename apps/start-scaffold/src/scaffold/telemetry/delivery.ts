@@ -2,7 +2,7 @@ import { resource } from "@tinker/core";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { telemetrySettings } from "./state.ts";
 import type { Telemetry } from "./records.ts";
-import { httpBackend } from "../backend/http.ts";
+import { httpBackend } from "../http-backend.ts";
 
 /** The server factory keeps storage URLs out of the browser. */
 export const delivery = resource({

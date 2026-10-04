@@ -742,7 +742,7 @@ function builtinFetchReference(node) {
 }
 function checkFetch(node) {
   if (typeReference(node) || !builtinFetchReference(node)) return;
-  if (pathOf(node) === "src/scaffold/backend/http.ts" && backendDefault(node)) return;
+  if (pathOf(node) === "src/scaffold/http-backend.ts" && backendDefault(node)) return;
   fail(node, "http-request: use httpRequest.controller instead of built-in fetch");
 }
 function httpResourceReference(node) {

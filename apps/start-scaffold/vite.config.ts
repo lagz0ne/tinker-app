@@ -13,7 +13,6 @@ export default defineConfig({
         behavior: "error",
         client: {
           files: [/\.server\./, /\/backend\//],
-          excludeFiles: ["**/node_modules/**", "src/scaffold/backend/http.ts"],
           specifiers: [
             "@tanstack/react-start/server",
             "pg",

@@ -18,14 +18,15 @@ try {
     join(proof, "src/backend/http.ts"),
     'export { database } from "./database.ts";\n',
   );
-  for (const specifier of [
-    "./backend/index.ts",
-    "./backend/http.ts",
-    `${components.aliases.lib}/tinker.server`,
+  for (const [specifier, unit] of [
+    ["./backend/index.ts", "database"],
+    ["./backend/http.ts", "database"],
+    [`${components.aliases.lib}/tinker.server`, "database"],
+    ["./scaffold/backend/http.ts", "httpRequest"],
   ]) {
     await writeFile(
       router,
-      `import { database } from "${specifier}";\ndocument.title = database.label;\n${original}`,
+      `import { ${unit} } from "${specifier}";\ndocument.title = ${unit}.label;\n${original}`,
     );
     const result = spawnSync("vp", ["build"], { cwd: proof, encoding: "utf8" });
     assert.notEqual(result.status, 0);

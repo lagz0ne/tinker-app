@@ -1,6 +1,7 @@
-import { operation, resource, tag } from "@tinker/core";
+import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 import { raise } from "../errors.ts";
+import { httpBackend } from "../http-backend.ts";
 
 const requestShape = z
   .strictObject({
@@ -13,12 +14,6 @@ const requestShape = z
     body: z.string().optional(),
   })
   .brand<"HttpRequest">();
-
-/** Tests bind this tag; app code sends through httpRequest instead. */
-export const httpBackend = tag<typeof fetch>({
-  label: "http.backend",
-  default: (input, init) => fetch(input, init),
-});
 
 /** A session owns each request through body reading, including on graceful close. */
 export const http = resource({
