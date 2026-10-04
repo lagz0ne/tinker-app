@@ -676,7 +676,7 @@ test("HTTP cleanup can close its own owner without a hang", async () => {
     const closing = target.close({ graceful: true });
     finish.resolve();
     await working;
-    expect((await closing).status).toBe("success");
+    expect(await closing).toEqual({ status: "success" });
     stop.abort();
     expect((await scope.closed).status).toBe("success");
   }
