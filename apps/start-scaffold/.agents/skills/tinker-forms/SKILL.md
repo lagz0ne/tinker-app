@@ -32,9 +32,11 @@ Never pass a scope or context bag to a helper.
 
 Use httpRequest for each outgoing request.
 It wraps built-in fetch through the http resource and httpBackend tag.
-Each call is a child operation with an HTTP span and a graph edge.
-The span name has the method and path, with no query string.
-It records the reply status.
+The http resource is session-target.
+With observation on, each call makes an `http.request` operation span.
+Its `http <METHOD> <path>` child span records method, path, and status.
+The path has no query string.
+Depending on the request controller puts that edge in the graph.
 The method accepts HTTP token characters and becomes upper-case at input.
 The backend and span use that same checked method.
 The result has status, headers, and body text.
@@ -60,13 +62,15 @@ For example:
 }
 ```
 
-Closing the caller or resource aborts the request, including body reading.
+Forced caller close aborts the request, including body reading.
+Resource cleanup also aborts the request.
 The backendStop tag ends HTTP when server shutdown starts.
 The requestStop tag ends that request's HTTP when its signal aborts.
 Both reach sessions made by Core for calls with signal or tags.
 HTTP waits fail with HttpRequestFailed; caller cancellation returns cancelled.
 A direct graceful close with no stop signal cannot stop a pending HTTP wait.
 Core has no session close-start hook for that case.
+Cleanup runs after Core joins work and cannot stop that wait first.
 Other running work keeps its graceful close rule.
 Small-scope tests may leave the two stop tags unbound.
 Tests bind httpBackend to a fake; never patch global fetch.

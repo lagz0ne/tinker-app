@@ -144,7 +144,8 @@ The schema check proves generation adds no duplicate tables.
 - A final result replay completes a wait after disconnect.
 - Finished traces and Pino logs reach their HTTP receivers.
 - Telemetry uses the HTTP backend without tracing its own requests.
-- Each HTTP request has one named child span with its status.
+- With observation on, each HTTP request has an `http.request` span.
+- Its `http <METHOD> <path>` child span records method, path, and status.
 - An HTTP method is normalized once for sending and spans.
 - An HTTP method rejects non-token characters before sending.
 - Closing the HTTP resource aborts requests still in flight.
@@ -185,6 +186,9 @@ The schema check proves generation adds no duplicate tables.
 
 A graceful close alone cannot stop a pending HTTP wait without a stop signal.
 Core has no session close-start hook for that case.
+The HTTP resource is session-target; its cleanup runs after work joins.
+Backend and request stop tags end waits before that join.
+Forced close cancels through the caller's signal.
 Event history has no retention rule yet.
 SSE replays stored events; it is not a durable job queue.
 A crash after commit can leave mail without a final result.
@@ -229,16 +233,25 @@ Then run the checks above.
 Review the dry run before any fixed-source overwrite.
 
 App code uses only httpRequest for outgoing HTTP.
-The plain check refuses app references to httpBackend, including aliased dependencies.
+The plain check refuses app references to http and httpBackend, including aliases.
 Tests bind that tag through the fixed scaffold transport seam.
+The tag lives in src/scaffold/http-backend.ts.
+Only its default may use built-in fetch.
+Feature operations import httpRequest from @/lib/tinker.server.
+Pass unchecked request values through rawInput; input needs the branded shape.
+Map its reply to a feature value or managed error (ADR 0103).
 
 App imports of the named HTTP clients and raw sockets fail the plain check.
 Literal subpaths, re-exports, dynamic import, and require use the same ban.
-The client list includes node:http2, http2, ws, and ofetch.
-It also bans net, tls, dgram, and node:dgram imports outside src/scaffold/.
+The client list is node:http, node:https, node:http2, http, https, http2,
+ws, ofetch, undici, axios, ky, node-fetch, got, and superagent.
+It also bans node:net, node:tls, net, tls, dgram, and node:dgram
+imports outside src/scaffold/.
+Computed import and require paths fail there too.
+So do createRequire imports, aliases, and uses.
 XMLHttpRequest constructors and global value uses fail there too.
 So do navigator.sendBeacon calls and value uses, including literal bracket access.
 Native WebSocket and EventSource stay allowed for userland sync transports (ADR 0048).
 Their resources own and close the connection through ctx.defer.
-Type-only imports are allowed, including import { type X }.
+Type-only imports and exports are allowed, including import { type X }.
 Imports that keep a value or only send code still fail.

@@ -36,6 +36,8 @@ See `changeTodo` in `src/backend/todos.ts`.
 A repeated execution ID must not repeat saved effects.
 
 For outgoing HTTP, depend on httpRequest.controller and run it.
+Import it from @/lib/tinker.server and pass request values with rawInput.
+Map the reply to a feature value or managed error (ADR 0103).
 The filled request example is in tinker-forms.
 Never call built-in fetch from feature code.
 
