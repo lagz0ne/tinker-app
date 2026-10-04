@@ -764,8 +764,12 @@ function checkHttpBackend(node) {
 const httpClients = [
   "node:http",
   "node:https",
+  "node:http2",
   "http",
   "https",
+  "http2",
+  "ws",
+  "ofetch",
   "undici",
   "axios",
   "ky",
@@ -1016,6 +1020,26 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "client-node-http2",
+      "http-client",
+      'import * as client from "node:http2"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.connect("https://example.test/x")});',
+    ],
+    [
+      "client-http2",
+      "http-client",
+      'import * as client from "http2"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.connect("https://example.test/x")});',
+    ],
+    [
+      "client-ws",
+      "http-client",
+      'import * as client from "ws"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.WebSocket("https://example.test/x")});',
+    ],
+    [
+      "client-ofetch",
+      "http-client",
+      'import * as client from "ofetch"; import {operation} from "@tinker/core"; const probe = operation({run: () => client.ofetch("https://example.test/x")});',
+    ],
     [
       "client-node-http",
       "http-client",
