@@ -709,6 +709,16 @@ function entryStopAllocation(node) {
 const builtinFetch = checker.resolveName("fetch", undefined, ts.SymbolFlags.Value, false);
 assert.ok(builtinFetch, "the project must declare built-in fetch");
 const fetchDeclarations = new Set(builtinFetch.declarations);
+const builtinXhr = checker.resolveName("XMLHttpRequest", undefined, ts.SymbolFlags.Value, false);
+assert.ok(builtinXhr, "the project must declare built-in XMLHttpRequest");
+const navigatorType = checker.resolveName("Navigator", undefined, ts.SymbolFlags.Type, false);
+assert.ok(navigatorType, "the project must declare Navigator");
+const builtinBeacon = checker.getDeclaredTypeOfSymbol(navigatorType).getProperty("sendBeacon");
+assert.ok(builtinBeacon, "Navigator must declare sendBeacon");
+const browserHttpDeclarations = new Set([
+  ...builtinXhr.declarations,
+  ...builtinBeacon.declarations,
+]);
 function typeReference(node) {
   for (let parent = node.parent; parent; parent = parent.parent)
     if (ts.isTypeNode(parent)) return true;
@@ -726,24 +736,29 @@ function backendDefault(node) {
     coreSymbol(call.expression, "tag")
   );
 }
-function fetchSymbol(node) {
+function referenceSymbol(node) {
   if (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression))
     return checker.getTypeAtLocation(node.expression).getProperty(node.argumentExpression.text);
   return locationSymbol(node);
 }
-function builtinFetchReference(node) {
+function nativeReference(node, declarations) {
   if (
     !ts.isIdentifier(node) &&
     !ts.isPropertyAccessExpression(node) &&
     !ts.isElementAccessExpression(node)
   )
     return false;
-  return fetchSymbol(node)?.declarations?.some((decl) => fetchDeclarations.has(decl));
+  return referenceSymbol(node)?.declarations?.some((decl) => declarations.has(decl));
 }
 function checkFetch(node) {
-  if (typeReference(node) || !builtinFetchReference(node)) return;
+  if (typeReference(node) || !nativeReference(node, fetchDeclarations)) return;
   if (pathOf(node) === "src/scaffold/http-backend.ts" && backendDefault(node)) return;
   fail(node, "http-request: use httpRequest.controller instead of built-in fetch");
+}
+function checkBrowserHttp(node) {
+  if (pathOf(node).startsWith("src/scaffold/") || typeReference(node)) return;
+  if (nativeReference(node, browserHttpDeclarations))
+    fail(node, "http-client: app HTTP must use httpRequest.controller");
 }
 function httpUnitReference(node, file, name) {
   if (!ts.isIdentifier(node)) return false;
@@ -778,6 +793,10 @@ const httpClients = [
   "superagent",
   "node:net",
   "node:tls",
+  "net",
+  "tls",
+  "dgram",
+  "node:dgram",
 ];
 function importSpecifier(node) {
   if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier;
@@ -992,6 +1011,7 @@ for (const source of sources) {
     fail(source, ts.flattenDiagnosticMessageText(error.messageText, " "));
   walk(source, (node) => {
     checkFetch(node);
+    checkBrowserHttp(node);
     checkHttpResource(node);
     checkHttpBackend(node);
     checkHttpImport(node);
@@ -1029,6 +1049,54 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    ["client-net", "http-client", 'import * as client from "net"; export { client };'],
+    ["client-tls", "http-client", 'import * as client from "tls"; export { client };'],
+    ["client-dgram", "http-client", 'import * as client from "dgram"; export { client };'],
+    [
+      "client-node-dgram",
+      "http-client",
+      'import * as client from "node:dgram"; export { client };',
+    ],
+    [
+      "client-xhr-constructor",
+      "http-client",
+      'import {resource} from "@tinker/core"; const probe = resource({factory: () => new XMLHttpRequest()});',
+    ],
+    [
+      "client-xhr-global",
+      "http-client",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => globalThis.XMLHttpRequest});',
+    ],
+    [
+      "client-xhr-bracket",
+      "http-client",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => window["XMLHttpRequest"]});',
+    ],
+    [
+      "client-beacon-call",
+      "http-client",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => navigator.sendBeacon("https://example.test/x", "hello")});',
+    ],
+    [
+      "client-beacon-value",
+      "http-client",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => navigator.sendBeacon});',
+    ],
+    [
+      "client-beacon-bracket",
+      "http-client",
+      'import {operation} from "@tinker/core"; const probe = operation({run: () => navigator["sendBeacon"]("https://example.test/x", "hello")});',
+    ],
+    [
+      "client-websocket-allowed",
+      null,
+      'import {resource} from "@tinker/core"; const probe = resource({factory: (_deps, ctx) => { const socket = new WebSocket("wss://example.test/sync"); ctx.defer(() => socket.close()); return socket; }});',
+    ],
+    [
+      "client-eventsource-allowed",
+      null,
+      'import {resource} from "@tinker/core"; const probe = resource({factory: (_deps, ctx) => { const events = new EventSource("https://example.test/sync"); ctx.defer(() => events.close()); return events; }});',
+    ],
     [
       "client-import-type",
       null,

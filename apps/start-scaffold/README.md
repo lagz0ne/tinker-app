@@ -218,5 +218,10 @@ Tests bind that tag through the fixed scaffold transport seam.
 App imports of the named HTTP clients and raw sockets fail the plain check.
 Literal subpaths, re-exports, dynamic import, and require use the same ban.
 The client list includes node:http2, http2, ws, and ofetch.
+It also bans net, tls, dgram, and node:dgram imports outside src/scaffold/.
+XMLHttpRequest constructors and global value uses fail there too.
+So do navigator.sendBeacon calls and value uses, including literal bracket access.
+Native WebSocket and EventSource stay allowed for userland sync transports (ADR 0048).
+Their resources own and close the connection through ctx.defer.
 Type-only imports are allowed, including import { type X }.
 Imports that keep a value or only send code still fail.

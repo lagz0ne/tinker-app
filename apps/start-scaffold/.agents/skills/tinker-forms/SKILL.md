@@ -77,11 +77,16 @@ App imports cannot load the named HTTP clients or raw sockets:
 - node:http, node:https, node:http2, http, https, http2.
 - ws and ofetch.
 - undici, axios, ky, node-fetch, got, superagent.
-- node:net and node:tls.
+- node:net, node:tls, net, and tls.
+- node:dgram and dgram.
 
 The ban also covers literal subpaths, re-exports, import(), and require().
 Type-only imports are allowed, including import { type X }.
 A mixed import, default value import, or empty import still fails.
+Outside src/scaffold/, XMLHttpRequest constructors and global value uses fail too.
+So do navigator.sendBeacon calls and value uses, including literal bracket access.
+Native WebSocket and EventSource stay allowed for userland sync transports (ADR 0048).
+Their resources own and close the connection through ctx.defer.
 A feature operation depends on the request controller:
 
 ```ts
