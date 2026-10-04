@@ -121,7 +121,9 @@ export const postNotice = operation({
         body: "The order is ready.",
       },
     });
-    if (reply.status < 200 || reply.status >= 300) raise("NotificationFailed", {});
+    if (reply.status < 200 || reply.status >= 300) {
+      raise("NotificationFailed", {});
+    }
     return { sent: true };
   },
 });
