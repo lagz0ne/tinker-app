@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { operation, resource } from "@tinker/core";
-import { auth, requestHeaders, database } from "@/lib/tinker.server";
+import { auth, database } from "@/lib/tinker.server";
+import { requestHeaders } from "./headers.server.ts";
 import { notifications } from "./notifications.ts";
 import { backendStop, requestStop } from "./lifetime.ts";
 import { streamCursor } from "../protocol.ts";

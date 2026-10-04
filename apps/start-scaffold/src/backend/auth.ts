@@ -1,8 +1,8 @@
 import { operation, resource, tag } from "@tinker/core";
-import { z } from "zod";
 import type { BetterAuthPlugin } from "better-auth";
 import { database } from "./database.ts";
 import { sendMail } from "./mail.ts";
+import { requestHeaders } from "../scaffold/backend/headers.server.ts";
 import { raise } from "../errors.ts";
 export declare namespace Auth {
   type Settings = {
@@ -12,7 +12,6 @@ export declare namespace Auth {
   };
 }
 export const authSettings = tag<Auth.Settings>({ label: "auth.settings" });
-export const requestHeaders = tag<Headers>({ label: "request.headers" });
 export const auth = resource({
   label: "auth",
   target: "session",
@@ -42,12 +41,6 @@ export const auth = resource({
       plugins: settings.plugins,
     });
   },
-});
-export const handleAuth = operation({
-  label: "handleAuth",
-  input: z.instanceof(Request),
-  depends: { auth },
-  run: async ({ auth }, ctx) => auth.handler(ctx.input),
 });
 export const principal = resource({
   label: "request.principal",

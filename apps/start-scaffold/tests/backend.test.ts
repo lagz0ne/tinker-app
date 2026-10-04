@@ -1,3 +1,4 @@
+import { handleAuth, requestHeaders } from "@tinker-start-scaffold/transport";
 import { proofDatabase, proofMail } from "@tinker-start-scaffold/testing";
 import { test, expect } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
@@ -7,8 +8,6 @@ import {
   authSettings,
   databaseSettings,
   mailSettings,
-  handleAuth,
-  requestHeaders,
   readProfile,
   saveProfile,
   database,
