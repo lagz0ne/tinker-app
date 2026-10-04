@@ -241,6 +241,11 @@ Feature operations import httpRequest from @/lib/tinker.server.
 Pass unchecked request values through rawInput; input needs the branded shape.
 Map its reply to a feature value or managed error (ADR 0103).
 
+The plain check rejects any app use of the global Response
+outside src/routes/ and src/scaffold/, including type references.
+It also rejects operations with Request input or Response output.
+Only handleAuth in src/scaffold/backend/auth.server.ts is excepted.
+
 App imports of the named HTTP clients and raw sockets fail the plain check.
 Literal subpaths, re-exports, dynamic import, and require use the same ban.
 The client list is node:http, node:https, node:http2, http, https, http2,
