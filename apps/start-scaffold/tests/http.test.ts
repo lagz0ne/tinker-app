@@ -33,7 +33,7 @@ function createHeldBackend() {
   };
 }
 
-test("an HTTP request makes one named child span with its status", async () => {
+test("an HTTP request makes two spans and records its status", async () => {
   const stop = new AbortController();
   const scope = createScope({
     signal: stop.signal,
