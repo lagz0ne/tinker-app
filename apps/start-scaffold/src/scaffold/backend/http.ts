@@ -41,7 +41,12 @@ export const http = resource({
           });
           return {
             status: response.status,
-            headers: Object.fromEntries(response.headers),
+            headers: Object.fromEntries(
+              Array.from(response.headers, ([name, value]): [string, string[]] => [
+                name,
+                name === "set-cookie" ? response.headers.getSetCookie() : [value],
+              ]),
+            ),
             body: await response.text(),
           };
         } finally {

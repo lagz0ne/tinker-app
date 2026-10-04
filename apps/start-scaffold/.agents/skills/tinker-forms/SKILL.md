@@ -38,6 +38,9 @@ It records the reply status.
 The method accepts HTTP token characters and becomes upper-case at input.
 The backend and span use that same checked method.
 The result has status, headers, and body text.
+Headers are a record of string arrays.
+Each set-cookie value stays separate, including a date with a comma.
+Other native header values stay joined inside one array entry.
 A non-2xx reply is a normal result.
 A network failure raises the managed HttpRequestFailed error.
 Its payload has only method and path; query strings and native causes stay out.

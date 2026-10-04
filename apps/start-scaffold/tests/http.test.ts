@@ -122,7 +122,7 @@ test("a bound HTTP backend gets the request and returns text without network", a
       }),
     ).toEqual({
       status: 201,
-      headers: { "content-type": "text/plain;charset=UTF-8", "x-reply": "yes" },
+      headers: { "content-type": ["text/plain;charset=UTF-8"], "x-reply": ["yes"] },
       body: "reply",
     });
     expect(
@@ -261,6 +261,39 @@ test("an HTTP method rejects non-token characters before sending", async () => {
           .status,
       ).toBe("failed");
     expect(sent).toBe(0);
+  } finally {
+    stop.abort();
+    expect((await scope.closed).status).toBe("success");
+  }
+});
+
+test("HTTP replies keep each set-cookie value and joined repeated headers", async () => {
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    tags: [
+      httpBackend(
+        async () =>
+          new Response(null, {
+            headers: [
+              ["set-cookie", "a=1; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/"],
+              ["set-cookie", "b=2; HttpOnly; Path=/"],
+              ["x-repeat", "first"],
+              ["x-repeat", "second"],
+            ],
+          }),
+      ),
+    ],
+  });
+  await scope.ready;
+  try {
+    const reply = await scope.run(httpRequest, {
+      rawInput: { url: "https://example.test/x", method: "GET" },
+    });
+    expect(reply.headers).toEqual({
+      "set-cookie": ["a=1; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/", "b=2; HttpOnly; Path=/"],
+      "x-repeat": ["first, second"],
+    });
   } finally {
     stop.abort();
     expect((await scope.closed).status).toBe("success");
