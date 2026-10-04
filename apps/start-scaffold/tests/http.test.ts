@@ -1,7 +1,7 @@
 import { expect, test } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
 import { httpRequest, isError, raise } from "@tinker-start-scaffold/backend";
-import { http, httpBackend } from "@tinker-start-scaffold/transport";
+import { http, httpBackend, startRequests } from "@tinker-start-scaffold/transport";
 
 const post = operation({
   label: "test.post",
@@ -9,6 +9,23 @@ const post = operation({
   run: ({ request }) =>
     request.run({ rawInput: { url: "https://example.test/x?secret=1", method: "POST" } }),
 });
+
+/** The fake waits for abort, like fetch against a server that never replies. */
+function createHeldBackend() {
+  const started = Promise.withResolvers<void>();
+  return {
+    started: started.promise,
+    binding: httpBackend((_url, init) => {
+      const signal = init?.signal;
+      if (!signal) raise("BadInput", { reason: "request must have a signal" });
+      signal.throwIfAborted();
+      return new Promise<Response>((_done, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        started.resolve();
+      });
+    }),
+  };
+}
 
 test("an HTTP request makes one named child span with its status", async () => {
   const stop = new AbortController();
@@ -423,3 +440,117 @@ test("HTTP replies keep each set-cookie value and joined repeated headers", asyn
     expect((await scope.closed).status).toBe("success");
   }
 });
+
+test("graceful root close stops a never-answering HTTP request", async () => {
+  const backend = createHeldBackend();
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    extensions: [startRequests],
+    tags: [backend.binding],
+  });
+  await scope.ready;
+  const target = scope;
+  const sending = target.settle(httpRequest, {
+    rawInput: { url: "https://slow.test/x", method: "GET" },
+  });
+  await backend.started;
+  const closing = target.close({ graceful: true });
+  const result = await sending;
+  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  expect(result.error.payload).toMatchObject({ method: "GET", path: "/x" });
+  expect((await closing).status).toBe("success");
+  stop.abort();
+  expect((await scope.closed).status).toBe("success");
+}, 2000);
+
+test("graceful session close stops a never-answering HTTP request", async () => {
+  const backend = createHeldBackend();
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    extensions: [startRequests],
+    tags: [backend.binding],
+  });
+  await scope.ready;
+  const target = scope.createSession();
+  const sending = target.settle(httpRequest, {
+    rawInput: { url: "https://slow.test/x", method: "GET" },
+  });
+  await backend.started;
+  const closing = target.close({ graceful: true });
+  const result = await sending;
+  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  expect(result.error.payload).toMatchObject({ method: "GET", path: "/x" });
+  expect((await closing).status).toBe("success");
+  stop.abort();
+  expect((await scope.closed).status).toBe("success");
+}, 2000);
+
+test("an HTTP request started after graceful close begins fails before sending", async () => {
+  let sent = 0;
+  const work = Promise.withResolvers<void>();
+  const started = Promise.withResolvers<void>();
+  const waiting = operation({
+    label: "test.waiting",
+    run: () => {
+      started.resolve();
+      return work.promise;
+    },
+  });
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    extensions: [startRequests],
+    tags: [
+      httpBackend(async () => {
+        sent += 1;
+        return new Response("too late");
+      }),
+    ],
+  });
+  await scope.ready;
+  const client = scope.resolve(http);
+  const running = scope.run(waiting);
+  await started.promise;
+  const closing = scope.close({ graceful: true });
+  try {
+    await expect(
+      client.send("https://slow.test/late", {
+        method: "GET",
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toBeDefined();
+    expect(sent).toBe(0);
+  } finally {
+    work.resolve();
+    await running;
+    expect((await closing).status).toBe("success");
+    expect((await scope.closed).status).toBe("success");
+  }
+}, 2000);
+
+test("forced root and session closes still cancel a never-answering HTTP request", async () => {
+  for (const where of ["root", "session"]) {
+    const backend = createHeldBackend();
+    const stop = new AbortController();
+    const scope = createScope({
+      signal: stop.signal,
+      extensions: [startRequests],
+      tags: [backend.binding],
+    });
+    await scope.ready;
+    const target = where === "root" ? scope : scope.createSession();
+    const sending = target.settle(httpRequest, {
+      rawInput: { url: "https://slow.test/x", method: "GET" },
+    });
+    await backend.started;
+    const closing = target.close();
+    expect((await sending).status).toBe("cancelled");
+    expect((await closing).status).toBe("cancelled");
+    stop.abort();
+    expect((await scope.closed).status).toBe(where === "root" ? "cancelled" : "success");
+  }
+}, 2000);
