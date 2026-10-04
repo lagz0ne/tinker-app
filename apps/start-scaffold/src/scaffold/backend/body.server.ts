@@ -22,6 +22,9 @@ export const responseBodies = resource({
       for (const result of results) if (result.status === "rejected") throw result.reason;
     });
     return {
+      isResponse(value: unknown): value is Response {
+        return value instanceof Response;
+      },
       async hold(
         response: Response,
         finish: (graceful: boolean) => Promise<void>,

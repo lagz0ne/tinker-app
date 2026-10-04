@@ -805,6 +805,15 @@ function checkRequestHeaders(node) {
   if (protocolUnitReference(node, "src/scaffold/backend/headers.server.ts", "requestHeaders"))
     fail(node, "protocol-headers: app code must use principal or currentUser");
 }
+const builtinResponse = checker.resolveName("Response", undefined, ts.SymbolFlags.Value, false);
+assert.ok(builtinResponse, "the project must declare built-in Response");
+const responseDeclarations = new Set(builtinResponse.declarations);
+function checkResponse(node) {
+  const file = pathOf(node);
+  if (file.startsWith("src/routes/") || file.startsWith("src/scaffold/")) return;
+  if (nativeReference(node, responseDeclarations))
+    fail(node, "protocol-response: replies belong to routes or the scaffold");
+}
 function checkMountedAuth(node) {
   const file = pathOf(node);
   if (["src/scaffold/backend/auth.server.ts", "src/routes/api.auth.$.ts"].includes(file)) return;
@@ -1209,6 +1218,7 @@ for (const source of sources) {
     checkHttpResource(node);
     checkHttpBackend(node);
     checkRequestHeaders(node);
+    checkResponse(node);
     checkMountedAuth(node);
     checkHttpImport(node);
     checkService(node);
@@ -1245,6 +1255,39 @@ if (!process.argv.includes("--list"))
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [
+    [
+      "response-resource-unknown",
+      "protocol-response",
+      'import {operation, resource} from "@tinker/core"; const replies = resource({factory: () => new Response() as unknown}); const probe = operation({depends: {reply: replies}, run: ({reply}) => reply});',
+    ],
+    [
+      "response-resource-method-unknown",
+      "protocol-response",
+      'import {operation, resource} from "@tinker/core"; const replies = resource({factory: () => ({make: (): unknown => new Response()})}); const probe = operation({depends: {replies}, run: ({replies}) => replies.make()});',
+    ],
+    [
+      "response-reflect-construct",
+      "protocol-response",
+      'import {resource} from "@tinker/core"; const probe = resource({factory: () => Reflect.construct(Response, [])});',
+    ],
+    ["response-type-reference", "protocol-response", "export type Probe = Response;"],
+    [
+      "response-route-allowed",
+      null,
+      'import {createFileRoute} from "@tanstack/react-router"; export const Route = createFileRoute("/api/telemetry")({server: {handlers: {GET: () => new Response()}}}); export type Reply = Response;',
+      "src/routes/plain-probe.ts",
+    ],
+    [
+      "response-scaffold-allowed",
+      null,
+      'import {resource} from "@tinker/core"; const probe = resource({factory: () => new Response()}); export type Reply = Response;',
+      "src/scaffold/plain-probe.ts",
+    ],
+    [
+      "response-local-type-allowed",
+      null,
+      "type Response = {value: string}; export type Probe = Response;",
+    ],
     [
       "request-headers-constant-key",
       "protocol-headers",

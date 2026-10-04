@@ -26,7 +26,7 @@ const renderRequest = createStartFetch(async (context) => {
   if (typeof router.close !== "function") raise("StartScopeMissing", {});
   try {
     const output = await renderStartStream(context);
-    if (output instanceof Response) return bodies.hold(output, router.close);
+    if (bodies.isResponse(output)) return bodies.hold(output, router.close);
     return { ...output, response: await bodies.hold(output.response, router.close) };
   } catch (error) {
     await router.close();
