@@ -37,7 +37,9 @@ Feature HTTP operations import httpRequest through src/lib/tinker.server.ts.
 Export those operations from src/backend/index.ts for scope tests.
 Tests bind httpBackend through the fixed transport seam.
 The tag lives in src/scaffold/http-backend.ts.
-App code cannot reference http or httpBackend, even through fixed scaffold exports.
+App code cannot use http as a value, even through fixed scaffold exports.
+Type references to http remain allowed.
+App code cannot reference httpBackend.
 The fixed telemetry sender uses httpBackend directly to avoid tracing itself.
 
 Server imports belong in server functions and routes.

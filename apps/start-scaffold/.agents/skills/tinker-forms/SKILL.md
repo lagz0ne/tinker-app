@@ -82,7 +82,9 @@ The HTTP resource and request stay behind the backend import guard.
 
 Only fixed scaffold code may use the http resource directly.
 App seams export only httpRequest.
-The plain check rejects app references to http and httpBackend.
+The plain check rejects app use of http as a value.
+Type references to http remain allowed.
+The check rejects app references to httpBackend.
 Only fixed scaffold code may send through the backend tag.
 App imports cannot load the named HTTP clients or raw sockets:
 

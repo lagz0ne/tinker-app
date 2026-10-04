@@ -233,7 +233,9 @@ Then run the checks above.
 Review the dry run before any fixed-source overwrite.
 
 App code uses only httpRequest for outgoing HTTP.
-The plain check refuses app references to http and httpBackend, including aliases.
+The plain check refuses app use of http as a value, including aliases.
+Type references to http remain allowed.
+The check refuses app references to httpBackend.
 Tests bind that tag through the fixed scaffold transport seam.
 The tag lives in src/scaffold/http-backend.ts.
 Only its default may use built-in fetch.
