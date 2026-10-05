@@ -33,7 +33,7 @@ It supplies change, result, public, and private bodies.
 See `src/contracts/sync.ts` for the current bodies.
 Put raw-input readers in `src/contracts/`.
 
-Feature HTTP operations import httpRequest through src/lib/tinker.server.ts.
+Feature HTTP operations import httpRequest from `@/scaffold/backend/http`.
 Export those operations from src/backend/index.ts for scope tests.
 Tests bind httpBackend through the fixed transport seam.
 The tag lives in src/scaffold/http-backend.ts.

@@ -108,7 +108,7 @@ A feature operation depends on the request controller:
 
 ```ts
 import { operation } from "@tinker/core";
-import { httpRequest } from "@/lib/tinker.server";
+import { httpRequest } from "@/scaffold/backend/http";
 import { raise } from "@/errors";
 
 export const postNotice = operation({
