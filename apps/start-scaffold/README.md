@@ -149,6 +149,7 @@ The schema check proves generation adds no duplicate tables.
 - An HTTP method is normalized once for sending and spans.
 - An HTTP method rejects non-token characters before sending.
 - Closing the HTTP resource aborts requests still in flight.
+- Releasing HTTP aborts a held direct send and leaves the scope open.
 - A bound HTTP backend gets the request and returns text without network.
 - HTTP replies keep each set-cookie value and joined repeated headers.
 - Network failures keep method, path, and only cause name and code.

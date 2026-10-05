@@ -454,7 +454,7 @@ test("backend stop settles a server function's signalled HTTP call", async () =>
   const scope = createScope({
     signal: stop.signal,
     extensions: [startRequests],
-    tags: [backend.binding],
+    tags: [backend.binding, backendStop(stop.signal)],
   });
   await scope.ready;
   const session = scope.createSession();
@@ -478,7 +478,7 @@ for (const shape of ["signal", "tags"]) {
     const call = new AbortController();
     const scope = createScope({
       signal: stop.signal,
-      tags: [backend.binding],
+      tags: [backend.binding, backendStop(stop.signal)],
     });
     await scope.ready;
     const input = { url: "https://slow.test/x", method: "GET" };
@@ -614,7 +614,7 @@ test("backend stop settles HTTP while other running work finishes", async () => 
   const stop = new AbortController();
   const scope = createScope({
     signal: stop.signal,
-    tags: [backend.binding],
+    tags: [backend.binding, backendStop(stop.signal)],
   });
   await scope.ready;
   const working = scope.run(waiting);
@@ -748,6 +748,27 @@ test("running work finishes on graceful close when the HTTP backend answers", as
   finish.resolve();
   expect(await sending).toBe("finished");
   expect(await closing).toEqual({ status: "success" });
+  stop.abort();
+  expect(await scope.closed).toEqual({ status: "success" });
+}, 2000);
+
+test("releasing HTTP aborts a held direct send and leaves the scope open", async () => {
+  const backend = createHeldBackend();
+  const stop = new AbortController();
+  const scope = createScope({ signal: stop.signal, tags: backend.binding });
+  await scope.ready;
+  const sending = expect(
+    scope.resolve(http).send("https://example.test/held", {
+      method: "GET",
+      signal: new AbortController().signal,
+    }),
+  ).rejects.toMatchObject({ name: "AbortError", code: 20 });
+  await backend.started;
+  scope.release(http);
+  await sending;
+  expect(scope.run(operation({ label: "test.after-release", run: () => "still open" }))).toBe(
+    "still open",
+  );
   stop.abort();
   expect(await scope.closed).toEqual({ status: "success" });
 }, 2000);
