@@ -16,9 +16,8 @@ const requestShape = z
   })
   .brand<"HttpRequest">();
 
-/** Backend stop and request end abort HTTP before graceful shutdown joins work.
- * A direct graceful close without an aborted stop tag cannot stop a pending wait:
- * Core has no session close-start hook. Forced close and resource cleanup still abort. */
+/** Closing this session or an ancestor ends HTTP waits before graceful work drains.
+ * Stop tags also end waits without closing a layer; caller cancellation keeps Core's result. */
 export const http = resource({
   label: "http",
   target: "session",
@@ -27,13 +26,14 @@ export const http = resource({
     backendStop: backendStop.optional,
     requestStop: requestStop.optional,
   },
-  factory: ({ send, backendStop, requestStop }, ctx) => {
+  factory: ({ send, backendStop, requestStop }, { closing, defer }) => {
     const stop = new AbortController();
-    ctx.defer(() => stop.abort());
+    defer(() => stop.abort());
     return {
       async send(url: string, init: RequestInit & { signal: AbortSignal }) {
         const signal = AbortSignal.any([
           init.signal,
+          closing,
           stop.signal,
           ...(backendStop.present ? [backendStop.value] : []),
           ...(requestStop.present ? [requestStop.value] : []),

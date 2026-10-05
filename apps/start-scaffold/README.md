@@ -163,6 +163,10 @@ The schema check proves generation adds no duplicate tables.
 - An HTTP request after backendStop or requestStop ends fails before sending.
 - Forced root and session closes still cancel a never-answering HTTP request.
 - Backend stop settles HTTP while other running work finishes.
+- A direct graceful session close settles a hung HTTP send without stop tags.
+- A direct graceful root close reaches a session's hung HTTP send without stop tags.
+- BackendStop ends a pending HTTP send without closing its root.
+- Running work finishes on graceful close when the HTTP backend answers.
 - Storage failure keeps bounded records for retry.
 - Accepted telemetry frees the byte budget for later records.
 - Browser ingest refuses foreign origins, bad shapes, and large bodies.
@@ -182,13 +186,16 @@ The schema check proves generation adds no duplicate tables.
 - A private route check clears cached records after another tab signs out.
 - Sign-in, an old stream account event, and route loads fetch one signed-in snapshot.
 
+The session-target HTTP resource joins `ctx.closing` with its send signals.
+A graceful close of the session or its root ends HTTP waits before work joins.
+A closing abort raises HttpRequestFailed with an AbortError cause.
+The caller's signal stays open on a graceful close.
+Other running work can finish, after the backend has delivered its reply.
+Forced close cancels through the caller's signal.
+Backend and request stop tags can also end waits without closing a layer.
+
 ## Limits
 
-A graceful close alone cannot stop a pending HTTP wait without a stop signal.
-Core has no session close-start hook for that case.
-The HTTP resource is session-target; its cleanup runs after work joins.
-Backend and request stop tags end waits before that join.
-Forced close cancels through the caller's signal.
 Event history has no retention rule yet.
 SSE replays stored events; it is not a durable job queue.
 A crash after commit can leave mail without a final result.

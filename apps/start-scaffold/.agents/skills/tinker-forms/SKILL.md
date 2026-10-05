@@ -68,9 +68,11 @@ The backendStop tag ends HTTP when server shutdown starts.
 The requestStop tag ends that request's HTTP when its signal aborts.
 Both reach sessions made by Core for calls with signal or tags.
 HTTP waits fail with HttpRequestFailed; caller cancellation returns cancelled.
-A direct graceful close with no stop signal cannot stop a pending HTTP wait.
-Core has no session close-start hook for that case.
-Cleanup runs after Core joins work and cannot stop that wait first.
+The resource joins ctx.closing with its send signals (ADR 0104).
+A graceful session or root close ends HTTP waits before Core joins work.
+Its closing abort raises HttpRequestFailed with an AbortError cause.
+The caller's signal stays open on a graceful close.
+Stop tags still end waits without closing a layer.
 Other running work keeps its graceful close rule.
 Small-scope tests may leave the two stop tags unbound.
 Tests bind httpBackend to a fake; never patch global fetch.

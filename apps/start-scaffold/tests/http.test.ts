@@ -454,14 +454,14 @@ test("backend stop settles a server function's signalled HTTP call", async () =>
   const scope = createScope({
     signal: stop.signal,
     extensions: [startRequests],
-    tags: [backend.binding, backendStop(stop.signal)],
+    tags: [backend.binding],
   });
   await scope.ready;
   const session = scope.createSession();
   const sending = session.settle(post, { signal: call.signal });
   await backend.started;
-  const closing = session.close({ graceful: true });
   stop.abort();
+  const closing = session.close({ graceful: true });
   const result = await sending;
   if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
   if (!isError(result.error, "HttpRequestFailed")) throw result.error;
@@ -478,7 +478,7 @@ for (const shape of ["signal", "tags"]) {
     const call = new AbortController();
     const scope = createScope({
       signal: stop.signal,
-      tags: [backend.binding, backendStop(stop.signal)],
+      tags: [backend.binding],
     });
     await scope.ready;
     const input = { url: "https://slow.test/x", method: "GET" };
@@ -614,7 +614,7 @@ test("backend stop settles HTTP while other running work finishes", async () => 
   const stop = new AbortController();
   const scope = createScope({
     signal: stop.signal,
-    tags: [backend.binding, backendStop(stop.signal)],
+    tags: [backend.binding],
   });
   await scope.ready;
   const working = scope.run(waiting);
@@ -638,4 +638,116 @@ test("backend stop settles HTTP while other running work finishes", async () => 
   finish.resolve(42);
   expect(await working).toBe(42);
   expect(await closing).toEqual({ status: "success" });
+}, 2000);
+
+test("a direct graceful session close settles a hung HTTP send without stop tags", async () => {
+  const backend = createHeldBackend();
+  const stop = new AbortController();
+  const call = new AbortController();
+  const scope = createScope({ signal: stop.signal, tags: backend.binding });
+  await scope.ready;
+  const session = scope.createSession();
+  const sending = session.settle(post, { signal: call.signal });
+  await backend.started;
+  const closing = session.close({ graceful: true });
+  const result = await sending;
+  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  expect(result.error.payload).toEqual({
+    method: "POST",
+    path: "/x",
+    cause: { name: "AbortError", code: 20 },
+  });
+  expect(call.signal.aborted).toBe(false);
+  expect(await closing).toEqual({ status: "success" });
+  stop.abort();
+  expect(await scope.closed).toEqual({ status: "success" });
+}, 2000);
+
+test("a direct graceful root close reaches a session's hung HTTP send without stop tags", async () => {
+  const backend = createHeldBackend();
+  const stop = new AbortController();
+  const scope = createScope({ signal: stop.signal, tags: backend.binding });
+  await scope.ready;
+  const session = scope.createSession();
+  const sending = session.settle(post);
+  await backend.started;
+  const closing = scope.close({ graceful: true });
+  const result = await sending;
+  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  expect(result.error.payload).toEqual({
+    method: "POST",
+    path: "/x",
+    cause: { name: "AbortError", code: 20 },
+  });
+  expect(await closing).toEqual({ status: "success" });
+  expect(await session.close({ graceful: true })).toEqual({ status: "success" });
+}, 2000);
+
+test("backendStop ends a pending HTTP send without closing its root", async () => {
+  const backend = createHeldBackend();
+  const stop = new AbortController();
+  const backendEnd = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    tags: [backend.binding, backendStop(backendEnd.signal)],
+  });
+  await scope.ready;
+  const session = scope.createSession();
+  const sending = session.settle(post);
+  await backend.started;
+  backendEnd.abort();
+  const result = await sending;
+  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  expect(result.error.payload).toEqual({
+    method: "POST",
+    path: "/x",
+    cause: { name: "AbortError", code: 20 },
+  });
+  expect(scope.run(operation({ label: "test.still-open", run: () => "still open" }))).toBe(
+    "still open",
+  );
+  expect(await session.close({ graceful: true })).toEqual({ status: "success" });
+  stop.abort();
+  expect(await scope.closed).toEqual({ status: "success" });
+}, 2000);
+
+test("running work finishes on graceful close when the HTTP backend answers", async () => {
+  const working = Promise.withResolvers<AbortSignal>();
+  const finish = Promise.withResolvers<void>();
+  const sendAndFinish = operation({
+    label: "test.send-and-finish",
+    depends: { request: httpRequest.controller },
+    run: async ({ request }, { signal }) => {
+      const reply = await request.run({
+        rawInput: { url: "https://example.test/x", method: "GET" },
+      });
+      working.resolve(signal);
+      await finish.promise;
+      return reply.body;
+    },
+  });
+  const stop = new AbortController();
+  const scope = createScope({
+    signal: stop.signal,
+    tags: httpBackend(async () => new Response("finished")),
+  });
+  await scope.ready;
+  const session = scope.createSession();
+  const sending = session.run(sendAndFinish);
+  const signal = await working.promise;
+  let closed = false;
+  const closing = session.close({ graceful: true }).then((end) => {
+    closed = true;
+    return end;
+  });
+  expect(signal.aborted).toBe(false);
+  expect(closed).toBe(false);
+  finish.resolve();
+  expect(await sending).toBe("finished");
+  expect(await closing).toEqual({ status: "success" });
+  stop.abort();
+  expect(await scope.closed).toEqual({ status: "success" });
 }, 2000);
