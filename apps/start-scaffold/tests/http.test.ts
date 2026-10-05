@@ -772,3 +772,30 @@ test("releasing HTTP aborts a held direct send and leaves the scope open", async
   stop.abort();
   expect(await scope.closed).toEqual({ status: "success" });
 }, 2000);
+
+test.each(["signal", "tags"] as const)(
+  "a root-bound backendStop reaches a Core-made session (%s)",
+  async (shape) => {
+    const backend = createHeldBackend();
+    const stop = new AbortController();
+    const end = new AbortController();
+    const call = new AbortController();
+    const scope = createScope({
+      signal: stop.signal,
+      tags: [backend.binding, backendStop(end.signal)],
+    });
+    await scope.ready;
+    const input = { url: "https://slow.test/x", method: "GET" };
+    const sending =
+      shape === "signal"
+        ? scope.settle(httpRequest, { rawInput: input, signal: call.signal })
+        : scope.settle(httpRequest, { rawInput: input, tags: requestStop(call.signal) });
+    await backend.started;
+    end.abort();
+    const result = await sending;
+    expect(result.status).toBe("failed");
+    stop.abort();
+    expect(await scope.closed).toEqual({ status: "success" });
+  },
+  2000,
+);
