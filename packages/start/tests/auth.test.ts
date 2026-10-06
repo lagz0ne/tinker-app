@@ -36,6 +36,7 @@ test("handleAuth takes only a request, and a failing auth library fails the call
         handler: async () => {
           throw lost;
         },
+        api: { getSession: async () => null },
       })),
     ],
   });

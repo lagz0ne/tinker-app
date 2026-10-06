@@ -132,7 +132,7 @@ test("Start's static output options pass on; an unknown option fails the build",
     prerender: { enabled: true },
   });
   expect(() => passThrough({ prerendr: {}, sap: {} })).toThrow(
-    "tinker(): unknown option prerendr, sap; known: root, prerender, pages, spa, sitemap, telemetry, auth",
+    "tinker(): unknown option prerendr, sap; known: root, prerender, pages, spa, sitemap, telemetry, auth, sync",
   );
   expect(passThrough({ telemetry: false, auth: true, spa: { enabled: true } })).toStrictEqual({
     spa: { enabled: true },
@@ -151,5 +151,20 @@ test("with auth on, its route mounts at /api/auth/$ from the base", () => {
   ]);
   expect(resolve(root, "src/routes", tree.children[3].file)).toBe(
     join(baseDir, "src/routes/api.auth.ts"),
+  );
+});
+
+test("with sync on, its route mounts at /api/sync from the base", () => {
+  const root = fixture({ "src/routes/index.tsx": "" });
+  const { virtualRouteConfig: tree } = startOptions(root, ["auth", "sync"]).router;
+  expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([
+    "/api/health",
+    "/tinker",
+    "/api/auth/$",
+    "/api/sync",
+    "",
+  ]);
+  expect(resolve(root, "src/routes", tree.children[3].file)).toBe(
+    join(baseDir, "src/routes/api.sync.ts"),
   );
 });

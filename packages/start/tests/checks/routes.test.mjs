@@ -165,3 +165,14 @@ test("with auth off, as by default, /api/auth/ is the app's", () => {
   });
   expect(routes(root).status).toBe("ok");
 });
+
+test("with sync on, a route at /api/sync names the switch that frees it", () => {
+  const root = goodApp({
+    ".tinker/base.json": JSON.stringify({ base: "0.5.0", parts: ["auth", "sync"] }),
+    "src/routes/api.sync.ts": page("/api/sync"),
+  });
+  expect(routes(root).lines).toEqual([
+    "src/routes/api.sync.ts:2 takes /api/sync, a base route; tinker({ sync: false }) frees it",
+  ]);
+  expect(routes(goodApp({ "src/routes/api.sync.ts": page("/api/sync") })).status).toBe("ok");
+});

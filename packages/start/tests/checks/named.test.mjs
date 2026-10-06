@@ -95,3 +95,23 @@ test("with auth on, a seam with both names passes; with auth off, none is needed
   expect(named(goodApp({ ".tinker/base.json": authOn, ...seam })).status).toBe("ok");
   expect(named(goodApp()).status).toBe("ok");
 });
+
+const syncOn = JSON.stringify({ base: "0.5.0", parts: ["telemetry", "auth", "sync"] });
+
+test("with sync on, a seam without database names it for the sync part", () => {
+  const root = goodApp({
+    ".tinker/base.json": syncOn,
+    "src/lib/tinker.server.ts":
+      "export const extensions = [];\nexport const auth = 1;\nexport const readAccount = 2;\n",
+  });
+  expect(named(root).lines).toEqual([
+    "src/lib/tinker.server.ts:1 does not export database; the sync part reads it",
+  ]);
+});
+
+test("with sync on and no seam, each part names what it reads", () => {
+  expect(named(goodApp({ ".tinker/base.json": syncOn })).lines).toEqual([
+    "src/lib/tinker.server.ts is missing; the auth part reads auth and readAccount from it",
+    "src/lib/tinker.server.ts is missing; the sync part reads database from it",
+  ]);
+});

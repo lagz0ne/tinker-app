@@ -1,9 +1,10 @@
 import type { Route as AuthRoute } from "../../src/routes/api.auth.ts";
+import type { Route as SyncRoute } from "../../src/routes/api.sync.ts";
 import type { Route as RootRoute } from "../../src/routes/root.tsx";
 
 /**
- * The base's type check reads apps/start-min's route tree, where auth is off. This adds the auth
- * part's route the way a generated tree with auth on declares it; apps never read this file.
+ * The base's type check reads apps/start-min's route tree, where auth and sync are off. This adds
+ * their routes the way a generated tree with them on declares them; apps never read this file.
  */
 declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
@@ -12,6 +13,13 @@ declare module "@tanstack/react-router" {
       path: "/api/auth/$";
       fullPath: "/api/auth/$";
       preLoaderRoute: typeof AuthRoute;
+      parentRoute: typeof RootRoute;
+    };
+    "/api/sync": {
+      id: "/api/sync";
+      path: "/api/sync";
+      fullPath: "/api/sync";
+      preLoaderRoute: typeof SyncRoute;
       parentRoute: typeof RootRoute;
     };
   }

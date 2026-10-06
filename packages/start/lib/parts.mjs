@@ -6,18 +6,37 @@ export const parts = basePackage.tinker.parts;
 
 /**
  * The parts tinker() turns on, in the base's order: each part's own option, else (unset or
- * undefined, as the option's type allows) its default.
- * A part option that is not true or false fails the build, so no switch is misread.
+ * undefined, as the option's type allows) its default. A part that is on turns on the parts it
+ * needs (sync needs auth), unless the app turned one off, which fails the build. A switch that
+ * is not true or false fails the build too, so no switch is misread.
  * @param {Record<string, unknown>} options - From tinker(); why: the app's part switches.
  */
 export function partsOn(options) {
-  return Object.entries(parts)
+  const chosen = Object.entries(parts)
     .filter(([name, part]) => {
       const value = options[name] ?? part.on;
       if (typeof value !== "boolean") throw new Error(`tinker(): ${name} takes true or false`);
       return value;
     })
     .map(([name]) => name);
+  const needed = chosen.flatMap((name) =>
+    (parts[name].needs ?? []).map((need) => {
+      if (options[need] === false)
+        throw new Error(
+          `tinker(): ${name} needs ${need}, but ${need} is false; drop ${need}: false, or set ${name}: false`,
+        );
+      return need;
+    }),
+  );
+  return Object.keys(parts).filter((name) => chosen.includes(name) || needed.includes(name));
+}
+
+/**
+ * What the switches did beyond themselves: one line per part another on part turned on.
+ * @param {string[]} on - From partsOn or the record; why: the parts that are on.
+ */
+export function partNotes(on) {
+  return on.flatMap((name) => (parts[name].needs ?? []).map((need) => `${name} turns ${need} on`));
 }
 
 /**

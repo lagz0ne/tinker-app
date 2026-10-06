@@ -3,6 +3,9 @@ export declare namespace Errors {
     StartScopeMissing: Record<string, never>;
     Cancelled: Record<string, never>;
     BadSettings: { part: string; keys: string[] };
+    StreamMissing: Record<string, never>;
+    StreamDenied: Record<string, never>;
+    StreamDisconnected: Record<string, never>;
   };
   type Name = keyof Payloads;
   type Of<N extends Name> = Error & { kind: N; payload: Payloads[N] };

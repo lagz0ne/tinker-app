@@ -1,0 +1,466 @@
+import { createScope, operation } from "@tinker/core";
+import { makeTestClock, preset } from "@tinker/core/testing";
+import { expect, test } from "vite-plus/test";
+import { z } from "zod";
+import { database, signedIn } from "#tinker/app.server";
+import { requestHeaders } from "../src/backend/headers.server.ts";
+import { backendStop, requestStop } from "../src/backend/lifetime.ts";
+import { eventHistory } from "../src/parts/sync/history.server.ts";
+import { notifications } from "../src/parts/sync/notifications.server.ts";
+import { execution } from "../src/parts/sync/schema.ts";
+import { eventStream, openSync } from "../src/parts/sync/stream.server.ts";
+import { syncEndpoint } from "../src/parts/sync/endpoint.server.ts";
+
+const ids = [
+  "00000000-0000-4000-8000-000000000001",
+  "00000000-0000-4000-8000-000000000002",
+  "00000000-0000-4000-8000-000000000003",
+];
+
+/** An app write: lock the stream, then append its changes, in one transaction. */
+const publish = operation({
+  label: "test.publish",
+  input: z.object({ stream: z.string(), executionId: z.string(), changes: z.array(z.unknown()) }),
+  depends: { database, history: eventHistory },
+  run: async ({ database, history }, { input }) =>
+    database.transaction(async (tx) => {
+      await history.lock(tx, input.stream);
+      await history.append(
+        tx,
+        input.stream,
+        input.executionId,
+        input.changes.map((change) => ({ kind: "change" as const, change })),
+      );
+    }),
+});
+const rolledBack = operation({
+  label: "test.rolledBack",
+  depends: { database, history: eventHistory },
+  run: async ({ database, history }, { raise }) =>
+    database.transaction(async (tx) => {
+      await history.lock(tx, "public");
+      await history.append(tx, "public", ids[0], [{ kind: "change", change: 1 }]);
+      raise("Rollback", {});
+    }),
+});
+
+/**
+ * The text of the stream's next chunk; "" once it ends.
+ * @param read - From a test's reader; why: one pending or new read.
+ */
+async function text(read: Promise<ReadableStreamReadResult<Uint8Array>>) {
+  const { value } = await read;
+  return value === undefined ? "" : new TextDecoder().decode(value);
+}
+
+/**
+ * The frame a stream sends for these rows and this cursor.
+ * @param rows - From a test; why: the events the frame carries, as the table holds them.
+ * @param cursor - From a test; why: where the client resumes after them.
+ */
+function changesFrame(rows: object[], cursor: object) {
+  return `event: changes\nid: ${JSON.stringify(cursor)}\ndata: ${JSON.stringify({ kind: "changes", events: rows })}\n\n`;
+}
+const row = (stream: string, revision: number, executionId: string, change: unknown) => ({
+  stream,
+  revision,
+  executionId,
+  payload: { kind: "change", change },
+});
+const account = 'event: account\ndata: {"kind":"account-change"}\n\n';
+
+test("notifications wake after a commit, stay silent on a rollback, and a read before waiting still wakes", async () => {
+  const root = createScope();
+  const feed = await root.resolve(notifications);
+  const subscription = await feed.subscribe();
+  const before = feed.revision();
+  expect(await root.settle(rolledBack)).toMatchObject({ status: "failed" });
+  expect(feed.revision()).toBe(before);
+  await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
+  await feed.wait(subscription, before, new AbortController().signal);
+  expect(feed.revision()).toBeGreaterThan(before);
+  expect(feed.ended(subscription)).toBe(false);
+  feed.close(subscription);
+  expect(feed.ended(subscription)).toBe(true);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the stream replays after its cursor in one frame, greets once, then sends each new commit", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1, 2] } });
+  const session = root.createSession();
+  const body = await session.run(openSync, { input: { cursor: { public: 0, private: null } } });
+  const reader = body.getReader();
+  expect(await text(reader.read())).toBe(
+    changesFrame([row("public", 1, ids[0], 1), row("public", 2, ids[0], 2)], {
+      public: 2,
+      private: null,
+    }),
+  );
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const held = reader.read();
+  await root.run(publish, { input: { stream: "public", executionId: ids[1], changes: [3] } });
+  expect(await text(held)).toBe(
+    changesFrame([row("public", 3, ids[1], 3)], { public: 3, private: null }),
+  );
+  const idle = reader.read();
+  await reader.cancel();
+  expect((await idle).done).toBe(true);
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a resumed cursor skips what it has; one frame carries at most 100 events", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  const many = Array.from({ length: 102 }, (_, index) => index + 1);
+  await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: many } });
+  const session = root.createSession();
+  const body = await session.run(openSync, { input: { cursor: { public: 1, private: null } } });
+  const reader = body.getReader();
+  const rows = many.slice(1).map((value) => row("public", value, ids[0], value));
+  expect(await text(reader.read())).toBe(
+    changesFrame(rows.slice(0, 100), { public: 101, private: null }),
+  );
+  expect(await text(reader.read())).toBe(
+    changesFrame(rows.slice(100), { public: 102, private: null }),
+  );
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  await reader.cancel();
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("an account's own private events replay beside the public ones; another account's cursor is refused", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(new Set(["ada", "grace"]))],
+  });
+  await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["a1"] } });
+  await root.run(publish, { input: { stream: "grace", executionId: ids[1], changes: ["g1"] } });
+  await root.run(publish, { input: { stream: "public", executionId: ids[2], changes: [1] } });
+  const cursor = { public: 0, private: { accountId: "ada", revision: 0 } };
+  const grace = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "grace" })) });
+  expect(await grace.settle(openSync, { input: { cursor } })).toMatchObject({
+    status: "failed",
+    error: { kind: "StreamDenied" },
+  });
+  expect((await grace.close({ graceful: true })).status).toBe("success");
+  const ada = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
+  const reader = (await ada.run(openSync, { input: { cursor } })).getReader();
+  expect(await text(reader.read())).toBe(
+    changesFrame([row("ada", 1, ids[0], "a1"), row("public", 1, ids[2], 1)], {
+      public: 1,
+      private: { accountId: "ada", revision: 1 },
+    }),
+  );
+  await reader.cancel();
+  expect((await ada.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a held stream whose account signs out sends the account frame, then no saved rows", async () => {
+  const stop = new AbortController();
+  const accounts = new Set(["ada"]);
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+  });
+  const ada = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
+  const reader = (
+    await ada.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const held = reader.read();
+  accounts.delete("ada");
+  await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["secret"] } });
+  expect(await text(held)).toBe(account);
+  expect((await reader.read()).done).toBe(true);
+  expect((await ada.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("an anonymous stream that signs in is an account change too", async () => {
+  const stop = new AbortController();
+  const accounts = new Set<string>();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+  });
+  const tab = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
+  const reader = (
+    await tab.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const held = reader.read();
+  accounts.add("ada");
+  await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
+  expect(await text(held)).toBe(account);
+  expect((await reader.read()).done).toBe(true);
+  expect((await tab.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and at a heartbeat after sign-out", async () => {
+  const time = makeTestClock();
+  let sleeping = Promise.withResolvers<number>();
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      const slept = time.sleep(ms, signal);
+      sleeping.resolve(ms);
+      sleeping = Promise.withResolvers();
+      return slept;
+    },
+  };
+  const stop = new AbortController();
+  const accounts = new Set(["ada"]);
+  const root = createScope({
+    clock,
+    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+  });
+  const quiet = root.createSession({ tags: requestHeaders(new Headers()) });
+  const reader = (
+    await quiet.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  for (const at of [10_000, 20_000, 30_000]) {
+    const slept = sleeping.promise;
+    const held = reader.read();
+    expect(await slept).toBe(10_000);
+    time.advance(10_000);
+    expect([at, await text(held)]).toEqual([at, ": heartbeat\n\n"]);
+  }
+  expect((await reader.read()).done).toBe(true);
+  expect((await quiet.close({ graceful: true })).status).toBe("success");
+  const ada = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
+  const own = (
+    await ada.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(own.read())).toBe(": connected\n\n");
+  const slept = sleeping.promise;
+  const held = own.read();
+  expect(await slept).toBe(10_000);
+  accounts.delete("ada");
+  time.advance(10_000);
+  expect(await text(held)).toBe(account);
+  expect((await own.read()).done).toBe(true);
+  expect((await ada.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a stream whose request stopped while it opened is Cancelled", async () => {
+  const backend = new AbortController();
+  const root = createScope({
+    tags: [backendStop(backend.signal), requestHeaders(new Headers())],
+  });
+  const request = new AbortController();
+  const session = root.createSession({ tags: requestStop(request.signal) });
+  const opening = session.settle(openSync, { input: { cursor: { public: 0, private: null } } });
+  request.abort();
+  expect(await opening).toMatchObject({ status: "failed", error: { kind: "Cancelled" } });
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a backend stop ends a held stream, and the request ends clean", async () => {
+  const backend = new AbortController();
+  const root = createScope({
+    tags: [
+      backendStop(backend.signal),
+      requestStop(new AbortController().signal),
+      requestHeaders(new Headers()),
+    ],
+  });
+  const session = root.createSession();
+  const reader = (
+    await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const held = reader.read();
+  backend.abort();
+  expect((await held).done).toBe(true);
+  expect(await session.close({ graceful: true })).toMatchObject({
+    status: "success",
+    teardownErrors: undefined,
+  });
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a listener that cannot start fails the subscribe; one that breaks ends its subscribers", async () => {
+  const refused = new Error("listen refused");
+  const listens: { wake: () => void; failed: () => void; stopped: boolean }[] = [];
+  const root = createScope({
+    presets: [
+      preset(database, async () => {
+        const [{ PGlite }, { drizzle }] = await Promise.all([
+          import("@electric-sql/pglite"),
+          import("drizzle-orm/pglite"),
+        ]);
+        return Object.assign(drizzle({ client: await PGlite.create() }), {
+          listen: async (wake: () => void, failed: () => void) => {
+            if (listens.length === 0) {
+              listens.push({ wake, failed, stopped: true });
+              throw refused;
+            }
+            const listen = { wake, failed, stopped: false };
+            listens.push(listen);
+            return () => {
+              listen.stopped = true;
+            };
+          },
+        });
+      }),
+    ],
+  });
+  const feed = await root.resolve(notifications);
+  await expect(feed.subscribe()).rejects.toBe(refused);
+  let disconnected = 0;
+  const first = await feed.subscribe(() => {
+    disconnected += 1;
+  });
+  listens[1]?.failed();
+  expect([disconnected, feed.ended(first)]).toEqual([1, true]);
+  const second = await feed.subscribe();
+  expect([listens.length, listens[1]?.stopped, feed.ended(second)]).toEqual([3, true, false]);
+  listens[2]?.wake();
+  await feed.wait(second, 0, new AbortController().signal);
+  expect(feed.revision()).toBe(2);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  expect(listens[2]?.stopped).toBe(true);
+});
+
+test("the sync route answers each request with the stream or its status", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      signedIn(new Set(["ada"])),
+      requestHeaders(new Headers()),
+    ],
+  });
+  const ada = encodeURIComponent('{"public":0,"private":{"accountId":"ada","revision":0}}');
+  for (const row of [
+    { name: "open", search: "", last: null, status: 200 },
+    {
+      name: "a cursor",
+      search: "?cursor=%7B%22public%22%3A0%2C%22private%22%3Anull%7D",
+      last: null,
+      status: 200,
+    },
+    { name: "resume", search: "?cursor=bad", last: '{"public":0,"private":null}', status: 200 },
+    { name: "bad cursor", search: "?cursor=bad", last: null, status: 400 },
+    { name: "bad cursor shape", search: "?cursor=%7B%7D", last: null, status: 400 },
+    { name: "long Last-Event-ID", search: "", last: "x".repeat(2049), status: 400 },
+    { name: "another account", search: `?cursor=${ada}`, last: null, status: 403 },
+  ]) {
+    const session = root.createSession();
+    const request = new Request(`http://localhost/api/sync${row.search}`, {
+      headers: row.last ? { "Last-Event-ID": row.last } : {},
+    });
+    const response = await session.resolve(syncEndpoint).answer(request);
+    const reader = response.body?.getReader();
+    const body = reader ? await text(reader.read()) : "";
+    await reader?.cancel();
+    expect({ status: response.status, headers: [...response.headers], body }, row.name).toEqual({
+      status: row.status,
+      headers:
+        row.status === 200
+          ? [
+              ["cache-control", "no-store"],
+              ["content-type", "text/event-stream; charset=utf-8"],
+              ["x-accel-buffering", "no"],
+            ]
+          : [],
+      body: row.status === 200 ? ": connected\n\n" : "",
+    });
+    expect((await session.close({ graceful: true })).status).toBe("success");
+  }
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a request that fails to read, or a stream that fails to open, fails the reply, not as a 400", async () => {
+  const torn = new Error("request read failed");
+  const opened = new Error("stream failed");
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    presets: [
+      preset(eventStream, async () => ({
+        open: async (): Promise<ReadableStream<Uint8Array>> => {
+          throw opened;
+        },
+      })),
+    ],
+  });
+  const unreadable = Object.defineProperty(new Request("http://localhost/api/sync"), "url", {
+    get: () => {
+      throw torn;
+    },
+  });
+  await expect(root.resolve(syncEndpoint).answer(unreadable)).rejects.toBe(torn);
+  await expect(
+    root.resolve(syncEndpoint).answer(new Request("http://localhost/api/sync")),
+  ).rejects.toBe(opened);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the event history locks a stream, appends in order, saves a result, and keeps owners apart", async () => {
+  const save = operation({
+    label: "test.save",
+    depends: { database, history: eventHistory },
+    run: async ({ database, history }) =>
+      database.transaction(async (tx) => {
+        const locked = [await history.lock(tx, "ada")];
+        await tx.insert(execution).values({ id: ids[0], stream: "ada" });
+        await history.append(tx, "ada", ids[0], [
+          { kind: "change", change: "a" },
+          { kind: "result", result: { kind: "complete" } },
+        ]);
+        locked.push(await history.lock(tx, "ada"));
+        return {
+          locked,
+          found: await history.find(tx, ids[0], "ada"),
+          unknown: await history.find(tx, ids[1], "ada"),
+        };
+      }),
+  });
+  const denied = operation({
+    label: "test.denied",
+    depends: { database, history: eventHistory },
+    run: async ({ database, history }) =>
+      database.transaction(async (tx) => history.find(tx, ids[0], "grace")),
+  });
+  const unlocked = operation({
+    label: "test.unlocked",
+    depends: { database, history: eventHistory },
+    run: async ({ database, history }) =>
+      database.transaction(async (tx) =>
+        history.append(tx, "never-locked", ids[2], [{ kind: "change", change: 1 }]),
+      ),
+  });
+  const root = createScope();
+  expect(await root.run(save)).toEqual({
+    locked: [0, 2],
+    found: { id: ids[0], stream: "ada", notification: null, result: { kind: "complete" } },
+    unknown: undefined,
+  });
+  expect(await root.settle(denied)).toMatchObject({
+    status: "failed",
+    error: { kind: "StreamDenied" },
+  });
+  expect(await root.settle(unlocked)).toMatchObject({
+    status: "failed",
+    error: { kind: "StreamMissing" },
+  });
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});

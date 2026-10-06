@@ -3,5 +3,7 @@ export { backendStop, requestStop } from "./backend/lifetime.ts";
 export { env } from "./env.ts";
 export { authSettings } from "./parts/auth/settings.ts";
 export type { Auth } from "./parts/auth/settings.ts";
+export { eventHistory } from "./parts/sync/history.server.ts";
+export type { Database } from "./parts/sync/database.ts";
 export { createServerEntry } from "./server-entry.ts";
 export type { ServerEntry } from "./server-entry.ts";

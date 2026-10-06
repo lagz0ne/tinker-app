@@ -89,3 +89,14 @@ test("with auth on, a seam without readAccount stops the build with doctor's lin
     "tinker doctor, named files: src/lib/tinker.server.ts:1 does not export readAccount; the auth part reads it",
   ]);
 });
+
+test("with sync on, a seam without database stops the build with doctor's line", () => {
+  const root = goodApp({
+    ".tinker/base.json": JSON.stringify({ base: "0.5.0", parts: ["telemetry", "auth", "sync"] }),
+    "src/lib/tinker.server.ts":
+      "export const extensions = [];\nexport const auth = 1;\nexport const readAccount = 2;\n",
+  });
+  expect(buildChecks(root).errors).toEqual([
+    "tinker doctor, named files: src/lib/tinker.server.ts:1 does not export database; the sync part reads it",
+  ]);
+});

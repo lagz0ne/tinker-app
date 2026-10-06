@@ -102,3 +102,12 @@ test("a failing tinker prepare fails, except as postinstall, so a broken clone s
   ).toBe(0);
   expect(prepareExitCode([], undefined)).toBe(0);
 });
+
+test("with sync on, the parts file records that sync turned auth on", () => {
+  const root = fixture({ "package.json": "{}" });
+  const file = render(root, ["telemetry", "auth", "sync"])["parts.server.ts"];
+  expect(file.split("\n")[0]).toBe(
+    "// Written by tinker(); parts on: telemetry, auth, sync; sync turns auth on.",
+  );
+  expect(file).not.toContain("parts/sync");
+});

@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { appFiles, pick } from "./named.mjs";
-import { parts, recordedParts } from "./parts.mjs";
+import { partNotes, parts, recordedParts } from "./parts.mjs";
 import { baseDir, basePackage, findPackage } from "./paths.mjs";
 
 const compilerOptions = {
@@ -42,7 +42,10 @@ function partsFile(base, on, entry) {
       const module = on.includes(name) ? part.entries[entry] : "off.ts";
       return `export { ${name} } from ${JSON.stringify(join(base, "src/parts", name, module))};`;
     });
-  return `// Written by tinker(); parts on: ${on.join(", ") || "none"}.\n${lines.join("\n")}\n`;
+  const notes = partNotes(on)
+    .map((note) => `; ${note}`)
+    .join("");
+  return `// Written by tinker(); parts on: ${on.join(", ") || "none"}${notes}.\n${lines.join("\n")}\n`;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import { readPartEnv, rules } from "../lib/part-env.mjs";
-import { parts, partsOn, recordedParts } from "../lib/parts.mjs";
+import { partNotes, parts, partsOn, recordedParts } from "../lib/parts.mjs";
 import { basePackage } from "../lib/paths.mjs";
 import { fixture } from "./fixture.mjs";
 
@@ -71,7 +71,7 @@ test("a recorded part this base does not have is left out", () => {
     ".tinker/base.json": JSON.stringify({ base: "9.0.0", parts: ["telemetry", "later"] }),
   });
   expect(recordedParts(root)).toEqual(["telemetry"]);
-  expect(Object.keys(basePackage.tinker.parts)).toEqual(["telemetry", "auth"]);
+  expect(Object.keys(basePackage.tinker.parts)).toEqual(["telemetry", "auth", "sync"]);
 });
 
 test("auth is off by default, and tinker({ auth: true }) turns it on", () => {
@@ -101,4 +101,25 @@ test("a secret takes at least 32 characters", () => {
   expect(rules.secret.wants).toBe("at least 32 characters");
   expect(rules.secret.accepts("s".repeat(31))).toBe(false);
   expect(rules.secret.accepts("s".repeat(32))).toBe(true);
+});
+
+test("sync is off by default; on, it turns auth on, and says so", () => {
+  expect(partsOn({})).toEqual(["telemetry"]);
+  expect(partsOn({ sync: true })).toEqual(["telemetry", "auth", "sync"]);
+  expect(partsOn({ sync: true, auth: true, telemetry: false })).toEqual(["auth", "sync"]);
+  expect(partNotes(["telemetry", "auth", "sync"])).toEqual(["sync turns auth on"]);
+  expect(partNotes(["telemetry", "auth"])).toEqual([]);
+});
+
+test("sync with auth: false fails the build with the two ways out", () => {
+  expect(() => partsOn({ sync: true, auth: false })).toThrow(
+    "tinker(): sync needs auth, but auth is false; drop auth: false, or set sync: false",
+  );
+  expect(partsOn({ sync: false, auth: false })).toEqual(["telemetry"]);
+});
+
+test("the sync part mounts /api/sync, reads database from the server seam, and no env key", () => {
+  expect(parts.sync.routes).toEqual({ "/api/sync": "src/routes/api.sync.ts" });
+  expect(parts.sync.reads).toEqual({ "src/lib/tinker.server.ts": ["database"] });
+  expect(readPartEnv(parts.sync.env, {})).toEqual({ values: {}, refused: [] });
 });

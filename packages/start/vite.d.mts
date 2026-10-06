@@ -9,5 +9,7 @@ export declare function tinker(
     telemetry?: boolean;
     /** The auth part: off by default; on mounts `/api/auth/$` and reads the server seam. */
     auth?: boolean;
+    /** The sync part: off by default; on mounts `/api/sync`, and turns auth on. */
+    sync?: boolean;
   } & Pick<StartOptions, "prerender" | "pages" | "spa" | "sitemap">,
 ): PluginOption[];
