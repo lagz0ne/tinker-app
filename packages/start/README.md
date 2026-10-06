@@ -397,6 +397,7 @@ The package's `exports` refuses every other path.
     is an account change: it sends `event: account`
     and closes, with no saved rows after it.
   - A request or backend stop ends it.
+    A body cancelled while it waits stops its wait at once.
   - `eventHistory` locks a stream, appends events
     at the next revisions, saves a result,
     and refuses another owner's execution.
@@ -408,7 +409,8 @@ The package's `exports` refuses every other path.
     A listener that cannot start fails the subscribe,
     so the stream's open fails; a listener that breaks
     ends its subscribers, and the next subscribe
-    starts a new one.
+    starts a new one. A subscribe whose listener is
+    replaced while it connects fails as disconnected.
 - With no `src/server.ts`, the server entry
   goes straight to the base.
 - In production, the error page shows no error text.

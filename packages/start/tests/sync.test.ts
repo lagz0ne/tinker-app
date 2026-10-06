@@ -604,6 +604,36 @@ test("the stream reads the account with no cookie cache and no refresh", async (
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
+test("a body cancelled while it waits stops its wait at once", async () => {
+  const time = makeTestClock();
+  const slept = Promise.withResolvers<AbortSignal | undefined>();
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      slept.resolve(signal);
+      return time.sleep(ms, signal);
+    },
+  };
+  const stop = new AbortController();
+  const root = createScope({
+    clock,
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  const session = root.createSession();
+  const reader = (
+    await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const held = reader.read();
+  const waiting = await slept.promise;
+  await reader.cancel();
+  expect(waiting?.aborted).toBe(true);
+  expect((await held).done).toBe(true);
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
 test("a graceful close of the request ends a held read", async () => {
   const stop = new AbortController();
   const root = createScope({
@@ -916,6 +946,36 @@ test("a listener that breaks while it connects fails the subscribe as disconnect
   });
   const feed = await root.resolve(notifications);
   await expect(feed.subscribe()).rejects.toMatchObject({ kind: "StreamDisconnected" });
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a subscribe whose listener is replaced while it connects fails as disconnected", async () => {
+  let feed: { subscribe(): Promise<unknown> } | undefined;
+  let replacing: Promise<unknown> | undefined;
+  const root = createScope({
+    presets: [
+      preset(database, async (_deps, { defer }) => {
+        const [{ PGlite }, { drizzle }] = await Promise.all([
+          import("@electric-sql/pglite"),
+          import("drizzle-orm/pglite"),
+        ]);
+        const client = await PGlite.create();
+        defer(() => client.close());
+        return Object.assign(drizzle({ client }), {
+          listen: async (_wake: () => void, failed: () => void) => {
+            if (replacing === undefined) {
+              failed();
+              replacing = feed?.subscribe();
+            }
+            return () => undefined;
+          },
+        });
+      }),
+    ],
+  });
+  feed = await root.resolve(notifications);
+  await expect(feed.subscribe()).rejects.toMatchObject({ kind: "StreamDisconnected" });
+  expect(await replacing).toMatchObject({ closed: false });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
