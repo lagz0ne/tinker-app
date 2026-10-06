@@ -53,6 +53,31 @@ It is gitignored, and nobody edits it.
 
 The package's `exports` refuses every other path.
 
+## At run time
+
+- Each request runs in its own session of the root
+  scope, with its headers and its stop signal.
+  A request with no root scope fails before any work.
+- The session ends when the response body is read
+  to the end: a graceful close.
+  A body that is cancelled or fails to read,
+  or a request that throws, closes it by force.
+  A response with no body ends it at once.
+- A held body keeps its status and headers.
+- Closing the root scope cancels each open body.
+  A request that cannot end fails the body's cancel,
+  and the scope's close.
+- `readResult` returns a settled value.
+  It throws a failure as is,
+  and a cancelled call as the base's `Cancelled` error.
+- `/api/health` answers `{"ok":true,"base":"<version>"}`.
+- With no `src/server.ts`, the server entry
+  goes straight to the base.
+- In production, the error page shows no error text.
+  In dev, Start's JSON 500 for a page load
+  becomes a page that reloads after the fix.
+  Every other response passes through.
+
 ## Doctor
 
 ```bash
