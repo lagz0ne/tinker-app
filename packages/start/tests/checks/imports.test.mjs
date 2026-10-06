@@ -8,10 +8,11 @@ test("passes when src/ reaches the base only through its entries", () => {
   const root = goodApp({
     "src/backend/greet.ts":
       'import { readResult } from "@tinker/start/server";\nimport { x } from "./x.ts";\n',
+    "src/frontend/tab.ts": 'import { syncClient } from "@tinker/start/client";\n',
   });
   expect(imports(root)).toEqual({
     status: "ok",
-    lines: ["2 files in src/ import the base only through its entries"],
+    lines: ["3 files in src/ import the base only through its entries"],
   });
 });
 

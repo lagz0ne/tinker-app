@@ -14,6 +14,8 @@ import { join, resolve } from "node:path";
  * Break each check, glue function, and doctor message in a scratch copy of the base, one at a
  * time, and run the unit tests: every break must make a test fail. A hand-written mutation run.
  * Usage: node packages/start/scripts/break-each-check.mjs
+ * `BREAKS="a,b"` runs the control and only the breaks whose names hold `a` or `b`;
+ * a part that names no break stops the run. Unset, it runs every break.
  */
 const base = resolve(import.meta.dirname, "..");
 const scratch = "/tmp/tinker-break/start";
@@ -700,7 +702,7 @@ const breaks = [
     name: "an augmentation is never found",
     file: "lib/source.mjs",
     find: "found.push({ module: node.id.value, name: item.id.name });",
-    replace: "",
+    replace: ";",
   },
   {
     name: "the client entry is not a base entry",
@@ -769,10 +771,10 @@ const breaks = [
     replace: "",
   },
   {
-    name: "reconnects do not wait",
+    name: "reconnects wait less than 500 ms",
     file: "src/parts/sync/client/events.ts",
     find: "await clock.sleep(500, signal);",
-    replace: "await clock.sleep(0, signal);",
+    replace: "await clock.sleep(400, signal);",
   },
   {
     name: "a hydrated tab does not stream",
@@ -849,13 +851,20 @@ function failedTests() {
   return { failed: report.numFailedTests, broken };
 }
 
+const only = (process.env.BREAKS ?? "").split(",").filter(Boolean);
+const unknown = only.filter((part) =>
+  [...breaks, ...messageBreaks()].every(({ name }) => !name.includes(part)),
+);
+if (unknown.length > 0) throw new Error(`BREAKS names no break: ${unknown.join(", ")}`);
+const chosen = (change) => only.length === 0 || only.some((part) => change.name.includes(part));
+const logic = breaks.filter(chosen);
+const all = [...logic, ...messageBreaks().filter(chosen)];
 freshScratch();
 const control = failedTests();
 console.log(
   `control (no break): ${control.failed} failed test(s), ${control.broken} broken file(s)`,
 );
 let caught = 0;
-const all = [...breaks, ...messageBreaks()];
 for (const change of all) {
   freshScratch();
   applyBreak(change);
@@ -865,6 +874,6 @@ for (const change of all) {
   console.log(`${ok ? "caught" : "MISSED"}  ${String(failed).padStart(3)} failed  ${change.name}`);
 }
 console.log(
-  `\n${caught} of ${all.length} breaks caught (${breaks.length} logic, ${all.length - breaks.length} message)`,
+  `\n${caught} of ${all.length} breaks caught (${logic.length} logic, ${all.length - logic.length} message)${only.length > 0 ? `; BREAKS=${only.join(",")}` : ""}`,
 );
 process.exitCode = caught === all.length && control.failed === 0 ? 0 : 1;
