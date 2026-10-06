@@ -40,3 +40,16 @@ test("files under a - folder and the shell are not routes", () => {
   expect(isRouteFile("notes.md")).toBe(false);
   expect(isRouteFile("posts/$id.tsx")).toBe(true);
 });
+
+test("a route under a base splat takes its path from the splat", () => {
+  const splat = ["/api/auth/$"];
+  expect(routeClash("api.auth.$.ts", splat)).toBe("takes /api/auth/$, a base route");
+  expect(routeClash("api/auth/login.ts", splat)).toBe(
+    "takes /api/auth/login from /api/auth/$, a base route that answers every path under it",
+  );
+  expect(routeClash("api.auth.ts", splat)).toBe(null);
+  expect(routeClash("api/authors.ts", splat)).toBe(null);
+  expect(routeClash("tinker/more.tsx", ["/tinker"])).toBe(
+    "nests under /tinker, a base route with no outlet; the base page renders",
+  );
+});

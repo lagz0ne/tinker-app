@@ -66,3 +66,32 @@ test("names each usual Start file the glue never reads", () => {
     "src/routeTree.gen.ts:1 is a Start file the base does not read; the route tree is .tinker/routeTree.gen.ts; delete this file",
   ]);
 });
+
+const authOn = JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] });
+
+test("with auth on, a missing server seam names the file and what the part reads", () => {
+  expect(named(goodApp({ ".tinker/base.json": authOn })).lines).toEqual([
+    "src/lib/tinker.server.ts is missing; the auth part reads auth and readAccount from it",
+  ]);
+});
+
+test("with auth on, a seam without auth or readAccount names each missing name", () => {
+  const root = goodApp({
+    ".tinker/base.json": authOn,
+    "src/lib/tinker.server.ts": "export const extensions = [];\nexport const session = 1;\n",
+  });
+  expect(named(root).lines).toEqual([
+    "src/lib/tinker.server.ts:1 does not export auth; the auth part reads it",
+    "src/lib/tinker.server.ts:1 does not export readAccount; the auth part reads it",
+  ]);
+});
+
+test("with auth on, a seam with both names passes; with auth off, none is needed", () => {
+  const seam = {
+    "src/lib/tinker.server.ts":
+      'export const extensions = [];\nexport { auth, readAccount } from "../backend/auth.ts";\n',
+    "src/backend/auth.ts": "export const auth = 1;\nexport const readAccount = 2;\n",
+  };
+  expect(named(goodApp({ ".tinker/base.json": authOn, ...seam })).status).toBe("ok");
+  expect(named(goodApp()).status).toBe("ok");
+});

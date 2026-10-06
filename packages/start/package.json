@@ -1,6 +1,6 @@
 {
   "name": "@tinker/start",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "The Tinkered Start base: entries, routes, tinker(), and the tinker command (ADR 0106).",
   "bin": {
@@ -78,6 +78,10 @@
     "parts": {
       "telemetry": {
         "on": true,
+        "entries": {
+          "router": "on.ts",
+          "server": "on.server.ts"
+        },
         "routes": {
           "/api/telemetry": "src/routes/api.telemetry.ts"
         },
@@ -92,6 +96,29 @@
           },
           "OTEL_SERVICE_NAME": {
             "default": "tinker-app"
+          }
+        }
+      },
+      "auth": {
+        "on": false,
+        "entries": {
+          "server": "on.server.ts"
+        },
+        "routes": {
+          "/api/auth/$": "src/routes/api.auth.ts"
+        },
+        "reads": {
+          "src/lib/tinker.server.ts": [
+            "auth",
+            "readAccount"
+          ]
+        },
+        "env": {
+          "PUBLIC_ORIGIN": {
+            "rule": "http"
+          },
+          "AUTH_SECRET": {
+            "rule": "secret"
           }
         }
       }

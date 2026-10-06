@@ -28,17 +28,20 @@ function json(value) {
 }
 
 /**
- * A parts file: one export per part, from its on or off module in the base. The base entries
- * import it as `#tinker/parts` (the router) or `#tinker/parts.server` (the server).
+ * A parts file: one export per part the entry reads, from that part's on module or its off
+ * module in the base. The base entries import it as `#tinker/parts` (the router) or
+ * `#tinker/parts.server` (the server).
  * @param {string} base - From render; why: the base folder the modules live in.
  * @param {string[]} on - From render; why: the parts that are on.
- * @param {string} side - From render; why: "" for the router's file, ".server" for the server's.
+ * @param {"router" | "server"} entry - From render; why: the entry that imports the file.
  */
-function partsFile(base, on, side) {
-  const lines = Object.keys(parts).map((name) => {
-    const module = on.includes(name) ? `on${side}.ts` : "off.ts";
-    return `export { ${name} } from ${JSON.stringify(join(base, "src/parts", name, module))};`;
-  });
+function partsFile(base, on, entry) {
+  const lines = Object.entries(parts)
+    .filter(([, part]) => entry in part.entries)
+    .map(([name, part]) => {
+      const module = on.includes(name) ? part.entries[entry] : "off.ts";
+      return `export { ${name} } from ${JSON.stringify(join(base, "src/parts", name, module))};`;
+    });
   return `// Written by tinker(); parts on: ${on.join(", ") || "none"}.\n${lines.join("\n")}\n`;
 }
 
@@ -71,8 +74,8 @@ export function render(root, on = recordedParts(root)) {
       exclude: ["../dist", "../node_modules"],
     }),
     "base.json": json({ base: basePackage.version, parts: on }),
-    "parts.ts": partsFile(base, on, ""),
-    "parts.server.ts": partsFile(base, on, ".server"),
+    "parts.ts": partsFile(base, on, "router"),
+    "parts.server.ts": partsFile(base, on, "server"),
   };
 }
 

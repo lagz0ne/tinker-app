@@ -79,3 +79,13 @@ test("a glue or version problem only warns: the build itself still works", () =>
     'tinker doctor, glue: tsconfig.json:1 does not extend "./.tinker/tsconfig.json"',
   ]);
 });
+
+test("with auth on, a seam without readAccount stops the build with doctor's line", () => {
+  const root = goodApp({
+    ".tinker/base.json": JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] }),
+    "src/lib/tinker.server.ts": "export const extensions = [];\nexport const auth = 1;\n",
+  });
+  expect(buildChecks(root).errors).toEqual([
+    "tinker doctor, named files: src/lib/tinker.server.ts:1 does not export readAccount; the auth part reads it",
+  ]);
+});

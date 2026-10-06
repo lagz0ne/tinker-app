@@ -62,3 +62,42 @@ test("an off part's keys are not checked", () => {
   });
   expect(env(root)).toEqual({ status: "ok", lines: ["no .env.example to check"] });
 });
+
+const authOn = JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] });
+
+test("with auth on, a short secret is named at its .env line, and an unset origin as unset", () => {
+  const root = fixture({
+    ".tinker/base.json": authOn,
+    ".env": "# auth\nAUTH_SECRET=short\n",
+  });
+  expect(env(root).lines).toEqual([
+    ".env does not set PUBLIC_ORIGIN; the auth part needs it",
+    ".env:2 sets AUTH_SECRET; the auth part needs at least 32 characters",
+  ]);
+});
+
+test("an unset auth key that .env.example lists is named once, by .env.example", () => {
+  const root = fixture({
+    ".tinker/base.json": authOn,
+    ".env.example": "PUBLIC_ORIGIN=\nAUTH_SECRET=\n",
+  });
+  expect(env(root).lines).toEqual([
+    ".env.example:1 lists PUBLIC_ORIGIN; set it in .env or the shell",
+    ".env.example:2 lists AUTH_SECRET; set it in .env or the shell",
+  ]);
+});
+
+test("with auth on and good keys, check 9 passes for both parts", () => {
+  const root = fixture({
+    ".tinker/base.json": authOn,
+    ".env": `PUBLIC_ORIGIN=http://localhost:4318\nAUTH_SECRET=${"s".repeat(32)}\n`,
+  });
+  expect(env(root)).toEqual({
+    status: "ok",
+    lines: ["no .env.example to check; part keys read well: telemetry, auth"],
+  });
+});
+
+test("with auth off, as by default, its keys are not read", () => {
+  expect(env(fixture({ ".env": "AUTH_SECRET=short\n" })).status).toBe("ok");
+});

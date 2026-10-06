@@ -17,13 +17,13 @@
     "resolveJsonModule": true,
     "paths": {
       "#tinker/app": ["./src/defaults/app.ts"],
-      "#tinker/app.server": ["./src/defaults/app.server.ts"],
+      "#tinker/app.server": ["./tests/fixtures/app.server.ts"],
       "#tinker/router": ["./src/defaults/router.ts"],
       "#tinker/start": ["./src/defaults/start.ts"],
       "#tinker/server": ["./src/defaults/server.ts"],
       "#tinker/routes": ["../../apps/start-min/.tinker/routeTree.gen.ts"],
       "#tinker/parts": ["./src/parts/telemetry/on.ts"],
-      "#tinker/parts.server": ["./src/parts/telemetry/on.server.ts"]
+      "#tinker/parts.server": ["./tests/fixtures/parts.server.ts"]
     }
   },
   "include": ["src", "tests"]

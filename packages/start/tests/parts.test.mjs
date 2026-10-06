@@ -71,5 +71,34 @@ test("a recorded part this base does not have is left out", () => {
     ".tinker/base.json": JSON.stringify({ base: "9.0.0", parts: ["telemetry", "later"] }),
   });
   expect(recordedParts(root)).toEqual(["telemetry"]);
-  expect(Object.keys(basePackage.tinker.parts)).toEqual(["telemetry"]);
+  expect(Object.keys(basePackage.tinker.parts)).toEqual(["telemetry", "auth"]);
+});
+
+test("auth is off by default, and tinker({ auth: true }) turns it on", () => {
+  expect(partsOn({ telemetry: false })).toEqual([]);
+  expect(partsOn({ auth: true })).toEqual(["telemetry", "auth"]);
+  expect(partsOn({ telemetry: false, auth: true })).toEqual(["auth"]);
+  expect(() => partsOn({ auth: "yes" })).toThrow("tinker(): auth takes true or false");
+});
+
+test("the auth part mounts /api/auth/$, reads the server seam, and two keys with no default", () => {
+  expect(parts.auth.routes).toEqual({ "/api/auth/$": "src/routes/api.auth.ts" });
+  expect(parts.auth.reads).toEqual({ "src/lib/tinker.server.ts": ["auth", "readAccount"] });
+  expect(readPartEnv(parts.auth.env, {})).toEqual({
+    values: { PUBLIC_ORIGIN: undefined, AUTH_SECRET: undefined },
+    refused: ["PUBLIC_ORIGIN", "AUTH_SECRET"],
+  });
+  const secret = "s".repeat(32);
+  expect(
+    readPartEnv(parts.auth.env, { PUBLIC_ORIGIN: "http://localhost:4318", AUTH_SECRET: secret }),
+  ).toEqual({
+    values: { PUBLIC_ORIGIN: "http://localhost:4318", AUTH_SECRET: secret },
+    refused: [],
+  });
+});
+
+test("a secret takes at least 32 characters", () => {
+  expect(rules.secret.wants).toBe("at least 32 characters");
+  expect(rules.secret.accepts("s".repeat(31))).toBe(false);
+  expect(rules.secret.accepts("s".repeat(32))).toBe(true);
 });

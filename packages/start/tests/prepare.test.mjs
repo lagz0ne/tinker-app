@@ -51,21 +51,33 @@ test("prepare writes the tsconfig, the parts files, and the base version into .t
   expect(existsSync(join(root, ".tinker/tsconfig.json"))).toBe(true);
 });
 
-test("each parts file exports every part, from its on or its off module", () => {
+test("each parts file exports the parts its entry reads, from the on or the off module", () => {
   const root = fixture({ "package.json": "{}" });
-  const module = (file) => JSON.stringify(join(baseDir, "src/parts/telemetry", file));
-  const on = render(root, ["telemetry"]);
+  const module = (part, file) => JSON.stringify(join(baseDir, "src/parts", part, file));
+  const on = render(root, ["telemetry", "auth"]);
   expect(on["parts.ts"]).toBe(
-    `// Written by tinker(); parts on: telemetry.\nexport { telemetry } from ${module("on.ts")};\n`,
+    `// Written by tinker(); parts on: telemetry, auth.\nexport { telemetry } from ${module("telemetry", "on.ts")};\n`,
   );
   expect(on["parts.server.ts"]).toBe(
-    `// Written by tinker(); parts on: telemetry.\nexport { telemetry } from ${module("on.server.ts")};\n`,
+    [
+      "// Written by tinker(); parts on: telemetry, auth.",
+      `export { telemetry } from ${module("telemetry", "on.server.ts")};`,
+      `export { auth } from ${module("auth", "on.server.ts")};`,
+      "",
+    ].join("\n"),
   );
   const off = render(root, []);
   expect(off["parts.ts"]).toBe(
-    `// Written by tinker(); parts on: none.\nexport { telemetry } from ${module("off.ts")};\n`,
+    `// Written by tinker(); parts on: none.\nexport { telemetry } from ${module("telemetry", "off.ts")};\n`,
   );
-  expect(off["parts.server.ts"]).toBe(off["parts.ts"]);
+  expect(off["parts.server.ts"]).toBe(
+    [
+      "// Written by tinker(); parts on: none.",
+      `export { telemetry } from ${module("telemetry", "off.ts")};`,
+      `export { auth } from ${module("auth", "off.ts")};`,
+      "",
+    ].join("\n"),
+  );
 });
 
 test("tinker prepare with no options keeps the parts the last tinker() call recorded", () => {

@@ -145,3 +145,23 @@ test("with no base installed, no path is the base's", () => {
     lines: ["route files export Route; none takes a base path ()"],
   });
 });
+
+test("with auth on, a route on or under /api/auth/$ names the switch that frees it", () => {
+  const root = goodApp({
+    ".tinker/base.json": JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] }),
+    "src/routes/api.auth.$.ts": page("/api/auth/$"),
+    "src/routes/api/auth/login.ts": page("/api/auth/login"),
+  });
+  expect(routes(root).lines.sort()).toEqual([
+    "src/routes/api.auth.$.ts:2 takes /api/auth/$, a base route; tinker({ auth: false }) frees it",
+    "src/routes/api/auth/login.ts:2 takes /api/auth/login from /api/auth/$, a base route that answers every path under it; tinker({ auth: false }) frees it",
+  ]);
+});
+
+test("with auth off, as by default, /api/auth/ is the app's", () => {
+  const root = goodApp({
+    "src/routes/api.auth.$.ts": page("/api/auth/$"),
+    "src/routes/api/auth/login.ts": page("/api/auth/login"),
+  });
+  expect(routes(root).status).toBe("ok");
+});

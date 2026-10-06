@@ -1,7 +1,7 @@
 import { createScope } from "@tinker/core";
 import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
 import { extensions } from "#tinker/app.server";
-import { telemetry } from "#tinker/parts.server";
+import { auth, telemetry } from "#tinker/parts.server";
 import app from "#tinker/server";
 import type { getRouter } from "./router.tsx";
 import { responseBodies } from "../backend/body.server.ts";
@@ -45,7 +45,7 @@ async function start() {
   const app = createScope({
     signal: stop.signal,
     observe: tools.resolve(telemetry.observe),
-    extensions: [startRequests, extensions],
+    extensions: [startRequests, auth.extensions, extensions],
     tags: [backendStop(stop.signal), settings, tools.resolve(telemetry.appTags)],
   });
   try {

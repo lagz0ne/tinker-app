@@ -7,5 +7,7 @@ export declare function tinker(
     root?: string;
     /** The telemetry part: on by default; off frees `/api/telemetry` for the app. */
     telemetry?: boolean;
+    /** The auth part: off by default; on mounts `/api/auth/$` and reads the server seam. */
+    auth?: boolean;
   } & Pick<StartOptions, "prerender" | "pages" | "spa" | "sitemap">,
 ): PluginOption[];

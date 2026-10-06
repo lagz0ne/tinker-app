@@ -53,13 +53,19 @@ export function routePath(file, keepUnnest = false) {
 }
 
 /**
- * How a user route file collides with a route the base mounts, or null.
+ * How a user route file collides with a route the base mounts, or null. TanStack prefers a
+ * fixed path to a splat, so a route under a base splat (`/api/auth/$`) hides a base answer.
  * @param {string} file - From a walk of src/routes; why: the user route to judge.
  * @param {string[]} owned - From the base's package.json; why: the paths the base mounts.
  */
 export function routeClash(file, owned) {
   const same = owned.find((path) => path === routePath(file));
   if (same) return `takes ${same}, a base route`;
+  const caught = owned.find(
+    (path) => path.endsWith("/$") && routePath(file).startsWith(path.slice(0, -1)),
+  );
+  if (caught)
+    return `takes ${routePath(file)} from ${caught}, a base route that answers every path under it`;
   const under = owned.find((path) => routePath(file, true).startsWith(`${path}/`));
   if (under) return `nests under ${under}, a base route with no outlet; the base page renders`;
   return null;
