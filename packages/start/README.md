@@ -51,7 +51,7 @@ Turning a part off frees its route path for the app.
 
 ```ts
 export default defineConfig({
-  plugins: [tinker({ telemetry: false })],
+  plugins: [tinker({ telemetry: false, auth: true })],
 });
 ```
 
@@ -64,6 +64,40 @@ export default defineConfig({
   - Reads `OTEL_SERVICE_NAME`, default `tinker-app`.
   - Both URLs must be http(s).
     An empty value reads as unset.
+- **auth**: off by default.
+  - Route: `/api/auth/$`, GET and POST:
+    the app's auth library answers.
+  - Reads `auth` and `readAccount`
+    from `src/lib/tinker.server.ts`.
+  - Reads `PUBLIC_ORIGIN`, an http(s) URL,
+    and `AUTH_SECRET`, at least 32 characters.
+    Neither has a default.
+
+The server seam with auth on, filled in:
+
+```ts
+// src/lib/tinker.server.ts
+export const extensions = [];
+export { auth, readAccount } from "../backend/auth.ts";
+```
+
+```ts
+// src/backend/auth.ts
+import { resource } from "@tinker/core";
+import { authSettings } from "@tinker/start/server";
+
+export const auth = resource({
+  label: "auth",
+  depends: { settings: authSettings },
+  factory: async ({ settings }) => {
+    const { betterAuth } = await import("better-auth");
+    return betterAuth({
+      baseURL: settings.origin,
+      secret: settings.secret,
+    });
+  },
+});
+```
 
 A part switch takes `true` or `false`;
 any other value fails the build.
@@ -75,7 +109,8 @@ so `tinker prepare` and doctor read the same switches.
 - `@tinker/start`: shared units, such as
   `startRequests` and `RouterOptions`.
 - `@tinker/start/server`: `readResult`, `env`,
-  `createServerEntry`.
+  `createServerEntry`, and `authSettings`
+  (the auth part's origin and secret).
 - `@tinker/start/vite`: `tinker()`,
   with the part switches and Start's
   `prerender`, `pages`, `spa`, `sitemap`.
@@ -115,15 +150,26 @@ The package's `exports` refuses every other path.
     Names and keys are cut to 256 characters,
     values to 2048; a span keeps 31 attributes
     and 32 events.
-  - The server and a tab send once a second;
+    A bigint, `undefined`, or a cycle still
+    encodes as text.
+  - A server sends its spans grouped by side:
+    server, then browser, then ssr.
+  - The server and a tab send on their own
+    once a second has passed;
     a server render sends when it closes.
-    One send waits at most 750 ms.
+    One send waits at most 750 ms,
+    and carries at most 48,000 bytes.
   - A tab posts to `/api/telemetry`.
     The route answers each post with a status:
     `202` for a same-origin JSON post
     of at most 64 KiB, with tab records only;
     else `403`, `415`, `413`, `400`,
     or `503` while the server stops.
+    A refused post's body is never opened.
+  - A batch is taken only when every record keeps
+    the wire rules: ids in hex of the right length,
+    times in digits, at most 64 records,
+    and no keys beyond the record's own.
   - The route expects the request's own origin;
     behind a `*.preview.tini.works` proxy,
     its `https` one.
@@ -131,15 +177,30 @@ The package's `exports` refuses every other path.
     to the telemetry root, as a plain batch.
     A tab's record takes the server's service name.
   - The queue holds 512 records and 1 MiB;
-    one record is at most 48 KB,
+    one record is at most 48,000 bytes,
     and one send at most 64 records.
     Sent records free their room.
-    It keeps what storage refused or could not reach,
-    for the next send, and counts drops.
-  - Closing sends what is left,
-    for at most 1.5 s.
+    A send that storage refuses, or that throws,
+    in a tab or on the server,
+    keeps its records for the next send.
+    Each kind leaves on its own: when the trace send
+    fails, the traces stay and the logs sent beside them leave.
+    Drops are counted.
+  - Closing sends what is left, for at most 1.5 s.
+    Then closing gives up on storage,
+    and what is left is dropped.
   - A bad storage URL stops the telemetry root
     at its start with `BadSettings`, naming each key.
+- With auth on, `/api/auth/$` hands the whole
+  request to the app's `auth` library,
+  and returns its reply as is.
+  It takes only a request;
+  a failing library fails the call.
+- The auth part reads its two keys once,
+  and hands them to the app's `auth` as `authSettings`.
+  With auth on, the app root does not start
+  while a key is unset or refused.
+  With auth off, the app root reads no auth key.
 - With no `src/server.ts`, the server entry
   goes straight to the base.
 - In production, the error page shows no error text.
@@ -162,11 +223,19 @@ tinker doctor --fix
   `.tinker/`, the `.gitignore` lines,
   the tsconfig `extends` key, and the `postinstall` script.
 - It never edits `src/`, the Vite config, or `.env`.
+- Check 5 (named files) also names each seam
+  name an on part reads and the seam lacks,
+  and a missing seam file. The build stops on it.
 - Check 7 (routes) counts an on part's routes as base routes,
   and names the switch that frees one.
+  A route under a base splat, such as
+  `/api/auth/login` under `/api/auth/$`, counts too:
+  TanStack would serve the app's file there.
 - Check 9 (env) also reads each on part's keys,
   as the part does: the shell, then `.env`, then the default.
-  A refused value is named at its `.env` line.
+  A refused value is named at its `.env` line;
+  an unset key with no default, as `.env`'s,
+  unless `.env.example` lists it already.
 
 `vp build` runs the same checks for named files,
 imports, routes, and style before TanStack's route

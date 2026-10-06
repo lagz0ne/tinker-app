@@ -101,3 +101,15 @@ test("with auth off, the app root reads no auth key", async () => {
   expect(off.extensions).toEqual([]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
+
+test("the auth part's work shows on the trace as auth.settings and handleAuth", async () => {
+  const root = createScope({ observe: { history: 20 }, extensions: [authStartup], tags: keys });
+  await root.ready;
+  await root.settle(handleAuth, { input: new Request("http://app/api/auth/get-session") });
+  expect(root.spans().map(({ name }) => name)).toEqual([
+    "auth.settings",
+    "test.auth",
+    "handleAuth",
+  ]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});

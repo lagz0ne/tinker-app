@@ -2,6 +2,20 @@
 
 `tinker upgrade` prints the sections between your old and new version.
 
+## 0.4.0
+
+The auth part is off by default; no app change is needed
+while it stays off.
+`tinker({ auth: true })` turns it on:
+
+- It mounts `/api/auth/$` for the app's auth library.
+- `src/lib/tinker.server.ts` must export
+  `auth` and `readAccount`; the build stops without them.
+- Set `PUBLIC_ORIGIN` and `AUTH_SECRET`
+  (at least 32 characters) in `.env` or the shell.
+- Build the app's `auth` on `authSettings`
+  from `@tinker/start/server`.
+
 ## 0.3.0
 
 The telemetry part is on by default.
