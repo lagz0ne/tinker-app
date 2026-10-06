@@ -1,6 +1,6 @@
 import { createScope, operation } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
-import { expect, test } from "vite-plus/test";
+import { beforeAll, expect, test } from "vite-plus/test";
 import { z } from "zod";
 import { auth, database, signedIn } from "#tinker/app.server";
 import { requestHeaders } from "../src/backend/headers.server.ts";
@@ -10,6 +10,12 @@ import { notifications } from "../src/parts/sync/notifications.server.ts";
 import { execution } from "../src/parts/sync/schema.ts";
 import { eventStream, openSync } from "../src/parts/sync/stream.server.ts";
 import { syncEndpoint } from "../src/parts/sync/endpoint.server.ts";
+
+/** PGlite (a WASM Postgres) loads and compiles once, here, so no test pays its cold start. */
+beforeAll(async () => {
+  const { PGlite } = await import("@electric-sql/pglite");
+  await (await PGlite.create()).close();
+}, 60_000);
 
 const ids = [
   "00000000-0000-4000-8000-000000000001",

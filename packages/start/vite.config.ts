@@ -10,7 +10,5 @@ export default defineConfig({
   },
   test: {
     include: ["tests/**/*.test.{ts,mjs}"],
-    /** PGlite's cold start (a WASM Postgres) takes seconds when every package tests at once. */
-    testTimeout: 30_000,
   },
 });
