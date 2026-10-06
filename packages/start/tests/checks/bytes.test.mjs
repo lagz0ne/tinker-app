@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { bytes } from "../../lib/checks/bytes.mjs";
 import { runCheck } from "../../lib/doctor.mjs";
-import { baseDir } from "../../lib/paths.mjs";
+import { baseDir, basePackage } from "../../lib/paths.mjs";
 import { fixture, goodApp, installedApp, write } from "../fixture.mjs";
 
 test("skips a workspace link: a source checkout has no pinned bytes", () => {
@@ -64,4 +64,9 @@ test("--fix without a tarball says how to reinstall, and the check still fails",
   const result = bytes(root);
   expect(result.fix()).toBe("reinstall @tinker/start (^9.0.0) with your package manager");
   expect(runCheck(root, bytes, true).status).toBe("fail");
+});
+
+test("every file a pack always ships is pinned: a README or LICENSE is in the files list", () => {
+  const always = readdirSync(baseDir).filter((file) => /^(readme|license|licence)\b/i.test(file));
+  expect(always.filter((file) => !basePackage.files.includes(file))).toEqual([]);
 });
