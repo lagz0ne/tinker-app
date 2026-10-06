@@ -8,6 +8,8 @@
 # 12: the telemetry part: on, records reach a stand-in storage; off, /api/telemetry is the app's.
 # 13: the auth part: on, a stand-in seam's handler answers /api/auth/*; off, the path is the app's;
 #     a seam without a name the part reads stops the build; a bad key is named in .env.
+# 14: the sync part (3a, the server side): on, /api/sync streams a stand-in in-memory database's
+#     events; off, the path is the app's; a seam without database stops the build; auth: false fails.
 # Logs land in docs/roadmap/start-base/proof/. Builds, servers, and curl are proofs here, never unit tests.
 set -uo pipefail
 repo=$(pwd)
@@ -400,5 +402,118 @@ appAuthRoute() {
   doctor
 } 2>&1 | clean > "$out/13-auth-part.txt"
 
+# The sync part's stand-in server seam: auth with no one signed in, and an in-memory PGlite
+# database with the sync tables and two public events. PGlite is linked from the base's dev tools.
+syncSeam() {
+  ln -sfn "$(readlink -f "$repo/packages/start/node_modules/@electric-sql/pglite")" node_modules/@electric-sql/pglite 2>/dev/null ||
+    { mkdir -p node_modules/@electric-sql && ln -sfn "$(readlink -f "$repo/packages/start/node_modules/@electric-sql/pglite")" node_modules/@electric-sql/pglite; }
+  ln -sfn "$(readlink -f "$repo/packages/start/node_modules/drizzle-orm")" node_modules/drizzle-orm
+  mkdir -p src/lib
+  cat > src/lib/tinker.server.ts <<'TS'
+import { operation, resource } from "@tinker/core";
+import { authSettings } from "@tinker/start/server";
+import type { Database } from "@tinker/start/server";
+
+export const extensions = [];
+export const auth = resource({
+  label: "auth",
+  depends: { settings: authSettings },
+  factory: ({ settings }) => ({
+    handler: async (request: Request) =>
+      Response.json({ handled: new URL(request.url).pathname, origin: settings.origin }),
+    api: {
+      getSession: async (_options: { headers: Headers; query?: object }): Promise<{ user: { id: string } } | null> =>
+        null,
+    },
+  }),
+});
+export const readAccount = operation({ label: "readAccount", run: () => null });
+TS
+  [[ ${1:-} == no-database ]] && return
+  cat >> src/lib/tinker.server.ts <<'TS'
+export const database = resource({
+  label: "database",
+  factory: async (_deps, { defer }): Promise<Database.Handle> => {
+    const [{ PGlite }, { drizzle }] = await Promise.all([
+      import("@electric-sql/pglite"),
+      import("drizzle-orm/pglite"),
+    ]);
+    const client = await PGlite.create();
+    defer(() => client.close());
+    await client.exec(`
+      CREATE TABLE sync_stream (id text PRIMARY KEY, revision integer DEFAULT 0 NOT NULL);
+      CREATE TABLE sync_execution (id text PRIMARY KEY, stream text NOT NULL, notification jsonb, result jsonb);
+      CREATE TABLE sync_event (stream text, revision integer, "executionId" text NOT NULL,
+        payload jsonb NOT NULL, PRIMARY KEY (stream, revision));
+      INSERT INTO sync_event VALUES
+        ('public', 1, '00000000-0000-4000-8000-000000000001', '{"kind":"change","change":{"count":1}}'),
+        ('public', 2, '00000000-0000-4000-8000-000000000002', '{"kind":"change","change":{"count":2}}');
+    `);
+    return Object.assign(drizzle({ client }), {
+      listen: async (wake: () => void) => client.listen("start_sync", wake),
+    });
+  },
+});
+TS
+}
+appSyncRoute() {
+  printf '%s\n' 'import { createFileRoute } from "@tanstack/react-router";' \
+    'export const Route = createFileRoute("/api/sync")({' \
+    '  server: { handlers: { GET: () => new Response("the app takes it") } },' \
+    '});' > src/routes/api.sync.ts
+}
+
+{
+  mistake "sync on, with stand-in seams: /api/sync streams the database's events"
+  sed -i 's/tinker()/tinker({ sync: true })/' vite.config.ts
+  syncSeam
+  keys
+  build
+  say "cat .tinker/parts.server.ts"
+  cat .tinker/parts.server.ts
+  say "jq .parts .tinker/base.json"
+  node -e 'console.log(JSON.stringify(require("./.tinker/base.json").parts))'
+  doctor
+  serve_up
+  say "curl -s -N --max-time 8 :PORT/api/sync  (the first request starts PGlite)"
+  curl -s -N --max-time 8 -w 'first byte after %{time_starttransfer} s\n' "http://127.0.0.1:$port/api/sync"
+  echo "curl: EXIT $?"
+  say "curl -s -N --max-time 2 :PORT/api/sync, Last-Event-ID: {\"public\":1,\"private\":null}"
+  curl -s -N --max-time 2 -H 'Last-Event-ID: {"public":1,"private":null}' "http://127.0.0.1:$port/api/sync"
+  echo "curl: EXIT $?"
+  say "curl -s -o /dev/null -w '%{http_code}' :PORT/api/sync?cursor=bad"
+  curl -s -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:$port/api/sync?cursor=bad"
+  serve_down
+
+  mistake "sync off (the default): /api/sync is the app's own"
+  appSyncRoute
+  build
+  doctor
+  serve_up
+  get /api/sync 'the app takes it'
+  serve_down
+
+  mistake "sync on, and the app's own /api/sync: the build names the switch"
+  sed -i 's/tinker()/tinker({ sync: true })/' vite.config.ts
+  syncSeam
+  keys
+  appSyncRoute
+  build
+  doctor
+
+  mistake "sync on, and a seam without database: the build stops"
+  sed -i 's/tinker()/tinker({ sync: true })/' vite.config.ts
+  syncSeam no-database
+  keys
+  build
+  doctor
+
+  mistake "sync on, with auth: false: the build fails"
+  sed -i 's/tinker()/tinker({ sync: true, auth: false })/' vite.config.ts
+  syncSeam
+  keys
+  build 2
+} 2>&1 | clean > "$out/14-sync-part.txt"
+
 cd "$repo"
-grep -H "EXIT\|^fail\|tinker doctor," "$out"/8-*.txt "$out"/9-*.txt "$out"/10-*.txt "$out"/11-*.txt "$out"/12-*.txt "$out"/13-*.txt | cut -c1-150
+grep -H "EXIT\|^fail\|tinker doctor," "$out"/8-*.txt "$out"/9-*.txt "$out"/10-*.txt "$out"/11-*.txt "$out"/12-*.txt "$out"/13-*.txt "$out"/14-*.txt | cut -c1-150
