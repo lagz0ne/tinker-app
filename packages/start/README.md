@@ -2,14 +2,14 @@
 
 The Start base: the fixed TanStack Start setup
 for a Tinkered app, as one package
-([ADR 0106](../../docs/decisions/0106-the-start-base-is-a-package-glued-by-one-plugin.md)).
+([ADR 0106](https://github.com/lagz0ne/tinkered/blob/main/docs/decisions/0106-the-start-base-is-a-package-glued-by-one-plugin.md)).
 
 - It holds the entries, the base routes,
   the `tinker()` Vite plugin, and the `tinker` command.
 - It ships TypeScript source, readable in `node_modules`.
 - An app never edits it. An upgrade replaces it whole.
 
-The smallest app is `apps/start-min`:
+The smallest app is `apps/start-min` in the Tinkered repo:
 two files in `src/`, and the two glue lines below.
 
 ## The glue
@@ -51,6 +51,7 @@ It is gitignored, and nobody edits it.
   `createServerEntry`.
 - `@tinker/start/vite`: `tinker()`.
 
+`@tinker/start/package.json` is exported too.
 The package's `exports` refuses every other path.
 
 ## At run time
@@ -135,4 +136,4 @@ packages/start/scripts/proof.sh
   doctor message, one at a time; a test must fail.
 - `proof.sh` builds and serves `apps/start-min`.
   Its logs land in `docs/roadmap/start-base/proof/`.
-  [The proof](../../docs/roadmap/start-base/PROOF.md).
+  [The proof](https://github.com/lagz0ne/tinkered/blob/main/docs/roadmap/start-base/PROOF.md).
