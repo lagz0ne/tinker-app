@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { byteOrderMark, lineOfKey, prependExtends, readJsonc, writeKey } from "../jsonc.mjs";
 import { callsOf, importsFrom, parseSource, specifiers } from "../source.mjs";
@@ -88,13 +88,16 @@ function parseProblem(file, error) {
 }
 
 /**
- * Where tsc finds an extended file: the path itself, else the path with `.json` added.
+ * Where tsc finds an extended file: the path itself when it is a file, else the path with `.json`
+ * added (a folder of that name does not count).
  * @param {string} dir - From extendedChain; why: an extends path is relative to its file.
  * @param {string} entry - From an extends list; why: the path as written.
  */
 function extendedPath(dir, entry) {
   const path = resolve(dir, entry);
-  return existsSync(path) || path.endsWith(".json") ? path : `${path}.json`;
+  return statSync(path, { throwIfNoEntry: false })?.isFile() || path.endsWith(".json")
+    ? path
+    : `${path}.json`;
 }
 
 /**

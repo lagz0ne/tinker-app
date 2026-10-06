@@ -218,6 +218,17 @@ test("finds an extended file as tsc does: a name with no .json gets .json added"
   ]);
 });
 
+test("an extends name that is also a folder is read as the .json file, as tsc does", () => {
+  const root = goodApp({
+    "tsconfig.json": '{\n  "extends": ["./.tinker/tsconfig.json", "./configs"]\n}\n',
+    "configs.json": '{\n  "compilerOptions": {\n    "strict": false\n  }\n}\n',
+    "configs/strict.json": "{}\n",
+  });
+  expect(glue(root).lines).toEqual([
+    "configs.json:3 turns strict off; the base's files need strict",
+  ]);
+});
+
 test("follows each extended file's own extends chain, as tsc does", () => {
   const root = goodApp({
     "tsconfig.json": '{\n  "extends": ["./.tinker/tsconfig.json", "./a.json"]\n}\n',
