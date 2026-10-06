@@ -2,6 +2,23 @@
 
 `tinker upgrade` prints the sections between your old and new version.
 
+## 0.6.0
+
+The sync part's client side; it is off by default,
+and no app change is needed while it stays off.
+With `tinker({ sync: true })`:
+
+- `src/lib/tinker.server.ts` also exports `bootstrap`,
+  the app's snapshot operation.
+- `src/lib/tinker.ts` exports `records`, `readSnapshot`,
+  `readBootstrap`, `readBatch`, and `streamMessage`.
+- Some file in `src/` declares the `Register` bodies:
+  `declare module "@tinker/start" { interface Register { … } }`.
+- A route that reads `context.bootstrap()` or
+  `context.account()` needs a shell made with
+  `createRootRouteWithContext<Sync.RouterContext>()`.
+- The tab's units come from `@tinker/start/client`.
+
 ## 0.5.0
 
 The sync part's server side; it is off by default,
