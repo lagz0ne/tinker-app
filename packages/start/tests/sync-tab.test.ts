@@ -428,7 +428,8 @@ test("the tab streams once started: an account frame reloads, an ended connectio
   expect(await slept).toBe(500);
   expect([calls, fake.opened.length]).toEqual([["load", "account"], 2]);
   tab.abort();
-  expect((await root.close({ graceful: true })).status).toBe("success");
+  const closed = await root.close({ graceful: true });
+  expect([closed.status, closed.teardownErrors]).toEqual(["success", undefined]);
   expect(fake.opened.length).toBe(2);
 });
 

@@ -366,7 +366,8 @@ The package's `exports` refuses every other path.
   - The tab logs `sync.reconnecting` only after
     a failure, and checks nothing more once it stops.
     A stream loop that fails surfaces its error
-    when the tab closes.
+    when the tab closes; one that ends clean
+    closes with no error.
   - The server side has no page:
     the tab lifetime binds without listening.
   - A real page hide closes the tab's app root;
