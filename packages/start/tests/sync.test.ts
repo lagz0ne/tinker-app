@@ -2,7 +2,7 @@ import { createScope, operation } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
-import { database, signedIn } from "#tinker/app.server";
+import { auth, database, signedIn } from "#tinker/app.server";
 import { requestHeaders } from "../src/backend/headers.server.ts";
 import { backendStop, requestStop } from "../src/backend/lifetime.ts";
 import { eventHistory } from "../src/parts/sync/history.server.ts";
@@ -331,11 +331,41 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
   expect([disconnected, feed.ended(first)]).toEqual([1, true]);
   const second = await feed.subscribe();
   expect([listens.length, listens[1]?.stopped, feed.ended(second)]).toEqual([3, true, false]);
+  expect(feed.ended(first)).toBe(true);
+  await feed.subscribe();
+  expect(listens).toHaveLength(3);
+  let gone = 0;
+  const left = await feed.subscribe(() => {
+    gone += 1;
+  });
+  feed.close(left);
   listens[2]?.wake();
   await feed.wait(second, 0, new AbortController().signal);
-  expect(feed.revision()).toBe(2);
+  expect([feed.revision(), disconnected, gone]).toEqual([2, 2, 0]);
   expect((await root.close({ graceful: true })).status).toBe("success");
   expect(listens[2]?.stopped).toBe(true);
+});
+
+test("closing the root wakes and disconnects each subscriber; a root that never listened closes clean", async () => {
+  const quiet = createScope();
+  await quiet.resolve(notifications);
+  expect(await quiet.close({ graceful: true })).toMatchObject({
+    status: "success",
+    teardownErrors: undefined,
+  });
+  const root = createScope();
+  const feed = await root.resolve(notifications);
+  let disconnected = 0;
+  const subscription = await feed.subscribe(() => {
+    disconnected += 1;
+  });
+  const waiting = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  expect(await root.close({ graceful: true })).toMatchObject({
+    status: "success",
+    teardownErrors: undefined,
+  });
+  await waiting;
+  expect(disconnected).toBe(1);
 });
 
 test("the sync route answers each request with the stream or its status", async () => {
@@ -358,6 +388,7 @@ test("the sync route answers each request with the stream or its status", async 
       status: 200,
     },
     { name: "resume", search: "?cursor=bad", last: '{"public":0,"private":null}', status: 200 },
+    { name: "a later cursor", search: "", last: '{"public":5,"private":null}', status: 200 },
     { name: "bad cursor", search: "?cursor=bad", last: null, status: 400 },
     { name: "bad cursor shape", search: "?cursor=%7B%7D", last: null, status: 400 },
     { name: "long Last-Event-ID", search: "", last: "x".repeat(2049), status: 400 },
@@ -462,5 +493,149 @@ test("the event history locks a stream, appends in order, saves a result, and ke
     status: "failed",
     error: { kind: "StreamMissing" },
   });
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the stream reads the account with no cookie cache and no refresh", async () => {
+  const asked: unknown[] = [];
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    presets: [
+      preset(auth, () => ({
+        handler: async () => new Response(null),
+        api: {
+          getSession: async ({ query }: { headers: Headers; query?: object }) => {
+            asked.push(query);
+            return null;
+          },
+        },
+      })),
+    ],
+  });
+  const session = root.createSession();
+  const reader = (
+    await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  await reader.cancel();
+  expect(asked[0]).toEqual({ disableCookieCache: true, disableRefresh: true });
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a graceful close of the request ends a held read", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  const session = root.createSession();
+  const reader = (
+    await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const held = reader.read();
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await held).done).toBe(true);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a stream opened after a wake still replays; a signed-in tab with no account cursor gets the account frame at once", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(new Set(["ada"]))],
+  });
+  const feed = await root.resolve(notifications);
+  const subscription = await feed.subscribe();
+  await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
+  await feed.wait(subscription, 0, new AbortController().signal);
+  feed.close(subscription);
+  expect(feed.revision()).toBe(1);
+  const guest = root.createSession({ tags: requestHeaders(new Headers()) });
+  const replayed = (
+    await guest.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(replayed.read())).toBe(
+    changesFrame([row("public", 1, ids[0], 1)], { public: 1, private: null }),
+  );
+  await replayed.cancel();
+  expect((await guest.close({ graceful: true })).status).toBe("success");
+  const ada = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
+  const reader = (
+    await ada.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(reader.read())).toBe(account);
+  expect((await reader.read()).done).toBe(true);
+  expect((await ada.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a request that stops while its account is read gets a body that has already ended", async () => {
+  const request = new AbortController();
+  const backend = new AbortController();
+  const root = createScope({
+    tags: [backendStop(backend.signal), requestHeaders(new Headers())],
+    presets: [
+      preset(auth, () => ({
+        handler: async () => new Response(null),
+        api: {
+          getSession: async () => {
+            request.abort();
+            return null;
+          },
+        },
+      })),
+    ],
+  });
+  const session = root.createSession({ tags: requestStop(request.signal) });
+  const reader = (
+    await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect((await reader.read()).done).toBe(true);
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a query that fails errors the body, and the request still ends clean", async () => {
+  const dropEvents = operation({
+    label: "test.dropEvents",
+    depends: { database },
+    run: async ({ database }) => {
+      const { sql } = await import("drizzle-orm");
+      await database.execute(sql`DROP TABLE sync_event`);
+    },
+  });
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  const session = root.createSession();
+  const reader = (
+    await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  await root.run(dropEvents);
+  await expect(reader.read()).rejects.toThrow("sync_event");
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the sync part's work shows on the trace under its own names", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    observe: { history: 50 },
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
+  const session = root.createSession();
+  const response = await session
+    .resolve(syncEndpoint)
+    .answer(new Request("http://localhost/api/sync"));
+  const reader = response.body?.getReader();
+  await reader?.read();
+  await reader?.cancel();
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  const names = new Set(root.spans().map(({ name }) => name));
+  const parts = ["history", "endpoint", "open", "stream", "notifications", "liveAccount"];
+  expect(parts.filter((part) => !names.has(`sync.${part}`))).toEqual([]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

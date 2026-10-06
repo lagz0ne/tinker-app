@@ -173,7 +173,6 @@ export const eventStream = resource({
             start(controller) {
               output = controller;
               if (ended) controller.close();
-              else if (signal.aborted) close();
             },
             async pull(controller) {
               try {
