@@ -2,6 +2,20 @@
 
 `tinker upgrade` prints the sections between your old and new version.
 
+## 0.5.0
+
+The sync part's server side; it is off by default,
+and no app change is needed while it stays off.
+`tinker({ sync: true })` turns it on, and auth with it:
+
+- It mounts `GET /api/sync`, a Server-Sent Events stream.
+- `src/lib/tinker.server.ts` must export `database`
+  (a drizzle Postgres database with `listen`),
+  besides auth's `auth` and `readAccount`.
+- The app's migrations create the sync tables
+  and the `start_sync` trigger (see the README).
+- `auth: false` with `sync: true` fails the build.
+
 ## 0.4.0
 
 The auth part is off by default; no app change is needed

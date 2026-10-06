@@ -99,18 +99,52 @@ export const auth = resource({
 });
 ```
 
+- **sync**: off by default; its server side
+  is built, its client side comes next.
+  - It turns auth on.
+    `sync: true` with `auth: false` fails the build.
+  - Route: `GET /api/sync`, a Server-Sent Events stream.
+  - Reads `database` from `src/lib/tinker.server.ts`:
+    a drizzle Postgres database with `listen`
+    (the `Database` type on `@tinker/start/server`).
+  - Reads no env key of its own.
+
+With sync on, the app's migrations create
+the sync tables (`src/parts/sync/schema.ts`)
+and this trigger, which wakes the streams:
+
+```sql
+CREATE FUNCTION start_sync_wake()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_notify('start_sync', TG_TABLE_NAME);
+  RETURN NULL;
+END; $$;
+CREATE TRIGGER sync_event_committed
+AFTER INSERT ON sync_event
+FOR EACH STATEMENT
+EXECUTE FUNCTION start_sync_wake();
+```
+
 A part switch takes `true` or `false`;
 any other value fails the build.
 `.tinker/base.json` records which parts are on,
 so `tinker prepare` and doctor read the same switches.
+When one part turns another on, the build says so
+(`tinker: sync turns auth on`),
+and so does the head of `.tinker/parts.server.ts`.
 
 ## Entries
 
 - `@tinker/start`: shared units, such as
-  `startRequests` and `RouterOptions`.
+  `startRequests` and `RouterOptions`,
+  and the sync part's `Register`, `Sync` types,
+  envelopes, and readers.
 - `@tinker/start/server`: `readResult`, `env`,
-  `createServerEntry`, and `authSettings`
-  (the auth part's origin and secret).
+  `createServerEntry`, `authSettings`
+  (the auth part's origin and secret),
+  and `eventHistory` with the `Database` type
+  (the sync part's writes).
 - `@tinker/start/vite`: `tinker()`,
   with the part switches and Start's
   `prerender`, `pages`, `spa`, `sitemap`.
@@ -165,7 +199,8 @@ The package's `exports` refuses every other path.
     of at most 64 KiB, with tab records only;
     else `403`, `415`, `413`, `400`,
     or `503` while the server stops.
-    A refused post's body is never opened.
+    A refused post's body is never opened;
+    a read body is let go, and the request ends clean.
   - A batch is taken only when every record keeps
     the wire rules: ids in hex of the right length,
     times in digits, at most 64 records,
@@ -201,6 +236,38 @@ The package's `exports` refuses every other path.
   With auth on, the app root does not start
   while a key is unset or refused.
   With auth off, the app root reads no auth key.
+  The auth part's work shows on the trace
+  as `auth.settings` and `handleAuth`.
+- With sync on, `GET /api/sync` streams events:
+  - The cursor comes from `Last-Event-ID`,
+    else `?cursor=`, else the start.
+    A cursor that does not read is a `400`;
+    another account's is a `403`.
+  - It replays the events after the cursor,
+    public and the account's own,
+    at most 100 to a frame,
+    each frame with its resume cursor as its `id`.
+  - Then it greets once (`: connected`),
+    and sends each commit as it lands.
+  - A quiet stream sends `: heartbeat` each 10 s,
+    and closes at its 30 s lease.
+  - Each wake re-reads the account.
+    An account stream that signs out,
+    or an anonymous stream that signs in,
+    is an account change: it sends `event: account`
+    and closes, with no saved rows after it.
+  - A request or backend stop ends it.
+  - `eventHistory` locks a stream, appends events
+    at the next revisions, saves a result,
+    and refuses another owner's execution.
+  - Notifications wake after a commit
+    and stay silent on a rollback;
+    a read made before waiting still wakes.
+  - One listener wakes every stream.
+    A listener that cannot start fails the subscribe,
+    so the stream's open fails; a listener that breaks
+    ends its subscribers, and the next subscribe
+    starts a new one.
 - With no `src/server.ts`, the server entry
   goes straight to the base.
 - In production, the error page shows no error text.
@@ -226,6 +293,8 @@ tinker doctor --fix
 - Check 5 (named files) also names each seam
   name an on part reads and the seam lacks,
   and a missing seam file. The build stops on it.
+- Check 5 also names a server seam without
+  `database` while sync is on.
 - Check 7 (routes) counts an on part's routes as base routes,
   and names the switch that frees one.
   A route under a base splat, such as
