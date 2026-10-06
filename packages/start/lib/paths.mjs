@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
-import { createRequire } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,14 +55,14 @@ export function installedVersion(root, name) {
   return path && readJson(join(path, "package.json")).version;
 }
 
-/** @param {string} root - From the app folder; why: find the base the app resolves. */
+/**
+ * The base the app installs, as a real folder: found in the app's node_modules, walking up,
+ * never through NODE_PATH, which a package manager's script run sets to its own store.
+ * @param {string} root - From the app folder; why: find the base the app resolves.
+ */
 export function installedBase(root) {
-  try {
-    const require = createRequire(join(root, "package.json"));
-    return realpathSync(dirname(require.resolve("@tinker/start/package.json")));
-  } catch {
-    return null;
-  }
+  const path = findPackage(root, "@tinker/start");
+  return path && realpathSync(path);
 }
 
 /**

@@ -1,6 +1,9 @@
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { expect, test } from "vite-plus/test";
 import { version } from "../../lib/checks/version.mjs";
-import { basePackage } from "../../lib/paths.mjs";
+import { baseDir, basePackage } from "../../lib/paths.mjs";
 import { fixture, goodApp } from "../fixture.mjs";
 
 test("passes when the base resolves and every peer is the tested version", () => {
@@ -8,6 +11,22 @@ test("passes when the base resolves and every peer is the tested version", () =>
     status: "ok",
     lines: [`@tinker/start ${basePackage.version}; 4 peers match the tested versions`],
   });
+});
+
+test("the base is the one in the app's node_modules, never one on NODE_PATH", () => {
+  const store = fixture({
+    "node_modules/@tinker/start/package.json": JSON.stringify(basePackage),
+  });
+  const app = fixture({ "package.json": "{}" });
+  const check = pathToFileURL(join(baseDir, "lib/checks/version.mjs")).href;
+  const script = `const { version } = await import(${JSON.stringify(check)});\nconsole.log(JSON.stringify(version(${JSON.stringify(app)}).lines));`;
+  const lines = execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+    env: { ...process.env, NODE_PATH: join(store, "node_modules") },
+    encoding: "utf8",
+  });
+  expect(JSON.parse(lines)).toEqual([
+    "package.json:1 does not install @tinker/start; add it and install",
+  ]);
 });
 
 test("fails when the base does not resolve", () => {
