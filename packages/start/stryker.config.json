@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "mutate": ["lib/**/*.mjs", "src/**/*.ts", "src/**/*.tsx"],
+  "ignorePatterns": ["tsconfig.json", "packs", "files.json"],
+  "reporters": ["clear-text", "progress", "json"],
+  "thresholds": {
+    "high": 90,
+    "low": 75,
+    "break": 85
+  },
+  "tempDirName": ".stryker-tmp",
+  "concurrency": 4,
+  "timeoutMS": 15000
+}

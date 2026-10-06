@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import { findPackage } from "./paths.mjs";
 
 export const say = {
   noTypescript:
@@ -25,18 +25,14 @@ export function typeErrors(output) {
 /**
  * Run the app's own tsc once. Vite strips types without checking them,
  * so a wrong `<Link to>` would ship and land on a 404.
+ * TypeScript is found in the app's node_modules, walking up; never through NODE_PATH, which
+ * a package manager's script run sets to its own store.
  * @param {string} root - From tinker(); why: check that app with its own tsconfig and TypeScript.
  */
 export function checkTypes(root) {
-  let tsc;
-  try {
-    tsc = join(
-      dirname(createRequire(join(root, "package.json")).resolve("typescript/package.json")),
-      "bin/tsc",
-    );
-  } catch {
-    return [say.noTypescript];
-  }
+  const typescript = findPackage(root, "typescript");
+  if (!typescript) return [say.noTypescript];
+  const tsc = join(typescript, "bin/tsc");
   try {
     execFileSync(process.execPath, [tsc, "--noEmit", "--pretty", "false", "-p", root], {
       cwd: root,

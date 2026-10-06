@@ -27,7 +27,9 @@
   },
   "scripts": {
     "release": "node scripts/pack.mjs",
-    "test": "vp test"
+    "test": "vp test",
+    "mutate": "stryker run",
+    "check": "vp check"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",
@@ -37,6 +39,8 @@
     "oxc-parser": "^0.117.0"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "catalog:",
+    "@stryker-mutator/vitest-runner": "catalog:",
     "@tanstack/react-router": "1.170.41",
     "@tanstack/react-start": "1.168.60",
     "@tinker/core": "workspace:*",
