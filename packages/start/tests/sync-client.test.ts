@@ -476,6 +476,19 @@ test("closing the root fails a wait that no signal stops", async () => {
   await expect(waiting).rejects.toMatchObject({ kind: "Cancelled" });
 });
 
+test("an account exit fails a wait that no signal stops", async () => {
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+  });
+  await root.ready;
+  const client = await root.resolve(syncClient);
+  const waiting = client.wait(ids[1], 0, new AbortController().signal);
+  client.leave();
+  await expect(waiting).rejects.toMatchObject({ kind: "Cancelled" });
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
 test("a result for a write this tab did not send is not kept for a later write of that id", async () => {
   const call = new AbortController();
   const { write, sent, reply } = heldWrite(ids[2], call.signal);
@@ -490,6 +503,8 @@ test("a result for a write this tab did not send is not kept for a later write o
   const writing = root.run(write);
   await sent;
   reply.resolve({ kind: "accepted", executionId: ids[2] });
+  // The write took the reply first, so it is waiting now.
+  await reply.promise;
   client.apply(
     [
       {
@@ -534,6 +549,8 @@ test("a finished write forgets its id: a repeat waits for its own result", async
   const repeating = root.run(again.write);
   await again.sent;
   again.reply.resolve({ kind: "accepted", executionId: ids[1] });
+  // The repeat took the reply first, so it is waiting now.
+  await again.reply.promise;
   client.apply(
     [
       {

@@ -147,6 +147,34 @@ test("an account check keeps the same account, and leaves a changed one", async 
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
+test("each snapshot load and account read stops with its call", async () => {
+  const signals: AbortSignal[] = [];
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+    presets: [
+      preset(snapshotSource, () => ({
+        load: async ({ signal }: { signal: AbortSignal }) => {
+          signals.push(signal);
+          return ada;
+        },
+        account: async ({ signal }: { signal: AbortSignal }) => {
+          signals.push(signal);
+          return "ada";
+        },
+      })),
+    ],
+  });
+  await root.ready;
+  const call = new AbortController();
+  await root.run(loadSnapshot, { signal: call.signal });
+  await root.run(checkAccount, { signal: call.signal });
+  await root.run(refreshAccount, { signal: call.signal });
+  call.abort();
+  expect(signals.map((signal) => signal?.aborted)).toEqual([true, true, true]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
 test("a sign-in holds loads and checks until it completes, with its own load", async () => {
   const { calls, source } = network();
   const root = createScope({
@@ -753,6 +781,12 @@ test("the tab's sync work shows on the trace under its own names", async () => {
   const consuming = root.run(consumeConnection);
   (await opening).emit("error");
   await consuming;
+  await root.resolve(syncRouter);
+  const streaming = fake.next();
+  root.resolve(syncStreaming).start();
+  await streaming;
+  tab.abort();
+  expect((await root.close({ graceful: true })).status).toBe("success");
   const names = new Set(root.spans().map(({ name }) => name));
   const expected = [
     "sync.snapshotLoader",
@@ -762,8 +796,8 @@ test("the tab's sync work shows on the trace under its own names", async () => {
     "sync.receive",
     "sync.connection",
     "sync.eventSource",
+    "sync.router",
+    "sync.listen",
   ];
   expect(expected.filter((name) => !names.has(name))).toEqual([]);
-  tab.abort();
-  expect((await root.close({ graceful: true })).status).toBe("success");
 });
