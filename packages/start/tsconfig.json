@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "#tinker/app": ["./src/defaults/app.ts"],
+      "#tinker/app.server": ["./src/defaults/app.server.ts"],
+      "#tinker/router": ["./src/defaults/router.ts"],
+      "#tinker/start": ["./src/defaults/start.ts"],
+      "#tinker/server": ["./src/defaults/server.ts"],
+      "#tinker/routes": ["../../apps/start-min/.tinker/routeTree.gen.ts"]
+    }
+  },
+  "include": ["src", "tests"]
+}
