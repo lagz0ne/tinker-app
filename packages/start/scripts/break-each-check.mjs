@@ -340,7 +340,7 @@ const breaks = [
     name: "an extended file's own extends is not followed",
     file: "lib/checks/glue.mjs",
     find: "...extendedChain(root, file, parent, seen)",
-    replace: "",
+    replace: "...[]",
   },
   {
     name: "a byte order mark passes strict JSON",
