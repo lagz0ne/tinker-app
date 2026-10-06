@@ -9,15 +9,19 @@ import {
 } from "jsonc-parser";
 import { lineAt, readText } from "./paths.mjs";
 
-/** A UTF-8 byte order mark: tsc and npm accept one at the start; the parser does not. */
+/** A UTF-8 byte order mark: tsc accepts one at the start; the parser does not. */
 const bom = "\uFEFF";
+
+/** The parse error code of a byte order mark in strict JSON. */
+export const byteOrderMark = "ByteOrderMark";
 
 /**
  * Read a config file the way its tool reads it. tsc takes comments and trailing commas in
  * tsconfig.json; package.json and components.json are strict JSON (`strict`).
  * TypeScript 7 ships no JS config reader, so this is jsonc-parser, the JSONC parser VS Code uses.
- * A leading byte order mark is set aside, and kept for a write. A parse error comes back with
- * its line; the caller must then never write the file.
+ * A leading byte order mark is set aside, and kept for a write. In strict JSON it is an error at
+ * line 1: `vp install` stops on it. A parse error comes back with its line; the caller must then
+ * never write the file.
  * @param {string} path - From a check; why: the file to read; a missing file reads as `{}`.
  * @param {{ strict?: boolean }} [options] - From a check; why: strict JSON for npm and shadcn files.
  */
@@ -25,17 +29,20 @@ export function readJsonc(path, { strict = false } = {}) {
   const raw = readText(path);
   const marked = raw.startsWith(bom);
   const text = marked ? raw.slice(1) : raw;
+  if (strict && marked) return { text, marked, error: { line: 1, code: byteOrderMark } };
+  return { text, marked, ...parseText(text, strict) };
+}
+
+/**
+ * @param {string} text - From readJsonc; why: the file's text, with no byte order mark.
+ * @param {boolean} strict - From readJsonc; why: strict JSON allows no comment and no trailing comma.
+ */
+function parseText(text, strict) {
   const errors = [];
   const value = parse(text, errors, { allowTrailingComma: !strict, disallowComments: strict });
-  if (text && errors.length > 0) {
-    const [first] = errors;
-    return {
-      text,
-      marked,
-      error: { line: lineAt(text, first.offset), code: printParseErrorCode(first.error) },
-    };
-  }
-  return { text, marked, value: value ?? {} };
+  if (!text || errors.length === 0) return { value: value ?? {} };
+  const [first] = errors;
+  return { error: { line: lineAt(text, first.offset), code: printParseErrorCode(first.error) } };
 }
 
 /**

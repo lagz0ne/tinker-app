@@ -175,6 +175,60 @@ test("a tsconfig.json with a byte order mark parses, and --fix keeps the mark", 
   );
 });
 
+test("names paths or strict: false in a local file the extends list reads after .tinker", () => {
+  const root = goodApp({
+    "tsconfig.json": '{\n  "extends": ["./.tinker/tsconfig.json", "./configs/strict.json"]\n}\n',
+    "configs/strict.json":
+      '{\n  "compilerOptions": {\n    "strict": false,\n    "paths": { "x": ["y"] }\n  }\n}\n',
+  });
+  expect(glue(root).lines).toEqual([
+    "configs/strict.json:4 sets compilerOptions.paths; it replaces the base's #tinker/* and @/* paths, so remove it",
+    "configs/strict.json:3 turns strict off; the base's files need strict",
+  ]);
+});
+
+test("reads the extends list as tsc does: the last file that sets a key wins over .tinker", () => {
+  const before = goodApp({
+    "tsconfig.json": '{\n  "extends": ["./paths.json", "./.tinker/tsconfig.json"]\n}\n',
+    "paths.json": '{ "compilerOptions": { "strict": false, "paths": { "x": ["y"] } } }\n',
+  });
+  expect(glue(before).status).toBe("ok");
+  const later = goodApp({
+    "tsconfig.json":
+      '{\n  "extends": ["./.tinker/tsconfig.json", "./loose.json", "./tight.json"]\n}\n',
+    "loose.json": '{ "compilerOptions": { "strict": false } }\n',
+    "tight.json": '{\n  "compilerOptions": {\n    "strict": true\n  }\n}\n',
+  });
+  expect(glue(later).status).toBe("ok");
+  const own = goodApp({
+    "tsconfig.json":
+      '{\n  "extends": ["./.tinker/tsconfig.json", "./loose.json"],\n  "compilerOptions": { "strict": true }\n}\n',
+    "loose.json": '{ "compilerOptions": { "strict": false } }\n',
+  });
+  expect(glue(own).status).toBe("ok");
+});
+
+test("an extended file that does not parse is named at its line", () => {
+  const root = goodApp({
+    "tsconfig.json": '{\n  "extends": ["./.tinker/tsconfig.json", "./strict.json"]\n}\n',
+    "strict.json":
+      '{\n  "compilerOptions": {\n    "strict": true\n    "jsx": "react-jsx"\n  }\n}\n',
+  });
+  expect(glue(root).lines).toEqual([
+    "strict.json:4 does not parse (CommaExpected); doctor never edits a file that does not parse",
+  ]);
+});
+
+test("a package.json with a byte order mark is named, and --fix never writes it", () => {
+  const marked = '\uFEFF{\n  "name": "app"\n}\n';
+  const root = goodApp({ "package.json": marked });
+  const result = glue(root);
+  expect(result.lines).toEqual(["package.json:1 starts with a byte order mark; vp cannot read it"]);
+  expect(result.fix).toBeUndefined();
+  expect(runCheck(root, glue, true).status).toBe("fail");
+  expect(readFileSync(join(root, "package.json"), "utf8")).toBe(marked);
+});
+
 test("--fix indents a new key as the file does: tabs and CRLF stay", () => {
   const root = goodApp({
     "tsconfig.json": '{\r\n\t// my options\r\n\t"compilerOptions": {},\r\n}\r\n',

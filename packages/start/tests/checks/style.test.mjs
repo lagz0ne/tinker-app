@@ -75,6 +75,11 @@ test("components.json is strict JSON, as shadcn reads it: a trailing comma does 
   expect(style(root).lines).toEqual(["components.json:2 does not parse (PropertyNameExpected)"]);
 });
 
+test("components.json is strict JSON: a byte order mark does not parse", () => {
+  const root = goodApp({ "components.json": '\uFEFF{ "tailwind": { "css": "src/style.css" } }\n' });
+  expect(style(root).lines).toEqual(["components.json:1 does not parse (ByteOrderMark)"]);
+});
+
 test("names a components.json that sets no tailwind.css", () => {
   const root = goodApp({ "components.json": '{ "aliases": {} }\n' });
   prepare(root);

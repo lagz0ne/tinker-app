@@ -162,8 +162,8 @@ const breaks = [
   {
     name: "a tsconfig that does not parse reads as empty",
     file: "lib/jsonc.mjs",
-    find: "if (text && errors.length > 0) {",
-    replace: "if (false) {",
+    find: "if (!text || errors.length === 0) return { value: value ?? {} };",
+    replace: "return { value: value ?? {} };",
   },
   {
     name: "--fix drops the comments of tsconfig.json",
@@ -175,9 +175,9 @@ const breaks = [
   {
     name: "--fix writes a tsconfig that does not parse",
     file: "lib/checks/glue.mjs",
-    find: 'if (tsconfig.error) return [say.parse("tsconfig.json", tsconfig.error)];',
+    find: 'if (tsconfig.error) return [parseProblem("tsconfig.json", tsconfig.error)];',
     replace:
-      'if (tsconfig.error) return [say.parse("tsconfig.json", tsconfig.error), say.extends];',
+      'if (tsconfig.error) return [parseProblem("tsconfig.json", tsconfig.error), say.extends];',
   },
   {
     name: "a renamed tinker import counts no call",
@@ -311,6 +311,36 @@ const breaks = [
     file: "lib/checks/glue.mjs",
     find: "![parent].flat().includes(tinkerConfig)",
     replace: "parent !== tinkerConfig",
+  },
+  {
+    name: "a file extended after .tinker is never read",
+    file: "lib/checks/glue.mjs",
+    find: ".slice(list.indexOf(tinkerConfig) + 1)",
+    replace: ".slice(list.length)",
+  },
+  {
+    name: "a file extended before .tinker counts too",
+    file: "lib/checks/glue.mjs",
+    find: ".slice(list.indexOf(tinkerConfig) + 1)",
+    replace: ".slice(0)",
+  },
+  {
+    name: "the first extended file wins, not the last",
+    file: "lib/checks/glue.mjs",
+    find: "    .reverse()\n    .map((file) => ({",
+    replace: "    .map((file) => ({",
+  },
+  {
+    name: "a byte order mark passes strict JSON",
+    file: "lib/jsonc.mjs",
+    find: "if (strict && marked) return",
+    replace: "if (false) return",
+  },
+  {
+    name: "a byte order mark in package.json reads as a parse code",
+    file: "lib/checks/glue.mjs",
+    find: "error.code === byteOrderMark ? say.mark(file) : ",
+    replace: "",
   },
   {
     name: "--fix replaces the extends key",
