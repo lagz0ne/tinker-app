@@ -1,4 +1,4 @@
-import { chmodSync } from "node:fs";
+import { symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { asset } from "../lib/serve.mjs";
@@ -72,8 +72,8 @@ test("a HEAD request gets the file; a path under a file passes on", async () => 
 
 test("a built file that cannot be read fails the request, not a silent 404", async () => {
   const root = built();
-  chmodSync(join(root, "dist/client/robots.txt"), 0);
-  await expect(asset(root, new Request("http://app/robots.txt"))).rejects.toMatchObject({
-    code: "EACCES",
+  symlinkSync("loop.txt", join(root, "dist/client/loop.txt"));
+  await expect(asset(root, new Request("http://app/loop.txt"))).rejects.toMatchObject({
+    code: "ELOOP",
   });
 });

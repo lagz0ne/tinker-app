@@ -5,13 +5,11 @@ import { requestStop } from "../src/backend/lifetime.ts";
 import { readResult } from "../src/server.ts";
 import { startRequests } from "../src/start.ts";
 
-/** Waits a moment, then reports whether its session was stopped by force. */
-const slow = operation({
-  label: "test.slow",
-  run: async (_deps, { signal }) => {
-    await new Promise((done) => setTimeout(done, 10));
-    return signal.aborted;
-  },
+/** Runs until its session stops it by force. */
+const stoppable = operation({
+  label: "test.stoppable",
+  run: (_deps, { signal }) =>
+    new Promise((done) => signal.addEventListener("abort", () => done("stopped"), { once: true })),
 });
 
 const asker = operation({
@@ -23,14 +21,24 @@ const asker = operation({
 test("each request runs in its own session, with its headers and stop signal, until its body is read", async () => {
   const root = createScope();
   const closed = [];
+  const closing = Promise.withResolvers();
   const recorder = resource({
     label: "test.recorder",
     target: "session",
     factory: (_deps, ctx) => {
+      ctx.closing.addEventListener("abort", () => closing.resolve(), { once: true });
       ctx.defer(() => {
         closed.push("session");
       });
       return closed;
+    },
+  });
+  const gate = Promise.withResolvers();
+  const gated = operation({
+    label: "test.gated",
+    run: async (_deps, { signal }) => {
+      await gate.promise;
+      return signal.aborted;
     },
   });
   const request = new Request("http://app/", { headers: { "x-who": "Ada" } });
@@ -45,14 +53,17 @@ test("each request runs in its own session, with its headers and stop signal, un
       const context = options?.context ?? expect.unreachable("the middleware passes its context");
       asked = readResult(context.session.settle(asker));
       context.session.resolve(recorder);
-      running.resolve(context.session.settle(slow));
+      running.resolve(context.session.settle(gated));
       return { request, pathname: "/", context, response: new Response("hello") };
     },
   });
   expect(asked).toEqual({ who: "Ada", requestStop: request.signal });
-  expect(closed).toEqual([]);
   if (!result || result instanceof Response) return expect.unreachable("Start's result comes back");
-  expect(await result.response.text()).toBe("hello");
+  const reading = result.response.text();
+  await closing.promise;
+  expect(closed).toEqual([]);
+  gate.resolve();
+  expect(await reading).toBe("hello");
   expect(closed).toEqual(["session"]);
   expect(await running.promise).toEqual({ status: "success", value: false });
   expect((await root.close({ graceful: true })).status).toBe("success");
@@ -71,12 +82,12 @@ test("a request that throws stops its session by force and passes the error on",
       context: { scope: root },
       async next(options) {
         const context = options?.context ?? expect.unreachable("the middleware passes its context");
-        running.resolve(context.session.settle(slow));
+        running.resolve(context.session.settle(stoppable));
         throw boom;
       },
     }),
   ).rejects.toBe(boom);
-  expect(await running.promise).toEqual({ status: "success", value: true });
+  expect(await running.promise).toEqual({ status: "success", value: "stopped" });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
