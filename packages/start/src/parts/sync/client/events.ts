@@ -110,7 +110,7 @@ export const eventSourceBackend = tag<(url: string) => Source>({
  * One stream connection at a time. EventSource keeps the framing; frames queue until read, and
  * a ninth unread frame closes the connection, so the tab replays instead of lagging.
  */
-const eventSource = resource({
+export const eventSource = resource({
   label: "sync.eventSource",
   depends: { open: eventSourceBackend },
   factory: ({ open }, { defer }) => {
@@ -184,7 +184,7 @@ export const receiveMessage = operation({
 });
 
 /** One connection, from the applied cursors, until it ends (false) or the account changes (true). */
-const consumeConnection = operation({
+export const consumeConnection = operation({
   label: "sync.connection",
   depends: {
     sync: syncClient,
@@ -242,7 +242,7 @@ export const refreshAccount = operation({
 });
 
 /** Connect, read, then reload after an account change or re-check the account; 500 ms apart. */
-const streamChanges = operation({
+export const streamChanges = operation({
   label: "sync.listen",
   depends: { consume: consumeConnection, load: loadSnapshot, refresh: refreshAccount },
   run: async ({ consume, load, refresh }, { signal, log, clock }) => {
