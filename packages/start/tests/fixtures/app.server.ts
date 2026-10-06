@@ -31,7 +31,7 @@ export const bootstrap = operation({
 });
 
 /** The sync part's tables and wake trigger, as an app's migrations create them. */
-const syncTables = `
+export const syncTables = `
 CREATE TABLE sync_stream (id text PRIMARY KEY, revision integer DEFAULT 0 NOT NULL);
 CREATE TABLE sync_execution (id text PRIMARY KEY, stream text NOT NULL, notification jsonb, result jsonb);
 CREATE TABLE sync_event (stream text, revision integer, "executionId" text NOT NULL,

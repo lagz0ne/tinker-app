@@ -2,7 +2,7 @@ import { createScope, operation } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
 import { beforeAll, expect, test } from "vite-plus/test";
 import { z } from "zod";
-import { auth, database, signedIn } from "#tinker/app.server";
+import { auth, database, signedIn, syncTables } from "#tinker/app.server";
 import { requestHeaders } from "../src/backend/headers.server.ts";
 import { backendStop, requestStop } from "../src/backend/lifetime.ts";
 import { eventHistory } from "../src/parts/sync/history.server.ts";
@@ -654,5 +654,243 @@ test("the sync part's work shows on the trace under its own names", async () => 
   const names = new Set(root.spans().map(({ name }) => name));
   const parts = ["history", "endpoint", "open", "stream", "notifications", "liveAccount"];
   expect(parts.filter((part) => !names.has(`sync.${part}`))).toEqual([]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+/**
+ * The fixture database without its native listener: the test wakes streams by hand, so a commit
+ * wakes none by itself.
+ */
+function handWoken() {
+  const wakes: (() => void)[] = [];
+  const db = preset(database, async (_deps, { defer }) => {
+    const [{ PGlite }, { drizzle }] = await Promise.all([
+      import("@electric-sql/pglite"),
+      import("drizzle-orm/pglite"),
+    ]);
+    const client = await PGlite.create();
+    defer(() => client.close());
+    await client.exec(syncTables);
+    return Object.assign(drizzle({ client }), {
+      listen: async (wake: () => void) => {
+        wakes.push(wake);
+        return () => undefined;
+      },
+    });
+  });
+  return { db, wake: () => wakes.forEach((wake) => wake()) };
+}
+
+/**
+ * An auth library whose account reads answer in turn; the last answer repeats. `during` runs
+ * inside the read of that number (1-based), before it answers.
+ * @param answers - From a test; why: the account each read sees.
+ * @param during - From a test; why: what happens while one read is in flight.
+ */
+function accountReads(answers: (string | null)[], during: Record<number, () => void> = {}) {
+  let reads = 0;
+  const auth_ = preset(auth, () => ({
+    handler: async () => new Response(null),
+    api: {
+      getSession: async () => {
+        reads += 1;
+        during[reads]?.();
+        const id = answers[Math.min(reads, answers.length) - 1] ?? null;
+        return id === null ? null : { user: { id } };
+      },
+    },
+  }));
+  return { auth: auth_, reads: () => reads };
+}
+
+/** "settled" when the promise has settled already, else "pending": a marker queued after it. */
+const settledFirst = (promise: Promise<unknown>) =>
+  Promise.race([promise.then(() => "settled"), Promise.resolve().then(() => "pending")]);
+
+test("only the check before the rows read can catch a sign-out whose rows cannot be read", async () => {
+  const dropEvents = operation({
+    label: "test.dropEvents",
+    depends: { database },
+    run: async ({ database }) => {
+      const { sql } = await import("drizzle-orm");
+      await database.execute(sql`DROP TABLE sync_event`);
+    },
+  });
+  const { db, wake } = handWoken();
+  const reads = accountReads(["ada", null]);
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [db, reads.auth],
+  });
+  const session = root.createSession({ tags: requestHeaders(new Headers()) });
+  const reader = (
+    await session.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const held = reader.read();
+  await root.run(dropEvents);
+  wake();
+  expect(await text(held)).toBe(account);
+  expect((await reader.read()).done).toBe(true);
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("only the check after the rows read can stop rows of an account that signed out during it", async () => {
+  const { db, wake } = handWoken();
+  const reads = accountReads(["ada", "ada", null], { 2: () => wake() });
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [db, reads.auth],
+  });
+  const session = root.createSession({ tags: requestHeaders(new Headers()) });
+  const reader = (
+    await session.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const held = reader.read();
+  await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["secret"] } });
+  wake();
+  expect(await text(held)).toBe(account);
+  expect((await reader.read()).done).toBe(true);
+  expect(reads.reads()).toBe(3);
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a sign-out that lands during the heartbeat's account read sends the account frame, not a heartbeat", async () => {
+  const time = makeTestClock();
+  let sleeping = Promise.withResolvers<number>();
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      const slept = time.sleep(ms, signal);
+      sleeping.resolve(ms);
+      sleeping = Promise.withResolvers();
+      return slept;
+    },
+  };
+  const { db, wake } = handWoken();
+  const reads = accountReads(["ada", "ada", null], { 2: () => wake() });
+  const stop = new AbortController();
+  const root = createScope({
+    clock,
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [db, reads.auth],
+  });
+  const session = root.createSession({ tags: requestHeaders(new Headers()) });
+  const reader = (
+    await session.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const slept = sleeping.promise;
+  const held = reader.read();
+  expect(await slept).toBe(10_000);
+  time.advance(10_000);
+  expect(await text(held)).toBe(account);
+  expect((await reader.read()).done).toBe(true);
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the stream reads the account once per wake, not once per pull", async () => {
+  const { db, wake } = handWoken();
+  const reads = accountReads(["ada"]);
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [db, reads.auth],
+  });
+  const session = root.createSession({ tags: requestHeaders(new Headers()) });
+  const reader = (
+    await session.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  for (const [executionId, change] of [
+    [ids[0], "a1"],
+    [ids[1], "a2"],
+  ]) {
+    const held = reader.read();
+    await root.run(publish, { input: { stream: "ada", executionId, changes: [change] } });
+    wake();
+    expect(await text(held)).toContain(`"change":"${change}"`);
+  }
+  expect(reads.reads()).toBe(3);
+  await reader.cancel();
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a wait holds until a wake, a close, or a stop, and returns at once when it has nothing to wait for", async () => {
+  const { db, wake } = handWoken();
+  const root = createScope({ presets: [db] });
+  const feed = await root.resolve(notifications);
+  const subscription = await feed.subscribe();
+  const stop = new AbortController();
+  const waiting = feed.wait(subscription, feed.revision(), stop.signal);
+  const held = subscription.waiting;
+  expect(held).toBeDefined();
+  expect(await settledFirst(waiting)).toBe("pending");
+  stop.abort();
+  expect(await settledFirst(held?.promise ?? waiting)).toBe("settled");
+  await waiting;
+  expect(subscription.waiting).toBeUndefined();
+  const woken = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  wake();
+  await woken;
+  const moved = feed.wait(subscription, 0, new AbortController().signal);
+  expect(subscription.waiting).toBeUndefined();
+  await moved;
+  const stopped = new AbortController();
+  stopped.abort();
+  const late = feed.wait(subscription, feed.revision(), stopped.signal);
+  expect(subscription.waiting).toBeUndefined();
+  await late;
+  const closing = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  feed.close(subscription);
+  await closing;
+  const closed = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  expect(subscription.waiting).toBeUndefined();
+  await closed;
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a wait on a broken listener returns at once", async () => {
+  const failures: (() => void)[] = [];
+  const root = createScope({
+    presets: [
+      preset(database, async (_deps, { defer }) => {
+        const [{ PGlite }, { drizzle }] = await Promise.all([
+          import("@electric-sql/pglite"),
+          import("drizzle-orm/pglite"),
+        ]);
+        const client = await PGlite.create();
+        defer(() => client.close());
+        return Object.assign(drizzle({ client }), {
+          listen: async (_wake: () => void, failed: () => void) => {
+            failures.push(failed);
+            return () => undefined;
+          },
+        });
+      }),
+    ],
+  });
+  const feed = await root.resolve(notifications);
+  const subscription = await feed.subscribe();
+  failures[0]?.();
+  const broken = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  expect(subscription.waiting).toBeUndefined();
+  await broken;
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

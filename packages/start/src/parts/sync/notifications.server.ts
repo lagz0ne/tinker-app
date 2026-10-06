@@ -15,12 +15,14 @@ export const notifications = resource({
           | { kind: "failed"; error: unknown }
         >
       | undefined;
-    const watchers = new Set<{
+    /** One stream's place on the listener: the connection it opened on, and its held wait. */
+    type Subscriber = {
       opened: NonNullable<typeof connection>;
       closed: boolean;
       disconnected?: () => void;
       waiting?: ReturnType<typeof Promise.withResolvers<void>>;
-    }>();
+    };
+    const watchers = new Set<Subscriber>();
     const wake = () => {
       revision += 1;
       for (const subscriber of watchers) {
@@ -61,35 +63,22 @@ export const notifications = resource({
         const connected = await opened;
         if (connected.kind === "failed") throw connected.error;
         if (broken || opened !== connection) raise("StreamDisconnected", {});
-        const subscriber = { opened, closed: false, disconnected };
+        const subscriber: Subscriber = { opened, closed: false, disconnected };
         watchers.add(subscriber);
         return subscriber;
       },
       revision() {
         return revision;
       },
-      ended(subscriber: { opened: NonNullable<typeof connection>; closed: boolean }) {
+      ended(subscriber: Subscriber) {
         return subscriber.closed || broken || subscriber.opened !== connection;
       },
-      close(subscriber: {
-        opened: NonNullable<typeof connection>;
-        closed: boolean;
-        waiting?: ReturnType<typeof Promise.withResolvers<void>>;
-        disconnected?: () => void;
-      }) {
+      close(subscriber: Subscriber) {
         subscriber.closed = true;
         watchers.delete(subscriber);
         subscriber.waiting?.resolve();
       },
-      async wait(
-        subscriber: {
-          opened: NonNullable<typeof connection>;
-          closed: boolean;
-          waiting?: ReturnType<typeof Promise.withResolvers<void>>;
-        },
-        after: number,
-        signal: AbortSignal,
-      ) {
+      async wait(subscriber: Subscriber, after: number, signal: AbortSignal) {
         if (subscriber.closed || broken || after !== revision || signal.aborted) return;
         const changed = Promise.withResolvers<void>();
         subscriber.waiting = changed;
