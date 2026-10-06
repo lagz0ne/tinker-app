@@ -1,7 +1,7 @@
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { glue } from "../../lib/checks/glue.mjs";
+import { breaksBuild, glue } from "../../lib/checks/glue.mjs";
 import { runCheck } from "../../lib/doctor.mjs";
 import { fixture, goodApp } from "../fixture.mjs";
 
@@ -265,4 +265,68 @@ test("--fix writes the extends line and the postinstall script, and keeps the re
 test("--fix never edits vite.config.ts", () => {
   const root = goodApp({ "vite.config.ts": "export default {};\n" });
   expect(glue(root).fix).toBeUndefined();
+});
+
+test("names Start's plugin under the name it is imported as", () => {
+  const root = goodApp({
+    "vite.config.ts": `${glued}import { tanstackStart as start } from "@tanstack/react-start/plugin/vite";\nexport default { plugins: [tinker(), start()] };\n`,
+  });
+  expect(glue(root).lines).toEqual([
+    "vite.config.ts:3 adds tanstackStart(); tinker() adds it already",
+  ]);
+});
+
+test("only a second tinker() or a tanstackStart() line stops the build", () => {
+  expect(breaksBuild("vite.config.mts:12 calls tinker() 2 times; call it once")).toBe(true);
+  expect(breaksBuild("vite.config.js:3 adds tanstackStart(); tinker() adds it already")).toBe(true);
+  expect(breaksBuild('vite.config.ts:1 does not import tinker from "@tinker/start/vite"')).toBe(
+    false,
+  );
+  expect(breaksBuild("tsconfig.json:4 calls tinker() 2 times")).toBe(false);
+});
+
+test("--fix writes only the key that is wrong", () => {
+  const tsconfig = '{ "extends": "./.tinker/tsconfig.json" }\n';
+  const noScript = goodApp({ "tsconfig.json": tsconfig, "package.json": "{}\n" });
+  expect(runCheck(noScript, glue, true).status).toBe("fixed");
+  expect(readFileSync(join(noScript, "tsconfig.json"), "utf8")).toBe(tsconfig);
+  const pkg = '{ "scripts": { "postinstall": "tinker prepare" } }\n';
+  const noExtends = goodApp({ "tsconfig.json": "{}\n", "package.json": pkg });
+  expect(runCheck(noExtends, glue, true).status).toBe("fixed");
+  expect(readFileSync(join(noExtends, "package.json"), "utf8")).toBe(pkg);
+});
+
+test("--fix writes the extends line even when another glue line needs a hand edit", () => {
+  const root = goodApp({
+    "tsconfig.json": "{}\n",
+    "vite.config.ts": `${glued}import tailwindcss from "@tailwindcss/vite";\nexport default { plugins: [tinker(), tailwindcss()] };\n`,
+  });
+  expect(runCheck(root, glue, true).lines).toEqual([
+    "vite.config.ts:2 imports @tailwindcss/vite; tinker() adds Tailwind already",
+  ]);
+  expect(readFileSync(join(root, "tsconfig.json"), "utf8")).toBe(
+    '{\n  "extends": "./.tinker/tsconfig.json"\n}\n',
+  );
+});
+
+test("--fix writes a missing tsconfig.json, and fills an empty extends list", () => {
+  const missing = goodApp();
+  rmSync(join(missing, "tsconfig.json"));
+  expect(runCheck(missing, glue, true).status).toBe("fixed");
+  expect(readFileSync(join(missing, "tsconfig.json"), "utf8")).toBe(
+    '{\n  "extends": "./.tinker/tsconfig.json"\n}\n',
+  );
+  const empty = goodApp({ "tsconfig.json": '{ "extends": [] }\n' });
+  expect(runCheck(empty, glue, true).status).toBe("fixed");
+  expect(readFileSync(join(empty, "tsconfig.json"), "utf8")).toBe(
+    '{ "extends": ["./.tinker/tsconfig.json"] }\n',
+  );
+});
+
+test("--fix indents a new key with the file's own indent", () => {
+  const root = goodApp({ "tsconfig.json": '{\n    "compilerOptions": {}\n}\n' });
+  expect(runCheck(root, glue, true).status).toBe("fixed");
+  expect(readFileSync(join(root, "tsconfig.json"), "utf8")).toBe(
+    '{\n    "extends": "./.tinker/tsconfig.json",\n    "compilerOptions": {}\n}\n',
+  );
 });

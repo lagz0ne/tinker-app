@@ -122,6 +122,20 @@ test("an upgrade plan names each dependency change and the base it leaves, and w
   expect(readFileSync(join(root, "package.json"), "utf8")).toBe(before);
 });
 
+test("a peer whose spec already installs the tested version keeps its spec", () => {
+  const root = installedApp({
+    "@tinker/start": "file:base.tgz",
+    "@tanstack/react-router": "file:router.tgz",
+  });
+  write(root, {
+    "node_modules/@tanstack/react-router/package.json": JSON.stringify({ version: "1.170.41" }),
+  });
+  packRelease(root, "9.1.0");
+  expect(planUpgrade(root, "9.1.0", { from: "packs", force: false }).changes).toEqual([
+    "package.json: @tinker/start file:base.tgz -> file:packs/tinker-start-9.1.0.tgz",
+  ]);
+});
+
 test("with no release folder, an upgrade names the version and pins no peer", () => {
   const root = installedApp({ "@tinker/start": "9.0.0", "@tanstack/react-router": "1.160.0" });
   expect(planUpgrade(root, "9.1.0", { force: false }).changes).toEqual([
@@ -132,9 +146,12 @@ test("with no release folder, an upgrade names the version and pins no peer", ()
 test("an upgrade stops on an edited base file, unless forced, and on a missing release", () => {
   const root = installedApp();
   packRelease(root, "9.1.0");
-  write(root, { "node_modules/@tinker/start/src/a.ts": "edited" });
+  write(root, {
+    "node_modules/@tinker/start/src/a.ts": "edited",
+    "node_modules/@tinker/start/src/b.ts": "edited",
+  });
   expect(planUpgrade(root, "9.1.0", { from: "packs", force: false })).toEqual({
-    stop: "stop: node_modules/@tinker/start/src/a.ts changed; an install drops base edits, so use an extension point\nRun tinker doctor --fix first, or pass --force.",
+    stop: "stop: node_modules/@tinker/start/src/a.ts changed; an install drops base edits, so use an extension point; node_modules/@tinker/start/src/b.ts changed; an install drops base edits, so use an extension point\nRun tinker doctor --fix first, or pass --force.",
   });
   expect(planUpgrade(root, "9.1.0", { from: "packs", force: true }).changes).toEqual([
     "package.json: @tinker/start file:base.tgz -> file:packs/tinker-start-9.1.0.tgz",

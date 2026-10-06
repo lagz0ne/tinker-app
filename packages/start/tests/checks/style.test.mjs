@@ -171,6 +171,22 @@ test("a components.json with no UI file yet needs no stylesheet", () => {
   });
 });
 
+test("reads Tailwind's import with single quotes and any spacing", () => {
+  const root = goodApp({ "src/style.css": "@import\t 'tailwindcss';\n", ...tailwindInstalled });
+  expect(style(root).status).toBe("ok");
+  const missing = goodApp({ "src/style.css": "@import\t 'tailwindcss';\n" });
+  expect(style(missing).lines).toHaveLength(2);
+  const button = { "src/components/ui/button.tsx": "export const Button = 1;\n" };
+  const ui = goodApp({
+    "components.json": shadcn({}),
+    "src/style.css": "@import  'tailwindcss';\n",
+    ...tailwindInstalled,
+    ...button,
+  });
+  prepare(ui);
+  expect(style(ui).status).toBe("ok");
+});
+
 test("names a missing or Tailwind-less stylesheet once shadcn has a UI file", () => {
   const button = { "src/components/ui/button.tsx": "export const Button = 1;\n" };
   const missing = goodApp({ "components.json": shadcn({}), ...button });

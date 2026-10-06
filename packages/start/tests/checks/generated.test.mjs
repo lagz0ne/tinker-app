@@ -153,6 +153,19 @@ test("--fix starts a new line in a .gitignore that does not end in one", () => {
   );
 });
 
+test("--fix appends to a .gitignore that ends in a newline, and says when it adds nothing", () => {
+  const root = preparedApp({ ".gitignore": "node_modules\n" });
+  expect(runCheck(root, generated, true).status).toBe("fixed");
+  expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe(
+    "node_modules\n.tinker/\n.tanstack/\n",
+  );
+  write(root, { ".tinker/tsconfig.json": "{}" });
+  expect(runCheck(root, generated, true)).toEqual({
+    status: "fixed",
+    lines: ["ran tinker prepare"],
+  });
+});
+
 /**
  * A fake `vite` with the one call `tinker prepare` makes: it notes that the route generator ran
  * (the real one would write the tree), so a test sees whether --fix ran it. No Vite runs.
