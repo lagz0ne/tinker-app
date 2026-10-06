@@ -138,31 +138,60 @@ The client seam with sync on, filled in:
 // src/lib/tinker.ts
 export const extensions = [];
 export { records } from "../frontend/records.ts";
-export { readSnapshot, readBootstrap, readBatch, streamMessage } from "../contracts/sync.ts";
+export { readSnapshot, readBootstrap } from "./sync.ts";
+export { readBatch, streamMessage } from "./sync.ts";
 ```
 
 ```ts
-// src/contracts/sync.ts, the Register bodies
+// src/lib/sync.ts, the Register bodies
 declare module "@tinker/start" {
   interface Register {
-    change: FeatureChange;
-    result: FeatureResult;
+    change: { count: number };
+    result: { kind: "done" };
     public: { count: number };
     private: { name: string };
   }
 }
 ```
 
-`records` keeps the tab's saved state:
-`bootstrapPublic`, `bootstrapPrivate`, `change`,
-`resetPrivate`, and `snapshot`.
+`records` keeps the tab's saved state.
+It is a `Sync.Records`. Type its factory with it,
+so a wrong method fails in the app's own file.
+A revision of -1 means none yet.
+
+```ts
+// src/frontend/records.ts
+export const records = resource({
+  label: "records",
+  depends: { count: count.controller },
+  factory: ({ count }): Sync.Records => ({
+    resetPrivate: () => {},
+    bootstrapPublic: (saved, after) => {
+      if (saved.revision >= after) count.set(saved.count);
+    },
+    bootstrapPrivate: () => {},
+    change: (change) => count.set(change.count),
+    snapshot: (revision) => ({
+      public: {
+        stream: "public",
+        revision: Math.max(0, revision),
+        count: count.get(),
+      },
+      private: null,
+    }),
+  }),
+});
+```
+
 A route reads the router context sync adds,
 `Sync.RouterContext` (`bootstrap` and `account`),
 from a shell that declares it:
 
 ```tsx
 // src/routes/__root.tsx
-export const Route = createRootRouteWithContext<Sync.RouterContext>()({
+type Context = Sync.RouterContext;
+const root = createRootRouteWithContext<Context>();
+export const Route = root({
   component: () => <Outlet />,
 });
 ```

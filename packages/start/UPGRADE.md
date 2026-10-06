@@ -12,6 +12,7 @@ With `tinker({ sync: true })`:
   the app's snapshot operation.
 - `src/lib/tinker.ts` exports `records`, `readSnapshot`,
   `readBootstrap`, `readBatch`, and `streamMessage`.
+  `records` fits `Sync.Records`; type its factory with it.
 - Some file in `src/` declares the `Register` bodies:
   `declare module "@tinker/start" { interface Register { … } }`.
 - A route that reads `context.bootstrap()` or

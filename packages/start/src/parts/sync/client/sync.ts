@@ -11,7 +11,8 @@ import { accountOwner } from "./owner.ts";
 export const syncClient = resource({
   label: "sync.client",
   depends: { owner: accountOwner, records },
-  factory: async ({ owner, records }, { defer, log, clock }) => {
+  factory: async ({ owner, records: appRecords }, { defer, log, clock }) => {
+    const records: Sync.Records = appRecords;
     let accountId: string | null = null;
     const cursors = new Map<string, number>();
     cursors.set("public", -1);

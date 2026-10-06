@@ -16,6 +16,14 @@ export declare namespace Sync {
   type Envelope = z.infer<typeof eventEnvelope>;
   type Receipt = { executionId: string };
   type Reply = { kind: "accepted"; executionId: string } | { kind: "rejected"; message: string };
+  /** The app's `records`, as the sync client calls them; a revision of -1 means none yet. */
+  type Records = {
+    resetPrivate(): void;
+    bootstrapPublic(saved: Public, after: number): void;
+    bootstrapPrivate(saved: Private, after: number): void;
+    change(change: Change): void;
+    snapshot(publicRevision: number, privateRevision: number): Snapshot;
+  };
   /** The router context sync adds: a route's loader or guard calls these. */
   type RouterContext = {
     bootstrap: () => Promise<Snapshot>;
