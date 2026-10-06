@@ -302,7 +302,8 @@ The package's `exports` refuses every other path.
     Each kind leaves on its own: when the trace send
     fails, the traces stay and the logs sent beside them leave.
     Drops are counted.
-  - Closing sends what is left, for at most 1.5 s.
+  - Closing sends what is left, for at most 1.5 s;
+    then the owned clock aborts a stuck storage request.
     Then closing gives up on storage,
     and what is left is dropped.
   - A bad storage URL stops the telemetry root
@@ -355,7 +356,8 @@ The package's `exports` refuses every other path.
     A send that fails because its call stopped fails
     with its own error, and is not retried.
     A wait for an old account version, or with a
-    stopped signal, fails at once. A result for a write
+    stopped signal, fails at once. An account exit
+    or a root close fails a wait that no signal stops. A result for a write
     this tab did not send is not kept for a later write
     of that id.
   - A connection that applies changes, then errors,
@@ -392,7 +394,7 @@ The package's `exports` refuses every other path.
     rows cannot be read. It re-reads it again after the
     read, so rows read for an account that signed out
     during the read are not sent.
-    An account stream that signs out,
+    A held stream whose account signs out,
     or an anonymous stream that signs in,
     is an account change: it sends `event: account`
     and closes, with no saved rows after it.
@@ -405,6 +407,7 @@ The package's `exports` refuses every other path.
     and stay silent on a rollback;
     a read made before waiting still wakes.
   - One listener wakes every stream.
+    A root that never listened closes clean.
     A closed subscriber is not told when it breaks.
     A listener that cannot start fails the subscribe,
     so the stream's open fails; a listener that breaks
