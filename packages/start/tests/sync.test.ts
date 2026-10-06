@@ -83,6 +83,69 @@ const row = (stream: string, revision: number, executionId: string, change: unkn
 });
 const account = 'event: account\ndata: {"kind":"account-change"}\n\n';
 
+test("a wait holds until a wake, a close, or a stop, and returns at once when it has nothing to wait for", async () => {
+  const { db, wake } = handWoken();
+  const root = createScope({ presets: [db] });
+  const feed = await root.resolve(notifications);
+  const subscription = await feed.subscribe();
+  const stop = new AbortController();
+  const waiting = feed.wait(subscription, feed.revision(), stop.signal);
+  const held = subscription.waiting;
+  expect(held).toBeDefined();
+  expect(await settledFirst(waiting)).toBe("pending");
+  stop.abort();
+  expect(await settledFirst(held?.promise ?? waiting)).toBe("settled");
+  await waiting;
+  expect(subscription.waiting).toBeUndefined();
+  const woken = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  wake();
+  await woken;
+  const moved = feed.wait(subscription, 0, new AbortController().signal);
+  expect(subscription.waiting).toBeUndefined();
+  await moved;
+  const stopped = new AbortController();
+  stopped.abort();
+  const late = feed.wait(subscription, feed.revision(), stopped.signal);
+  expect(subscription.waiting).toBeUndefined();
+  await late;
+  const closing = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  feed.close(subscription);
+  await closing;
+  const closed = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  expect(subscription.waiting).toBeUndefined();
+  await closed;
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a wait on a broken listener returns at once", async () => {
+  const failures: (() => void)[] = [];
+  const root = createScope({
+    presets: [
+      preset(database, async (_deps, { defer }) => {
+        const [{ PGlite }, { drizzle }] = await Promise.all([
+          import("@electric-sql/pglite"),
+          import("drizzle-orm/pglite"),
+        ]);
+        const client = await PGlite.create();
+        defer(() => client.close());
+        return Object.assign(drizzle({ client }), {
+          listen: async (_wake: () => void, failed: () => void) => {
+            failures.push(failed);
+            return () => undefined;
+          },
+        });
+      }),
+    ],
+  });
+  const feed = await root.resolve(notifications);
+  const subscription = await feed.subscribe();
+  failures[0]?.();
+  const broken = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  expect(subscription.waiting).toBeUndefined();
+  await broken;
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
 test("notifications wake after a commit, stay silent on a rollback, and a read before waiting still wakes", async () => {
   const root = createScope();
   const feed = await root.resolve(notifications);
@@ -832,41 +895,31 @@ test("the stream reads the account once per wake, not once per pull", async () =
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("a wait holds until a wake, a close, or a stop, and returns at once when it has nothing to wait for", async () => {
-  const { db, wake } = handWoken();
-  const root = createScope({ presets: [db] });
+test("a listener that breaks while it connects fails the subscribe as disconnected", async () => {
+  const root = createScope({
+    presets: [
+      preset(database, async (_deps, { defer }) => {
+        const [{ PGlite }, { drizzle }] = await Promise.all([
+          import("@electric-sql/pglite"),
+          import("drizzle-orm/pglite"),
+        ]);
+        const client = await PGlite.create();
+        defer(() => client.close());
+        return Object.assign(drizzle({ client }), {
+          listen: async (_wake: () => void, failed: () => void) => {
+            failed();
+            return () => undefined;
+          },
+        });
+      }),
+    ],
+  });
   const feed = await root.resolve(notifications);
-  const subscription = await feed.subscribe();
-  const stop = new AbortController();
-  const waiting = feed.wait(subscription, feed.revision(), stop.signal);
-  const held = subscription.waiting;
-  expect(held).toBeDefined();
-  expect(await settledFirst(waiting)).toBe("pending");
-  stop.abort();
-  expect(await settledFirst(held?.promise ?? waiting)).toBe("settled");
-  await waiting;
-  expect(subscription.waiting).toBeUndefined();
-  const woken = feed.wait(subscription, feed.revision(), new AbortController().signal);
-  wake();
-  await woken;
-  const moved = feed.wait(subscription, 0, new AbortController().signal);
-  expect(subscription.waiting).toBeUndefined();
-  await moved;
-  const stopped = new AbortController();
-  stopped.abort();
-  const late = feed.wait(subscription, feed.revision(), stopped.signal);
-  expect(subscription.waiting).toBeUndefined();
-  await late;
-  const closing = feed.wait(subscription, feed.revision(), new AbortController().signal);
-  feed.close(subscription);
-  await closing;
-  const closed = feed.wait(subscription, feed.revision(), new AbortController().signal);
-  expect(subscription.waiting).toBeUndefined();
-  await closed;
+  await expect(feed.subscribe()).rejects.toMatchObject({ kind: "StreamDisconnected" });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("a wait on a broken listener returns at once", async () => {
+test("a closed subscriber is not told when the listener breaks", async () => {
   const failures: (() => void)[] = [];
   const root = createScope({
     presets: [
@@ -887,10 +940,86 @@ test("a wait on a broken listener returns at once", async () => {
     ],
   });
   const feed = await root.resolve(notifications);
-  const subscription = await feed.subscribe();
+  let told = 0;
+  const gone = await feed.subscribe(() => {
+    told += 1;
+  });
+  feed.close(gone);
   failures[0]?.();
-  const broken = feed.wait(subscription, feed.revision(), new AbortController().signal);
-  expect(subscription.waiting).toBeUndefined();
-  await broken;
+  expect(told).toBe(0);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a quiet stream reads the account once per heartbeat, and once more only for a wake during it", async () => {
+  const time = makeTestClock();
+  let sleeping = Promise.withResolvers<number>();
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      const slept = time.sleep(ms, signal);
+      sleeping.resolve(ms);
+      sleeping = Promise.withResolvers();
+      return slept;
+    },
+  };
+  const { db } = handWoken();
+  const reads = accountReads(["ada", "ada", null]);
+  const stop = new AbortController();
+  const root = createScope({
+    clock,
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [db, reads.auth],
+  });
+  const session = root.createSession({ tags: requestHeaders(new Headers()) });
+  const reader = (
+    await session.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  let slept = sleeping.promise;
+  let held = reader.read();
+  expect(await slept).toBe(10_000);
+  time.advance(10_000);
+  expect(await text(held)).toBe(": heartbeat\n\n");
+  expect(reads.reads()).toBe(2);
+  slept = sleeping.promise;
+  held = reader.read();
+  expect(await slept).toBe(10_000);
+  time.advance(10_000);
+  expect(await text(held)).toBe(account);
+  expect((await reader.read()).done).toBe(true);
+  expect(reads.reads()).toBe(3);
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a request whose stream was never opened ends clean", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  const session = root.createSession();
+  await session.resolve(eventStream);
+  expect(await session.close({ graceful: true })).toMatchObject({
+    status: "success",
+    teardownErrors: undefined,
+  });
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a private cursor resumes past revision 0", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(new Set(["ada"]))],
+  });
+  const ada = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
+  const opened = await ada.settle(openSync, {
+    rawInput: { cursor: { public: 0, private: { accountId: "ada", revision: 5 } } },
+  });
+  if (opened.status !== "success") throw opened;
+  await opened.value.cancel();
+  expect((await ada.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

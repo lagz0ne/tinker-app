@@ -11,9 +11,9 @@ import {
   receiveMessage,
   refreshAccount,
   snapshotLoader,
-  snapshotSource,
   syncStreaming,
 } from "../src/parts/sync/client/events.ts";
+import { snapshotSource } from "../src/parts/sync/functions.ts";
 import { accountOwner } from "../src/parts/sync/client/owner.ts";
 import { syncRouter } from "../src/parts/sync/client/router.ts";
 import { applyBootstrap, syncClient } from "../src/parts/sync/client/sync.ts";
@@ -44,7 +44,12 @@ const accountChange = JSON.stringify({ kind: "account-change" });
  * `emit` hands its listeners a frame, and `next` is the next connection to open.
  */
 function sources() {
-  type Connection = { url: string; closed: boolean; emit(type: string, data?: string): void };
+  type Connection = {
+    url: string;
+    closed: boolean;
+    closes: number;
+    emit(type: string, data?: string): void;
+  };
   const opened: Connection[] = [];
   let arrival = Promise.withResolvers<Connection>();
   const backend = (url: string) => {
@@ -52,6 +57,7 @@ function sources() {
     const connection: Connection = {
       url,
       closed: false,
+      closes: 0,
       emit: (type, data) => {
         for (const [name, listener] of listeners)
           if (name === type) listener(new MessageEvent(type, { data }));
@@ -66,6 +72,7 @@ function sources() {
       },
       close: () => {
         connection.closed = true;
+        connection.closes += 1;
       },
     };
   };
@@ -475,5 +482,288 @@ test("the on part streams through the tab's owner; the off part adds nothing and
   expect(router.options).toEqual({});
   expect(() => router.bind(async () => undefined)).not.toThrow();
   expect(off.extensions).toEqual([]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+/** "settled" when the promise has settled already, else "pending": a marker queued after it. */
+const settledFirst = (promise: Promise<unknown>) =>
+  Promise.race([
+    promise.then(
+      () => "settled",
+      () => "settled",
+    ),
+    Promise.resolve().then(() => "pending"),
+  ]);
+
+test("a tab whose snapshot came another way still loads its own at the next version", async () => {
+  const { calls, source } = network();
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+    presets: [source],
+  });
+  await root.ready;
+  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  expect(await root.run(loadSnapshot)).toEqual(ada);
+  expect(calls).toEqual(["load"]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a load that cannot apply yet is tried again; a newer load is not dropped when an older one ends", async () => {
+  const replies: PromiseWithResolvers<Sync.Snapshot>[] = [];
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+    presets: [
+      preset(snapshotSource, () => ({
+        load: () => {
+          const reply = Promise.withResolvers<Sync.Snapshot>();
+          replies.push(reply);
+          return reply.promise;
+        },
+        account: async () => "ada",
+      })),
+    ],
+  });
+  await root.ready;
+  const loader = await root.resolve(snapshotLoader);
+  const client = await root.resolve(syncClient);
+  const signal = new AbortController().signal;
+  const older = loader.load(signal);
+  await Promise.resolve();
+  client.leave();
+  const newer = loader.load(signal);
+  await Promise.resolve();
+  replies[0]?.resolve(ada);
+  await older;
+  const shared = loader.load(signal);
+  expect(replies).toHaveLength(2);
+  replies[1]?.resolve({ ...ada, private: null });
+  expect([await newer, await shared]).toEqual([
+    { public: ada.public, private: null },
+    { public: ada.public, private: null },
+  ]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a snapshot that cannot apply while a write is pending is loaded again", async () => {
+  const { calls, source } = network();
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+    presets: [source],
+  });
+  await root.ready;
+  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  const client = await root.resolve(syncClient);
+  const sent = Promise.withResolvers<void>();
+  const pending = client.execute(
+    id,
+    { data: undefined, send: () => (sent.resolve(), new Promise<Sync.Reply>(() => undefined)) },
+    new AbortController().signal,
+  );
+  pending.catch(() => undefined);
+  await sent.promise;
+  await root.run(loadSnapshot);
+  await root.run(loadSnapshot);
+  expect(calls).toEqual(["load", "load"]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("an account change begun twice holds the tab until the latest one ends", async () => {
+  const { source } = network();
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+    presets: [source],
+  });
+  await root.ready;
+  const loader = await root.resolve(snapshotLoader);
+  const order: string[] = [];
+  const first = loader.beginAccountChange();
+  const latest = loader.beginAccountChange();
+  loader.endAccountChange(first);
+  void loader.ready().then(() => order.push("ready"));
+  await Promise.resolve();
+  void latest.promise.then(() => order.push("latest ended"));
+  loader.endAccountChange(latest);
+  await loader.ready();
+  const again = loader.beginAccountChange();
+  const newest = loader.beginAccountChange();
+  await loader.completeAccountChange(new AbortController().signal, again);
+  void loader.ready().then(() => order.push("ready again"));
+  await Promise.resolve();
+  void newest.promise.then(() => order.push("newest ended"));
+  loader.endAccountChange(newest);
+  await loader.ready();
+  expect(order).toEqual(["latest ended", "ready", "newest ended", "ready again"]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("frames from an old connection after a reconnect are dropped", async () => {
+  const fake = sources();
+  const root = createScope({ tags: eventSourceBackend(fake.backend) });
+  const source = root.resolve(eventSource);
+  const signal = new AbortController().signal;
+  source.connect({ public: 0, private: null }, signal);
+  source.close();
+  source.close();
+  fake.opened[0]?.emit("changes", "stale");
+  source.connect({ public: 0, private: null }, signal);
+  fake.opened[1]?.emit("changes", "fresh");
+  expect([await source.next(), fake.opened[0]?.closes]).toEqual(["fresh", 1]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("before any connection, close does nothing and next ends at once; a root that never connected closes clean", async () => {
+  const fake = sources();
+  const root = createScope({ tags: eventSourceBackend(fake.backend) });
+  const source = root.resolve(eventSource);
+  expect(() => source.close()).not.toThrow();
+  const next = source.next();
+  expect(await settledFirst(next)).toBe("settled");
+  expect(await next).toBe(undefined);
+  expect(await root.close({ graceful: true })).toMatchObject({
+    status: "success",
+    teardownErrors: undefined,
+  });
+});
+
+test("a connection that applies changes, then errors, ends false", async () => {
+  const fake = sources();
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: [tabStop(new AbortController().signal), eventSourceBackend(fake.backend)],
+  });
+  await root.ready;
+  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  const landed = Promise.withResolvers<void>();
+  const stopWatching = root.controller(applied).watch(() => landed.resolve());
+  const opening = fake.next();
+  const consuming = root.run(consumeConnection);
+  const connection = await opening;
+  connection.emit("changes", changes(["public", 3, "p3"]));
+  await landed.promise;
+  stopWatching();
+  connection.emit("error");
+  expect(await consuming).toBe(false);
+  expect(root.resolve(applied)).toEqual(["p3"]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the tab logs a reconnect only after a failure, and checks nothing more once it stops", async () => {
+  const time = makeTestClock();
+  let sleeping = Promise.withResolvers<number>();
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      const slept = time.sleep(ms, signal);
+      sleeping.resolve(ms);
+      sleeping = Promise.withResolvers();
+      return slept;
+    },
+  };
+  const fake = sources();
+  const logs: string[] = [];
+  const calls: string[] = [];
+  const tab = new AbortController();
+  const root = createScope({
+    clock,
+    observe: { log: ({ message }) => logs.push(message) },
+    extensions: [accountOwner, syncStreaming],
+    tags: [tabStop(tab.signal), eventSourceBackend(fake.backend)],
+    presets: [
+      preset(snapshotSource, () => ({
+        load: async () => {
+          calls.push("load");
+          throw new TypeError("offline");
+        },
+        account: async () => {
+          calls.push("account");
+          return "ada";
+        },
+      })),
+    ],
+  });
+  await root.ready;
+  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  const opening = fake.next();
+  root.resolve(syncStreaming).start();
+  const one = await opening;
+  const slept = sleeping.promise;
+  one.emit("account", accountChange);
+  expect(await slept).toBe(500);
+  expect([calls, logs]).toEqual([["load"], ["sync.reconnecting"]]);
+  const reopening = fake.next();
+  time.advance(500);
+  const two = await reopening;
+  tab.abort();
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  expect([calls, logs, two.closed]).toEqual([["load"], ["sync.reconnecting"], true]);
+});
+
+test("a tab stream that fails surfaces its error when the tab closes", async () => {
+  const torn = new Error("clock torn");
+  const time = makeTestClock();
+  const slept = Promise.withResolvers<void>();
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: async () => {
+      slept.resolve();
+      throw torn;
+    },
+  };
+  const fake = sources();
+  const tab = new AbortController();
+  const root = createScope({
+    clock,
+    extensions: [accountOwner, syncStreaming],
+    tags: [
+      tabStop(tab.signal),
+      eventSourceBackend(() => {
+        throw new TypeError("no stream");
+      }),
+    ],
+    presets: [network().source],
+  });
+  await root.ready;
+  root.resolve(syncStreaming).start();
+  await slept.promise;
+  expect(await root.close({ graceful: true })).toMatchObject({ teardownErrors: [torn] });
+  expect(fake.opened).toHaveLength(0);
+});
+
+test("the tab's sync work shows on the trace under its own names", async () => {
+  const fake = sources();
+  const tab = new AbortController();
+  const root = createScope({
+    observe: { history: 60 },
+    extensions: [accountOwner, syncStreaming],
+    tags: [tabStop(tab.signal), eventSourceBackend(fake.backend)],
+    presets: [network().source],
+  });
+  await root.ready;
+  await root.run(loadSnapshot);
+  await root.run(checkAccount);
+  await root.run(refreshAccount);
+  await root.run(receiveMessage, { rawInput: { version: 1, data: changes() } });
+  const opening = fake.next();
+  const consuming = root.run(consumeConnection);
+  (await opening).emit("error");
+  await consuming;
+  const names = new Set(root.spans().map(({ name }) => name));
+  const expected = [
+    "sync.snapshotLoader",
+    "sync.load",
+    "sync.checkAccount",
+    "sync.refreshAccount",
+    "sync.receive",
+    "sync.connection",
+    "sync.eventSource",
+  ];
+  expect(expected.filter((name) => !names.has(name))).toEqual([]);
+  tab.abort();
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

@@ -372,3 +372,311 @@ test("closing the root cancels a write that waits for its result", async () => {
   expect(await writing).toMatchObject({ status: "failed", error: { kind: "Cancelled" } });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
+
+/** "settled" when the promise has settled already, else "pending": a marker queued after it. */
+const settledFirst = (promise: Promise<unknown>) =>
+  Promise.race([
+    promise.then(
+      () => "settled",
+      () => "settled",
+    ),
+    Promise.resolve().then(() => "pending"),
+  ]);
+
+/**
+ * A write whose send the test answers: `sent` resolves when it sends; `reply` answers it.
+ * @param executionId - From a test; why: the write's id.
+ * @param call - From a test; why: the signal that stops this call.
+ */
+function heldWrite(executionId: string, call: AbortSignal) {
+  const sent = Promise.withResolvers<void>();
+  const reply = Promise.withResolvers<Sync.Reply>();
+  const write = operation({
+    label: "test.sync.write",
+    depends: { sync: syncClient },
+    run: async ({ sync }) =>
+      sync.execute(
+        executionId,
+        {
+          data: undefined,
+          send: () => {
+            sent.resolve();
+            return reply.promise;
+          },
+        },
+        call,
+      ),
+  });
+  return { write, sent: sent.promise, reply };
+}
+
+test("an anonymous snapshot keeps the tab anonymous on the public stream", async () => {
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+  });
+  await root.ready;
+  const client = await root.resolve(syncClient);
+  const anonymous = { public: { stream: "public" as const, revision: 2 }, private: null };
+  expect(await root.run(applyBootstrap, { input: { snapshot: anonymous, version: 0 } })).toBe(0);
+  expect([client.cursors(), root.resolve(savedPrivate)]).toEqual([
+    { accountId: null, publicRevision: 2, privateRevision: -1 },
+    null,
+  ]);
+  expect(client.snapshot()).toEqual(anonymous);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("an account that leaves and joins again takes its snapshot afresh", async () => {
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+  });
+  await root.ready;
+  const client = await root.resolve(syncClient);
+  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  await root.run(applyEvents, { input: { version: 1, events: [event("ada", 1, "a1")] } });
+  await root.run(leaveAccount);
+  const older = { ...ada, private: { stream: "ada", revision: 0 } };
+  await root.run(applyBootstrap, { input: { snapshot: older, version: 2 } });
+  expect([root.resolve(savedPrivate), client.cursors().privateRevision]).toEqual([
+    older.private,
+    0,
+  ]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a wait for an old account version, or with a stopped signal, fails at once", async () => {
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+  });
+  await root.ready;
+  const client = await root.resolve(syncClient);
+  const old = client.wait(ids[1], 5, new AbortController().signal);
+  expect(await settledFirst(old)).toBe("settled");
+  await expect(old).rejects.toMatchObject({ kind: "Cancelled" });
+  const stopped = new AbortController();
+  stopped.abort();
+  const late = client.wait(ids[1], 0, stopped.signal);
+  expect(await settledFirst(late)).toBe("settled");
+  await expect(late).rejects.toMatchObject({ kind: "Cancelled" });
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("closing the root fails a wait that no signal stops", async () => {
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+  });
+  await root.ready;
+  const client = await root.resolve(syncClient);
+  const waiting = client.wait(ids[1], 0, new AbortController().signal);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  await expect(waiting).rejects.toMatchObject({ kind: "Cancelled" });
+});
+
+test("a result for a write this tab did not send is not kept for a later write of that id", async () => {
+  const call = new AbortController();
+  const { write, sent, reply } = heldWrite(ids[2], call.signal);
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+  });
+  await root.ready;
+  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  const client = await root.resolve(syncClient);
+  client.apply([result("ada", 1, ids[2])], 1);
+  const writing = root.run(write);
+  await sent;
+  reply.resolve({ kind: "accepted", executionId: ids[2] });
+  client.apply(
+    [
+      {
+        stream: "ada",
+        revision: 2,
+        executionId: ids[2],
+        payload: { kind: "result", result: "own" },
+      },
+    ],
+    1,
+  );
+  expect(await writing).toBe("own");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a finished write forgets its id: a repeat waits for its own result", async () => {
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+  });
+  await root.ready;
+  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  const client = await root.resolve(syncClient);
+  const first = heldWrite(ids[1], new AbortController().signal);
+  const writing = root.run(first.write);
+  await first.sent;
+  first.reply.resolve({ kind: "accepted", executionId: ids[1] });
+  client.apply([result("ada", 1, ids[1])], 1);
+  expect(await writing).toEqual({ kind: "done" });
+  client.apply(
+    [
+      {
+        stream: "ada",
+        revision: 2,
+        executionId: ids[1],
+        payload: { kind: "result", result: "late" },
+      },
+    ],
+    1,
+  );
+  const again = heldWrite(ids[1], new AbortController().signal);
+  const repeating = root.run(again.write);
+  await again.sent;
+  again.reply.resolve({ kind: "accepted", executionId: ids[1] });
+  client.apply(
+    [
+      {
+        stream: "ada",
+        revision: 3,
+        executionId: ids[1],
+        payload: { kind: "result", result: "own" },
+      },
+    ],
+    1,
+  );
+  expect(await repeating).toBe("own");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a call stopped before it sends fails at once, and sends nothing", async () => {
+  const call = new AbortController();
+  call.abort();
+  const { write } = heldWrite(ids[1], call.signal);
+  let sends = 0;
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+  });
+  await root.ready;
+  const counted = operation({
+    label: "test.sync.counted",
+    depends: { sync: syncClient },
+    run: async ({ sync }) =>
+      sync.execute(
+        ids[1],
+        {
+          data: undefined,
+          send: async () => {
+            sends += 1;
+            return { kind: "accepted", executionId: ids[1] };
+          },
+        },
+        call.signal,
+      ),
+  });
+  expect(await root.settle(counted)).toMatchObject({
+    status: "failed",
+    error: { kind: "Cancelled" },
+  });
+  expect(await root.settle(write)).toMatchObject({
+    status: "failed",
+    error: { kind: "Cancelled" },
+  });
+  expect(sends).toBe(0);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a send that fails because its call stopped fails with its own error, and is not retried", async () => {
+  const call = new AbortController();
+  const torn = new Error("send torn");
+  const logs: string[] = [];
+  const write = operation({
+    label: "test.sync.torn",
+    depends: { sync: syncClient },
+    run: async ({ sync }) =>
+      sync.execute(
+        ids[1],
+        {
+          data: undefined,
+          send: async () => {
+            call.abort();
+            throw torn;
+          },
+        },
+        call.signal,
+      ),
+  });
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+    observe: { log: ({ message }) => logs.push(message) },
+  });
+  await root.ready;
+  expect(await root.settle(write)).toMatchObject({ status: "failed", error: torn });
+  expect(logs).toEqual([]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a result that lands as its call stops fails the call", async () => {
+  const call = new AbortController();
+  const { write, sent, reply } = heldWrite(ids[1], call.signal);
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+  });
+  await root.ready;
+  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  const client = await root.resolve(syncClient);
+  const writing = root.settle(write);
+  await sent;
+  reply.resolve({ kind: "accepted", executionId: ids[1] });
+  await Promise.resolve();
+  client.apply([result("ada", 1, ids[1])], 1);
+  call.abort();
+  expect(await writing).toMatchObject({ status: "failed", error: { kind: "Cancelled" } });
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the sync client's work shows on the trace under its own names", async () => {
+  const root = createScope({
+    observe: { history: 30 },
+    extensions: [accountOwner],
+    tags: [tabStop(new AbortController().signal), pageEvents(new EventTarget())],
+  });
+  await root.ready;
+  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  await root.run(applyEvents, { input: { version: 1, events: [] } });
+  await root.run(leaveAccount);
+  root.resolve(tabLifetime);
+  const names = new Set(root.spans().map(({ name }) => name));
+  const expected = [
+    "sync.client",
+    "sync.bootstrap",
+    "sync.apply",
+    "sync.leave",
+    "router.tabLifetime",
+  ];
+  expect(expected.filter((name) => !names.has(name))).toEqual([]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the account owner needs the tab's stop signal bound", async () => {
+  const root = createScope({ extensions: [accountOwner] });
+  await expect(root.ready).rejects.toMatchObject({ payload: { label: "sync.tabStop" } });
+  await root.close();
+});
+
+test("a page hide before anything is bound closes nothing; a root with no page ends clean", async () => {
+  const page = new EventTarget();
+  const root = createScope({ tags: pageEvents(page) });
+  root.resolve(tabLifetime);
+  expect(() => page.dispatchEvent(hide(false))).not.toThrow();
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  const server = createScope();
+  server.resolve(tabLifetime);
+  expect(await server.close({ graceful: true })).toMatchObject({
+    status: "success",
+    teardownErrors: undefined,
+  });
+});

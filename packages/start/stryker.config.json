@@ -11,6 +11,7 @@
     "!src/entry/start.ts",
     "!src/entry/fallbacks.tsx",
     "!src/routes/**",
+    "!src/parts/sync/functions.ts",
     "!src/defaults/app.ts",
     "!src/defaults/app.server.ts",
     "!src/defaults/router.ts",

@@ -2,19 +2,10 @@ import { extension, operation, resource, tag } from "@tinker/core";
 import { streamMessage } from "#tinker/app";
 import { streamInput } from "../envelopes.ts";
 import type { Sync } from "../envelopes.ts";
-import { getAccount, getBootstrap } from "../functions.ts";
+import { snapshotSource } from "../functions.ts";
 import type { Stream } from "../protocol.ts";
 import { applyBootstrap, syncClient } from "./sync.ts";
 import { tabStop } from "./tab.ts";
-
-/** The network client: the two server functions. Only scope tests replace it. */
-export const snapshotSource = resource({
-  label: "sync.snapshotSource",
-  factory: () => ({
-    load: (options: { signal: AbortSignal }): Promise<Sync.Snapshot> => getBootstrap(options),
-    account: (options: { signal: AbortSignal }): Promise<string | null> => getAccount(options),
-  }),
-});
 
 /**
  * One tab shares a load per account version; a sign-in holds loads and reconnects until its new

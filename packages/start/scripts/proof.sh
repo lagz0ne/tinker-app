@@ -10,6 +10,8 @@
 #     a seam without a name the part reads stops the build; a bad key is named in .env.
 # 14: the sync part (3a, the server side): on, /api/sync streams a stand-in in-memory database's
 #     events; off, the path is the app's; a seam without database stops the build; auth: false fails.
+# 15: the sync part's client (3b): getBootstrap answers the server render; the hydrated tab opens
+#     /api/sync and shows a commit made after it loaded; a client seam without a name stops the build.
 # Logs land in docs/roadmap/start-base/proof/. Builds, servers, and curl are proofs here, never unit tests.
 set -uo pipefail
 repo=$(pwd)
@@ -515,5 +517,204 @@ appSyncRoute() {
   build 2
 } 2>&1 | clean > "$out/14-sync-part.txt"
 
+# The sync app: stand-in seams on both sides, a page that shows the public count from the tab's
+# records, and a route that commits the next count as a sync event.
+syncApp() {
+  sed -i 's/tinker()/tinker({ sync: true })/' vite.config.ts
+  syncSeam
+  keys
+  cat >> src/lib/tinker.server.ts <<'TS'
+export const bootstrap = operation({
+  label: "bootstrap",
+  depends: { database, history: eventHistory },
+  run: async ({ database, history }) =>
+    database.transaction(async (tx) => {
+      const count = await history.lock(tx, "public");
+      return { public: { stream: "public" as const, revision: count, count }, private: null };
+    }),
+});
+TS
+  sed -i 's|^import { authSettings } from "@tinker/start/server";|import { authSettings, eventHistory } from "@tinker/start/server";|' src/lib/tinker.server.ts
+  sed -i 's|        payload jsonb NOT NULL, PRIMARY KEY (stream, revision));|        payload jsonb NOT NULL, PRIMARY KEY (stream, revision));\n      CREATE FUNCTION start_sync_wake() RETURNS trigger LANGUAGE plpgsql AS $$\n      BEGIN PERFORM pg_notify('"'"'start_sync'"'"', TG_TABLE_NAME); RETURN NULL; END; $$;\n      CREATE TRIGGER sync_event_committed AFTER INSERT ON sync_event\n      FOR EACH STATEMENT EXECUTE FUNCTION start_sync_wake();|' src/lib/tinker.server.ts
+  sed -i "s|      INSERT INTO sync_event VALUES|      INSERT INTO sync_stream VALUES ('public', 2);\n      INSERT INTO sync_event VALUES|" src/lib/tinker.server.ts
+  mkdir -p src/frontend src/backend
+  cat > src/frontend/count.ts <<'TS'
+import { data } from "@tinker/core";
+export const count = data<number>({ label: "count", initial: 0 });
+TS
+  cat > src/lib/tinker.ts <<'TS'
+import { resource } from "@tinker/core";
+import {
+  batchEnvelope,
+  bootstrapEnvelope,
+  eventEnvelope,
+  snapshotEnvelope,
+} from "@tinker/start";
+import type { Sync } from "@tinker/start";
+import { z } from "zod";
+import { count } from "../frontend/count.ts";
+
+declare module "@tinker/start" {
+  interface Register {
+    change: { count: number };
+    result: { kind: "done" };
+    public: { count: number };
+    private: Record<never, never>;
+  }
+}
+export const extensions = [];
+export const records = resource({
+  label: "records",
+  depends: { value: count.controller },
+  factory: ({ value }) => ({
+    resetPrivate() {},
+    bootstrapPublic(saved: Sync.Public, after: number) {
+      if (saved.revision >= after) value.set(saved.count);
+    },
+    bootstrapPrivate() {},
+    change(change: Sync.Change) {
+      value.set(change.count);
+    },
+    snapshot(publicRevision: number): Sync.Snapshot {
+      return {
+        public: { stream: "public", revision: Math.max(0, publicRevision), count: value.get() },
+        private: null,
+      };
+    },
+  }),
+});
+export const readSnapshot = snapshotEnvelope.extend({
+  public: z.object({ stream: z.literal("public"), revision: z.number().int().min(0), count: z.number() }),
+  private: z.null(),
+});
+export const readBootstrap = bootstrapEnvelope.extend({ snapshot: readSnapshot });
+const event = eventEnvelope.extend({
+  payload: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("change"), change: z.object({ count: z.number() }) }),
+    z.object({ kind: z.literal("result"), result: z.object({ kind: z.literal("done") }) }),
+  ]),
+});
+export const readBatch = batchEnvelope.extend({ events: z.array(event) });
+export const streamMessage = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("changes"), events: z.array(event).max(100) }),
+  z.object({ kind: z.literal("account-change") }),
+]);
+TS
+  cat > src/backend/bump.ts <<'TS'
+import { operation } from "@tinker/core";
+import { eventHistory } from "@tinker/start/server";
+import { database } from "../lib/tinker.server.ts";
+export const bump = operation({
+  label: "bump",
+  depends: { database, history: eventHistory },
+  run: async ({ database, history }, { random }) =>
+    database.transaction(async (tx) => {
+      const revision = await history.lock(tx, "public");
+      await history.append(tx, "public", random.uuid(), [
+        { kind: "change", change: { count: revision + 1 } },
+      ]);
+      return revision + 1;
+    }),
+});
+TS
+  cat > src/routes/__root.tsx <<'TS'
+import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import type { Sync } from "@tinker/start";
+export const Route = createRootRouteWithContext<Sync.RouterContext>()({
+  component: () => <Outlet />,
+  shellComponent: ({ children }) => (
+    <html lang="en">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  ),
+});
+TS
+  cat > src/routes/index.tsx <<'TS'
+import { createFileRoute } from "@tanstack/react-router";
+import { useData } from "@tinker/react";
+import { count } from "../frontend/count.ts";
+function Count() {
+  return <p>count {useData(count)}</p>;
+}
+export const Route = createFileRoute("/")({
+  loader: ({ context }) => context.bootstrap(),
+  component: Count,
+});
+TS
+  cat > src/routes/api.bump.ts <<'TS'
+import { createFileRoute } from "@tanstack/react-router";
+import { startRequests } from "@tinker/start";
+import { readResult } from "@tinker/start/server";
+import { bump } from "../backend/bump.ts";
+export const Route = createFileRoute("/api/bump")({
+  server: {
+    middleware: [startRequests.middleware],
+    handlers: {
+      POST: async ({ context }) =>
+        Response.json({ count: readResult(await context.session.settle(bump, {})) }),
+    },
+  },
+});
+TS
+  rm -f src/backend/greet.ts
+}
+browse() {
+  say "agent-browser $*"
+  timeout 60 agent-browser $browser_flags --session "$browser_session" "$@" 2>&1 | tail -3
+}
+
+{
+  mistake "sync on, client side: the server render, the tab, and its stream"
+  syncApp
+  rport=$(node -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
+  rm -f "$scratch/received-sync.txt"
+  node "$scratch/receiver.mjs" "$rport" "$scratch/received-sync.txt" &
+  receiver=$!
+  printf 'VICTORIA_TRACES_URL=http://127.0.0.1:%s/traces\nVICTORIA_LOGS_URL=http://127.0.0.1:%s/logs\n' "$rport" "$rport" >> .env
+  build
+  say "cat .tinker/parts.ts"
+  cat .tinker/parts.ts
+  doctor
+  serve_up
+  say "curl -s :PORT/ | grep -ao '<p>count[^<]*<!-- -->[0-9]*</p>'  (getBootstrap, in the server render)"
+  curl -s "http://127.0.0.1:$port/" | grep -ao '<p>count[^<]*<!-- -->[0-9]*</p>'
+  sleep 2
+  say "storage: spans so far"
+  grep -ao '"name":"[a-zA-Z.]*","kind"' "$scratch/received-sync.txt" | cut -d'"' -f4 | sort | uniq -c
+  browser_session="sync-tab-$$"
+  browser_flags="${SYNC_BROWSER_FLAGS:-}"
+  echo "browser engine: ${browser_flags:-lightpanda (the default)}"
+  browse open "http://127.0.0.1:$port/"
+  sleep 3
+  browse eval 'document.querySelector("p")?.textContent'
+  say "curl -s -X POST :PORT/api/bump  (a commit after the tab loaded)"
+  curl -s -X POST -H "origin: http://127.0.0.1:$port" "http://127.0.0.1:$port/api/bump"; echo
+  sleep 3
+  browse eval 'document.querySelector("p")?.textContent'
+  browse close
+  serve_down
+  kill "$receiver"
+  say "storage: every span name, after the tab"
+  grep -ao '"name":"[a-zA-Z.]*","kind"' "$scratch/received-sync.txt" | cut -d'"' -f4 | sort | uniq -c
+
+  mistake "sync on, and a client seam without streamMessage: the build stops"
+  syncApp
+  sed -i 's/^export const streamMessage = /const streamMessage = /' src/lib/tinker.ts
+  build
+  doctor
+
+  mistake "sync on, and no Register bodies: the build stops"
+  syncApp
+  sed -i '/^declare module "@tinker\/start" {/,/^}/d' src/lib/tinker.ts
+  build
+  doctor
+} 2>&1 | clean > "$out/15-sync-client.txt"
+
 cd "$repo"
-grep -H "EXIT\|^fail\|tinker doctor," "$out"/8-*.txt "$out"/9-*.txt "$out"/10-*.txt "$out"/11-*.txt "$out"/12-*.txt "$out"/13-*.txt "$out"/14-*.txt | cut -c1-150
+grep -H "EXIT\|^fail\|tinker doctor," "$out"/8-*.txt "$out"/9-*.txt "$out"/10-*.txt "$out"/11-*.txt "$out"/12-*.txt "$out"/13-*.txt "$out"/14-*.txt "$out"/15-*.txt | cut -c1-150
