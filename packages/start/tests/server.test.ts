@@ -69,22 +69,26 @@ test("a request with no root scope fails before any work runs", async () => {
   expect(called).toBe(false);
 });
 
+/**
+ * A request's finish: it ends the request once, as the start middleware's own finish does.
+ * @param ends - From a test; why: each request's end, true when graceful.
+ */
+function endOnce(ends: boolean[]) {
+  let ended: Promise<void> | undefined;
+  return (graceful: boolean) =>
+    (ended ??= Promise.resolve().then(() => {
+      ends.push(graceful);
+    }));
+}
+
 test("a held response body ends the request when read to the end, or when cancelled", async () => {
   const root = createScope();
   const ends: boolean[] = [];
-  /** Each request ends once, as the start middleware's own finish does. */
-  const request = () => {
-    let ended: Promise<void> | undefined;
-    return (graceful: boolean) =>
-      (ended ??= Promise.resolve().then(() => {
-        ends.push(graceful);
-      }));
-  };
-  const read = await root.resolve(responseBodies).hold(new Response("hello"), request());
+  const read = await root.resolve(responseBodies).hold(new Response("hello"), endOnce(ends));
   expect(await read.text()).toBe("hello");
   const open = await root
     .resolve(responseBodies)
-    .hold(new Response(new ReadableStream()), request());
+    .hold(new Response(new ReadableStream()), endOnce(ends));
   await open.body?.cancel();
   expect(ends).toEqual([true, false]);
   expect((await root.close({ graceful: true })).status).toBe("success");
@@ -109,4 +113,99 @@ test("dev turns Start's JSON 500 into a page that reloads after the fix", async 
   expect(await devErrorPage(new Request("http://app/_serverFn/x"), data)).toBe(data);
   const fine = new Response("ok");
   expect(await devErrorPage(page, fine)).toBe(fine);
+});
+
+test("dev passes on any response that is not a page load's JSON 500", async () => {
+  const page = new Request("http://app/", { headers: { accept: "text/html" } });
+  const data = new Request("http://app/", { headers: { accept: "application/json" } });
+  const failed = Response.json({ message: "boom" }, { status: 500 });
+  expect(await devErrorPage(data, failed)).toBe(failed);
+  const text = new Response("boom", { status: 500 });
+  expect(await devErrorPage(page, text)).toBe(text);
+  const bare = new Response(null, { status: 500 });
+  expect(await devErrorPage(page, bare)).toBe(bare);
+});
+
+test("a response with no body ends its request at once and passes through", async () => {
+  const root = createScope();
+  const bodies = root.resolve(responseBodies);
+  const ends: boolean[] = [];
+  const empty = new Response(null, { status: 204 });
+  expect(await bodies.hold(empty, async (graceful) => void ends.push(graceful))).toBe(empty);
+  expect(ends).toEqual([true]);
+  expect(bodies.isResponse(empty)).toBe(true);
+  expect(bodies.isResponse({ status: 204 })).toBe(false);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a held body keeps its status and headers, and ends its request once", async () => {
+  const root = createScope();
+  const ends: boolean[] = [];
+  const held = await root
+    .resolve(responseBodies)
+    .hold(
+      new Response("made", { status: 201, statusText: "Made", headers: { "x-app": "1" } }),
+      async (graceful) => void ends.push(graceful),
+    );
+  expect([held.status, held.statusText, held.headers.get("x-app")]).toEqual([201, "Made", "1"]);
+  expect(await held.text()).toBe("made");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  expect(ends).toEqual([true]);
+});
+
+test("a body that fails to read ends its request by force and fails the read", async () => {
+  const root = createScope();
+  const ends: boolean[] = [];
+  const torn = new Error("torn");
+  const source = new ReadableStream({
+    pull(controller) {
+      controller.error(torn);
+    },
+  });
+  const held = await root
+    .resolve(responseBodies)
+    .hold(new Response(source), async (graceful) => void ends.push(graceful));
+  await expect(held.text()).rejects.toBe(torn);
+  expect(ends).toEqual([false]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  expect(ends).toEqual([false]);
+});
+
+test("closing the scope cancels each open body and ends its request by force", async () => {
+  const root = createScope();
+  const ends: boolean[] = [];
+  const cancelled: string[] = [];
+  const bodies = root.resolve(responseBodies);
+  const open = () =>
+    new Response(
+      new ReadableStream({
+        cancel() {
+          cancelled.push("source");
+        },
+      }),
+    );
+  const left = await bodies.hold(open(), endOnce(ends));
+  const dropped = await bodies.hold(open(), endOnce(ends));
+  await dropped.body?.cancel();
+  expect([ends, cancelled]).toEqual([[false], ["source"]]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  expect([ends, cancelled]).toEqual([
+    [false, false],
+    ["source", "source"],
+  ]);
+  expect(left.bodyUsed).toBe(false);
+});
+
+test("a request that cannot end fails the body's cancel, and the scope's close", async () => {
+  const root = createScope();
+  const lost = new Error("lost");
+  const bodies = root.resolve(responseBodies);
+  const cancelled = await bodies.hold(new Response(new ReadableStream()), async () => {
+    throw lost;
+  });
+  await expect(cancelled.body?.cancel()).rejects.toBe(lost);
+  await bodies.hold(new Response(new ReadableStream()), async () => {
+    throw lost;
+  });
+  expect((await root.close({ graceful: true })).teardownErrors).toEqual([lost]);
 });

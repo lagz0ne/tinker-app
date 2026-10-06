@@ -1,39 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { bytes } from "../../lib/checks/bytes.mjs";
 import { runCheck } from "../../lib/doctor.mjs";
 import { baseDir } from "../../lib/paths.mjs";
-import { fixture, goodApp, write } from "../fixture.mjs";
-
-const hash = (text) => createHash("sha256").update(text).digest("hex");
-
-/** An app with a packed base installed under node_modules, as an install leaves it. */
-function installedApp(spec = "file:base.tgz") {
-  const base = {
-    "package.json": JSON.stringify({
-      name: "@tinker/start",
-      version: "9.0.0",
-      exports: { "./package.json": "./package.json" },
-    }),
-    "files.json": JSON.stringify({ "src/a.ts": hash("a"), "src/b.ts": hash("b") }),
-    "src/a.ts": "a",
-    "src/b.ts": "b",
-  };
-  const root = fixture({
-    "package.json": JSON.stringify({ dependencies: { "@tinker/start": spec } }),
-    ...Object.fromEntries(
-      Object.entries(base).map(([file, text]) => [`node_modules/@tinker/start/${file}`, text]),
-    ),
-    ...Object.fromEntries(
-      Object.entries(base).map(([file, text]) => [`pack/package/${file}`, text]),
-    ),
-  });
-  execFileSync("tar", ["-czf", join(root, "base.tgz"), "-C", join(root, "pack"), "package"]);
-  return root;
-}
+import { fixture, goodApp, installedApp, write } from "../fixture.mjs";
 
 test("skips a workspace link: a source checkout has no pinned bytes", () => {
   const root = goodApp();
@@ -87,7 +59,7 @@ test("--fix restores the released bytes from the app's tarball", () => {
 });
 
 test("--fix without a tarball says how to reinstall, and the check still fails", () => {
-  const root = installedApp("^9.0.0");
+  const root = installedApp({ "@tinker/start": "^9.0.0" });
   write(root, { "node_modules/@tinker/start/src/a.ts": "edited" });
   const result = bytes(root);
   expect(result.fix()).toBe("reinstall @tinker/start (^9.0.0) with your package manager");

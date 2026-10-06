@@ -1,7 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { appFiles, pick } from "./named.mjs";
 import { baseDir, basePackage, findPackage } from "./paths.mjs";
 
@@ -64,18 +62,6 @@ export function prepare(root) {
   const files = render(root);
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
   return Object.keys(files);
-}
-
-/**
- * Write `.tinker/routeTree.gen.ts` with no dev server and no build: resolving the app's own
- * Vite config runs Start's route generator once, so a fresh clone type-checks.
- * @param {string} root - From the CLI; why: load that app's vite.config.ts with its own Vite.
- */
-export async function writeRouteTree(root) {
-  const require = createRequire(join(root, "package.json"));
-  const vite = await import(pathToFileURL(require.resolve("vite")).href);
-  await vite.resolveConfig({ root, logLevel: "silent" }, "serve");
-  return "routeTree.gen.ts";
 }
 
 /**

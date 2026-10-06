@@ -1,8 +1,5 @@
 import { readFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import { serve as listen } from "@hono/node-server";
-import { loadEnv } from "./env.mjs";
 
 const types = {
   ".js": "text/javascript",
@@ -56,31 +53,4 @@ export async function asset(root, request) {
   const found = await readStatic(file, immutable);
   if (found || !immutable) return found;
   return new Response(null, { status: 404 });
-}
-
-/**
- * The Node host for a built app: `.env`, then built files, then the base's server entry (ADR 0106).
- * @param {string} root - From the CLI; why: the built app to serve.
- */
-export async function serve(root) {
-  loadEnv(root);
-  const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
-  const server = listen({
-    overrideGlobalObjects: false,
-    hostname: process.env.HOST ?? "127.0.0.1",
-    port: Number(process.env.PORT ?? 4318),
-    fetch: async (request) => (await asset(root, request)) ?? built.default.fetch(request),
-  });
-  console.log(
-    `tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${process.env.PORT ?? 4318}`,
-  );
-  const stopped = Promise.withResolvers();
-  process.once("SIGINT", () => stopped.resolve());
-  process.once("SIGTERM", () => stopped.resolve());
-  await stopped.promise;
-  await Promise.all([
-    built.close(),
-    new Promise((done, reject) => server.close((error) => (error ? reject(error) : done()))),
-  ]);
-  return 0;
 }

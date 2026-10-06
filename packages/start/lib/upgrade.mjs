@@ -5,7 +5,7 @@ import { bytes } from "./checks/bytes.mjs";
 import { installedBase, installedVersion, readJson } from "./paths.mjs";
 
 /** @param {string} root - From upgrade; why: pick the package manager its lockfile names. */
-function installCommand(root) {
+export function installCommand(root) {
   for (let dir = root; dir !== dirname(dir); dir = dirname(dir)) {
     if (existsSync(join(dir, "pnpm-lock.yaml"))) return "pnpm";
     if (existsSync(join(dir, "package-lock.json"))) return "npm";
@@ -27,7 +27,7 @@ function order(version) {
  * @param {string} from - From the old base; why: skip notes already applied.
  * @param {string} to - From the new base; why: stop at this release.
  */
-function notesBetween(text, from, to) {
+export function notesBetween(text, from, to) {
   return text
     .split(/^## /m)
     .slice(1)
@@ -59,21 +59,6 @@ export function pinDependencies(dependencies, spec, tested, installed) {
     next[name] = version;
   }
   return { dependencies: next, changes };
-}
-
-/**
- * @param {string} root - From upgrade; why: the app whose package.json changes.
- * @param {string} spec - From the release folder or version; why: the new dependency.
- * @param {Record<string, string>} tested - From the new base; why: pin peers it was tested with.
- */
-function writeDependencies(root, spec, tested) {
-  const path = join(root, "package.json");
-  const pkg = readJson(path);
-  const { dependencies, changes } = pinDependencies(pkg.dependencies, spec, tested, (name) =>
-    installedVersion(root, name),
-  );
-  writeFileSync(path, JSON.stringify({ ...pkg, dependencies }, null, 2) + "\n");
-  return changes;
 }
 
 /**
@@ -121,27 +106,49 @@ function finish(root) {
 }
 
 /**
+ * What an upgrade will do, before it writes anything: a `stop` line, or the new package.json
+ * with each dependency change and the base version it leaves.
+ * @param {string} root - From upgrade; why: the app to upgrade.
+ * @param {string} version - From the CLI; why: the release to move to.
+ * @param {{ from?: string, force: boolean }} options - From the CLI; why: release folder, edit override.
+ */
+export function planUpgrade(root, version, options) {
+  const pinned = bytes(root);
+  if (pinned.status === "fail" && !options.force)
+    return {
+      stop: `stop: ${pinned.lines.join("; ")}\nRun tinker doctor --fix first, or pass --force.`,
+    };
+  const next = release(root, version, options.from);
+  if (next.missing) return { stop: `stop: ${next.missing} does not exist` };
+  const pkg = readJson(join(root, "package.json"));
+  const { dependencies, changes } = pinDependencies(
+    pkg.dependencies,
+    next.spec,
+    next.tested,
+    (name) => installedVersion(root, name),
+  );
+  return {
+    pkg: { ...pkg, dependencies },
+    changes: changes.map(([name, from, to]) => `package.json: ${name} ${from} -> ${to}`),
+    before: readJson(join(installedBase(root), "package.json")).version,
+  };
+}
+
+/**
  * Move the app to another base release: no merge, nothing in src/ is written (ADR 0106).
  * @param {string} root - From the CLI; why: the app to upgrade.
  * @param {string} version - From the CLI; why: the release to move to.
  * @param {{ from?: string, force: boolean }} options - From the CLI; why: release folder, edit override.
  */
 export function upgrade(root, version, options) {
-  const pinned = bytes(root);
-  if (pinned.status === "fail" && !options.force) {
-    console.log(
-      `stop: ${pinned.lines.join("; ")}\nRun tinker doctor --fix first, or pass --force.`,
-    );
+  const plan = planUpgrade(root, version, options);
+  if (plan.stop) {
+    console.log(plan.stop);
     return 1;
   }
-  const next = release(root, version, options.from);
-  if (next.missing) {
-    console.log(`stop: ${next.missing} does not exist`);
-    return 1;
-  }
-  const before = readJson(join(installedBase(root), "package.json")).version;
-  for (const [name, from, to] of writeDependencies(root, next.spec, next.tested))
-    console.log(`package.json: ${name} ${from} -> ${to}`);
+  writeFileSync(join(root, "package.json"), JSON.stringify(plan.pkg, null, 2) + "\n");
+  for (const line of plan.changes) console.log(line);
+  const { before } = plan;
   const status = finish(root);
   const notes = readFileSync(join(freshBase(root), "UPGRADE.md"), "utf8");
   console.log(

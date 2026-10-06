@@ -76,17 +76,19 @@ export function runCheck(root, check, fix) {
 }
 
 /**
+ * What `tinker doctor` prints, and its exit code: a status line per check, its findings
+ * under it, then the total. Exit 1 on any fail.
  * @param {string} root - From the CLI; why: the app to check.
  * @param {boolean} fix - From --fix; why: repair base-owned and generated files only.
  */
 export function doctor(root, fix) {
+  const lines = [];
   let failed = 0;
   checks.forEach(({ label, check }, index) => {
     const result = runCheck(root, check, fix);
     if (result.status === "fail") failed += 1;
-    console.log(`${result.status.padEnd(5)} ${index + 1} ${label}`);
-    for (const line of result.lines) console.log(wrap(line));
+    lines.push(`${result.status.padEnd(5)} ${index + 1} ${label}`, ...result.lines.map(wrap));
   });
-  console.log(failed === 0 ? "doctor: all checks pass" : `doctor: ${failed} check(s) fail`);
-  return failed === 0 ? 0 : 1;
+  lines.push(failed === 0 ? "doctor: all checks pass" : `doctor: ${failed} check(s) fail`);
+  return { lines, code: failed === 0 ? 0 : 1 };
 }

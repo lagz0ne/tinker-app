@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -44,5 +46,36 @@ export function goodApp(files = {}) {
     ...files,
   });
   symlinkSync(baseDir, join(root, "node_modules/@tinker/start"));
+  return root;
+}
+
+const hash = (text) => createHash("sha256").update(text).digest("hex");
+
+/**
+ * An app with a packed base 9.0.0 installed under node_modules, as an install leaves it, and
+ * the same base packed as `base.tgz`.
+ * @param {Record<string, string>} [dependencies] - From a test; why: the app's package.json specs.
+ */
+export function installedApp(dependencies = { "@tinker/start": "file:base.tgz" }) {
+  const base = {
+    "package.json": JSON.stringify({
+      name: "@tinker/start",
+      version: "9.0.0",
+      exports: { "./package.json": "./package.json" },
+    }),
+    "files.json": JSON.stringify({ "src/a.ts": hash("a"), "src/b.ts": hash("b") }),
+    "src/a.ts": "a",
+    "src/b.ts": "b",
+  };
+  const root = fixture({
+    "package.json": JSON.stringify({ dependencies }),
+    ...Object.fromEntries(
+      Object.entries(base).map(([file, text]) => [`node_modules/@tinker/start/${file}`, text]),
+    ),
+    ...Object.fromEntries(
+      Object.entries(base).map(([file, text]) => [`pack/package/${file}`, text]),
+    ),
+  });
+  execFileSync("tar", ["-czf", join(root, "base.tgz"), "-C", join(root, "pack"), "package"]);
   return root;
 }

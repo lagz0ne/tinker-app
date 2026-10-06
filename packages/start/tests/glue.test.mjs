@@ -1,4 +1,4 @@
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { aliases, passThrough, startOptions } from "../lib/glue.mjs";
 import { appFiles, ignoredFiles } from "../lib/named.mjs";
@@ -24,6 +24,7 @@ test("an alias points at the app's named file, else at the base default, and kee
     "#tinker/server",
     "#tinker/style?url",
     "#tinker/app.server",
+    "#tinker/routes",
     "@/backend/greet.ts",
   ];
   expect(
@@ -36,6 +37,7 @@ test("an alias points at the app's named file, else at the base default, and kee
     join(baseDir, "src/defaults/server.ts"),
     `${join(root, "src/style.css")}?url`,
     join(baseDir, "src/defaults/app.server.ts"),
+    join(root, ".tinker/routeTree.gen.ts"),
     join(root, "src/backend/greet.ts"),
   ]);
 });
@@ -64,16 +66,40 @@ test("Start's entries and base routes point into the base, relative to the app's
   ]);
 });
 
+test("Start runs the base's entries, the generated route tree, and the base's import rules", () => {
+  const root = fixture({ "src/routes/index.tsx": "" });
+  const fromSrc = (file) => relative(join(root, "src"), join(baseDir, "src", file));
+  const { virtualRouteConfig, ...router } = startOptions(root).router;
+  expect({ ...startOptions(root), router }).toEqual({
+    srcDirectory: "src",
+    start: { entry: fromSrc("entry/start.ts") },
+    server: { entry: fromSrc("entry/server.ts") },
+    router: {
+      entry: fromSrc("entry/router.tsx"),
+      generatedRouteTree: "../.tinker/routeTree.gen.ts",
+    },
+    importProtection: {
+      behavior: "error",
+      client: {
+        files: [/\.server\./, /\/backend\//],
+        specifiers: ["@tanstack/react-start/server", "@tinker/start/server"],
+      },
+      server: { files: [/\.client\./] },
+    },
+  });
+  expect(virtualRouteConfig.type).toBe("root");
+});
+
 test("the app's src/routes/__root.tsx replaces the base shell", () => {
   const root = fixture({ "src/routes/__root.tsx": "" });
   expect(startOptions(root).router.virtualRouteConfig.file).toBe("__root.tsx");
 });
 
 test("Start's static output options pass on; an unknown option fails the build", () => {
-  expect(passThrough({ root: "/app", prerender: { enabled: true } })).toEqual({
+  expect(passThrough({ root: "/app", prerender: { enabled: true } })).toStrictEqual({
     prerender: { enabled: true },
   });
-  expect(() => passThrough({ prerendr: {} })).toThrow(
-    "tinker(): unknown option prerendr; known: root, prerender, pages, spa, sitemap",
+  expect(() => passThrough({ prerendr: {}, sap: {} })).toThrow(
+    "tinker(): unknown option prerendr, sap; known: root, prerender, pages, spa, sitemap",
   );
 });
