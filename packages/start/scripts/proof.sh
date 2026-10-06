@@ -5,6 +5,7 @@
 #    vp build stops with doctor's file:line message, or doctor names it.
 # 10: what the base now does: named files, style, public/, .env, prod errors.
 # 11: a fresh clone: tinker prepare (the postinstall) writes the route tree; tsc passes.
+# 12: the telemetry part: on, records reach a stand-in storage; off, /api/telemetry is the app's.
 # Logs land in docs/roadmap/start-base/proof/. Builds, servers, and curl are proofs here, never unit tests.
 set -uo pipefail
 repo=$(pwd)
@@ -244,5 +245,79 @@ tar -xzf packages/start/packs/tinker-start-*.tgz -C "$scratch/base"
   doctor
 } 2>&1 | clean > "$out/11-fresh-clone.txt"
 
+# A stand-in for VictoriaTraces and VictoriaLogs: it keeps each POST's path and body.
+cat > "$scratch/receiver.mjs" <<'JS'
+import { appendFileSync } from "node:fs";
+import { createServer } from "node:http";
+const [port, out] = process.argv.slice(2);
+createServer(async (request, response) => {
+  let body = "";
+  for await (const chunk of request) body += chunk;
+  appendFileSync(out, `${request.method} ${request.url}\n${body}\n`);
+  response.writeHead(204).end();
+}).listen(Number(port), "127.0.0.1");
+JS
+post() {
+  say "curl -X POST :PORT/api/telemetry, origin $1: ${2:0:60}"
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://127.0.0.1:$port/api/telemetry" \
+    -H "origin: $1" -H "content-type: application/json" --data "$2"
+}
+tab='{"traces":[],"logs":[{"time":1,"level":30,"msg":"from a tab","side":"browser","service":"tab"}]}'
+
+{
+  mistake "telemetry on (the default): a page and a tab's batch reach storage"
+  rport=$(node -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
+  node "$scratch/receiver.mjs" "$rport" "$scratch/received.txt" &
+  receiver=$!
+  printf 'VICTORIA_TRACES_URL=http://127.0.0.1:%s/traces\nVICTORIA_LOGS_URL=http://127.0.0.1:%s/logs\nOTEL_SERVICE_NAME=start-min\n' "$rport" "$rport" > .env
+  build
+  say "cat .tinker/parts.server.ts"
+  cat .tinker/parts.server.ts
+  doctor
+  serve_up
+  get / '<p>[^<]*</p>'
+  post "http://127.0.0.1:$port" "$tab"
+  post "http://other.test" "$tab"
+  serve_down
+  kill "$receiver"
+  say "what storage got"
+  grep -ao '^POST /[a-z]*' "$scratch/received.txt" | sort | uniq -c
+  echo "spans: $(grep -ao '"name":"[a-z.]*","kind"' "$scratch/received.txt" | cut -d'"' -f4 | sort -u | tr '\n' ' ')"
+  grep -ao '{"time":1,[^}]*}' "$scratch/received.txt"
+  say "grep -c core.span server log"
+  grep -ac '"msg":"core.span"' /tmp/tinker-proof-serve.log
+
+  mistake "telemetry off: /api/telemetry is the app's own route"
+  sed -i 's/tinker()/tinker({ telemetry: false })/' vite.config.ts
+  printf '%s\n' 'import { createFileRoute } from "@tanstack/react-router";' \
+    'export const Route = createFileRoute("/api/telemetry")({' \
+    '  server: { handlers: { POST: () => new Response("the app takes it", { status: 200 }) } },' \
+    '});' > src/routes/api.telemetry.ts
+  printf 'VICTORIA_TRACES_URL=not a url\n' > .env
+  build
+  say "cat .tinker/parts.server.ts"
+  cat .tinker/parts.server.ts
+  doctor
+  serve_up
+  post "http://127.0.0.1:$port" "$tab"
+  say "curl -s -X POST :PORT/api/telemetry"
+  curl -s -X POST "http://127.0.0.1:$port/api/telemetry"; echo
+  say "grep -c core.span server log"
+  grep -ac '"msg":"core.span"' /tmp/tinker-proof-serve.log
+  serve_down
+
+  mistake "telemetry on, and the app's own /api/telemetry: the build names the switch"
+  printf '%s\n' 'import { createFileRoute } from "@tanstack/react-router";' \
+    'export const Route = createFileRoute("/api/telemetry")({' \
+    '  server: { handlers: { POST: () => new Response("the app takes it") } },' \
+    '});' > src/routes/api.telemetry.ts
+  build
+  doctor
+
+  mistake "telemetry on, and a bad storage URL in .env: doctor names its line"
+  printf '# storage\nVICTORIA_TRACES_URL=not a url\n' > .env
+  doctor
+} 2>&1 | clean > "$out/12-telemetry-part.txt"
+
 cd "$repo"
-grep -H "EXIT\|^fail\|tinker doctor," "$out"/8-*.txt "$out"/9-*.txt "$out"/10-*.txt "$out"/11-*.txt | cut -c1-150
+grep -H "EXIT\|^fail\|tinker doctor," "$out"/8-*.txt "$out"/9-*.txt "$out"/10-*.txt "$out"/11-*.txt "$out"/12-*.txt | cut -c1-150

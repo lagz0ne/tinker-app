@@ -16,5 +16,5 @@ echo "\$ curl -s http://127.0.0.1:$port/tinker | grep -ao '<main>.*</main>'"
 curl -s "http://127.0.0.1:$port/tinker" | grep -ao '<main>.*</main>' || true
 kill -INT "$server"
 wait "$server" && echo "server stopped: EXIT $?"
-echo "server log:"
-cat /tmp/tinker-serve.log
+echo "server log, without the telemetry part's span lines ($(grep -ac '"msg":"core.span"' /tmp/tinker-serve.log) of them):"
+grep -av '"msg":"core.span"' /tmp/tinker-serve.log
