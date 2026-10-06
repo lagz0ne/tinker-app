@@ -6,6 +6,8 @@
 # 10: what the base now does: named files, style, public/, .env, prod errors.
 # 11: a fresh clone: tinker prepare (the postinstall) writes the route tree; tsc passes.
 # 12: the telemetry part: on, records reach a stand-in storage; off, /api/telemetry is the app's.
+# 13: the auth part: on, a stand-in seam's handler answers /api/auth/*; off, the path is the app's;
+#     a seam without a name the part reads stops the build; a bad key is named in .env.
 # Logs land in docs/roadmap/start-base/proof/. Builds, servers, and curl are proofs here, never unit tests.
 set -uo pipefail
 repo=$(pwd)
@@ -319,5 +321,84 @@ tab='{"traces":[],"logs":[{"time":1,"level":30,"msg":"from a tab","side":"browse
   doctor
 } 2>&1 | clean > "$out/12-telemetry-part.txt"
 
+# The auth part's stand-in server seam: an auth library that answers with what it was sent.
+seam() {
+  mkdir -p src/lib
+  printf '%s\n' 'import { operation, resource } from "@tinker/core";' \
+    'import { authSettings } from "@tinker/start/server";' \
+    'export const extensions = [];' \
+    'export const auth = resource({' \
+    '  label: "auth",' \
+    '  depends: { settings: authSettings },' \
+    '  factory: ({ settings }) => ({' \
+    '    handler: async (request: Request) =>' \
+    '      Response.json({ handled: `${request.method} ${new URL(request.url).pathname}`, origin: settings.origin }),' \
+    '  }),' \
+    '});' > src/lib/tinker.server.ts
+  [[ ${1:-} == no-readAccount ]] && return
+  printf '%s\n' 'export const readAccount = operation({ label: "readAccount", run: () => null });' >> src/lib/tinker.server.ts
+}
+keys() { printf 'PUBLIC_ORIGIN=http://127.0.0.1:4318\nAUTH_SECRET=%s\n' "$(printf 's%.0s' $(seq 1 32))" > .env; }
+appAuthRoute() {
+  printf '%s\n' 'import { createFileRoute } from "@tanstack/react-router";' \
+    'export const Route = createFileRoute("/api/auth/$")({' \
+    '  server: { handlers: { GET: () => new Response("the app takes it") } },' \
+    '});' > 'src/routes/api.auth.$.ts'
+}
+
+{
+  mistake "auth on, with a stand-in seam: the handler answers /api/auth/*"
+  sed -i 's/tinker()/tinker({ auth: true })/' vite.config.ts
+  seam
+  keys
+  build
+  say "cat .tinker/parts.server.ts"
+  cat .tinker/parts.server.ts
+  doctor
+  serve_up
+  get /api/auth/get-session '"handled":"[^"]*","origin":"[^"]*"'
+  say "curl -s -X POST :PORT/api/auth/sign-in/email"
+  curl -s -X POST -H "origin: http://127.0.0.1:$port" "http://127.0.0.1:$port/api/auth/sign-in/email"; echo
+  serve_down
+
+  mistake "auth off (the default): /api/auth/* is the app's own"
+  appAuthRoute
+  build
+  say "cat .tinker/parts.server.ts"
+  cat .tinker/parts.server.ts
+  doctor
+  serve_up
+  get /api/auth/get-session 'the app takes it'
+  serve_down
+
+  mistake "auth on, and the app's own /api/auth/\$: the build names the switch"
+  sed -i 's/tinker()/tinker({ auth: true })/' vite.config.ts
+  seam
+  keys
+  appAuthRoute
+  build
+  doctor
+
+  mistake "auth on, and a seam without readAccount: the build stops"
+  sed -i 's/tinker()/tinker({ auth: true })/' vite.config.ts
+  seam no-readAccount
+  keys
+  build
+  doctor
+
+  mistake "auth on, and no seam at all: the build stops"
+  sed -i 's/tinker()/tinker({ auth: true })/' vite.config.ts
+  keys
+  build
+  doctor
+
+  mistake "auth on, a short secret and no origin: doctor names them"
+  sed -i 's/tinker()/tinker({ auth: true })/' vite.config.ts
+  seam
+  printf '# auth\nAUTH_SECRET=short\n' > .env
+  build
+  doctor
+} 2>&1 | clean > "$out/13-auth-part.txt"
+
 cd "$repo"
-grep -H "EXIT\|^fail\|tinker doctor," "$out"/8-*.txt "$out"/9-*.txt "$out"/10-*.txt "$out"/11-*.txt "$out"/12-*.txt | cut -c1-150
+grep -H "EXIT\|^fail\|tinker doctor," "$out"/8-*.txt "$out"/9-*.txt "$out"/10-*.txt "$out"/11-*.txt "$out"/12-*.txt "$out"/13-*.txt | cut -c1-150
