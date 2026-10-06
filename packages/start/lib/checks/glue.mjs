@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { byteOrderMark, lineOfKey, prependExtends, readJsonc, writeKey } from "../jsonc.mjs";
 import { callsOf, importsFrom, parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";
@@ -88,22 +88,54 @@ function parseProblem(file, error) {
 }
 
 /**
+ * Where tsc finds an extended file: the path itself, else the path with `.json` added.
+ * @param {string} dir - From extendedChain; why: an extends path is relative to its file.
+ * @param {string} entry - From an extends list; why: the path as written.
+ */
+function extendedPath(dir, entry) {
+  const path = resolve(dir, entry);
+  return existsSync(path) || path.endsWith(".json") ? path : `${path}.json`;
+}
+
+/**
+ * The local files a tsconfig extends after the base's, the winner first. tsc applies an
+ * extends list in order, each file after its own chain, so the last file wins, then its chain.
+ * A file read once is never read again, so a loop ends.
+ * @param {string} root - From overriding; why: the base's tsconfig and each name are found there.
+ * @param {string} path - From overriding; why: the file whose extends list this reads.
+ * @param {{ value?: Record<string, any> }} read - From readJsonc; why: that file, parsed.
+ * @param {Set<string>} seen - From overriding; why: the files read so far.
+ */
+function extendedChain(root, path, read, seen) {
+  const list = [read.value?.extends ?? []]
+    .flat()
+    .filter((file) => /^\.{1,2}\//.test(file))
+    .map((file) => extendedPath(dirname(path), file));
+  const files = [];
+  for (const file of list.slice(list.indexOf(join(root, tinkerConfig)) + 1).reverse()) {
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const parent = readJsonc(file);
+    files.push(
+      { file: relative(root, file), read: parent },
+      ...extendedChain(root, file, parent, seen),
+    );
+  }
+  return files;
+}
+
+/**
  * The tsconfig files that can override the base's, as tsc reads them, the winner first: the
- * app's own, then each local file its extends list names after .tinker, last to first.
+ * app's own, then each local file its extends chain names after .tinker.
  * @param {string} root - From tsconfigProblems; why: an extended path resolves from the app folder.
  * @param {{ text: string, value: Record<string, any> }} tsconfig - From readJsonc; why: the app's tsconfig.json.
  */
 function overriding(root, tsconfig) {
-  const list = [tsconfig.value.extends ?? []].flat();
-  const after = list
-    .slice(list.indexOf(tinkerConfig) + 1)
-    .filter((file) => /^\.{1,2}\//.test(file))
-    .reverse()
-    .map((file) => ({
-      file: relative(root, resolve(root, file)),
-      read: readJsonc(resolve(root, file)),
-    }));
-  return [{ file: "tsconfig.json", read: tsconfig }, ...after];
+  const own = join(root, "tsconfig.json");
+  return [
+    { file: "tsconfig.json", read: tsconfig },
+    ...extendedChain(root, own, tsconfig, new Set([own])),
+  ];
 }
 
 /**

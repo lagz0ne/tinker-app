@@ -208,6 +208,44 @@ test("reads the extends list as tsc does: the last file that sets a key wins ove
   expect(glue(own).status).toBe("ok");
 });
 
+test("finds an extended file as tsc does: a name with no .json gets .json added", () => {
+  const root = goodApp({
+    "tsconfig.json": '{\n  "extends": ["./.tinker/tsconfig.json", "./configs/strict"]\n}\n',
+    "configs/strict.json": '{\n  "compilerOptions": {\n    "paths": { "x": ["y"] }\n  }\n}\n',
+  });
+  expect(glue(root).lines).toEqual([
+    "configs/strict.json:3 sets compilerOptions.paths; it replaces the base's #tinker/* and @/* paths, so remove it",
+  ]);
+});
+
+test("follows each extended file's own extends chain, as tsc does", () => {
+  const root = goodApp({
+    "tsconfig.json": '{\n  "extends": ["./.tinker/tsconfig.json", "./a.json"]\n}\n',
+    "a.json": '{ "extends": "./configs/b.json" }\n',
+    "configs/b.json": '{\n  "compilerOptions": {\n    "strict": false\n  }\n}\n',
+  });
+  expect(glue(root).lines).toEqual([
+    "configs/b.json:3 turns strict off; the base's files need strict",
+  ]);
+  const own = goodApp({
+    "tsconfig.json": '{\n  "extends": ["./.tinker/tsconfig.json", "./a.json"]\n}\n',
+    "a.json": '{ "extends": "./b.json", "compilerOptions": { "strict": true } }\n',
+    "b.json": '{ "compilerOptions": { "strict": false } }\n',
+  });
+  expect(glue(own).status).toBe("ok");
+});
+
+test("an extends chain that loops is read once", () => {
+  const root = goodApp({
+    "tsconfig.json": '{\n  "extends": ["./.tinker/tsconfig.json", "./a.json"]\n}\n',
+    "a.json": '{ "extends": "./b.json" }\n',
+    "b.json": '{\n  "extends": "./a.json",\n  "compilerOptions": { "paths": {} }\n}\n',
+  });
+  expect(glue(root).lines).toEqual([
+    "b.json:3 sets compilerOptions.paths; it replaces the base's #tinker/* and @/* paths, so remove it",
+  ]);
+});
+
 test("an extended file that does not parse is named at its line", () => {
   const root = goodApp({
     "tsconfig.json": '{\n  "extends": ["./.tinker/tsconfig.json", "./strict.json"]\n}\n',

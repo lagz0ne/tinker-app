@@ -315,20 +315,32 @@ const breaks = [
   {
     name: "a file extended after .tinker is never read",
     file: "lib/checks/glue.mjs",
-    find: ".slice(list.indexOf(tinkerConfig) + 1)",
-    replace: ".slice(list.length)",
+    find: "list.slice(list.indexOf(join(root, tinkerConfig)) + 1).reverse()",
+    replace: "[]",
   },
   {
     name: "a file extended before .tinker counts too",
     file: "lib/checks/glue.mjs",
-    find: ".slice(list.indexOf(tinkerConfig) + 1)",
-    replace: ".slice(0)",
+    find: "list.slice(list.indexOf(join(root, tinkerConfig)) + 1).reverse()",
+    replace: "list.reverse()",
   },
   {
     name: "the first extended file wins, not the last",
     file: "lib/checks/glue.mjs",
-    find: "    .reverse()\n    .map((file) => ({",
-    replace: "    .map((file) => ({",
+    find: "list.slice(list.indexOf(join(root, tinkerConfig)) + 1).reverse()",
+    replace: "list.slice(list.indexOf(join(root, tinkerConfig)) + 1)",
+  },
+  {
+    name: "an extends name with no .json is not found",
+    file: "lib/checks/glue.mjs",
+    find: 'path.endsWith(".json") ? path : `${path}.json`',
+    replace: "true ? path : path",
+  },
+  {
+    name: "an extended file's own extends is not followed",
+    file: "lib/checks/glue.mjs",
+    find: "...extendedChain(root, file, parent, seen)",
+    replace: "",
   },
   {
     name: "a byte order mark passes strict JSON",
