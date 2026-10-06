@@ -96,22 +96,72 @@ test("with auth on, a seam with both names passes; with auth off, none is needed
   expect(named(goodApp()).status).toBe("ok");
 });
 
-const syncOn = JSON.stringify({ base: "0.5.0", parts: ["telemetry", "auth", "sync"] });
+const syncOn = JSON.stringify({ base: "0.6.0", parts: ["telemetry", "auth", "sync"] });
+const clientSeam = {
+  "src/lib/tinker.ts":
+    'export const extensions = [];\nexport { records, readSnapshot, readBootstrap, readBatch, streamMessage } from "../sync.ts";\n',
+  "src/sync.ts":
+    'export const records = 1, readSnapshot = 2, readBootstrap = 3, readBatch = 4, streamMessage = 5;\ndeclare module "@tinker/start" {\n  interface Register { change: number }\n}\n',
+};
 
-test("with sync on, a seam without database names it for the sync part", () => {
+test("with sync on, a server seam without database or bootstrap names each for the sync part", () => {
   const root = goodApp({
     ".tinker/base.json": syncOn,
+    ...clientSeam,
     "src/lib/tinker.server.ts":
       "export const extensions = [];\nexport const auth = 1;\nexport const readAccount = 2;\n",
   });
   expect(named(root).lines).toEqual([
     "src/lib/tinker.server.ts:1 does not export database; the sync part reads it",
+    "src/lib/tinker.server.ts:1 does not export bootstrap; the sync part reads it",
+  ]);
+});
+
+test("with sync on, a client seam without a name the part reads names each, and the Register bodies", () => {
+  const root = goodApp({
+    ".tinker/base.json": syncOn,
+    "src/lib/tinker.server.ts":
+      "export const extensions = [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
+    "src/lib/tinker.ts":
+      "export const extensions = [];\nexport const records = 1, readBatch = 2;\n",
+  });
+  expect(named(root).lines).toEqual([
+    "src/lib/tinker.ts:1 does not export readSnapshot; the sync part reads it",
+    "src/lib/tinker.ts:1 does not export readBootstrap; the sync part reads it",
+    "src/lib/tinker.ts:1 does not export streamMessage; the sync part reads it",
+    'src/ adds no Register bodies to "@tinker/start"; the sync part reads them: declare module "@tinker/start" { interface Register { … } }',
+  ]);
+});
+
+test("with sync on, both seams and the Register bodies pass, wherever in src/ they sit", () => {
+  const root = goodApp({
+    ".tinker/base.json": syncOn,
+    ...clientSeam,
+    "src/lib/tinker.server.ts":
+      "export const extensions = [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
+  });
+  expect(named(root).status).toBe("ok");
+});
+
+test("a Register augmentation of another module does not count", () => {
+  const root = goodApp({
+    ".tinker/base.json": syncOn,
+    ...clientSeam,
+    "src/sync.ts":
+      'export const records = 1, readSnapshot = 2, readBootstrap = 3, readBatch = 4, streamMessage = 5;\ndeclare module "@tanstack/react-router" {\n  interface Register { router: number }\n}\ndeclare module "@tinker/start" {\n  interface Other { x: number }\n}\n',
+    "src/lib/tinker.server.ts":
+      "export const extensions = [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
+  });
+  expect(named(root).lines).toEqual([
+    'src/ adds no Register bodies to "@tinker/start"; the sync part reads them: declare module "@tinker/start" { interface Register { … } }',
   ]);
 });
 
 test("with sync on and no seam, each part names what it reads", () => {
   expect(named(goodApp({ ".tinker/base.json": syncOn })).lines).toEqual([
     "src/lib/tinker.server.ts is missing; the auth part reads auth and readAccount from it",
-    "src/lib/tinker.server.ts is missing; the sync part reads database from it",
+    "src/lib/tinker.server.ts is missing; the sync part reads database and bootstrap from it",
+    "src/lib/tinker.ts is missing; the sync part reads records and readSnapshot and readBootstrap and readBatch and streamMessage from it",
+    'src/ adds no Register bodies to "@tinker/start"; the sync part reads them: declare module "@tinker/start" { interface Register { … } }',
   ]);
 });

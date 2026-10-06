@@ -118,8 +118,12 @@ test("sync with auth: false fails the build with the two ways out", () => {
   expect(partsOn({ sync: false, auth: false })).toEqual(["telemetry"]);
 });
 
-test("the sync part mounts /api/sync, reads database from the server seam, and no env key", () => {
+test("the sync part mounts /api/sync, reads both seams and the Register bodies, and no env key", () => {
   expect(parts.sync.routes).toEqual({ "/api/sync": "src/routes/api.sync.ts" });
-  expect(parts.sync.reads).toEqual({ "src/lib/tinker.server.ts": ["database"] });
+  expect(parts.sync.reads).toEqual({
+    "src/lib/tinker.server.ts": ["database", "bootstrap"],
+    "src/lib/tinker.ts": ["records", "readSnapshot", "readBootstrap", "readBatch", "streamMessage"],
+  });
+  expect(parts.sync.augments).toEqual({ "@tinker/start": ["Register"] });
   expect(readPartEnv(parts.sync.env, {})).toEqual({ values: {}, refused: [] });
 });

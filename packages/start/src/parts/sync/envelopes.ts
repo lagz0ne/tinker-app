@@ -16,6 +16,11 @@ export declare namespace Sync {
   type Envelope = z.infer<typeof eventEnvelope>;
   type Receipt = { executionId: string };
   type Reply = { kind: "accepted"; executionId: string } | { kind: "rejected"; message: string };
+  /** The router context sync adds: a route's loader or guard calls these. */
+  type RouterContext = {
+    bootstrap: () => Promise<Snapshot>;
+    account: () => Promise<string | null>;
+  };
 }
 const executionInput = z.object({ executionId: z.uuid() }).strict();
 /**
@@ -56,3 +61,5 @@ export const bootstrapEnvelope = z.object({
   version: z.number().int().min(0),
   snapshot: snapshotEnvelope,
 });
+/** One stream frame as the tab hands it on: the account version it was read under, and its data. */
+export const streamInput = z.object({ version: z.number().int().min(0), data: z.string() });

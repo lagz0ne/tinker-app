@@ -24,6 +24,11 @@ export const auth = resource({
   }),
 });
 export const readAccount = operation({ label: "test.readAccount", run: () => null });
+/** The app's snapshot for a request: no account, at the start of the public stream. */
+export const bootstrap = operation({
+  label: "test.bootstrap",
+  run: () => ({ public: { stream: "public" as const, revision: 0 }, private: null }),
+});
 
 /** The sync part's tables and wake trigger, as an app's migrations create them. */
 const syncTables = `

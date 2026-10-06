@@ -56,7 +56,12 @@ test("each parts file exports the parts its entry reads, from the on or the off 
   const module = (part, file) => JSON.stringify(join(baseDir, "src/parts", part, file));
   const on = render(root, ["telemetry", "auth"]);
   expect(on["parts.ts"]).toBe(
-    `// Written by tinker(); parts on: telemetry, auth.\nexport { telemetry } from ${module("telemetry", "on.ts")};\n`,
+    [
+      "// Written by tinker(); parts on: telemetry, auth.",
+      `export { telemetry } from ${module("telemetry", "on.ts")};`,
+      `export { sync } from ${module("sync", "off.ts")};`,
+      "",
+    ].join("\n"),
   );
   expect(on["parts.server.ts"]).toBe(
     [
@@ -68,7 +73,15 @@ test("each parts file exports the parts its entry reads, from the on or the off 
   );
   const off = render(root, []);
   expect(off["parts.ts"]).toBe(
-    `// Written by tinker(); parts on: none.\nexport { telemetry } from ${module("telemetry", "off.ts")};\n`,
+    [
+      "// Written by tinker(); parts on: none.",
+      `export { telemetry } from ${module("telemetry", "off.ts")};`,
+      `export { sync } from ${module("sync", "off.ts")};`,
+      "",
+    ].join("\n"),
+  );
+  expect(render(root, ["auth", "sync"])["parts.ts"]).toContain(
+    `export { sync } from ${module("sync", "on.ts")};`,
   );
   expect(off["parts.server.ts"]).toBe(
     [

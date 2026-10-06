@@ -220,3 +220,18 @@ export function importedNames(source) {
       .flatMap((node) => node.specifiers.map((item) => item.local.name)),
   );
 }
+
+/**
+ * The interfaces a file adds to a module by augmentation: `declare module "m" { interface I {} }`.
+ * @param {ReturnType<typeof parseSource>} source - From a check; why: the file to read.
+ */
+export function augmentations(source) {
+  const found = [];
+  walk(source.program, (node) => {
+    if (node.type !== "TSModuleDeclaration" || typeof node.id?.value !== "string") return;
+    for (const item of node.body?.body ?? [])
+      if (item.type === "TSInterfaceDeclaration")
+        found.push({ module: node.id.value, name: item.id.name });
+  });
+  return found;
+}

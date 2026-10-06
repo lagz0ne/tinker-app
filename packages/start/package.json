@@ -1,6 +1,6 @@
 {
   "name": "@tinker/start",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "The Tinkered Start base: entries, routes, tinker(), and the tinker command (ADR 0106).",
   "bin": {
@@ -20,6 +20,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
+    "./client": "./src/client.ts",
     "./vite": {
       "types": "./vite.d.mts",
       "default": "./vite.mjs"
@@ -129,13 +130,28 @@
         "needs": [
           "auth"
         ],
-        "entries": {},
+        "entries": {
+          "router": "on.ts"
+        },
         "routes": {
           "/api/sync": "src/routes/api.sync.ts"
         },
         "reads": {
           "src/lib/tinker.server.ts": [
-            "database"
+            "database",
+            "bootstrap"
+          ],
+          "src/lib/tinker.ts": [
+            "records",
+            "readSnapshot",
+            "readBootstrap",
+            "readBatch",
+            "streamMessage"
+          ]
+        },
+        "augments": {
+          "@tinker/start": [
+            "Register"
           ]
         },
         "env": {}

@@ -6,14 +6,19 @@ import { verdict } from "./result.mjs";
 export const say = {
   seam: (at, name) => `${at} "${name}" is a base-only name; app code cannot import it`,
   entry: (at, name) =>
-    `${at} "${name}" is not a base entry; use @tinker/start, @tinker/start/server, or @tinker/start/vite`,
+    `${at} "${name}" is not a base entry; use @tinker/start, @tinker/start/server, @tinker/start/client, or @tinker/start/vite`,
   path: (at, name) => `${at} "${name}" reaches into the base by path; use a base entry`,
   serverEntry: (at, name) =>
     `${at} "${name}" skips the base's scope; use createServerEntry from @tinker/start/server`,
   passed: (count) => `${count} files in src/ import the base only through its entries`,
 };
 
-const entries = new Set(["@tinker/start", "@tinker/start/server", "@tinker/start/vite"]);
+const entries = new Set([
+  "@tinker/start",
+  "@tinker/start/server",
+  "@tinker/start/client",
+  "@tinker/start/vite",
+]);
 
 /**
  * @param {string} name - From an import; why: a relative path may point into the base.

@@ -6,6 +6,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "#tinker/app.server": fileURLToPath(new URL("tests/fixtures/app.server.ts", import.meta.url)),
+      "#tinker/app": fileURLToPath(new URL("tests/fixtures/app.ts", import.meta.url)),
     },
   },
   test: {
