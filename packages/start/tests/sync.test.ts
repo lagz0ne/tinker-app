@@ -11,9 +11,17 @@ import { execution } from "../src/parts/sync/schema.ts";
 import { eventStream, openSync } from "../src/parts/sync/stream.server.ts";
 import { syncEndpoint } from "../src/parts/sync/endpoint.server.ts";
 
-/** PGlite (a WASM Postgres) loads and compiles once, here, so no test pays its cold start. */
+/**
+ * PGlite (a WASM Postgres) and drizzle load once, here, so no test pays their cold start: under
+ * a full `vp run -r test`, the first test's imports alone came near the 5 s test timeout.
+ */
 beforeAll(async () => {
-  const { PGlite } = await import("@electric-sql/pglite");
+  const [{ PGlite }] = await Promise.all([
+    import("@electric-sql/pglite"),
+    import("drizzle-orm"),
+    import("drizzle-orm/pglite"),
+    import("../src/parts/sync/schema.ts"),
+  ]);
   await (await PGlite.create()).close();
 }, 60_000);
 
@@ -352,13 +360,16 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
   expect(listens[2]?.stopped).toBe(true);
 });
 
-test("closing the root wakes and disconnects each subscriber; a root that never listened closes clean", async () => {
+test("a root that never listened closes clean", async () => {
   const quiet = createScope();
   await quiet.resolve(notifications);
   expect(await quiet.close({ graceful: true })).toMatchObject({
     status: "success",
     teardownErrors: undefined,
   });
+});
+
+test("closing the root wakes and disconnects each subscriber", async () => {
   const root = createScope();
   const feed = await root.resolve(notifications);
   let disconnected = 0;
