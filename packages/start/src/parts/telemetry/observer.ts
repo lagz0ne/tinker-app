@@ -47,8 +47,8 @@ export const observer = resource({
     const write = (record: Telemetry.Log) => {
       queue.ingest({ traces: [], logs: [record] });
       if (side !== "browser") process.stdout.write(`${JSON.stringify(record)}\n`);
-      else if (record.level === LEVELS.error) console.error(record);
-      else if (record.level === LEVELS.warn) console.warn(record);
+      else if (record.level >= LEVELS.error) console.error(record);
+      else if (record.level >= LEVELS.warn) console.warn(record);
       else console.info(record);
     };
     return {
@@ -106,12 +106,7 @@ export const observer = resource({
       },
       log(entry) {
         write({
-          level:
-            entry.level >= LEVELS.error
-              ? LEVELS.error
-              : entry.level >= LEVELS.warn
-                ? LEVELS.warn
-                : LEVELS.info,
+          level: entry.level,
           time: entry.time,
           service,
           side,
