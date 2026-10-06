@@ -566,7 +566,7 @@ export const extensions = [];
 export const records = resource({
   label: "records",
   depends: { value: count.controller },
-  factory: ({ value }) => ({
+  factory: ({ value }): Sync.Records => ({
     resetPrivate() {},
     bootstrapPublic(saved: Sync.Public, after: number) {
       if (saved.revision >= after) value.set(saved.count);
@@ -663,6 +663,7 @@ export const Route = createFileRoute("/api/bump")({
 });
 TS
   rm -f src/backend/greet.ts
+  node node_modules/@tinker/start/bin/tinker.mjs prepare > /dev/null 2>&1
 }
 browse() {
   say "agent-browser $*"
