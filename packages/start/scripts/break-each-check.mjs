@@ -471,8 +471,8 @@ const breaks = [
   {
     name: "a parts file always imports the on module",
     file: "lib/prepare.mjs",
-    find: 'on.includes(name) ? `on${side}.ts` : "off.ts"',
-    replace: "`on${side}.ts`",
+    find: 'on.includes(name) ? part.entries[entry] : "off.ts"',
+    replace: "part.entries[entry]",
   },
   {
     name: "base.json records no parts",
@@ -495,7 +495,7 @@ const breaks = [
   {
     name: "check 9 checks no part key",
     file: "lib/checks/env.mjs",
-    find: "...partProblems(root, local)",
+    find: "...partProblems(root, local, keys)",
     replace: "",
   },
   {
@@ -519,8 +519,8 @@ const breaks = [
   {
     name: "a part rule accepts any value",
     file: "lib/part-env.mjs",
-    find: "if (rule && !rules[rule].accepts(values[key]))",
-    replace: "if (false)",
+    find: "(rule && !rules[rule].accepts(values[key]))",
+    replace: "false",
   },
   {
     name: "an ftp URL passes as http",
@@ -551,6 +551,72 @@ const breaks = [
     file: "src/parts/telemetry/ingest.server.ts",
     find: 'request.headers.get("origin") !== expected',
     replace: "false",
+  },
+  {
+    name: "the parts' seam names are not checked",
+    file: "lib/checks/named.mjs",
+    find: "[...missing, ...partProblems(root), ...ignored]",
+    replace: "[...missing, ...ignored]",
+  },
+  {
+    name: "a missing seam file reads as a missing name",
+    file: "lib/checks/named.mjs",
+    find: "if (!existsSync(join(root, file))) return [say.noSeam(file, part, names)];",
+    replace: "",
+  },
+  {
+    name: "a route under a base splat is free",
+    file: "lib/route-path.mjs",
+    find: 'path.endsWith("/$") && routePath(file)',
+    replace: "false && routePath(file)",
+  },
+  {
+    name: "an unset part key is not named",
+    file: "lib/checks/env.mjs",
+    find: "return listed.includes(key) ? [] : [say.unset(key, name)];",
+    replace: "return [];",
+  },
+  {
+    name: "an unset part key that .env.example lists is named twice",
+    file: "lib/checks/env.mjs",
+    find: "return listed.includes(key) ? [] : [say.unset(key, name)];",
+    replace: "return [say.unset(key, name)];",
+  },
+  {
+    name: "listed keys come in parseEnv's sorted order",
+    file: "lib/checks/env.mjs",
+    find: ".sort((a, b) => a.line - b.line)",
+    replace: "",
+  },
+  {
+    name: "a short secret passes",
+    file: "lib/part-env.mjs",
+    find: "value.length >= 32",
+    replace: "value.length >= 0",
+  },
+  {
+    name: "a parts file exports every part, read or not",
+    file: "lib/prepare.mjs",
+    find: ".filter(([, part]) => entry in part.entries)",
+    replace: "",
+  },
+  {
+    name: "the auth part takes a refused key",
+    file: "src/parts/auth/settings.ts",
+    find: 'if (refused.length > 0) raise("BadSettings", { part: "auth", keys: refused });',
+    replace: "",
+  },
+  {
+    name: "the app root starts without reading the auth keys",
+    file: "src/parts/auth/settings.ts",
+    find: "resolve(authSettings);",
+    replace: "",
+  },
+  {
+    name: "handleAuth hands the library another request",
+    file: "src/parts/auth/handle.server.ts",
+    find: "auth.handler(input)",
+    replace: 'auth.handler(new Request("http://app/"))',
   },
   {
     name: "the telemetry queue has no count bound",
