@@ -137,3 +137,11 @@ test("an installed base from before parts mounts its own routes only", () => {
     lines: ["route files export Route; none takes a base path (/tinker)"],
   });
 });
+
+test("with no base installed, no path is the base's", () => {
+  const root = fixture({ "src/routes/tinker.tsx": page("/tinker") });
+  expect(routes(root)).toEqual({
+    status: "ok",
+    lines: ["route files export Route; none takes a base path ()"],
+  });
+});

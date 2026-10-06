@@ -65,7 +65,7 @@ export declare namespace Telemetry {
   type Batch = z.infer<typeof telemetryBatch>;
   type Side = Log["side"];
   type Health = { pending: number; dropped: number } & (
-    | { kind: "idle" | "queued" | "sending" | "closed" }
+    | { kind: "idle" | "queued" | "sending" }
     | { kind: "failed"; failure: string }
   );
   type Settings = { side: Side; service: string } & (

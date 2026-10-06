@@ -43,13 +43,42 @@ so a fresh clone gets `.tinker/`:
 `.tinker/` is the generated folder.
 It is gitignored, and nobody edits it.
 
+## Parts
+
+A base part is an opt-in slice of the base,
+set in `tinker({ ... })`.
+Turning a part off frees its route path for the app.
+
+```ts
+export default defineConfig({
+  plugins: [tinker({ telemetry: false })],
+});
+```
+
+- **telemetry**: on by default.
+  - Route: `POST /api/telemetry`, a tab's records.
+  - Reads `VICTORIA_TRACES_URL`,
+    default `http://127.0.0.1:10428/insert/opentelemetry/v1/traces`.
+  - Reads `VICTORIA_LOGS_URL`,
+    default `http://127.0.0.1:9428/insert/jsonline`.
+  - Reads `OTEL_SERVICE_NAME`, default `tinker-app`.
+  - Both URLs must be http(s).
+    An empty value reads as unset.
+
+A part switch takes `true` or `false`;
+any other value fails the build.
+`.tinker/base.json` records which parts are on,
+so `tinker prepare` and doctor read the same switches.
+
 ## Entries
 
 - `@tinker/start`: shared units, such as
   `startRequests` and `RouterOptions`.
 - `@tinker/start/server`: `readResult`, `env`,
   `createServerEntry`.
-- `@tinker/start/vite`: `tinker()`.
+- `@tinker/start/vite`: `tinker()`,
+  with the part switches and Start's
+  `prerender`, `pages`, `spa`, `sitemap`.
 
 `@tinker/start/package.json` is exported too.
 The package's `exports` refuses every other path.
@@ -72,6 +101,45 @@ The package's `exports` refuses every other path.
   It throws a failure as is,
   and a cancelled call as the base's `Cancelled` error.
 - `/api/health` answers `{"ok":true,"base":"<version>"}`.
+- Each entry makes a telemetry root
+  that observes the app root and closes after it.
+  Its own sends are not traced.
+  With telemetry off, it is empty,
+  and nothing is observed.
+  - Each finished span and log line at info or above
+    becomes a record, and a line on the local console:
+    JSON on the server, an object in a tab.
+  - A record names its side: `server`,
+    `ssr` (a server render), or `browser` (a tab).
+  - A span with no end is sent with its start as its end.
+    Names and keys are cut to 256 characters,
+    values to 2048; a span keeps 31 attributes
+    and 32 events.
+  - The server and a tab send once a second;
+    a server render sends when it closes.
+    One send waits at most 750 ms.
+  - A tab posts to `/api/telemetry`.
+    The route answers each post with a status:
+    `202` for a same-origin JSON post
+    of at most 64 KiB, with tab records only;
+    else `403`, `415`, `413`, `400`,
+    or `503` while the server stops.
+  - The route expects the request's own origin;
+    behind a `*.preview.tini.works` proxy,
+    its `https` one.
+  - The route hands each good batch
+    to the telemetry root, as a plain batch.
+    A tab's record takes the server's service name.
+  - The queue holds 512 records and 1 MiB;
+    one record is at most 48 KB,
+    and one send at most 64 records.
+    Sent records free their room.
+    It keeps what storage refused or could not reach,
+    for the next send, and counts drops.
+  - Closing sends what is left,
+    for at most 1.5 s.
+  - A bad storage URL stops the telemetry root
+    at its start with `BadSettings`, naming each key.
 - With no `src/server.ts`, the server entry
   goes straight to the base.
 - In production, the error page shows no error text.
@@ -94,6 +162,11 @@ tinker doctor --fix
   `.tinker/`, the `.gitignore` lines,
   the tsconfig `extends` key, and the `postinstall` script.
 - It never edits `src/`, the Vite config, or `.env`.
+- Check 7 (routes) counts an on part's routes as base routes,
+  and names the switch that frees one.
+- Check 9 (env) also reads each on part's keys,
+  as the part does: the shell, then `.env`, then the default.
+  A refused value is named at its `.env` line.
 
 `vp build` runs the same checks for named files,
 imports, routes, and style before TanStack's route

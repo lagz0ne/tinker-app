@@ -46,6 +46,20 @@ test("an alias points at the app's named file, else at the base default, and kee
   ]);
 });
 
+test("an alias matches its whole name only", () => {
+  const table = aliases(fixture({}));
+  const near = [
+    "x@/backend/greet.ts",
+    "x#tinker/routes",
+    "#tinker/routes.ts",
+    "x#tinker/parts",
+    "#tinker/parts.ts",
+    "x#tinker/parts.server",
+    "#tinker/parts.server.ts",
+  ];
+  expect(near.filter((name) => table.some(({ find }) => find.test(name)))).toEqual([]);
+});
+
 test("Start's usual files the glue does not read are listed, and the read ones are not", () => {
   const files = ignoredFiles.map(({ file }) => file);
   expect(files).toContain("src/router.tsx");

@@ -2,6 +2,20 @@
 
 `tinker upgrade` prints the sections between your old and new version.
 
+## 0.3.0
+
+The telemetry part is on by default.
+It takes `POST /api/telemetry`,
+and sends spans and log lines to
+`VICTORIA_TRACES_URL` and `VICTORIA_LOGS_URL`.
+
+- An app route at `/api/telemetry` now fails the build.
+  Set `tinker({ telemetry: false })` to keep it.
+- Set the two URLs, or run the default storage
+  on `127.0.0.1`; doctor names a URL that is not http(s).
+- `OTEL_SERVICE_NAME` names the service;
+  the default is `tinker-app`.
+
 ## 0.2.0
 
 The base reads five named files, and no others:

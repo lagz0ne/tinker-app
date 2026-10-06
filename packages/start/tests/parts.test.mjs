@@ -48,6 +48,7 @@ test("a value that breaks its key's rule is refused, every such key at once", ()
     }).refused,
   ).toEqual(["VICTORIA_TRACES_URL", "VICTORIA_LOGS_URL"]);
   expect(rules.http.wants).toBe("an http(s) URL");
+  expect(rules.http.accepts("xhttp://a.example")).toBe(false);
   expect(rules.http.accepts("http://127.0.0.1:1/x")).toBe(true);
   expect(rules.http.accepts("https://a.example")).toBe(true);
 });

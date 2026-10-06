@@ -71,7 +71,7 @@ export const queue = resource({
       flush(): Promise<void> {
         return (pending ??= Promise.resolve()
           .then(async () => {
-            if (state === "closed" || !records.length) return;
+            if (!records.length) return;
             let bytes = 0;
             const retained = records.filter((record, index) => {
               const size = new TextEncoder().encode(JSON.stringify(record.value)).byteLength;
@@ -167,7 +167,6 @@ export const queue = resource({
           dropped += records.length;
           records = [];
           queueBytes = 0;
-          if (publishing) health.set({ kind: "closed", pending: 0, dropped: dropped });
         }
       },
     };
