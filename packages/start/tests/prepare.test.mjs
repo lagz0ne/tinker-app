@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { basePackage } from "../lib/paths.mjs";
+import { baseDir, basePackage } from "../lib/paths.mjs";
 import { prepare, prepareExitCode, render } from "../lib/prepare.mjs";
 import { fixture, goodApp } from "./fixture.mjs";
 
@@ -41,13 +41,46 @@ test("a named file the app has wins; a missing one maps to the base default", ()
   expect(paths["#tinker/routes"]).toEqual([join(root, ".tinker/routeTree.gen.ts")]);
 });
 
-test("prepare writes the tsconfig and the base version into .tinker/", () => {
+test("prepare writes the tsconfig, the parts files, and the base version into .tinker/", () => {
   const root = fixture({ "package.json": "{}" });
-  expect(prepare(root)).toEqual(["tsconfig.json", "base.json"]);
+  expect(prepare(root)).toEqual(["tsconfig.json", "base.json", "parts.ts", "parts.server.ts"]);
   expect(JSON.parse(readFileSync(join(root, ".tinker/base.json"), "utf8"))).toEqual({
     base: basePackage.version,
+    parts: ["telemetry"],
   });
   expect(existsSync(join(root, ".tinker/tsconfig.json"))).toBe(true);
+});
+
+test("each parts file exports every part, from its on or its off module", () => {
+  const root = fixture({ "package.json": "{}" });
+  const module = (file) => JSON.stringify(join(baseDir, "src/parts/telemetry", file));
+  const on = render(root, ["telemetry"]);
+  expect(on["parts.ts"]).toBe(
+    `// Written by tinker(); parts on: telemetry.\nexport { telemetry } from ${module("on.ts")};\n`,
+  );
+  expect(on["parts.server.ts"]).toBe(
+    `// Written by tinker(); parts on: telemetry.\nexport { telemetry } from ${module("on.server.ts")};\n`,
+  );
+  const off = render(root, []);
+  expect(off["parts.ts"]).toBe(
+    `// Written by tinker(); parts on: none.\nexport { telemetry } from ${module("off.ts")};\n`,
+  );
+  expect(off["parts.server.ts"]).toBe(off["parts.ts"]);
+});
+
+test("tinker prepare with no options keeps the parts the last tinker() call recorded", () => {
+  const root = fixture({ "package.json": "{}" });
+  prepare(root, []);
+  expect(prepare(root)).toContain("parts.ts");
+  expect(JSON.parse(readFileSync(join(root, ".tinker/base.json"), "utf8")).parts).toEqual([]);
+  expect(readFileSync(join(root, ".tinker/parts.ts"), "utf8")).toContain("off.ts");
+});
+
+test("the generated tsconfig maps both parts files", () => {
+  const root = fixture({ "package.json": "{}" });
+  const { paths } = JSON.parse(render(root)["tsconfig.json"]).compilerOptions;
+  expect(paths["#tinker/parts"]).toEqual([join(root, ".tinker/parts.ts")]);
+  expect(paths["#tinker/parts.server"]).toEqual([join(root, ".tinker/parts.server.ts")]);
 });
 
 test("a failing tinker prepare fails, except as postinstall, so a broken clone still installs", () => {

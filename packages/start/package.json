@@ -1,6 +1,6 @@
 {
   "name": "@tinker/start",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "The Tinkered Start base: entries, routes, tinker(), and the tinker command (ADR 0106).",
   "bin": {
@@ -37,7 +37,8 @@
     "@tanstack/virtual-file-routes": "1.162.0",
     "@vitejs/plugin-react": "^4.3.4",
     "jsonc-parser": "^3.3.1",
-    "oxc-parser": "^0.117.0"
+    "oxc-parser": "^0.117.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@stryker-mutator/core": "catalog:",
@@ -73,6 +74,27 @@
     "routes": {
       "/api/health": "src/routes/api.health.ts",
       "/tinker": "src/routes/tinker.tsx"
+    },
+    "parts": {
+      "telemetry": {
+        "on": true,
+        "routes": {
+          "/api/telemetry": "src/routes/api.telemetry.ts"
+        },
+        "env": {
+          "VICTORIA_TRACES_URL": {
+            "default": "http://127.0.0.1:10428/insert/opentelemetry/v1/traces",
+            "rule": "http"
+          },
+          "VICTORIA_LOGS_URL": {
+            "default": "http://127.0.0.1:9428/insert/jsonline",
+            "rule": "http"
+          },
+          "OTEL_SERVICE_NAME": {
+            "default": "tinker-app"
+          }
+        }
+      }
     }
   }
 }

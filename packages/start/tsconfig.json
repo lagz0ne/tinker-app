@@ -21,7 +21,9 @@
       "#tinker/router": ["./src/defaults/router.ts"],
       "#tinker/start": ["./src/defaults/start.ts"],
       "#tinker/server": ["./src/defaults/server.ts"],
-      "#tinker/routes": ["../../apps/start-min/.tinker/routeTree.gen.ts"]
+      "#tinker/routes": ["../../apps/start-min/.tinker/routeTree.gen.ts"],
+      "#tinker/parts": ["./src/parts/telemetry/on.ts"],
+      "#tinker/parts.server": ["./src/parts/telemetry/on.server.ts"]
     }
   },
   "include": ["src", "tests"]

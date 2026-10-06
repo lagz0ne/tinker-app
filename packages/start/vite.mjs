@@ -8,6 +8,7 @@ import { say as routeSay } from "./lib/checks/routes.mjs";
 import { loadEnv } from "./lib/env.mjs";
 import { aliases, passThrough, startOptions } from "./lib/glue.mjs";
 import { buildChecks } from "./lib/doctor.mjs";
+import { partsOn } from "./lib/parts.mjs";
 import { recordViolation, restartNote, startViolations } from "./lib/hooks.mjs";
 import { checkTypes } from "./lib/typecheck.mjs";
 import { prepare } from "./lib/prepare.mjs";
@@ -96,16 +97,17 @@ async function tailwind(root) {
 
 /**
  * The glue: one call in the app's vite.config.ts joins the app to the base (ADR 0106).
- * @param {{ root?: string, prerender?: object, pages?: object[], spa?: object, sitemap?: object }} [options] - From vite.config.ts; why: the app folder (default cwd) and Start's static output options.
+ * @param {{ root?: string, telemetry?: boolean, prerender?: object, pages?: object[], spa?: object, sitemap?: object }} [options] - From vite.config.ts; why: the app folder (default cwd), the base parts to turn on or off, and Start's static output options.
  */
 export function tinker(options = {}) {
   const passed = passThrough(options);
+  const on = partsOn(options);
   const root = resolve(options.root ?? process.cwd());
   loadEnv(root);
   if (!existsSync(join(root, "src/routes"))) throw new Error(`tinker: ${routeSay.missing}`);
-  prepare(root);
+  prepare(root, on);
   const glue = { name: "tinker:glue", config: () => glueConfig(root) };
-  const own = startOptions(root);
+  const own = startOptions(root, on);
   const record = {};
   /** Returns nothing: Start drops a violation whose hook returns false. */
   const onViolation = (info) => {

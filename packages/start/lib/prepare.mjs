@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { appFiles, pick } from "./named.mjs";
+import { parts, recordedParts } from "./parts.mjs";
 import { baseDir, basePackage, findPackage } from "./paths.mjs";
 
 const compilerOptions = {
@@ -27,17 +28,35 @@ function json(value) {
 }
 
 /**
- * What `.tinker/` must hold for this app and this base version.
+ * A parts file: one export per part, from its on or off module in the base. The base entries
+ * import it as `#tinker/parts` (the router) or `#tinker/parts.server` (the server).
+ * @param {string} base - From render; why: the base folder the modules live in.
+ * @param {string[]} on - From render; why: the parts that are on.
+ * @param {string} side - From render; why: "" for the router's file, ".server" for the server's.
+ */
+function partsFile(base, on, side) {
+  const lines = Object.keys(parts).map((name) => {
+    const module = on.includes(name) ? `on${side}.ts` : "off.ts";
+    return `export { ${name} } from ${JSON.stringify(join(base, "src/parts", name, module))};`;
+  });
+  return `// Written by tinker(); parts on: ${on.join(", ") || "none"}.\n${lines.join("\n")}\n`;
+}
+
+/**
+ * What `.tinker/` must hold for this app, this base version, and these parts.
  * Every path is absolute: shadcn reads `paths` with tsconfig-paths, which resolves an extended
  * file's paths from the app folder, so a relative "../src/*" sent its writes one folder up.
  * @param {string} root - From the app folder; why: aliases point at its files.
+ * @param {string[]} on - From tinker()'s options, else the record; why: the parts to write.
  */
-export function render(root) {
+export function render(root, on = recordedParts(root)) {
   const base = findPackage(root, "@tinker/start") ?? baseDir;
   const paths = {
     "@/*": [`${join(root, "src")}/*`],
     ...Object.fromEntries(appFiles.map((entry) => [entry.alias, [pick(root, base, entry)]])),
     "#tinker/routes": [join(root, ".tinker/routeTree.gen.ts")],
+    "#tinker/parts": [join(root, ".tinker/parts.ts")],
+    "#tinker/parts.server": [join(root, ".tinker/parts.server.ts")],
   };
   return {
     "tsconfig.json": json({
@@ -51,15 +70,20 @@ export function render(root) {
       ],
       exclude: ["../dist", "../node_modules"],
     }),
-    "base.json": json({ base: basePackage.version }),
+    "base.json": json({ base: basePackage.version, parts: on }),
+    "parts.ts": partsFile(base, on, ""),
+    "parts.server.ts": partsFile(base, on, ".server"),
   };
 }
 
-/** @param {string} root - From the plugin or the CLI; why: write `.tinker/` in that app. */
-export function prepare(root) {
+/**
+ * @param {string} root - From the plugin or the CLI; why: write `.tinker/` in that app.
+ * @param {string[]} [on] - From tinker()'s options; why: the CLI keeps the recorded parts.
+ */
+export function prepare(root, on) {
   const dir = join(root, ".tinker");
   mkdirSync(dir, { recursive: true });
-  const files = render(root);
+  const files = render(root, on);
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
   return Object.keys(files);
 }

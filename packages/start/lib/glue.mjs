@@ -2,11 +2,13 @@ import { existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { physical, rootRoute, route } from "@tanstack/virtual-file-routes";
 import { appFiles, pick, shellFile } from "./named.mjs";
+import { parts } from "./parts.mjs";
 import { baseDir, basePackage } from "./paths.mjs";
 
 /**
- * Vite aliases that join the app to the base: `@/` for the app, and one `#tinker/*` name per
- * named or seam file. A query such as `?url` stays on the replaced path.
+ * Vite aliases that join the app to the base: `@/` for the app, one `#tinker/*` name per
+ * named or seam file, and the generated route tree and parts files. A query such as `?url`
+ * stays on the replaced path.
  * @param {string} root - From tinker(); why: the base reads app paths from there.
  */
 export function aliases(root) {
@@ -17,15 +19,19 @@ export function aliases(root) {
       replacement: `${pick(root, baseDir, entry)}$1`,
     })),
     { find: /^#tinker\/routes$/, replacement: join(root, ".tinker/routeTree.gen.ts") },
+    { find: /^#tinker\/parts$/, replacement: join(root, ".tinker/parts.ts") },
+    { find: /^#tinker\/parts\.server$/, replacement: join(root, ".tinker/parts.server.ts") },
   ];
 }
 
 /**
  * Start's options: entries and base routes point into the base, by paths relative to the app's
- * src/ (Start resolves no package name or absolute path there).
+ * src/ (Start resolves no package name or absolute path there). A part's routes mount only while
+ * it is on, so an off part leaves its paths to the app.
  * @param {string} root - From tinker(); why: Start takes paths relative to that app's src.
+ * @param {string[]} on - From partsOn; why: the parts whose routes to mount.
  */
-export function startOptions(root) {
+export function startOptions(root, on) {
   const src = join(root, "src");
   const routes = join(src, "routes");
   const fromSrc = (file) => relative(src, join(baseDir, "src", file));
@@ -33,8 +39,8 @@ export function startOptions(root) {
   const shell = existsSync(join(root, shellFile))
     ? "__root.tsx"
     : fromRoutes("src/routes/root.tsx");
-  const mounted = Object.entries(basePackage.tinker.routes).map(([path, file]) =>
-    route(path, fromRoutes(file)),
+  const mounted = [basePackage.tinker.routes, ...on.map((name) => parts[name].routes)].flatMap(
+    (routes) => Object.entries(routes).map(([path, file]) => route(path, fromRoutes(file))),
   );
   return {
     srcDirectory: "src",
@@ -61,11 +67,11 @@ const passed = ["prerender", "pages", "spa", "sitemap"];
 
 /**
  * The Start options tinker() passes on. An unknown key fails the build, so no option is dropped
- * in silence.
+ * in silence; a part's switch is known too (see partsOn).
  * @param {Record<string, unknown>} options - From vite.config.ts; why: what the app asked for.
  */
 export function passThrough(options) {
-  const known = ["root", ...passed];
+  const known = ["root", ...passed, ...Object.keys(parts)];
   const unknown = Object.keys(options).filter((key) => !known.includes(key));
   if (unknown.length > 0)
     throw new Error(`tinker(): unknown option ${unknown.join(", ")}; known: ${known.join(", ")}`);

@@ -8,7 +8,9 @@ const page = (path) =>
 test("passes when every route exports Route and none takes a base path", () => {
   expect(routes(goodApp())).toEqual({
     status: "ok",
-    lines: ["route files export Route; none takes a base path (/api/health, /tinker)"],
+    lines: [
+      "route files export Route; none takes a base path (/api/health, /tinker, /api/telemetry)",
+    ],
   });
 });
 
@@ -99,4 +101,39 @@ test("names each of the six ways a route takes a base path", () => {
     "src/routes/tinker/index.tsx:2 takes /tinker, a base route",
     "src/routes/tinker/settings.tsx:2 nests under /tinker, a base route with no outlet; the base page renders",
   ]);
+});
+
+test("a route on an on part's path names the switch that frees it", () => {
+  const root = goodApp({
+    "src/routes/api.telemetry.ts": page("/api/telemetry"),
+    "src/routes/api/telemetry/raw.ts": page("/api/telemetry/raw"),
+  });
+  expect(routes(root).lines.sort()).toEqual([
+    "src/routes/api.telemetry.ts:2 takes /api/telemetry, a base route; tinker({ telemetry: false }) frees it",
+    "src/routes/api/telemetry/raw.ts:2 nests under /api/telemetry, a base route with no outlet; the base page renders; tinker({ telemetry: false }) frees it",
+  ]);
+});
+
+test("with the part off, as the last tinker() call recorded, its path is the app's", () => {
+  const root = goodApp({
+    ".tinker/base.json": JSON.stringify({ base: "0.3.0", parts: [] }),
+    "src/routes/api.telemetry.ts": page("/api/telemetry"),
+  });
+  expect(routes(root)).toEqual({
+    status: "ok",
+    lines: ["route files export Route; none takes a base path (/api/health, /tinker)"],
+  });
+});
+
+test("an installed base from before parts mounts its own routes only", () => {
+  const root = fixture({
+    "src/routes/api.telemetry.ts": page("/api/telemetry"),
+    "node_modules/@tinker/start/package.json": JSON.stringify({
+      tinker: { routes: { "/tinker": "src/routes/tinker.tsx" } },
+    }),
+  });
+  expect(routes(root)).toEqual({
+    status: "ok",
+    lines: ["route files export Route; none takes a base path (/tinker)"],
+  });
 });

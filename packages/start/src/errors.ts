@@ -2,6 +2,7 @@ export declare namespace Errors {
   type Payloads = {
     StartScopeMissing: Record<string, never>;
     Cancelled: Record<string, never>;
+    BadSettings: { part: string; keys: string[] };
   };
   type Name = keyof Payloads;
   type Of<N extends Name> = Error & { kind: N; payload: Payloads[N] };
