@@ -77,10 +77,12 @@ for (const composition of [["app"], ["app", "starter"]]) {
     }
     for (const name of composition) await copyItem(name);
     const installed = JSON.parse(await readFile(join(consumer, "package.json"), "utf8"));
-    assert.match(
-      installed.dependencies["@tinker/start"],
-      /releases\/download\/start-v0\.7\.0\/tinker-start-0\.7\.0\.tgz$/,
+    const template = JSON.parse(
+      items
+        .find((item) => item.name === "app")
+        .files.find((file) => file.target === "~/package.json").content,
     );
+    assert.equal(installed.dependencies["@tinker/start"], template.dependencies["@tinker/start"]);
     assert.ok(!/workspace:|catalog:/.test(JSON.stringify(installed)));
     await symlink(join(app, "node_modules"), join(consumer, "node_modules"), "dir");
     if (composition.includes("starter")) {
