@@ -49,5 +49,7 @@
     "parts": ["auth", "sync"],
     "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
   },
-  "registryDependencies": ["http://127.0.0.1:4870/r/postgres-auth-mail-example.json"]
+  "registryDependencies": [
+    "https://raw.githubusercontent.com/lagz0ne/tinkered/start-v0.7.0/apps/start-scaffold/public/r/postgres-auth-mail-example.json"
+  ]
 }

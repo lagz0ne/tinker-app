@@ -41,7 +41,10 @@ for (const composition of [["app"], ["postgres-auth-mail-example", "starter"]]) 
       }
     }
     const installed = JSON.parse(await readFile(join(consumer, "package.json"), "utf8"));
-    assert.equal(installed.dependencies["@tinker/start"], "0.6.0");
+    assert.match(
+      installed.dependencies["@tinker/start"],
+      /releases\/download\/start-v0\.7\.0\/tinker-start-0\.7\.0\.tgz$/,
+    );
     assert.ok(!/workspace:|catalog:/.test(JSON.stringify(installed)));
     await symlink(join(app, "node_modules"), join(consumer, "node_modules"), "dir");
     const build = spawnSync("vp", ["build"], { cwd: consumer, encoding: "utf8", timeout: 120000 });

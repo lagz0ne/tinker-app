@@ -255,6 +255,7 @@ The package's `exports` refuses every other path.
   It throws a failure as is,
   and a cancelled call as the base's `Cancelled` error.
 - `/api/health` answers `{"ok":true,"base":"<version>"}`.
+  The health operation reports the installed base version.
 - Each entry makes a telemetry root
   that observes the app root and closes after it.
   Its own sends are not traced.
@@ -390,6 +391,9 @@ The package's `exports` refuses every other path.
     resumes past its own revision,
     at most 100 to a frame,
     each frame with its resume cursor as its `id`.
+  - A stream opened after a wake still replays.
+    A signed-in tab with no account cursor gets
+    the account frame at once.
   - Then it greets once (`: connected`),
     and sends each commit as it lands.
   - A quiet stream sends `: heartbeat` each 10 s,
@@ -473,19 +477,29 @@ imports, routes, and style before TanStack's route
 generator, then the app's own `tsc`.
 A fail stops the build with doctor's line.
 
+## Packages from GitHub
+
+Core, React, and Start ship together on `lagz0ne/tinkered`.
+Each app pins three tarball URLs under one `start-v<version>` tag.
+The lockfile pins their bytes.
+The first set is `0.7.0`; it is prepared locally, not published.
+Read [the release steps](../../docs/roadmap/start-base/RELEASE.md).
+
 ## Upgrade
 
 ```bash
-tinker upgrade 0.3.0
-tinker upgrade 0.3.0 --from ../packs
+tinker upgrade 0.7.0
+tinker upgrade 0.7.0 --from ../packs
 ```
 
 1. It stops when a base file in `node_modules`
    was edited (doctor check 2). `--force` goes on.
-2. `package.json` gets the new version.
-   With `--from`, it names the packed file,
-   and each peer moves to the version
-   that release was tested with.
+2. `package.json` gets three GitHub tarball URLs:
+   Core, React, and Start from tag `start-v0.7.0`.
+   All three share one version because they ship together.
+   Other peers move to the versions the new base tested.
+   With `--from`, only Start uses a local packed file;
+   this mode is for local proofs.
 3. Install, `tinker prepare`, then `tinker doctor`.
 4. It prints the `UPGRADE.md` notes between versions.
 

@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { bytes } from "./checks/bytes.mjs";
+import { releaseDependencies, releaseUrls } from "./release.mjs";
 import { installedBase, installedVersion, readJson } from "./paths.mjs";
 
 /** @param {string} root - From upgrade; why: pick the package manager its lockfile names. */
@@ -81,13 +82,13 @@ function freshBase(root) {
 }
 
 /**
- * Where the release comes from: a packed file in `from`, else the registry.
+ * Where the release comes from: a packed file in `from`, else the shared GitHub release.
  * @param {string} root - From upgrade; why: the spec is relative to the app.
  * @param {string} version - From the CLI; why: the release to move to.
  * @param {string | undefined} from - From --from; why: a folder of packed releases.
  */
 function release(root, version, from) {
-  if (!from) return { spec: version, tested: {} };
+  if (!from) return { spec: releaseUrls(version)["@tinker/start"], tested: {} };
   const tarball = resolve(root, from, `tinker-start-${version}.tgz`);
   if (!existsSync(tarball)) return { missing: tarball };
   const pkg = JSON.parse(
@@ -100,6 +101,21 @@ function release(root, version, from) {
 function finish(root) {
   const install = installCommand(root);
   if (step(`${install} install`, install, ["install"], root) !== 0) return 1;
+  const pkg = readJson(join(root, "package.json"));
+  const tested = readJson(join(freshBase(root), "package.json")).tinker.tested;
+  const { dependencies, changes } = pinDependencies(
+    pkg.dependencies,
+    pkg.dependencies["@tinker/start"],
+    tested,
+    (name) => installedVersion(root, name),
+  );
+  if (changes.length > 1) {
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ ...pkg, dependencies }, null, 2) + "\n",
+    );
+    if (step(`${install} install`, install, ["install"], root) !== 0) return 1;
+  }
   const bin = join(freshBase(root), "bin/tinker.mjs");
   if (step("tinker prepare", process.execPath, [bin, "prepare"], root) !== 0) return 1;
   return step("tinker doctor", process.execPath, [bin, "doctor"], root);
@@ -121,15 +137,20 @@ export function planUpgrade(root, version, options) {
   const next = release(root, version, options.from);
   if (next.missing) return { stop: `stop: ${next.missing} does not exist` };
   const pkg = readJson(join(root, "package.json"));
-  const { dependencies, changes } = pinDependencies(
-    pkg.dependencies,
-    next.spec,
-    next.tested,
-    (name) => installedVersion(root, name),
+  const pinnedDependencies = pinDependencies(pkg.dependencies, next.spec, next.tested, (name) =>
+    installedVersion(root, name),
   );
   return {
-    pkg: { ...pkg, dependencies },
-    changes: changes.map(([name, from, to]) => `package.json: ${name} ${from} -> ${to}`),
+    pkg: {
+      ...pkg,
+      dependencies: options.from
+        ? pinnedDependencies.dependencies
+        : releaseDependencies(pkg.dependencies, version),
+    },
+    changes: (options.from
+      ? pinnedDependencies.changes
+      : Object.entries(releaseUrls(version)).map(([name, to]) => [name, pkg.dependencies[name], to])
+    ).map(([name, from, to]) => `package.json: ${name} ${from} -> ${to}`),
     before: readJson(join(installedBase(root), "package.json")).version,
   };
 }

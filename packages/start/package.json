@@ -1,6 +1,6 @@
 {
   "name": "@tinker/start",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "The Tinkered Start base: entries, routes, tinker(), and the tinker command (ADR 0106).",
   "bin": {
@@ -72,8 +72,8 @@
     "tested": {
       "@tanstack/react-router": "1.170.41",
       "@tanstack/react-start": "1.168.60",
-      "@tinker/core": "0.0.0",
-      "@tinker/react": "0.0.0"
+      "@tinker/core": "0.7.0",
+      "@tinker/react": "0.7.0"
     },
     "routes": {
       "/api/health": "src/routes/api.health.ts",

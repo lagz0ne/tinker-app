@@ -64,13 +64,13 @@ try {
   run(process.execPath, [join(root, "packages/start/scripts/pack.mjs"), packs], root);
   const release = join(scratch, "new-base");
   await mkdir(release);
-  run("tar", ["-xzf", join(packs, "tinker-start-0.6.0.tgz"), "-C", release], root);
+  run("tar", ["-xzf", join(packs, "tinker-start-0.7.0.tgz"), "-C", release], root);
   const releaseRoot = join(release, "package");
   const next = JSON.parse(await readFile(join(releaseRoot, "package.json"), "utf8"));
-  next.version = "0.6.1";
+  next.version = "0.7.1";
   await writeFile(join(releaseRoot, "package.json"), JSON.stringify(next, null, 2) + "\n");
   run("vp", ["pm", "pack", "--pack-destination", packs], releaseRoot);
-  console.log("Assumption: 0.6.1 is a local version-bump fixture, not a published release.");
+  console.log("Assumption: 0.7.1 is a local version-bump fixture, not a published release.");
   const staticServer = spawn(
     process.execPath,
     [
@@ -175,12 +175,12 @@ try {
     ".gitignore",
   ])
     configBefore[name] = await readFile(join(consumer, name), "utf8");
-  run(tinker, ["upgrade", "0.6.1", "--from", packs]);
+  run(tinker, ["upgrade", "0.7.1", "--from", packs]);
   assert.deepEqual(await hashes(join(consumer, "src")), userBefore);
   for (const [name, content] of Object.entries(configBefore))
     assert.equal(await readFile(join(consumer, name), "utf8"), content);
   console.log(
-    "PASS: upgrade 0.6.0 -> 0.6.1 changed no user source or config; package.json and install files changed as expected.",
+    "PASS: upgrade 0.7.0 -> 0.7.1 changed no user source or config; package.json and install files changed as expected.",
   );
   run("npx", [
     "--yes",

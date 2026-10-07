@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
+import { releaseUrls } from "../../../packages/start/lib/release.mjs";
+
 export const app = resolve(import.meta.dirname, "..");
 export const root = resolve(app, "../..");
 
 /** Release specs replace workspace and catalog names; local packs never enter a normal build. */
-async function releasePackage(path, packs) {
+async function releasePackage(path, packs, releaseVersion) {
   const pkg = JSON.parse(await readFile(path, "utf8"));
   const workspace = await readFile(join(root, "pnpm-workspace.yaml"), "utf8");
   const catalog = Object.fromEntries(
@@ -30,7 +32,7 @@ async function releasePackage(path, packs) {
         );
         dependencies[name] = packs
           ? `file:${join(resolve(packs), `${name.slice(1).replace("/", "-")}-${release.version}.tgz`)}`
-          : release.version;
+          : releaseUrls(releaseVersion)[name];
       }
       assert.ok(dependencies[name], name);
       assert.ok(!dependencies[name].endsWith(":"), name);
@@ -40,11 +42,19 @@ async function releasePackage(path, packs) {
   return pkg;
 }
 
+/** One release tag pins packages and registry links unless a local proof supplies paths. */
+async function registryRelease({ packs, url, version }) {
+  version ??= JSON.parse(await readFile(join(root, "packages/start/package.json"), "utf8")).version;
+  url ??= `https://raw.githubusercontent.com/lagz0ne/tinkered/start-v${version}/apps/start-scaffold/public/r`;
+  return { packs, url, version };
+}
+
 /** Each item reads the app's source; targets keep shadcn inside the consumer's folder. */
-export async function registryItems({ packs, url = "http://127.0.0.1:4870/r" } = {}) {
+export async function registryItems(options = {}) {
+  const { packs, url, version } = await registryRelease(options);
   const registry = JSON.parse(await readFile(join(app, "registry.json"), "utf8"));
-  const full = await releasePackage(join(app, "package.json"), packs);
-  const minimal = await releasePackage(join(root, "apps/start-min/package.json"), packs);
+  const full = await releasePackage(join(app, "package.json"), packs, version);
+  const minimal = await releasePackage(join(root, "apps/start-min/package.json"), packs, version);
   minimal.name = "tinker-app";
   const tasks = Object.keys(full.scripts).filter(
     (name) => name.startsWith("test:") && name !== "test:schema",

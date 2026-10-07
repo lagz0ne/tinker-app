@@ -2,6 +2,16 @@
 
 `tinker upgrade` prints the sections between your old and new version.
 
+## 0.7.0
+
+Core, React, and Start now share one version.
+`tinker upgrade 0.7.0` sets all three GitHub release URLs,
+then installs and runs prepare and doctor.
+The tag is `start-v0.7.0` on `lagz0ne/tinkered`.
+No app source or config change is needed.
+An edited base still stops the upgrade before any write.
+This set is prepared locally; publication needs the user's go.
+
 ## 0.6.0
 
 The sync part's client side; it is off by default,

@@ -8,8 +8,16 @@ Victoria stores traces and logs.
 
 This app runs on the package `@tinker/start`.
 The base owns entries, telemetry, auth routes, and sync.
-The source registry is built locally; it is not published.
-Install packed Core, React, and Start releases first.
+Core, React, and Start come from one GitHub release tag.
+The `0.7.0` release is prepared locally; it is not published.
+After the lead publishes it, start in an empty folder:
+
+```bash
+npx shadcn@4.21.0 add https://raw.githubusercontent.com/lagz0ne/tinkered/start-v0.7.0/apps/start-scaffold/public/r/app.json --yes
+```
+
+This is the smallest app, with telemetry on.
+The items below add the full demo.
 
 From your project folder:
 
@@ -204,7 +212,7 @@ It serves the registry at 127.0.0.1.
 It starts from an empty folder and runs real shadcn.
 It builds, runs doctor, and curls the served page.
 It adds examples and checks a changed source with `--diff`.
-It upgrades to a local 0.6.1 version-bump fixture.
+It upgrades to a local 0.7.1 version-bump fixture.
 It checks user files stay the same, then stops each server
 by its own PID.
 The scratch folder stays for review.
@@ -234,8 +242,8 @@ vp run @tinker-start-scaffold#registry:build
 They work on this machine only.
 `TINKER_REGISTRY_URL` sets links between example items.
 `TINKER_REGISTRY_OUT` can keep proof output outside this repo.
-Without the overrides, builds use release versions from
-package files and the local URL above.
+Without the overrides, builds use GitHub release URLs
+and raw GitHub registry URLs at the same tag.
 Run `registry:build` again without overrides before committing.
 `test:registry` rejects built items that differ from source.
 
@@ -328,13 +336,11 @@ npx shadcn@4.21.0 add \
 `runtime` remains a package-only item for old users.
 New apps start with `app`.
 
-Publishing waits for the user's go and exact domain.
-It also needs a place to install the private Core, React,
-and Start releases: npm or an agreed private registry.
-A published build uses those real release versions,
-not this machine's `file:` paths.
-Set `TINKER_REGISTRY_URL` to the domain's `/r` URL.
-No domain or package is published by these scripts.
+Publishing waits for the user's go.
+No account or domain is needed for an app install.
+[The release steps](../../docs/roadmap/start-base/RELEASE.md)
+name the tag, assets, and raw GitHub registry paths.
+No package or registry is published by the local scripts.
 
 ## Promises tested through app scopes
 

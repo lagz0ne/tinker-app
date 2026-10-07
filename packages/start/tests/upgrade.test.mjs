@@ -136,13 +136,6 @@ test("a peer whose spec already installs the tested version keeps its spec", () 
   ]);
 });
 
-test("with no release folder, an upgrade names the version and pins no peer", () => {
-  const root = installedApp({ "@tinker/start": "9.0.0", "@tanstack/react-router": "1.160.0" });
-  expect(planUpgrade(root, "9.1.0", { force: false }).changes).toEqual([
-    "package.json: @tinker/start 9.0.0 -> 9.1.0",
-  ]);
-});
-
 test("an upgrade stops on an edited base file, unless forced, and on a missing release", () => {
   const root = installedApp();
   packRelease(root, "9.1.0");
@@ -158,5 +151,18 @@ test("an upgrade stops on an edited base file, unless forced, and on a missing r
   ]);
   expect(planUpgrade(root, "9.2.0", { from: "packs", force: true })).toEqual({
     stop: `stop: ${join(root, "packs/tinker-start-9.2.0.tgz")} does not exist`,
+  });
+});
+
+test("an upgrade without --from writes the three URLs for one GitHub tag", () => {
+  const root = installedApp({ "@tinker/start": "file:base.tgz", zod: "^4" });
+  expect(planUpgrade(root, "0.7.0", { force: false }).pkg.dependencies).toEqual({
+    zod: "^4",
+    "@tinker/core":
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.7.0/tinker-core-0.7.0.tgz",
+    "@tinker/react":
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.7.0/tinker-react-0.7.0.tgz",
+    "@tinker/start":
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.7.0/tinker-start-0.7.0.tgz",
   });
 });
