@@ -15,6 +15,35 @@ assert.deepEqual(
   { ...registry, items },
   "registry index must match source too",
 );
+for (const target of new Set([
+  ...registry.items.find((item) => item.name === "app").files.map((file) => file.target),
+  "~/package.json",
+  "~/vite.config.ts",
+  "~/vite.config.mts",
+  "~/tsconfig.json",
+  "~/src/lib/tinker.ts",
+  "~/src/lib/tinker.server.ts",
+])) {
+  const planted = structuredClone(registry);
+  planted.items
+    .find((item) => item.name === "mail-example")
+    .files.push({
+      path: "unused",
+      type: "registry:file",
+      target,
+    });
+  await assert.rejects(registryItems({ registry: planted }), /protected app file/);
+  console.log(`PASS: registry build rejects protected target ${target}.`);
+}
+const duplicate = structuredClone(registry);
+duplicate.items
+  .find((item) => item.name === "todos-example")
+  .files.push({
+    path: "src/errors.ts",
+    type: "registry:file",
+    target: "~/src/errors.ts",
+  });
+await assert.rejects(registryItems({ registry: duplicate }), /already owned/);
 let files = 0;
 for (const item of items) {
   const built = JSON.parse(await readFile(join(app, "public/r", `${item.name}.json`), "utf8"));
@@ -30,16 +59,23 @@ for (const item of items) {
     files++;
   }
 }
-for (const composition of [["app"], ["postgres-auth-mail-example", "starter"]]) {
+for (const composition of [["app"], ["app", "starter"]]) {
   const consumer = await mkdtemp(join(tmpdir(), "start-registry-consumer-"));
   try {
-    for (const name of composition) {
-      for (const file of items.find((item) => item.name === name).files) {
+    const copied = new Set();
+    async function copyItem(name) {
+      if (copied.has(name)) return;
+      copied.add(name);
+      const item = items.find((item) => item.name === name);
+      for (const dependency of item.registryDependencies ?? [])
+        await copyItem(dependency.split("/").at(-1).replace(".json", ""));
+      for (const file of item.files) {
         const target = join(consumer, file.target.slice(2));
         await mkdir(dirname(target), { recursive: true });
         await writeFile(target, file.content);
       }
     }
+    for (const name of composition) await copyItem(name);
     const installed = JSON.parse(await readFile(join(consumer, "package.json"), "utf8"));
     assert.match(
       installed.dependencies["@tinker/start"],
@@ -47,13 +83,20 @@ for (const composition of [["app"], ["postgres-auth-mail-example", "starter"]]) 
     );
     assert.ok(!/workspace:|catalog:/.test(JSON.stringify(installed)));
     await symlink(join(app, "node_modules"), join(consumer, "node_modules"), "dir");
+    if (composition.includes("starter")) {
+      await writeFile(
+        join(consumer, "vite.config.ts"),
+        await readFile(join(app, "vite.config.ts")),
+      );
+      for (const seam of ["tinker.ts", "tinker.server.ts"])
+        await writeFile(
+          join(consumer, "src/lib", seam),
+          await readFile(join(app, "src/lib", seam)),
+        );
+    }
     const build = spawnSync("vp", ["build"], { cwd: consumer, encoding: "utf8", timeout: 120000 });
     assert.equal(build.status, 0, build.stdout + build.stderr);
     if (composition.includes("starter")) {
-      for (const task of Object.values(installed.scripts)) {
-        const path = task.match(/^node (scripts\/\S+)/)?.[1];
-        if (path) await readFile(join(consumer, path));
-      }
       const plain = spawnSync(process.execPath, ["scripts/check-plain.mjs"], {
         cwd: consumer,
         encoding: "utf8",

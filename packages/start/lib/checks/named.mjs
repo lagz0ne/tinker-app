@@ -5,6 +5,7 @@ import { parts, recordedParts } from "../parts.mjs";
 import { listFiles } from "../paths.mjs";
 import { augmentations, mayExport, parseSource } from "../source.mjs";
 import { verdict } from "./result.mjs";
+import { examples } from "./examples.mjs";
 
 export const say = {
   export: (file, name) => `${file}:1 does not export ${name}; the base imports it from this file`,
@@ -64,6 +65,7 @@ function augmentProblems(root) {
  * where the glue never reads it (ADR 0106). No fix.
  */
 export function named(root) {
+  const installed = examples(root);
   const found = appFiles.filter(({ file, reads }) => reads && existsSync(join(root, file)));
   const missing = found
     .filter(({ file, reads }) => !mayExport(join(root, file), reads))
@@ -72,7 +74,13 @@ export function named(root) {
     .filter(({ file }) => existsSync(join(root, file)))
     .map(({ file, hint }) => say.ignored(file, hint));
   return verdict(
-    [...missing, ...partProblems(root), ...augmentProblems(root), ...ignored],
+    [
+      ...missing,
+      ...partProblems(root),
+      ...augmentProblems(root),
+      ...ignored,
+      ...(installed.status === "fail" ? installed.lines : []),
+    ],
     say.passed(found.map(({ file }) => file)),
   );
 }

@@ -24,6 +24,30 @@ const passOk = 'return { status: "ok", lines: ["broken"] };';
 /** Logic breaks: file, the text to find, what replaces it. */
 const breaks = [
   {
+    name: "example missing parts are missed",
+    file: "lib/checks/examples.mjs",
+    find: "!on.includes(part)",
+    replace: "false",
+  },
+  {
+    name: "example missing seam exports are missed",
+    file: "lib/checks/examples.mjs",
+    find: "!existsSync(path) || !mayExport(path, name)",
+    replace: "false",
+  },
+  {
+    name: "example startup extension is missed",
+    file: "lib/checks/examples.mjs",
+    find: "needed.include && !hasSetup(path, needed)",
+    replace: "false",
+  },
+  {
+    name: "example requirements are not checked by doctor",
+    file: "lib/checks/named.mjs",
+    find: '...(installed.status === "fail" ? installed.lines : [])',
+    replace: "...[]",
+  },
+  {
     name: "seam module declarations are missed",
     file: "lib/source.mjs",
     find: "node.id.value",

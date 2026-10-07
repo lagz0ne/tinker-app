@@ -565,3 +565,13 @@ of an account that signed out during it.
 Generated aliases and parts use the real package folder.
 A linked workspace base has one sync Register,
 so app snapshot fields keep their types in both entries.
+
+Installed examples carry their part and seam needs in
+`src/examples/*.tinker.json`.
+Doctor names each missing `tinker({ part: true })` switch
+and the exact export line to add to the seam file.
+An empty server extensions list must also join the demo's
+database startup extension.
+Doctor accepts its re-export, an imported startup extension,
+or a spread of the copied demo's extensions beside your own.
+Example requirements also stop a build until they are joined.

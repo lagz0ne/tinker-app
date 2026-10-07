@@ -277,52 +277,116 @@ Review example changes with `shadcn add --diff`.
 
 ## Example items
 
-These files are yours once copied:
+Examples add their own files.
+They never replace the app's config, first page, or seams.
+The registry build refuses a protected app target.
+It also refuses two items that own the same target.
 
-- `mail-example`: SMTP settings, client, and send action.
-  No base parts or Postgres are needed.
-  Set SMTP values before calling `sendMail`.
-- `todos-example`: todo table, operations, view, and route.
-- `profile-example`: profile form, actions, and route.
-- `auth-pages-example`: accounts and the sign-in page.
-- `counter-example`: the shared counter and its view.
-- `example-wiring`: state, sync bodies, seams, UI,
-  database, and migrations.
+- `mail-example`: SMTP settings, client, send action, and errors.
+  No base part or seam export is needed.
+  SMTP settings are needed only when sending mail.
+- `postgres-auth-mail-example`: the shared demo bodies,
+  migrations, UI, and a new page at `/demo`.
+  It depends on mail.
+- `todos-example`, `profile-example`, `auth-pages-example`,
+  `counter-example`, and `example-wiring`:
+  each adds its own requirements file.
+  Each depends on the shared demo.
+- `starter`: the shared demo plus tests and guides.
+  Add it to an existing `app`; it adds no app template files.
+- `runtime`: a package-only item for old users.
 
-The last five share this demo's bodies and page links.
-Each depends on `postgres-auth-mail-example`,
-which copies the complete demo from the same source.
-It adds the needed packages and writes this filled config:
+The demo's feature bodies stay joined.
+Adding one feature installs the whole shared demo.
+The first page stays yours; the demo starts at `/demo`.
+Its copied env sample is `examples/demo.env.example`.
+No example writes `.env` or a secret.
 
-```ts
-import { defineConfig } from "vite-plus";
-import { tinker } from "@tinker/start/vite";
+Every example states `meta.parts` and `meta.seams`.
+A copied `src/examples/<item>.tinker.json` file keeps
+those needs beside the app, so doctor needs no network.
+Doctor names each missing switch and the exact export line.
+It also names a database startup extension missing from
+an existing empty extensions list.
 
-export default defineConfig({
-  plugins: [tinker({ auth: true, sync: true })],
-});
-```
-
-It replaces the empty seams and the first page too.
-For the first demo install, allow these changes:
+From an app made with `app`:
 
 ```bash
 npx shadcn@4.21.0 add \
-  http://127.0.0.1:4870/r/todos-example.json \
-  --yes --overwrite
-cp .env.example .env
+  http://127.0.0.1:4870/r/todos-example.json --yes
+npx tinker doctor
+```
+
+Keep your config and add these switches to its `tinker()` call:
+
+```ts
+tinker({ auth: true, sync: true });
+```
+
+Keep your server extensions and add `databaseSetup`.
+The other server exports doctor names are:
+
+```ts
+export { database } from "../backend/database.ts";
+export { auth } from "../backend/auth.ts";
+export { readAccount } from "../backend/auth.ts";
+export { bootstrap } from "../backend/sync.ts";
+```
+
+For an empty server seam, the filled startup list is:
+
+```ts
+export { extensions } from "../examples/demo.server.ts";
+```
+
+The browser seam exports the copied demo's readers and types:
+
+```ts
+export {
+  records,
+  readSnapshot,
+  readBootstrap,
+  readBatch,
+  streamMessage,
+} from "../examples/demo.ts";
+```
+
+The copied module also adds the app's `Register` bodies.
+For a server seam with your own extensions, keep that list
+and join the demo's startup extension:
+
+```ts
+import { databaseSetup } from "../backend/database.ts";
+export const extensions = [databaseSetup];
+```
+
+Then set the env values and check:
+
+```bash
+cp examples/demo.env.example .env
 vp build
 npx tinker doctor
 ```
 
 Build and doctor need no running Postgres or SMTP.
-Live use needs Postgres and SMTP settings from `.env.example`.
-The server applies the copied migrations at startup.
-Auth needs a real `AUTH_SECRET` and `PUBLIC_ORIGIN`.
+Serving the joined demo needs Postgres and SMTP settings.
+The server applies migrations at startup.
+Auth needs `AUTH_SECRET` and `PUBLIC_ORIGIN`.
 Sync uses auth and the database.
-The counter uses sync, so it needs both too.
-`mail-example` alone needs SMTP only when sending.
-Telemetry is on by default and uses the base defaults.
+Telemetry is on by default.
+
+Run the proof of safe example adds:
+
+```bash
+node apps/start-scaffold/maintain/\
+  proof-no-overwrite.mjs
+```
+
+It uses real shadcn and a local registry at 127.0.0.1.
+Each item is added to a fresh app without overwrite.
+It checks config and seam hashes before applying doctor's lines.
+All servers stop by their own PID.
+Nothing is published.
 
 Review newer mail source without writing any file:
 

@@ -182,26 +182,29 @@ try {
   console.log(
     "PASS: upgrade 0.7.0 -> 0.7.1 changed no user source or config; package.json and install files changed as expected.",
   );
-  run("npx", [
-    "--yes",
-    "shadcn@4.21.0",
-    "add",
-    `${url}/todos-example.json`,
-    "--yes",
-    "--overwrite",
-  ]);
-  await cp(join(consumer, ".env.example"), join(consumer, ".env"));
+  run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/todos-example.json`, "--yes"]);
+  const configPath = join(consumer, "vite.config.ts");
+  await writeFile(
+    configPath,
+    (await readFile(configPath, "utf8")).replace("tinker()", "tinker({ auth: true, sync: true })"),
+  );
+  await writeFile(join(consumer, "src/lib/tinker.ts"), 'export * from "../examples/demo.ts";\n');
+  await writeFile(
+    join(consumer, "src/lib/tinker.server.ts"),
+    'export * from "../examples/demo.server.ts";\nexport { extensions } from "../examples/demo.server.ts";\n',
+  );
+  await cp(join(consumer, "examples/demo.env.example"), join(consumer, ".env"));
   run("vp", ["build"]);
   run(tinker, ["doctor"]);
   for (const name of ["profile-example", "auth-pages-example", "counter-example", "example-wiring"])
-    run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/${name}.json`, "--yes", "--overwrite"]);
+    run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/${name}.json`, "--yes"]);
   run("vp", ["build"]);
   run(tinker, ["doctor"]);
   console.log(
     "PASS: todos, profile, auth pages, counter, wiring build and doctor EXIT 0 without a running Postgres.",
   );
   console.log(
-    "These demo items enable auth + sync and need Postgres + SMTP for live use. Their shared dependency copies all demo bodies.",
+    "These demo items need the auth + sync switches and Postgres + SMTP for live use. Their shared dependency copies all demo bodies.",
   );
   console.log(
     "NOT PROVEN: live copied demo auth/sync/mail, public registry hosting, or published private packages.",

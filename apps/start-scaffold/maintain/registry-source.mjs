@@ -1,11 +1,40 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, posix, resolve } from "node:path";
 
 import { releaseUrls } from "../../../packages/start/lib/release.mjs";
 
 export const app = resolve(import.meta.dirname, "..");
 export const root = resolve(app, "../..");
+
+/** Examples may add files, but never replace the app template or another item's files. */
+function checkTargets(registry) {
+  const protectedFiles = new Set([
+    ...registry.items.find((item) => item.name === "app").files.map((file) => file.target),
+    "~/package.json",
+    "~/vite.config.ts",
+    "~/vite.config.mts",
+    "~/tsconfig.json",
+    "~/src/lib/tinker.ts",
+    "~/src/lib/tinker.server.ts",
+  ]);
+  const owners = new Map();
+  for (const item of registry.items) {
+    for (const file of item.files) {
+      assert.ok(file.target.startsWith("~/") && !file.target.includes(".."), file.target);
+      assert.equal(file.target, `~/${posix.normalize(file.target.slice(2))}`, file.target);
+      assert.ok(
+        item.name === "app" || !protectedFiles.has(file.target),
+        `${item.name}: protected app file ${file.target}`,
+      );
+      assert.ok(
+        !owners.has(file.target),
+        `${item.name}: ${file.target} is already owned by ${owners.get(file.target)}`,
+      );
+      owners.set(file.target, item.name);
+    }
+  }
+}
 
 /** Release specs replace workspace and catalog names; local packs never enter a normal build. */
 async function releasePackage(path, packs, releaseVersion) {
@@ -49,10 +78,56 @@ async function registryRelease({ packs, url, version }) {
   return { packs, url, version };
 }
 
+/** Example package specs use the same release versions as the source app. */
+function itemDependencies(item, full) {
+  return Object.fromEntries(
+    ["dependencies", "devDependencies"]
+      .filter((field) => item[field])
+      .map((field) => [
+        field,
+        item[field].map((dependency) => {
+          const name = dependency.slice(0, dependency.lastIndexOf("@"));
+          return `${name}@${full.dependencies[name] ?? full.devDependencies[name]}`;
+        }),
+      ]),
+  );
+}
+
+/** A copied receipt lets doctor read the item's requirements without a registry connection. */
+function receipt(item) {
+  if (!item.meta.parts) return [];
+  return [
+    {
+      path: `src/examples/${item.name}.tinker.json`,
+      target: `~/src/examples/${item.name}.tinker.json`,
+      type: "registry:file",
+      content:
+        JSON.stringify(
+          { name: item.name, parts: item.meta.parts, seams: item.meta.seams },
+          null,
+          2,
+        ) + "\n",
+    },
+  ];
+}
+
+/** Copied tests refer to the consumer's files, whatever name their package has. */
+async function fileContent(file, packages) {
+  if (packages[file.path]) return JSON.stringify(packages[file.path], null, 2) + "\n";
+  const text = await readFile(join(app, file.path), "utf8");
+  if (!file.path.startsWith("tests/")) return text;
+  return text
+    .replaceAll('"@tinker-start-scaffold/backend"', '"../src/backend/index.ts"')
+    .replaceAll('"@tinker-start-scaffold/frontend"', '"../src/frontend/index.ts"')
+    .replaceAll('"@tinker-start-scaffold/testing"', '"./presets.ts"');
+}
+
 /** Each item reads the app's source; targets keep shadcn inside the consumer's folder. */
 export async function registryItems(options = {}) {
   const { packs, url, version } = await registryRelease(options);
-  const registry = JSON.parse(await readFile(join(app, "registry.json"), "utf8"));
+  const registry =
+    options.registry ?? JSON.parse(await readFile(join(app, "registry.json"), "utf8"));
+  checkTargets(registry);
   const full = await releasePackage(join(app, "package.json"), packs, version);
   const minimal = await releasePackage(join(root, "apps/start-min/package.json"), packs, version);
   minimal.name = "tinker-app";
@@ -66,14 +141,7 @@ export async function registryItems(options = {}) {
   const items = [];
   for (const item of registry.items) {
     const emitted = { $schema: "https://ui.shadcn.com/schema/registry-item.json", ...item };
-    for (const field of ["dependencies", "devDependencies"]) {
-      if (item[field])
-        emitted[field] = item[field].map((dependency) => {
-          const split = dependency.lastIndexOf("@");
-          const name = dependency.slice(0, split);
-          return `${name}@${full.dependencies[name] ?? full.devDependencies[name]}`;
-        });
-    }
+    Object.assign(emitted, itemDependencies(item, full));
     if (item.registryDependencies)
       emitted.registryDependencies = item.registryDependencies.map(
         (name) => `${url.replace(/\/$/, "")}/${name.replace("@tinker-start/", "")}.json`,
@@ -81,11 +149,10 @@ export async function registryItems(options = {}) {
     emitted.files = await Promise.all(
       item.files.map(async (file) => ({
         ...file,
-        content: packages[file.path]
-          ? JSON.stringify(packages[file.path], null, 2) + "\n"
-          : await readFile(join(app, file.path), "utf8"),
+        content: await fileContent(file, packages),
       })),
     );
+    emitted.files.push(...receipt(item));
     items.push(emitted);
   }
   return { registry, items, packages };

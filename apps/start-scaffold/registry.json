@@ -83,44 +83,54 @@
       "type": "registry:file",
       "title": "Todos example",
       "description": "Todos example",
-      "files": [
-        {
-          "path": "src/backend/todos.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/todos.ts"
-        },
-        {
-          "path": "src/backend/todos.schema.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/todos.schema.ts"
-        },
-        {
-          "path": "src/contracts/todos.ts",
-          "type": "registry:file",
-          "target": "~/src/contracts/todos.ts"
-        },
-        {
-          "path": "src/frontend/Todos.tsx",
-          "type": "registry:file",
-          "target": "~/src/frontend/Todos.tsx"
-        },
-        {
-          "path": "src/routes/todos.tsx",
-          "type": "registry:file",
-          "target": "~/src/routes/todos.tsx"
-        },
-        {
-          "path": "src/transport/todos.functions.ts",
-          "type": "registry:file",
-          "target": "~/src/transport/todos.functions.ts"
-        }
-      ],
+      "files": [],
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": ["auth", "sync"],
-        "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
+        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
+        "seams": {
+          "src/lib/tinker.server.ts": {
+            "extensions": {
+              "line": "export { extensions } from \"../examples/demo.server.ts\";",
+              "from": "../examples/demo.server.ts",
+              "include": {
+                "name": "databaseSetup",
+                "from": "../backend/database.ts"
+              }
+            },
+            "database": {
+              "line": "export { database } from \"../backend/database.ts\";"
+            },
+            "auth": {
+              "line": "export { auth } from \"../backend/auth.ts\";"
+            },
+            "readAccount": {
+              "line": "export { readAccount } from \"../backend/auth.ts\";"
+            },
+            "bootstrap": {
+              "line": "export { bootstrap } from \"../backend/sync.ts\";"
+            }
+          },
+          "src/lib/tinker.ts": {
+            "records": {
+              "line": "export { records } from \"../examples/demo.ts\";"
+            },
+            "readSnapshot": {
+              "line": "export { readSnapshot } from \"../examples/demo.ts\";"
+            },
+            "readBootstrap": {
+              "line": "export { readBootstrap } from \"../examples/demo.ts\";"
+            },
+            "readBatch": {
+              "line": "export { readBatch } from \"../examples/demo.ts\";"
+            },
+            "streamMessage": {
+              "line": "export { streamMessage } from \"../examples/demo.ts\";"
+            }
+          }
+        }
       },
       "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
@@ -129,44 +139,54 @@
       "type": "registry:file",
       "title": "Profile example",
       "description": "Profile example",
-      "files": [
-        {
-          "path": "src/backend/profile.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/profile.ts"
-        },
-        {
-          "path": "src/contracts/profile.ts",
-          "type": "registry:file",
-          "target": "~/src/contracts/profile.ts"
-        },
-        {
-          "path": "src/frontend/Profile.tsx",
-          "type": "registry:file",
-          "target": "~/src/frontend/Profile.tsx"
-        },
-        {
-          "path": "src/frontend/profile-actions.ts",
-          "type": "registry:file",
-          "target": "~/src/frontend/profile-actions.ts"
-        },
-        {
-          "path": "src/routes/profile.tsx",
-          "type": "registry:file",
-          "target": "~/src/routes/profile.tsx"
-        },
-        {
-          "path": "src/transport/profile.functions.ts",
-          "type": "registry:file",
-          "target": "~/src/transport/profile.functions.ts"
-        }
-      ],
+      "files": [],
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": ["auth", "sync"],
-        "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
+        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
+        "seams": {
+          "src/lib/tinker.server.ts": {
+            "extensions": {
+              "line": "export { extensions } from \"../examples/demo.server.ts\";",
+              "from": "../examples/demo.server.ts",
+              "include": {
+                "name": "databaseSetup",
+                "from": "../backend/database.ts"
+              }
+            },
+            "database": {
+              "line": "export { database } from \"../backend/database.ts\";"
+            },
+            "auth": {
+              "line": "export { auth } from \"../backend/auth.ts\";"
+            },
+            "readAccount": {
+              "line": "export { readAccount } from \"../backend/auth.ts\";"
+            },
+            "bootstrap": {
+              "line": "export { bootstrap } from \"../backend/sync.ts\";"
+            }
+          },
+          "src/lib/tinker.ts": {
+            "records": {
+              "line": "export { records } from \"../examples/demo.ts\";"
+            },
+            "readSnapshot": {
+              "line": "export { readSnapshot } from \"../examples/demo.ts\";"
+            },
+            "readBootstrap": {
+              "line": "export { readBootstrap } from \"../examples/demo.ts\";"
+            },
+            "readBatch": {
+              "line": "export { readBatch } from \"../examples/demo.ts\";"
+            },
+            "streamMessage": {
+              "line": "export { streamMessage } from \"../examples/demo.ts\";"
+            }
+          }
+        }
       },
       "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
@@ -175,44 +195,54 @@
       "type": "registry:file",
       "title": "Auth pages example",
       "description": "Auth pages example",
-      "files": [
-        {
-          "path": "src/backend/auth.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/auth.ts"
-        },
-        {
-          "path": "src/backend/schema.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/schema.ts"
-        },
-        {
-          "path": "src/contracts/credentials.ts",
-          "type": "registry:file",
-          "target": "~/src/contracts/credentials.ts"
-        },
-        {
-          "path": "src/frontend/App.tsx",
-          "type": "registry:file",
-          "target": "~/src/frontend/App.tsx"
-        },
-        {
-          "path": "src/frontend/auth-actions.ts",
-          "type": "registry:file",
-          "target": "~/src/frontend/auth-actions.ts"
-        },
-        {
-          "path": "src/routes/index.tsx",
-          "type": "registry:file",
-          "target": "~/src/routes/index.tsx"
-        }
-      ],
+      "files": [],
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": ["auth", "sync"],
-        "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
+        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
+        "seams": {
+          "src/lib/tinker.server.ts": {
+            "extensions": {
+              "line": "export { extensions } from \"../examples/demo.server.ts\";",
+              "from": "../examples/demo.server.ts",
+              "include": {
+                "name": "databaseSetup",
+                "from": "../backend/database.ts"
+              }
+            },
+            "database": {
+              "line": "export { database } from \"../backend/database.ts\";"
+            },
+            "auth": {
+              "line": "export { auth } from \"../backend/auth.ts\";"
+            },
+            "readAccount": {
+              "line": "export { readAccount } from \"../backend/auth.ts\";"
+            },
+            "bootstrap": {
+              "line": "export { bootstrap } from \"../backend/sync.ts\";"
+            }
+          },
+          "src/lib/tinker.ts": {
+            "records": {
+              "line": "export { records } from \"../examples/demo.ts\";"
+            },
+            "readSnapshot": {
+              "line": "export { readSnapshot } from \"../examples/demo.ts\";"
+            },
+            "readBootstrap": {
+              "line": "export { readBootstrap } from \"../examples/demo.ts\";"
+            },
+            "readBatch": {
+              "line": "export { readBatch } from \"../examples/demo.ts\";"
+            },
+            "streamMessage": {
+              "line": "export { streamMessage } from \"../examples/demo.ts\";"
+            }
+          }
+        }
       },
       "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
@@ -238,7 +268,8 @@
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": [],
-        "requires": "No base parts or Postgres. SMTP settings are needed only when sendMail runs."
+        "requires": "No base parts or Postgres. SMTP settings are needed only when sendMail runs.",
+        "seams": {}
       },
       "dependencies": ["nodemailer@10.0.13"],
       "devDependencies": ["@types/nodemailer@^7.0.11"]
@@ -248,29 +279,54 @@
       "type": "registry:file",
       "title": "Counter example",
       "description": "Counter example",
-      "files": [
-        {
-          "path": "src/backend/counter.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/counter.ts"
-        },
-        {
-          "path": "src/frontend/Counter.tsx",
-          "type": "registry:file",
-          "target": "~/src/frontend/Counter.tsx"
-        },
-        {
-          "path": "src/transport/counter.functions.ts",
-          "type": "registry:file",
-          "target": "~/src/transport/counter.functions.ts"
-        }
-      ],
+      "files": [],
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": ["auth", "sync"],
-        "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
+        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
+        "seams": {
+          "src/lib/tinker.server.ts": {
+            "extensions": {
+              "line": "export { extensions } from \"../examples/demo.server.ts\";",
+              "from": "../examples/demo.server.ts",
+              "include": {
+                "name": "databaseSetup",
+                "from": "../backend/database.ts"
+              }
+            },
+            "database": {
+              "line": "export { database } from \"../backend/database.ts\";"
+            },
+            "auth": {
+              "line": "export { auth } from \"../backend/auth.ts\";"
+            },
+            "readAccount": {
+              "line": "export { readAccount } from \"../backend/auth.ts\";"
+            },
+            "bootstrap": {
+              "line": "export { bootstrap } from \"../backend/sync.ts\";"
+            }
+          },
+          "src/lib/tinker.ts": {
+            "records": {
+              "line": "export { records } from \"../examples/demo.ts\";"
+            },
+            "readSnapshot": {
+              "line": "export { readSnapshot } from \"../examples/demo.ts\";"
+            },
+            "readBootstrap": {
+              "line": "export { readBootstrap } from \"../examples/demo.ts\";"
+            },
+            "readBatch": {
+              "line": "export { readBatch } from \"../examples/demo.ts\";"
+            },
+            "streamMessage": {
+              "line": "export { streamMessage } from \"../examples/demo.ts\";"
+            }
+          }
+        }
       },
       "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
@@ -279,164 +335,54 @@
       "type": "registry:file",
       "title": "Shared app seams, records, contracts, UI, and migrations",
       "description": "Shared app seams, records, contracts, UI, and migrations",
-      "files": [
-        {
-          "path": "drizzle/20261002031710_past_preak/migration.sql",
-          "type": "registry:file",
-          "target": "~/drizzle/20261002031710_past_preak/migration.sql"
-        },
-        {
-          "path": "drizzle/20261002031710_past_preak/snapshot.json",
-          "type": "registry:file",
-          "target": "~/drizzle/20261002031710_past_preak/snapshot.json"
-        },
-        {
-          "path": "drizzle/20261002051447_steady_mother_askani/migration.sql",
-          "type": "registry:file",
-          "target": "~/drizzle/20261002051447_steady_mother_askani/migration.sql"
-        },
-        {
-          "path": "drizzle/20261002051447_steady_mother_askani/snapshot.json",
-          "type": "registry:file",
-          "target": "~/drizzle/20261002051447_steady_mother_askani/snapshot.json"
-        },
-        {
-          "path": "drizzle/20261002092416_melted_forgotten_one/migration.sql",
-          "type": "registry:file",
-          "target": "~/drizzle/20261002092416_melted_forgotten_one/migration.sql"
-        },
-        {
-          "path": "drizzle/20261002092416_melted_forgotten_one/snapshot.json",
-          "type": "registry:file",
-          "target": "~/drizzle/20261002092416_melted_forgotten_one/snapshot.json"
-        },
-        {
-          "path": "drizzle/20261002110319_sync_notifications/migration.sql",
-          "type": "registry:file",
-          "target": "~/drizzle/20261002110319_sync_notifications/migration.sql"
-        },
-        {
-          "path": "drizzle/20261002110319_sync_notifications/snapshot.json",
-          "type": "registry:file",
-          "target": "~/drizzle/20261002110319_sync_notifications/snapshot.json"
-        },
-        {
-          "path": "src/backend/database.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/database.ts"
-        },
-        {
-          "path": "src/backend/index.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/index.ts"
-        },
-        {
-          "path": "src/backend/sync.schema.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/sync.schema.ts"
-        },
-        {
-          "path": "src/backend/sync.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/sync.ts"
-        },
-        {
-          "path": "src/contracts/commands.ts",
-          "type": "registry:file",
-          "target": "~/src/contracts/commands.ts"
-        },
-        {
-          "path": "src/contracts/sync.ts",
-          "type": "registry:file",
-          "target": "~/src/contracts/sync.ts"
-        },
-        {
-          "path": "src/errors.ts",
-          "type": "registry:file",
-          "target": "~/src/errors.ts"
-        },
-        {
-          "path": "src/frontend/actions.ts",
-          "type": "registry:file",
-          "target": "~/src/frontend/actions.ts"
-        },
-        {
-          "path": "src/frontend/error-text.ts",
-          "type": "registry:file",
-          "target": "~/src/frontend/error-text.ts"
-        },
-        {
-          "path": "src/frontend/index.ts",
-          "type": "registry:file",
-          "target": "~/src/frontend/index.ts"
-        },
-        {
-          "path": "src/frontend/records.ts",
-          "type": "registry:file",
-          "target": "~/src/frontend/records.ts"
-        },
-        {
-          "path": "src/frontend/state.ts",
-          "type": "registry:file",
-          "target": "~/src/frontend/state.ts"
-        },
-        {
-          "path": "src/frontend/ui/button.tsx",
-          "type": "registry:file",
-          "target": "~/src/frontend/ui/button.tsx"
-        },
-        {
-          "path": "src/frontend/ui/card.tsx",
-          "type": "registry:file",
-          "target": "~/src/frontend/ui/card.tsx"
-        },
-        {
-          "path": "src/frontend/ui/classes.ts",
-          "type": "registry:file",
-          "target": "~/src/frontend/ui/classes.ts"
-        },
-        {
-          "path": "src/frontend/ui/input.tsx",
-          "type": "registry:file",
-          "target": "~/src/frontend/ui/input.tsx"
-        },
-        {
-          "path": "src/lib/tinker.server.ts",
-          "type": "registry:file",
-          "target": "~/src/lib/tinker.server.ts"
-        },
-        {
-          "path": "src/lib/tinker.ts",
-          "type": "registry:file",
-          "target": "~/src/lib/tinker.ts"
-        },
-        {
-          "path": "src/routes/__root.tsx",
-          "type": "registry:file",
-          "target": "~/src/routes/__root.tsx"
-        },
-        {
-          "path": "src/style.css",
-          "type": "registry:file",
-          "target": "~/src/style.css"
-        },
-        {
-          "path": "src/transport/result.server.ts",
-          "type": "registry:file",
-          "target": "~/src/transport/result.server.ts"
-        },
-        {
-          "path": "drizzle.config.ts",
-          "type": "registry:file",
-          "target": "~/drizzle.config.ts"
-        }
-      ],
+      "files": [],
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": ["auth", "sync"],
-        "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
+        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
+        "seams": {
+          "src/lib/tinker.server.ts": {
+            "extensions": {
+              "line": "export { extensions } from \"../examples/demo.server.ts\";",
+              "from": "../examples/demo.server.ts",
+              "include": {
+                "name": "databaseSetup",
+                "from": "../backend/database.ts"
+              }
+            },
+            "database": {
+              "line": "export { database } from \"../backend/database.ts\";"
+            },
+            "auth": {
+              "line": "export { auth } from \"../backend/auth.ts\";"
+            },
+            "readAccount": {
+              "line": "export { readAccount } from \"../backend/auth.ts\";"
+            },
+            "bootstrap": {
+              "line": "export { bootstrap } from \"../backend/sync.ts\";"
+            }
+          },
+          "src/lib/tinker.ts": {
+            "records": {
+              "line": "export { records } from \"../examples/demo.ts\";"
+            },
+            "readSnapshot": {
+              "line": "export { readSnapshot } from \"../examples/demo.ts\";"
+            },
+            "readBootstrap": {
+              "line": "export { readBootstrap } from \"../examples/demo.ts\";"
+            },
+            "readBatch": {
+              "line": "export { readBatch } from \"../examples/demo.ts\";"
+            },
+            "streamMessage": {
+              "line": "export { streamMessage } from \"../examples/demo.ts\";"
+            }
+          }
+        }
       },
       "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
@@ -462,12 +408,12 @@
           "target": "~/src/contracts/todos.ts"
         },
         {
-          "path": "src/frontend/Todos.tsx",
+          "path": "templates/demo-frontend-Todos.tsx.txt",
           "type": "registry:file",
           "target": "~/src/frontend/Todos.tsx"
         },
         {
-          "path": "src/routes/todos.tsx",
+          "path": "templates/demo-routes-todos.tsx.txt",
           "type": "registry:file",
           "target": "~/src/routes/todos.tsx"
         },
@@ -487,7 +433,7 @@
           "target": "~/src/contracts/profile.ts"
         },
         {
-          "path": "src/frontend/Profile.tsx",
+          "path": "templates/demo-frontend-Profile.tsx.txt",
           "type": "registry:file",
           "target": "~/src/frontend/Profile.tsx"
         },
@@ -497,7 +443,7 @@
           "target": "~/src/frontend/profile-actions.ts"
         },
         {
-          "path": "src/routes/profile.tsx",
+          "path": "templates/demo-routes-profile.tsx.txt",
           "type": "registry:file",
           "target": "~/src/routes/profile.tsx"
         },
@@ -532,16 +478,6 @@
           "target": "~/src/frontend/auth-actions.ts"
         },
         {
-          "path": "src/routes/index.tsx",
-          "type": "registry:file",
-          "target": "~/src/routes/index.tsx"
-        },
-        {
-          "path": "src/backend/mail.ts",
-          "type": "registry:file",
-          "target": "~/src/backend/mail.ts"
-        },
-        {
           "path": "src/backend/counter.ts",
           "type": "registry:file",
           "target": "~/src/backend/counter.ts"
@@ -627,11 +563,6 @@
           "target": "~/src/contracts/sync.ts"
         },
         {
-          "path": "src/errors.ts",
-          "type": "registry:file",
-          "target": "~/src/errors.ts"
-        },
-        {
           "path": "src/frontend/actions.ts",
           "type": "registry:file",
           "target": "~/src/frontend/actions.ts"
@@ -677,16 +608,6 @@
           "target": "~/src/frontend/ui/input.tsx"
         },
         {
-          "path": "src/lib/tinker.server.ts",
-          "type": "registry:file",
-          "target": "~/src/lib/tinker.server.ts"
-        },
-        {
-          "path": "src/lib/tinker.ts",
-          "type": "registry:file",
-          "target": "~/src/lib/tinker.ts"
-        },
-        {
           "path": "src/routes/__root.tsx",
           "type": "registry:file",
           "target": "~/src/routes/__root.tsx"
@@ -707,20 +628,73 @@
           "target": "~/drizzle.config.ts"
         },
         {
-          "path": "vite.config.ts",
-          "type": "registry:file",
-          "target": "~/vite.config.ts"
+          "path": "templates/demo.ts.txt",
+          "target": "~/src/examples/demo.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "templates/demo.server.ts.txt",
+          "target": "~/src/examples/demo.server.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "templates/demo-route.tsx.txt",
+          "target": "~/src/routes/demo.tsx",
+          "type": "registry:file"
         },
         {
           "path": ".env.example",
-          "type": "registry:file",
-          "target": "~/.env.example"
+          "target": "~/examples/demo.env.example",
+          "type": "registry:file"
         }
       ],
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
-        "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them."
+        "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them.",
+        "parts": ["auth", "sync"],
+        "seams": {
+          "src/lib/tinker.server.ts": {
+            "extensions": {
+              "line": "export { extensions } from \"../examples/demo.server.ts\";",
+              "from": "../examples/demo.server.ts",
+              "include": {
+                "name": "databaseSetup",
+                "from": "../backend/database.ts"
+              }
+            },
+            "database": {
+              "line": "export { database } from \"../backend/database.ts\";"
+            },
+            "auth": {
+              "line": "export { auth } from \"../backend/auth.ts\";"
+            },
+            "readAccount": {
+              "line": "export { readAccount } from \"../backend/auth.ts\";"
+            },
+            "bootstrap": {
+              "line": "export { bootstrap } from \"../backend/sync.ts\";"
+            }
+          },
+          "src/lib/tinker.ts": {
+            "records": {
+              "line": "export { records } from \"../examples/demo.ts\";"
+            },
+            "readSnapshot": {
+              "line": "export { readSnapshot } from \"../examples/demo.ts\";"
+            },
+            "readBootstrap": {
+              "line": "export { readBootstrap } from \"../examples/demo.ts\";"
+            },
+            "readBatch": {
+              "line": "export { readBatch } from \"../examples/demo.ts\";"
+            },
+            "streamMessage": {
+              "line": "export { streamMessage } from \"../examples/demo.ts\";"
+            }
+          }
+        },
+        "requires": "Enable the named parts and join the named seam exports by hand. Shared demo bodies stay together. Copy examples/demo.env.example to .env before doctor."
       },
       "dependencies": [
         "@hono/node-server@1.19.17",
@@ -740,13 +714,14 @@
         "@types/pg@^8.15.6",
         "drizzle-kit@catalog:",
         "tailwindcss@4.3.3"
-      ]
+      ],
+      "registryDependencies": ["@tinker-start/mail-example"]
     },
     {
       "name": "starter",
       "type": "registry:block",
       "title": "Public and private Start application",
-      "description": "Install the complete example app on @tinker/start. Package upgrades never overwrite your app files.",
+      "description": "Add the complete demo and its guides to an existing app without replacing app files.",
       "registryDependencies": ["@tinker-start/runtime", "@tinker-start/postgres-auth-mail-example"],
       "files": [
         {
@@ -773,11 +748,6 @@
           "path": ".agents/skills/tinker-testing/SKILL.md",
           "type": "registry:file",
           "target": "~/.agents/skills/tinker-testing/SKILL.md"
-        },
-        {
-          "path": ".env.example",
-          "type": "registry:file",
-          "target": "~/.env.example"
         },
         {
           "path": "AGENTS.md",
@@ -808,11 +778,6 @@
           "path": "scripts/check-schema.mjs",
           "type": "registry:file",
           "target": "~/scripts/check-schema.mjs"
-        },
-        {
-          "path": "starter.package.json",
-          "type": "registry:file",
-          "target": "~/package.json"
         },
         {
           "path": "tests/backend.test.ts",
@@ -850,36 +815,60 @@
           "target": "~/tests/waste.test.ts"
         },
         {
-          "path": "tsconfig.json",
-          "type": "registry:file",
-          "target": "~/tsconfig.json"
-        },
-        {
-          "path": "vite.config.ts",
-          "type": "registry:file",
-          "target": "~/vite.config.ts"
-        },
-        {
           "path": "vitest.config.ts",
           "type": "registry:file",
           "target": "~/vitest.config.ts"
-        },
-        {
-          "path": "components.json",
-          "type": "registry:file",
-          "target": "~/components.json"
-        },
-        {
-          "path": ".gitignore",
-          "type": "registry:file",
-          "target": "~/.gitignore"
         }
       ],
       "meta": {
         "version": "0.6.0",
-        "ownership": "install-only",
-        "prerequisites": "Install packed Core, React, and Start releases first; nothing is published by this source registry."
-      }
+        "ownership": "userland",
+        "prerequisites": "Install packed Core, React, and Start releases first; nothing is published by this source registry.",
+        "parts": ["auth", "sync"],
+        "seams": {
+          "src/lib/tinker.server.ts": {
+            "extensions": {
+              "line": "export { extensions } from \"../examples/demo.server.ts\";",
+              "from": "../examples/demo.server.ts",
+              "include": {
+                "name": "databaseSetup",
+                "from": "../backend/database.ts"
+              }
+            },
+            "database": {
+              "line": "export { database } from \"../backend/database.ts\";"
+            },
+            "auth": {
+              "line": "export { auth } from \"../backend/auth.ts\";"
+            },
+            "readAccount": {
+              "line": "export { readAccount } from \"../backend/auth.ts\";"
+            },
+            "bootstrap": {
+              "line": "export { bootstrap } from \"../backend/sync.ts\";"
+            }
+          },
+          "src/lib/tinker.ts": {
+            "records": {
+              "line": "export { records } from \"../examples/demo.ts\";"
+            },
+            "readSnapshot": {
+              "line": "export { readSnapshot } from \"../examples/demo.ts\";"
+            },
+            "readBootstrap": {
+              "line": "export { readBootstrap } from \"../examples/demo.ts\";"
+            },
+            "readBatch": {
+              "line": "export { readBatch } from \"../examples/demo.ts\";"
+            },
+            "streamMessage": {
+              "line": "export { streamMessage } from \"../examples/demo.ts\";"
+            }
+          }
+        },
+        "requires": "Add to an existing app. The dependency adds the shared demo; doctor names the app wiring to add."
+      },
+      "devDependencies": ["@electric-sql/pglite@catalog:"]
     }
   ]
 }
