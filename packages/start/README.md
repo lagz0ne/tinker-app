@@ -606,6 +606,7 @@ Example requirements also stop a build until they are joined.
 - Hashed files under `/assets/` have a one-year cache.
   Other built files need revalidation.
 - HEAD returns headers with no body.
+- A public gzip download keeps its original bytes.
 - Chrome's client entry has a comment, the compile hint,
   on by default.
   It asks Chrome to compile functions off the main thread.

@@ -1,6 +1,6 @@
 import { symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { brotliCompressSync, brotliDecompressSync, gunzipSync } from "node:zlib";
+import { brotliCompressSync, brotliDecompressSync, gunzipSync, gzipSync } from "node:zlib";
 import { expect, test } from "vite-plus/test";
 import { createAssets } from "../lib/serve.mjs";
 import { fixture } from "./fixture.mjs";
@@ -140,5 +140,16 @@ test("the host uses a build's compressed copy", async () => {
   expect(brotliDecompressSync(Buffer.from(await response.arrayBuffer())).toString()).toBe(
     "built copy",
   );
-  expect(await asset(new Request("http://app/assets/app-1a2b.js.br"))).toBeNull();
+});
+
+test("a public gzip download keeps its bytes and is not a response encoding", async () => {
+  const root = fixture({ "dist/client/archive.txt.gz": "" });
+  writeFileSync(join(root, "dist/client/archive.txt.gz"), gzipSync("archive bytes"));
+  const asset = await createAssets(root);
+  const response = await asset(
+    new Request("http://app/archive.txt.gz", { headers: { "accept-encoding": "br" } }),
+  );
+  expect(gunzipSync(Buffer.from(await response.arrayBuffer())).toString()).toBe("archive bytes");
+  expect(response?.headers.get("content-type")).toBe("application/octet-stream");
+  expect(response?.headers.get("content-encoding")).toBeNull();
 });

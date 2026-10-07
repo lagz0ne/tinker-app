@@ -41,7 +41,7 @@ async function asset(publicRoot, files, request) {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
   const path = decodeURIComponent(new URL(request.url).pathname);
   const file = resolve(publicRoot, `.${path}`);
-  if (path.split("/").some((part) => part.startsWith(".") || /\.(br|gz)$/.test(part))) return null;
+  if (path.split("/").some((part) => part.startsWith("."))) return null;
   if (file !== publicRoot && !file.startsWith(`${publicRoot}/`)) return null;
   const candidate = [file, join(file, "index.html")].find((entry) => files.has(entry));
   if (!candidate) return path.startsWith("/assets/") ? new Response(null, { status: 404 }) : null;
