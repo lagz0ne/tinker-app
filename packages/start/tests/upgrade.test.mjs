@@ -166,3 +166,30 @@ test("an upgrade without --from writes the three URLs for one GitHub tag", () =>
       "https://github.com/lagz0ne/tinkered/releases/download/start-v0.7.0/tinker-start-0.7.0.tgz",
   });
 });
+
+test("the new release's tested peers are pinned before install while the three tarball URLs stay", () => {
+  const root = installedApp({
+    "@tinker/start": "file:base.tgz",
+    "@tinker/core": "0.6.0",
+    "@tinker/react": "0.6.0",
+    "@tanstack/react-router": "1.160.0",
+  });
+  expect(
+    planUpgrade(root, "0.7.0", {
+      force: false,
+      tested: {
+        "@tinker/core": "0.7.0",
+        "@tinker/react": "0.7.0",
+        "@tanstack/react-router": "1.170.41",
+      },
+    }).pkg.dependencies,
+  ).toEqual({
+    "@tinker/core":
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.7.0/tinker-core-0.7.0.tgz",
+    "@tinker/react":
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.7.0/tinker-react-0.7.0.tgz",
+    "@tinker/start":
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.7.0/tinker-start-0.7.0.tgz",
+    "@tanstack/react-router": "1.170.41",
+  });
+});

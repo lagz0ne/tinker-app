@@ -1,5 +1,13 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { bytes } from "./checks/bytes.mjs";
 import { releaseDependencies, releaseUrls } from "./release.mjs";
@@ -101,21 +109,6 @@ function release(root, version, from) {
 function finish(root) {
   const install = installCommand(root);
   if (step(`${install} install`, install, ["install"], root) !== 0) return 1;
-  const pkg = readJson(join(root, "package.json"));
-  const tested = readJson(join(freshBase(root), "package.json")).tinker.tested;
-  const { dependencies, changes } = pinDependencies(
-    pkg.dependencies,
-    pkg.dependencies["@tinker/start"],
-    tested,
-    (name) => installedVersion(root, name),
-  );
-  if (changes.length > 1) {
-    writeFileSync(
-      join(root, "package.json"),
-      JSON.stringify({ ...pkg, dependencies }, null, 2) + "\n",
-    );
-    if (step(`${install} install`, install, ["install"], root) !== 0) return 1;
-  }
   const bin = join(freshBase(root), "bin/tinker.mjs");
   if (step("tinker prepare", process.execPath, [bin, "prepare"], root) !== 0) return 1;
   return step("tinker doctor", process.execPath, [bin, "doctor"], root);
@@ -126,7 +119,7 @@ function finish(root) {
  * with each dependency change and the base version it leaves.
  * @param {string} root - From upgrade; why: the app to upgrade.
  * @param {string} version - From the CLI; why: the release to move to.
- * @param {{ from?: string, force: boolean }} options - From the CLI; why: release folder, edit override.
+ * @param {{ from?: string, force: boolean, tested?: Record<string, string> }} options - From the CLI and release; why: release folder, edit override, tested peers.
  */
 export function planUpgrade(root, version, options) {
   const pinned = bytes(root);
@@ -137,22 +130,41 @@ export function planUpgrade(root, version, options) {
   const next = release(root, version, options.from);
   if (next.missing) return { stop: `stop: ${next.missing} does not exist` };
   const pkg = readJson(join(root, "package.json"));
-  const pinnedDependencies = pinDependencies(pkg.dependencies, next.spec, next.tested, (name) =>
-    installedVersion(root, name),
+  const pinnedDependencies = pinDependencies(
+    pkg.dependencies,
+    next.spec,
+    options.tested ?? next.tested,
+    (name) => installedVersion(root, name),
   );
+  const dependencies = options.from
+    ? pinnedDependencies.dependencies
+    : releaseDependencies(pinnedDependencies.dependencies, version);
   return {
-    pkg: {
-      ...pkg,
-      dependencies: options.from
-        ? pinnedDependencies.dependencies
-        : releaseDependencies(pkg.dependencies, version),
-    },
-    changes: (options.from
-      ? pinnedDependencies.changes
-      : Object.entries(releaseUrls(version)).map(([name, to]) => [name, pkg.dependencies[name], to])
-    ).map(([name, from, to]) => `package.json: ${name} ${from} -> ${to}`),
+    pkg: { ...pkg, dependencies },
+    changes: Object.entries(dependencies)
+      .filter(([name, to]) => pkg.dependencies[name] !== to)
+      .map(([name, to]) => `package.json: ${name} ${pkg.dependencies[name]} -> ${to}`),
     before: readJson(join(installedBase(root), "package.json")).version,
   };
+}
+
+/**
+ * Read tested peers before install: an old exact peer can make npm refuse the new base.
+ * @param {string} url - From releaseUrls; why: inspect the same tarball the app will install.
+ */
+async function testedRelease(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`release download ${url}: HTTP ${response.status}`);
+  const dir = mkdtempSync(join(tmpdir(), "tinker-upgrade-"));
+  try {
+    const tarball = join(dir, "start.tgz");
+    writeFileSync(tarball, Buffer.from(await response.arrayBuffer()));
+    return JSON.parse(
+      execFileSync("tar", ["-xzOf", tarball, "package/package.json"], { encoding: "utf8" }),
+    ).tinker.tested;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -161,11 +173,19 @@ export function planUpgrade(root, version, options) {
  * @param {string} version - From the CLI; why: the release to move to.
  * @param {{ from?: string, force: boolean }} options - From the CLI; why: release folder, edit override.
  */
-export function upgrade(root, version, options) {
-  const plan = planUpgrade(root, version, options);
+export async function upgrade(root, version, options) {
+  let plan = planUpgrade(root, version, options);
   if (plan.stop) {
     console.log(plan.stop);
     return 1;
+  }
+  if (!options.from) {
+    const tested = await testedRelease(plan.pkg.dependencies["@tinker/start"]);
+    plan = planUpgrade(root, version, { ...options, tested });
+    if (plan.stop) {
+      console.log(plan.stop);
+      return 1;
+    }
   }
   writeFileSync(join(root, "package.json"), JSON.stringify(plan.pkg, null, 2) + "\n");
   for (const line of plan.changes) console.log(line);
