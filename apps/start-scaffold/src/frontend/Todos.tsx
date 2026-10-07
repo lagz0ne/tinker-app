@@ -2,14 +2,14 @@ import { z } from "zod";
 import { data, operation, isError as isCoreError } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
-import { updateTodo } from "../transport/todos.functions.ts";
-import { readTodoChange } from "../contracts/todos.ts";
-import { todos, profile } from "./state.ts";
+import { updateTodo } from "../transport/todos.functions";
+import { readTodoChange } from "../contracts/todos";
+import { todos, profile } from "./state";
 import { syncClient } from "@tinker/start/client";
-import { isError } from "../errors.ts";
-import { Button } from "./ui/button.tsx";
-import { Input } from "./ui/input.tsx";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card.tsx";
+import { isError } from "../errors";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";
 const flow = data<{ kind: "idle" } | { kind: "saving" } | { kind: "failed"; message: string }>({
   label: "todos.flow",
   initial: { kind: "idle" },

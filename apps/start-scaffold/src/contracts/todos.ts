@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { raise } from "../errors.ts";
+import { raise } from "../errors";
 export declare namespace Todos {
   type Row = { id: number; title: string; done: boolean };
   type Change = z.infer<typeof todoChange>;

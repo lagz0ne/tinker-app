@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { cn } from "./classes.ts";
+import { cn } from "./classes";
 
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (

@@ -1,5 +1,5 @@
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import { errorDetail } from "./error-detail.ts";
+import { errorDetail } from "./error-detail";
 
 /**
  * The base's error page: a production page shows no error text, and the server log gets the

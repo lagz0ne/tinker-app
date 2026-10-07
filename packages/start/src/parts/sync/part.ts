@@ -1,5 +1,5 @@
 import type { Many, Resource, Scope } from "@tinker/core";
-import type { Sync } from "./envelopes.ts";
+import type { Sync } from "./envelopes";
 
 /**
  * The shape of the sync part for the router entry, in a file that imports no seam name, so an

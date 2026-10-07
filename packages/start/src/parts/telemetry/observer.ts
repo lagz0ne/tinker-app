@@ -1,9 +1,9 @@
 import { extension, LEVELS, operation, resource } from "@tinker/core";
 import type { Observe } from "@tinker/core";
-import { encodeValue, telemetryBatch } from "./records.ts";
-import type { Telemetry } from "./records.ts";
-import { queue } from "./queue.ts";
-import { telemetrySettings } from "./settings.ts";
+import { encodeValue, telemetryBatch } from "./records";
+import type { Telemetry } from "./records";
+import { queue } from "./queue";
+import { telemetrySettings } from "./settings";
 
 /** Transfers the records to the telemetry root; callers must not edit them afterward. */
 export const ingestTelemetry = operation({

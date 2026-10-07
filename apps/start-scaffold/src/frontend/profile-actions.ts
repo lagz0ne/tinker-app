@@ -1,10 +1,10 @@
 import { operation } from "@tinker/core";
 import { z } from "zod";
-import { updateProfile, retryProfileNotification } from "../transport/profile.functions.ts";
-import { nameDraft, pending, notice, profileResult } from "./state.ts";
+import { updateProfile, retryProfileNotification } from "../transport/profile.functions";
+import { nameDraft, pending, notice, profileResult } from "./state";
 import { syncClient } from "@tinker/start/client";
-import { readProfileInput } from "../contracts/profile.ts";
-import { raise } from "../errors.ts";
+import { readProfileInput } from "../contracts/profile";
+import { raise } from "../errors";
 const notificationId = z.uuid();
 const draftInput = z.string();
 export const saveName = operation({

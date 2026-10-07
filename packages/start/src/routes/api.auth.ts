@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { readResult } from "../backend/result.server.ts";
-import { handleAuth } from "../parts/auth/handle.server.ts";
-import { startRequests } from "../start.ts";
+import { readResult } from "../backend/result.server";
+import { handleAuth } from "../parts/auth/handle.server";
+import { startRequests } from "../start";
 /** Mounted only while the auth part is on (ADR 0106); the app's auth library answers. */
 export const Route = createFileRoute("/api/auth/$")({
   server: {

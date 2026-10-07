@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
-import { incrementCounter } from "../backend/index.ts";
-import { readExecution } from "../contracts/sync.ts";
+import { incrementCounter } from "../backend/index";
+import { readExecution } from "../contracts/sync";
 import { startRequests } from "@tinker/start";
-import { readReceipt } from "./result.server.ts";
+import { readReceipt } from "./result.server";
 export const updateCounter = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
   .validator(readExecution)

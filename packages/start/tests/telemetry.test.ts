@@ -1,19 +1,19 @@
 import { createScope, operation } from "@tinker/core";
 import { makeTestClock } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
-import { httpBackend } from "../src/backend/http-backend.ts";
-import { env } from "../src/env.ts";
-import { exportHealth } from "../src/parts/telemetry/health.ts";
+import { httpBackend } from "../src/backend/http-backend";
+import { env } from "../src/env";
+import { exportHealth } from "../src/parts/telemetry/health";
 import {
   flushTelemetry,
   ingestTelemetry,
   observer,
   telemetryExport,
-} from "../src/parts/telemetry/observer.ts";
-import { telemetry as off } from "../src/parts/telemetry/off.ts";
-import { telemetry as routerPart } from "../src/parts/telemetry/on.ts";
-import type { Telemetry } from "../src/parts/telemetry/records.ts";
-import { telemetrySettings, telemetrySide } from "../src/parts/telemetry/settings.ts";
+} from "../src/parts/telemetry/observer";
+import { telemetry as off } from "../src/parts/telemetry/off";
+import { telemetry as routerPart } from "../src/parts/telemetry/on";
+import type { Telemetry } from "../src/parts/telemetry/records";
+import { telemetrySettings, telemetrySide } from "../src/parts/telemetry/settings";
 
 /** Storage keys for a test: each send lands in the fake bound as httpBackend. */
 const storageEnv = env({

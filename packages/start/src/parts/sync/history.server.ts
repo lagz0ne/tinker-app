@@ -1,7 +1,7 @@
 import { resource } from "@tinker/core";
-import { raise } from "../../errors.ts";
-import type { Database } from "./database.ts";
-import type { Sync } from "./envelopes.ts";
+import { raise } from "../../errors";
+import type { Database } from "./database";
+import type { Sync } from "./envelopes";
 
 /**
  * The app's writes to a sync stream. A stream row stays locked until its records and events
@@ -12,7 +12,7 @@ export const eventHistory = resource({
   factory: async () => {
     const [{ eq, sql }, { stream, event, execution }] = await Promise.all([
       import("drizzle-orm"),
-      import("./schema.ts"),
+      import("./schema"),
     ]);
     return {
       async lock(tx: Database.Transaction, id: string) {

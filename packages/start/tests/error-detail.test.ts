@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { errorDetail } from "../src/entry/error-detail.ts";
+import { errorDetail } from "../src/entry/error-detail";
 
 test("a production error page shows no error text; dev shows the message", () => {
   const error = new Error("boom: secret detail");

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { readProfileInput } from "./profile.ts";
-import { readTodoChange } from "./todos.ts";
+import { readProfileInput } from "./profile";
+import { readTodoChange } from "./todos";
 const profileCommand = z.object({ executionId: z.uuid(), profile: z.unknown() }).strict();
 const todoCommand = z.object({ executionId: z.uuid(), change: z.unknown() }).strict();
 /**

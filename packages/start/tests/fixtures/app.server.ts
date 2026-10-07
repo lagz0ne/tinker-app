@@ -1,6 +1,6 @@
 import { operation, resource, tag } from "@tinker/core";
 import type { Many, Scope } from "@tinker/core";
-import type { Database } from "../../src/parts/sync/database.ts";
+import type { Database } from "../../src/parts/sync/database";
 
 /**
  * A stand-in server seam for the base's own tests and type check, as `#tinker/app.server`:

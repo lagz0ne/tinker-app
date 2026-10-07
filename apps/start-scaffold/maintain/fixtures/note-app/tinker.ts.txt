@@ -1,7 +1,7 @@
 export const extensions = [];
-export { records } from "../records.ts";
-export { readSnapshot, readBootstrap, readBatch, streamMessage } from "../contracts.ts";
-import type { Notes } from "../contracts.ts";
+export { records } from "../records";
+export { readSnapshot, readBootstrap, readBatch, streamMessage } from "../contracts";
+import type { Notes } from "../contracts";
 /** This different app merges the registry without the example's feature types. */
 declare module "@tinker/start" {
   interface Register {

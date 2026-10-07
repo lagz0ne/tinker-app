@@ -12,15 +12,15 @@ import {
   refreshAccount,
   snapshotLoader,
   syncStreaming,
-} from "../src/parts/sync/client/events.ts";
-import { snapshotSource } from "../src/parts/sync/functions.ts";
-import { accountOwner } from "../src/parts/sync/client/owner.ts";
-import { syncRouter } from "../src/parts/sync/client/router.ts";
-import { applyBootstrap, syncClient } from "../src/parts/sync/client/sync.ts";
-import { pageEvents, tabStop } from "../src/parts/sync/client/tab.ts";
-import type { Sync } from "../src/parts/sync/envelopes.ts";
-import { sync as off } from "../src/parts/sync/off.ts";
-import { sync as on } from "../src/parts/sync/on.ts";
+} from "../src/parts/sync/client/events";
+import { snapshotSource } from "../src/parts/sync/functions";
+import { accountOwner } from "../src/parts/sync/client/owner";
+import { syncRouter } from "../src/parts/sync/client/router";
+import { applyBootstrap, syncClient } from "../src/parts/sync/client/sync";
+import { pageEvents, tabStop } from "../src/parts/sync/client/tab";
+import type { Sync } from "../src/parts/sync/envelopes";
+import { sync as off } from "../src/parts/sync/off";
+import { sync as on } from "../src/parts/sync/on";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const ada: Sync.Snapshot = {

@@ -1,11 +1,11 @@
 import { extension, operation, resource, tag } from "@tinker/core";
 import { streamMessage } from "#tinker/app";
-import { streamInput } from "../envelopes.ts";
-import type { Sync } from "../envelopes.ts";
-import { snapshotSource } from "../functions.ts";
-import type { Stream } from "../protocol.ts";
-import { applyBootstrap, syncClient } from "./sync.ts";
-import { tabStop } from "./tab.ts";
+import { streamInput } from "../envelopes";
+import type { Sync } from "../envelopes";
+import { snapshotSource } from "../functions";
+import type { Stream } from "../protocol";
+import { applyBootstrap, syncClient } from "./sync";
+import { tabStop } from "./tab";
 
 /**
  * One tab shares a load per account version; a sign-in holds loads and reconnects until its new

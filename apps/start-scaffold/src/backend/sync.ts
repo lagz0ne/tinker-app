@@ -1,15 +1,15 @@
 import { operation } from "@tinker/core";
-import { database } from "./database.ts";
-import { currentUser, principal } from "./auth.ts";
+import { database } from "./database";
+import { currentUser, principal } from "./auth";
 import { eventHistory } from "@tinker/start/server";
-import { readCursor, readPrivateCursor, readFeatureEvent } from "../contracts/sync.ts";
-import type { Sync } from "../contracts/sync.ts";
-import { raise } from "../errors.ts";
+import { readCursor, readPrivateCursor, readFeatureEvent } from "../contracts/sync";
+import type { Sync } from "../contracts/sync";
+import { raise } from "../errors";
 export const bootstrapPublic = operation({
   label: "bootstrapPublic",
   depends: { database, history: eventHistory },
   run: async ({ database, history }) => {
-    const { counter } = await import("./sync.schema.ts");
+    const { counter } = await import("./sync.schema");
     return database.transaction(async (tx) => {
       const revision = await history.lock(tx, "public");
       return {
@@ -26,8 +26,8 @@ export const bootstrapPrivate = operation({
   run: async ({ currentUser, database, history }) => {
     const [{ eq, asc }, { user }, { todo }] = await Promise.all([
       import("drizzle-orm"),
-      import("./schema.ts"),
-      import("./todos.schema.ts"),
+      import("./schema"),
+      import("./todos.schema"),
     ]);
     return database.transaction(async (tx) => {
       const revision = await history.lock(tx, currentUser.id);

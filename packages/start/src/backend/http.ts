@@ -1,8 +1,8 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
-import { raise } from "../errors.ts";
-import { httpBackend } from "./http-backend.ts";
-import { backendStop, requestStop } from "./lifetime.ts";
+import { raise } from "../errors";
+import { httpBackend } from "./http-backend";
+import { backendStop, requestStop } from "./lifetime";
 
 const requestShape = z
   .strictObject({

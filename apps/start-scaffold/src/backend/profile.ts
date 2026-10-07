@@ -1,19 +1,19 @@
 import { operation, resource } from "@tinker/core";
-import { principal, currentUser } from "./auth.ts";
-import { database } from "./database.ts";
-import { sendMail } from "./mail.ts";
+import { principal, currentUser } from "./auth";
+import { database } from "./database";
+import { sendMail } from "./mail";
 import { eventHistory } from "@tinker/start/server";
-import { readProfileCommand } from "../contracts/commands.ts";
-import { readExecution, readRetry, readFeatureResult } from "../contracts/sync.ts";
-import type { Sync } from "../contracts/sync.ts";
-import type { Profile } from "../contracts/profile.ts";
-import { raise } from "../errors.ts";
+import { readProfileCommand } from "../contracts/commands";
+import { readExecution, readRetry, readFeatureResult } from "../contracts/sync";
+import type { Sync } from "../contracts/sync";
+import type { Profile } from "../contracts/profile";
+import { raise } from "../errors";
 export const readProfile = operation({
   label: "readProfile",
   depends: { principal, database },
   run: async ({ principal, database }): Promise<Profile.Value | null> => {
     if (principal === null) return null;
-    const [{ eq }, { user }] = await Promise.all([import("drizzle-orm"), import("./schema.ts")]);
+    const [{ eq }, { user }] = await Promise.all([import("drizzle-orm"), import("./schema")]);
     return (
       (
         await database
@@ -92,7 +92,7 @@ export const saveProfile = operation({
   run: async ({ currentUser, database, history, notify }, { input, clock }) => {
     const [{ eq }, { user }, { execution }] = await Promise.all([
       import("drizzle-orm"),
-      import("./schema.ts"),
+      import("./schema"),
       import("@tinker/start/server"),
     ]);
     await database.transaction(async (tx) => {

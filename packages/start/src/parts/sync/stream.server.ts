@@ -1,12 +1,12 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 import { auth, database } from "#tinker/app.server";
-import { requestHeaders } from "../../backend/headers.server.ts";
-import { backendStop, requestStop } from "../../backend/lifetime.ts";
-import { raise } from "../../errors.ts";
-import { notifications } from "./notifications.server.ts";
-import { streamCursor } from "./protocol.ts";
-import type { Stream } from "./protocol.ts";
+import { requestHeaders } from "../../backend/headers.server";
+import { backendStop, requestStop } from "../../backend/lifetime";
+import { raise } from "../../errors";
+import { notifications } from "./notifications.server";
+import { streamCursor } from "./protocol";
+import type { Stream } from "./protocol";
 
 /** Cookie caches and session refresh are off on this long-lived request. */
 const liveAccount = operation({
@@ -69,7 +69,7 @@ export const eventStream = resource({
           raise("StreamDenied", {});
         const [{ and, or, eq, gt, asc }, { event }] = await Promise.all([
           import("drizzle-orm"),
-          import("./schema.ts"),
+          import("./schema"),
         ]);
         const cursor = { ...initial, private: initial.private ? { ...initial.private } : null };
         const lease = clock.currentTimeMillis() + 30_000;

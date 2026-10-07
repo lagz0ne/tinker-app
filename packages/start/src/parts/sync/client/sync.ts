@@ -1,8 +1,8 @@
 import { operation, resource } from "@tinker/core";
 import { readBatch, readBootstrap, records } from "#tinker/app";
-import { fail, raise } from "../../../errors.ts";
-import type { Sync } from "../envelopes.ts";
-import { accountOwner } from "./owner.ts";
+import { fail, raise } from "../../../errors";
+import type { Sync } from "../envelopes";
+import { accountOwner } from "./owner";
 
 /**
  * The tab's applied state: the cursor per stream, and the account it belongs to. It keeps only

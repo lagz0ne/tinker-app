@@ -1,10 +1,10 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { extension } from "@tinker/core";
 import type { Scope } from "@tinker/core";
-import { requestHeaders } from "./backend/headers.server.ts";
-import { raise } from "./errors.ts";
-import { responseBodies } from "./backend/body.server.ts";
-import { requestStop } from "./backend/lifetime.ts";
+import { requestHeaders } from "./backend/headers.server";
+import { raise } from "./errors";
+import { responseBodies } from "./backend/body.server";
+import { requestStop } from "./backend/lifetime";
 
 /** Start merges this registry to type the context supplied by the server entry. */
 declare module "@tanstack/react-start" {

@@ -33,7 +33,7 @@
       "path": "../start-min/src/routes/index.tsx",
       "type": "registry:file",
       "target": "~/src/routes/index.tsx",
-      "content": "import { createFileRoute } from \"@tanstack/react-router\";\nimport { createServerFn } from \"@tanstack/react-start\";\nimport { startRequests } from \"@tinker/start\";\nimport { readResult } from \"@tinker/start/server\";\nimport { greet } from \"../backend/greet.ts\";\n\nconst runGreet = createServerFn({ method: \"GET\" })\n  .middleware([startRequests.middleware])\n  .handler(async ({ context }) =>\n    readResult(\n      await context.session.settle(greet, {\n        input: { name: \"world\" },\n        signal: context.signal,\n      }),\n    ),\n  );\n\nexport const Route = createFileRoute(\"/\")({\n  loader: () => runGreet(),\n  component: () => <p>{Route.useLoaderData().text}</p>,\n});\n"
+      "content": "import { createFileRoute } from \"@tanstack/react-router\";\nimport { createServerFn } from \"@tanstack/react-start\";\nimport { startRequests } from \"@tinker/start\";\nimport { readResult } from \"@tinker/start/server\";\nimport { greet } from \"../backend/greet\";\n\nconst runGreet = createServerFn({ method: \"GET\" })\n  .middleware([startRequests.middleware])\n  .handler(async ({ context }) =>\n    readResult(\n      await context.session.settle(greet, {\n        input: { name: \"world\" },\n        signal: context.signal,\n      }),\n    ),\n  );\n\nexport const Route = createFileRoute(\"/\")({\n  loader: () => runGreet(),\n  component: () => <p>{Route.useLoaderData().text}</p>,\n});\n"
     },
     {
       "path": "templates/tinker.ts.txt",

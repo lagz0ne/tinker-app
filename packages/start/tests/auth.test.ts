@@ -2,11 +2,11 @@ import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 import { auth } from "#tinker/app.server";
-import { env } from "../src/env.ts";
-import { handleAuth } from "../src/parts/auth/handle.server.ts";
-import { auth as off } from "../src/parts/auth/off.ts";
-import { auth as on } from "../src/parts/auth/on.server.ts";
-import { authSettings, authStartup } from "../src/parts/auth/settings.ts";
+import { env } from "../src/env";
+import { handleAuth } from "../src/parts/auth/handle.server";
+import { auth as off } from "../src/parts/auth/off";
+import { auth as on } from "../src/parts/auth/on.server";
+import { authSettings, authStartup } from "../src/parts/auth/settings";
 
 const keys = env({
   PUBLIC_ORIGIN: "https://shop.example",

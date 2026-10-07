@@ -1,9 +1,9 @@
 import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
-import { backendStop, requestStop } from "../src/backend/lifetime.ts";
-import { browserTelemetry, receiveTelemetry } from "../src/parts/telemetry/ingest.server.ts";
-import { encodeValue } from "../src/parts/telemetry/records.ts";
-import type { Telemetry } from "../src/parts/telemetry/records.ts";
+import { backendStop, requestStop } from "../src/backend/lifetime";
+import { browserTelemetry, receiveTelemetry } from "../src/parts/telemetry/ingest.server";
+import { encodeValue } from "../src/parts/telemetry/records";
+import type { Telemetry } from "../src/parts/telemetry/records";
 
 const traceId = "0123456789abcdef0123456789abcdef";
 const spanId = "0123456789abcdef";

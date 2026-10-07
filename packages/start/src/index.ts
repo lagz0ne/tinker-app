@@ -1,5 +1,5 @@
-export { startRequests } from "./start.ts";
-export type { RouterOptions, RouteTree } from "./entry/router.tsx";
+export { startRequests } from "./start";
+export type { RouterOptions, RouteTree } from "./entry/router";
 export {
   batchEnvelope,
   bootstrapEnvelope,
@@ -9,6 +9,6 @@ export {
   readPrivateCursor,
   readRetry,
   snapshotEnvelope,
-} from "./parts/sync/envelopes.ts";
-export type { Register, Sync } from "./parts/sync/envelopes.ts";
-export type { Errors } from "./errors.ts";
+} from "./parts/sync/envelopes";
+export type { Register, Sync } from "./parts/sync/envelopes";
+export type { Errors } from "./errors";

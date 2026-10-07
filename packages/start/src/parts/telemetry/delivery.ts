@@ -1,7 +1,7 @@
 import { resource } from "@tinker/core";
-import { httpBackend } from "../../backend/http-backend.ts";
-import type { Telemetry } from "./records.ts";
-import { telemetrySettings } from "./settings.ts";
+import { httpBackend } from "../../backend/http-backend";
+import type { Telemetry } from "./records";
+import { telemetrySettings } from "./settings";
 
 /**
  * Sends one batch. The server and SSR sides post to storage; the browser posts to the base's

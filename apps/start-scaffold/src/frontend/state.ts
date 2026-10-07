@@ -1,7 +1,7 @@
-import type { Todos } from "../contracts/todos.ts";
-import type { Sync } from "../contracts/sync.ts";
+import type { Todos } from "../contracts/todos";
+import type { Sync } from "../contracts/sync";
 import { data } from "@tinker/core";
-import type { Profile } from "../contracts/profile.ts";
+import type { Profile } from "../contracts/profile";
 export const profile = data<Profile.Value | null>({
   label: "profile",
   initial: null,

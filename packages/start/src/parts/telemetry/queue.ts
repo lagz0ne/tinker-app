@@ -1,8 +1,8 @@
 import { resource } from "@tinker/core";
-import type { Telemetry } from "./records.ts";
-import { delivery } from "./delivery.ts";
-import { telemetrySettings } from "./settings.ts";
-import { exportHealth } from "./health.ts";
+import type { Telemetry } from "./records";
+import { delivery } from "./delivery";
+import { telemetrySettings } from "./settings";
+import { exportHealth } from "./health";
 
 /** Retains failed records within count and byte bounds; this resource owns every promise. */
 export const queue = resource({

@@ -1,17 +1,17 @@
 import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
-import { httpBackend } from "../src/backend/http-backend.ts";
-import { backendStop, requestStop } from "../src/backend/lifetime.ts";
-import { env } from "../src/env.ts";
+import { httpBackend } from "../src/backend/http-backend";
+import { backendStop, requestStop } from "../src/backend/lifetime";
+import { env } from "../src/env";
 import {
   browserTelemetry,
   receiveTelemetry,
   telemetryEndpoint,
   telemetryOrigin,
-} from "../src/parts/telemetry/ingest.server.ts";
-import { flushTelemetry } from "../src/parts/telemetry/observer.ts";
-import { telemetry as serverPart } from "../src/parts/telemetry/on.server.ts";
-import type { Telemetry } from "../src/parts/telemetry/records.ts";
+} from "../src/parts/telemetry/ingest.server";
+import { flushTelemetry } from "../src/parts/telemetry/observer";
+import { telemetry as serverPart } from "../src/parts/telemetry/on.server";
+import type { Telemetry } from "../src/parts/telemetry/records";
 
 const empty: Telemetry.Batch = { traces: [], logs: [] };
 const tabSpan: Telemetry.Span = {

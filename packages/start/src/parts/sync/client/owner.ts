@@ -1,5 +1,5 @@
 import { extension, resource } from "@tinker/core";
-import { pageEvents, tabStop } from "./tab.ts";
+import { pageEvents, tabStop } from "./tab";
 
 /** Listens while the factory runs; `bind` only names what to close on a real page hide. */
 export const tabLifetime = resource({

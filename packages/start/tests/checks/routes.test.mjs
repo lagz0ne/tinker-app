@@ -34,7 +34,7 @@ test("names a route that exports route, not Route, at its createFileRoute line",
 
 test("a route that re-exports Route through export * is a route", () => {
   const root = goodApp({
-    "src/routes/about.tsx": 'export * from "../frontend/about.tsx";\n',
+    "src/routes/about.tsx": 'export * from "../frontend/about";\n',
     "src/frontend/about.tsx": 'export const Route = createFileRoute("/about")({});\n',
   });
   expect(routes(root).status).toBe("ok");
@@ -66,7 +66,7 @@ test("passes a shell that renders Outlet, uses Outlet as is, or imports its comp
     'import { Outlet } from "@tanstack/react-router";\nexport const Route = createRootRoute({ component: () => <main><Outlet /></main> });\n',
     'import { Outlet as Slot } from "@tanstack/react-router";\nexport const Route = createRootRoute({ component: () => <Slot /> });\n',
     'import { Outlet } from "@tanstack/react-router";\nexport const Route = createRootRoute({ component: Outlet });\n',
-    'import { Layout } from "../layout.tsx";\nexport const Route = createRootRoute({ component: Layout });\n',
+    'import { Layout } from "../layout";\nexport const Route = createRootRoute({ component: Layout });\n',
     "export const Route = createRootRoute({ shellComponent: ({ children }) => children });\n",
   ];
   for (const shell of shells)

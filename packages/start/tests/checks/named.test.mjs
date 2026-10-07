@@ -39,9 +39,9 @@ test("names each named or seam file that lacks the export the base imports", () 
 
 test("follows export * to a local file, and skips the check when it cannot follow", () => {
   const followed = goodApp({
-    "src/lib/tinker.server.ts": 'export * from "../backend/seam.server.ts";\n',
+    "src/lib/tinker.server.ts": 'export * from "../backend/seam.server";\n',
     "src/backend/seam.server.ts": "export const extensions = [];\nexport default 1;\n",
-    "src/server.ts": 'export * from "./backend/seam.server.ts";\n',
+    "src/server.ts": 'export * from "./backend/seam.server";\n',
   });
   expect(named(followed).lines).toEqual([
     "src/server.ts:1 does not export default; the base imports it from this file",
@@ -89,7 +89,7 @@ test("with auth on, a seam without auth or readAccount names each missing name",
 test("with auth on, a seam with both names passes; with auth off, none is needed", () => {
   const seam = {
     "src/lib/tinker.server.ts":
-      'export const extensions = [];\nexport { auth, readAccount } from "../backend/auth.ts";\n',
+      'export const extensions = [];\nexport { auth, readAccount } from "../backend/auth";\n',
     "src/backend/auth.ts": "export const auth = 1;\nexport const readAccount = 2;\n",
   };
   expect(named(goodApp({ ".tinker/base.json": authOn, ...seam })).status).toBe("ok");
@@ -99,7 +99,7 @@ test("with auth on, a seam with both names passes; with auth off, none is needed
 const syncOn = JSON.stringify({ base: "0.6.0", parts: ["telemetry", "auth", "sync"] });
 const clientSeam = {
   "src/lib/tinker.ts":
-    'export const extensions = [];\nexport { records, readSnapshot, readBootstrap, readBatch, streamMessage } from "../sync.ts";\n',
+    'export const extensions = [];\nexport { records, readSnapshot, readBootstrap, readBatch, streamMessage } from "../sync";\n',
   "src/sync.ts":
     'export const records = 1, readSnapshot = 2, readBootstrap = 3, readBatch = 4, streamMessage = 5;\ndeclare module "@tinker/start" {\n  interface Register { change: number }\n}\n',
 };

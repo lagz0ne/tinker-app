@@ -7,9 +7,9 @@ import { extensions } from "#tinker/app";
 import { sync, telemetry } from "#tinker/parts";
 import { router } from "#tinker/router";
 import { routeTree } from "#tinker/routes";
-import { env } from "../env.ts";
-import { pageEvents, tabStop } from "../parts/sync/client/tab.ts";
-import { TinkerError, TinkerNotFound } from "./fallbacks.tsx";
+import { env } from "../env";
+import { pageEvents, tabStop } from "../parts/sync/client/tab";
+import { TinkerError, TinkerNotFound } from "./fallbacks";
 
 /** A server render reads the process env; a tab has none. */
 const readEnv = createIsomorphicFn()

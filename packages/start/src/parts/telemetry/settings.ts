@@ -1,9 +1,9 @@
 import { resource, tag } from "@tinker/core";
 import { readPartEnv } from "../../../lib/part-env.mjs";
 import { tinker } from "../../../package.json";
-import { env } from "../../env.ts";
-import { raise } from "../../errors.ts";
-import type { Telemetry } from "./records.ts";
+import { env } from "../../env";
+import { raise } from "../../errors";
+import type { Telemetry } from "./records";
 
 /** Where this root's records come from; each entry binds its own side. */
 export const telemetrySide = tag<Telemetry.Side>({ label: "telemetry.side" });

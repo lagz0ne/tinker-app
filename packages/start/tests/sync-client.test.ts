@@ -2,15 +2,15 @@ import { createScope, operation } from "@tinker/core";
 import { makeTestClock } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 import { applied, savedPrivate, savedPublic } from "#tinker/app";
-import { accountOwner, tabLifetime } from "../src/parts/sync/client/owner.ts";
+import { accountOwner, tabLifetime } from "../src/parts/sync/client/owner";
 import {
   applyBootstrap,
   applyEvents,
   leaveAccount,
   syncClient,
-} from "../src/parts/sync/client/sync.ts";
-import { pageEvents, tabStop } from "../src/parts/sync/client/tab.ts";
-import type { Sync } from "../src/parts/sync/envelopes.ts";
+} from "../src/parts/sync/client/sync";
+import { pageEvents, tabStop } from "../src/parts/sync/client/tab";
+import type { Sync } from "../src/parts/sync/envelopes";
 
 /** A page hide event; `persisted` true means the tab went into the back-forward cache. */
 const hide = (persisted: boolean) => Object.assign(new Event("pagehide"), { persisted });

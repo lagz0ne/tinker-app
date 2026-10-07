@@ -1,2 +1,2 @@
 export const extensions = [];
-export { database, databaseSettings, auth, authSettings, mailSettings, migrate, bootstrap, readAccount } from "../notes.server.ts";
+export { database, databaseSettings, auth, authSettings, mailSettings, migrate, bootstrap, readAccount } from "../notes.server";

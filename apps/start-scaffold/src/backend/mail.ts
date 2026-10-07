@@ -1,6 +1,6 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
-import { raise } from "../errors.ts";
+import { raise } from "../errors";
 const message = z.strictObject({ to: z.string(), subject: z.string(), text: z.string() });
 export declare namespace Mail {
   type Message = z.infer<typeof message>;

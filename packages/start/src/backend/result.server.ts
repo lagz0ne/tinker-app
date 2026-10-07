@@ -1,5 +1,5 @@
 import type { RunResult } from "@tinker/core";
-import { raise } from "../errors.ts";
+import { raise } from "../errors";
 /** HTTP boundaries handle a settled failure without failing the server root.
  * @param result - From a settled boundary call; why: return its value or raise its failure.
  */

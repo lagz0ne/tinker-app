@@ -1,13 +1,13 @@
 import { Link, Navigate } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
-import type { Profile } from "../contracts/profile.ts";
-import { profile, nameDraft, pending, notice, profileResult } from "./state.ts";
-import { signOut } from "./auth-actions.ts";
-import { saveName, editName, retryMail } from "./profile-actions.ts";
-import { errorText } from "./error-text.ts";
-import { Button } from "./ui/button.tsx";
-import { Input } from "./ui/input.tsx";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card.tsx";
+import type { Profile } from "../contracts/profile";
+import { profile, nameDraft, pending, notice, profileResult } from "./state";
+import { signOut } from "./auth-actions";
+import { saveName, editName, retryMail } from "./profile-actions";
+import { errorText } from "./error-text";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";
 function ProfileForm({ value }: { value: Profile.Value }) {
   const draft = useData(nameDraft);
   const last = useData(profileResult);

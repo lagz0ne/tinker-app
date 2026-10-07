@@ -2,9 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { resource } from "@tinker/core";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { bootstrap, readAccount } from "#tinker/app.server";
-import { readResult } from "../../backend/result.server.ts";
-import { startRequests } from "../../start.ts";
-import type { Sync } from "./envelopes.ts";
+import { readResult } from "../../backend/result.server";
+import { startRequests } from "../../start";
+import type { Sync } from "./envelopes";
 
 /** The app's snapshot for this request's account: what a tab loads before it streams. */
 export const getBootstrap = createServerFn({ method: "GET" })

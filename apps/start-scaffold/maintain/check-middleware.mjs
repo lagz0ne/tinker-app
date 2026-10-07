@@ -38,9 +38,9 @@ export const proofFunction = createMiddleware({type: "function"})
       join(proof, "src/proof-functions.ts"),
       `
 import { createServerFn } from "@tanstack/react-start";
-import { proofRequest, proofFunction } from "./proof-middleware.ts";
+import { proofRequest, proofFunction } from "./proof-middleware";
 import { readResult } from "@tinker/start/server";
-import { readProofUser } from "./proof.server.ts";
+import { readProofUser } from "./proof.server";
 export const readProof = createServerFn({method: "GET"})
   .middleware([proofRequest, proofFunction, proofFunction])
   .handler(async ({context}) => ({
@@ -70,8 +70,8 @@ export const readProofUser = operation({
       join(proof, "src/routes/proof.native.tsx"),
       `
 import { createFileRoute } from "@tanstack/react-router";
-import { proofRequest } from "../proof-middleware.ts";
-import { readProof } from "../proof-functions.ts";
+import { proofRequest } from "../proof-middleware";
+import { readProof } from "../proof-functions";
 export const Route = createFileRoute("/proof/native")({
   server: {middleware: [proofRequest]},
   loader: async () => ({first: await readProof(), second: await readProof()}),
@@ -83,7 +83,7 @@ export const Route = createFileRoute("/proof/native")({
       join(proof, "src/start.ts"),
       `
 import { createStart } from "@tanstack/react-start";
-import { proofRequest } from "./proof-middleware.ts";
+import { proofRequest } from "./proof-middleware";
 export const startInstance = createStart(() => ({requestMiddleware: [proofRequest]}));
 `,
     );
@@ -91,7 +91,7 @@ export const startInstance = createStart(() => ({requestMiddleware: [proofReques
       join(proof, "src/routes/proof.write.ts"),
       `
 import { createFileRoute } from "@tanstack/react-router";
-import { incrementCounter } from "../backend/index.ts";
+import { incrementCounter } from "../backend/index";
 import { startRequests } from "@tinker/start";
 import { readResult } from "@tinker/start/server";
 export const Route = createFileRoute("/proof/write")({server: {

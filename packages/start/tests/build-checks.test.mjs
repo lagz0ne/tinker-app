@@ -59,9 +59,9 @@ test("tinker() imported under another name, and called once, builds", () => {
 
 test("a valid export * in a seam file and a route file builds", () => {
   const root = goodApp({
-    "src/lib/tinker.server.ts": 'export * from "../backend/seam.server.ts";\n',
+    "src/lib/tinker.server.ts": 'export * from "../backend/seam.server";\n',
     "src/backend/seam.server.ts": "export const extensions = [];\n",
-    "src/routes/about.tsx": 'export * from "../frontend/about.tsx";\n',
+    "src/routes/about.tsx": 'export * from "../frontend/about";\n',
     "src/frontend/about.tsx": 'export const Route = createFileRoute("/about")({});\n',
   });
   expect(buildChecks(root)).toEqual({ errors: [], warnings: [] });

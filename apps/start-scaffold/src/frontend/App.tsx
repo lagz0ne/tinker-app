@@ -1,12 +1,12 @@
-import { Counter } from "./Counter.tsx";
+import { Counter } from "./Counter";
 import { Link } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
-import { profile, pending, notice, authMode } from "./state.ts";
-import { signIn, setAuthMode } from "./auth-actions.ts";
-import { errorText } from "./error-text.ts";
-import { Button } from "./ui/button.tsx";
-import { Input } from "./ui/input.tsx";
-import { Card, CardHeader, CardTitle, CardContent } from "./ui/card.tsx";
+import { profile, pending, notice, authMode } from "./state";
+import { signIn, setAuthMode } from "./auth-actions";
+import { errorText } from "./error-text";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 function AccountForm() {
   const mode = useData(authMode);
   const changeMode = useRun(setAuthMode);

@@ -1,12 +1,12 @@
 import { createScope, operation } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 import { version } from "../package.json";
-import { responseBodies } from "../src/backend/body.server.ts";
-import { health } from "../src/backend/health.ts";
-import entry from "../src/defaults/server.ts";
-import { devErrorPage } from "../src/entry/dev-error.ts";
-import { env, readResult } from "../src/server.ts";
-import { startRequests } from "../src/start.ts";
+import { responseBodies } from "../src/backend/body.server";
+import { health } from "../src/backend/health";
+import entry from "../src/defaults/server";
+import { devErrorPage } from "../src/entry/dev-error";
+import { env, readResult } from "../src/server";
+import { startRequests } from "../src/start";
 
 const greet = operation({
   label: "test.greet",

@@ -1,10 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
-import { listTodos, changeTodo } from "../backend/index.ts";
-import { readTodoCommand } from "../contracts/commands.ts";
+import { listTodos, changeTodo } from "../backend/index";
+import { readTodoCommand } from "../contracts/commands";
 import { startRequests } from "@tinker/start";
 import { readResult } from "@tinker/start/server";
-import { readReceipt } from "./result.server.ts";
+import { readReceipt } from "./result.server";
 export const getTodos = createServerFn({ method: "GET" })
   .middleware([startRequests.middleware])
   .handler(async ({ context }) => {

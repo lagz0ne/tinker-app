@@ -78,7 +78,7 @@ The server seam with auth on, filled in:
 ```ts
 // src/lib/tinker.server.ts
 export const extensions = [];
-export { auth, readAccount } from "../backend/auth.ts";
+export { auth, readAccount } from "../backend/auth";
 ```
 
 ```ts
@@ -137,9 +137,9 @@ The client seam with sync on, filled in:
 ```ts
 // src/lib/tinker.ts
 export const extensions = [];
-export { records } from "../frontend/records.ts";
-export { readSnapshot, readBootstrap } from "./sync.ts";
-export { readBatch, streamMessage } from "./sync.ts";
+export { records } from "../frontend/records";
+export { readSnapshot, readBootstrap } from "./sync";
+export { readBatch, streamMessage } from "./sync";
 ```
 
 ```ts

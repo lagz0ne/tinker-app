@@ -12,7 +12,7 @@ if (import.meta.main) {
         return nextLoad(url, context);
       },
     });
-    await import("../src/backend/index.ts");
+    await import("../src/backend/index");
     hooks.deregister();
     const services = [...loaded].filter((url) =>
       /\/node_modules\/(?:pg|@electric-sql\/pglite|better-auth|nodemailer)(?:\/|$)/.test(url),

@@ -1,9 +1,9 @@
 import { resource } from "@tinker/core";
 import { readSnapshot } from "#tinker/app";
-import type { SyncPart } from "../part.ts";
-import { checkAccount, loadSnapshot, syncStreaming } from "./events.ts";
-import { tabLifetime } from "./owner.ts";
-import { applyBootstrap, syncClient } from "./sync.ts";
+import type { SyncPart } from "../part";
+import { checkAccount, loadSnapshot, syncStreaming } from "./events";
+import { tabLifetime } from "./owner";
+import { applyBootstrap, syncClient } from "./sync";
 
 /**
  * The router side of sync: the server render loads the snapshot and dehydrates it; the tab

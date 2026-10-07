@@ -3,13 +3,13 @@ import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/
 import { extensions } from "#tinker/app.server";
 import { auth, telemetry } from "#tinker/parts.server";
 import app from "#tinker/server";
-import type { getRouter } from "./router.tsx";
-import { responseBodies } from "../backend/body.server.ts";
-import { devErrorPage } from "./dev-error.ts";
-import { backendStop } from "../backend/lifetime.ts";
-import { env } from "../env.ts";
-import { raise } from "../errors.ts";
-import { startRequests } from "../start.ts";
+import type { getRouter } from "./router";
+import { responseBodies } from "../backend/body.server";
+import { devErrorPage } from "./dev-error";
+import { backendStop } from "../backend/lifetime";
+import { env } from "../env";
+import { raise } from "../errors";
+import { startRequests } from "../start";
 
 const renderRequest = createStartHandler(async (context) => {
   const { requestContext } = await (entry.owned ??= start());

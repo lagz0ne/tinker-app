@@ -1,8 +1,8 @@
 import { resource } from "@tinker/core";
 import { ZodError } from "zod";
-import { readResult } from "../../backend/result.server.ts";
-import { streamCursor, streamRequest } from "./protocol.ts";
-import { openSync } from "./stream.server.ts";
+import { readResult } from "../../backend/result.server";
+import { streamCursor, streamRequest } from "./protocol";
+import { openSync } from "./stream.server";
 
 /**
  * The reply of `GET /api/sync` (ADR 0103). The cursor comes from `Last-Event-ID` (a reconnect),

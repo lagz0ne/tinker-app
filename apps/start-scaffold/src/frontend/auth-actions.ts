@@ -1,9 +1,9 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
-import { pending, notice, authMode } from "./state.ts";
+import { pending, notice, authMode } from "./state";
 import { syncClient, snapshotLoader } from "@tinker/start/client";
-import { credentials } from "../contracts/credentials.ts";
-import { raise } from "../errors.ts";
+import { credentials } from "../contracts/credentials";
+import { raise } from "../errors";
 const modeInput = z.enum(["signup", "signin"]);
 export const authClient = resource({
   label: "browser.auth",

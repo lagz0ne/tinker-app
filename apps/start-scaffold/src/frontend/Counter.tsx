@@ -1,10 +1,10 @@
 import { operation } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
-import { counter } from "./state.ts";
+import { counter } from "./state";
 import { syncClient } from "@tinker/start/client";
-import { updateCounter } from "../transport/counter.functions.ts";
-import { Button } from "./ui/button.tsx";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "./ui/card.tsx";
+import { updateCounter } from "../transport/counter.functions";
+import { Button } from "./ui/button";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "./ui/card";
 const increase = operation({
   label: "counter.increase",
   depends: { sync: syncClient },

@@ -71,7 +71,7 @@ test("while check 7 fails, a missed route says to fix check 7 first; a file with
 
 test("a route file that re-exports Route from another file counts as a route", () => {
   const root = preparedApp({
-    "src/routes/about.tsx": 'export * from "../frontend/about-page.tsx";\n',
+    "src/routes/about.tsx": 'export * from "../frontend/about-page";\n',
     "src/frontend/about-page.tsx": 'export const Route = createFileRoute("/about")({});\n',
   });
   expect(generated(root).lines).toEqual([

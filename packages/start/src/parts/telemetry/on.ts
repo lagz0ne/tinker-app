@@ -1,7 +1,7 @@
 import { createIsomorphicFn } from "@tanstack/react-start";
-import { observer, telemetryExport } from "./observer.ts";
-import type { Telemetry } from "./records.ts";
-import { telemetrySide } from "./settings.ts";
+import { observer, telemetryExport } from "./observer";
+import type { Telemetry } from "./records";
+import { telemetrySide } from "./settings";
 
 /** Start compiles one side in: a server render records as "ssr", a tab as "browser". */
 const side = createIsomorphicFn()

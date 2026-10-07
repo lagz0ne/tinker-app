@@ -6,8 +6,8 @@ import {
   bootstrapEnvelope,
   eventEnvelope,
   snapshotEnvelope,
-} from "../../src/parts/sync/envelopes.ts";
-import type { Sync } from "../../src/parts/sync/envelopes.ts";
+} from "../../src/parts/sync/envelopes";
+import type { Sync } from "../../src/parts/sync/envelopes";
 
 /**
  * A stand-in client seam for the base's own tests and type check, as `#tinker/app`: the names

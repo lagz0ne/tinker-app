@@ -3,13 +3,13 @@ import { makeTestClock, preset } from "@tinker/core/testing";
 import { beforeAll, expect, test } from "vite-plus/test";
 import { z } from "zod";
 import { auth, database, signedIn, syncTables } from "#tinker/app.server";
-import { requestHeaders } from "../src/backend/headers.server.ts";
-import { backendStop, requestStop } from "../src/backend/lifetime.ts";
-import { eventHistory } from "../src/parts/sync/history.server.ts";
-import { notifications } from "../src/parts/sync/notifications.server.ts";
-import { execution } from "../src/parts/sync/schema.ts";
-import { eventStream, openSync } from "../src/parts/sync/stream.server.ts";
-import { syncEndpoint } from "../src/parts/sync/endpoint.server.ts";
+import { requestHeaders } from "../src/backend/headers.server";
+import { backendStop, requestStop } from "../src/backend/lifetime";
+import { eventHistory } from "../src/parts/sync/history.server";
+import { notifications } from "../src/parts/sync/notifications.server";
+import { execution } from "../src/parts/sync/schema";
+import { eventStream, openSync } from "../src/parts/sync/stream.server";
+import { syncEndpoint } from "../src/parts/sync/endpoint.server";
 
 /**
  * PGlite (a WASM Postgres) and drizzle load once, here, so no test pays their cold start: under
@@ -20,7 +20,7 @@ beforeAll(async () => {
     import("@electric-sql/pglite"),
     import("drizzle-orm"),
     import("drizzle-orm/pglite"),
-    import("../src/parts/sync/schema.ts"),
+    import("../src/parts/sync/schema"),
   ]);
   await (await PGlite.create()).close();
 }, 60_000);

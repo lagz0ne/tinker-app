@@ -1,12 +1,12 @@
 import { operation, resource, tag } from "@tinker/core";
-import { backendStop, requestStop } from "../../backend/lifetime.ts";
-import { requestBody } from "../../backend/request-body.server.ts";
-import { readResult } from "../../backend/result.server.ts";
-import { raise } from "../../errors.ts";
-import { ingestTelemetry } from "./observer.ts";
-import { telemetryBatch } from "./records.ts";
-import type { Telemetry } from "./records.ts";
-import { telemetrySettings } from "./settings.ts";
+import { backendStop, requestStop } from "../../backend/lifetime";
+import { requestBody } from "../../backend/request-body.server";
+import { readResult } from "../../backend/result.server";
+import { raise } from "../../errors";
+import { ingestTelemetry } from "./observer";
+import { telemetryBatch } from "./records";
+import type { Telemetry } from "./records";
+import { telemetrySettings } from "./settings";
 
 /** Borrowed from the telemetry root. Requests neither create nor close that owner. */
 export const browserTelemetry = tag<(batch: Telemetry.Batch) => Promise<void>>({

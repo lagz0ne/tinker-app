@@ -3,7 +3,7 @@ import type { Database } from "@tinker/start/server";
 export type { Database } from "@tinker/start/server";
 import { env } from "@tinker/start/server";
 import { z } from "zod";
-import { raise } from "../errors.ts";
+import { raise } from "../errors";
 const databaseEnv = z.object({ DATABASE_URL: z.string().min(1) });
 export const databaseSettings = resource({
   label: "database.settings",

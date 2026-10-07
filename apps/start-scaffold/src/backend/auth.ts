@@ -1,9 +1,9 @@
 import { operation, resource } from "@tinker/core";
-import { database } from "./database.ts";
-import { sendMail } from "./mail.ts";
+import { database } from "./database";
+import { sendMail } from "./mail";
 import { authSettings, requestHeaders } from "@tinker/start/server";
 export { authSettings } from "@tinker/start/server";
-import { raise } from "../errors.ts";
+import { raise } from "../errors";
 export const auth = resource({
   label: "auth",
   target: "session",
@@ -14,7 +14,7 @@ export const auth = resource({
         import("better-auth"),
         import("better-auth/adapters/drizzle"),
         import("better-auth/tanstack-start"),
-        import("./schema.ts"),
+        import("./schema"),
       ]);
     return betterAuth({
       baseURL: settings.origin,

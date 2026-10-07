@@ -1,6 +1,6 @@
-import type { Route as AuthRoute } from "../../src/routes/api.auth.ts";
-import type { Route as SyncRoute } from "../../src/routes/api.sync.ts";
-import type { Route as RootRoute } from "../../src/routes/root.tsx";
+import type { Route as AuthRoute } from "../../src/routes/api.auth";
+import type { Route as SyncRoute } from "../../src/routes/api.sync";
+import type { Route as RootRoute } from "../../src/routes/root";
 
 /**
  * The base's type check reads apps/start-min's route tree, where auth and sync are off. This adds

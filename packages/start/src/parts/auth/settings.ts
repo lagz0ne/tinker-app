@@ -2,8 +2,8 @@ import { extension, resource } from "@tinker/core";
 import type { Many, Scope } from "@tinker/core";
 import { readPartEnv } from "../../../lib/part-env.mjs";
 import basePackage from "../../../package.json" with { type: "json" };
-import { env } from "../../env.ts";
-import { raise } from "../../errors.ts";
+import { env } from "../../env";
+import { raise } from "../../errors";
 
 export declare namespace Auth {
   /** What the app's `auth` resource builds on: the public origin and the signing secret. */

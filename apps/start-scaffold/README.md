@@ -127,11 +127,11 @@ export default defineConfig({
 `src/lib/tinker.server.ts`:
 
 ```ts
-import { databaseSetup } from "../backend/database.ts";
+import { databaseSetup } from "../backend/database";
 export const extensions = [databaseSetup];
-export { database } from "../backend/database.ts";
-export { auth, readAccount } from "../backend/auth.ts";
-export { bootstrap } from "../backend/sync.ts";
+export { database } from "../backend/database";
+export { auth, readAccount } from "../backend/auth";
+export { bootstrap } from "../backend/sync";
 ```
 
 Read the filled [browser seam](src/lib/tinker.ts) for
