@@ -1,5 +1,6 @@
 import { createScope } from "@tinker/core";
-import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
+import { createStartHandler as createStart } from "@tanstack/react-start/server";
+import { defaultStreamHandler as renderStream } from "@tanstack/react-start/server";
 import { extensions } from "#tinker/app.server";
 import { auth, telemetry } from "#tinker/parts.server";
 import app from "#tinker/server";
@@ -11,7 +12,7 @@ import { env } from "../env";
 import { raise } from "../errors";
 import { startRequests } from "../start";
 
-const renderRequest = createStartHandler(async (context) => {
+const renderRequest = createStart(async (context) => {
   const { requestContext } = await (entry.owned ??= start());
   const bodies = requestContext.scope.resolve(responseBodies);
   const router: typeof context.router & {
@@ -19,7 +20,7 @@ const renderRequest = createStartHandler(async (context) => {
   } = context.router;
   if (typeof router.close !== "function") raise("StartScopeMissing", {});
   try {
-    const output = await defaultStreamHandler(context);
+    const output = await renderStream(context);
     if (bodies.isResponse(output)) return bodies.hold(output, router.close);
     return { ...output, response: await bodies.hold(output.response, router.close) };
   } catch (error) {
@@ -68,7 +69,11 @@ async function start() {
       if (toolEnd.teardownErrors?.length) throw toolEnd.teardownErrors.at(0);
     }));
   if (import.meta.hot) import.meta.hot.dispose(close);
-  return { requestContext: app.resolve(startRequests), close };
+  return {
+    requestContext: app.resolve(startRequests),
+    renderObserve: tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs }),
+    close,
+  };
 }
 
 const entry: {
@@ -87,4 +92,9 @@ const entry: {
 export default entry;
 export async function close() {
   if (entry.owned) await (await entry.owned).close();
+}
+
+/** Server renders borrow observation; only process close ends its telemetry root. */
+export async function getRenderObserver() {
+  return (await (entry.owned ??= start())).renderObserve;
 }

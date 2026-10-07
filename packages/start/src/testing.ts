@@ -11,3 +11,7 @@ export { receiveMessage, refreshAccount } from "./parts/sync/client/events";
 export { snapshotSource } from "./parts/sync/functions";
 export { startRequests } from "./start";
 export { isError, raise } from "./errors";
+export { exportHealth } from "./parts/telemetry/health";
+export { flushTelemetry } from "./parts/telemetry/observer";
+export { telemetry as serverTelemetry } from "./parts/telemetry/on.server";
+export { telemetry as offTelemetry } from "./parts/telemetry/off";

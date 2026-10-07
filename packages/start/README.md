@@ -256,9 +256,14 @@ The package's `exports` refuses every other path.
   and a cancelled call as the base's `Cancelled` error.
 - `/api/health` answers `{"ok":true,"base":"<version>"}`.
   The health operation reports the installed base version.
-- Each entry makes a telemetry root
-  that observes the app root and closes after it.
-  Its own sends are not traced.
+- The server owns one telemetry root per process.
+  Server renders borrow its observer and queue.
+  Their records keep side `ssr`.
+  Render close finishes while a storage send is held.
+  Process close sends records from all renders.
+  Each browser tab owns its telemetry root,
+  which closes after the tab's app root.
+  Telemetry sends are not traced.
   With telemetry off, it is empty,
   and nothing is observed.
   - Each finished span and log line at info or above
@@ -278,7 +283,7 @@ The package's `exports` refuses every other path.
     server, then browser, then ssr.
   - The server and a tab send on their own
     once a second has passed;
-    a server render sends when it closes.
+    render close never waits for a telemetry send.
     One send waits at most 750 ms,
     Server records carry at most 48,000 bytes per send.
     A tab sends at most 32,000 UTF-8 bytes,

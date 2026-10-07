@@ -11,10 +11,28 @@ import { env } from "../env";
 import { pageEvents, tabStop } from "../parts/sync/client/tab";
 import { TinkerError, TinkerNotFound } from "./fallbacks";
 
-/** A server render reads the process env; a tab has none. */
-const readEnv = createIsomorphicFn()
-  .server(() => ({ ...process.env }))
-  .client(() => ({}));
+/** Server renders borrow the process observer; each tab owns its telemetry root. */
+const readTelemetry = createIsomorphicFn()
+  .server(async () => {
+    const { getRenderObserver } = await import("./server");
+    return { observe: await getRenderObserver(), close: undefined };
+  })
+  .client(async () => {
+    const toolStop = new AbortController();
+    const tools = createScope({
+      signal: toolStop.signal,
+      extensions: telemetry.extensions,
+      tags: [env({}), telemetry.tags],
+    });
+    await tools.ready;
+    return {
+      observe: tools.resolve(telemetry.observe),
+      async close() {
+        toolStop.abort();
+        return tools.closed;
+      },
+    };
+  });
 /** A tab's page events (for its lifetime); a server render has no page. */
 const readPage = createIsomorphicFn()
   .server((): EventTarget | undefined => undefined)
@@ -37,23 +55,17 @@ export type RouterOptions = (
 >;
 
 /**
- * Start calls this once per server render and once per browser tab. The telemetry root observes
- * the app root, and closes after it. With sync on, the app root holds the tab's sync state, and
+ * Start calls this once per server render and once per browser tab. Only a tab closes its
+ * telemetry root after the app root. With sync on, the app root holds the tab's sync state, and
  * the router gets sync's context, dehydrate, and hydrate; a real page hide closes the tab.
  */
 export async function getRouter() {
-  const toolStop = new AbortController();
-  const tools = createScope({
-    signal: toolStop.signal,
-    extensions: telemetry.extensions,
-    tags: [env(readEnv()), telemetry.tags],
-  });
-  await tools.ready;
+  const tools = await readTelemetry();
   const stop = new AbortController();
   const app = createScope({
     signal: stop.signal,
     extensions: [sync.extensions, extensions],
-    observe: tools.resolve(telemetry.observe),
+    observe: tools.observe,
     tags: [tabStop(stop.signal), pageEvents(readPage())],
   });
   const tab = await app.ready
@@ -61,8 +73,7 @@ export async function getRouter() {
     .catch(async (error: unknown) => {
       stop.abort();
       await app.closed;
-      toolStop.abort();
-      await tools.closed;
+      await tools.close?.();
       throw error;
     });
   let closed: Promise<void> | undefined;
@@ -70,12 +81,11 @@ export async function getRouter() {
     (closed ??= Promise.resolve().then(async () => {
       stop.abort();
       const end = await app.closed;
-      toolStop.abort();
-      const toolEnd = await tools.closed;
-      if (end.status === "failed") throw end.error;
-      if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
-      if (toolEnd.status === "failed") throw toolEnd.error;
-      if (toolEnd.teardownErrors?.length) throw toolEnd.teardownErrors.at(0);
+      const toolEnd = await tools.close?.();
+      for (const result of [end, toolEnd]) {
+        if (result?.status === "failed") throw result.error;
+        if (result?.teardownErrors?.length) throw result.teardownErrors.at(0);
+      }
     }));
   tab.bind(close);
   if (import.meta.hot) import.meta.hot.dispose(close);
