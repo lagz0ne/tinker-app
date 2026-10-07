@@ -9,7 +9,7 @@
       "path": "src/examples/counter-example.tinker.json",
       "target": "~/src/examples/counter-example.tinker.json",
       "type": "registry:file",
-      "content": "{\n  \"name\": \"counter-example\",\n  \"parts\": [\n    \"auth\",\n    \"sync\"\n  ],\n  \"seams\": {\n    \"src/lib/tinker.server.ts\": {\n      \"extensions\": {\n        \"line\": \"export { extensions } from \\\"../examples/demo.server.ts\\\";\",\n        \"from\": \"../examples/demo.server.ts\",\n        \"include\": {\n          \"name\": \"databaseSetup\",\n          \"from\": \"../backend/database.ts\"\n        }\n      },\n      \"database\": {\n        \"line\": \"export { database } from \\\"../backend/database.ts\\\";\"\n      },\n      \"auth\": {\n        \"line\": \"export { auth } from \\\"../backend/auth.ts\\\";\"\n      },\n      \"readAccount\": {\n        \"line\": \"export { readAccount } from \\\"../backend/auth.ts\\\";\"\n      },\n      \"bootstrap\": {\n        \"line\": \"export { bootstrap } from \\\"../backend/sync.ts\\\";\"\n      }\n    },\n    \"src/lib/tinker.ts\": {\n      \"records\": {\n        \"line\": \"export { records } from \\\"../examples/demo.ts\\\";\"\n      },\n      \"readSnapshot\": {\n        \"line\": \"export { readSnapshot } from \\\"../examples/demo.ts\\\";\"\n      },\n      \"readBootstrap\": {\n        \"line\": \"export { readBootstrap } from \\\"../examples/demo.ts\\\";\"\n      },\n      \"readBatch\": {\n        \"line\": \"export { readBatch } from \\\"../examples/demo.ts\\\";\"\n      },\n      \"streamMessage\": {\n        \"line\": \"export { streamMessage } from \\\"../examples/demo.ts\\\";\"\n      }\n    }\n  }\n}\n"
+      "content": "{\n  \"name\": \"counter-example\",\n  \"parts\": [\n    \"auth\",\n    \"sync\"\n  ],\n  \"seams\": {\n    \"src/lib/tinker.server.ts\": {\n      \"extensions\": {\n        \"line\": \"export { extensions } from \\\"../examples/demo.server\\\";\",\n        \"from\": \"../examples/demo.server\",\n        \"include\": {\n          \"name\": \"databaseSetup\",\n          \"from\": \"../backend/database\"\n        }\n      },\n      \"database\": {\n        \"line\": \"export { database } from \\\"../backend/database\\\";\"\n      },\n      \"auth\": {\n        \"line\": \"export { auth } from \\\"../backend/auth\\\";\"\n      },\n      \"readAccount\": {\n        \"line\": \"export { readAccount } from \\\"../backend/auth\\\";\"\n      },\n      \"bootstrap\": {\n        \"line\": \"export { bootstrap } from \\\"../backend/sync\\\";\"\n      }\n    },\n    \"src/lib/tinker.ts\": {\n      \"records\": {\n        \"line\": \"export { records } from \\\"../examples/demo\\\";\"\n      },\n      \"readSnapshot\": {\n        \"line\": \"export { readSnapshot } from \\\"../examples/demo\\\";\"\n      },\n      \"readBootstrap\": {\n        \"line\": \"export { readBootstrap } from \\\"../examples/demo\\\";\"\n      },\n      \"readBatch\": {\n        \"line\": \"export { readBatch } from \\\"../examples/demo\\\";\"\n      },\n      \"streamMessage\": {\n        \"line\": \"export { streamMessage } from \\\"../examples/demo\\\";\"\n      }\n    }\n  }\n}\n"
     }
   ],
   "meta": {
@@ -22,10 +22,10 @@
       "src/lib/tinker.server.ts": {
         "extensions": {
           "line": "export { extensions } from \"../examples/demo.server\";",
-          "from": "../examples/demo.server.ts",
+          "from": "../examples/demo.server",
           "include": {
             "name": "databaseSetup",
-            "from": "../backend/database.ts"
+            "from": "../backend/database"
           }
         },
         "database": {

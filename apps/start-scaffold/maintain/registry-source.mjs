@@ -117,9 +117,9 @@ async function fileContent(file, packages) {
   const text = await readFile(join(app, file.path), "utf8");
   if (!file.path.startsWith("tests/")) return text;
   return text
-    .replaceAll('"@tinker-start-scaffold/backend"', '"../src/backend/index.ts"')
-    .replaceAll('"@tinker-start-scaffold/frontend"', '"../src/frontend/index.ts"')
-    .replaceAll('"@tinker-start-scaffold/testing"', '"./presets.ts"');
+    .replaceAll('"@tinker-start-scaffold/backend"', '"../src/backend/index"')
+    .replaceAll('"@tinker-start-scaffold/frontend"', '"../src/frontend/index"')
+    .replaceAll('"@tinker-start-scaffold/testing"', '"./presets"');
 }
 
 /** Each item reads the app's source; targets keep shadcn inside the consumer's folder. */

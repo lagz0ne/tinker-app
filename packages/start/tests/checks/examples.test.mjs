@@ -1,6 +1,7 @@
 import { expect, test } from "vite-plus/test";
 import { examples } from "../../lib/checks/examples.mjs";
 import { named } from "../../lib/checks/named.mjs";
+import { registryItems } from "../../../../apps/start-scaffold/maintain/registry-source.mjs";
 import { goodApp, write } from "../fixture.mjs";
 
 const receipt = JSON.stringify({
@@ -11,8 +12,8 @@ const receipt = JSON.stringify({
       auth: { line: 'export { auth } from "../backend/auth";' },
       extensions: {
         line: 'export { extensions } from "../examples/demo.server";',
-        from: "../examples/demo.server.ts",
-        include: { name: "databaseSetup", from: "../backend/database.ts" },
+        from: "../examples/demo.server",
+        include: { name: "databaseSetup", from: "../backend/database" },
       },
     },
   },
@@ -97,4 +98,23 @@ test("doctor's named check includes an installed example's part switch", () => {
   expect(result.lines).toContain(
     "demo: needs the sync part; set tinker({ sync: true }) in vite.config.ts",
   );
+});
+
+test("doctor builds todos suggestions with no TypeScript module endings", async () => {
+  const { items } = await registryItems();
+  const item = items.find((item) => item.name === "todos-example");
+  const receipt = item.files.find((file) => file.path.endsWith(".tinker.json"));
+  const root = goodApp({
+    "src/examples/todos-example.tinker.json": receipt.content,
+    ".tinker/base.json": JSON.stringify({ parts: item.meta.parts }),
+    "src/lib/tinker.server.ts": "export const extensions = [];",
+  });
+  const lines = examples(root).lines;
+  expect(lines).toContain(
+    'todos-example: src/lib/tinker.server.ts:1 needs database; add export { database } from "../backend/database";',
+  );
+  expect(lines).toContain(
+    'todos-example: src/lib/tinker.server.ts:1 needs databaseSetup in extensions; keep your extensions and add it, or use export { extensions } from "../examples/demo.server";',
+  );
+  expect(lines.join("\n")).not.toMatch(/\.(ts|tsx|mts)["']/);
 });

@@ -94,10 +94,10 @@
           "src/lib/tinker.server.ts": {
             "extensions": {
               "line": "export { extensions } from \"../examples/demo.server\";",
-              "from": "../examples/demo.server.ts",
+              "from": "../examples/demo.server",
               "include": {
                 "name": "databaseSetup",
-                "from": "../backend/database.ts"
+                "from": "../backend/database"
               }
             },
             "database": {
@@ -150,10 +150,10 @@
           "src/lib/tinker.server.ts": {
             "extensions": {
               "line": "export { extensions } from \"../examples/demo.server\";",
-              "from": "../examples/demo.server.ts",
+              "from": "../examples/demo.server",
               "include": {
                 "name": "databaseSetup",
-                "from": "../backend/database.ts"
+                "from": "../backend/database"
               }
             },
             "database": {
@@ -206,10 +206,10 @@
           "src/lib/tinker.server.ts": {
             "extensions": {
               "line": "export { extensions } from \"../examples/demo.server\";",
-              "from": "../examples/demo.server.ts",
+              "from": "../examples/demo.server",
               "include": {
                 "name": "databaseSetup",
-                "from": "../backend/database.ts"
+                "from": "../backend/database"
               }
             },
             "database": {
@@ -290,10 +290,10 @@
           "src/lib/tinker.server.ts": {
             "extensions": {
               "line": "export { extensions } from \"../examples/demo.server\";",
-              "from": "../examples/demo.server.ts",
+              "from": "../examples/demo.server",
               "include": {
                 "name": "databaseSetup",
-                "from": "../backend/database.ts"
+                "from": "../backend/database"
               }
             },
             "database": {
@@ -346,10 +346,10 @@
           "src/lib/tinker.server.ts": {
             "extensions": {
               "line": "export { extensions } from \"../examples/demo.server\";",
-              "from": "../examples/demo.server.ts",
+              "from": "../examples/demo.server",
               "include": {
                 "name": "databaseSetup",
-                "from": "../backend/database.ts"
+                "from": "../backend/database"
               }
             },
             "database": {
@@ -657,10 +657,10 @@
           "src/lib/tinker.server.ts": {
             "extensions": {
               "line": "export { extensions } from \"../examples/demo.server\";",
-              "from": "../examples/demo.server.ts",
+              "from": "../examples/demo.server",
               "include": {
                 "name": "databaseSetup",
-                "from": "../backend/database.ts"
+                "from": "../backend/database"
               }
             },
             "database": {
@@ -829,10 +829,10 @@
           "src/lib/tinker.server.ts": {
             "extensions": {
               "line": "export { extensions } from \"../examples/demo.server\";",
-              "from": "../examples/demo.server.ts",
+              "from": "../examples/demo.server",
               "include": {
                 "name": "databaseSetup",
-                "from": "../backend/database.ts"
+                "from": "../backend/database"
               }
             },
             "database": {
