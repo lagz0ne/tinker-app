@@ -330,28 +330,22 @@ Keep your server extensions and add `databaseSetup`.
 The other server exports doctor names are:
 
 ```ts
-export { database } from "../backend/database.ts";
-export { auth } from "../backend/auth.ts";
-export { readAccount } from "../backend/auth.ts";
-export { bootstrap } from "../backend/sync.ts";
+export { database } from "../backend/database";
+export { auth } from "../backend/auth";
+export { readAccount } from "../backend/auth";
+export { bootstrap } from "../backend/sync";
 ```
 
 For an empty server seam, the filled startup list is:
 
 ```ts
-export { extensions } from "../examples/demo.server.ts";
+export { extensions } from "../examples/demo.server";
 ```
 
 The browser seam exports the copied demo's readers and types:
 
 ```ts
-export {
-  records,
-  readSnapshot,
-  readBootstrap,
-  readBatch,
-  streamMessage,
-} from "../examples/demo.ts";
+export { records, readSnapshot, readBootstrap, readBatch, streamMessage } from "../examples/demo";
 ```
 
 The copied module also adds the app's `Register` bodies.
@@ -359,7 +353,7 @@ For a server seam with your own extensions, keep that list
 and join the demo's startup extension:
 
 ```ts
-import { databaseSetup } from "../backend/database.ts";
+import { databaseSetup } from "../backend/database";
 export const extensions = [databaseSetup];
 ```
 

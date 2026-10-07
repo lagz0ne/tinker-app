@@ -188,10 +188,10 @@ try {
     configPath,
     (await readFile(configPath, "utf8")).replace("tinker()", "tinker({ auth: true, sync: true })"),
   );
-  await writeFile(join(consumer, "src/lib/tinker.ts"), 'export * from "../examples/demo.ts";\n');
+  await writeFile(join(consumer, "src/lib/tinker.ts"), 'export * from "../examples/demo";\n');
   await writeFile(
     join(consumer, "src/lib/tinker.server.ts"),
-    'export * from "../examples/demo.server.ts";\nexport { extensions } from "../examples/demo.server.ts";\n',
+    'export * from "../examples/demo.server";\nexport { extensions } from "../examples/demo.server";\n',
   );
   await cp(join(consumer, "examples/demo.env.example"), join(consumer, ".env"));
   run("vp", ["build"]);

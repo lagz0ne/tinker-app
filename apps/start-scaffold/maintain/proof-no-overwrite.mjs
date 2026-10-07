@@ -85,8 +85,8 @@ async function wire(consumer, item) {
     for (const needed of Object.values(names)) {
       if (needed.include) {
         text =
-          `import { databaseSetup } from "../backend/database.ts";\n` +
-          text.replace("extensions = []", "extensions = [databaseSetup]");
+          `import { databaseSetup } from "../backend/database";
+` + text.replace("extensions = []", "extensions = [databaseSetup]");
       } else text += needed.line + "\n";
     }
     await writeFile(path, text);
