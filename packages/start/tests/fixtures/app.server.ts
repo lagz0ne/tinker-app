@@ -1,5 +1,7 @@
 import { operation, resource, tag } from "@tinker/core";
 import type { Many, Scope } from "@tinker/core";
+import type { PGliteInterface } from "@electric-sql/pglite";
+import { afterAll, beforeAll } from "vite-plus/test";
 import type { Database } from "../../src/parts/sync/database";
 
 /**
@@ -42,17 +44,27 @@ CREATE TRIGGER sync_event_committed AFTER INSERT ON sync_event
 FOR EACH STATEMENT EXECUTE FUNCTION start_sync_wake();
 `;
 
+/** Each scope owns a copy; the file owns the empty template and closes it after its tests. */
+export let syncTemplate: PGliteInterface;
+beforeAll(async () => {
+  const [{ PGlite }] = await Promise.all([
+    import("@electric-sql/pglite"),
+    import("drizzle-orm"),
+    import("drizzle-orm/pglite"),
+    import("../../src/parts/sync/schema"),
+  ]);
+  syncTemplate = await PGlite.create();
+  await syncTemplate.exec(syncTables);
+}, 60_000);
+afterAll(() => syncTemplate.close());
+
 /** An in-memory Postgres (PGlite, no server) with the sync tables, as the app's database. */
 export const database = resource({
   label: "test.database",
   factory: async (_deps, { defer }): Promise<Database.Handle> => {
-    const [{ PGlite }, { drizzle }] = await Promise.all([
-      import("@electric-sql/pglite"),
-      import("drizzle-orm/pglite"),
-    ]);
-    const client = await PGlite.create();
+    const { drizzle } = await import("drizzle-orm/pglite");
+    const client = await syncTemplate.clone();
     defer(() => client.close());
-    await client.exec(syncTables);
     return Object.assign(drizzle({ client }), {
       listen: async (wake: () => void) => client.listen("start_sync", wake),
     });

@@ -1,8 +1,8 @@
 import { createScope, operation } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
-import { beforeAll, expect, test } from "vite-plus/test";
+import { expect, test } from "vite-plus/test";
 import { z } from "zod";
-import { auth, database, signedIn, syncTables } from "#tinker/app.server";
+import { auth, database, signedIn, syncTemplate } from "#tinker/app.server";
 import { requestHeaders } from "../src/backend/headers.server";
 import { backendStop, requestStop } from "../src/backend/lifetime";
 import { eventHistory } from "../src/parts/sync/history.server";
@@ -10,20 +10,6 @@ import { notifications } from "../src/parts/sync/notifications.server";
 import { execution } from "../src/parts/sync/schema";
 import { eventStream, openSync } from "../src/parts/sync/stream.server";
 import { syncEndpoint } from "../src/parts/sync/endpoint.server";
-
-/**
- * PGlite (a WASM Postgres) and drizzle load once, here, so no test pays their cold start: under
- * a full `vp run -r test`, the first test's imports alone came near the 5 s test timeout.
- */
-beforeAll(async () => {
-  const [{ PGlite }] = await Promise.all([
-    import("@electric-sql/pglite"),
-    import("drizzle-orm"),
-    import("drizzle-orm/pglite"),
-    import("../src/parts/sync/schema"),
-  ]);
-  await (await PGlite.create()).close();
-}, 60_000);
 
 const ids = [
   "00000000-0000-4000-8000-000000000001",
@@ -122,11 +108,8 @@ test("a wait on a broken listener returns at once", async () => {
   const root = createScope({
     presets: [
       preset(database, async (_deps, { defer }) => {
-        const [{ PGlite }, { drizzle }] = await Promise.all([
-          import("@electric-sql/pglite"),
-          import("drizzle-orm/pglite"),
-        ]);
-        const client = await PGlite.create();
+        const { drizzle } = await import("drizzle-orm/pglite");
+        const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
           listen: async (_wake: () => void, failed: () => void) => {
@@ -365,12 +348,11 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
   const listens: { wake: () => void; failed: () => void; stopped: boolean }[] = [];
   const root = createScope({
     presets: [
-      preset(database, async () => {
-        const [{ PGlite }, { drizzle }] = await Promise.all([
-          import("@electric-sql/pglite"),
-          import("drizzle-orm/pglite"),
-        ]);
-        return Object.assign(drizzle({ client: await PGlite.create() }), {
+      preset(database, async (_deps, { defer }) => {
+        const { drizzle } = await import("drizzle-orm/pglite");
+        const client = await syncTemplate.clone();
+        defer(() => client.close());
+        return Object.assign(drizzle({ client }), {
           listen: async (wake: () => void, failed: () => void) => {
             if (listens.length === 0) {
               listens.push({ wake, failed, stopped: true });
@@ -745,13 +727,9 @@ test("the sync part's work shows on the trace under its own names", async () => 
 function handWoken(logQuery?: (query: string) => void) {
   const wakes: (() => void)[] = [];
   const db = preset(database, async (_deps, { defer }) => {
-    const [{ PGlite }, { drizzle }] = await Promise.all([
-      import("@electric-sql/pglite"),
-      import("drizzle-orm/pglite"),
-    ]);
-    const client = await PGlite.create();
+    const { drizzle } = await import("drizzle-orm/pglite");
+    const client = await syncTemplate.clone();
     defer(() => client.close());
-    await client.exec(syncTables);
     return Object.assign(drizzle({ client, logger: logQuery ? { logQuery } : undefined }), {
       listen: async (wake: () => void) => {
         wakes.push(wake);
@@ -905,11 +883,8 @@ test("a listener that breaks while it connects fails the subscribe as disconnect
   const root = createScope({
     presets: [
       preset(database, async (_deps, { defer }) => {
-        const [{ PGlite }, { drizzle }] = await Promise.all([
-          import("@electric-sql/pglite"),
-          import("drizzle-orm/pglite"),
-        ]);
-        const client = await PGlite.create();
+        const { drizzle } = await import("drizzle-orm/pglite");
+        const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
           listen: async (_wake: () => void, failed: () => void) => {
@@ -931,11 +906,8 @@ test("a subscribe whose listener is replaced while it connects fails as disconne
   const root = createScope({
     presets: [
       preset(database, async (_deps, { defer }) => {
-        const [{ PGlite }, { drizzle }] = await Promise.all([
-          import("@electric-sql/pglite"),
-          import("drizzle-orm/pglite"),
-        ]);
-        const client = await PGlite.create();
+        const { drizzle } = await import("drizzle-orm/pglite");
+        const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
           listen: async (_wake: () => void, failed: () => void) => {
@@ -960,11 +932,8 @@ test("a closed subscriber is not told when the listener breaks", async () => {
   const root = createScope({
     presets: [
       preset(database, async (_deps, { defer }) => {
-        const [{ PGlite }, { drizzle }] = await Promise.all([
-          import("@electric-sql/pglite"),
-          import("drizzle-orm/pglite"),
-        ]);
-        const client = await PGlite.create();
+        const { drizzle } = await import("drizzle-orm/pglite");
+        const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
           listen: async (_wake: () => void, failed: () => void) => {
