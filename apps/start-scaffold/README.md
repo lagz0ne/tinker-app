@@ -399,10 +399,6 @@ npx shadcn@4.21.0 add \
   --diff src/backend/mail.ts
 ```
 
-`starter` remains the full demo template for old users.
-`runtime` remains a package-only item for old users.
-New apps start with `app`.
-
 Publishing waits for the user's go.
 No account or domain is needed for an app install.
 [The release steps](../../docs/roadmap/start-base/RELEASE.md)
