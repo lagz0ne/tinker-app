@@ -90,7 +90,7 @@ export async function compressResponse(request, response) {
     headers.delete("etag");
     return new Response(null, { status: 406, headers });
   }
-  if (encoding !== "identity" && response.body !== null) {
+  if (encoding !== "identity" && (response.body !== null || request.method === "HEAD")) {
     headers.set("content-encoding", encoding);
     headers.delete("content-length");
     headers.delete("etag");

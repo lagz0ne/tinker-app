@@ -106,4 +106,9 @@ test("HEAD cancels HTML and returns its negotiated encoding without a body", asy
   expect(response.body).toBeNull();
   expect(response.headers.get("content-encoding")).toBe("br");
   expect(response.headers.get("content-length")).toBeNull();
+  const empty = await compressResponse(
+    new Request("http://app", { method: "HEAD", headers: { "accept-encoding": "br" } }),
+    new Response(null, { headers: { "content-type": "text/html" } }),
+  );
+  expect(empty.headers.get("content-encoding")).toBe("br");
 });
