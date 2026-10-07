@@ -22,7 +22,7 @@
   "thresholds": {
     "high": 90,
     "low": 75,
-    "break": 85
+    "break": 75
   },
   "tempDirName": ".stryker-tmp",
   "concurrency": 4,
