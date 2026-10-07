@@ -1,6 +1,7 @@
 import { resource } from "@tinker/core";
 import { database } from "#tinker/app.server";
 import { raise } from "../../errors";
+import type { event } from "./schema";
 
 /** One native listener wakes all request subscribers; reconnect replaces a broken listener. */
 export const notifications = resource({
@@ -23,8 +24,11 @@ export const notifications = resource({
       waiting?: ReturnType<typeof Promise.withResolvers<void>>;
     };
     const watchers = new Set<Subscriber>();
+    /** Streams at the same cursor borrow one page per wake, as Go's singleflight does. */
+    let reads = new Map<string, Promise<(typeof event.$inferSelect)[]>>();
     const wake = () => {
       revision += 1;
+      reads = new Map();
       for (const subscriber of watchers) {
         if (broken || subscriber.opened !== connection) subscriber.disconnected?.();
         subscriber.waiting?.resolve();
@@ -70,12 +74,24 @@ export const notifications = resource({
       revision() {
         return revision;
       },
+      share(key: string, read: () => PromiseLike<(typeof event.$inferSelect)[]>) {
+        const held = reads.get(key);
+        if (held) return held;
+        const at = reads;
+        const started = Promise.resolve(read()).catch((error) => {
+          at.delete(key);
+          throw error;
+        });
+        at.set(key, started);
+        return started;
+      },
       ended(subscriber: Subscriber) {
         return subscriber.closed || broken || subscriber.opened !== connection;
       },
       close(subscriber: Subscriber) {
         subscriber.closed = true;
         watchers.delete(subscriber);
+        if (!watchers.size) reads.clear();
         subscriber.waiting?.resolve();
       },
       async wait(subscriber: Subscriber, after: number, signal: AbortSignal) {

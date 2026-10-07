@@ -21,6 +21,9 @@ const liveAccount = operation({
     )?.user.id ?? null,
 });
 
+/** A finished wait has no error to report and needs no per-wait exception stack. */
+const waitDone = Symbol("sync.waitDone");
+
 /** The frame a stream sends, then closes on, when its account signed out or changed. */
 const accountChange = 'event: account\ndata: {"kind":"account-change"}\n\n';
 
@@ -43,17 +46,21 @@ export const eventStream = resource({
     let subscription: Awaited<ReturnType<typeof notifications.subscribe>> | undefined;
     let output: ReadableStreamDefaultController<Uint8Array> | undefined;
     let ended = false;
+    let watching: Promise<void> | undefined;
+    let activity = Promise.withResolvers<boolean>();
     const close = () => {
       if (ended) return;
       ended = true;
-      stop.abort();
+      stop.abort(waitDone);
+      activity.resolve(false);
       if (subscription) notifications.close(subscription);
       output?.close();
     };
     signal.addEventListener("abort", close, { once: true });
-    defer(() => {
+    defer(async () => {
       close();
       signal.removeEventListener("abort", close);
+      await watching;
     });
     return {
       async open(initial: Stream.Cursor) {
@@ -78,15 +85,23 @@ export const eventStream = resource({
         let afterWake = -1;
         let authorizedWake = initialAccount === expectedAccount ? openingWake : -1;
         let greeted = false;
+        let checking: Promise<void> | undefined;
         /** Read the account at this wake; a change sends its frame and closes the stream. */
-        const recheck = async (wake: number) => {
-          const current = await account.run();
-          authorizedWake = wake;
-          if (ended) return;
-          if (current !== expectedAccount) {
-            output?.enqueue(encoder.encode(accountChange));
-            close();
-          }
+        const recheck = (wake: number): Promise<void> => {
+          checking ??= account
+            .run()
+            .then((current) => {
+              authorizedWake = wake;
+              if (ended) return;
+              if (current !== expectedAccount) {
+                output?.enqueue(encoder.encode(accountChange));
+                close();
+              }
+            })
+            .finally(() => {
+              checking = undefined;
+            });
+          return checking;
         };
         /** The lease, the listener, and a wake since the last account read. */
         const checkWake = async () => {
@@ -94,28 +109,30 @@ export const eventStream = resource({
             close();
             return notifications.revision();
           }
-          const wake = notifications.revision();
-          if (wake !== authorizedWake) await recheck(wake);
+          while (!ended && notifications.revision() !== authorizedWake)
+            await recheck(notifications.revision());
           return notifications.revision();
         };
         /** Up to 100 events after the cursor: public ones, and the account's own. */
         const readRows = () =>
-          database
-            .select()
-            .from(event)
-            .where(
-              or(
-                and(eq(event.stream, "public"), gt(event.revision, cursor.public)),
-                cursor.private
-                  ? and(
-                      eq(event.stream, cursor.private.accountId),
-                      gt(event.revision, cursor.private.revision),
-                    )
-                  : undefined,
-              ),
-            )
-            .orderBy(asc(event.stream), asc(event.revision))
-            .limit(100);
+          notifications.share(JSON.stringify(cursor), () =>
+            database
+              .select()
+              .from(event)
+              .where(
+                or(
+                  and(eq(event.stream, "public"), gt(event.revision, cursor.public)),
+                  cursor.private
+                    ? and(
+                        eq(event.stream, cursor.private.accountId),
+                        gt(event.revision, cursor.private.revision),
+                      )
+                    : undefined,
+                ),
+              )
+              .orderBy(asc(event.stream), asc(event.revision))
+              .limit(100),
+          );
         /** The rows after the cursor, as one frame; false when there are none. */
         const replay = async (
           wake: number,
@@ -123,13 +140,14 @@ export const eventStream = resource({
         ) => {
           if (wake === afterWake) return false;
           const rows = await readRows();
-          const replayWake = notifications.revision();
-          if (replayWake !== authorizedWake) await recheck(replayWake);
+          await checkWake();
           if (ended) return true;
           if (!rows.length) {
             afterWake = wake;
             return false;
           }
+          /** A short page has every row at this wake, so the next pull waits. */
+          if (rows.length < 100) afterWake = wake;
           for (const row of rows) {
             if (row.stream === "public") cursor.public = row.revision;
             else if (cursor.private) cursor.private.revision = row.revision;
@@ -141,56 +159,82 @@ export const eventStream = resource({
           );
           return true;
         };
-        /** The greeting once, then a wake (false) or a heartbeat after 10 s (true). */
-        const greetOrWait = async (controller: ReadableStreamDefaultController<Uint8Array>) => {
+        /** The request owns this loop even while the client holds no pending read. */
+        const watch = async () => {
+          try {
+            while (!ended) {
+              const wake = await checkWake();
+              if (ended) return;
+              const waiting = new AbortController();
+              const waitingSignal = AbortSignal.any([signal, waiting.signal]);
+              let heartbeat: boolean;
+              try {
+                heartbeat = await Promise.race([
+                  notifications.wait(changes, wake, waitingSignal).then(() => false),
+                  clock
+                    .sleep(Math.min(10_000, lease - clock.currentTimeMillis()), waitingSignal)
+                    .then(() => true),
+                ]);
+              } finally {
+                waiting.abort(waitDone);
+              }
+              await checkWake();
+              if (heartbeat && !ended) {
+                await recheck(notifications.revision());
+                await checkWake();
+              }
+              activity.resolve(heartbeat);
+              activity = Promise.withResolvers();
+            }
+          } catch (error) {
+            fail(error);
+          }
+        };
+        const fail = (error: unknown) => {
+          if (signal.aborted) {
+            close();
+            return;
+          }
+          ended = true;
+          stop.abort(waitDone);
+          activity.resolve(false);
+          notifications.close(changes);
+          output?.error(error);
+        };
+        /** Heartbeats are sent only for a pending pull; stalled clients buffer no heartbeat. */
+        const greetOrWait = async (
+          controller: ReadableStreamDefaultController<Uint8Array>,
+          awake: Promise<boolean>,
+        ) => {
           if (ended || notifications.revision() !== afterWake) return false;
           if (!greeted) {
             greeted = true;
             controller.enqueue(encoder.encode(": connected\n\n"));
             return true;
           }
-          const waiting = new AbortController();
-          const waitingSignal = AbortSignal.any([signal, waiting.signal]);
-          try {
-            const outcome = await Promise.race([
-              notifications.wait(changes, afterWake, waitingSignal).then(() => "changed"),
-              clock.sleep(10_000, waitingSignal).then(() => "heartbeat"),
-            ]);
-            if (outcome !== "heartbeat") return false;
-            await recheck(notifications.revision());
-            if (!ended) {
-              const latestWake = notifications.revision();
-              if (latestWake !== authorizedWake) await recheck(latestWake);
-            }
-            if (!ended) controller.enqueue(encoder.encode(": heartbeat\n\n"));
-            return true;
-          } finally {
-            waiting.abort();
-          }
+          const heartbeat = await awake;
+          await checkWake();
+          if (heartbeat && !ended) controller.enqueue(encoder.encode(": heartbeat\n\n"));
+          return heartbeat;
         };
         return new ReadableStream<Uint8Array>(
           {
             start(controller) {
               output = controller;
               if (ended) controller.close();
+              else watching = watch();
             },
             async pull(controller) {
               try {
                 while (!ended) {
+                  const awake = activity.promise;
                   const wake = await checkWake();
                   if (ended) return;
                   if (await replay(wake, controller)) return;
-                  if (await greetOrWait(controller)) return;
+                  if (await greetOrWait(controller, awake)) return;
                 }
               } catch (error) {
-                if (signal.aborted) {
-                  close();
-                  return;
-                }
-                ended = true;
-                stop.abort();
-                notifications.close(changes);
-                controller.error(error);
+                fail(error);
               }
             },
             cancel() {

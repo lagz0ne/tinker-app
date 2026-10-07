@@ -409,7 +409,10 @@ The package's `exports` refuses every other path.
   - Then it greets once (`: connected`),
     and sends each commit as it lands.
   - A quiet stream sends `: heartbeat` each 10 s,
-    and closes at its 30 s lease. Each heartbeat
+    and closes at its 30 s lease, even if the client stops reading.
+    Heartbeat account checks run even for a stalled client.
+    Heartbeats wait for a client read; they do not build a queue.
+    Each heartbeat
     re-reads the account first; a sign-out found
     then sends the account frame instead.
   - The stream reads the account fresh each time:
@@ -431,6 +434,9 @@ The package's `exports` refuses every other path.
   - Notifications wake after a commit
     and stay silent on a rollback;
     a read made before waiting still wakes.
+  - Streams at the same cursor share one row read per wake.
+    A short page skips the empty read after it.
+    Private rows stay apart by account; each session checks sign-out.
   - One listener wakes every stream.
     A root that never listened closes clean.
     A closed subscriber is not told when it breaks.

@@ -285,17 +285,7 @@ test("an anonymous stream that signs in is an account change too", async () => {
 
 test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and at a heartbeat after sign-out", async () => {
   const time = makeTestClock();
-  let sleeping = Promise.withResolvers<number>();
-  const clock = {
-    currentTimeMillis: () => time.currentTimeMillis(),
-    currentTimeNanos: () => time.currentTimeNanos(),
-    sleep: (ms: number, signal?: AbortSignal) => {
-      const slept = time.sleep(ms, signal);
-      sleeping.resolve(ms);
-      sleeping = Promise.withResolvers();
-      return slept;
-    },
-  };
+  const clock = time;
   const stop = new AbortController();
   const accounts = new Set(["ada"]);
   const root = createScope({
@@ -307,13 +297,13 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
     await quiet.run(openSync, { input: { cursor: { public: 0, private: null } } })
   ).getReader();
   expect(await text(reader.read())).toBe(": connected\n\n");
-  for (const at of [10_000, 20_000, 30_000]) {
-    const slept = sleeping.promise;
+  for (const at of [10_000, 20_000]) {
     const held = reader.read();
-    expect(await slept).toBe(10_000);
+    await settledFirst(held);
     time.advance(10_000);
     expect([at, await text(held)]).toEqual([at, ": heartbeat\n\n"]);
   }
+  time.advance(10_000);
   expect((await reader.read()).done).toBe(true);
   expect((await quiet.close({ graceful: true })).status).toBe("success");
   const ada = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
@@ -323,9 +313,8 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
     })
   ).getReader();
   expect(await text(own.read())).toBe(": connected\n\n");
-  const slept = sleeping.promise;
   const held = own.read();
-  expect(await slept).toBe(10_000);
+  await settledFirst(held);
   accounts.delete("ada");
   time.advance(10_000);
   expect(await text(held)).toBe(account);
@@ -754,7 +743,7 @@ test("the sync part's work shows on the trace under its own names", async () => 
  * The fixture database without its native listener: the test wakes streams by hand, so a commit
  * wakes none by itself.
  */
-function handWoken() {
+function handWoken(logQuery?: (query: string) => void) {
   const wakes: (() => void)[] = [];
   const db = preset(database, async (_deps, { defer }) => {
     const [{ PGlite }, { drizzle }] = await Promise.all([
@@ -764,7 +753,7 @@ function handWoken() {
     const client = await PGlite.create();
     defer(() => client.close());
     await client.exec(syncTables);
-    return Object.assign(drizzle({ client }), {
+    return Object.assign(drizzle({ client, logger: logQuery ? { logQuery } : undefined }), {
       listen: async (wake: () => void) => {
         wakes.push(wake);
         return () => undefined;
@@ -859,17 +848,7 @@ test("only the check after the rows read can stop rows of an account that signed
 
 test("a sign-out that lands during the heartbeat's account read sends the account frame, not a heartbeat", async () => {
   const time = makeTestClock();
-  let sleeping = Promise.withResolvers<number>();
-  const clock = {
-    currentTimeMillis: () => time.currentTimeMillis(),
-    currentTimeNanos: () => time.currentTimeNanos(),
-    sleep: (ms: number, signal?: AbortSignal) => {
-      const slept = time.sleep(ms, signal);
-      sleeping.resolve(ms);
-      sleeping = Promise.withResolvers();
-      return slept;
-    },
-  };
+  const clock = time;
   const { db, wake } = handWoken();
   const reads = accountReads(["ada", "ada", null], { 2: () => wake() });
   const stop = new AbortController();
@@ -885,9 +864,8 @@ test("a sign-out that lands during the heartbeat's account read sends the accoun
     })
   ).getReader();
   expect(await text(reader.read())).toBe(": connected\n\n");
-  const slept = sleeping.promise;
   const held = reader.read();
-  expect(await slept).toBe(10_000);
+  await settledFirst(held);
   time.advance(10_000);
   expect(await text(held)).toBe(account);
   expect((await reader.read()).done).toBe(true);
@@ -1012,17 +990,7 @@ test("a closed subscriber is not told when the listener breaks", async () => {
 
 test("a quiet stream reads the account once per heartbeat, and once more only for a wake during it", async () => {
   const time = makeTestClock();
-  let sleeping = Promise.withResolvers<number>();
-  const clock = {
-    currentTimeMillis: () => time.currentTimeMillis(),
-    currentTimeNanos: () => time.currentTimeNanos(),
-    sleep: (ms: number, signal?: AbortSignal) => {
-      const slept = time.sleep(ms, signal);
-      sleeping.resolve(ms);
-      sleeping = Promise.withResolvers();
-      return slept;
-    },
-  };
+  const clock = time;
   const { db } = handWoken();
   const reads = accountReads(["ada", "ada", null]);
   const stop = new AbortController();
@@ -1038,15 +1006,13 @@ test("a quiet stream reads the account once per heartbeat, and once more only fo
     })
   ).getReader();
   expect(await text(reader.read())).toBe(": connected\n\n");
-  let slept = sleeping.promise;
   let held = reader.read();
-  expect(await slept).toBe(10_000);
+  await settledFirst(held);
   time.advance(10_000);
   expect(await text(held)).toBe(": heartbeat\n\n");
   expect(reads.reads()).toBe(2);
-  slept = sleeping.promise;
   held = reader.read();
-  expect(await slept).toBe(10_000);
+  await settledFirst(held);
   time.advance(10_000);
   expect(await text(held)).toBe(account);
   expect((await reader.read()).done).toBe(true);
@@ -1081,5 +1047,201 @@ test("a private cursor resumes past revision 0", async () => {
   if (opened.status !== "success") throw opened;
   await opened.value.cancel();
   expect((await ada.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the lease closes a client that stopped reading", async () => {
+  const clock = makeTestClock();
+  const stop = new AbortController();
+  const root = createScope({
+    clock,
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  const session = root.createSession();
+  const reader = (
+    await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  let closed = false;
+  const closing = reader.closed.then(() => {
+    closed = true;
+  });
+  clock.advance(30_000);
+  for (let turn = 0; turn < 100 && !closed; turn += 1) await Promise.resolve();
+  const closedBeforeReading = closed;
+  await reader.cancel();
+  await closing;
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  expect(closedBeforeReading).toBe(true);
+});
+
+test("a heartbeat checks sign-out even when the client stopped reading", async () => {
+  const clock = makeTestClock();
+  const stop = new AbortController();
+  const reads = accountReads(["ada", null]);
+  const root = createScope({
+    clock,
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    presets: [reads.auth],
+  });
+  const session = root.createSession();
+  const reader = (
+    await session.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  clock.advance(10_000);
+  for (let turn = 0; turn < 100 && reads.reads() === 1; turn += 1) await Promise.resolve();
+  const checkedBeforeReading = reads.reads();
+  expect(await text(reader.read())).toBe(account);
+  expect((await reader.read()).done).toBe(true);
+  await reader.cancel();
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  expect(checkedBeforeReading).toBe(2);
+});
+
+test("streams at the same cursor share one read per wake and skip the empty read after a short page", async () => {
+  const queries: string[] = [];
+  const { db, wake } = handWoken((query) => {
+    if (query.startsWith("select") && query.includes('from "sync_event"')) queries.push(query);
+  });
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    presets: [db],
+  });
+  const first = root.createSession();
+  const second = root.createSession();
+  const cursor = { public: 0, private: null };
+  const readers = await Promise.all(
+    [first, second].map(async (session) =>
+      (await session.run(openSync, { input: { cursor } })).getReader(),
+    ),
+  );
+  expect(await Promise.all(readers.map((reader) => text(reader.read())))).toEqual([
+    ": connected\n\n",
+    ": connected\n\n",
+  ]);
+  const held = readers.map((reader) => reader.read());
+  await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
+  wake();
+  const frame = changesFrame([row("public", 1, ids[0], 1)], { public: 1, private: null });
+  expect(await Promise.all(held.map(text))).toEqual([frame, frame]);
+  const next = readers.map((reader) => reader.read());
+  for (let turn = 0; turn < 100; turn += 1) await Promise.resolve();
+  const reads = queries.length;
+  await Promise.all(readers.map((reader) => reader.cancel()));
+  await Promise.all(next);
+  expect((await first.close({ graceful: true })).status).toBe("success");
+  expect((await second.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  expect(reads).toBe(2);
+});
+
+test("shared private rows keep accounts apart and check each session after sign-out", async () => {
+  const { db, wake } = handWoken();
+  const live = new Set(["ada-one", "ada-two", "grace"]);
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [
+      db,
+      preset(auth, () => ({
+        handler: async () => new Response(null),
+        api: {
+          getSession: async ({ headers }: { headers: Headers }) => {
+            const token = headers.get("x-session");
+            const id = headers.get("x-account");
+            return token !== null && id !== null && live.has(token) ? { user: { id } } : null;
+          },
+        },
+      })),
+    ],
+  });
+  const tabs = [
+    { id: "ada", token: "ada-one" },
+    { id: "ada", token: "ada-two" },
+    { id: "grace", token: "grace" },
+  ].map(({ id, token }) => ({
+    id,
+    session: root.createSession({
+      tags: requestHeaders(new Headers({ "x-account": id, "x-session": token })),
+    }),
+  }));
+  const readers = await Promise.all(
+    tabs.map(async ({ id, session }) =>
+      (
+        await session.run(openSync, {
+          input: { cursor: { public: 0, private: { accountId: id, revision: 0 } } },
+        })
+      ).getReader(),
+    ),
+  );
+  expect(await Promise.all(readers.map((reader) => text(reader.read())))).toEqual(
+    tabs.map(() => ": connected\n\n"),
+  );
+  live.delete("ada-one");
+  await root.run(publish, {
+    input: { stream: "ada", executionId: ids[0], changes: ["ada secret"] },
+  });
+  await root.run(publish, {
+    input: { stream: "grace", executionId: ids[1], changes: ["grace secret"] },
+  });
+  wake();
+  expect(await Promise.all(readers.map((reader) => text(reader.read())))).toEqual([
+    account,
+    changesFrame([row("ada", 1, ids[0], "ada secret")], {
+      public: 0,
+      private: { accountId: "ada", revision: 1 },
+    }),
+    changesFrame([row("grace", 1, ids[1], "grace secret")], {
+      public: 0,
+      private: { accountId: "grace", revision: 1 },
+    }),
+  ]);
+  await Promise.all(readers.map((reader) => reader.cancel()));
+  for (const { session } of tabs)
+    expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a failed shared row read can be retried by another open stream", async () => {
+  const rename = operation({
+    label: "test.renameEvents",
+    input: z.boolean(),
+    depends: { database },
+    run: async ({ database }, { input }) => {
+      const { sql } = await import("drizzle-orm");
+      await database.execute(
+        input
+          ? sql`ALTER TABLE sync_event RENAME TO held_event`
+          : sql`ALTER TABLE held_event RENAME TO sync_event`,
+      );
+    },
+  });
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  const first = root.createSession();
+  const second = root.createSession();
+  const cursor = { public: 0, private: null };
+  const readers = await Promise.all(
+    [first, second].map(async (session) =>
+      (await session.run(openSync, { input: { cursor } })).getReader(),
+    ),
+  );
+  await root.run(rename, { input: true });
+  await expect(readers[0]?.read()).rejects.toBeDefined();
+  await root.run(rename, { input: false });
+  const survivor = readers[1];
+  if (!survivor) throw new Error("missing stream fixture");
+  expect(await text(survivor.read())).toBe(": connected\n\n");
+  await survivor.cancel();
+  expect((await first.close({ graceful: true })).status).toBe("success");
+  expect((await second.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
