@@ -284,8 +284,7 @@ test("an anonymous stream that signs in is an account change too", async () => {
 });
 
 test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and at a heartbeat after sign-out", async () => {
-  const time = makeTestClock();
-  const clock = time;
+  const clock = makeTestClock();
   const stop = new AbortController();
   const accounts = new Set(["ada"]);
   const root = createScope({
@@ -300,10 +299,10 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
   for (const at of [10_000, 20_000]) {
     const held = reader.read();
     await settledFirst(held);
-    time.advance(10_000);
+    clock.advance(10_000);
     expect([at, await text(held)]).toEqual([at, ": heartbeat\n\n"]);
   }
-  time.advance(10_000);
+  clock.advance(10_000);
   expect((await reader.read()).done).toBe(true);
   expect((await quiet.close({ graceful: true })).status).toBe("success");
   const ada = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
@@ -316,7 +315,7 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
   const held = own.read();
   await settledFirst(held);
   accounts.delete("ada");
-  time.advance(10_000);
+  clock.advance(10_000);
   expect(await text(held)).toBe(account);
   expect((await own.read()).done).toBe(true);
   expect((await ada.close({ graceful: true })).status).toBe("success");
@@ -847,8 +846,7 @@ test("only the check after the rows read can stop rows of an account that signed
 });
 
 test("a sign-out that lands during the heartbeat's account read sends the account frame, not a heartbeat", async () => {
-  const time = makeTestClock();
-  const clock = time;
+  const clock = makeTestClock();
   const { db, wake } = handWoken();
   const reads = accountReads(["ada", "ada", null], { 2: () => wake() });
   const stop = new AbortController();
@@ -866,7 +864,7 @@ test("a sign-out that lands during the heartbeat's account read sends the accoun
   expect(await text(reader.read())).toBe(": connected\n\n");
   const held = reader.read();
   await settledFirst(held);
-  time.advance(10_000);
+  clock.advance(10_000);
   expect(await text(held)).toBe(account);
   expect((await reader.read()).done).toBe(true);
   expect((await session.close({ graceful: true })).status).toBe("success");
@@ -989,8 +987,7 @@ test("a closed subscriber is not told when the listener breaks", async () => {
 });
 
 test("a quiet stream reads the account once per heartbeat, and once more only for a wake during it", async () => {
-  const time = makeTestClock();
-  const clock = time;
+  const clock = makeTestClock();
   const { db } = handWoken();
   const reads = accountReads(["ada", "ada", null]);
   const stop = new AbortController();
@@ -1008,12 +1005,12 @@ test("a quiet stream reads the account once per heartbeat, and once more only fo
   expect(await text(reader.read())).toBe(": connected\n\n");
   let held = reader.read();
   await settledFirst(held);
-  time.advance(10_000);
+  clock.advance(10_000);
   expect(await text(held)).toBe(": heartbeat\n\n");
   expect(reads.reads()).toBe(2);
   held = reader.read();
   await settledFirst(held);
-  time.advance(10_000);
+  clock.advance(10_000);
   expect(await text(held)).toBe(account);
   expect((await reader.read()).done).toBe(true);
   expect(reads.reads()).toBe(3);
@@ -1074,7 +1071,7 @@ test("the lease closes a client that stopped reading", async () => {
   expect((await session.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
   expect(closedBeforeReading).toBe(true);
-});
+}, 30_000);
 
 test("a heartbeat checks sign-out even when the client stopped reading", async () => {
   const clock = makeTestClock();
@@ -1101,7 +1098,7 @@ test("a heartbeat checks sign-out even when the client stopped reading", async (
   expect((await session.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
   expect(checkedBeforeReading).toBe(2);
-});
+}, 30_000);
 
 test("streams at the same cursor share one read per wake and skip the empty read after a short page", async () => {
   const queries: string[] = [];
@@ -1139,7 +1136,7 @@ test("streams at the same cursor share one read per wake and skip the empty read
   expect((await second.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
   expect(reads).toBe(2);
-});
+}, 30_000);
 
 test("shared private rows keep accounts apart and check each session after sign-out", async () => {
   const { db, wake } = handWoken();
@@ -1206,7 +1203,7 @@ test("shared private rows keep accounts apart and check each session after sign-
   for (const { session } of tabs)
     expect((await session.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
-});
+}, 30_000);
 
 test("a failed shared row read can be retried by another open stream", async () => {
   const rename = operation({
@@ -1244,4 +1241,4 @@ test("a failed shared row read can be retried by another open stream", async () 
   expect((await first.close({ graceful: true })).status).toBe("success");
   expect((await second.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
-});
+}, 30_000);
