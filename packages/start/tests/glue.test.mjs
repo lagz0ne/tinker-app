@@ -128,11 +128,13 @@ test("the app's src/routes/__root.tsx replaces the base shell", () => {
 });
 
 test("Start's static output options pass on; an unknown option fails the build", () => {
-  expect(passThrough({ root: "/app", prerender: { enabled: true } })).toStrictEqual({
+  expect(
+    passThrough({ root: "/app", compileHints: false, prerender: { enabled: true } }),
+  ).toStrictEqual({
     prerender: { enabled: true },
   });
   expect(() => passThrough({ prerendr: {}, sap: {} })).toThrow(
-    "tinker(): unknown option prerendr, sap; known: root, prerender, pages, spa, sitemap, telemetry, auth, sync",
+    "tinker(): unknown option prerendr, sap; known: root, compileHints, prerender, pages, spa, sitemap, telemetry, auth, sync",
   );
   expect(passThrough({ telemetry: false, auth: true, spa: { enabled: true } })).toStrictEqual({
     spa: { enabled: true },

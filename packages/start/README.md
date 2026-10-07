@@ -591,3 +591,27 @@ database startup extension.
 Doctor accepts its re-export, an imported startup extension,
 or a spread of the copied demo's extensions beside your own.
 Example requirements also stop a build until they are joined.
+
+## Built files and compression
+
+- `tinker serve` reads the built file list once at start.
+  A new build needs a host restart.
+- The build writes `.br` and `.gz` copies of JS, CSS,
+  and HTML files that exist when client output is written.
+- The host picks Brotli or gzip from `Accept-Encoding`.
+  With no copy, it compresses JS, CSS, and HTML on demand.
+  HTML from the app keeps streaming.
+- Responses that can be compressed have
+  `Vary: Accept-Encoding`, even when sent plain.
+- Hashed files under `/assets/` have a one-year cache.
+  Other built files need revalidation.
+- HEAD returns headers with no body.
+- Chrome's client entry has the compile hint on by default.
+  Chrome can compile its functions off the main thread.
+  This uses more memory for functions that never run.
+  Other browsers ignore the comment.
+  To turn it off:
+
+  ```ts
+  tinker({ compileHints: false });
+  ```

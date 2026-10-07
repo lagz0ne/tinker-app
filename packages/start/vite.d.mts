@@ -5,6 +5,8 @@ type StartOptions = NonNullable<Parameters<typeof tanstackStart>[0]>;
 export declare function tinker(
   options?: {
     root?: string;
+    /** Chrome compiles the client entry eagerly; on by default. */
+    compileHints?: boolean;
     /** The telemetry part: on by default; off frees `/api/telemetry` for the app. */
     telemetry?: boolean;
     /** The auth part: off by default; on mounts `/api/auth/$` and reads the server seam. */

@@ -8,7 +8,8 @@ import { generatorBlocked, staleTree } from "../lib/checks/generated.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { loadEnv } from "../lib/env.mjs";
 import { prepare, prepareExitCode } from "../lib/prepare.mjs";
-import { asset } from "../lib/serve.mjs";
+import { createAssets } from "../lib/serve.mjs";
+import { compressResponse } from "../lib/compression.mjs";
 import { upgrade } from "../lib/upgrade.mjs";
 
 /**
@@ -30,11 +31,13 @@ async function writeRouteTree(root) {
 async function serve(root) {
   loadEnv(root);
   const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
+  const asset = await createAssets(root);
   const server = listen({
     overrideGlobalObjects: false,
     hostname: process.env.HOST ?? "127.0.0.1",
     port: Number(process.env.PORT ?? 4318),
-    fetch: async (request) => (await asset(root, request)) ?? built.default.fetch(request),
+    fetch: async (request) =>
+      (await asset(request)) ?? compressResponse(request, await built.default.fetch(request)),
   });
   console.log(
     `tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${process.env.PORT ?? 4318}`,
