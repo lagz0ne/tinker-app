@@ -1,6 +1,7 @@
 {
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
   "name": "runtime",
+  "type": "registry:file",
   "title": "Tinkered Start base package",
   "description": "Install the base package. No runtime source is copied.",
   "dependencies": ["@tinker/start@0.6.0"],
@@ -8,7 +9,6 @@
   "meta": {
     "version": "0.6.0",
     "ownership": "package",
-    "update": "Update @tinker/start with tinker upgrade; it never writes src/."
-  },
-  "type": "registry:file"
+    "update": "Compatibility item only. Install app for a new folder; update the base with tinker upgrade."
+  }
 }

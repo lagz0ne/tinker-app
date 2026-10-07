@@ -1,0 +1,73 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "app",
+  "type": "registry:item",
+  "title": "Small Start app",
+  "description": "Write once into an empty folder. The base stays in its package; examples are user files.",
+  "files": [
+    {
+      "path": "app.package.json",
+      "type": "registry:file",
+      "target": "~/package.json",
+      "content": "{\n  \"name\": \"tinker-app\",\n  \"version\": \"0.0.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"dev\": \"vp dev\",\n    \"build\": \"vp build\",\n    \"start\": \"tinker serve\",\n    \"doctor\": \"tinker doctor\",\n    \"typecheck\": \"tsc --noEmit\",\n    \"postinstall\": \"tinker prepare\"\n  },\n  \"dependencies\": {\n    \"@tanstack/react-router\": \"1.170.41\",\n    \"@tanstack/react-start\": \"1.168.60\",\n    \"@tinker/core\": \"0.0.0\",\n    \"@tinker/react\": \"0.0.0\",\n    \"@tinker/start\": \"0.6.0\",\n    \"react\": \"^19.3.0\",\n    \"react-dom\": \"^19.3.0\",\n    \"zod\": \"^4.0.0\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^24\",\n    \"@types/react\": \"^19\",\n    \"@types/react-dom\": \"^19\",\n    \"typescript\": \"^7.0.2\",\n    \"vite\": \"npm:@voidzero-dev/vite-plus-core@1.0.0\",\n    \"vite-plus\": \"1.0.0\"\n  },\n  \"overrides\": {\n    \"vite\": \"$vite\"\n  }\n}\n"
+    },
+    {
+      "path": "../start-min/vite.config.ts",
+      "type": "registry:file",
+      "target": "~/vite.config.ts",
+      "content": "import { defineConfig } from \"vite-plus\";\nimport { tinker } from \"@tinker/start/vite\";\n\nexport default defineConfig({\n  plugins: [tinker()],\n});\n"
+    },
+    {
+      "path": "../start-min/tsconfig.json",
+      "type": "registry:file",
+      "target": "~/tsconfig.json",
+      "content": "{ \"extends\": \"./.tinker/tsconfig.json\" }\n"
+    },
+    {
+      "path": "../start-min/src/backend/greet.ts",
+      "type": "registry:file",
+      "target": "~/src/backend/greet.ts",
+      "content": "import { operation } from \"@tinker/core\";\nimport { z } from \"zod\";\n\nexport const greet = operation({\n  label: \"greet\",\n  input: z.object({ name: z.string().min(1) }),\n  run: (_deps, { input }) => ({ text: `Hello, ${input.name}.` }),\n});\n"
+    },
+    {
+      "path": "../start-min/src/routes/index.tsx",
+      "type": "registry:file",
+      "target": "~/src/routes/index.tsx",
+      "content": "import { createFileRoute } from \"@tanstack/react-router\";\nimport { createServerFn } from \"@tanstack/react-start\";\nimport { startRequests } from \"@tinker/start\";\nimport { readResult } from \"@tinker/start/server\";\nimport { greet } from \"../backend/greet.ts\";\n\nconst runGreet = createServerFn({ method: \"GET\" })\n  .middleware([startRequests.middleware])\n  .handler(async ({ context }) =>\n    readResult(\n      await context.session.settle(greet, {\n        input: { name: \"world\" },\n        signal: context.signal,\n      }),\n    ),\n  );\n\nexport const Route = createFileRoute(\"/\")({\n  loader: () => runGreet(),\n  component: () => <p>{Route.useLoaderData().text}</p>,\n});\n"
+    },
+    {
+      "path": "templates/tinker.ts.txt",
+      "type": "registry:file",
+      "target": "~/src/lib/tinker.ts",
+      "content": "export const extensions = [];\n"
+    },
+    {
+      "path": "templates/tinker.server.ts.txt",
+      "type": "registry:file",
+      "target": "~/src/lib/tinker.server.ts",
+      "content": "export const extensions = [];\n"
+    },
+    {
+      "path": "templates/env.example",
+      "type": "registry:file",
+      "target": "~/.env.example",
+      "content": "# The small app uses the base defaults. No settings are required.\n# Uncomment these in .env to choose a host and port.\n# HOST=127.0.0.1\n# PORT=4318\n"
+    },
+    {
+      "path": "templates/gitignore",
+      "type": "registry:file",
+      "target": "~/.gitignore",
+      "content": "node_modules/\n.env\n.env.*\n!.env.example\n.tinker/\n.tanstack/\ndist/\n"
+    },
+    {
+      "path": "components.json",
+      "type": "registry:file",
+      "target": "~/components.json",
+      "content": "{\n  \"$schema\": \"https://ui.shadcn.com/schema.json\",\n  \"style\": \"new-york\",\n  \"rsc\": false,\n  \"tsx\": true,\n  \"tailwind\": {\n    \"config\": \"\",\n    \"css\": \"src/style.css\",\n    \"baseColor\": \"neutral\",\n    \"cssVariables\": true\n  },\n  \"aliases\": {\n    \"components\": \"@/frontend\",\n    \"ui\": \"@/frontend/ui\",\n    \"utils\": \"@/frontend/ui/classes\",\n    \"lib\": \"@/lib\",\n    \"hooks\": \"@/frontend\"\n  },\n  \"iconLibrary\": \"lucide\"\n}\n"
+    }
+  ],
+  "meta": {
+    "ownership": "install-only",
+    "update": "Never re-apply app. Use tinker upgrade for the base and shadcn add --diff for examples."
+  }
+}

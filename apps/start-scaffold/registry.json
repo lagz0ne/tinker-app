@@ -1,8 +1,70 @@
 {
   "$schema": "https://ui.shadcn.com/schema/registry.json",
   "name": "tinker-start",
-  "homepage": "https://p-50f124fdfa9c.preview.tini.works",
+  "homepage": "http://127.0.0.1:4870",
   "items": [
+    {
+      "name": "app",
+      "type": "registry:item",
+      "title": "Small Start app",
+      "description": "Write once into an empty folder. The base stays in its package; examples are user files.",
+      "files": [
+        {
+          "path": "app.package.json",
+          "type": "registry:file",
+          "target": "~/package.json"
+        },
+        {
+          "path": "../start-min/vite.config.ts",
+          "type": "registry:file",
+          "target": "~/vite.config.ts"
+        },
+        {
+          "path": "../start-min/tsconfig.json",
+          "type": "registry:file",
+          "target": "~/tsconfig.json"
+        },
+        {
+          "path": "../start-min/src/backend/greet.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/greet.ts"
+        },
+        {
+          "path": "../start-min/src/routes/index.tsx",
+          "type": "registry:file",
+          "target": "~/src/routes/index.tsx"
+        },
+        {
+          "path": "templates/tinker.ts.txt",
+          "type": "registry:file",
+          "target": "~/src/lib/tinker.ts"
+        },
+        {
+          "path": "templates/tinker.server.ts.txt",
+          "type": "registry:file",
+          "target": "~/src/lib/tinker.server.ts"
+        },
+        {
+          "path": "templates/env.example",
+          "type": "registry:file",
+          "target": "~/.env.example"
+        },
+        {
+          "path": "templates/gitignore",
+          "type": "registry:file",
+          "target": "~/.gitignore"
+        },
+        {
+          "path": "components.json",
+          "type": "registry:file",
+          "target": "~/components.json"
+        }
+      ],
+      "meta": {
+        "ownership": "install-only",
+        "update": "Never re-apply app. Use tinker upgrade for the base and shadcn add --diff for examples."
+      }
+    },
     {
       "name": "runtime",
       "type": "registry:file",
@@ -13,7 +75,7 @@
       "meta": {
         "version": "0.6.0",
         "ownership": "package",
-        "update": "Update @tinker/start with tinker upgrade; it never writes src/."
+        "update": "Compatibility item only. Install app for a new folder; update the base with tinker upgrade."
       }
     },
     {
@@ -56,9 +118,11 @@
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
-        "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them.",
-        "parts": ["auth", "sync"]
-      }
+        "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
+        "parts": ["auth", "sync"],
+        "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
+      },
+      "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
     {
       "name": "profile-example",
@@ -100,9 +164,11 @@
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
-        "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them.",
-        "parts": ["auth", "sync"]
-      }
+        "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
+        "parts": ["auth", "sync"],
+        "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
+      },
+      "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
     {
       "name": "auth-pages-example",
@@ -144,9 +210,11 @@
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
-        "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them.",
-        "parts": ["auth", "sync"]
-      }
+        "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
+        "parts": ["auth", "sync"],
+        "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
+      },
+      "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
     {
       "name": "mail-example",
@@ -158,14 +226,22 @@
           "path": "src/backend/mail.ts",
           "type": "registry:file",
           "target": "~/src/backend/mail.ts"
+        },
+        {
+          "path": "src/errors.ts",
+          "type": "registry:file",
+          "target": "~/src/errors.ts"
         }
       ],
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
-        "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them.",
-        "parts": []
-      }
+        "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
+        "parts": [],
+        "requires": "No base parts or Postgres. SMTP settings are needed only when sendMail runs."
+      },
+      "dependencies": ["nodemailer@10.0.13"],
+      "devDependencies": ["@types/nodemailer@^7.0.11"]
     },
     {
       "name": "counter-example",
@@ -192,9 +268,11 @@
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
-        "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them.",
-        "parts": ["auth", "sync"]
-      }
+        "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
+        "parts": ["auth", "sync"],
+        "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
+      },
+      "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
     {
       "name": "example-wiring",
@@ -356,28 +434,312 @@
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
-        "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them.",
-        "parts": ["auth", "sync"]
-      }
+        "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
+        "parts": ["auth", "sync"],
+        "requires": "This demo shares all feature bodies and page links. Its dependency installs the complete Postgres demo and enables auth and sync."
+      },
+      "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
     {
       "name": "postgres-auth-mail-example",
       "type": "registry:file",
       "title": "All examples with their shared wiring",
       "description": "All examples with their shared wiring",
-      "files": [],
+      "files": [
+        {
+          "path": "src/backend/todos.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/todos.ts"
+        },
+        {
+          "path": "src/backend/todos.schema.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/todos.schema.ts"
+        },
+        {
+          "path": "src/contracts/todos.ts",
+          "type": "registry:file",
+          "target": "~/src/contracts/todos.ts"
+        },
+        {
+          "path": "src/frontend/Todos.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/Todos.tsx"
+        },
+        {
+          "path": "src/routes/todos.tsx",
+          "type": "registry:file",
+          "target": "~/src/routes/todos.tsx"
+        },
+        {
+          "path": "src/transport/todos.functions.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/todos.functions.ts"
+        },
+        {
+          "path": "src/backend/profile.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/profile.ts"
+        },
+        {
+          "path": "src/contracts/profile.ts",
+          "type": "registry:file",
+          "target": "~/src/contracts/profile.ts"
+        },
+        {
+          "path": "src/frontend/Profile.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/Profile.tsx"
+        },
+        {
+          "path": "src/frontend/profile-actions.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/profile-actions.ts"
+        },
+        {
+          "path": "src/routes/profile.tsx",
+          "type": "registry:file",
+          "target": "~/src/routes/profile.tsx"
+        },
+        {
+          "path": "src/transport/profile.functions.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/profile.functions.ts"
+        },
+        {
+          "path": "src/backend/auth.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/auth.ts"
+        },
+        {
+          "path": "src/backend/schema.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/schema.ts"
+        },
+        {
+          "path": "src/contracts/credentials.ts",
+          "type": "registry:file",
+          "target": "~/src/contracts/credentials.ts"
+        },
+        {
+          "path": "src/frontend/App.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/App.tsx"
+        },
+        {
+          "path": "src/frontend/auth-actions.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/auth-actions.ts"
+        },
+        {
+          "path": "src/routes/index.tsx",
+          "type": "registry:file",
+          "target": "~/src/routes/index.tsx"
+        },
+        {
+          "path": "src/backend/mail.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/mail.ts"
+        },
+        {
+          "path": "src/backend/counter.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/counter.ts"
+        },
+        {
+          "path": "src/frontend/Counter.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/Counter.tsx"
+        },
+        {
+          "path": "src/transport/counter.functions.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/counter.functions.ts"
+        },
+        {
+          "path": "drizzle/20261002031710_past_preak/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002031710_past_preak/migration.sql"
+        },
+        {
+          "path": "drizzle/20261002031710_past_preak/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002031710_past_preak/snapshot.json"
+        },
+        {
+          "path": "drizzle/20261002051447_steady_mother_askani/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002051447_steady_mother_askani/migration.sql"
+        },
+        {
+          "path": "drizzle/20261002051447_steady_mother_askani/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002051447_steady_mother_askani/snapshot.json"
+        },
+        {
+          "path": "drizzle/20261002092416_melted_forgotten_one/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002092416_melted_forgotten_one/migration.sql"
+        },
+        {
+          "path": "drizzle/20261002092416_melted_forgotten_one/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002092416_melted_forgotten_one/snapshot.json"
+        },
+        {
+          "path": "drizzle/20261002110319_sync_notifications/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002110319_sync_notifications/migration.sql"
+        },
+        {
+          "path": "drizzle/20261002110319_sync_notifications/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261002110319_sync_notifications/snapshot.json"
+        },
+        {
+          "path": "src/backend/database.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/database.ts"
+        },
+        {
+          "path": "src/backend/index.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/index.ts"
+        },
+        {
+          "path": "src/backend/sync.schema.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/sync.schema.ts"
+        },
+        {
+          "path": "src/backend/sync.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/sync.ts"
+        },
+        {
+          "path": "src/contracts/commands.ts",
+          "type": "registry:file",
+          "target": "~/src/contracts/commands.ts"
+        },
+        {
+          "path": "src/contracts/sync.ts",
+          "type": "registry:file",
+          "target": "~/src/contracts/sync.ts"
+        },
+        {
+          "path": "src/errors.ts",
+          "type": "registry:file",
+          "target": "~/src/errors.ts"
+        },
+        {
+          "path": "src/frontend/actions.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/actions.ts"
+        },
+        {
+          "path": "src/frontend/error-text.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/error-text.ts"
+        },
+        {
+          "path": "src/frontend/index.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/index.ts"
+        },
+        {
+          "path": "src/frontend/records.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/records.ts"
+        },
+        {
+          "path": "src/frontend/state.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/state.ts"
+        },
+        {
+          "path": "src/frontend/ui/button.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/ui/button.tsx"
+        },
+        {
+          "path": "src/frontend/ui/card.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/ui/card.tsx"
+        },
+        {
+          "path": "src/frontend/ui/classes.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/ui/classes.ts"
+        },
+        {
+          "path": "src/frontend/ui/input.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/ui/input.tsx"
+        },
+        {
+          "path": "src/lib/tinker.server.ts",
+          "type": "registry:file",
+          "target": "~/src/lib/tinker.server.ts"
+        },
+        {
+          "path": "src/lib/tinker.ts",
+          "type": "registry:file",
+          "target": "~/src/lib/tinker.ts"
+        },
+        {
+          "path": "src/routes/__root.tsx",
+          "type": "registry:file",
+          "target": "~/src/routes/__root.tsx"
+        },
+        {
+          "path": "src/style.css",
+          "type": "registry:file",
+          "target": "~/src/style.css"
+        },
+        {
+          "path": "src/transport/result.server.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/result.server.ts"
+        },
+        {
+          "path": "drizzle.config.ts",
+          "type": "registry:file",
+          "target": "~/drizzle.config.ts"
+        },
+        {
+          "path": "vite.config.ts",
+          "type": "registry:file",
+          "target": "~/vite.config.ts"
+        },
+        {
+          "path": ".env.example",
+          "type": "registry:file",
+          "target": "~/.env.example"
+        }
+      ],
       "meta": {
         "version": "0.6.0",
         "ownership": "userland",
         "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them."
       },
-      "registryDependencies": [
-        "@tinker-start/todos-example",
-        "@tinker-start/profile-example",
-        "@tinker-start/auth-pages-example",
-        "@tinker-start/mail-example",
-        "@tinker-start/counter-example",
-        "@tinker-start/example-wiring"
+      "dependencies": [
+        "@hono/node-server@1.19.17",
+        "@radix-ui/react-slot@1.3.3",
+        "better-auth@1.7.7",
+        "class-variance-authority@0.7.1",
+        "clsx@2.1.1",
+        "drizzle-orm@catalog:",
+        "nodemailer@10.0.13",
+        "pg@8.20.0",
+        "pino@10.3.1",
+        "tailwind-merge@3.7.0"
+      ],
+      "devDependencies": [
+        "@tailwindcss/vite@4.3.3",
+        "@types/nodemailer@^7.0.11",
+        "@types/pg@^8.15.6",
+        "drizzle-kit@catalog:",
+        "tailwindcss@4.3.3"
       ]
     },
     {

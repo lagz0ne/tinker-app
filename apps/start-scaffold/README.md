@@ -123,22 +123,8 @@ export { auth, readAccount } from "../backend/auth.ts";
 export { bootstrap } from "../backend/sync.ts";
 ```
 
-`src/lib/tinker.ts`:
-
-```ts
-export const extensions = [];
-export { records } from "../frontend/records.ts";
-export { readBatch, readBootstrap, readSnapshot, streamMessage } from "../contracts/sync.ts";
-import type { FeatureSync } from "../contracts/sync.ts";
-declare module "@tinker/start" {
-  interface Register {
-    change: FeatureSync.Change;
-    result: FeatureSync.Result;
-    public: FeatureSync.Public;
-    private: FeatureSync.Private;
-  }
-}
-```
+Read the filled [browser seam](src/lib/tinker.ts) for
+records, wire readers, and the app's `Register` bodies.
 
 ## Checks
 
@@ -197,38 +183,158 @@ Tests use `createScope` and app operations.
 They run no framework, server, build, or browser.
 The named proof scripts run those outside tests.
 
+## Local registry
+
+The registry is built from source.
+It publishes nothing.
+`app` writes the smallest app once.
+Its package and page come from `apps/start-min`.
+Its two seams start with empty extensions.
+Its config uses `tinker()` and the generated tsconfig.
+The base stays in `node_modules/@tinker/start`.
+
+Run the full local proof from this repo's root:
+
+```bash
+node apps/start-scaffold/maintain/proof-registry.mjs
+```
+
+It packs Core, React, and Start without publishing.
+It serves the registry at 127.0.0.1.
+It starts from an empty folder and runs real shadcn.
+It builds, runs doctor, and curls the served page.
+It adds examples and checks a changed source with `--diff`.
+It upgrades to a local 0.6.1 version-bump fixture.
+It checks user files stay the same, then stops each server
+by its own PID.
+The scratch folder stays for review.
+The printed local URL works only during that proof.
+
+For a local registry you keep running, pack these first:
+
+```bash
+mkdir -p /tmp/tinker-packs
+vp pm --dir packages/core pack \
+  --pack-destination /tmp/tinker-packs
+vp pm --dir packages/react pack \
+  --pack-destination /tmp/tinker-packs
+node packages/start/scripts/pack.mjs /tmp/tinker-packs
+```
+
+Build with a local package override:
+
+```bash
+export TINKER_PACKAGE_DIR=/tmp/tinker-packs
+TINKER_REGISTRY_URL=http://127.0.0.1:4870/r
+export TINKER_REGISTRY_URL
+vp run @tinker-start-scaffold#registry:build
+```
+
+`TINKER_PACKAGE_DIR` writes absolute `file:` tarball specs.
+They work on this machine only.
+`TINKER_REGISTRY_URL` sets links between example items.
+`TINKER_REGISTRY_OUT` can keep proof output outside this repo.
+Without the overrides, builds use release versions from
+package files and the local URL above.
+Run `registry:build` again without overrides before committing.
+`test:registry` rejects built items that differ from source.
+
+Serve it from this repo root:
+
+```bash
+python3 -m http.server 4870 --bind 127.0.0.1 \
+  --directory apps/start-scaffold/public
+```
+
+Stop that server with Ctrl-C when you finish.
+From an empty app folder, the one install command is:
+
+```bash
+npx shadcn@4.21.0 add \
+  http://127.0.0.1:4870/r/app.json --yes
+```
+
+Then run:
+
+```bash
+npm install
+vp build
+npx tinker doctor
+npm start
+```
+
+Never re-apply `app` to update an app.
+Upgrade its base with `tinker upgrade`.
+Review example changes with `shadcn add --diff`.
+
 ## Example items
 
-The local registry has these copy-in items:
+These files are yours once copied:
 
-- `todos-example`: todo table, operations, view,
-  contracts, route, and server functions.
-- `profile-example`: profile operations, form,
-  actions, route, and server functions.
-- `auth-pages-example`: auth resource, auth tables,
-  sign-in actions, credentials, and public page.
 - `mail-example`: SMTP settings, client, and send action.
-- `counter-example`: shared counter and its view.
-- `example-wiring`: shared state, sync bodies,
-  seams, UI, database, and migrations.
+  No base parts or Postgres are needed.
+  Set SMTP values before calling `sendMail`.
+- `todos-example`: todo table, operations, view, and route.
+- `profile-example`: profile form, actions, and route.
+- `auth-pages-example`: accounts and the sign-in page.
+- `counter-example`: the shared counter and its view.
+- `example-wiring`: state, sync bodies, seams, UI,
+  database, and migrations.
 
-The items share this demo's sync bodies and page links.
-They are copy-in parts for an app with that wiring.
-`postgres-auth-mail-example` joins all of them.
-`starter` adds the app files once.
-`runtime` now installs `@tinker/start@0.6.0` only.
-It copies no runtime source.
+The last five share this demo's bodies and page links.
+Each depends on `postgres-auth-mail-example`,
+which copies the complete demo from the same source.
+It adds the needed packages and writes this filled config:
 
-Auth and profile forms and actions have separate files.
-Shared error text stays in `src/frontend/error-text.ts`.
-The old action entry re-exports them for existing tests.
+```ts
+import { defineConfig } from "vite-plus";
+import { tinker } from "@tinker/start/vite";
 
-Upgrade the base with `tinker upgrade`.
-Review newer example files before copying them.
-Never re-apply the app package file to update the base.
-A clean registry CLI install and separate app template
-belong to card `start/shadcn-registry`.
-Publishing waits for the user's go.
+export default defineConfig({
+  plugins: [tinker({ auth: true, sync: true })],
+});
+```
+
+It replaces the empty seams and the first page too.
+For the first demo install, allow these changes:
+
+```bash
+npx shadcn@4.21.0 add \
+  http://127.0.0.1:4870/r/todos-example.json \
+  --yes --overwrite
+cp .env.example .env
+vp build
+npx tinker doctor
+```
+
+Build and doctor need no running Postgres or SMTP.
+Live use needs Postgres and SMTP settings from `.env.example`.
+The server applies the copied migrations at startup.
+Auth needs a real `AUTH_SECRET` and `PUBLIC_ORIGIN`.
+Sync uses auth and the database.
+The counter uses sync, so it needs both too.
+`mail-example` alone needs SMTP only when sending.
+Telemetry is on by default and uses the base defaults.
+
+Review newer mail source without writing any file:
+
+```bash
+npx shadcn@4.21.0 add \
+  http://127.0.0.1:4870/r/mail-example.json \
+  --diff src/backend/mail.ts
+```
+
+`starter` remains the full demo template for old users.
+`runtime` remains a package-only item for old users.
+New apps start with `app`.
+
+Publishing waits for the user's go and exact domain.
+It also needs a place to install the private Core, React,
+and Start releases: npm or an agreed private registry.
+A published build uses those real release versions,
+not this machine's `file:` paths.
+Set `TINKER_REGISTRY_URL` to the domain's `/r` URL.
+No domain or package is published by these scripts.
 
 ## Promises tested through app scopes
 
