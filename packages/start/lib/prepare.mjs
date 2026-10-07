@@ -14,7 +14,7 @@ const compilerOptions = {
   strict: true,
   noUnusedLocals: true,
   noEmit: true,
-  allowImportingTsExtensions: true,
+
   esModuleInterop: true,
   isolatedModules: true,
   verbatimModuleSyntax: true,
@@ -40,7 +40,7 @@ function partsFile(base, on, entry) {
     .filter(([, part]) => entry in part.entries)
     .map(([name, part]) => {
       const module = on.includes(name) ? part.entries[entry] : "off.ts";
-      return `export { ${name} } from ${JSON.stringify(join(base, "src/parts", name, module))};`;
+      return `export { ${name} } from ${JSON.stringify(join(base, "src/parts", name, module.replace(/\.ts$/, "")))};`;
     });
   const notes = partNotes(on)
     .map((note) => `; ${note}`)

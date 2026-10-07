@@ -459,6 +459,10 @@ tinker doctor --fix
 - Check 6 reads literal module paths in imports, exports,
   dynamic imports, import types, module declarations,
   and import-equals statements.
+  It also names `.ts`, `.tsx`, and `.mts` import endings
+  in app code, tests, and config files, with file and line.
+  Remove those endings; keep `.mjs`, `.js`, `.json`,
+  `.css`, assets, and `?url` queries.
   A private alias or a relative or absolute path
   into the installed base fails with its file and line.
 - Check 7 (routes) counts an on part's routes as base routes,

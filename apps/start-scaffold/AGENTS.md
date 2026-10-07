@@ -1,5 +1,7 @@
 # Start scaffold
 
+Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
+
 These rules travel with the copied starter.
 Follow the parent repo's rules too, when present.
 

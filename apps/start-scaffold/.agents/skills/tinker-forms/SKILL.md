@@ -5,6 +5,8 @@ description: Choose the owner of new app code.
 
 # Choose a form
 
+Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
+
 Read this before adding app code.
 Choose one form for each piece of work:
 

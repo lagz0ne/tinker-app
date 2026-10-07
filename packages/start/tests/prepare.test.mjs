@@ -56,16 +56,16 @@ test("each parts file exports the parts its entry reads, from the on or the off 
   expect(on["parts.ts"]).toBe(
     [
       "// Written by tinker(); parts on: telemetry, auth.",
-      `export { telemetry } from ${module("telemetry", "on.ts")};`,
-      `export { sync } from ${module("sync", "off.ts")};`,
+      `export { telemetry } from ${module("telemetry", "on")};`,
+      `export { sync } from ${module("sync", "off")};`,
       "",
     ].join("\n"),
   );
   expect(on["parts.server.ts"]).toBe(
     [
       "// Written by tinker(); parts on: telemetry, auth.",
-      `export { telemetry } from ${module("telemetry", "on.server.ts")};`,
-      `export { auth } from ${module("auth", "on.server.ts")};`,
+      `export { telemetry } from ${module("telemetry", "on.server")};`,
+      `export { auth } from ${module("auth", "on.server")};`,
       "",
     ].join("\n"),
   );
@@ -73,19 +73,19 @@ test("each parts file exports the parts its entry reads, from the on or the off 
   expect(off["parts.ts"]).toBe(
     [
       "// Written by tinker(); parts on: none.",
-      `export { telemetry } from ${module("telemetry", "off.ts")};`,
-      `export { sync } from ${module("sync", "off.ts")};`,
+      `export { telemetry } from ${module("telemetry", "off")};`,
+      `export { sync } from ${module("sync", "off")};`,
       "",
     ].join("\n"),
   );
   expect(render(root, ["auth", "sync"])["parts.ts"]).toContain(
-    `export { sync } from ${module("sync", "on.ts")};`,
+    `export { sync } from ${module("sync", "on")};`,
   );
   expect(off["parts.server.ts"]).toBe(
     [
       "// Written by tinker(); parts on: none.",
-      `export { telemetry } from ${module("telemetry", "off.ts")};`,
-      `export { auth } from ${module("auth", "off.ts")};`,
+      `export { telemetry } from ${module("telemetry", "off")};`,
+      `export { auth } from ${module("auth", "off")};`,
       "",
     ].join("\n"),
   );
@@ -96,7 +96,7 @@ test("tinker prepare with no options keeps the parts the last tinker() call reco
   prepare(root, []);
   expect(prepare(root)).toContain("parts.ts");
   expect(JSON.parse(readFileSync(join(root, ".tinker/base.json"), "utf8")).parts).toEqual([]);
-  expect(readFileSync(join(root, ".tinker/parts.ts"), "utf8")).toContain("off.ts");
+  expect(readFileSync(join(root, ".tinker/parts.ts"), "utf8")).toContain('/off";');
 });
 
 test("the generated tsconfig maps both parts files", () => {
@@ -126,6 +126,6 @@ test("with sync on, the parts file records that sync turned auth on", () => {
 test("linked parts use the real base path so sync has one Register", () => {
   const root = goodApp();
   expect(render(root, ["sync"])["parts.ts"]).toContain(
-    `export { sync } from ${JSON.stringify(join(baseDir, "src/parts/sync/on.ts"))};`,
+    `export { sync } from ${JSON.stringify(join(baseDir, "src/parts/sync/on"))};`,
   );
 });

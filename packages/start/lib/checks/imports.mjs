@@ -1,9 +1,12 @@
+import { readdirSync } from "node:fs";
 import { join, dirname, resolve, sep, isAbsolute } from "node:path";
 import { installedBase, listFiles } from "../paths.mjs";
 import { parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";
 
 export const say = {
+  extension: (at, name) =>
+    `${at} "${name}" ends in a TypeScript file extension; remove .ts, .tsx, or .mts from the import`,
   seam: (at, name) => `${at} "${name}" is a base-only name; app code cannot import it`,
   entry: (at, name) =>
     `${at} "${name}" is not a base entry; use @tinker/start, @tinker/start/server, @tinker/start/client, or @tinker/start/vite`,
@@ -12,6 +15,35 @@ export const say = {
     `${at} "${name}" skips the base's scope; use createServerEntry from @tinker/start/server`,
   passed: (count) => `${count} files in src/ import the base only through its entries`,
 };
+
+const skipped = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  ".git",
+  ".tinker",
+  ".tanstack",
+  ".stryker-tmp",
+]);
+
+/** App source, tests, and config files; dependencies and generated output are not app code. */
+function appSources(root, dir = "") {
+  return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) => {
+    if (skipped.has(entry.name)) return [];
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return appSources(root, path);
+    return /\.[cm]?[jt]sx?$/.test(path) ? [path] : [];
+  });
+}
+
+/** A finding at the module path's own line, including a dynamic or type-only import. */
+function extensionImports(root) {
+  return appSources(root).flatMap((file) =>
+    specifiers(parseSource(join(root, file)))
+      .filter(({ name }) => /\.(ts|tsx|mts)$/.test(name))
+      .map(({ name, line }) => say.extension(`${file}:${line}`, name)),
+  );
+}
 
 const entries = new Set([
   "@tinker/start",
@@ -46,7 +78,8 @@ function badImport(name, file, base) {
 
 /**
  * Check 6: app code reaches the base only through its entries, and never by a base-only
- * `#tinker/*` name or a path into the package. No fix: doctor never edits src/.
+ * `#tinker/*` name or a path into the package. App imports omit TypeScript file endings.
+ * No fix: doctor never edits app code.
  */
 export function imports(root) {
   const base = installedBase(root);
@@ -62,5 +95,5 @@ export function imports(root) {
       .filter(({ message }) => message)
       .map(({ name, at, message }) => message(at, name));
   });
-  return verdict(bad, say.passed(files.length));
+  return verdict([...bad, ...extensionImports(root)], say.passed(files.length));
 }

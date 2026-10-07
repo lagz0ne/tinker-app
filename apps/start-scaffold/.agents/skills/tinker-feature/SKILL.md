@@ -5,6 +5,8 @@ description: Add a feature from its table to its page.
 
 # Add one feature
 
+Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
+
 Use todos as the worked path.
 Read these files in this order:
 

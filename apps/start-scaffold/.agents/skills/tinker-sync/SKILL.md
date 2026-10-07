@@ -5,6 +5,8 @@ description: Choose mutations and sync for saved state.
 
 # Saved changes and waits
 
+Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
+
 Use this when adding a save or a shared view.
 A mutation asks the server to change saved state.
 Sync carries that saved change to every allowed view.

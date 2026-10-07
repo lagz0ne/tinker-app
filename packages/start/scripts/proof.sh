@@ -114,7 +114,7 @@ tar -xzf packages/start/packs/tinker-start-*.tgz -C "$scratch/base"
   doctor
 
   mistake "base files imported by path and by a base-only name"
-  printf '%s\n' 'import { raise } from "../../node_modules/@tinker/start/src/errors.ts";' \
+  printf '%s\n' 'import { raise } from "../../node_modules/@tinker/start/src/errors";' \
     'import { extensions } from "#tinker/app.server";' \
     'export const peek = [raise, extensions];' > src/backend/peek.ts
   build
@@ -188,7 +188,7 @@ tar -xzf packages/start/packs/tinker-start-*.tgz -C "$scratch/base"
   mkdir -p src/frontend
   printf 'export const NotFound = () => <p>app 404 page</p>;\n' > src/frontend/not-found.tsx
   printf '%s\n' 'import type { RouterOptions } from "@tinker/start";' \
-    'import { NotFound } from "./frontend/not-found.tsx";' \
+    'import { NotFound } from "./frontend/not-found";' \
     'export const router: RouterOptions = () => ({ defaultNotFoundComponent: NotFound });' > src/router.ts
   printf '%s\n' 'import { createMiddleware, createStart } from "@tanstack/react-start";' \
     'import { setResponseHeader } from "@tanstack/react-start/server";' \
@@ -552,7 +552,7 @@ import {
 } from "@tinker/start";
 import type { Sync } from "@tinker/start";
 import { z } from "zod";
-import { count } from "../frontend/count.ts";
+import { count } from "../frontend/count";
 
 declare module "@tinker/start" {
   interface Register {
@@ -603,7 +603,7 @@ TS
   cat > src/backend/bump.ts <<'TS'
 import { operation } from "@tinker/core";
 import { eventHistory } from "@tinker/start/server";
-import { database } from "../lib/tinker.server.ts";
+import { database } from "../lib/tinker.server";
 export const bump = operation({
   label: "bump",
   depends: { database, history: eventHistory },
@@ -638,7 +638,7 @@ TS
   cat > src/routes/index.tsx <<'TS'
 import { createFileRoute } from "@tanstack/react-router";
 import { useData } from "@tinker/react";
-import { count } from "../frontend/count.ts";
+import { count } from "../frontend/count";
 function Count() {
   return <p>count {useData(count)}</p>;
 }
@@ -651,7 +651,7 @@ TS
 import { createFileRoute } from "@tanstack/react-router";
 import { startRequests } from "@tinker/start";
 import { readResult } from "@tinker/start/server";
-import { bump } from "../backend/bump.ts";
+import { bump } from "../backend/bump";
 export const Route = createFileRoute("/api/bump")({
   server: {
     middleware: [startRequests.middleware],

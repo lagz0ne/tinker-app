@@ -24,6 +24,12 @@ const passOk = 'return { status: "ok", lines: ["broken"] };';
 /** Logic breaks: file, the text to find, what replaces it. */
 const breaks = [
   {
+    name: "TypeScript import endings are missed",
+    file: "lib/checks/imports.mjs",
+    find: "...extensionImports(root)",
+    replace: "...[]",
+  },
+  {
     name: "example missing parts are missed",
     file: "lib/checks/examples.mjs",
     find: "!on.includes(part)",

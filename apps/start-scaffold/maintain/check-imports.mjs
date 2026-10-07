@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
+import { createServer } from "vite-plus";
 
 if (import.meta.main) {
   if (process.argv.includes("--child")) {
@@ -12,8 +13,18 @@ if (import.meta.main) {
         return nextLoad(url, context);
       },
     });
-    await import("../src/backend/index");
-    hooks.deregister();
+    const vite = await createServer({
+      configFile: false,
+      root: fileURLToPath(new URL("..", import.meta.url)),
+      server: { middlewareMode: true, watch: null },
+      appType: "custom",
+    });
+    try {
+      await vite.ssrLoadModule("/src/backend/index");
+    } finally {
+      await vite.close();
+      hooks.deregister();
+    }
     const services = [...loaded].filter((url) =>
       /\/node_modules\/(?:pg|@electric-sql\/pglite|better-auth|nodemailer)(?:\/|$)/.test(url),
     );

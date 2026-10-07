@@ -5,6 +5,8 @@ description: Keep app wiring on the base's public entries.
 
 # Keep the seams
 
+Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
+
 Use this when changing imports or app wiring.
 The base lives in `node_modules/@tinker/start/`.
 Never edit it; update it with `tinker upgrade`.

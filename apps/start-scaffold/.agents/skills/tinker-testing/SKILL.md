@@ -5,6 +5,8 @@ description: Prove app promises through small scopes.
 
 # Test through a scope
 
+Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
+
 Use this when adding or fixing app behavior.
 Read `tests/todos.test.ts` for a full example.
 Import exported operations from the app's package seams.
