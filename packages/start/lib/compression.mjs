@@ -1,8 +1,11 @@
 import { Readable } from "node:stream";
 import { promisify } from "node:util";
-import { brotliCompress, createBrotliCompress, createGzip, gzip } from "node:zlib";
+import { brotliCompress, createBrotliCompress, createGzip, gzip, constants } from "node:zlib";
 
-const streams = { br: createBrotliCompress, gzip: createGzip };
+const streams = {
+  br: () => createBrotliCompress({ params: { [constants.BROTLI_PARAM_QUALITY]: 4 } }),
+  gzip: createGzip,
+};
 const encoders = { br: promisify(brotliCompress), gzip: promisify(gzip) };
 
 /**
@@ -40,9 +43,12 @@ export function isCompressible(type) {
 /**
  * @param {Uint8Array | string} bytes - From the build or a built file; why: its encoded copy.
  * @param {"br" | "gzip"} encoding - From negotiation or the build; why: the wire format.
+ * @param {number} quality - From the build; why: use 11 off the request path, 4 while serving.
  */
-export function compressBytes(bytes, encoding) {
-  return encoders[encoding](bytes);
+export function compressBytes(bytes, encoding, quality = 4) {
+  return encoding === "br"
+    ? encoders.br(bytes, { params: { [constants.BROTLI_PARAM_QUALITY]: quality } })
+    : encoders.gzip(bytes);
 }
 
 /**
@@ -84,23 +90,25 @@ export async function compressResponse(request, response) {
     headers.delete("etag");
     return new Response(null, { status: 406, headers });
   }
-  if (request.method === "HEAD") {
-    await response.body?.cancel();
-    return new Response(null, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
+  if (encoding !== "identity" && response.body !== null) {
+    headers.set("content-encoding", encoding);
+    headers.delete("content-length");
+    headers.delete("etag");
   }
-  if (encoding === "identity" || response.body === null)
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
-  headers.set("content-encoding", encoding);
-  headers.delete("content-length");
-  headers.delete("etag");
-  const body = Readable.toWeb(Readable.fromWeb(response.body).compose(streams[encoding]()));
+  const body = await compressBody(request, response.body, encoding);
   return new Response(body, { status: response.status, statusText: response.statusText, headers });
+}
+
+/**
+ * @param {Request} request - From the host; why: HEAD cancels rather than reading the body.
+ * @param {ReadableStream | null} body - From the response; why: ownership transfers to the encoded stream.
+ * @param {string} encoding - From negotiation; why: identity keeps the original stream.
+ */
+async function compressBody(request, body, encoding) {
+  if (request.method === "HEAD") {
+    await body?.cancel();
+    return null;
+  }
+  if (encoding === "identity" || body === null) return body;
+  return Readable.toWeb(Readable.fromWeb(body).compose(streams[encoding]()));
 }

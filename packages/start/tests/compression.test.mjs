@@ -86,3 +86,24 @@ test("a refused encoding cancels HTML and drops its old length", async () => {
   expect(cancelled).toBe(true);
   expect(response.headers.get("content-length")).toBeNull();
 });
+
+test("HEAD cancels HTML and returns its negotiated encoding without a body", async () => {
+  let cancelled = false;
+  const response = await compressResponse(
+    new Request("http://app", { method: "HEAD", headers: { "accept-encoding": "br" } }),
+    new Response(
+      new ReadableStream({
+        cancel() {
+          cancelled = true;
+        },
+      }),
+      {
+        headers: { "content-type": "text/html", "content-length": "12" },
+      },
+    ),
+  );
+  expect(cancelled).toBe(true);
+  expect(response.body).toBeNull();
+  expect(response.headers.get("content-encoding")).toBe("br");
+  expect(response.headers.get("content-length")).toBeNull();
+});

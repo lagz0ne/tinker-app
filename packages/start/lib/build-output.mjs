@@ -31,7 +31,7 @@ export function clientOutput(hints = true) {
         if (!entry.isFile() || ![".js", ".css", ".html"].includes(extname(entry.name))) continue;
         const file = join(entry.parentPath, entry.name);
         const bytes = await readFile(file);
-        await writeFile(`${file}.br`, await compressBytes(bytes, "br"));
+        await writeFile(`${file}.br`, await compressBytes(bytes, "br", 11));
         await writeFile(`${file}.gz`, await compressBytes(bytes, "gzip"));
       }
     },
