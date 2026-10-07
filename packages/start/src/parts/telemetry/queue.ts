@@ -4,6 +4,9 @@ import { delivery } from "./delivery";
 import { telemetrySettings } from "./settings";
 import { exportHealth } from "./health";
 
+/** One encoder for every record size; sizes are taken once, at ingest. */
+const encoder = new TextEncoder();
+
 /** Retains failed records within count and byte bounds; this resource owns every promise. */
 export const queue = resource({
   label: "telemetry.queue",
@@ -11,9 +14,15 @@ export const queue = resource({
   depends: { settings: telemetrySettings, health: exportHealth.controller, delivery },
   factory: ({ settings, health, delivery }, ctx) => {
     let records: (
-      | { kind: "trace"; value: Telemetry.Span }
-      | { kind: "log"; value: Telemetry.Log }
+      | { kind: "trace"; value: Telemetry.Span; bytes: number }
+      | { kind: "log"; value: Telemetry.Log; bytes: number }
     )[] = [];
+    const browser = settings.side === "browser";
+    const batchLimit = browser ? 32_000 : 48_000;
+    /** Reserve the JSON envelope and one comma per browser record. */
+    const recordLimit = browser ? batchLimit - 24 : batchLimit;
+    const frameBytes = browser ? 23 : 0;
+    const commaBytes = browser ? 1 : 0;
     let queueBytes = 0;
     let dropped = 0;
     let timer: Promise<void> | undefined;
@@ -25,33 +34,29 @@ export const queue = resource({
     let failed = false;
     const owned = {
       ingest(batch: Telemetry.Batch) {
-        const incoming: typeof records = [
-          ...batch.traces.map((value) => ({ kind: "trace" as const, value })),
-          ...batch.logs.map((value) => ({ kind: "log" as const, value })),
-        ];
-        for (const record of incoming) {
-          const recordBytes = new TextEncoder().encode(JSON.stringify(record.value)).byteLength;
-          if (
-            [
-              state === "closed",
-              recordBytes > 48_000,
-              records.length >= 512,
-              queueBytes + recordBytes > 1_048_576,
-            ].includes(true)
-          ) {
-            dropped++;
-          } else {
-            records.push(record);
-            queueBytes += recordBytes;
-          }
-          if (publishing) {
-            const previous = health.get();
-            health.set(
-              previous.kind === "failed"
-                ? { ...previous, pending: records.length, dropped }
-                : { kind: pending ? "sending" : "queued", pending: records.length, dropped },
-            );
-          }
+        for (const value of batch.traces) owned.push({ kind: "trace", value, bytes: 0 });
+        for (const value of batch.logs) owned.push({ kind: "log", value, bytes: 0 });
+        if (batch.traces.length + batch.logs.length) owned.publishQueued();
+      },
+      push(record: (typeof records)[number]) {
+        const full = state === "closed" || records.length >= 512;
+        const recordBytes = full ? 0 : encoder.encode(JSON.stringify(record.value)).byteLength;
+        if (full || recordBytes > recordLimit || queueBytes + recordBytes > 1_048_576) {
+          dropped++;
+        } else {
+          record.bytes = recordBytes;
+          records.push(record);
+          queueBytes += recordBytes;
+        }
+      },
+      publishQueued() {
+        if (publishing) {
+          const previous = health.get();
+          health.set(
+            previous.kind === "failed"
+              ? { ...previous, pending: records.length, dropped }
+              : { kind: pending ? "sending" : "queued", pending: records.length, dropped },
+          );
         }
       },
       start(flush: () => Promise<void>) {
@@ -68,17 +73,22 @@ export const queue = resource({
             }
           });
       },
+      takeBatch() {
+        let bytes = frameBytes;
+        const retained: typeof records = [];
+        for (const record of records.slice(0, 64)) {
+          const size = record.bytes + commaBytes;
+          if (bytes + size > batchLimit) continue;
+          bytes += size;
+          retained.push(record);
+        }
+        return retained;
+      },
       flush(): Promise<void> {
         return (pending ??= Promise.resolve()
           .then(async () => {
             if (!records.length) return;
-            let bytes = 0;
-            const retained = records.filter((record, index) => {
-              const size = new TextEncoder().encode(JSON.stringify(record.value)).byteLength;
-              if (index >= 64 || bytes + size > 48_000) return false;
-              bytes += size;
-              return true;
-            });
+            const retained = owned.takeBatch();
             const batch: Telemetry.Batch = {
               traces: retained
                 .filter((record) => record.kind === "trace")
@@ -113,11 +123,7 @@ export const queue = resource({
               retained.filter((record) => (record.kind === "trace" ? result.traces : result.logs)),
             );
             records = records.filter((record) => !accepted.has(record));
-            queueBytes = records.reduce(
-              (sum, record) =>
-                sum + new TextEncoder().encode(JSON.stringify(record.value)).byteLength,
-              0,
-            );
+            for (const record of accepted) queueBytes -= record.bytes;
             failed = !result.traces || !result.logs;
             if (publishing)
               health.set(

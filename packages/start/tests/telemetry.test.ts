@@ -848,3 +848,27 @@ test("a trace send that throws keeps the traces; the logs sent beside them leave
   expect((await app.close({ graceful: true })).status).toBe("success");
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
+
+test("closing a tab never sends a batch over 32,000 UTF-8 bytes", async () => {
+  const sent = storage();
+  const tools = createScope({
+    extensions: [telemetryExport],
+    tags: [storageEnv, telemetrySide("browser"), httpBackend(sent.backend)],
+  });
+  await tools.ready;
+  const log = { ...record("é".repeat(1000)), side: "browser" as const };
+  const large = { ...sized(32_000), side: "browser" as const };
+  const fitting = { ...sized(31_972), side: "browser" as const };
+  tools.run(ingestTelemetry, { input: { traces: [], logs: [large, fitting] } });
+  tools.run(ingestTelemetry, {
+    input: { traces: [], logs: Array.from({ length: 40 }, () => log) },
+  });
+  expect((await tools.close({ graceful: true })).status).toBe("success");
+  expect(sent.requests.length).toBeGreaterThan(1);
+  for (const { body } of sent.requests)
+    expect(new TextEncoder().encode(body).byteLength).toBeLessThanOrEqual(32_000);
+  expect(sent.requests.flatMap(({ body }) => JSON.parse(body).logs)).toEqual([
+    fitting,
+    ...Array.from({ length: 40 }, () => log),
+  ]);
+});

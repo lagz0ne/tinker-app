@@ -280,7 +280,12 @@ The package's `exports` refuses every other path.
     once a second has passed;
     a server render sends when it closes.
     One send waits at most 750 ms,
-    and carries at most 48,000 bytes.
+    Server records carry at most 48,000 bytes per send.
+    A tab sends at most 32,000 UTF-8 bytes,
+    including JSON framing, even when it closes.
+  - A tab trusts the records it made itself.
+    With sync off and no app import of zod,
+    the built client chunk contains no zod.
   - A tab posts to `/api/telemetry`.
     The route answers each post with a status:
     `202` for a same-origin JSON post
@@ -302,8 +307,10 @@ The package's `exports` refuses every other path.
   - A full queue drops what comes past 512 records,
     and counts the drops; each send stays within 64 KiB.
   - The queue holds 512 records and 1 MiB;
-    one record is at most 48,000 bytes,
+    one server record is at most 48,000 bytes,
+    and one tab record at most 31,976 bytes,
     and one send at most 64 records.
+    Each record is sized once when the queue takes it.
     Sent records free their room.
     A send that storage refuses, or that throws,
     in a tab or on the server,

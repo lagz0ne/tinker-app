@@ -4,7 +4,7 @@ import { requestBody } from "../../backend/request-body.server";
 import { readResult } from "../../backend/result.server";
 import { raise } from "../../errors";
 import { ingestTelemetry } from "./observer";
-import { telemetryBatch } from "./records";
+import { telemetryBatch } from "./records.server";
 import type { Telemetry } from "./records";
 import { telemetrySettings } from "./settings";
 

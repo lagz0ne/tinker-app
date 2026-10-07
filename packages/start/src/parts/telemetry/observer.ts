@@ -1,15 +1,18 @@
 import { extension, LEVELS, operation, resource } from "@tinker/core";
 import type { Observe } from "@tinker/core";
-import { encodeValue, telemetryBatch } from "./records";
+import { encodeValue } from "./records";
 import type { Telemetry } from "./records";
 import { queue } from "./queue";
 import { telemetrySettings } from "./settings";
 
-/** Transfers the records to the telemetry root; callers must not edit them afterward. */
+/**
+ * Transfers trusted records to the telemetry root; callers must not edit them afterward.
+ * The server route validates outside data before this operation receives it.
+ */
 export const ingestTelemetry = operation({
   label: "telemetry.ingest",
   depends: { queue },
-  input: telemetryBatch,
+  input: (raw: unknown) => raw as Telemetry.Batch,
   run: ({ queue }, ctx) => queue.ingest(ctx.input),
 });
 export const flushTelemetry = operation({
