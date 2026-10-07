@@ -23,7 +23,7 @@ Add your table to `drizzle.config.ts`.
 Generate and keep its migration:
 
 ```bash
-npm run db:generate
+vp exec drizzle-kit generate
 ```
 
 A private operation depends on `currentUser`.

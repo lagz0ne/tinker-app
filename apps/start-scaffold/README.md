@@ -26,6 +26,8 @@ cp .env.example .env
 npm install
 ```
 
+For a copied demo, use `examples/demo.env.example`
+in place of `.env.example`.
 Set `AUTH_SECRET` in `.env` to a long random value.
 The other sample values point at the local compose stack.
 SMTP user and password may be empty for Mailpit.
@@ -37,6 +39,7 @@ npm run dev
 ```
 
 Open `http://localhost:4318`.
+For a copied demo, open its `/demo` page.
 Make an account, save a name, and add a todo.
 Open `http://localhost:18025` to see mail in Mailpit.
 Open two tabs to see shared changes.
@@ -173,9 +176,9 @@ Build, type checks, and scope tests run separately:
 ```bash
 npm run build
 npm run typecheck
-npm test
+vp test
 npm run doctor
-npm run check:plain -- --prove
+node scripts/check-plain.mjs --prove
 ```
 
 Doctor 5 checks the names the base reads from the seams.

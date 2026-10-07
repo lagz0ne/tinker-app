@@ -305,11 +305,11 @@ Its deferred close cancels any reader the consumer left open.
 
 ## Check
 
-Run `npm run check:plain -- --prove` after changing this rule.
+Run `node scripts/check-plain.mjs --prove` after changing this rule.
 Every planted failure must exit 1 by its rule name.
 Each allowed type-only import must exit 0.
-Run `npm run check:plain` before review.
-Use `npm run check:plain -- --list` to inspect the list.
+Run `node scripts/check-plain.mjs` before review.
+Use `node scripts/check-plain.mjs --list` to inspect the list.
 Review every entry before copying that output into `PLAIN.md`.
 The list and code must agree; the cap still applies to list output.
 The check reads src and skips .gen, .generated, and declaration files.

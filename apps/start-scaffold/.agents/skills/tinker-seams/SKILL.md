@@ -50,7 +50,7 @@ After changing wiring:
 ```bash
 npm run build
 npm run typecheck
-npm run check:plain
+node scripts/check-plain.mjs
 npm run doctor
-npm run test:schema
+node scripts/check-schema.mjs
 ```

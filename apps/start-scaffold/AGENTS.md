@@ -82,11 +82,11 @@ Run the shipped checks before review:
 ```bash
 npm run build
 npm run typecheck
-npm run test
-npm run check:plain
-npm run check:plain -- --prove
+vp test
+node scripts/check-plain.mjs
+node scripts/check-plain.mjs --prove
 npm run doctor
-npm run test:schema
+node scripts/check-schema.mjs
 ```
 
 Run the repo's lint and strict style census when present.
