@@ -14,18 +14,19 @@
     "start": "tinker serve",
     "test": "vp test",
     "db:generate": "drizzle-kit generate",
-    "test:boundary": "node scripts/check-boundary.mjs",
     "test:imports": "node maintain/check-imports.mjs",
     "test:middleware": "node maintain/check-middleware.mjs",
     "test:serve": "node maintain/check-serve.mjs",
     "registry:build": "node maintain/build-registry.mjs",
     "test:registry": "node maintain/check-registry.mjs",
-    "test:seam": "node scripts/check-seam.mjs --prove",
     "test:seam:fixture": "node maintain/check-seam-fixture.mjs",
     "test:schema": "node scripts/check-schema.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "check:plain": "node scripts/check-plain.mjs",
-    "postinstall": "tinker prepare"
+    "postinstall": "tinker prepare",
+    "doctor": "tinker doctor",
+    "test:compose": "node maintain/check-compose.mjs",
+    "check": "node maintain/check-app.mjs"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",

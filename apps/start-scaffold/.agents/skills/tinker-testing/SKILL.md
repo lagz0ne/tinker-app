@@ -11,7 +11,7 @@ Import exported operations from the app's package seams.
 Bind raw request headers only through the testing entry:
 
 ```ts
-import { requestHeaders } from "@tinker-start-scaffold/testing";
+import { requestHeaders } from "@tinker/start/testing";
 ```
 
 App code uses principal or currentUser.
@@ -50,7 +50,7 @@ try {
 
 Give `settings` the database, auth, and mail tags.
 The worked tests show their filled values.
-For outgoing HTTP, bind httpBackend through the fixed transport seam:
+For outgoing HTTP, bind httpBackend through the base testing entry:
 
 ```ts
 const stop = new AbortController();
@@ -81,8 +81,8 @@ try {
 }
 ```
 
-Import httpBackend from @tinker-start-scaffold/transport.
-Import httpRequest from @tinker-start-scaffold/backend.
+Import httpBackend from `@tinker/start/testing`.
+Import httpRequest from `@tinker/start/server`.
 Bind the fake in the test's scope; never replace global fetch.
 
 One test names one public cause and decisive outcome.

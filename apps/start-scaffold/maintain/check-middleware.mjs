@@ -1,4 +1,5 @@
-import { cp, mkdtemp, readFile, writeFile, symlink, rm } from "node:fs/promises";
+import { copyProofApp, proofEnv } from "./proof-app.mjs";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -10,28 +11,18 @@ if (import.meta.main) {
   const proof = await mkdtemp(join(tmpdir(), "start-native-middleware-"));
   const previousDirectory = process.cwd();
   try {
-    for (const name of [
-      "src",
-      "tests",
-      "drizzle",
-      "package.json",
-      "vite.config.ts",
-      "tsconfig.json",
-    ]) {
-      await cp(join(source, name), join(proof, name), { recursive: true });
-    }
-    await symlink(join(source, "node_modules"), join(proof, "node_modules"), "dir");
+    await copyProofApp(source, proof);
     await writeFile(
       join(proof, "src/proof-middleware.ts"),
       `
 import { createMiddleware } from "@tanstack/react-start";
-import { startRequests } from "./scaffold/start.ts";
+import { startRequests } from "@tinker/start";
 export const proofRequest = createMiddleware()
   .middleware([startRequests.middleware])
   .server(async ({context, request, next}) => {
     request.headers.set("x-proof-requests", String(Number(request.headers.get("x-proof-requests")) + 1));
     const result = await next({context: {proofSession: context.session, proofRequest: request}});
-    result.response.headers.set("x-proof-requests", request.headers.get("x-proof-requests"));
+    result.response.headers.set("x-proof-requests", request.headers.get("x-proof-requests") ?? "0");
     return result;
   });
 export const proofFunction = createMiddleware({type: "function"})
@@ -48,7 +39,7 @@ export const proofFunction = createMiddleware({type: "function"})
       `
 import { createServerFn } from "@tanstack/react-start";
 import { proofRequest, proofFunction } from "./proof-middleware.ts";
-import { readResult } from "./scaffold/backend/result.server.ts";
+import { readResult } from "@tinker/start/server";
 import { readProofUser } from "./proof.server.ts";
 export const readProof = createServerFn({method: "GET"})
   .middleware([proofRequest, proofFunction, proofFunction])
@@ -64,7 +55,7 @@ export const readProof = createServerFn({method: "GET"})
       join(proof, "src/proof.server.ts"),
       `
 import { operation } from "@tinker/core";
-import { requestHeaders } from "./scaffold/backend/headers.server.ts";
+import { requestHeaders } from "@tinker/start/server";
 export const readProofUser = operation({
   label: "test.nativeRequest",
   depends: {headers: requestHeaders},
@@ -88,23 +79,21 @@ export const Route = createFileRoute("/proof/native")({
 });
 `,
     );
-    const start = join(proof, "src/start.ts");
     await writeFile(
-      start,
-      `import { proofRequest } from "./proof-middleware.ts";\n${(await readFile(start, "utf8")).replace("startRequests.middleware,", "startRequests.middleware, proofRequest,")}`,
-    );
-    const syncRoute = join(proof, "src/routes/api.sync.ts");
-    await writeFile(
-      syncRoute,
-      `import { proofRequest } from "../proof-middleware.ts";\n${(await readFile(syncRoute, "utf8")).replace("middleware: [startRequests.middleware]", "middleware: [startRequests.middleware, proofRequest, proofRequest]")}`,
+      join(proof, "src/start.ts"),
+      `
+import { createStart } from "@tanstack/react-start";
+import { proofRequest } from "./proof-middleware.ts";
+export const startInstance = createStart(() => ({requestMiddleware: [proofRequest]}));
+`,
     );
     await writeFile(
       join(proof, "src/routes/proof.write.ts"),
       `
 import { createFileRoute } from "@tanstack/react-router";
 import { incrementCounter } from "../backend/index.ts";
-import { startRequests } from "../scaffold/start.ts";
-import { readResult } from "../scaffold/backend/result.server.ts";
+import { startRequests } from "@tinker/start";
+import { readResult } from "@tinker/start/server";
 export const Route = createFileRoute("/proof/write")({server: {
   middleware: [startRequests.middleware], handlers: {
     POST: async ({context}) => Response.json(readResult(await context.session.settle(incrementCounter, {input: {executionId: crypto.randomUUID()}}))),
@@ -112,28 +101,10 @@ export const Route = createFileRoute("/proof/write")({server: {
 }});
 `,
     );
-    const entry = join(proof, "src/server.ts");
-    await writeFile(
-      entry,
-      'import { proofDatabase, proofMail } from "../tests/presets.ts";\n' +
-        (await readFile(entry, "utf8")).replace(
-          "extensions: [setup, startRequests],",
-          "extensions: [setup, startRequests], presets: [proofDatabase, proofMail],",
-        ),
-    );
     const build = spawnSync("vp", ["build"], { cwd: proof, encoding: "utf8" });
     assert.equal(build.status, 0, build.stdout + build.stderr);
     process.chdir(proof);
-    Object.assign(process.env, {
-      PUBLIC_ORIGIN: "http://localhost:4318",
-      AUTH_SECRET: "local-proof-only-secret-with-thirty-two-letters",
-      DATABASE_URL: "postgres://proof",
-      SMTP_HOST: "proof",
-      SMTP_PORT: "25",
-      SMTP_USER: "",
-      SMTP_PASSWORD: "",
-      SMTP_FROM: "proof@example.com",
-    });
+    Object.assign(process.env, proofEnv);
     const app = await import(pathToFileURL(join(proof, "dist/server/server.js")).href);
     try {
       const results = await Promise.all(

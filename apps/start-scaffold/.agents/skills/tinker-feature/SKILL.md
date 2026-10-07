@@ -28,7 +28,7 @@ npm run db:generate
 
 A private operation depends on `currentUser`.
 Take the owner from that user, never from caller input.
-Use `eventHistory` from `src/scaffold/backend/events.ts`.
+Use `eventHistory` from `@tinker/start/server`.
 In one transaction, `lock` orders writes to the stream.
 `find` checks the execution ID before any saved effect.
 `append` stores the events with the saved change.

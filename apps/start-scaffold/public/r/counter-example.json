@@ -1,0 +1,33 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "counter-example",
+  "title": "Counter example",
+  "description": "Counter example",
+  "files": [
+    {
+      "path": "src/backend/counter.ts",
+      "content": "import { operation } from \"@tinker/core\";\nimport { database } from \"./database.ts\";\nimport { eventHistory } from \"@tinker/start/server\";\nimport { readExecution } from \"../contracts/sync.ts\";\nimport { raise } from \"../errors.ts\";\nexport const incrementCounter = operation({\n  label: \"incrementCounter\",\n  input: readExecution,\n  depends: { database, history: eventHistory },\n  run: async ({ database, history }, { input }) => {\n    const [{ eq, sql }, { counter }, { execution }] = await Promise.all([\n      import(\"drizzle-orm\"),\n      import(\"./sync.schema.ts\"),\n      import(\"@tinker/start/server\"),\n    ]);\n    await database.transaction(async (tx) => {\n      await history.lock(tx, \"public\");\n      if (await history.find(tx, input.executionId, \"public\")) return;\n      await tx.insert(execution).values({ id: input.executionId, stream: \"public\" });\n      await tx.insert(counter).values({ id: 1 }).onConflictDoNothing();\n      const row = (\n        await tx\n          .update(counter)\n          .set({ value: sql`${counter.value} + 1` })\n          .where(eq(counter.id, 1))\n          .returning()\n      ).at(0);\n      if (!row) raise(\"StreamMissing\", {});\n      await history.append(tx, \"public\", input.executionId, [\n        { kind: \"change\", change: { kind: \"counter\", value: row.value } },\n        { kind: \"result\", result: { kind: \"complete\", action: \"counter\" } },\n      ]);\n    });\n    return { executionId: input.executionId };\n  },\n});\n",
+      "type": "registry:file",
+      "target": "~/src/backend/counter.ts"
+    },
+    {
+      "path": "src/frontend/Counter.tsx",
+      "content": "import { operation } from \"@tinker/core\";\nimport { useData, useRun } from \"@tinker/react\";\nimport { counter } from \"./state.ts\";\nimport { syncClient } from \"@tinker/start/client\";\nimport { updateCounter } from \"../transport/counter.functions.ts\";\nimport { Button } from \"./ui/button.tsx\";\nimport { Card, CardHeader, CardTitle, CardContent, CardDescription } from \"./ui/card.tsx\";\nconst increase = operation({\n  label: \"counter.increase\",\n  depends: { sync: syncClient },\n  run: async ({ sync }, { random, signal }) => {\n    const executionId = random.uuid();\n    await sync.execute(executionId, { send: updateCounter, data: { executionId } }, signal);\n  },\n});\nexport function Counter() {\n  const value = useData(counter);\n  const action = useRun(increase);\n  return (\n    <Card>\n      <CardHeader>\n        <CardTitle>\n          <h2>Shared counter</h2>\n        </CardTitle>\n        <CardDescription>Everyone can add one. No sign-in needed.</CardDescription>\n      </CardHeader>\n      <CardContent className=\"flex items-center justify-between gap-4\">\n        <output aria-label=\"Counter value\" className=\"text-3xl font-semibold tabular-nums\">\n          {value}\n        </output>\n        <Button disabled={action.status === \"pending\"} onClick={() => action.run()}>\n          {action.status === \"pending\" ? \"Waiting for sync…\" : \"Increase counter\"}\n        </Button>\n        {Boolean(action.error) && (\n          <p role=\"alert\" className=\"text-sm\">\n            The counter did not finish. Try again.\n          </p>\n        )}\n      </CardContent>\n    </Card>\n  );\n}\n",
+      "type": "registry:file",
+      "target": "~/src/frontend/Counter.tsx"
+    },
+    {
+      "path": "src/transport/counter.functions.ts",
+      "content": "import { createServerFn } from \"@tanstack/react-start\";\nimport { incrementCounter } from \"../backend/index.ts\";\nimport { readExecution } from \"../contracts/sync.ts\";\nimport { startRequests } from \"@tinker/start\";\nimport { readReceipt } from \"./result.server.ts\";\nexport const updateCounter = createServerFn({ method: \"POST\" })\n  .middleware([startRequests.middleware])\n  .validator(readExecution)\n  .handler(async ({ context, data }) =>\n    readReceipt(\n      await context.session.settle(incrementCounter, { input: data, signal: context.signal }),\n    ),\n  );\n",
+      "type": "registry:file",
+      "target": "~/src/transport/counter.functions.ts"
+    }
+  ],
+  "meta": {
+    "version": "0.6.0",
+    "ownership": "userland",
+    "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them.",
+    "parts": ["auth", "sync"]
+  },
+  "type": "registry:file"
+}

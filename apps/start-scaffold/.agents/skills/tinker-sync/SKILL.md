@@ -11,7 +11,7 @@ Sync carries that saved change to every allowed view.
 A draft or a local view setting needs only local data.
 A read with no shared saved state can use a read operation.
 
-See `saveName` in `src/frontend/actions.ts`.
+See `saveName` in `src/frontend/auth-actions.ts`.
 It makes an execution ID with `ctx.random.uuid()`.
 `sync.execute` registers the wait before sending.
 Pass the native send function with its data record:
@@ -52,8 +52,8 @@ Keep drafts apart from saved records.
 
 Every sign-in action must hold reconnects during auth.
 Depend on `snapshotLoader` from
-`src/scaffold/frontend/events.ts` as `snapshots`.
-Follow `signIn` in `src/frontend/actions.ts`:
+`@tinker/start/client` as `snapshots`.
+Follow `signIn` in `src/frontend/auth-actions.ts`:
 
 ```ts
 const change = snapshots.beginAccountChange();

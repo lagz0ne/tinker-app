@@ -1,7 +1,8 @@
+import { copyProofApp, proofEnv } from "./proof-app.mjs";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { cp, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -27,17 +28,7 @@ export async function checkServe(source) {
   let server;
   let output = "";
   try {
-    for (const name of [
-      "src",
-      "tests",
-      "drizzle",
-      "scripts",
-      "package.json",
-      "vite.config.ts",
-      "tsconfig.json",
-    ])
-      await cp(join(source, name), join(proof, name), { recursive: true });
-    await symlink(join(source, "node_modules"), join(proof, "node_modules"), "dir");
+    await copyProofApp(source, proof);
     await writeFile(
       join(proof, "src/routes/proof.response.ts"),
       `import { createFileRoute } from "@tanstack/react-router";
@@ -45,17 +36,6 @@ export const Route = createFileRoute("/proof/response")({
   server: { handlers: { GET: () => Response.json({ ok: true }) } },
 });
 `,
-    );
-    const entry = join(proof, "src/server.ts");
-    const sourceEntry = await readFile(entry, "utf8");
-    assert.ok(sourceEntry.includes("extensions: [setup, startRequests],"));
-    await writeFile(
-      entry,
-      'import { proofDatabase, proofMail } from "../tests/presets.ts";\n' +
-        sourceEntry.replace(
-          "extensions: [setup, startRequests],",
-          "extensions: [setup, startRequests], presets: [proofDatabase, proofMail],",
-        ),
     );
     const built = spawnSync(join(source, "node_modules/.bin/vp"), ["build"], {
       cwd: proof,
@@ -69,25 +49,21 @@ export const Route = createFileRoute("/proof/response")({
     const address = listener.address();
     assert.ok(address && typeof address !== "string");
     await new Promise((done) => listener.close(done));
-    server = spawn(process.execPath, ["scripts/serve.mjs"], {
-      cwd: proof,
-      env: {
-        ...process.env,
-        HOST: "127.0.0.1",
-        PORT: String(address.port),
-        PUBLIC_ORIGIN: `http://127.0.0.1:${address.port}`,
-        AUTH_SECRET: "local-proof-only-secret-with-thirty-two-letters",
-        DATABASE_URL: "postgres://proof",
-        SMTP_HOST: "proof",
-        SMTP_PORT: "25",
-        SMTP_USER: "",
-        SMTP_PASSWORD: "",
-        SMTP_FROM: "proof@example.com",
-        VICTORIA_TRACES_URL: "http://127.0.0.1:1/insert/opentelemetry/v1/traces",
-        VICTORIA_LOGS_URL: "http://127.0.0.1:1/insert/jsonline",
+    server = spawn(
+      process.execPath,
+      [join(source, "node_modules/@tinker/start/bin/tinker.mjs"), "serve"],
+      {
+        cwd: proof,
+        env: {
+          ...process.env,
+          HOST: "127.0.0.1",
+          PORT: String(address.port),
+          ...proofEnv,
+          PUBLIC_ORIGIN: `http://127.0.0.1:${address.port}`,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
       },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    );
     server.stdout.on("data", (data) => (output += data));
     server.stderr.on("data", (data) => (output += data));
     const response = await fetchWhenListening(

@@ -1,5 +1,5 @@
 import { data, resource } from "@tinker/core";
-import type { Sync } from "./scaffold/sync.ts";
+import type { Sync } from "@tinker/start";
 export const publicNote = data({ label: "note.public", initial: { text: "" } });
 export const privateNote = data<{ text: string } | null>({ label: "note.private", initial: null });
 export const records = resource({

@@ -23,6 +23,24 @@ const passOk = 'return { status: "ok", lines: ["broken"] };';
 
 /** Logic breaks: file, the text to find, what replaces it. */
 const breaks = [
+  {
+    name: "seam module declarations are missed",
+    file: "lib/source.mjs",
+    find: "node.id.value",
+    replace: "undefined",
+  },
+  {
+    name: "seam import equals is missed",
+    file: "lib/source.mjs",
+    find: "node.expression.value",
+    replace: "undefined",
+  },
+  {
+    name: "seam absolute base paths are missed",
+    file: "lib/checks/imports.mjs",
+    find: " || isAbsolute(name)",
+    replace: "",
+  },
   ...[
     "version",
     "bytes",

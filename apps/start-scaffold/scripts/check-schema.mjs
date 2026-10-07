@@ -20,10 +20,22 @@ async function inventory(folder) {
   return paths.sort((a, b) => a.localeCompare(b));
 }
 try {
-  for (const name of ["drizzle", "drizzle.config.ts", "src", "package.json", "tsconfig.json"]) {
+  for (const name of [
+    "drizzle",
+    "drizzle.config.ts",
+    "src",
+    "package.json",
+    "tsconfig.json",
+    "vite.config.ts",
+  ]) {
     await cp(join(app, name), join(consumer, name), { recursive: true });
   }
   await symlink(join(app, "node_modules"), join(consumer, "node_modules"), "dir");
+  const prepared = spawnSync(join(app, "node_modules/.bin/tinker"), ["prepare"], {
+    cwd: consumer,
+    encoding: "utf8",
+  });
+  assert.equal(prepared.status, 0, prepared.stdout + prepared.stderr);
   const before = await inventory(join(consumer, "drizzle"));
   const result = spawnSync(join(app, "node_modules/.bin/drizzle-kit"), ["generate"], {
     cwd: consumer,

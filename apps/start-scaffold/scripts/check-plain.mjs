@@ -5,13 +5,16 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import ts from "typescript-api";
+import { createRequire } from "node:module";
 
 const PLAIN_MAX = 17;
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(process.argv.slice(2).find((arg) => !arg.startsWith("--")) ?? app);
 // TypeScript resolves types from the working folder; run from the project root.
 process.chdir(root);
-const entries = new Set(["src/server.ts", "src/router.tsx", "src/scaffold/frontend/router.tsx"]);
+const base = dirname(
+  createRequire(join(root, "package.json")).resolve("@tinker/start/package.json"),
+);
 const failures = [];
 const files = [];
 async function scan(folder) {
@@ -128,28 +131,6 @@ function enclosingFunction(node) {
   for (let parent = node.parent; parent; parent = parent.parent)
     if (isFunction(parent)) return parent;
 }
-function serverFetchEntry(node) {
-  if (nameOf(functionName(node)) !== "fetch" || !ts.isMethodDeclaration(node)) return false;
-  const object = node.parent;
-  if (!ts.isObjectLiteralExpression(object) || !moduleBinding(object.parent)) return false;
-  return nameOf(object.parent.name) === "entry";
-}
-function topLevelEntry(node, names) {
-  return (
-    ts.isFunctionDeclaration(node) &&
-    node.parent === node.getSourceFile() &&
-    names.includes(nameOf(functionName(node)))
-  );
-}
-function isEntry(node) {
-  const path = pathOf(node);
-  if (path === "src/server.ts")
-    return topLevelEntry(node, ["start", "close"]) || serverFetchEntry(node);
-  return (
-    ["src/router.tsx", "src/scaffold/frontend/router.tsx"].includes(path) &&
-    topLevelEntry(node, ["getRouter"])
-  );
-}
 
 function isComponent(node) {
   if (
@@ -231,9 +212,7 @@ function returnedObject(object, owner) {
 function valueOwner(owner) {
   if (!owner) return false;
   return (
-    factoryBody(owner) ||
-    isEntry(owner) ||
-    (optionsMember(owner) && nameOf(owner.parent.parent?.name) === "hooks")
+    factoryBody(owner) || (optionsMember(owner) && nameOf(owner.parent.parent?.name) === "hooks")
   );
 }
 function ownedMethod(node) {
@@ -530,14 +509,6 @@ function exportedFunction(node) {
 function moduleBinding(node) {
   return ts.isVariableDeclaration(node) && node.parent.parent.parent === node.getSourceFile();
 }
-function entryScopeReference(node) {
-  const owner = enclosingFunction(node);
-  if (!entries.has(pathOf(node)) || !owner || !ts.isFunctionDeclaration(owner)) return false;
-  return (
-    owner.parent === owner.getSourceFile() &&
-    ["start", "getRouter"].includes(nameOf(functionName(owner)))
-  );
-}
 function checkScopeReference(node) {
   if (
     ![ts.isIdentifier, ts.isStringLiteral].some((kind) => kind(node)) ||
@@ -545,21 +516,12 @@ function checkScopeReference(node) {
   )
     return;
   if (ts.isImportSpecifier(node.parent) || ts.isImportClause(node.parent)) return;
-  if (!entryScopeReference(node)) fail(node, "scope-entry-only");
-}
-function serverEntryHolder(node) {
-  if (pathOf(node) !== "src/server.ts" || nameOf(node.name) !== "entry") return false;
-  return checker
-    .getPropertiesOfType(checker.getTypeAtLocation(node.name))
-    .every(
-      (prop) =>
-        prop.name === "owned" || !contains(checker.getTypeOfSymbolAtLocation(prop, node), "holder"),
-    );
+  fail(node, "scope-entry-only");
 }
 function checkRoots(node) {
   checkScopeReference(node);
   if (!moduleBinding(node) || !contains(checker.getTypeAtLocation(node.name), "holder")) return;
-  if (!serverEntryHolder(node)) fail(node, "module-handle");
+  fail(node, "module-handle");
 }
 
 function declarationName(node) {
@@ -705,11 +667,6 @@ function serviceAllocation(node) {
       ))
   );
 }
-function entryStopAllocation(node) {
-  if (!ts.isNewExpression(node) || nameOf(node.expression) !== "AbortController") return false;
-  const owner = enclosingFunction(node);
-  return entries.has(pathOf(node)) && owner && topLevelEntry(owner, ["start", "getRouter"]);
-}
 const builtinFetch = checker.resolveName("fetch", undefined, ts.SymbolFlags.Value, false);
 assert.ok(builtinFetch, "the project must declare built-in fetch");
 const fetchDeclarations = new Set(builtinFetch.declarations);
@@ -727,18 +684,6 @@ function typeReference(node) {
   for (let parent = node.parent; parent; parent = parent.parent)
     if (ts.isTypeNode(parent) || typeOnlyImport(parent)) return true;
   return false;
-}
-function backendDefault(node) {
-  const fn = enclosingFunction(node);
-  if (!fn || !ts.isPropertyAssignment(fn.parent)) return false;
-  const property = fn.parent;
-  const call = property.parent.parent;
-  if (!ts.isCallExpression(call) || !ts.isVariableDeclaration(call.parent)) return false;
-  return (
-    nameOf(property.name) === "default" &&
-    nameOf(call.parent.name) === "httpBackend" &&
-    coreSymbol(call.expression, "tag")
-  );
 }
 function referenceSymbol(node) {
   if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent))
@@ -764,25 +709,20 @@ function nativeReference(node, declarations) {
 }
 function checkFetch(node) {
   if (typeReference(node) || !nativeReference(node, fetchDeclarations)) return;
-  if (pathOf(node) === "src/scaffold/http-backend.ts" && backendDefault(node)) return;
   fail(node, "http-request: use httpRequest.controller instead of built-in fetch");
 }
 function checkBrowserHttp(node) {
-  if (pathOf(node).startsWith("src/scaffold/") || typeReference(node)) return;
+  if (typeReference(node)) return;
   if (nativeReference(node, browserHttpDeclarations))
     fail(node, "http-client: app HTTP must use httpRequest.controller");
 }
-function httpUnitReference(node, file, name) {
-  return protocolUnitReference(node, file, name);
-}
 function checkHttpResource(node) {
-  if (pathOf(node).startsWith("src/scaffold/") || typeReference(node)) return;
-  if (httpUnitReference(node, "src/scaffold/backend/http.ts", "http"))
+  if (typeReference(node)) return;
+  if (protocolUnitReference(node, "src/backend/http.ts", "http"))
     fail(node, "http-resource: app code must depend on httpRequest.controller");
 }
 function checkHttpBackend(node) {
-  if (pathOf(node).startsWith("src/scaffold/")) return;
-  if (httpUnitReference(node, "src/scaffold/http-backend.ts", "httpBackend"))
+  if (protocolUnitReference(node, "src/backend/http-backend.ts", "httpBackend"))
     fail(node, "http-backend: app code must depend on httpRequest.controller");
 }
 function protocolUnitReference(node, file, name) {
@@ -796,13 +736,16 @@ function protocolUnitReference(node, file, name) {
   const symbol = referenceSymbol(node);
   const target = aliasTarget(symbol);
   return target?.declarations?.some(
-    (decl) => ts.isVariableDeclaration(decl) && pathOf(decl) === file && nameOf(decl.name) === name,
+    (decl) =>
+      ts.isVariableDeclaration(decl) &&
+      resolve(decl.getSourceFile().fileName) === join(base, file) &&
+      nameOf(decl.name) === name,
   );
 }
 function checkRequestHeaders(node) {
   const file = pathOf(node);
-  if (file.startsWith("src/scaffold/") || file === "src/backend/auth.ts") return;
-  if (protocolUnitReference(node, "src/scaffold/backend/headers.server.ts", "requestHeaders"))
+  if (file === "src/backend/auth.ts") return;
+  if (protocolUnitReference(node, "src/backend/headers.server.ts", "requestHeaders"))
     fail(node, "protocol-headers: app code must use principal or currentUser");
 }
 const builtinResponse = checker.resolveName("Response", undefined, ts.SymbolFlags.Value, false);
@@ -810,14 +753,12 @@ assert.ok(builtinResponse, "the project must declare built-in Response");
 const responseDeclarations = new Set(builtinResponse.declarations);
 function checkResponse(node) {
   const file = pathOf(node);
-  if (file.startsWith("src/routes/") || file.startsWith("src/scaffold/")) return;
+  if (file.startsWith("src/routes/")) return;
   if (nativeReference(node, responseDeclarations))
-    fail(node, "protocol-response: replies belong to routes or the scaffold");
+    fail(node, "protocol-response: replies belong to routes or the base");
 }
 function checkMountedAuth(node) {
-  const file = pathOf(node);
-  if (["src/scaffold/backend/auth.server.ts", "src/routes/api.auth.$.ts"].includes(file)) return;
-  if (protocolUnitReference(node, "src/scaffold/backend/auth.server.ts", "handleAuth"))
+  if (protocolUnitReference(node, "src/parts/auth/handle.server.ts", "handleAuth"))
     fail(node, "protocol-auth: only the auth route may use the mounted handler");
 }
 const httpClients = [
@@ -894,11 +835,10 @@ function createRequireReference(node) {
   );
 }
 function checkHttpImport(node) {
-  if (pathOf(node).startsWith("src/scaffold/") || typeOnlyImport(node) || typeReference(node))
-    return;
+  if (typeOnlyImport(node) || typeReference(node)) return;
   const specifier = importSpecifier(node);
   if (createRequireReference(node))
-    fail(node, "http-client: createRequire is not allowed outside the scaffold");
+    fail(node, "http-client: createRequire is not allowed in app code");
   if (!specifier) return;
   if (!ts.isStringLiteralLike(specifier)) {
     fail(node, "http-client: module loads must use a literal path");
@@ -918,7 +858,6 @@ function checkService(node) {
     return;
   }
   if (!serviceAllocation(node) || graphOwner(node)) return;
-  if (entryStopAllocation(node)) return;
   fail(node, "service-owner");
 }
 function callerOf(use) {
@@ -1086,7 +1025,7 @@ function checkFunction(node) {
     checkComponent(node);
     return;
   }
-  if ([isEntry, optionsMember, ownedMethod, nativeCallback].some((rule) => rule(node))) return;
+  if ([optionsMember, ownedMethod, nativeCallback].some((rule) => rule(node))) return;
   checkPlainFunction(node);
 }
 
@@ -1185,20 +1124,8 @@ function checkOperationRun(run) {
     });
   if (response) fail(run, "operation-wire-output: replies belong to the protocol layer");
 }
-function authProtocolException(node) {
-  return (
-    pathOf(node) === "src/scaffold/backend/auth.server.ts" &&
-    ts.isVariableDeclaration(node.parent) &&
-    nameOf(node.parent.name) === "handleAuth"
-  );
-}
 function checkOperationWire(node) {
-  if (
-    !ts.isCallExpression(node) ||
-    !coreSymbol(node.expression, "operation") ||
-    authProtocolException(node)
-  )
-    return;
+  if (!ts.isCallExpression(node) || !coreSymbol(node.expression, "operation")) return;
   const options = node.arguments[0];
   if (
     !options ||
@@ -1287,10 +1214,10 @@ if (process.argv.includes("--prove")) {
       "src/routes/plain-probe.ts",
     ],
     [
-      "response-scaffold-allowed",
-      null,
+      "response-userland-refused",
+      "protocol-response",
       'import {resource} from "@tinker/core"; const probe = resource({factory: () => new Response()}); export type Reply = Response;',
-      "src/scaffold/plain-probe.ts",
+      "src/plain-probe.ts",
     ],
     [
       "response-local-type-allowed",
@@ -1300,13 +1227,13 @@ if (process.argv.includes("--prove")) {
     [
       "request-headers-constant-key",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import * as t from "@tinker-start-scaffold/testing"; const key = "requestHeaders" as const; const probe = operation({depends: {headers: t[key]}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import * as t from "@tinker/start/testing"; const key = "requestHeaders" as const; const probe = operation({depends: {headers: t[key]}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
     [
       "http-backend-constant-key",
       "http-backend",
-      'import {operation} from "@tinker/core"; import * as t from "./scaffold/http-backend.ts"; const key = "httpBackend" as const; const probe = operation({depends: {send: t[key]}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import * as t from "@tinker/start/testing"; const key = "httpBackend" as const; const probe = operation({depends: {send: t[key]}, run: () => 1});',
     ],
     [
       "operation-request-custom-reader",
@@ -1317,52 +1244,52 @@ if (process.argv.includes("--prove")) {
     [
       "mounted-auth-bracket",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import * as protocol from "@tinker-start-scaffold/testing"; const probe = operation({depends: {mounted: protocol["handleAuth"].controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import * as protocol from "@tinker/start/testing"; const probe = operation({depends: {mounted: protocol["handleAuth"].controller}, run: () => 1});',
       "src/backend/plain-probe.ts",
     ],
     [
       "request-headers-bracket",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import * as protocol from "@tinker-start-scaffold/testing"; const probe = operation({depends: {headers: protocol["requestHeaders"]}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import * as protocol from "@tinker/start/testing"; const probe = operation({depends: {headers: protocol["requestHeaders"]}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
 
     [
       "mounted-auth-testing",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker-start-scaffold/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker/start/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
       "src/backend/plain-probe.ts",
     ],
     [
       "mounted-auth-direct",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import {handleAuth} from "../scaffold/backend/auth.server.ts"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker/start/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
       "src/backend/plain-probe.ts",
     ],
     [
-      "mounted-auth-scaffold",
+      "mounted-auth-userland",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import {handleAuth} from "./backend/auth.server.ts"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
-      "src/scaffold/plain-probe.ts",
+      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker/start/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      "src/plain-probe.ts",
     ],
 
     [
       "request-headers-testing",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker-start-scaffold/testing"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker/start/testing"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
     [
       "request-headers-direct",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import {requestHeaders} from "../scaffold/backend/headers.server.ts"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker/start/server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
     [
-      "request-headers-scaffold",
-      null,
-      'import {operation} from "@tinker/core"; import {requestHeaders} from "./backend/headers.server.ts"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
-      "src/scaffold/plain-probe.ts",
+      "request-headers-userland",
+      "protocol-headers",
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker/start/server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      "src/plain-probe.ts",
     ],
 
     [
@@ -1656,14 +1583,14 @@ if (process.argv.includes("--prove")) {
     [
       "http-backend-dependency",
       "http-backend",
-      'import {operation} from "@tinker/core"; import {httpBackend as backend} from "./scaffold/http-backend.ts"; const probe = operation({depends: {send: backend}, run: ({send}) => send("https://example.test/x")});',
+      'import {operation} from "@tinker/core"; import {httpBackend as backend} from "@tinker/start/testing"; const probe = operation({depends: {send: backend}, run: ({send}) => send("https://example.test/x")});',
     ],
     [
       "http-resource-dependency",
       "http-resource",
-      'import {operation} from "@tinker/core"; import {http as client} from "./scaffold/backend/http.ts"; const probe = operation({depends: {client}, run: ({client}) => client.send("https://example.test/x", {method: "GET", signal: new AbortController().signal})});',
+      'import {operation} from "@tinker/core"; import {http as client} from "@tinker/start/testing"; const probe = operation({depends: {client}, run: ({client}) => client.send("https://example.test/x", {method: "GET", signal: new AbortController().signal})});',
     ],
-    ["http-resource-export", "http-resource", 'export {http} from "./scaffold/backend/http.ts";'],
+    ["http-resource-export", "http-resource", 'export {http} from "@tinker/start/testing";'],
     [
       "fetch-tag-value",
       "http-request",
@@ -1925,8 +1852,8 @@ if (process.argv.includes("--prove")) {
     [
       "scope-entry-module",
       "scope-entry-only",
-      "const root = createScope({});",
-      "src/scaffold/frontend/router.tsx",
+      'import { createScope } from "@tinker/core"; const root = createScope({});',
+      "src/router.ts",
     ],
     [
       "holder-const",
@@ -2061,15 +1988,18 @@ if (process.argv.includes("--prove")) {
   if (names) assert.equal(selected.length, names.length, "unknown planted case");
   try {
     await cp(join(root, "src"), join(planted, "src"), { recursive: true });
-    for (const file of ["tsconfig.json", "PLAIN.md", "package.json"])
-      await cp(join(root, file), join(planted, file));
+    for (const file of ["tsconfig.json", "PLAIN.md", "package.json", ".tinker"])
+      await cp(join(root, file), join(planted, file), { recursive: true });
     await cp(join(root, "tests"), join(planted, "tests"), { recursive: true });
     await symlink(join(root, "node_modules"), join(planted, "node_modules"), "dir");
+    const generated = join(planted, ".tinker/tsconfig.json");
+    await writeFile(generated, (await readFile(generated, "utf8")).replaceAll(root, planted));
     for (const [name, rule, source, file = "src/plain-probe.ts"] of selected) {
       const path = join(planted, file);
-      const original = ["src/scaffold/frontend/router.tsx", "src/server.ts"].includes(file)
-        ? await readFile(path, "utf8")
-        : "";
+      const original = await readFile(path, "utf8").catch((error) => {
+        if (error.code === "ENOENT") return "";
+        throw error;
+      });
       await writeFile(path, original + source + "\n");
       if (name === "list") await writeFile(join(planted, "PLAIN.md"), "wrong list\n");
       const red = spawnSync(

@@ -6,10 +6,10 @@ Victoria stores traces and logs.
 
 ## Start
 
-Install this starter through shadcn into your project.
-Core and React must be installed from packed releases first.
-They are not published to npm yet.
-The starter copies its package file and all project checks.
+This app runs on the package `@tinker/start`.
+The base owns entries, telemetry, auth routes, and sync.
+The source registry is built locally; it is not published.
+Install packed Core, React, and Start releases first.
 
 From your project folder:
 
@@ -50,8 +50,10 @@ All settings and compose ports are in `.env.example`.
 
 ## Layout
 
-- `src/scaffold/`: fixed Start, sync, and trace setup.
-  Update it through the registry; do not edit it.
+- `node_modules/@tinker/start/`: the base package.
+  Update it with `tinker upgrade`; never edit its files.
+- `.tinker/`: generated config, route tree, and parts.
+  It is ignored by git; never edit it by hand.
 - `src/lib/tinker.ts`: your browser values and `Register` types.
 - `src/lib/tinker.server.ts`: your server values.
 - `src/backend/`: database, auth, mail, and feature operations.
@@ -63,7 +65,7 @@ All settings and compose ports are in `.env.example`.
 - `tests/`: scope tests and database/mail presets.
 - `.agents/skills/`: short guides for app changes.
 
-`src/routeTree.gen.ts` is generated.
+`.tinker/routeTree.gen.ts` is generated.
 Never edit it by hand.
 Native clients load inside their resource factories.
 The browser build refuses server imports.
@@ -74,7 +76,7 @@ Use a tag for settings, data for changing state,
 a resource for a shared client, and an operation for an action.
 Code outside these four forms needs a TSDoc reason.
 Read `AGENTS.md` and the skill for the work you are doing.
-The scaffold reaches your code through the two lib seams.
+The base reaches your code through the two lib seams.
 `Register` fills its open types with your feature bodies.
 
 A mutation returns an execution ID.
@@ -93,28 +95,142 @@ A signed-out private route checks only the account before redirecting.
 Account exit cancels waits and starts a new snapshot lifetime.
 Scope close cancels response readers left open by their consumer.
 
+## Glue and seams
+
+`vite.config.ts`:
+
+```ts
+import { defineConfig } from "vite-plus";
+import { tinker } from "@tinker/start/vite";
+export default defineConfig({
+  plugins: [tinker({ auth: true, sync: true })],
+});
+```
+
+`tsconfig.json`:
+
+```json
+{ "extends": "./.tinker/tsconfig.json" }
+```
+
+`src/lib/tinker.server.ts`:
+
+```ts
+import { databaseSetup } from "../backend/database.ts";
+export const extensions = [databaseSetup];
+export { database } from "../backend/database.ts";
+export { auth, readAccount } from "../backend/auth.ts";
+export { bootstrap } from "../backend/sync.ts";
+```
+
+`src/lib/tinker.ts`:
+
+```ts
+export const extensions = [];
+export { records } from "../frontend/records.ts";
+export { readBatch, readBootstrap, readSnapshot, streamMessage } from "../contracts/sync.ts";
+import type { FeatureSync } from "../contracts/sync.ts";
+declare module "@tinker/start" {
+  interface Register {
+    change: FeatureSync.Change;
+    result: FeatureSync.Result;
+    public: FeatureSync.Public;
+    private: FeatureSync.Private;
+  }
+}
+```
+
 ## Checks
+
+From this repo's root:
+
+```bash
+vp run @tinker-start-scaffold#check
+```
+
+It runs every named app check, one at a time.
+The Compose proof starts its own Postgres and Mailpit.
+It needs Docker, curl, and agent-browser with Lightpanda.
+It stops its servers and removes its own volumes.
+
+Each check also has a name in `package.json`:
+
+- `check:plain`: strict app forms and HTTP rules.
+  It reads base symbols and checks `PLAIN.md`.
+- `test:schema`: generate from a fresh prepared copy.
+  No new migration may appear.
+- `test:imports`: importing app units starts no services.
+  Drizzle table declarations may load.
+  Native drivers, auth, and mail clients may not load.
+- `test:middleware`: native request and function calls
+  share one session; SSE replays and closes.
+- `test:serve`: the base host serves a native JSON reply.
+- `test:seam:fixture`: notes compile with their own
+  Register bodies and the installed base.
+- `test:registry`: built items match source;
+  their complete app builds in a scratch folder.
+- `test:compose`: real auth, SMTP, migrations,
+  and two tabs sharing a todo through sync.
+
+`registry:build` writes the local registry payloads.
+It publishes nothing.
+Build, type checks, and scope tests run separately:
 
 ```bash
 npm run build
 npm run typecheck
 npm test
-npm run check:plain
+npm run doctor
 npm run check:plain -- --prove
-npm run test:seam
-npm run test:boundary
-npm run test:schema
 ```
 
-`npm run check` runs the project gates together.
-Tests run operations through small scopes.
-They use presets with PGlite and real auth and database code.
-There are no mocks and no timing claims.
-The seam check rejects imports outside the fixed folder.
-The browser check proves server imports fail the build.
-The schema check proves generation adds no duplicate tables.
+Doctor 5 checks the names the base reads from the seams.
+Doctor 6 checks imports through the base's public entries.
+It also reads module declarations and import-equals.
+An absolute path into the base fails too.
+Doctor 10 reads the last build's import violations.
+The plugin already refuses server code in a browser.
+The old seam and boundary scripts are removed.
+Their base rules are already checked there.
 
-## Promises tested through scopes
+Tests use `createScope` and app operations.
+They run no framework, server, build, or browser.
+The named proof scripts run those outside tests.
+
+## Example items
+
+The local registry has these copy-in items:
+
+- `todos-example`: todo table, operations, view,
+  contracts, route, and server functions.
+- `profile-example`: profile operations, form,
+  actions, route, and server functions.
+- `auth-pages-example`: auth resource, auth tables,
+  sign-in actions, credentials, and public page.
+- `mail-example`: SMTP settings, client, and send action.
+- `counter-example`: shared counter and its view.
+- `example-wiring`: shared state, sync bodies,
+  seams, UI, database, and migrations.
+
+The items share this demo's sync bodies and page links.
+They are copy-in parts for an app with that wiring.
+`postgres-auth-mail-example` joins all of them.
+`starter` adds the app files once.
+`runtime` now installs `@tinker/start@0.6.0` only.
+It copies no runtime source.
+
+Auth and profile forms and actions have separate files.
+Shared error text stays in `src/frontend/error-text.ts`.
+The old action entry re-exports them for existing tests.
+
+Upgrade the base with `tinker upgrade`.
+Review newer example files before copying them.
+Never re-apply the app package file to update the base.
+A clean registry CLI install and separate app template
+belong to card `start/shadcn-registry`.
+Publishing waits for the user's go.
+
+## Promises tested through app scopes
 
 - Real accounts can sign up, sign in, sign out, and save a profile.
 - Signed-out private writes open no transaction.
@@ -130,70 +246,16 @@ The schema check proves generation adds no duplicate tables.
 - Events before receipts finish waits after saved records are applied.
 - Replayed events and old snapshots keep newer records and drafts.
 - Account exit stops waits and ignores late old responses.
-- Binding after the factory ends closes the tab once on a real page hide.
-- The server side has no page and binds without listening.
 - Failed mail keeps the name and retry sends only mail.
 - Committed profile work finishes after its request exits.
 - Saved names stay readable while duplicate requests share a send.
-- Unbound middleware fails before calling its next step.
-- A body ending or being cancelled closes its session and work.
 - Commit wakes SSE; rollback publishes no wake.
 - SSE replays saved events and refuses another account's cursor.
 - A revoked session receives no queued private rows.
 - A quiet private stream closes at the heartbeat after sign-out.
 - A final result replay completes a wait after disconnect.
-- Finished traces and Pino logs reach their HTTP receivers.
-- Telemetry uses the HTTP backend without tracing its own requests.
-- With observation on, each HTTP request has an `http.request` span.
-- Its `http <METHOD> <path>` child span records method, path, and status.
-- An HTTP method is normalized once for sending and spans.
-- An HTTP method rejects non-token characters before sending.
-- Closing the HTTP resource aborts requests still in flight.
-- Releasing HTTP aborts a held direct send and leaves the scope open.
-- A bound HTTP backend gets the request and returns text without network.
-- HTTP replies keep each set-cookie value and joined repeated headers.
-- Network failures keep method, path, and only cause name and code.
-- An abort failure keeps its numeric code without its message.
-- A string cause keeps the outer error name and code without private text.
-- Network failures keep readable cause fields when the other field has a wrong type.
-- Closing the caller aborts HTTP body reading.
-- Backend stop settles a server function's signalled HTTP call.
-- Backend stop settles HTTP in a root call with signal or tags.
-- Request end settles its tagged HTTP call and leaves siblings open.
-- Ending the server function's call signal still cancels its HTTP work.
-- An HTTP request after backendStop or requestStop ends fails before sending.
-- Forced root and session closes still cancel a never-answering HTTP request.
-- Backend stop settles HTTP while other running work finishes.
-- A direct graceful session close settles a hung HTTP send without stop tags.
-- A direct graceful root close reaches a session's hung HTTP send without stop tags.
-- BackendStop ends a pending HTTP send without closing its root.
-- Running work finishes on graceful close when the HTTP backend answers.
-- Storage failure keeps bounded records for retry.
-- Accepted telemetry frees the byte budget for later records.
-- Browser ingest refuses foreign origins, bad shapes, and large bodies.
-- Telemetry routes keep each input case's status, headers, and body.
-- Telemetry operations take a plain batch and return no HTTP reply.
-- A stopped telemetry backend raises a managed error before ingest.
-- Sync operations take a cursor param and return the owned body stream.
-- Sync routes keep open, Last-Event-ID precedence, and bad cursor replies.
-- Sync request read failures pass through the cursor check.
-- Sync downstream validation failures pass through without a bad cursor reply.
-- The public transport entry keeps the mounted auth handler private.
-- Owner close flushes finished records without a scheduled browser timer.
-- A stuck receiver is aborted by the owned Core clock during close.
-- Stalled uploads and storage requests stop with their owner.
-- A stream checks the session once at open and once for the next wake.
-- A signed-out private redirect loads one snapshot across separate renders.
-- A private route check clears cached records after another tab signs out.
-- Sign-in, an old stream account event, and route loads fetch one signed-in snapshot.
-
-The session-target HTTP resource joins `ctx.closing` with its send signals.
-A graceful close of the session or its root ends HTTP waits before work joins.
-A closing abort raises HttpRequestFailed with an AbortError cause.
-The caller's signal stays open on a graceful close.
-Other running work can finish, after the backend has delivered its reply.
-Forced close cancels through the caller's signal.
-Backend and request stop tags can also end waits without closing a layer.
+  The base owns the request, HTTP, telemetry, and tab tests.
+  Read `@tinker/start`'s README for those promises.
 
 ## Limits
 
@@ -206,67 +268,17 @@ SMTP acceptance means the server accepted mail.
 Mailpit lets you see that message in local development.
 Storage failure can drop records when its bounded queue fills.
 
-## Move from setup contract 3 to 4
+## App HTTP rules
 
-The source items are version `0.6.0`; setup contract 4 changes the entry and lib seams.
-Update these install-only files before copying the new fixed runtime.
-A runtime-only overwrite does not update them.
+Use `httpRequest` from `@tinker/start/server`.
+Map its reply to a feature value or managed error.
+Tests bind `httpBackend` from `@tinker/start/testing`.
+App code may not use that tag or the raw `http` resource.
 
-- Move root creation, signals, and close into `src/server.ts`.
-  The backend entry module now exports only the `setup` extension.
-  Remove imports of `getBackend` and `closeBackend`.
-- In `src/lib/tinker.ts`, export `readSnapshot`, `readBootstrap`, and `readBatch` as schema values.
-  Export the message body schema as `streamMessage`.
-  The fixed receive operation owns JSON parsing; remove the old `readStreamMessage` helper.
-- Replace a custom import of `holdResponse` with `responseBodies`.
-  Its resource owns open readers and cancels them during scope close.
-- Native database listen may return a synchronous release callback.
-  Its handle type permits void or Promise<void>.
-  Notifications return subscription records; invoke wait and close on their resource.
-- The snapshot resource owns account-change completion.
-  Use endAccountChange and completeAccountChange on that resource.
-- Pass a native send function and its data record to sync.execute.
-  Remove signal-taking arrow helpers at its callers.
-- The telemetry queue exposes only ingest, start, flush, and close.
-  Its close hook ends scheduling; remove calls to stopSchedule.
-
-The server entry holds the body for the native request:
-
-```ts
-const bodies = requestContext.scope.resolve(responseBodies);
-return bodies.hold(response, finish);
-```
-
-Then run the checks above.
-Review the dry run before any fixed-source overwrite.
-
-App code uses only httpRequest for outgoing HTTP.
-The plain check refuses app use of http as a value, including aliases.
-Type references to http remain allowed.
-The check refuses app references to httpBackend.
-Tests bind that tag through the fixed scaffold transport seam.
-The tag lives in src/scaffold/http-backend.ts.
-Only its default may use built-in fetch.
-Feature operations import httpRequest from @/lib/tinker.server.
-Pass unchecked request values through rawInput; input needs the branded shape.
-Map its reply to a feature value or managed error (ADR 0103).
-
-The plain check rejects any app use of the global Response
-outside src/routes/ and src/scaffold/, including type references.
-It also rejects operations with Request input or Response output.
-Only handleAuth in src/scaffold/backend/auth.server.ts is excepted.
-
-App imports of the named HTTP clients and raw sockets fail the plain check.
-Literal subpaths, re-exports, dynamic import, and require use the same ban.
-The client list is node:http, node:https, node:http2, http, https, http2,
-ws, ofetch, undici, axios, ky, node-fetch, got, and superagent.
-It also bans node:net, node:tls, net, tls, dgram, and node:dgram
-imports outside src/scaffold/.
-Computed import and require paths fail there too.
-So do createRequire imports, aliases, and uses.
-XMLHttpRequest constructors and global value uses fail there too.
-So do navigator.sendBeacon calls and value uses, including literal bracket access.
-Native WebSocket and EventSource stay allowed for userland sync transports (ADR 0048).
-Their resources own and close the connection through ctx.defer.
-Type-only imports and exports are allowed, including import { type X }.
-Imports that keep a value or only send code still fail.
+The plain check refuses built-in fetch, raw HTTP clients,
+computed module loads, and createRequire in app code.
+It refuses raw request headers outside the auth resource.
+Replies belong to routes; operations take plain params.
+Operations never take Request or return Response.
+Native WebSocket and EventSource remain allowed.
+Their resources own and close the connection.

@@ -1,51 +1,49 @@
 ---
 name: tinker-seams
-description: Keep feature work outside the fixed scaffold.
+description: Keep app wiring on the base's public entries.
 ---
 
 # Keep the seams
 
 Use this when changing imports or app wiring.
-Never edit `src/scaffold/` to add a feature.
-It is fixed source updated through the registry.
+The base lives in `node_modules/@tinker/start/`.
+Never edit it; update it with `tinker upgrade`.
 
-App code may import fixed scaffold exports.
-It must never edit them.
-Examples used by the app:
+App imports use only public entries:
 
-- `eventHistory`: `src/scaffold/backend/events.ts`.
-- `syncClient`: `src/scaffold/frontend/sync.ts`.
-- `startRequests`: `src/scaffold/start.ts`.
-- `readResult`: `src/scaffold/backend/result.server.ts`.
-- `responseBodies`: `src/scaffold/backend/body.server.ts`.
-- `httpRequest`: `src/scaffold/backend/http.ts`.
+- `@tinker/start`: startRequests and sync types.
+- `@tinker/start/server`: eventHistory, readResult,
+  httpRequest, env, auth settings, and sync tables.
+- `@tinker/start/client`: syncClient and snapshotLoader.
+- `@tinker/start/testing`: test bindings only.
+- `@tinker/start/vite`: the tinker plugin.
 
-The seam check guards only imports from scaffold to app.
-The scaffold reads your values through:
+The base reads app values through two files:
 
-```ts
-import { records } from "@/lib/tinker";
-import { database } from "@/lib/tinker.server";
-```
+- `src/lib/tinker.ts`: extensions, records, readers,
+  and the app's Register bodies.
+- `src/lib/tinker.server.ts`: extensions, database,
+  auth, readAccount, and bootstrap.
 
-Fill the open `Register` in `src/lib/tinker.ts`.
-It supplies change, result, public, and private bodies.
-See `src/contracts/sync.ts` for the current bodies.
+Doctor 5 checks these names.
+Doctor 6 refuses base paths and private alias imports.
+Doctor 10 reports the last build's import violations.
+
+Fill `Register` on `@tinker/start` in the client seam.
+See `src/contracts/sync.ts` for this app's bodies.
 Put raw-input readers in `src/contracts/`.
 
-Feature HTTP operations import httpRequest from `@tinker/start/server`.
-Export those operations from src/backend/index.ts for scope tests.
-Tests bind httpBackend through the fixed transport seam.
-The tag lives in src/scaffold/http-backend.ts.
-App code cannot use http as a value, even through fixed scaffold exports.
-Type references to http remain allowed.
-App code cannot reference httpBackend.
-The fixed telemetry sender uses httpBackend directly to avoid tracing itself.
+Feature HTTP operations import httpRequest from
+`@tinker/start/server`.
+Tests bind httpBackend from `@tinker/start/testing`.
+App code never uses that tag or the raw http resource.
+Import feature operations directly from their files.
+A server seam that re-exports a feature can form a loop.
 
+The app owns its migrations and wake triggers.
+It imports sync tables from `@tinker/start/server`.
 Server imports belong in server functions and routes.
-Never import `tinker.server` into a browser view.
-Keep fixed sync tables in the scaffold's schema.
-Your feature tables belong in `src/backend/`.
+Never import the server seam into a browser view.
 
 After changing wiring:
 
@@ -53,7 +51,6 @@ After changing wiring:
 npm run build
 npm run typecheck
 npm run check:plain
-npm run test:seam
-npm run test:boundary
+npm run doctor
 npm run test:schema
 ```

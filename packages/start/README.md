@@ -452,6 +452,11 @@ tinker doctor --fix
   a server seam without `database` or `bootstrap`,
   a client seam without one of its five names,
   and an app with no `Register` bodies.
+- Check 6 reads literal module paths in imports, exports,
+  dynamic imports, import types, module declarations,
+  and import-equals statements.
+  A private alias or a relative or absolute path
+  into the installed base fails with its file and line.
 - Check 7 (routes) counts an on part's routes as base routes,
   and names the switch that frees one.
   A route under a base splat, such as

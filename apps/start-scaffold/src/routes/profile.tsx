@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { ProfilePage } from "../frontend/App.tsx";
+import { ProfilePage } from "../frontend/Profile.tsx";
 export const Route = createFileRoute("/profile")({
   gcTime: 0,
   beforeLoad: async ({ context }) => {

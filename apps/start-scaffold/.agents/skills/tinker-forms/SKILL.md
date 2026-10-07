@@ -76,18 +76,18 @@ Stop tags still end waits without closing a layer.
 Other running work keeps its graceful close rule.
 Small-scope tests may leave the two stop tags unbound.
 Tests bind httpBackend to a fake; never patch global fetch.
-Only the default in src/scaffold/http-backend.ts uses built-in fetch.
+Only the default in the base HTTP backend uses built-in fetch.
 The plain check bans other built-in fetch value uses across src.
 Telemetry sends through httpBackend directly so it does not trace itself.
 Only the shared backend tag file is safe on server and browser.
 The HTTP resource and request stay behind the backend import guard.
 
-Only fixed scaffold code may use the http resource directly.
+Only base code may use the http resource directly.
 App seams export only httpRequest.
 The plain check rejects app use of http as a value.
 Type references to http remain allowed.
 The check rejects app references to httpBackend.
-Only fixed scaffold code may send through the backend tag.
+Only base code may send through the backend tag.
 App imports cannot load the named HTTP clients or raw sockets:
 
 - node:http, node:https, node:http2, http, https, http2.
@@ -97,11 +97,11 @@ App imports cannot load the named HTTP clients or raw sockets:
 - node:dgram and dgram.
 
 The ban also covers literal subpaths, re-exports, import(), and require().
-Computed import() and require() paths fail outside src/scaffold/.
+Computed import() and require() paths fail in app code.
 So do createRequire imports, aliases, and uses.
 Type-only imports and exports are allowed, including import { type X }.
 A mixed import, default value import, or empty import still fails.
-Outside src/scaffold/, XMLHttpRequest constructors and global value uses fail too.
+In app code, XMLHttpRequest constructors and global value uses fail too.
 So do navigator.sendBeacon calls and value uses, including literal bracket access.
 Destructured browser globals fail too.
 Native WebSocket and EventSource stay allowed for userland sync transports (ADR 0048).
@@ -153,7 +153,7 @@ The sync route reads the cursor and Last-Event-ID.
 Its operation takes { cursor } and returns the owned body stream.
 The route adds the SSE headers.
 The named handleAuth mount is the only exception.
-It lives in scaffold protocol code and calls better-auth's HTTP handler.
+It lives in base protocol code and calls better-auth's HTTP handler.
 Raw request headers stay inside that protocol code and auth.
 
 ## Plain functions are rare
@@ -195,11 +195,8 @@ Never expose a send method that bypasses flush dedupe.
 Core callbacks are direct run, factory, input, and hooks members of a unit's options object.
 Wrapping a factory callback in Object.freeze gives no exception.
 Only the resource unit's direct factory grants owned public methods.
-Process entries are top-level start and close in src/server.ts,
-plus its module-level entry object's fetch method.
-The router entry is a top-level getRouter in its listed entry files.
-Names alone grant no entry exception.
-The returned public native methods of these entries keep their entry contract.
+Process entries live in the installed base.
+App files get no root entry exception.
 An extension hook may return its public value, just as a resource factory does.
 Other inline callbacks are allowed only in a callback slot whose callee is outside src, or a JSX attribute.
 A native options object may supply that native callee's named callbacks.
@@ -253,7 +250,7 @@ start(flush: () => Promise<void>) {
 },
 ```
 
-This is the shipped method in `src/scaffold/telemetry/queue.ts`.
+This is the shipped method in the base telemetry queue.
 It may take a callback because its resource owns the timer promise,
 stops the signal, and awaits that promise during close.
 A plain function has no such owner, so it may not take a callback.
@@ -271,11 +268,8 @@ The root entry may create only its root stop controllers outside that graph.
 The tabLifetime resource owns the pagehide listener and removes it on close.
 An option value evaluated at import has none.
 
-Only these files may reference Core createScope:
-
-- `src/server.ts`: inside start, which owns both roots and stop signals.
-- `src/router.tsx`: inside getRouter, the client entry.
-- `src/scaffold/frontend/router.tsx`: inside getRouter, its fixed implementation.
+App files never call Core createScope.
+The base owns both roots; scope tests own theirs.
 
 Imports alone are allowed.
 Aliases, parentheses, casts, arrays, call, and Reflect.apply give no exception.
@@ -286,9 +280,8 @@ Exported accessors and arrow properties returning a scope fail too.
 Outside entries, no module-level let or const may hold a live Core handle,
 AbortController, or native client, including nested and promised values.
 Declared Core units may live at module scope; their handles are forbidden in plain params and React props.
-Only the server entry's entry.owned lazy promise may retain its root context.
-Importing it starts no clients.
-The fixed backend entry declares only the setup extension.
+The base holds its roots.
+The app server seam declares its extensions.
 
 At module scope, calls and new expressions fail unless they declare app setup.
 The allowed calls are:

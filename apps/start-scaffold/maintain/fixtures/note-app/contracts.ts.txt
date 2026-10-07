@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eventEnvelope, snapshotEnvelope, batchEnvelope, bootstrapEnvelope } from "./scaffold/sync.ts";
+import { eventEnvelope, snapshotEnvelope, batchEnvelope, bootstrapEnvelope } from "@tinker/start";
 const note = z.object({ text: z.string() });
 const result = z.object({ kind: z.literal("saved"), text: z.string() });
 const snapshot = snapshotEnvelope.extend({

@@ -15,12 +15,16 @@ if (import.meta.main) {
     await import("../src/backend/index.ts");
     hooks.deregister();
     const services = [...loaded].filter((url) =>
-      /\/node_modules\/(?:pg|@electric-sql\/pglite|drizzle-orm|better-auth|nodemailer)(?:\/|$)/.test(
-        url,
-      ),
+      /\/node_modules\/(?:pg|@electric-sql\/pglite|better-auth|nodemailer)(?:\/|$)/.test(url),
     );
-    assert.deepEqual(services, [], "Public backend import loaded service libraries");
-    process.stdout.write("PASS: public backend import leaves service libraries unloaded.\n");
+    assert.deepEqual(
+      services,
+      [],
+      "Public backend import loaded a native driver, auth library, or mail client",
+    );
+    process.stdout.write(
+      "PASS: public backend import leaves drivers, auth, and SMTP unloaded; Drizzle table declarations are allowed.\n",
+    );
   } else {
     const result = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--child"], {
       encoding: "utf8",

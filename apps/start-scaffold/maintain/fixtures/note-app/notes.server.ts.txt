@@ -1,14 +1,14 @@
 import { operation, resource, tag } from "@tinker/core";
-import type { Database } from "./scaffold/backend/database.ts";
+import type { Database } from "@tinker/start/server";
 import type { BetterAuthPlugin } from "better-auth";
-import type { Sync } from "./scaffold/sync.ts";
+import type { Sync } from "@tinker/start";
 export const databaseSettings = tag<{ url: string; migrations: string }>({ label: "note.database.settings" });
 export const database = resource({
   label: "note.database",
-  factory: async (_deps, ctx): Promise<Database.Handle> => {
+  factory: async (_deps, { defer }): Promise<Database.Handle> => {
     const [{ PGlite }, { drizzle }] = await Promise.all([import("@electric-sql/pglite"), import("drizzle-orm/pglite")]);
     const client = await PGlite.create();
-    ctx.defer(() => client.close());
+    defer(() => client.close());
     return Object.assign(drizzle({ client }), { listen: async (wake: () => void) => client.listen("start_sync", wake) });
   },
 });

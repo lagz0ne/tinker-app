@@ -35,3 +35,22 @@ test("names each import that goes around the base's entries, at its line", () =>
     `src/backend/peek.ts:5 "${linked}" reaches into the base by path; use a base entry`,
   ]);
 });
+
+test("names module declarations and import-equals that bypass the base entries", () => {
+  const root = goodApp({
+    "src/peek.ts":
+      'declare module "#tinker/app" { interface X {} }\nimport app = require("@tinker/start/src/index.ts");\n',
+  });
+  expect(imports(root).lines).toEqual([
+    'src/peek.ts:1 "#tinker/app" is a base-only name; app code cannot import it',
+    'src/peek.ts:2 "@tinker/start/src/index.ts" is not a base entry; use @tinker/start, @tinker/start/server, @tinker/start/client, or @tinker/start/vite',
+  ]);
+});
+
+test("names an absolute path into the linked base", () => {
+  const path = join(baseDir, "src/errors.ts");
+  const root = goodApp({ "src/peek.ts": `export { raise } from "${path}";\n` });
+  expect(imports(root).lines).toEqual([
+    `src/peek.ts:1 "${path}" reaches into the base by path; use a base entry`,
+  ]);
+});

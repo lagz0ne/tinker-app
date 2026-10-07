@@ -38,10 +38,11 @@ for (const name of [
   "test:serve",
   "test:imports",
   "test:seam:fixture",
+  "test:compose",
 ])
   delete pkg.scripts[name];
 pkg.scripts.check =
-  "vp check && vp run typecheck && vp run test && vp run check:plain && vp run test:seam && vp run test:boundary && vp run test:schema";
+  "vp check && vp run typecheck && vp run test && vp run check:plain && vp run test:schema && vp run doctor";
 await writeFile(join(app, "starter.package.json"), JSON.stringify(pkg, null, 2) + "\n");
 const vp = join(root, "node_modules/.bin/vp");
 for (const args of [

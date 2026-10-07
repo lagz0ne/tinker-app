@@ -1,4 +1,4 @@
-import { join, dirname, resolve, sep } from "node:path";
+import { join, dirname, resolve, sep, isAbsolute } from "node:path";
 import { installedBase, listFiles } from "../paths.mjs";
 import { parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";
@@ -26,7 +26,7 @@ const entries = new Set([
  * @param {string | null} base - From installedBase; why: a linked base folder.
  */
 function reachesBase(name, file, base) {
-  const target = name.startsWith(".") ? resolve(dirname(file), name) : "";
+  const target = name.startsWith(".") || isAbsolute(name) ? resolve(dirname(file), name) : "";
   if (target.includes(`${sep}node_modules${sep}@tinker${sep}start${sep}`)) return true;
   return Boolean(base && target.startsWith(base + sep));
 }

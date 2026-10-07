@@ -1,8 +1,9 @@
+export const extensions = [];
 export { records } from "../records.ts";
 export { readSnapshot, readBootstrap, readBatch, streamMessage } from "../contracts.ts";
 import type { Notes } from "../contracts.ts";
 /** This different app merges the registry without the example's feature types. */
-declare module "../scaffold/sync.ts" {
+declare module "@tinker/start" {
   interface Register {
     change: Notes.Change;
     result: Notes.Result;

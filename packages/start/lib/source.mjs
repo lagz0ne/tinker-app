@@ -37,7 +37,12 @@ export function parseSource(path) {
 export function specifiers(source) {
   const found = [];
   walk(source.program, (node) => {
-    const name = node.source?.value;
+    const name =
+      node.type === "TSModuleDeclaration"
+        ? node.id.value
+        : node.type === "TSExternalModuleReference"
+          ? node.expression.value
+          : node.source?.value;
     if (typeof name === "string" && node.type !== "Literal")
       found.push({ name, line: source.line(node) });
   });

@@ -21,7 +21,7 @@ An action must run through an operation to get observation and cancellation.
 Outgoing HTTP uses httpRequest.controller; never call fetch from app code.
 The http resource owns requests and wraps built-in fetch through httpBackend.
 App code cannot reference http or httpBackend; use only httpRequest.
-Tests bind the tag through the fixed scaffold seam.
+Tests bind the tag through `@tinker/start/testing`.
 The plain check bans app imports of the named HTTP clients and raw sockets.
 Telemetry uses it directly to avoid tracing its own sends.
 A resource may retain native handles and private work state.
@@ -47,18 +47,19 @@ Their helpers still follow the strict rule.
 
 A service must never exist outside the graph of primitives.
 Resources own long-lived clients, connections, clocks, timers, and queues.
-Only `src/server.ts`, `src/router.tsx`, and its fixed router part create roots.
+Only the installed base entries and scope tests create roots.
 The entry owns each root and its stop signal.
 No helper module keeps a scope singleton or exports a scope getter.
 No module-level let or const holds a live handle, stop controller, or native client.
-Only start and getRouter may reference createScope inside the listed entries.
+App files never call createScope.
 Module calls are restricted to the declaration list in tinker-forms.
 Only a factory's returned public methods get its owned-method exception.
 Hidden object methods and arrow properties follow the plain rule.
 React props cannot carry Core handles or signals; components cannot await.
 The plain-function cap is 17; raising it needs a decision.
 
-Keep fixed setup under `src/scaffold/` and feature units in userland.
+The base lives in `node_modules/@tinker/start/`.
+Keep feature units in app files.
 
 ## App skills
 
@@ -67,7 +68,7 @@ Read the skill for the work you are doing:
 - [tinker-forms](.agents/skills/tinker-forms/SKILL.md):
   before adding app code; choose its owner.
 - [tinker-seams](.agents/skills/tinker-seams/SKILL.md):
-  when changing imports or wiring; never edit `src/scaffold/`.
+  when changing imports or wiring; never edit the base.
 - [tinker-feature](.agents/skills/tinker-feature/SKILL.md):
   when adding a feature; follow todos from table to page.
 - [tinker-sync](.agents/skills/tinker-sync/SKILL.md):
@@ -84,8 +85,7 @@ npm run typecheck
 npm run test
 npm run check:plain
 npm run check:plain -- --prove
-npm run test:seam
-npm run test:boundary
+npm run doctor
 npm run test:schema
 ```
 

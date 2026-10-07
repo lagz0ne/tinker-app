@@ -10,7 +10,9 @@ import { setImmediate } from "node:timers/promises";
 /** Real Postgres, better-auth, Mailpit, and two Lightpanda tabs. This is a proof, never a test. */
 const repo = resolve(import.meta.dirname, "../../..");
 const app = join(repo, "apps/start-scaffold");
-const logFile = join(repo, "docs/roadmap/start-base/proof/16-scaffold-on-base.txt");
+const logFile =
+  process.env.SCAFFOLD_PROOF_LOG ??
+  join(repo, "docs/roadmap/start-base/proof/16-scaffold-on-base.txt");
 const scratch = await mkdtemp(join(tmpdir(), "scaffold-on-base-"));
 const rows = [];
 const say = (line) => {
@@ -114,7 +116,7 @@ let startedCompose = false;
 let serverOutput = "";
 let failed;
 try {
-  say("STEP 1: scaffold on @tinker/start; telemetry, auth, sync on");
+  say("scaffold on @tinker/start; telemetry, auth, sync on");
   const build = spawnSync("vp", ["build"], { cwd: app, env, encoding: "utf8", timeout: 120000 });
   say(`vp build: EXIT ${build.status}`);
   assert.equal(build.status, 0, build.stdout + build.stderr);
@@ -309,7 +311,20 @@ try {
   );
   assert.ok(saved.includes(todoTitle));
   say(`Postgres saved todo: ${saved}`);
-  say("PROOF PASS: real auth, SMTP, migrations, and two-tab sync");
+  activeSession = session;
+  browser("open", `${origin}/profile`);
+  browser("wait", "form input");
+  browser("fill", "form input", "Step two saved name");
+  browser("find", "role", "button", "click", "--name", "Save name", "--exact");
+  browser("wait", "--text", "Name saved and notification accepted.");
+  const notifications = await fetch(`${mailpitOrigin}/api/v1/messages`).then((response) =>
+    response.json(),
+  );
+  assert.ok(
+    notifications.messages.some((message) => message.Subject === "Your profile was updated"),
+  );
+  say("profile page saved name; Mailpit received the real SMTP notification");
+  say("PROOF PASS: real auth, SMTP, migrations, two-tab sync, and profile page");
 } catch (error) {
   failed = error;
   say(`PROOF FAIL: ${error.message}`);
