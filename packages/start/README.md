@@ -606,8 +606,9 @@ Example requirements also stop a build until they are joined.
 - Hashed files under `/assets/` have a one-year cache.
   Other built files need revalidation.
 - HEAD returns headers with no body.
-- Chrome's client entry has the compile hint on by default.
-  Chrome can compile its functions off the main thread.
+- Chrome's client entry has a comment, the compile hint,
+  on by default.
+  It asks Chrome to compile functions off the main thread.
   This uses more memory for functions that never run.
   Other browsers ignore the comment.
   To turn it off:
