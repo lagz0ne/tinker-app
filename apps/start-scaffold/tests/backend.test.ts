@@ -1,3 +1,4 @@
+import { env } from "@tinker/start/server";
 import { handleAuth } from "@tinker-start-scaffold/testing";
 import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
 import { test, expect } from "vite-plus/test";
@@ -5,9 +6,6 @@ import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { sql } from "drizzle-orm";
 import {
-  authSettings,
-  databaseSettings,
-  mailSettings,
   readProfile,
   saveProfile,
   database,
@@ -17,21 +15,16 @@ import {
   isError,
 } from "@tinker-start-scaffold/backend";
 import type { Mail } from "@tinker-start-scaffold/backend";
-const tags = [
-  databaseSettings({ url: "postgres://proof", migrations: "drizzle" }),
-  mailSettings({
-    host: "proof",
-    port: 25,
-    user: "proof",
-    password: "proof",
-    from: "proof@example.com",
-  }),
-  authSettings({
-    origin: "http://localhost:4318",
-    secret: "test-secret-with-at-least-thirty-two-letters",
-    plugins: [],
-  }),
-];
+const tags = env({
+  DATABASE_URL: "postgres://proof",
+  SMTP_HOST: "proof",
+  SMTP_PORT: "25",
+  SMTP_USER: "proof",
+  SMTP_PASSWORD: "proof",
+  SMTP_FROM: "proof@example.com",
+  PUBLIC_ORIGIN: "http://localhost:4318",
+  AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
+});
 function authRequest(path: string, body: object, cookie = "") {
   return new Request(`http://localhost:4318/api/auth/${path}`, {
     method: "POST",

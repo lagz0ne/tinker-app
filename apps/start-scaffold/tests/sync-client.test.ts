@@ -1,15 +1,9 @@
 import { profile, counter, nameDraft } from "@tinker-start-scaffold/frontend";
 import { test, expect } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
-import {
-  accountOwner,
-  tabStop,
-  syncClient,
-  applyBootstrap,
-  applyEvents,
-  leaveAccount,
-} from "@tinker-start-scaffold/sync";
-import type { Sync } from "@tinker-start-scaffold/sync";
+import { syncClient, applyBootstrap, applyEvents, leaveAccount } from "@tinker/start/client";
+import { accountOwner, tabStop } from "@tinker/start/testing";
+import type { Sync } from "@tinker/start";
 const ada = { id: "ada", name: "Ada", email: "ada@example.com", emailVerified: false };
 const initial: Sync.Snapshot = {
   public: { stream: "public", revision: 0, value: 0 },
@@ -29,7 +23,7 @@ test("an event before its receipt finishes only after saved records are applied"
   const send = operation({
     label: "test.sync.send",
     depends: { sync: syncClient },
-    run: async ({ sync }, ctx) =>
+    run: async ({ sync }, { signal }) =>
       sync.execute(
         executionId,
         {
@@ -39,7 +33,7 @@ test("an event before its receipt finishes only after saved records are applied"
             return receipt.promise;
           },
         },
-        ctx.signal,
+        signal,
       ),
   });
   const root = createScope({
@@ -129,7 +123,7 @@ test("account exit stops local waits and ignores an old account's late response"
   const send = operation({
     label: "test.sync.send",
     depends: { sync: syncClient },
-    run: async ({ sync }, ctx) =>
+    run: async ({ sync }, { signal }) =>
       sync.execute(
         executionId,
         {
@@ -139,7 +133,7 @@ test("account exit stops local waits and ignores an old account's late response"
             return { kind: "accepted", executionId };
           },
         },
-        ctx.signal,
+        signal,
       ),
   });
   const root = createScope({

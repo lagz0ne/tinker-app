@@ -1,27 +1,21 @@
-import { operation, resource, tag } from "@tinker/core";
-import type { BetterAuthPlugin } from "better-auth";
+import { operation, resource } from "@tinker/core";
 import { database } from "./database.ts";
 import { sendMail } from "./mail.ts";
-import { requestHeaders } from "../scaffold/backend/headers.server.ts";
+import { authSettings, requestHeaders } from "@tinker/start/server";
+export { authSettings } from "@tinker/start/server";
 import { raise } from "../errors.ts";
-export declare namespace Auth {
-  type Settings = {
-    origin: string | { allowedHosts: string[]; fallback: string };
-    secret: string;
-    plugins: BetterAuthPlugin[];
-  };
-}
-export const authSettings = tag<Auth.Settings>({ label: "auth.settings" });
 export const auth = resource({
   label: "auth",
   target: "session",
   depends: { database, settings: authSettings, send: sendMail },
   factory: async ({ database, settings, send }) => {
-    const [{ betterAuth }, { drizzleAdapter }, schema] = await Promise.all([
-      import("better-auth"),
-      import("better-auth/adapters/drizzle"),
-      import("./schema.ts"),
-    ]);
+    const [{ betterAuth }, { drizzleAdapter }, { tanstackStartCookies }, schema] =
+      await Promise.all([
+        import("better-auth"),
+        import("better-auth/adapters/drizzle"),
+        import("better-auth/tanstack-start"),
+        import("./schema.ts"),
+      ]);
     return betterAuth({
       baseURL: settings.origin,
       secret: settings.secret,
@@ -38,7 +32,7 @@ export const auth = resource({
           await send.run({ input: { to: user.email, subject: "Check your email", text: url } });
         },
       },
-      plugins: settings.plugins,
+      plugins: [tanstackStartCookies()],
     });
   },
 });

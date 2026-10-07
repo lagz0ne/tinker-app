@@ -6,16 +6,12 @@
   "exports": {
     "./backend": "./src/backend/index.ts",
     "./frontend": "./src/frontend/index.ts",
-    "./transport": "./src/scaffold/backend/index.server.ts",
-    "./telemetry": "./src/scaffold/telemetry/index.ts",
-    "./sync": "./src/scaffold/frontend/index.ts",
-    "./testing": "./tests/presets.ts",
-    "./routes": "./src/transport/routes.server.ts"
+    "./testing": "./tests/presets.ts"
   },
   "scripts": {
-    "dev": "node --env-file=.env node_modules/vite-plus/bin/vp dev",
+    "dev": "vp dev",
     "build": "vp build",
-    "start": "node --env-file=.env scripts/serve.mjs",
+    "start": "tinker serve",
     "test": "vp test",
     "db:generate": "drizzle-kit generate",
     "test:boundary": "node scripts/check-boundary.mjs",
@@ -28,7 +24,8 @@
     "test:seam:fixture": "node maintain/check-seam-fixture.mjs",
     "test:schema": "node scripts/check-schema.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
-    "check:plain": "node scripts/check-plain.mjs"
+    "check:plain": "node scripts/check-plain.mjs",
+    "postinstall": "tinker prepare"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",
@@ -37,6 +34,7 @@
     "@tanstack/react-start": "1.168.60",
     "@tinker/core": "workspace:*",
     "@tinker/react": "workspace:*",
+    "@tinker/start": "workspace:*",
     "better-auth": "1.7.7",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

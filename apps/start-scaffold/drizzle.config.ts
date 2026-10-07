@@ -5,7 +5,6 @@ export default defineConfig({
     "./src/backend/schema.ts",
     "./src/backend/todos.schema.ts",
     "./src/backend/sync.schema.ts",
-    "./src/scaffold/backend/sync.schema.ts",
   ],
   out: "./drizzle",
 });

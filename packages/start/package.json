@@ -25,7 +25,8 @@
       "types": "./vite.d.mts",
       "default": "./vite.mjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "release": "node scripts/pack.mjs",

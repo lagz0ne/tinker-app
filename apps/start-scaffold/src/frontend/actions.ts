@@ -2,8 +2,8 @@ import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 import { updateProfile, retryProfileNotification } from "../transport/profile.functions.ts";
 import { nameDraft, pending, notice, authMode, profileResult } from "./state.ts";
-import { syncClient } from "../scaffold/frontend/sync.ts";
-import { snapshotLoader } from "../scaffold/frontend/events.ts";
+import { syncClient } from "@tinker/start/client";
+import { snapshotLoader } from "@tinker/start/client";
 import { credentials } from "../contracts/credentials.ts";
 import { readProfileInput } from "../contracts/profile.ts";
 import { raise } from "../errors.ts";
@@ -31,21 +31,21 @@ export const signIn = operation({
     pending: pending.controller,
     notice: notice.controller,
   },
-  run: async ({ client, sync, snapshots, pending, notice }, ctx) => {
+  run: async ({ client, sync, snapshots, pending, notice }, { defer, input, signal, log }) => {
     pending.set(true);
     notice.set("");
-    ctx.defer(() => pending.set(false));
+    defer(() => pending.set(false));
     const change = snapshots.beginAccountChange();
-    ctx.defer(() => snapshots.endAccountChange(change));
+    defer(() => snapshots.endAccountChange(change));
     sync.leave();
     const result =
-      ctx.input.mode === "signup"
-        ? await client.signUp.email(ctx.input, { signal: ctx.signal })
-        : await client.signIn.email(ctx.input, { signal: ctx.signal });
+      input.mode === "signup"
+        ? await client.signUp.email(input, { signal: signal })
+        : await client.signIn.email(input, { signal: signal });
     if (result.error) raise("AuthFailed", { message: result.error.message ?? "Sign in failed." });
-    await snapshots.completeAccountChange(ctx.signal, change);
+    await snapshots.completeAccountChange(signal, change);
     notice.set("You are signed in. Open your profile or private list.");
-    ctx.log("account.signedIn");
+    log("account.signedIn");
   },
 });
 export const saveName = operation({
@@ -58,15 +58,15 @@ export const saveName = operation({
     notice: notice.controller,
     result: profileResult.controller,
   },
-  run: async ({ sync, draft, pending, notice, result }, ctx) => {
+  run: async ({ sync, draft, pending, notice, result }, { defer, random, input, signal }) => {
     pending.set(true);
     notice.set("");
-    ctx.defer(() => pending.set(false));
-    const executionId = ctx.random.uuid();
+    defer(() => pending.set(false));
+    const executionId = random.uuid();
     const completed = await sync.execute(
       executionId,
-      { send: updateProfile, data: { executionId, profile: ctx.input } },
-      ctx.signal,
+      { send: updateProfile, data: { executionId, profile: input } },
+      signal,
     );
     result.set({ executionId, result: completed });
     if (completed.kind === "failed") raise("WriteRejected", { message: completed.message });
@@ -87,14 +87,14 @@ export const retryMail = operation({
     notice: notice.controller,
     result: profileResult.controller,
   },
-  run: async ({ sync, pending, notice, result }, ctx) => {
+  run: async ({ sync, pending, notice, result }, { defer, random, input, signal }) => {
     pending.set(true);
-    ctx.defer(() => pending.set(false));
-    const executionId = ctx.random.uuid();
+    defer(() => pending.set(false));
+    const executionId = random.uuid();
     const completed = await sync.execute(
       executionId,
-      { send: retryProfileNotification, data: { executionId, previousExecutionId: ctx.input } },
-      ctx.signal,
+      { send: retryProfileNotification, data: { executionId, previousExecutionId: input } },
+      signal,
     );
     result.set({ executionId, result: completed });
     notice.set(
@@ -109,8 +109,8 @@ export const retryMail = operation({
 export const signOut = operation({
   label: "signOut",
   depends: { client: authClient, sync: syncClient, notice: notice.controller },
-  run: async ({ client, sync, notice }, ctx) => {
-    const result = await client.signOut({ fetchOptions: { signal: ctx.signal } });
+  run: async ({ client, sync, notice }, { signal }) => {
+    const result = await client.signOut({ fetchOptions: { signal: signal } });
     if (result.error) raise("AuthFailed", { message: result.error.message ?? "Sign out failed." });
     sync.leave();
     notice.set("You are signed out. Committed changes remain saved.");
@@ -120,11 +120,11 @@ export const setAuthMode = operation({
   label: "setAuthMode",
   input: (raw: unknown) => modeInput.parse(raw),
   depends: { mode: authMode.controller },
-  run: ({ mode }, ctx) => mode.set(ctx.input),
+  run: ({ mode }, { input }) => mode.set(input),
 });
 export const editName = operation({
   label: "editName",
   input: (raw: unknown) => draftInput.parse(raw),
   depends: { draft: nameDraft.controller },
-  run: ({ draft }, ctx) => draft.set(ctx.input),
+  run: ({ draft }, { input }) => draft.set(input),
 });

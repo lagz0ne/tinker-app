@@ -1,21 +1,35 @@
-import { operation, resource, tag } from "@tinker/core";
-import type { Database } from "../scaffold/backend/database.ts";
-export type { Database } from "../scaffold/backend/database.ts";
-export const databaseSettings = tag<{ url: string; migrations: string }>({
+import { extension, operation, resource } from "@tinker/core";
+import type { Database } from "@tinker/start/server";
+export type { Database } from "@tinker/start/server";
+import { env } from "@tinker/start/server";
+import { z } from "zod";
+import { raise } from "../errors.ts";
+const databaseEnv = z.object({ DATABASE_URL: z.string().min(1) });
+export const databaseSettings = resource({
   label: "database.settings",
+  depends: { env },
+  factory: ({ env }) => {
+    const settings = databaseEnv.safeParse(env);
+    if (!settings.success)
+      raise("BadSettings", {
+        part: "database",
+        keys: settings.error.issues.map((issue) => issue.path.join(".")),
+      });
+    return { url: settings.data.DATABASE_URL, migrations: "drizzle" };
+  },
 });
 /** Feature code uses native PostgreSQL queries, without the driver's client field. */
 export const database = resource({
   label: "database",
   depends: { settings: databaseSettings },
-  factory: async ({ settings }, ctx): Promise<Database.Handle> => {
+  factory: async ({ settings }, { defer }): Promise<Database.Handle> => {
     const [{ default: pg }, { drizzle }] = await Promise.all([
       import("pg"),
       import("drizzle-orm/node-postgres"),
     ]);
     const client = new pg.Pool({ connectionString: settings.url });
     const listeners = new Set<AbortController>();
-    ctx.defer(async () => {
+    defer(async () => {
       for (const stop of listeners) stop.abort();
       await client.end();
     });
@@ -60,5 +74,14 @@ export const migrate = operation({
     await migrate(readMigrationFiles({ migrationsFolder: settings.migrations }), database, {
       migrationsFolder: settings.migrations,
     });
+  },
+});
+export const databaseSetup = extension({
+  label: "database.setup",
+  hooks: {
+    async start({ next, scope }) {
+      await next();
+      await scope.run(migrate);
+    },
   },
 });

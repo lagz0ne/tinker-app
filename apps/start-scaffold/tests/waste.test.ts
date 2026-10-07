@@ -1,51 +1,37 @@
+import { env } from "@tinker/start/server";
 import { handleAuth } from "@tinker-start-scaffold/testing";
 import { test, expect } from "vite-plus/test";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { createAuthClient } from "better-auth/react";
 import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
-import {
-  databaseSettings,
-  mailSettings,
-  authSettings,
-  migrate,
-  incrementCounter,
-  bootstrap,
-  readAccount,
-} from "@tinker-start-scaffold/backend";
+import { migrate, incrementCounter, bootstrap, readAccount } from "@tinker-start-scaffold/backend";
 import { authClient, signIn } from "@tinker-start-scaffold/frontend";
+import { syncClient, loadSnapshot, checkAccount } from "@tinker/start/client";
 import {
   accountOwner,
   tabStop,
-  syncClient,
-  loadSnapshot,
-  checkAccount,
   refreshAccount,
   receiveMessage,
   snapshotSource,
-} from "@tinker-start-scaffold/sync";
-import { openSync, backendStop, requestStop } from "@tinker-start-scaffold/transport";
-const settings = [
-  databaseSettings({ url: "postgres://proof", migrations: "drizzle" }),
-  mailSettings({
-    host: "proof",
-    port: 25,
-    user: "proof",
-    password: "proof",
-    from: "proof@example.com",
-  }),
-  authSettings({
-    origin: "http://localhost:4318",
-    secret: "test-secret-with-at-least-thirty-two-letters",
-    plugins: [],
-  }),
-];
+} from "@tinker/start/testing";
+import { openSync, backendStop, requestStop } from "@tinker/start/testing";
+const settings = env({
+  DATABASE_URL: "postgres://proof",
+  SMTP_HOST: "proof",
+  SMTP_PORT: "25",
+  SMTP_USER: "proof",
+  SMTP_PASSWORD: "proof",
+  SMTP_FROM: "proof@example.com",
+  PUBLIC_ORIGIN: "http://localhost:4318",
+  AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
+});
 test("a stream checks the session once at open and once for the next wake", async () => {
   const stop = new AbortController();
   const root = createScope({
     signal: stop.signal,
     tags: [
-      ...settings,
+      settings,
       backendStop(stop.signal),
       requestStop(stop.signal),
       requestHeaders(new Headers()),

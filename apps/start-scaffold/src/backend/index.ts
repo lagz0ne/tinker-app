@@ -14,4 +14,4 @@ export {
   replayPublic,
   replayPrivate,
 } from "./sync.ts";
-export { httpRequest } from "../scaffold/backend/http.ts";
+export { httpRequest } from "@tinker/start/server";

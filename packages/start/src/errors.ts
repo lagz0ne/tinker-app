@@ -1,5 +1,10 @@
 export declare namespace Errors {
   type Payloads = {
+    HttpRequestFailed: {
+      method: string;
+      path: string;
+      cause?: { name?: string; code?: string | number };
+    };
     StartScopeMissing: Record<string, never>;
     Cancelled: Record<string, never>;
     BadSettings: { part: string; keys: string[] };
@@ -25,4 +30,12 @@ export function raise<N extends Errors.Name>(kind: N, payload: Errors.Payloads[N
  */
 export function fail<N extends Errors.Name>(kind: N, payload: Errors.Payloads[N]): Errors.Of<N> {
   return Object.assign(new Error(kind), { kind, payload });
+}
+
+/**
+ * @param error - From a caught failure; why: narrow its payload.
+ * @param kind - From the caller; why: select the expected error.
+ */
+export function isError<N extends Errors.Name>(error: unknown, kind: N): error is Errors.Of<N> {
+  return error instanceof Error && "kind" in error && error.kind === kind;
 }

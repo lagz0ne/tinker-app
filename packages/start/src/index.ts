@@ -11,3 +11,4 @@ export {
   snapshotEnvelope,
 } from "./parts/sync/envelopes.ts";
 export type { Register, Sync } from "./parts/sync/envelopes.ts";
+export type { Errors } from "./errors.ts";

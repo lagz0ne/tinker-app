@@ -1,9 +1,7 @@
 import { createScope, operation, resource } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
-import { requestHeaders } from "../src/backend/headers.server.ts";
-import { requestStop } from "../src/backend/lifetime.ts";
-import { readResult } from "../src/server.ts";
-import { startRequests } from "../src/start.ts";
+import { readResult } from "@tinker/start/server";
+import { requestHeaders, requestStop, startRequests } from "@tinker/start/testing";
 
 /** Runs until its session stops it by force. */
 const stoppable = operation({
@@ -118,5 +116,38 @@ test("a teardown error in the request session fails the body read", async () => 
   });
   if (!result || result instanceof Response) return expect.unreachable("Start's result comes back");
   await expect(result.response.text()).rejects.toBe(lost);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("cancelling a body stops active request work before it can close gracefully", async () => {
+  const root = createScope();
+  const started = Promise.withResolvers();
+  const running = Promise.withResolvers();
+  const waiting = operation({
+    label: "test.waiting",
+    run: async (_deps, { signal }) => {
+      await new Promise((done) => {
+        signal.addEventListener("abort", () => done(), { once: true });
+        started.resolve();
+      });
+      signal.throwIfAborted();
+    },
+  });
+  const request = new Request("http://app/");
+  const result = await startRequests.middleware.options.server?.({
+    request,
+    pathname: "/",
+    handlerType: "router",
+    context: { scope: root },
+    async next(options) {
+      const context = options?.context ?? expect.unreachable("the middleware passes its context");
+      running.resolve(context.session.settle(waiting));
+      return { request, pathname: "/", context, response: new Response(new ReadableStream()) };
+    },
+  });
+  if (!result || result instanceof Response) return expect.unreachable("Start's result comes back");
+  await started.promise;
+  await result.response.body.cancel();
+  expect((await running.promise).status).toBe("cancelled");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

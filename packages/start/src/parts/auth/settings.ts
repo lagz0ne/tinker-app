@@ -1,7 +1,7 @@
 import { extension, resource } from "@tinker/core";
 import type { Many, Scope } from "@tinker/core";
 import { readPartEnv } from "../../../lib/part-env.mjs";
-import { tinker } from "../../../package.json";
+import basePackage from "../../../package.json" with { type: "json" };
 import { env } from "../../env.ts";
 import { raise } from "../../errors.ts";
 
@@ -20,7 +20,7 @@ export const authSettings = resource({
   label: "auth.settings",
   depends: { env },
   factory: ({ env }): Auth.Settings => {
-    const { values, refused } = readPartEnv(tinker.parts.auth.env, env);
+    const { values, refused } = readPartEnv(basePackage.tinker.parts.auth.env, env);
     if (refused.length > 0) raise("BadSettings", { part: "auth", keys: refused });
     return { origin: values.PUBLIC_ORIGIN, secret: values.AUTH_SECRET };
   },

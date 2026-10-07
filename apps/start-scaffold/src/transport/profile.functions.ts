@@ -2,8 +2,8 @@ import { readRetry } from "../contracts/sync.ts";
 import { createServerFn } from "@tanstack/react-start";
 import { readProfileCommand } from "../contracts/commands.ts";
 import { readProfile, saveProfile, retryNotification } from "../backend/index.ts";
-import { startRequests } from "../scaffold/start.ts";
-import { readResult } from "../scaffold/backend/result.server.ts";
+import { startRequests } from "@tinker/start";
+import { readResult } from "@tinker/start/server";
 import { readReceipt } from "./result.server.ts";
 export const getProfile = createServerFn({ method: "GET" })
   .middleware([startRequests.middleware])

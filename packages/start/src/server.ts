@@ -7,3 +7,6 @@ export { eventHistory } from "./parts/sync/history.server.ts";
 export type { Database } from "./parts/sync/database.ts";
 export { createServerEntry } from "./server-entry.ts";
 export type { ServerEntry } from "./server-entry.ts";
+export { httpRequest } from "./backend/http.ts";
+export { requestHeaders } from "./backend/headers.server.ts";
+export { event, execution, stream } from "./parts/sync/schema.ts";

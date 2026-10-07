@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { appFiles, pick } from "./named.mjs";
 import { partNotes, parts, recordedParts } from "./parts.mjs";
-import { baseDir, basePackage, findPackage } from "./paths.mjs";
+import { baseDir, basePackage, installedBase } from "./paths.mjs";
 
 const compilerOptions = {
   target: "esnext",
@@ -56,7 +56,7 @@ function partsFile(base, on, entry) {
  * @param {string[]} on - From tinker()'s options, else the record; why: the parts to write.
  */
 export function render(root, on = recordedParts(root)) {
-  const base = findPackage(root, "@tinker/start") ?? baseDir;
+  const base = installedBase(root) ?? baseDir;
   const paths = {
     "@/*": [`${join(root, "src")}/*`],
     ...Object.fromEntries(appFiles.map((entry) => [entry.alias, [pick(root, base, entry)]])),

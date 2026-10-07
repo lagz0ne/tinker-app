@@ -2,7 +2,7 @@ import { operation } from "@tinker/core";
 import { database } from "./database.ts";
 import { currentUser } from "./auth.ts";
 import { readTodoCommand } from "../contracts/commands.ts";
-import { eventHistory } from "../scaffold/backend/events.ts";
+import { eventHistory } from "@tinker/start/server";
 import type { Todos } from "../contracts/todos.ts";
 import type { Sync } from "../contracts/sync.ts";
 import { raise } from "../errors.ts";
@@ -25,16 +25,16 @@ export const changeTodo = operation({
   label: "changeTodo",
   input: readTodoCommand,
   depends: { currentUser, database, history: eventHistory },
-  run: async ({ currentUser, database, history }, ctx) => {
+  run: async ({ currentUser, database, history }, { input }) => {
     const [{ and, asc, eq }, { todo }, { execution }] = await Promise.all([
       import("drizzle-orm"),
       import("./todos.schema.ts"),
-      import("../scaffold/backend/sync.schema.ts"),
+      import("@tinker/start/server"),
     ]);
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
-      if (await history.find(tx, ctx.input.executionId, currentUser.id)) return;
-      const change = ctx.input.change;
+      if (await history.find(tx, input.executionId, currentUser.id)) return;
+      const change = input.change;
       let changed = true;
       if (change.kind === "add")
         await tx.insert(todo).values({ ownerId: currentUser.id, title: change.title });
@@ -47,7 +47,7 @@ export const changeTodo = operation({
           await tx.update(todo).set({ done: change.done }).where(owned);
         else changed = false;
       }
-      await tx.insert(execution).values({ id: ctx.input.executionId, stream: currentUser.id });
+      await tx.insert(execution).values({ id: input.executionId, stream: currentUser.id });
       const payloads: Sync.Payload[] = [];
       if (changed) {
         const rows = await tx
@@ -58,8 +58,8 @@ export const changeTodo = operation({
         payloads.push({ kind: "change", change: { kind: "todos", rows } });
       }
       payloads.push({ kind: "result", result: { kind: "complete", action: "todo" } });
-      await history.append(tx, currentUser.id, ctx.input.executionId, payloads);
+      await history.append(tx, currentUser.id, input.executionId, payloads);
     });
-    return { executionId: ctx.input.executionId };
+    return { executionId: input.executionId };
   },
 });

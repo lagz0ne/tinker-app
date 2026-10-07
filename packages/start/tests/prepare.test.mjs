@@ -35,9 +35,7 @@ test("a named file the app has wins; a missing one maps to the base default", ()
   const { paths } = JSON.parse(render(root)["tsconfig.json"]).compilerOptions;
   expect(paths["#tinker/router"]).toEqual([join(root, "src/router.ts")]);
   expect(paths["#tinker/app.server"]).toEqual([join(root, "src/lib/tinker.server.ts")]);
-  expect(paths["#tinker/start"]).toEqual([
-    join(root, "node_modules/@tinker/start/src/defaults/start.ts"),
-  ]);
+  expect(paths["#tinker/start"]).toEqual([join(baseDir, "src/defaults/start.ts")]);
   expect(paths["#tinker/routes"]).toEqual([join(root, ".tinker/routeTree.gen.ts")]);
 });
 
@@ -123,4 +121,11 @@ test("with sync on, the parts file records that sync turned auth on", () => {
     "// Written by tinker(); parts on: telemetry, auth, sync; sync turns auth on.",
   );
   expect(file).not.toContain("parts/sync");
+});
+
+test("linked parts use the real base path so sync has one Register", () => {
+  const root = goodApp();
+  expect(render(root, ["sync"])["parts.ts"]).toContain(
+    `export { sync } from ${JSON.stringify(join(baseDir, "src/parts/sync/on.ts"))};`,
+  );
 });

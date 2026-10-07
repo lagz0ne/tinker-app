@@ -1,16 +1,16 @@
 import { operation } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
 import { counter } from "./state.ts";
-import { syncClient } from "../scaffold/frontend/sync.ts";
+import { syncClient } from "@tinker/start/client";
 import { updateCounter } from "../transport/counter.functions.ts";
 import { Button } from "./ui/button.tsx";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "./ui/card.tsx";
 const increase = operation({
   label: "counter.increase",
   depends: { sync: syncClient },
-  run: async ({ sync }, ctx) => {
-    const executionId = ctx.random.uuid();
-    await sync.execute(executionId, { send: updateCounter, data: { executionId } }, ctx.signal);
+  run: async ({ sync }, { random, signal }) => {
+    const executionId = random.uuid();
+    await sync.execute(executionId, { send: updateCounter, data: { executionId } }, signal);
   },
 });
 export function Counter() {

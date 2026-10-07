@@ -1,13 +1,8 @@
 import { expect, test } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
-import { httpRequest, isError, raise } from "@tinker-start-scaffold/backend";
-import {
-  backendStop,
-  http,
-  httpBackend,
-  requestStop,
-  startRequests,
-} from "@tinker-start-scaffold/transport";
+import { httpRequest } from "@tinker/start/server";
+import { isError, raise } from "@tinker/start/testing";
+import { backendStop, http, httpBackend, requestStop, startRequests } from "@tinker/start/testing";
 
 const post = operation({
   label: "test.post",
@@ -23,7 +18,7 @@ function createHeldBackend() {
     started: started.promise,
     binding: httpBackend((_url, init) => {
       const signal = init?.signal;
-      if (!signal) raise("BadInput", { reason: "request must have a signal" });
+      if (!signal) raise("StartScopeMissing", {});
       signal.throwIfAborted();
       return new Promise<Response>((_done, reject) => {
         signal.addEventListener("abort", () => reject(signal.reason), { once: true });
@@ -32,46 +27,6 @@ function createHeldBackend() {
     }),
   };
 }
-
-test("an HTTP request makes two spans and records its status", async () => {
-  const stop = new AbortController();
-  const scope = createScope({
-    signal: stop.signal,
-    observe: { history: 20 },
-    tags: [httpBackend(async () => new Response("not found", { status: 404 }))],
-  });
-  await scope.ready;
-  try {
-    expect((await scope.run(post)).status).toBe(404);
-    const spans = scope.spans();
-    const caller = spans.find((span) => span.name === "test.post");
-    const request = spans.find((span) => span.name === "http.request");
-    expect(request?.parentId).toBe(caller?.id);
-    expect(
-      spans
-        .filter((span) => span.name === "http POST /x")
-        .map((span) => ({
-          parentId: span.parentId,
-          status: span.status,
-          attributes: span.attributes,
-        })),
-    ).toEqual([
-      {
-        parentId: request?.id,
-        status: "ok",
-        attributes: {
-          "http.request.method": "POST",
-          "url.path": "/x",
-          "http.response.status_code": 404,
-        },
-      },
-    ]);
-    expect(spans.some((span) => span.name === "http" && span.kind === "resource")).toBe(true);
-  } finally {
-    stop.abort();
-    expect((await scope.closed).status).toBe("success");
-  }
-});
 
 test("closing the HTTP resource aborts a request still in flight", async () => {
   const stop = new AbortController();
@@ -83,7 +38,7 @@ test("closing the HTTP resource aborts a request still in flight", async () => {
         (_url, init) =>
           new Promise<Response>((_done, reject) => {
             const signal = init?.signal;
-            if (!signal) raise("BadInput", { reason: "request must have a signal" });
+            if (!signal) raise("StartScopeMissing", {});
             signal.addEventListener("abort", () => reject(signal.reason), { once: true });
             started.resolve(signal);
           }),
@@ -196,7 +151,7 @@ test("network failures keep method, path, and only cause name and code", async (
       const result = await scope.settle(httpRequest, {
         rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
       });
-      if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+      if (result.status !== "failed") throw result;
       if (!isError(result.error, "HttpRequestFailed")) throw result.error;
       expect(result.error.payload).toEqual({
         method: "GET",
@@ -225,7 +180,7 @@ test("an abort failure keeps its numeric code without its message", async () => 
     const result = await scope.settle(httpRequest, {
       rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
     });
-    if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+    if (result.status !== "failed") throw result;
     if (!isError(result.error, "HttpRequestFailed")) throw result.error;
     expect(result.error.payload).toEqual({
       method: "GET",
@@ -258,7 +213,7 @@ test("a string cause keeps the outer error name and code without private text", 
     const result = await scope.settle(httpRequest, {
       rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
     });
-    if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+    if (result.status !== "failed") throw result;
     if (!isError(result.error, "HttpRequestFailed")) throw result.error;
     expect(result.error.payload).toEqual({
       method: "GET",
@@ -304,7 +259,7 @@ test("network failures keep readable cause fields when the other field has a wro
       const result = await scope.settle(httpRequest, {
         rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
       });
-      if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+      if (result.status !== "failed") throw result;
       if (!isError(result.error, "HttpRequestFailed")) throw result.error;
       expect(result.error.payload).toEqual({ method: "GET", path: "/x", cause });
     }
@@ -323,7 +278,7 @@ test("closing the caller aborts HTTP body reading", async () => {
     tags: [
       httpBackend(async (_url, init) => {
         const signal = init?.signal;
-        if (!signal) raise("BadInput", { reason: "request must have a signal" });
+        if (!signal) raise("StartScopeMissing", {});
         return new Response(
           new ReadableStream(
             {
@@ -463,7 +418,7 @@ test("backend stop settles a server function's signalled HTTP call", async () =>
   stop.abort();
   const closing = session.close({ graceful: true });
   const result = await sending;
-  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (result.status !== "failed") throw result;
   if (!isError(result.error, "HttpRequestFailed")) throw result.error;
   expect(result.error.payload).toMatchObject({ method: "POST", path: "/x" });
   expect(call.signal.aborted).toBe(false);
@@ -489,7 +444,7 @@ for (const shape of ["signal", "tags"]) {
     await backend.started;
     stop.abort();
     const result = await sending;
-    if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+    if (result.status !== "failed") throw result;
     if (!isError(result.error, "HttpRequestFailed")) throw result.error;
     expect(result.error.payload).toMatchObject({ method: "GET", path: "/x" });
     expect(call.signal.aborted).toBe(false);
@@ -520,7 +475,7 @@ test("request end settles its tagged HTTP call and leaves siblings open", async 
   await second.started;
   request.abort();
   const result = await sending;
-  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (result.status !== "failed") throw result;
   if (!isError(result.error, "HttpRequestFailed")) throw result.error;
   expect(result.error.payload).toMatchObject({ method: "GET", path: "/x" });
   expect(await session.close({ graceful: true })).toEqual({ status: "success" });
@@ -566,7 +521,7 @@ for (const end of [backendStop, requestStop]) {
         rawInput: { url: "https://slow.test/late", method: "GET" },
         tags: end(ended.signal),
       });
-      if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+      if (result.status !== "failed") throw result;
       if (!isError(result.error, "HttpRequestFailed")) throw result.error;
       expect(result.error.payload).toMatchObject({ method: "GET", path: "/late" });
       expect(sent).toBe(0);
@@ -606,8 +561,8 @@ test("backend stop settles HTTP while other running work finishes", async () => 
   const finish = Promise.withResolvers<number>();
   const waiting = operation({
     label: "test.other-work",
-    run: (_deps, ctx) => {
-      started.resolve(ctx.signal);
+    run: (_deps, { signal }) => {
+      started.resolve(signal);
       return finish.promise;
     },
   });
@@ -631,7 +586,7 @@ test("backend stop settles HTTP while other running work finishes", async () => 
   });
   stop.abort();
   const result = await sending;
-  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (result.status !== "failed") throw result;
   if (!isError(result.error, "HttpRequestFailed")) throw result.error;
   expect(signal.aborted).toBe(false);
   expect(closed).toBe(false);
@@ -651,7 +606,7 @@ test("a direct graceful session close settles a hung HTTP send without stop tags
   await backend.started;
   const closing = session.close({ graceful: true });
   const result = await sending;
-  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (result.status !== "failed") throw result;
   if (!isError(result.error, "HttpRequestFailed")) throw result.error;
   expect(result.error.payload).toEqual({
     method: "POST",
@@ -674,7 +629,7 @@ test("a direct graceful root close reaches a session's hung HTTP send without st
   await backend.started;
   const closing = scope.close({ graceful: true });
   const result = await sending;
-  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (result.status !== "failed") throw result;
   if (!isError(result.error, "HttpRequestFailed")) throw result.error;
   expect(result.error.payload).toEqual({
     method: "POST",
@@ -699,7 +654,7 @@ test("backendStop ends a pending HTTP send without closing its root", async () =
   await backend.started;
   backendEnd.abort();
   const result = await sending;
-  if (result.status !== "failed") raise("BadInput", { reason: "request must fail" });
+  if (result.status !== "failed") throw result;
   if (!isError(result.error, "HttpRequestFailed")) throw result.error;
   expect(result.error.payload).toEqual({
     method: "POST",

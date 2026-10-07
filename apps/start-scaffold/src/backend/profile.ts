@@ -2,7 +2,7 @@ import { operation, resource } from "@tinker/core";
 import { principal, currentUser } from "./auth.ts";
 import { database } from "./database.ts";
 import { sendMail } from "./mail.ts";
-import { eventHistory } from "../scaffold/backend/events.ts";
+import { eventHistory } from "@tinker/start/server";
 import { readProfileCommand } from "../contracts/commands.ts";
 import { readExecution, readRetry, readFeatureResult } from "../contracts/sync.ts";
 import type { Sync } from "../contracts/sync.ts";
@@ -34,16 +34,16 @@ const notifyProfile = operation({
   label: "notifyProfile",
   input: readExecution,
   depends: { database, history: eventHistory, send: sendMail },
-  run: async ({ database, history, send }, ctx) => {
+  run: async ({ database, history, send }, { input }) => {
     const [{ eq }, { execution }] = await Promise.all([
       import("drizzle-orm"),
-      import("../scaffold/backend/sync.schema.ts"),
+      import("@tinker/start/server"),
     ]);
     const stored = (
-      await database.select().from(execution).where(eq(execution.id, ctx.input.executionId))
+      await database.select().from(execution).where(eq(execution.id, input.executionId))
     ).at(0);
     if (!stored?.notification) raise("RetryNotAvailable", {});
-    if (stored.result) return { executionId: ctx.input.executionId };
+    if (stored.result) return { executionId: input.executionId };
     const sent = await send.settle({ rawInput: stored.notification });
     const result: Sync.Result =
       sent.status === "success"
@@ -59,11 +59,11 @@ const notifyProfile = operation({
           };
     await database.transaction(async (tx) => {
       await history.lock(tx, stored.stream);
-      const latest = await history.find(tx, ctx.input.executionId, stored.stream);
+      const latest = await history.find(tx, input.executionId, stored.stream);
       if (latest?.result) return;
-      await history.append(tx, stored.stream, ctx.input.executionId, [{ kind: "result", result }]);
+      await history.append(tx, stored.stream, input.executionId, [{ kind: "result", result }]);
     });
-    return { executionId: ctx.input.executionId };
+    return { executionId: input.executionId };
   },
 });
 /** One process owner coalesces duplicate requests; this is not a cross-process SMTP guarantee. */
@@ -89,19 +89,19 @@ export const saveProfile = operation({
   label: "saveProfile",
   input: readProfileCommand,
   depends: { currentUser, database, history: eventHistory, notify: notificationWork },
-  run: async ({ currentUser, database, history, notify }, ctx) => {
+  run: async ({ currentUser, database, history, notify }, { input, clock }) => {
     const [{ eq }, { user }, { execution }] = await Promise.all([
       import("drizzle-orm"),
       import("./schema.ts"),
-      import("../scaffold/backend/sync.schema.ts"),
+      import("@tinker/start/server"),
     ]);
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
-      if (await history.find(tx, ctx.input.executionId, currentUser.id)) return;
+      if (await history.find(tx, input.executionId, currentUser.id)) return;
       const saved = (
         await tx
           .update(user)
-          .set({ name: ctx.input.profile.name, updatedAt: new Date(ctx.clock.currentTimeMillis()) })
+          .set({ name: input.profile.name, updatedAt: new Date(clock.currentTimeMillis()) })
           .where(eq(user.id, currentUser.id))
           .returning({
             id: user.id,
@@ -112,7 +112,7 @@ export const saveProfile = operation({
       ).at(0);
       if (!saved) raise("SignInRequired", {});
       await tx.insert(execution).values({
-        id: ctx.input.executionId,
+        id: input.executionId,
         stream: currentUser.id,
         notification: {
           to: saved.email,
@@ -120,23 +120,23 @@ export const saveProfile = operation({
           text: `Your saved name is ${saved.name}.`,
         },
       });
-      await history.append(tx, currentUser.id, ctx.input.executionId, [
+      await history.append(tx, currentUser.id, input.executionId, [
         { kind: "change", change: { kind: "profile", profile: saved } },
       ]);
     });
-    return notify.finish(ctx.input.executionId);
+    return notify.finish(input.executionId);
   },
 });
 export const retryNotification = operation({
   label: "retryNotification",
   input: readRetry,
   depends: { currentUser, database, history: eventHistory, notify: notificationWork },
-  run: async ({ currentUser, database, history, notify }, ctx) => {
-    const { execution } = await import("../scaffold/backend/sync.schema.ts");
+  run: async ({ currentUser, database, history, notify }, { input }) => {
+    const { execution } = await import("@tinker/start/server");
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
-      if (await history.find(tx, ctx.input.executionId, currentUser.id)) return;
-      const previous = await history.find(tx, ctx.input.previousExecutionId, currentUser.id);
+      if (await history.find(tx, input.executionId, currentUser.id)) return;
+      const previous = await history.find(tx, input.previousExecutionId, currentUser.id);
       if (
         !previous?.notification ||
         !previous.result ||
@@ -144,11 +144,11 @@ export const retryNotification = operation({
       )
         raise("RetryNotAvailable", {});
       await tx.insert(execution).values({
-        id: ctx.input.executionId,
+        id: input.executionId,
         stream: currentUser.id,
         notification: previous.notification,
       });
     });
-    return notify.finish(ctx.input.executionId);
+    return notify.finish(input.executionId);
   },
 });

@@ -11,7 +11,7 @@ export const records = resource({
     draft: nameDraft.controller,
     result: profileResult.controller,
   },
-  factory: ({ profile, todos, counter, draft, result }) => ({
+  factory: ({ profile, todos, counter, draft, result }): Sync.Records => ({
     resetPrivate() {
       profile.set(null);
       todos.set([]);

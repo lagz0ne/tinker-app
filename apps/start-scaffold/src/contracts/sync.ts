@@ -1,12 +1,7 @@
 import { z } from "zod";
-import {
-  eventEnvelope,
-  snapshotEnvelope,
-  batchEnvelope,
-  bootstrapEnvelope,
-} from "../scaffold/sync.ts";
-export { readExecution, readCursor, readPrivateCursor, readRetry } from "../scaffold/sync.ts";
-export type { Sync } from "../scaffold/sync.ts";
+import { eventEnvelope, snapshotEnvelope, batchEnvelope, bootstrapEnvelope } from "@tinker/start";
+export { readExecution, readCursor, readPrivateCursor, readRetry } from "@tinker/start";
+export type { Sync } from "@tinker/start";
 export declare namespace FeatureSync {
   type Change = z.infer<typeof change>;
   type Result = z.infer<typeof result>;

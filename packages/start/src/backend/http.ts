@@ -1,7 +1,7 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 import { raise } from "../errors.ts";
-import { httpBackend } from "../http-backend.ts";
+import { httpBackend } from "./http-backend.ts";
 import { backendStop, requestStop } from "./lifetime.ts";
 
 const requestShape = z
@@ -60,20 +60,20 @@ export const httpRequest = operation({
   label: "http.request",
   input: requestShape,
   depends: { http },
-  run: ({ http }, ctx) => {
-    const { url, method, headers, body } = ctx.input;
+  run: ({ http }, { input, obs, signal }) => {
+    const { url, method, headers, body } = input;
     const path = new URL(url).pathname;
-    return ctx.obs.child(`http ${method} ${path}`, async (span) => {
+    return obs.child(`http ${method} ${path}`, async (span) => {
       if (span) {
         span.attributes["http.request.method"] = method;
         span.attributes["url.path"] = path;
       }
       try {
-        const response = await http.send(url, { method, headers, body, signal: ctx.signal });
+        const response = await http.send(url, { method, headers, body, signal: signal });
         if (span) span.attributes["http.response.status_code"] = response.status;
         return response;
       } catch (cause) {
-        ctx.signal.throwIfAborted();
+        signal.throwIfAborted();
         const failureShape = z.object({
           name: z.string().optional().catch(undefined),
           code: z.union([z.string(), z.number()]).optional().catch(undefined),

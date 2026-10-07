@@ -1,4 +1,4 @@
-import type { Errors as ScaffoldErrors } from "./scaffold/errors.ts";
+import type { Errors as BaseErrors } from "@tinker/start";
 export declare namespace Errors {
   type Payloads = {
     NotificationFailed: Record<string, never>;
@@ -6,13 +6,14 @@ export declare namespace Errors {
     SignInRequired: Record<string, never>;
     BadInput: { reason: string };
     Rollback: Record<string, never>;
+    RetryNotAvailable: Record<string, never>;
     AuthFailed: { message: string };
   };
-  type Name = keyof Payloads | ScaffoldErrors.Name;
+  type Name = keyof Payloads | BaseErrors.Name;
   type Payload<N extends Name> = N extends keyof Payloads
     ? Payloads[N]
-    : N extends ScaffoldErrors.Name
-      ? ScaffoldErrors.Payloads[N]
+    : N extends BaseErrors.Name
+      ? BaseErrors.Payloads[N]
       : never;
   type Of<N extends Name> = Error & { kind: N; payload: Payload<N> };
 }

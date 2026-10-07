@@ -1,3 +1,4 @@
+import { env } from "@tinker/start/server";
 import { handleAuth } from "@tinker-start-scaffold/testing";
 import { test, expect } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
@@ -5,9 +6,6 @@ import { preset, makeTestClock } from "@tinker/core/testing";
 import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
 import {
   database,
-  databaseSettings,
-  mailSettings,
-  authSettings,
   migrate,
   incrementCounter,
   bootstrapPrivate,
@@ -17,34 +15,19 @@ import {
   mail,
 } from "@tinker-start-scaffold/backend";
 import type { Mail } from "@tinker-start-scaffold/backend";
-import {
-  accountOwner,
-  tabStop,
-  syncClient,
-  applyBootstrap,
-  receiveMessage,
-} from "@tinker-start-scaffold/sync";
-import {
-  openSync,
-  notifications,
-  backendStop,
-  requestStop,
-} from "@tinker-start-scaffold/transport";
-const settings = [
-  databaseSettings({ url: "postgres://proof", migrations: "drizzle" }),
-  mailSettings({
-    host: "proof",
-    port: 25,
-    user: "proof",
-    password: "proof",
-    from: "proof@example.com",
-  }),
-  authSettings({
-    origin: "http://localhost:4318",
-    secret: "test-secret-with-at-least-thirty-two-letters",
-    plugins: [],
-  }),
-];
+import { syncClient, applyBootstrap } from "@tinker/start/client";
+import { accountOwner, tabStop, receiveMessage } from "@tinker/start/testing";
+import { openSync, notifications, backendStop, requestStop } from "@tinker/start/testing";
+const settings = env({
+  DATABASE_URL: "postgres://proof",
+  SMTP_HOST: "proof",
+  SMTP_PORT: "25",
+  SMTP_USER: "proof",
+  SMTP_PASSWORD: "proof",
+  SMTP_FROM: "proof@example.com",
+  PUBLIC_ORIGIN: "http://localhost:4318",
+  AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
+});
 function signup(name: string) {
   return new Request("http://localhost:4318/api/auth/sign-up/email", {
     method: "POST",
@@ -112,7 +95,7 @@ test("SSE replays the supplied cursor and a held reader receives the next commit
   const root = createScope({
     signal: stop.signal,
     tags: [
-      ...settings,
+      settings,
       backendStop(stop.signal),
       requestStop(stop.signal),
       requestHeaders(new Headers()),
@@ -155,7 +138,7 @@ test("private SSE cursors are refused and a revoked held stream sends no saved p
   const stop = new AbortController();
   const root = createScope({
     signal: stop.signal,
-    tags: [...settings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [settings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -208,7 +191,7 @@ test("reconnecting from applied cursors finishes a save whose final event commit
   const accepted = Promise.withResolvers<void>();
   const server = createScope({
     signal: stop.signal,
-    tags: [...settings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [settings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -244,7 +227,7 @@ test("reconnecting from applied cursors finishes a save whose final event commit
     const save = operation({
       label: "test.pendingSave",
       depends: { sync: syncClient },
-      run: async ({ sync }, ctx) =>
+      run: async ({ sync }, { signal }) =>
         sync.execute(
           executionId,
           {
@@ -257,7 +240,7 @@ test("reconnecting from applied cursors finishes a save whose final event commit
               return { kind: "accepted", executionId };
             },
           },
-          ctx.signal,
+          signal,
         ),
     });
     const waiting = browser.run(save);
@@ -313,7 +296,7 @@ test("a quiet private stream closes at the heartbeat after sign-out", async () =
   const root = createScope({
     signal: stop.signal,
     clock,
-    tags: [...settings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [settings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;

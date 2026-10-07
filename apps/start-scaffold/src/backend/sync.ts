@@ -1,7 +1,7 @@
 import { operation } from "@tinker/core";
 import { database } from "./database.ts";
 import { currentUser, principal } from "./auth.ts";
-import { eventHistory } from "../scaffold/backend/events.ts";
+import { eventHistory } from "@tinker/start/server";
 import { readCursor, readPrivateCursor, readFeatureEvent } from "../contracts/sync.ts";
 import type { Sync } from "../contracts/sync.ts";
 import { raise } from "../errors.ts";
@@ -68,10 +68,10 @@ export const replayPublic = operation({
   label: "replayPublic",
   input: readCursor,
   depends: { database, principal },
-  run: async ({ database, principal }, ctx) => {
+  run: async ({ database, principal }, { input }) => {
     const [{ and, eq, gt, asc }, { event }] = await Promise.all([
       import("drizzle-orm"),
-      import("../scaffold/backend/sync.schema.ts"),
+      import("@tinker/start/server"),
     ]);
     return {
       accountId: principal?.id ?? null,
@@ -79,7 +79,7 @@ export const replayPublic = operation({
         await database
           .select()
           .from(event)
-          .where(and(eq(event.stream, "public"), gt(event.revision, ctx.input.after)))
+          .where(and(eq(event.stream, "public"), gt(event.revision, input.after)))
           .orderBy(asc(event.revision))
           .limit(200)
       ).map(readFeatureEvent),
@@ -90,17 +90,17 @@ export const replayPrivate = operation({
   label: "replayPrivate",
   input: readPrivateCursor,
   depends: { currentUser, database },
-  run: async ({ currentUser, database }, ctx) => {
-    if (ctx.input.accountId !== currentUser.id) raise("StreamDenied", {});
+  run: async ({ currentUser, database }, { input }) => {
+    if (input.accountId !== currentUser.id) raise("StreamDenied", {});
     const [{ and, eq, gt, asc }, { event }] = await Promise.all([
       import("drizzle-orm"),
-      import("../scaffold/backend/sync.schema.ts"),
+      import("@tinker/start/server"),
     ]);
     return (
       await database
         .select()
         .from(event)
-        .where(and(eq(event.stream, currentUser.id), gt(event.revision, ctx.input.after)))
+        .where(and(eq(event.stream, currentUser.id), gt(event.revision, input.after)))
         .orderBy(asc(event.revision))
         .limit(200)
     ).map(readFeatureEvent);

@@ -217,11 +217,19 @@ and so does the head of `.tinker/parts.server.ts`.
   `createServerEntry`, `authSettings`
   (the auth part's origin and secret),
   and `eventHistory` with the `Database` type
-  (the sync part's writes).
+  (the sync part's writes), `event`, `execution`,
+  and `stream` (the tables the app queries),
+  `requestHeaders` (auth reads the request),
+  and `httpRequest` (outgoing HTTP).
 - `@tinker/start/client`: the tab's sync units:
   `syncClient`, `snapshotLoader`, `loadSnapshot`,
   `checkAccount`, `applyBootstrap`, `applyEvents`,
   `leaveAccount`.
+- `@tinker/start/testing`: test bindings and units,
+  including `httpBackend`, `http`, `handleAuth`,
+  `requestHeaders`, `openSync`, `notifications`,
+  the tab owner and stop tag, and the snapshot source.
+  App code never imports this test entry.
 - `@tinker/start/vite`: `tinker()`,
   with the part switches and Start's
   `prerender`, `pages`, `spa`, `sitemap`.
@@ -497,3 +505,44 @@ packages/start/scripts/proof.sh
 - `proof.sh` builds and serves `apps/start-min`.
   Its logs land in `docs/roadmap/start-base/proof/`.
   [The proof](https://github.com/lagz0ne/tinkered/blob/main/docs/roadmap/start-base/PROOF.md).
+
+## Outgoing HTTP
+
+`httpRequest` depends on a session's HTTP resource.
+Each call makes an `http.request` operation span
+and its `http <METHOD> <path>` wire span (ADR 0102).
+The wire span keeps method, path, and status;
+the path has no query string.
+
+Bind `httpBackend` in scope tests to send without network.
+The request returns status, headers, and body text.
+Each set-cookie stays separate; other headers stay joined.
+The method accepts HTTP token characters and becomes upper-case.
+A non-2xx status is a result.
+A send or body read failure raises `HttpRequestFailed`:
+method, path, and only the cause's name and code.
+An inner socket cause wins for each readable field;
+an unreadable inner field keeps its readable outer field.
+A string cause is dropped.
+The code can be a number or string; private text is dropped.
+An abort failure keeps its numeric code without its message.
+
+Caller cancellation keeps Core's cancelled result.
+Cancelling a response body stops its active request work.
+Forced close cancels in-flight sends and body reads.
+A graceful close ends HTTP waits before other work drains.
+The caller's signal stays open on graceful close.
+The backend and request stop tags end HTTP waits
+without closing the scope; sibling requests stay open.
+An already stopped call sends nothing.
+Releasing the HTTP resource aborts its own pending sends.
+Other running work still finishes on graceful close.
+When the backend answers during graceful close,
+the caller's completed work stays completed.
+
+Only the check after the rows read can stop rows
+of an account that signed out during it.
+
+Generated aliases and parts use the real package folder.
+A linked workspace base has one sync Register,
+so app snapshot fields keep their types in both entries.

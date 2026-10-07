@@ -5,7 +5,7 @@ import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import { updateTodo } from "../transport/todos.functions.ts";
 import { readTodoChange } from "../contracts/todos.ts";
 import { todos, profile } from "./state.ts";
-import { syncClient } from "../scaffold/frontend/sync.ts";
+import { syncClient } from "@tinker/start/client";
 import { isError } from "../errors.ts";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
@@ -18,14 +18,14 @@ const saveTodo = operation({
   label: "todos.save",
   input: readTodoChange,
   depends: { flow: flow.controller, sync: syncClient },
-  run: async ({ flow, sync }, ctx) => {
+  run: async ({ flow, sync }, { defer, random, input, signal }) => {
     flow.set({ kind: "saving" });
-    ctx.defer(() => flow.set({ kind: "idle" }));
-    const executionId = ctx.random.uuid();
+    defer(() => flow.set({ kind: "idle" }));
+    const executionId = random.uuid();
     await sync.execute(
       executionId,
-      { send: updateTodo, data: { executionId, change: ctx.input } },
-      ctx.signal,
+      { send: updateTodo, data: { executionId, change: input } },
+      signal,
     );
   },
 });
@@ -38,10 +38,10 @@ const showFailure = operation({
       : "That change did not finish. Try again or reload the page.";
   },
   depends: { flow: flow.controller },
-  run: ({ flow }, ctx) => {
+  run: ({ flow }, { input }) => {
     flow.set({
       kind: "failed",
-      message: ctx.input,
+      message: input,
     });
   },
 });
@@ -49,8 +49,8 @@ const attemptTodo = operation({
   label: "todos.attempt",
   input: z.unknown(),
   depends: { save: saveTodo, failure: showFailure },
-  run: async ({ save, failure }, ctx) => {
-    const result = await save.settle({ rawInput: ctx.input });
+  run: async ({ save, failure }, { input }) => {
+    const result = await save.settle({ rawInput: input });
     if (result.status === "success") return true;
     if (result.status === "failed") failure.run({ rawInput: result.error });
     else failure.run({ rawInput: undefined });
