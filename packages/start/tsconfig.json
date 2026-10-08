@@ -16,6 +16,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "paths": {
+      "#tinker/telemetry-env": ["./tests/fixtures/telemetry-env.ts"],
       "#tinker/app": ["./tests/fixtures/app.ts"],
       "#tinker/app.server": ["./tests/fixtures/app.server.ts"],
       "#tinker/router": ["./src/defaults/router.ts"],

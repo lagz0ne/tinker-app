@@ -41,7 +41,13 @@ test("a named file the app has wins; a missing one maps to the base default", ()
 
 test("prepare writes the tsconfig, the parts files, and the base version into .tinker/", () => {
   const root = fixture({ "package.json": "{}" });
-  expect(prepare(root)).toEqual(["tsconfig.json", "base.json", "parts.ts", "parts.server.ts"]);
+  expect(prepare(root)).toEqual([
+    "tsconfig.json",
+    "base.json",
+    "parts.ts",
+    "parts.server.ts",
+    "telemetry-env.ts",
+  ]);
   expect(JSON.parse(readFileSync(join(root, ".tinker/base.json"), "utf8"))).toEqual({
     base: basePackage.version,
     parts: ["telemetry"],
@@ -127,5 +133,13 @@ test("linked parts use the real base path so sync has one Register", () => {
   const root = goodApp();
   expect(render(root, ["sync"])["parts.ts"]).toContain(
     `export { sync } from ${JSON.stringify(join(baseDir, "src/parts/sync/on"))};`,
+  );
+});
+
+test("generated telemetry settings contain only that part's env table", () => {
+  const files = render(fixture({ "package.json": "{}" }));
+  const table = files["telemetry-env.ts"];
+  expect(table).toBe(
+    `export const telemetryEnv = ${JSON.stringify(basePackage.tinker.parts.telemetry.env)};\n`,
   );
 });

@@ -1,6 +1,6 @@
 import { resource, tag } from "@tinker/core";
 import { readPartEnv } from "../../../lib/part-env.mjs";
-import { tinker } from "../../../package.json";
+import { telemetryEnv } from "#tinker/telemetry-env";
 import { env } from "../../env";
 import { raise } from "../../errors";
 import type { Telemetry } from "./records";
@@ -16,7 +16,7 @@ export const telemetrySettings = resource({
   label: "telemetry.settings",
   depends: { env, side: telemetrySide },
   factory: ({ env, side }): Telemetry.Settings => {
-    const { values, refused } = readPartEnv(tinker.parts.telemetry.env, env);
+    const { values, refused } = readPartEnv(telemetryEnv, env);
     if (refused.length > 0) raise("BadSettings", { part: "telemetry", keys: refused });
     const service = values.OTEL_SERVICE_NAME;
     if (side === "browser") return { side, service };

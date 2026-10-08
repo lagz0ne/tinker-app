@@ -21,6 +21,7 @@ export function aliases(root) {
     { find: /^#tinker\/routes$/, replacement: join(root, ".tinker/routeTree.gen.ts") },
     { find: /^#tinker\/parts$/, replacement: join(root, ".tinker/parts.ts") },
     { find: /^#tinker\/parts\.server$/, replacement: join(root, ".tinker/parts.server.ts") },
+    { find: /^#tinker\/telemetry-env$/, replacement: join(root, ".tinker/telemetry-env.ts") },
   ];
 }
 

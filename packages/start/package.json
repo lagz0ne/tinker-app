@@ -18,6 +18,9 @@
   ],
   "type": "module",
   "sideEffects": false,
+  "imports": {
+    "#tinker/telemetry-env": "./src/parts/telemetry/defaults.ts"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
