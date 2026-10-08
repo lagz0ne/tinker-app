@@ -61,7 +61,9 @@ test("each built file type is served with its content type", async () => {
   );
   const asset = await createAssets(root);
   const served = await Promise.all(
-    Object.keys(types).map((file) => asset(new Request(`http://app/assets/${file}`))),
+    Object.keys(types).map((file) =>
+      Promise.resolve(asset(new Request(`http://app/assets/${file}`))),
+    ),
   );
   expect(served.map((response) => response?.headers.get("content-type"))).toEqual(
     Object.values(types),
@@ -152,4 +154,25 @@ test("a public gzip download keeps its bytes and is not a response encoding", as
   expect(gunzipSync(Buffer.from(await response.arrayBuffer())).toString()).toBe("archive bytes");
   expect(response?.headers.get("content-type")).toBe("application/octet-stream");
   expect(response?.headers.get("content-encoding")).toBeNull();
+});
+
+test("a warmed host serves its retained raw and encoded bytes after files go away", async () => {
+  const root = built();
+  const asset = await createAssets(root);
+  const raw = new Request("http://app/robots.txt");
+  const zipped = new Request("http://app/assets/app-1a2b.js", {
+    headers: { "accept-encoding": "br" },
+  });
+  await (await asset(raw)).text();
+  await (await asset(zipped)).arrayBuffer();
+  unlinkSync(join(root, "dist/client/robots.txt"));
+  unlinkSync(join(root, "dist/client/assets/app-1a2b.js"));
+  const text = asset(raw);
+  const bytes = asset(zipped);
+  expect(text).toBeInstanceOf(Response);
+  expect(bytes).toBeInstanceOf(Response);
+  expect(await text.text()).toBe("User-agent: *\n");
+  expect(brotliDecompressSync(Buffer.from(await bytes.arrayBuffer())).toString()).toBe(
+    "console.log(1)",
+  );
 });

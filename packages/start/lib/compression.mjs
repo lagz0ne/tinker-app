@@ -11,6 +11,11 @@ const streams = {
   gzip: () => createGzip({ flush: constants.Z_SYNC_FLUSH }),
 };
 
+const compressibleType = /^(text\/(javascript|css|html)|application\/javascript)(;|$)/i;
+const noTransform = /\bno-transform\b/i;
+const varySeparator = /\s*,\s*/;
+const encodings = new Map();
+
 const encoders = { br: promisify(brotliCompress), gzip: promisify(gzip) };
 
 /**
@@ -21,16 +26,36 @@ function readWeights(accepted) {
   const weights = new Map();
   for (const token of accepted.split(",")) {
     const [name, ...parameters] = token.trim().toLowerCase().split(";");
-    const quality = parameters.find((part) => part.trim().startsWith("q="));
-    const weight = quality === undefined ? 1 : Number(quality.trim().slice(2));
-    weights.set(name, Number.isFinite(weight) && weight >= 0 && weight <= 1 ? weight : 0);
+    weights.set(name, readWeight(parameters));
   }
   return weights;
 }
 
+/** @param {string[]} parameters - From a header token; why: invalid weights refuse that encoding. */
+function readWeight(parameters) {
+  const quality = parameters.find(isQuality);
+  const weight = quality === undefined ? 1 : Number(quality.trim().slice(2));
+  return Number.isFinite(weight) && weight >= 0 && weight <= 1 ? weight : 0;
+}
+
+/** @param {string} parameter - From the header; why: ignore unrelated token parameters. */
+function isQuality(parameter) {
+  return parameter.trim().startsWith("q=");
+}
+
 /** @param {Request} request - From the host; why: pick the highest accepted weight, with Brotli winning ties. */
 export function readEncoding(request) {
-  const weights = readWeights(request.headers.get("accept-encoding") ?? "");
+  const accepted = request.headers.get("accept-encoding") ?? "";
+  if (encodings.has(accepted)) return encodings.get(accepted);
+  const encoding = selectEncoding(accepted);
+  if (encodings.size === 128) encodings.clear();
+  encodings.set(accepted, encoding);
+  return encoding;
+}
+
+/** @param {string} accepted - From the header; why: only a new header needs weight parsing. */
+function selectEncoding(accepted) {
+  const weights = readWeights(accepted);
   const fallback = weights.get("*") ?? 0;
   const choices = ["br", "gzip"].map((name) => ({ name, weight: weights.get(name) ?? fallback }));
   choices.push({ name: "identity", weight: weights.get("identity") ?? 0 });
@@ -42,7 +67,7 @@ export function readEncoding(request) {
 
 /** @param {string} type - From a file or response; why: only JS, CSS, and HTML are compressed. */
 export function isCompressible(type) {
-  return /^(text\/(javascript|css|html)|application\/javascript)(;|$)/i.test(type);
+  return compressibleType.test(type);
 }
 
 /**
@@ -62,20 +87,13 @@ export function compressBytes(bytes, encoding, quality = 4) {
 function mayCompress(response) {
   if (!isCompressible(response.headers.get("content-type") ?? "")) return false;
   if (response.headers.has("content-encoding") || response.status === 206) return false;
-  return !/\bno-transform\b/i.test(response.headers.get("cache-control") ?? "");
+  return !noTransform.test(response.headers.get("cache-control") ?? "");
 }
 
 /** @param {Headers} headers - From a response; why: merge the encoding cache key without repeating it. */
 export function varyEncoding(headers) {
   const vary = headers.get("vary") ?? "";
-  if (
-    vary === "*" ||
-    vary
-      .toLowerCase()
-      .split(/\s*,\s*/)
-      .includes("accept-encoding")
-  )
-    return;
+  if (vary === "*" || vary.toLowerCase().split(varySeparator).includes("accept-encoding")) return;
   headers.set("vary", vary ? `${vary}, Accept-Encoding` : "Accept-Encoding");
 }
 

@@ -32,12 +32,12 @@ async function serve(root) {
   loadEnv(root);
   const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
   const asset = await createAssets(root);
+  const render = async (request) => compressResponse(request, await built.default.fetch(request));
   const server = listen({
     overrideGlobalObjects: false,
     hostname: process.env.HOST ?? "127.0.0.1",
     port: Number(process.env.PORT ?? 4318),
-    fetch: async (request) =>
-      (await asset(request)) ?? compressResponse(request, await built.default.fetch(request)),
+    fetch: (request) => asset(request) ?? render(request),
   });
   console.log(
     `tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${process.env.PORT ?? 4318}`,
