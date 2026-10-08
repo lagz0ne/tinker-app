@@ -6,7 +6,6 @@ export { authSettings } from "@tinker/start/server";
 import { raise } from "../errors";
 export const auth = resource({
   label: "auth",
-  target: "session",
   depends: { database, settings: authSettings, send: sendMail },
   factory: async ({ database, settings, send }) => {
     const [{ betterAuth }, { drizzleAdapter }, { tanstackStartCookies }, schema] =

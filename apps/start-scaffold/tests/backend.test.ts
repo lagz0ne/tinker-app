@@ -6,6 +6,7 @@ import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { sql } from "drizzle-orm";
 import {
+  auth,
   readProfile,
   saveProfile,
   database,
@@ -259,5 +260,23 @@ test("email check and reset callbacks use the declared mail action", async () =>
   } finally {
     stop.abort();
     expect((await root.closed).status).toBe("success");
+  }
+});
+
+test("two requests share the auth instance", async () => {
+  const root = createScope({ tags, presets: [proofDatabase, proofMail] });
+  await root.ready;
+  try {
+    const first = await root.session(
+      { tags: requestHeaders(new Headers({ cookie: "first" })) },
+      (session) => session.resolve(auth),
+    );
+    const second = await root.session(
+      { tags: requestHeaders(new Headers({ cookie: "second" })) },
+      (session) => session.resolve(auth),
+    );
+    expect(first).toBe(second);
+  } finally {
+    expect((await root.close({ graceful: true })).status).toBe("success");
   }
 });
