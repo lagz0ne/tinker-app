@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 /** Named app checks run one by one; builds and the real-service proof never run inside tests. */
 const app = resolve(import.meta.dirname, "..");
+
 for (const task of [
   "check:plain",
   "test:schema",

@@ -33,6 +33,7 @@ const publish = operation({
       );
     }),
 });
+
 const rolledBack = operation({
   label: "test.rolledBack",
   depends: { database, history: eventHistory },
@@ -61,12 +62,14 @@ async function text(read: Promise<ReadableStreamReadResult<Uint8Array>>) {
 function changesFrame(rows: object[], cursor: object) {
   return `event: changes\nid: ${JSON.stringify(cursor)}\ndata: ${JSON.stringify({ kind: "changes", events: rows })}\n\n`;
 }
+
 const row = (stream: string, revision: number, executionId: string, change: unknown) => ({
   stream,
   revision,
   executionId,
   payload: { kind: "change", change },
 });
+
 const account = 'event: account\ndata: {"kind":"account-change"}\n\n';
 
 test("a wait holds until a wake, a close, or a stop, and returns at once when it has nothing to wait for", async () => {

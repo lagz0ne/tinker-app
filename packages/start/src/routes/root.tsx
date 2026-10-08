@@ -1,5 +1,6 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import style from "#tinker/style?url";
+
 /** The default page shell; it links src/style.css. src/routes/__root.tsx replaces it (ADR 0106). */
 export const Route = createRootRoute({
   head: () => ({

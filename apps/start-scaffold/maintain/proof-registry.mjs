@@ -213,4 +213,5 @@ try {
   await writeFile(mailSource, original);
   for (const child of servers.reverse()) await stop(child);
 }
+
 console.log("PASS: all proof servers stopped by PID. Nothing published.");

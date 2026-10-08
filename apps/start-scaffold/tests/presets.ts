@@ -4,8 +4,10 @@ import { afterAll, beforeAll } from "vite-plus/test";
 import { database } from "@tinker-start-scaffold/backend";
 import { mail } from "@tinker-start-scaffold/backend";
 import type { Database } from "@tinker-start-scaffold/backend";
+
 /** Keep migration inside each test; copy only the empty database's ready state. */
 let template: PGliteInterface;
+
 beforeAll(async () => {
   const [{ PGlite }] = await Promise.all([
     import("@electric-sql/pglite"),
@@ -13,6 +15,7 @@ beforeAll(async () => {
   ]);
   template = await PGlite.create();
 }, 60_000);
+
 afterAll(() => template.close());
 
 /** Explicit local proof wiring; production factories always use Postgres and SMTP. */
@@ -27,6 +30,7 @@ export const proofDatabase = preset(
     });
   },
 );
+
 export const proofMail = preset(mail, async (_deps, { log }) => ({
   send: async () => {
     log("mail.recorded", { delivered: false });

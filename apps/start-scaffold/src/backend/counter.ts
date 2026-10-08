@@ -3,6 +3,7 @@ import { database } from "./database";
 import { eventHistory } from "@tinker/start/server";
 import { readExecution } from "../contracts/sync";
 import { raise } from "../errors";
+
 export const incrementCounter = operation({
   label: "incrementCounter",
   input: readExecution,

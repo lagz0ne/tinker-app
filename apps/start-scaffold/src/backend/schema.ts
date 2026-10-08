@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+
 export const user = pgTable("user", {
   id: text().primaryKey(),
   name: text().notNull(),
@@ -8,6 +9,7 @@ export const user = pgTable("user", {
   createdAt: timestamp().notNull().defaultNow(),
   updatedAt: timestamp().notNull().defaultNow(),
 });
+
 export const session = pgTable(
   "session",
   {
@@ -24,6 +26,7 @@ export const session = pgTable(
   },
   (table) => [index("session_user_id").on(table.userId)],
 );
+
 export const account = pgTable(
   "account",
   {
@@ -45,6 +48,7 @@ export const account = pgTable(
   },
   (table) => [index("account_user_id").on(table.userId)],
 );
+
 export const verification = pgTable(
   "verification",
   {

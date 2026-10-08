@@ -1,10 +1,13 @@
 import { extension, operation, resource } from "@tinker/core";
 import type { Database } from "@tinker/start/server";
+
 export type { Database } from "@tinker/start/server";
 import { env } from "@tinker/start/server";
 import { z } from "zod";
 import { raise } from "../errors";
+
 const databaseEnv = z.object({ DATABASE_URL: z.string().min(1) });
+
 export const databaseSettings = resource({
   label: "database.settings",
   depends: { env },
@@ -18,6 +21,7 @@ export const databaseSettings = resource({
     return { url: settings.data.DATABASE_URL, migrations: "drizzle" };
   },
 });
+
 /** Feature code uses native PostgreSQL queries, without the driver's client field. */
 export const database = resource({
   label: "database",
@@ -63,6 +67,7 @@ export const database = resource({
     });
   },
 });
+
 export const migrate = operation({
   label: "migrate",
   depends: { database, settings: databaseSettings },
@@ -76,6 +81,7 @@ export const migrate = operation({
     });
   },
 });
+
 export const databaseSetup = extension({
   label: "database.setup",
   hooks: {

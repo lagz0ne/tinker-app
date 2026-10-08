@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 
 const app = resolve(import.meta.dirname, "..");
 const fixture = await mkdtemp(join(tmpdir(), "start-seam-note-"));
+
 try {
   await mkdir(join(fixture, "src/lib"), { recursive: true });
   await mkdir(join(fixture, "src/routes"), { recursive: true });

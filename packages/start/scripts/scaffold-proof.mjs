@@ -10,21 +10,26 @@ import { setImmediate } from "node:timers/promises";
 /** Real Postgres, better-auth, Mailpit, and two Lightpanda tabs. This is a proof, never a test. */
 const repo = resolve(import.meta.dirname, "../../..");
 const app = join(repo, "apps/start-scaffold");
+
 const logFile =
   process.env.SCAFFOLD_PROOF_LOG ??
   join(repo, "docs/roadmap/start-base/proof/16-scaffold-on-base.txt");
+
 const scratch = await mkdtemp(join(tmpdir(), "scaffold-on-base-"));
 const rows = [];
+
 const say = (line) => {
   rows.push(line);
   console.log(line);
 };
+
 const project = `scaffold-on-base-${process.pid}`;
 const session = `scaffold-on-base-${process.pid}`;
 const otherSession = `${session}-two`;
 let activeSession = session;
 const openedSessions = new Set();
 const ports = [];
+
 for (let n = 0; n < 4; n++) {
   const listener = createServer();
   listener.listen(0, "127.0.0.1");
@@ -32,8 +37,10 @@ for (let n = 0; n < 4; n++) {
   ports.push(listener.address().port);
   await new Promise((done) => listener.close(done));
 }
+
 const [port, postgresPort, smtpPort, mailpitPort] = ports;
 const origin = `http://127.0.0.1:${port}`;
+
 const env = {
   ...process.env,
   HOST: "127.0.0.1",
@@ -57,11 +64,14 @@ const env = {
   VICTORIA_TRACES_URL: "http://127.0.0.1:1/insert/opentelemetry/v1/traces",
   VICTORIA_LOGS_URL: "http://127.0.0.1:1/insert/jsonline",
 };
+
 const composeOverride = join(scratch, "compose-network.yml");
+
 await writeFile(
   composeOverride,
   "networks:\n  default:\n    ipam:\n      config:\n        - subnet: 10.254.251.0/28\n",
 );
+
 const compose = (...args) => {
   const result = spawnSync(
     "docker",
@@ -76,6 +86,7 @@ const compose = (...args) => {
   assert.equal(result.status, 0, result.stdout + result.stderr);
   return result.stdout.trim();
 };
+
 const browser = (...args) => {
   const result = spawnSync("agent-browser", ["--session", activeSession, ...args], {
     cwd: app,
@@ -86,7 +97,9 @@ const browser = (...args) => {
   assert.equal(result.status, 0, result.stdout + result.stderr);
   return result.stdout.trim();
 };
+
 const cookie = join(scratch, "cookies.txt");
+
 const authCurl = (path, body) => {
   const result = spawnSync(
     "curl",
@@ -109,12 +122,14 @@ const authCurl = (path, body) => {
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
 };
+
 let mailpitOrigin = `http://127.0.0.1:${mailpitPort}`;
 let relay;
 let server;
 let startedCompose = false;
 let serverOutput = "";
 let failed;
+
 try {
   say("scaffold on @tinker/start; telemetry, auth, sync on");
   const build = spawnSync("vp", ["build"], { cwd: app, env, encoding: "utf8", timeout: 120000 });
@@ -366,4 +381,5 @@ try {
   await writeFile(logFile, rows.join("\n") + "\n");
   if (!failed) await rm(scratch, { recursive: true });
 }
+
 if (failed) throw failed;

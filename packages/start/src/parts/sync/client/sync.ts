@@ -141,18 +141,21 @@ export const syncClient = resource({
     return client;
   },
 });
+
 export const applyBootstrap = operation({
   label: "sync.bootstrap",
   input: readBootstrap,
   depends: { sync: syncClient },
   run: async ({ sync }, { input }) => sync.bootstrap(input.snapshot, input.version),
 });
+
 export const applyEvents = operation({
   label: "sync.apply",
   input: readBatch,
   depends: { sync: syncClient },
   run: async ({ sync }, { input }) => sync.apply(input.events, input.version),
 });
+
 export const leaveAccount = operation({
   label: "sync.leave",
   depends: { sync: syncClient },

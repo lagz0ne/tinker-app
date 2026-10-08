@@ -4,6 +4,7 @@ const attribute = z.strictObject({
   key: z.string().max(256),
   value: z.strictObject({ stringValue: z.string().max(2048) }),
 });
+
 export const span = z.strictObject({
   side: z.enum(["server", "browser", "ssr"]),
   traceId: z
@@ -38,6 +39,7 @@ export const span = z.strictObject({
     message: z.string().max(2048).optional(),
   }),
 });
+
 export const logRecord = z.strictObject({
   time: z.number().int().nonnegative(),
   level: z.number().int().min(10).max(60),
@@ -54,6 +56,7 @@ export const logRecord = z.strictObject({
     .optional(),
   attributes: z.record(z.string().max(256), z.string().max(2048)).optional(),
 });
+
 export const telemetryBatch = z
   .strictObject({ traces: z.array(span).max(64), logs: z.array(logRecord).max(64) })
   .refine((batch) => batch.traces.length + batch.logs.length <= 64);

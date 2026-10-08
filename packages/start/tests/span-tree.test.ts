@@ -2,12 +2,14 @@ import { expect, test } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
 import { httpRequest } from "@tinker/start/server";
 import { httpBackend } from "@tinker/start/testing";
+
 const post = operation({
   label: "test.post",
   depends: { request: httpRequest.controller },
   run: ({ request }) =>
     request.run({ rawInput: { url: "https://example.test/x?secret=1", method: "POST" } }),
 });
+
 test("an HTTP request makes two spans and records its status", async () => {
   const stop = new AbortController();
   const scope = createScope({

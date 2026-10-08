@@ -17,6 +17,7 @@ export const extensions: Many<Scope.Extension<unknown>> = [];
 export const savedPublic = data<Sync.Public | null>({ label: "test.public", initial: null });
 export const savedPrivate = data<Sync.Private | null>({ label: "test.private", initial: null });
 export const applied = data<unknown[]>({ label: "test.applied", initial: [] });
+
 export const records = resource({
   label: "test.records",
   depends: {
@@ -46,9 +47,11 @@ export const records = resource({
     },
   }),
 });
+
 export const readSnapshot = snapshotEnvelope;
 export const readBootstrap = bootstrapEnvelope;
 export const readBatch = batchEnvelope;
+
 export const streamMessage = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("changes"), events: z.array(eventEnvelope).max(100) }),
   z.object({ kind: z.literal("account-change") }),

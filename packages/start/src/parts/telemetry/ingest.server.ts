@@ -12,8 +12,10 @@ import { telemetrySettings } from "./settings";
 export const browserTelemetry = tag<(batch: Telemetry.Batch) => Promise<void>>({
   label: "telemetry.browserIngest",
 });
+
 /** A live host binds its public origin; null reads it from the request. */
 export const telemetryOrigin = tag<string | null>({ label: "telemetry.origin", default: null });
+
 export const receiveTelemetry = operation({
   label: "telemetry.receive",
   depends: {

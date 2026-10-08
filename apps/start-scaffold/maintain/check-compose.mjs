@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 
 /** Reuse the real Postgres, Mailpit, better-auth, and two-tab proof; it owns all cleanup. */
 const repo = resolve(import.meta.dirname, "../../..");
+
 const proof = spawn(process.execPath, [join(repo, "packages/start/scripts/scaffold-proof.mjs")], {
   cwd: repo,
   env: {
@@ -14,8 +15,10 @@ const proof = spawn(process.execPath, [join(repo, "packages/start/scripts/scaffo
   },
   stdio: "inherit",
 });
+
 const code = await new Promise((done, failed) => {
   proof.once("error", failed);
   proof.once("close", done);
 });
+
 assert.equal(code, 0, "real auth, SMTP, and two-tab sync proof must pass");

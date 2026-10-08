@@ -5,8 +5,10 @@ import { nameDraft, pending, notice, profileResult } from "./state";
 import { syncClient } from "@tinker/start/client";
 import { readProfileInput } from "../contracts/profile";
 import { raise } from "../errors";
+
 const notificationId = z.uuid();
 const draftInput = z.string();
+
 export const saveName = operation({
   label: "saveName",
   input: readProfileInput,
@@ -37,6 +39,7 @@ export const saveName = operation({
     );
   },
 });
+
 export const retryMail = operation({
   label: "retryMail",
   input: (raw: unknown) => notificationId.parse(raw),
@@ -65,6 +68,7 @@ export const retryMail = operation({
     );
   },
 });
+
 export const editName = operation({
   label: "editName",
   input: (raw: unknown) => draftInput.parse(raw),

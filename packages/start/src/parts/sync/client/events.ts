@@ -75,11 +75,13 @@ export const snapshotLoader = resource({
     };
   },
 });
+
 export const loadSnapshot = operation({
   label: "sync.load",
   depends: { snapshots: snapshotLoader },
   run: ({ snapshots }, { signal }) => snapshots.load(signal),
 });
+
 export const checkAccount = operation({
   label: "sync.checkAccount",
   depends: { snapshots: snapshotLoader },
@@ -91,6 +93,7 @@ type Source = {
   addEventListener(type: string, listener: (event: MessageEvent<string>) => void): void;
   close(): void;
 };
+
 /** How a tab opens its stream: the native EventSource. Scope tests bind a fake. */
 export const eventSourceBackend = tag<(url: string) => Source>({
   label: "sync.eventSourceBackend",

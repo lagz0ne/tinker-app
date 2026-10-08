@@ -5,6 +5,7 @@ import { eventHistory } from "@tinker/start/server";
 import { readCursor, readPrivateCursor, readFeatureEvent } from "../contracts/sync";
 import type { Sync } from "../contracts/sync";
 import { raise } from "../errors";
+
 export const bootstrapPublic = operation({
   label: "bootstrapPublic",
   depends: { database, history: eventHistory },
@@ -20,6 +21,7 @@ export const bootstrapPublic = operation({
     });
   },
 });
+
 export const bootstrapPrivate = operation({
   label: "bootstrapPrivate",
   depends: { currentUser, database, history: eventHistory },
@@ -52,6 +54,7 @@ export const bootstrapPrivate = operation({
     });
   },
 });
+
 export const bootstrap = operation({
   label: "bootstrap",
   depends: { principal, public: bootstrapPublic, private: bootstrapPrivate },
@@ -64,6 +67,7 @@ export const bootstrap = operation({
     private: principal === null ? null : await privateState.run(),
   }),
 });
+
 export const replayPublic = operation({
   label: "replayPublic",
   input: readCursor,
@@ -86,6 +90,7 @@ export const replayPublic = operation({
     };
   },
 });
+
 export const replayPrivate = operation({
   label: "replayPrivate",
   input: readPrivateCursor,

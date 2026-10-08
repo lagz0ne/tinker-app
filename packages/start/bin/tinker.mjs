@@ -56,6 +56,7 @@ async function serve(root) {
 const [command, ...rest] = process.argv.slice(2);
 const root = process.cwd();
 const flag = (name) => rest[rest.indexOf(name) + 1];
+
 const commands = {
   prepare: async () => {
     const files = prepare(root);
@@ -81,8 +82,10 @@ const commands = {
     }),
   serve: () => serve(root),
 };
+
 if (!existsSync(join(root, "package.json")) || !(command in commands)) {
   console.log("usage: tinker prepare | doctor [--fix] | upgrade <version> [--from <dir>] | serve");
   process.exit(2);
 }
+
 process.exitCode = await commands[command]();

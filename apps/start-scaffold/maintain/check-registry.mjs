@@ -10,11 +10,13 @@ const { registry, items } = await registryItems();
 assert.equal(new Set(items.map((item) => item.name)).size, items.length);
 const names = new Set(items.map((item) => item.name));
 assert.deepEqual(items.find((item) => item.name === "runtime").files, []);
+
 assert.deepEqual(
   JSON.parse(await readFile(join(app, "public/r/registry.json"), "utf8")),
   { ...registry, items },
   "registry index must match source too",
 );
+
 for (const target of new Set([
   ...registry.items.find((item) => item.name === "app").files.map((file) => file.target),
   "~/package.json",
@@ -35,7 +37,9 @@ for (const target of new Set([
   await assert.rejects(registryItems({ registry: planted }), /protected app file/);
   console.log(`PASS: registry build rejects protected target ${target}.`);
 }
+
 const duplicate = structuredClone(registry);
+
 duplicate.items
   .find((item) => item.name === "todos-example")
   .files.push({
@@ -43,8 +47,10 @@ duplicate.items
     type: "registry:file",
     target: "~/src/errors.ts",
   });
+
 await assert.rejects(registryItems({ registry: duplicate }), /already owned/);
 let files = 0;
+
 for (const item of items) {
   const built = JSON.parse(await readFile(join(app, "public/r", `${item.name}.json`), "utf8"));
   assert.deepEqual(built, item, `${item.name}: rebuild registry:build after changing source`);
@@ -59,6 +65,7 @@ for (const item of items) {
     files++;
   }
 }
+
 for (const composition of [["app"], ["app", "starter"]]) {
   const consumer = await mkdtemp(join(tmpdir(), "start-registry-consumer-"));
   try {
@@ -110,6 +117,7 @@ for (const composition of [["app"], ["app", "starter"]]) {
     await rm(consumer, { recursive: true, force: true });
   }
 }
+
 console.log(
   `PASS: ${items.length} registry items; ${files} emitted files match source. No publish.`,
 );

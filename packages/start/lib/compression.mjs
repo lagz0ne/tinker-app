@@ -10,6 +10,7 @@ const streams = {
     }),
   gzip: () => createGzip({ flush: constants.Z_SYNC_FLUSH }),
 };
+
 const encoders = { br: promisify(brotliCompress), gzip: promisify(gzip) };
 
 /**

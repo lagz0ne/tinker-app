@@ -4,6 +4,7 @@ import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold
 import { test, expect } from "vite-plus/test";
 import { createScope, isError as isCoreError } from "@tinker/core";
 import { listTodos, changeTodo, migrate, raise, isError } from "@tinker-start-scaffold/backend";
+
 const tags = env({
   DATABASE_URL: "postgres://proof",
   SMTP_HOST: "proof",
@@ -14,6 +15,7 @@ const tags = env({
   PUBLIC_ORIGIN: "http://localhost:4318",
   AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
 });
+
 function signupRequest(name: string) {
   return new Request("http://localhost:4318/api/auth/sign-up/email", {
     method: "POST",
@@ -21,6 +23,7 @@ function signupRequest(name: string) {
     body: JSON.stringify({ name, email: `${name}@example.com`, password: "safe-password-42" }),
   });
 }
+
 function readHeaders(response: Response) {
   return new Headers({
     cookie: response.headers

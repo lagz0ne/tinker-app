@@ -16,6 +16,7 @@ import {
   isError,
 } from "@tinker-start-scaffold/backend";
 import type { Mail } from "@tinker-start-scaffold/backend";
+
 const tags = env({
   DATABASE_URL: "postgres://proof",
   SMTP_HOST: "proof",
@@ -26,6 +27,7 @@ const tags = env({
   PUBLIC_ORIGIN: "http://localhost:4318",
   AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
 });
+
 function authRequest(path: string, body: object, cookie = "") {
   return new Request(`http://localhost:4318/api/auth/${path}`, {
     method: "POST",
@@ -33,12 +35,14 @@ function authRequest(path: string, body: object, cookie = "") {
     body: JSON.stringify(body),
   });
 }
+
 function readCookie(response: Response) {
   return response.headers
     .getSetCookie()
     .map((cookie) => cookie.split(";").at(0))
     .join("; ");
 }
+
 const failAfterSave = operation({
   label: "test.failAfterSave",
   depends: { save: saveProfile },

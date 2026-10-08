@@ -1,4 +1,5 @@
 import type { Errors as BaseErrors } from "@tinker/start";
+
 export declare namespace Errors {
   type Payloads = {
     NotificationFailed: Record<string, never>;
@@ -17,6 +18,7 @@ export declare namespace Errors {
       : never;
   type Of<N extends Name> = Error & { kind: N; payload: Payload<N> };
 }
+
 /**
  * @param kind - From the failing caller; why: choose the managed error.
  * @param payload - From the failing caller; why: keep facts for that error.
@@ -24,6 +26,7 @@ export declare namespace Errors {
 export function raise<N extends Errors.Name>(kind: N, payload: Errors.Payload<N>): never {
   throw Object.assign(new Error(kind), { kind, payload });
 }
+
 /**
  * @param error - From a caught failure; why: narrow its payload.
  * @param kind - From the caller; why: select the expected error.

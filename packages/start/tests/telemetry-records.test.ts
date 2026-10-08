@@ -8,6 +8,7 @@ import type { Telemetry } from "../src/parts/telemetry/records";
 const traceId = "0123456789abcdef0123456789abcdef";
 const spanId = "0123456789abcdef";
 const pair = { key: "k", value: { stringValue: "v" } };
+
 const span = (side: Telemetry.Side): Telemetry.Span => ({
   side,
   traceId,
@@ -22,6 +23,7 @@ const span = (side: Telemetry.Side): Telemetry.Span => ({
   events: [{ name: "e", timeUnixNano: "56", attributes: [pair] }],
   status: { code: 2, message: "m" },
 });
+
 const log = (side: Telemetry.Side): Telemetry.Log => ({
   time: 1,
   level: 30,
@@ -32,14 +34,18 @@ const log = (side: Telemetry.Side): Telemetry.Log => ({
   spanId,
   attributes: { k: "v" },
 });
+
 const sides: Telemetry.Side[] = ["server", "browser", "ssr"];
 const good = { traces: sides.map(span), logs: sides.map(log) };
+
 const withSpan = (change: Record<string, unknown>) => ({
   traces: [{ ...span("browser"), ...change }],
   logs: [],
 });
+
 const withEvent = (change: Record<string, unknown>) =>
   withSpan({ events: [{ ...span("browser").events[0], ...change }] });
+
 const withLog = (change: Record<string, unknown>) => ({
   traces: [],
   logs: [{ ...log("browser"), ...change }],

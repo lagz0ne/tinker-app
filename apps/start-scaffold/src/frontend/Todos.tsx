@@ -10,10 +10,12 @@ import { isError } from "../errors";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";
+
 const flow = data<{ kind: "idle" } | { kind: "saving" } | { kind: "failed"; message: string }>({
   label: "todos.flow",
   initial: { kind: "idle" },
 });
+
 const saveTodo = operation({
   label: "todos.save",
   input: readTodoChange,
@@ -29,6 +31,7 @@ const saveTodo = operation({
     );
   },
 });
+
 const showFailure = operation({
   label: "todos.showFailure",
   input(error: unknown) {
@@ -45,6 +48,7 @@ const showFailure = operation({
     });
   },
 });
+
 const attemptTodo = operation({
   label: "todos.attempt",
   input: z.unknown(),
@@ -57,6 +61,7 @@ const attemptTodo = operation({
     return false;
   },
 });
+
 export function Todos() {
   const rows = useData(todos);
   const account = useData(profile);

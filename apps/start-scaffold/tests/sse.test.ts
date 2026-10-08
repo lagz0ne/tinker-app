@@ -18,6 +18,7 @@ import type { Mail } from "@tinker-start-scaffold/backend";
 import { syncClient, applyBootstrap } from "@tinker/start/client";
 import { accountOwner, tabStop, receiveMessage } from "@tinker/start/testing";
 import { openSync, notifications, backendStop, requestStop } from "@tinker/start/testing";
+
 const settings = env({
   DATABASE_URL: "postgres://proof",
   SMTP_HOST: "proof",
@@ -28,6 +29,7 @@ const settings = env({
   PUBLIC_ORIGIN: "http://localhost:4318",
   AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
 });
+
 function signup(name: string) {
   return new Request("http://localhost:4318/api/auth/sign-up/email", {
     method: "POST",
@@ -35,6 +37,7 @@ function signup(name: string) {
     body: JSON.stringify({ name, email: `${name}@example.com`, password: "safe-password-42" }),
   });
 }
+
 function headers(response: Response) {
   return new Headers({
     cookie: response.headers
@@ -43,6 +46,7 @@ function headers(response: Response) {
       .join("; "),
   });
 }
+
 const rollBackEvent = operation({
   label: "test.rollbackEvent",
   depends: { database },
@@ -56,6 +60,7 @@ const rollBackEvent = operation({
     });
   },
 });
+
 /** Session wakes hide the heartbeat fallback; only this test database drops that trigger. */
 const disableSessionWake = operation({
   label: "test.disableSessionWake",
@@ -65,6 +70,7 @@ const disableSessionWake = operation({
     await database.execute(sql`DROP TRIGGER sync_session_changed ON session`);
   },
 });
+
 test("SQL notifications wake after commit, stay silent on rollback, and survive a read before waiting", async () => {
   const stop = new AbortController();
   const root = createScope({
@@ -90,6 +96,7 @@ test("SQL notifications wake after commit, stay silent on rollback, and survive 
     expect((await root.closed).status).toBe("success");
   }
 });
+
 test("SSE replays the supplied cursor and a held reader receives the next committed batch", async () => {
   const stop = new AbortController();
   const root = createScope({
@@ -134,6 +141,7 @@ test("SSE replays the supplied cursor and a held reader receives the next commit
     expect((await root.closed).status).toBe("success");
   }
 });
+
 test("private SSE cursors are refused and a revoked held stream sends no saved private rows", async () => {
   const stop = new AbortController();
   const root = createScope({
@@ -185,6 +193,7 @@ test("private SSE cursors are refused and a revoked held stream sends no saved p
     expect((await root.closed).status).toBe("success");
   }
 });
+
 test("reconnecting from applied cursors finishes a save whose final event committed while disconnected", async () => {
   const stop = new AbortController();
   const sending = Promise.withResolvers<void>();

@@ -2,8 +2,10 @@ import { operation, resource } from "@tinker/core";
 import { database } from "./database";
 import { sendMail } from "./mail";
 import { authSettings, requestHeaders } from "@tinker/start/server";
+
 export { authSettings } from "@tinker/start/server";
 import { raise } from "../errors";
+
 export const auth = resource({
   label: "auth",
   depends: { database, settings: authSettings, send: sendMail },
@@ -35,12 +37,14 @@ export const auth = resource({
     });
   },
 });
+
 export const principal = resource({
   label: "request.principal",
   target: "session",
   depends: { auth, headers: requestHeaders },
   factory: async ({ auth, headers }) => (await auth.api.getSession({ headers }))?.user ?? null,
 });
+
 export const currentUser = resource({
   label: "request.currentUser",
   target: "session",
@@ -50,6 +54,7 @@ export const currentUser = resource({
     return principal;
   },
 });
+
 export const readAccount = operation({
   label: "readAccount",
   depends: { principal },

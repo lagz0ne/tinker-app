@@ -6,6 +6,7 @@ import { eventHistory } from "@tinker/start/server";
 import type { Todos } from "../contracts/todos";
 import type { Sync } from "../contracts/sync";
 import { raise } from "../errors";
+
 export const listTodos = operation({
   label: "listTodos",
   depends: { currentUser, database },
@@ -21,6 +22,7 @@ export const listTodos = operation({
       .orderBy(asc(todo.id));
   },
 });
+
 export const changeTodo = operation({
   label: "changeTodo",
   input: readTodoCommand,

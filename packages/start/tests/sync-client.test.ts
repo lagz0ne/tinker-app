@@ -14,21 +14,25 @@ import type { Sync } from "../src/parts/sync/envelopes";
 
 /** A page hide event; `persisted` true means the tab went into the back-forward cache. */
 const hide = (persisted: boolean) => Object.assign(new Event("pagehide"), { persisted });
+
 const ids = [
   "00000000-0000-4000-8000-000000000001",
   "00000000-0000-4000-8000-000000000002",
   "00000000-0000-4000-8000-000000000003",
 ];
+
 const ada: Sync.Snapshot = {
   public: { stream: "public", revision: 0 },
   private: { stream: "ada", revision: 0 },
 };
+
 const event = (stream: string, revision: number, change: unknown): Sync.Event => ({
   stream,
   revision,
   executionId: ids[0],
   payload: { kind: "change", change },
 });
+
 const result = (stream: string, revision: number, executionId: string): Sync.Event => ({
   stream,
   revision,

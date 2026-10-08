@@ -16,6 +16,7 @@ import {
   snapshotSource,
 } from "@tinker/start/testing";
 import { openSync, backendStop, requestStop } from "@tinker/start/testing";
+
 const settings = env({
   DATABASE_URL: "postgres://proof",
   SMTP_HOST: "proof",
@@ -26,6 +27,7 @@ const settings = env({
   PUBLIC_ORIGIN: "http://localhost:4318",
   AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
 });
+
 test("a stream checks the session once at open and once for the next wake", async () => {
   const stop = new AbortController();
   const root = createScope({
@@ -57,6 +59,7 @@ test("a stream checks the session once at open and once for the next wake", asyn
     expect((await root.closed).status).toBe("success");
   }
 });
+
 test("a signed-out private redirect loads one snapshot across separate renders", async () => {
   const stop = new AbortController();
   let loads = 0;

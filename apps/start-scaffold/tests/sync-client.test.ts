@@ -4,7 +4,9 @@ import { createScope, operation } from "@tinker/core";
 import { syncClient, applyBootstrap, applyEvents, leaveAccount } from "@tinker/start/client";
 import { accountOwner, tabStop } from "@tinker/start/testing";
 import type { Sync } from "@tinker/start";
+
 const ada = { id: "ada", name: "Ada", email: "ada@example.com", emailVerified: false };
+
 const initial: Sync.Snapshot = {
   public: { stream: "public", revision: 0, value: 0 },
   private: {
@@ -14,6 +16,7 @@ const initial: Sync.Snapshot = {
     todos: [],
   },
 };
+
 test("an event before its receipt finishes only after saved records are applied", async () => {
   const stop = new AbortController();
   const call = new AbortController();
@@ -75,6 +78,7 @@ test("an event before its receipt finishes only after saved records are applied"
     expect((await root.closed).status).toBe("success");
   }
 });
+
 test("replayed events and older snapshots leave newer records and dirty drafts alone", async () => {
   const stop = new AbortController();
   const root = createScope({
@@ -116,6 +120,7 @@ test("replayed events and older snapshots leave newer records and dirty drafts a
     expect((await root.closed).status).toBe("success");
   }
 });
+
 test("account exit stops local waits and ignores an old account's late response", async () => {
   const stop = new AbortController();
   const sent = Promise.withResolvers<void>();

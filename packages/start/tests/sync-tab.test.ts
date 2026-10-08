@@ -23,10 +23,12 @@ import { sync as off } from "../src/parts/sync/off";
 import { sync as on } from "../src/parts/sync/on";
 
 const id = "00000000-0000-4000-8000-000000000001";
+
 const ada: Sync.Snapshot = {
   public: { stream: "public", revision: 2 },
   private: { stream: "ada", revision: 3 },
 };
+
 const changes = (...events: [string, number, unknown][]) =>
   JSON.stringify({
     kind: "changes",
@@ -37,6 +39,7 @@ const changes = (...events: [string, number, unknown][]) =>
       payload: { kind: "change", change },
     })),
   });
+
 const accountChange = JSON.stringify({ kind: "account-change" });
 
 /**

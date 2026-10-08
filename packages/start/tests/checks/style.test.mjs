@@ -7,6 +7,7 @@ const tailwindInstalled = {
   "node_modules/tailwindcss/package.json": JSON.stringify({ version: "4.0.0" }),
   "node_modules/@tailwindcss/vite/package.json": JSON.stringify({ version: "4.0.0" }),
 };
+
 const shadcn = (settings) =>
   JSON.stringify(
     { tailwind: { css: "src/style.css" }, aliases: { ui: "@/components/ui" }, ...settings },

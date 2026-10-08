@@ -15,11 +15,13 @@ export const ingestTelemetry = operation({
   input: (raw: unknown) => raw as Telemetry.Batch,
   run: ({ queue }, ctx) => queue.ingest(ctx.input),
 });
+
 export const flushTelemetry = operation({
   label: "telemetry.export",
   depends: { queue },
   run: ({ queue }) => queue.flush(),
 });
+
 /** On the telemetry root: the queue's timer starts with the root, and its close sends what is left. */
 export const telemetryExport = extension({
   label: "telemetry",

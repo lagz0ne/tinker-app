@@ -1,13 +1,17 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 import { raise } from "../errors";
+
 const message = z.strictObject({ to: z.string(), subject: z.string(), text: z.string() });
+
 export declare namespace Mail {
   type Message = z.infer<typeof message>;
   type Sender = { send: (message: Message) => Promise<void> };
   type Settings = { host: string; port: number; user: string; password: string; from: string };
 }
+
 import { env } from "@tinker/start/server";
+
 const mailEnv = z.object({
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().int().positive(),
@@ -15,6 +19,7 @@ const mailEnv = z.object({
   SMTP_PASSWORD: z.string().default(""),
   SMTP_FROM: z.email(),
 });
+
 export const mailSettings = resource({
   label: "mail.settings",
   depends: { env },
@@ -35,6 +40,7 @@ export const mailSettings = resource({
     };
   },
 });
+
 export const mail = resource({
   label: "mail.sender",
   depends: { settings: mailSettings },
@@ -54,6 +60,7 @@ export const mail = resource({
     };
   },
 });
+
 export const sendMail = operation({
   label: "sendMail",
   input: message,

@@ -14,6 +14,7 @@ import { telemetry as serverPart } from "../src/parts/telemetry/on.server";
 import type { Telemetry } from "../src/parts/telemetry/records";
 
 const empty: Telemetry.Batch = { traces: [], logs: [] };
+
 const tabSpan: Telemetry.Span = {
   side: "browser",
   traceId: "1".repeat(32),
@@ -27,6 +28,7 @@ const tabSpan: Telemetry.Span = {
   events: [],
   status: { code: 1 },
 };
+
 const browserLog = (msg: string): Telemetry.Log => ({
   time: 1,
   level: 30,

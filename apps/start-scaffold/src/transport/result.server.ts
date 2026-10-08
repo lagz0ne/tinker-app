@@ -1,5 +1,6 @@
 import type { RunResult } from "@tinker/core";
 import { isError, raise } from "../errors";
+
 /**
  * @param result - From a settled mutation; why: turn its result into a network receipt.
  */

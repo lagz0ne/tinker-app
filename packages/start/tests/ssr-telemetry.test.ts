@@ -15,15 +15,18 @@ const telemetry = Object.assign(
   { renderObserve: serverTelemetry.observe, renderNs: namespace() },
   serverTelemetry,
 );
+
 const off = Object.assign(
   { renderObserve: offTelemetry.observe, renderNs: namespace() },
   offTelemetry,
 );
+
 const storageEnv = env({
   VICTORIA_TRACES_URL: "http://storage.test/traces",
   VICTORIA_LOGS_URL: "http://storage.test/logs",
   OTEL_SERVICE_NAME: "test-start",
 });
+
 const render = operation({ label: "test.render", run: () => "page" });
 
 test("render close finishes while the process telemetry send is held", async () => {

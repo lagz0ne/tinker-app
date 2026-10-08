@@ -97,6 +97,7 @@ test("with auth on, a seam with both names passes; with auth off, none is needed
 });
 
 const syncOn = JSON.stringify({ base: "0.6.0", parts: ["telemetry", "auth", "sync"] });
+
 const clientSeam = {
   "src/lib/tinker.ts":
     'export const extensions = [];\nexport { records, readSnapshot, readBootstrap, readBatch, streamMessage } from "../sync";\n',

@@ -900,19 +900,24 @@ function failedTests() {
 }
 
 const only = (process.env.BREAKS ?? "").split(",").filter(Boolean);
+
 const unknown = only.filter((part) =>
   [...breaks, ...messageBreaks()].every(({ name }) => !name.includes(part)),
 );
+
 if (unknown.length > 0) throw new Error(`BREAKS names no break: ${unknown.join(", ")}`);
 const chosen = (change) => only.length === 0 || only.some((part) => change.name.includes(part));
 const logic = breaks.filter(chosen);
 const all = [...logic, ...messageBreaks().filter(chosen)];
 freshScratch();
 const control = failedTests();
+
 console.log(
   `control (no break): ${control.failed} failed test(s), ${control.broken} broken file(s)`,
 );
+
 let caught = 0;
+
 for (const change of all) {
   freshScratch();
   applyBreak(change);
@@ -921,7 +926,9 @@ for (const change of all) {
   if (ok) caught += 1;
   console.log(`${ok ? "caught" : "MISSED"}  ${String(failed).padStart(3)} failed  ${change.name}`);
 }
+
 console.log(
   `\n${caught} of ${all.length} breaks caught (${logic.length} logic, ${all.length - logic.length} message)${only.length > 0 ? `; BREAKS=${only.join(",")}` : ""}`,
 );
+
 process.exitCode = caught === all.length && control.failed === 0 ? 0 : 1;

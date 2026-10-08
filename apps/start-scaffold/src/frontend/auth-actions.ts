@@ -4,7 +4,9 @@ import { pending, notice, authMode } from "./state";
 import { syncClient, snapshotLoader } from "@tinker/start/client";
 import { credentials } from "../contracts/credentials";
 import { raise } from "../errors";
+
 const modeInput = z.enum(["signup", "signin"]);
+
 export const authClient = resource({
   label: "browser.auth",
   factory: async () => {
@@ -12,6 +14,7 @@ export const authClient = resource({
     return createAuthClient();
   },
 });
+
 export const signIn = operation({
   label: "signIn",
   input: (raw: unknown) => {
@@ -43,6 +46,7 @@ export const signIn = operation({
     log("account.signedIn");
   },
 });
+
 export const signOut = operation({
   label: "signOut",
   depends: { client: authClient, sync: syncClient, notice: notice.controller },
@@ -53,6 +57,7 @@ export const signOut = operation({
     notice.set("You are signed out. Committed changes remain saved.");
   },
 });
+
 export const setAuthMode = operation({
   label: "setAuthMode",
   input: (raw: unknown) => modeInput.parse(raw),

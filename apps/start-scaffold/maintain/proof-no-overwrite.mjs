@@ -18,6 +18,7 @@ const project = `registry-no-overwrite-${process.pid}`;
 const composeFile = join(scratch, "compose.json");
 let services = false;
 console.log(`Proof folder: ${scratch}`);
+
 console.log(
   "Assumption: feature items keep the existing shared demo bodies together. Nothing is published.",
 );
@@ -311,6 +312,7 @@ try {
   for (const child of servers.reverse()) await stop(child);
   if (services) run("docker", ["compose", "-p", project, "-f", composeFile, "down", "-v"]);
 }
+
 console.log(
   "PASS: all proof servers stopped by PID; own Compose project removed. Nothing published.",
 );

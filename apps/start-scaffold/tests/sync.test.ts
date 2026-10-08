@@ -19,6 +19,7 @@ import {
   isError,
 } from "@tinker-start-scaffold/backend";
 import type { Mail } from "@tinker-start-scaffold/backend";
+
 const tags = env({
   DATABASE_URL: "postgres://proof",
   SMTP_HOST: "proof",
@@ -29,6 +30,7 @@ const tags = env({
   PUBLIC_ORIGIN: "http://localhost:4318",
   AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
 });
+
 function signup(name: string) {
   return new Request("http://localhost:4318/api/auth/sign-up/email", {
     method: "POST",
@@ -36,6 +38,7 @@ function signup(name: string) {
     body: JSON.stringify({ name, email: `${name}@example.com`, password: "safe-password-42" }),
   });
 }
+
 function headers(response: Response) {
   return new Headers({
     cookie: response.headers
@@ -44,6 +47,7 @@ function headers(response: Response) {
       .join("; "),
   });
 }
+
 test("concurrent public writes replay in commit order and a repeated receipt changes nothing", async () => {
   const stop = new AbortController();
   const root = createScope({ signal: stop.signal, tags, presets: [proofDatabase, proofMail] });
@@ -81,6 +85,7 @@ test("concurrent public writes replay in commit order and a repeated receipt cha
     expect((await root.closed).status).toBe("success");
   }
 });
+
 test("private cursors cannot read another real account's history", async () => {
   const stop = new AbortController();
   const root = createScope({ signal: stop.signal, tags, presets: [proofDatabase, proofMail] });
@@ -112,6 +117,7 @@ test("private cursors cannot read another real account's history", async () => {
     expect((await root.closed).status).toBe("success");
   }
 });
+
 test("failed notification keeps the saved profile and retry sends only the notification", async () => {
   const stop = new AbortController();
   let refuse = true;
@@ -185,6 +191,7 @@ test("failed notification keeps the saved profile and retry sends only the notif
     expect((await root.closed).status).toBe("success");
   }
 });
+
 test("request exit cannot strand a profile that already committed", async () => {
   const stop = new AbortController();
   const request = new AbortController();

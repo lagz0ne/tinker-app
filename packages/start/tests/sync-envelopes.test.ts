@@ -12,12 +12,14 @@ import {
 
 const id = "00000000-0000-4000-8000-000000000001";
 const other = "00000000-0000-4000-8000-000000000002";
+
 const event = {
   stream: "public",
   revision: 1,
   executionId: id,
   payload: { kind: "change", change: 1 },
 };
+
 const snapshot = { public: { stream: "public", revision: 0, value: 1 }, private: null };
 
 test("the sync readers take an app's wire values, and refuse each broken one", () => {

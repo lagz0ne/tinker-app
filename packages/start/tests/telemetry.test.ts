@@ -48,15 +48,18 @@ const child = operation({
     return "saved";
   },
 });
+
 const parent = operation({
   label: "test.telemetry.parent",
   depends: { child },
   run: ({ child }) => child.run(),
 });
+
 const rejected = operation({
   label: "test.telemetry.rejected",
   run: (_deps, { raise }) => raise("Rollback", {}),
 });
+
 const levels = operation({
   label: "test.telemetry.levels",
   run: (_deps, ctx) => {

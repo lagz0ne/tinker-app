@@ -89,7 +89,9 @@ const entry: {
     });
   },
 };
+
 export default entry;
+
 export async function close() {
   if (entry.owned) await (await entry.owned).close();
 }

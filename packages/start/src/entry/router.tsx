@@ -34,6 +34,7 @@ const readTelemetry = createIsomorphicFn()
       },
     };
   });
+
 /** A tab's page events (for its lifetime); a server render has no page. */
 const readPage = createIsomorphicFn()
   .server((): EventTarget | undefined => undefined)

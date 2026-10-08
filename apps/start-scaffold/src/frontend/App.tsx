@@ -7,6 +7,7 @@ import { errorText } from "./error-text";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+
 function AccountForm() {
   const mode = useData(authMode);
   const changeMode = useRun(setAuthMode);
@@ -95,6 +96,7 @@ function AccountForm() {
     </form>
   );
 }
+
 export function App() {
   const current = useData(profile);
   const message = useData(notice);

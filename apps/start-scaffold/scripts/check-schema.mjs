@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 
 const app = resolve(import.meta.dirname, "..");
 const consumer = await mkdtemp(join(tmpdir(), "start-seam-schema-"));
+
 async function inventory(folder) {
   const entries = await readdir(folder, { withFileTypes: true });
   const paths = [];
@@ -19,6 +20,7 @@ async function inventory(folder) {
   }
   return paths.sort((a, b) => a.localeCompare(b));
 }
+
 try {
   for (const name of [
     "drizzle",

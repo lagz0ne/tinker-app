@@ -12,11 +12,14 @@ const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(process.argv.slice(2).find((arg) => !arg.startsWith("--")) ?? app);
 // TypeScript resolves types from the working folder; run from the project root.
 process.chdir(root);
+
 const base = dirname(
   createRequire(join(root, "package.json")).resolve("@tinker/start/package.json"),
 );
+
 const failures = [];
 const files = [];
+
 async function scan(folder) {
   for (const entry of await readdir(folder, { withFileTypes: true })) {
     const path = join(folder, entry.name);
@@ -25,6 +28,7 @@ async function scan(folder) {
       files.push(path);
   }
 }
+
 await scan(join(root, "src"));
 const config = ts.readConfigFile(join(root, "tsconfig.json"), (path) => ts.sys.readFile(path));
 assert.equal(config.error, undefined, "tsconfig must be readable");
@@ -32,16 +36,20 @@ const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
 const program = ts.createProgram(files, parsed.options);
 const checker = program.getTypeChecker();
 const sources = files.sort((a, b) => a.localeCompare(b)).map((file) => program.getSourceFile(file));
+
 function walk(node, visit) {
   visit(node);
   ts.forEachChild(node, (child) => walk(child, visit));
 }
+
 function nameOf(node) {
   return node?.getText() ?? "";
 }
+
 function pathOf(node) {
   return relative(root, node.getSourceFile().fileName);
 }
+
 function unwrap(node) {
   while (
     node &&
@@ -53,6 +61,7 @@ function unwrap(node) {
     node = node.expression;
   return node;
 }
+
 function locationSymbol(node) {
   const symbol =
     node.parent && ts.isShorthandPropertyAssignment(node.parent)
@@ -60,18 +69,22 @@ function locationSymbol(node) {
       : checker.getSymbolAtLocation(node);
   return aliasTarget(symbol);
 }
+
 function aliasTarget(symbol) {
   return symbol?.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
 }
+
 function identifierInitializer(decl) {
   if (!decl || !ts.isVariableDeclaration(decl) || !decl.initializer) return undefined;
   return ts.isIdentifier(unwrap(decl.initializer)) ? decl.initializer : undefined;
 }
+
 function bindingTypeSymbol(decl, node, symbol) {
   return decl && ts.isBindingElement(decl)
     ? (checker.getTypeAtLocation(node).symbol ?? symbol)
     : undefined;
 }
+
 function symbolOf(node, seen = new Set()) {
   node = unwrap(node);
   if (!node) return undefined;
@@ -94,6 +107,7 @@ function coreSymbol(node, name) {
     )
   );
 }
+
 function coreCall(node) {
   return (
     ts.isCallExpression(node) &&
@@ -102,13 +116,16 @@ function coreCall(node) {
     )
   );
 }
+
 function at(node) {
   const file = node.getSourceFile();
   return `${pathOf(node)}:${file.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
 }
+
 function fail(node, rule) {
   failures.push(`${at(node)}: ${rule}`);
 }
+
 function functionName(node) {
   return (
     node.name ??
@@ -117,6 +134,7 @@ function functionName(node) {
       : undefined)
   );
 }
+
 function isFunction(node) {
   return (
     ts.isFunctionDeclaration(node) ||
@@ -127,6 +145,7 @@ function isFunction(node) {
     ts.isSetAccessorDeclaration(node)
   );
 }
+
 function enclosingFunction(node) {
   for (let parent = node.parent; parent; parent = parent.parent)
     if (isFunction(parent)) return parent;
@@ -146,15 +165,18 @@ function isComponent(node) {
   });
   return jsx;
 }
+
 function ownWalk(node, visit) {
   visit(node);
   ts.forEachChild(node, (child) => {
     if (!isFunction(child)) ownWalk(child, visit);
   });
 }
+
 function directOptions(object) {
   return coreCall(object.parent) && object.parent.arguments.includes(object);
 }
+
 function hookOptions(object) {
   const property = object.parent;
   return (
@@ -164,6 +186,7 @@ function hookOptions(object) {
     directOptions(property.parent)
   );
 }
+
 function optionsMember(node) {
   const member = ts.isPropertyAssignment(node.parent) ? node.parent : node;
   if (!member.name || !ts.isObjectLiteralExpression(member.parent)) return false;
@@ -182,6 +205,7 @@ function directReturn(expression, owner) {
   while (ts.isParenthesizedExpression(expression.parent)) expression = expression.parent;
   return ts.isReturnStatement(expression.parent) && enclosingFunction(expression.parent) === owner;
 }
+
 function assignedReturn(object, owner) {
   const call = object.parent;
   return (
@@ -190,6 +214,7 @@ function assignedReturn(object, owner) {
     directReturn(call, owner)
   );
 }
+
 function localReturn(object, owner) {
   if (!ts.isVariableDeclaration(object.parent)) return false;
   const symbol = symbolOf(object.parent.name);
@@ -200,6 +225,7 @@ function localReturn(object, owner) {
   });
   return found;
 }
+
 function returnedObject(object, owner) {
   return (
     unwrap(owner.body) === object ||
@@ -215,6 +241,7 @@ function valueOwner(owner) {
     factoryBody(owner) || (optionsMember(owner) && nameOf(owner.parent.parent?.name) === "hooks")
   );
 }
+
 function ownedMethod(node) {
   const member = ts.isPropertyAssignment(node.parent) ? node.parent : node;
   if (!ts.isObjectLiteralExpression(member.parent)) return false;
@@ -225,9 +252,11 @@ function ownedMethod(node) {
 function initializerOf(node) {
   return symbolOf(node)?.valueDeclaration?.initializer;
 }
+
 function propertyOf(object, name) {
   return object?.properties?.find((prop) => nameOf(prop.name) === name);
 }
+
 function parameterBinding(receiver) {
   if (!ts.isIdentifier(receiver)) return undefined;
   const binding = checker.getSymbolAtLocation(receiver)?.valueDeclaration;
@@ -235,11 +264,13 @@ function parameterBinding(receiver) {
     ? binding
     : undefined;
 }
+
 function dependencyInitializer(options, binding) {
   const depends = propertyOf(options, "depends")?.initializer;
   const dependency = propertyOf(depends, nameOf(binding.propertyName ?? binding.name));
   return initializerOf(dependency?.initializer ?? dependency?.name);
 }
+
 function dependencyUnit(receiver) {
   const binding = parameterBinding(receiver);
   if (!binding) return undefined;
@@ -247,6 +278,7 @@ function dependencyUnit(receiver) {
   if (!optionsMember(factory) || !ts.isPropertyAssignment(factory.parent)) return undefined;
   return dependencyInitializer(factory.parent.parent, binding);
 }
+
 function resolvedUnit(receiver) {
   if (ts.isIdentifier(receiver)) receiver = initializerOf(receiver) ?? receiver;
   if (!ts.isCallExpression(receiver) || !ts.isPropertyAccessExpression(receiver.expression))
@@ -255,6 +287,7 @@ function resolvedUnit(receiver) {
     ? initializerOf(receiver.arguments[0])
     : undefined;
 }
+
 function resolvedMethod(call) {
   if (!ts.isPropertyAccessExpression(call.expression)) return undefined;
   const receiver = call.expression.expression;
@@ -286,6 +319,7 @@ function externalCall(node) {
     (!files.includes(declarations.getSourceFile().fileName) || ownedMethod(declarations))
   );
 }
+
 function tagArgument(call) {
   return symbolOf(call.expression)?.declarations?.some(
     (decl) =>
@@ -294,6 +328,7 @@ function tagArgument(call) {
       coreSymbol(decl.initializer.expression, "tag"),
   );
 }
+
 function callbackType(signature, param, index, arg) {
   const instantiated = signature?.parameters[Math.min(index, signature.parameters.length - 1)];
   const type = instantiated
@@ -301,15 +336,18 @@ function callbackType(signature, param, index, arg) {
     : checker.getTypeAtLocation(param);
   return type.flags & ts.TypeFlags.TypeParameter ? checker.getBaseConstraintOfType(type) : type;
 }
+
 function callbackSlot(call, index) {
   const signature = checker.getResolvedSignature(call);
   const declaration = signature?.declaration ?? resolvedMethod(call);
   const param = declaration?.parameters[Math.min(index, declaration.parameters.length - 1)];
   return { signature, param };
 }
+
 function callbackIndex(call, arg) {
   return call.arguments?.indexOf(arg) ?? -1;
 }
+
 function callbackArgument(call, arg) {
   if (tagArgument(call)) return true;
   const index = callbackIndex(call, arg);
@@ -336,20 +374,25 @@ function callbackUse(use) {
     callbackArgument(call, use)
   );
 }
+
 const nativeCache = new Map();
+
 function nativeCallback(node) {
   if (!nativeCache.has(node)) nativeCache.set(node, classifyNativeCallback(node));
   return nativeCache.get(node);
 }
+
 function argumentOf(node, call) {
   return (ts.isCallExpression(call) || ts.isNewExpression(call)) && call.arguments?.includes(node);
 }
+
 function externalDeclaration(call) {
   return !files.includes(
     checker.getResolvedSignature(call)?.declaration?.getSourceFile().fileName ??
       resolvedMethod(call)?.getSourceFile().fileName,
   );
 }
+
 function nativeArgument(node) {
   const call = node.parent;
   return (
@@ -359,6 +402,7 @@ function nativeArgument(node) {
     callbackArgument(call, node)
   );
 }
+
 function nativeOption(node) {
   const member = ts.isPropertyAssignment(node.parent) ? node.parent : node;
   if (!ts.isObjectLiteralExpression(member.parent)) return false;
@@ -371,6 +415,7 @@ function nativeOption(node) {
   const call = object.parent;
   return argumentOf(object, call) && externalCall(call) && externalDeclaration(call);
 }
+
 function namedNativeCallback(node) {
   const name = functionName(node);
   if (!name) return false;
@@ -383,6 +428,7 @@ function namedNativeCallback(node) {
     });
   return callback;
 }
+
 function classifyNativeCallback(node) {
   if (ts.isFunctionDeclaration(node)) return false;
   if (ts.isJsxExpression(node.parent) && ts.isJsxAttribute(node.parent.parent)) return true;
@@ -394,6 +440,7 @@ function graphOwner(node) {
     if (optionsMember(parent) || factoryBody(parent)) return true;
   return false;
 }
+
 function callable(type) {
   return (
     type.getCallSignatures().length > 0 ||
@@ -401,6 +448,7 @@ function callable(type) {
     (type.isUnionOrIntersection() && type.types.some(callable))
   );
 }
+
 function unitType(type) {
   if (
     checker
@@ -412,9 +460,11 @@ function unitType(type) {
     type.aliasSymbol?.name ?? type.symbol?.name,
   );
 }
+
 function typeNameOf(type, text) {
   return type.aliasSymbol?.name ?? type.symbol?.name ?? text;
 }
+
 function forbiddenTypeName(type, mode) {
   const text = checker.typeToString(type).split("<")[0];
   const typeName = typeNameOf(type, text);
@@ -430,6 +480,7 @@ function forbiddenTypeName(type, mode) {
     pattern.test(typeName) || (pattern.test(text) && !text.startsWith("{") && !text.includes("=>"))
   );
 }
+
 function coreHandleType(type) {
   const symbol = type.aliasSymbol ?? type.symbol;
   return (
@@ -439,6 +490,7 @@ function coreHandleType(type) {
     )
   );
 }
+
 function primitiveType(type) {
   return (
     type.flags &
@@ -450,6 +502,7 @@ function primitiveType(type) {
       ts.TypeFlags.Unknown)
   );
 }
+
 function propertyContains(prop, mode, seen, depth) {
   const decl = prop.valueDeclaration ?? prop.declarations?.at(0);
   if (!decl) return false;
@@ -458,10 +511,12 @@ function propertyContains(prop, mode, seen, depth) {
   if (!files.includes(decl.getSourceFile().fileName) && prop.name !== "signal") return false;
   return contains(checker.getTypeOfSymbolAtLocation(prop, decl), mode, seen, depth + 1);
 }
+
 function awaitedContains(type, mode, seen, depth) {
   const awaited = checker.getAwaitedType(type);
   return awaited && awaited !== type && contains(awaited, mode, seen, depth + 1);
 }
+
 function nestedTypeContains(type, mode, seen, depth) {
   if (type.isUnionOrIntersection())
     return type.types.some((part) => contains(part, mode, seen, depth + 1));
@@ -476,9 +531,11 @@ function nestedTypeContains(type, mode, seen, depth) {
     .getPropertiesOfType(type)
     .some((prop) => propertyContains(prop, mode, seen, depth));
 }
+
 function skipType(type, seen, depth) {
   return !type || seen.has(type) || depth > 12;
 }
+
 function contains(type, mode, seen = new Set(), depth = 0) {
   if (skipType(type, seen, depth)) return false;
   seen.add(type);
@@ -506,9 +563,11 @@ function exportedFunction(node) {
         (entry.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(entry) : entry) === symbol,
     );
 }
+
 function moduleBinding(node) {
   return ts.isVariableDeclaration(node) && node.parent.parent.parent === node.getSourceFile();
 }
+
 function checkScopeReference(node) {
   if (
     ![ts.isIdentifier, ts.isStringLiteral].some((kind) => kind(node)) ||
@@ -518,6 +577,7 @@ function checkScopeReference(node) {
   if (ts.isImportSpecifier(node.parent) || ts.isImportClause(node.parent)) return;
   fail(node, "scope-entry-only");
 }
+
 function checkRoots(node) {
   checkScopeReference(node);
   if (!moduleBinding(node) || !contains(checker.getTypeAtLocation(node.name), "holder")) return;
@@ -529,6 +589,7 @@ function declarationName(node) {
     ? node.expression.name.text
     : symbolOf(node.expression)?.name;
 }
+
 function zodDeclaration(node, file) {
   return (
     /\/zod\//.test(file) &&
@@ -569,6 +630,7 @@ function zodDeclaration(node, file) {
     ].includes(declarationName(node))
   );
 }
+
 function schemaDeclaration(node, file) {
   return (
     /\/drizzle-orm\//.test(file) &&
@@ -592,6 +654,7 @@ function schemaDeclaration(node, file) {
     ].includes(symbolOf(node.expression)?.name)
   );
 }
+
 function frameworkDeclaration(node, file) {
   return (
     [
@@ -606,12 +669,14 @@ function frameworkDeclaration(node, file) {
     ].includes(symbolOf(node.expression)?.name) && /node_modules|packages\/core/.test(file)
   );
 }
+
 function clientDeclaration(node) {
   return (
     pathOf(node) === "src/client.tsx" &&
     ["startTransition", "hydrateRoot"].includes(symbolOf(node.expression)?.name)
   );
 }
+
 function unitMetadataCall(node) {
   return (
     ts.isCallExpression(node) &&
@@ -619,6 +684,7 @@ function unitMetadataCall(node) {
     node.arguments.every((arg) => ts.isObjectLiteralExpression(arg) || coreCall(arg))
   );
 }
+
 function routeDeclaration(node) {
   return (
     ts.isCallExpression(node.expression) &&
@@ -628,6 +694,7 @@ function routeDeclaration(node) {
     moduleDeclarationCall(node.expression)
   );
 }
+
 function chainedDeclaration(node) {
   if (!ts.isPropertyAccessExpression(node.expression)) return false;
   const chain = node.expression.expression;
@@ -639,9 +706,11 @@ function chainedDeclaration(node) {
     moduleDeclarationCall(chain)
   );
 }
+
 function declarationFile(node) {
   return checker.getResolvedSignature(node)?.declaration?.getSourceFile().fileName ?? "";
 }
+
 function moduleDeclarationCall(node) {
   if (coreCall(node) || clientDeclaration(node)) return true;
   const file = declarationFile(node);
@@ -667,6 +736,7 @@ function serviceAllocation(node) {
       ))
   );
 }
+
 const builtinFetch = checker.resolveName("fetch", undefined, ts.SymbolFlags.Value, false);
 assert.ok(builtinFetch, "the project must declare built-in fetch");
 const fetchDeclarations = new Set(builtinFetch.declarations);
@@ -676,15 +746,18 @@ const navigatorType = checker.resolveName("Navigator", undefined, ts.SymbolFlags
 assert.ok(navigatorType, "the project must declare Navigator");
 const builtinBeacon = checker.getDeclaredTypeOfSymbol(navigatorType).getProperty("sendBeacon");
 assert.ok(builtinBeacon, "Navigator must declare sendBeacon");
+
 const browserHttpDeclarations = new Set([
   ...builtinXhr.declarations,
   ...builtinBeacon.declarations,
 ]);
+
 function typeReference(node) {
   for (let parent = node.parent; parent; parent = parent.parent)
     if (ts.isTypeNode(parent) || typeOnlyImport(parent)) return true;
   return false;
 }
+
 function referenceSymbol(node) {
   if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent))
     return checker
@@ -697,6 +770,7 @@ function referenceSymbol(node) {
   }
   return locationSymbol(node);
 }
+
 function nativeReference(node, declarations) {
   if (
     !ts.isIdentifier(node) &&
@@ -707,24 +781,29 @@ function nativeReference(node, declarations) {
     return false;
   return referenceSymbol(node)?.declarations?.some((decl) => declarations.has(decl));
 }
+
 function checkFetch(node) {
   if (typeReference(node) || !nativeReference(node, fetchDeclarations)) return;
   fail(node, "http-request: use httpRequest.controller instead of built-in fetch");
 }
+
 function checkBrowserHttp(node) {
   if (typeReference(node)) return;
   if (nativeReference(node, browserHttpDeclarations))
     fail(node, "http-client: app HTTP must use httpRequest.controller");
 }
+
 function checkHttpResource(node) {
   if (typeReference(node)) return;
   if (protocolUnitReference(node, "src/backend/http.ts", "http"))
     fail(node, "http-resource: app code must depend on httpRequest.controller");
 }
+
 function checkHttpBackend(node) {
   if (protocolUnitReference(node, "src/backend/http-backend.ts", "httpBackend"))
     fail(node, "http-backend: app code must depend on httpRequest.controller");
 }
+
 function protocolUnitReference(node, file, name) {
   if (
     !ts.isIdentifier(node) &&
@@ -742,25 +821,30 @@ function protocolUnitReference(node, file, name) {
       nameOf(decl.name) === name,
   );
 }
+
 function checkRequestHeaders(node) {
   const file = pathOf(node);
   if (file === "src/backend/auth.ts") return;
   if (protocolUnitReference(node, "src/backend/headers.server.ts", "requestHeaders"))
     fail(node, "protocol-headers: app code must use principal or currentUser");
 }
+
 const builtinResponse = checker.resolveName("Response", undefined, ts.SymbolFlags.Value, false);
 assert.ok(builtinResponse, "the project must declare built-in Response");
 const responseDeclarations = new Set(builtinResponse.declarations);
+
 function checkResponse(node) {
   const file = pathOf(node);
   if (file.startsWith("src/routes/")) return;
   if (nativeReference(node, responseDeclarations))
     fail(node, "protocol-response: replies belong to routes or the base");
 }
+
 function checkMountedAuth(node) {
   if (protocolUnitReference(node, "src/parts/auth/handle.server.ts", "handleAuth"))
     fail(node, "protocol-auth: only the auth route may use the mounted handler");
 }
+
 const httpClients = [
   "node:http",
   "node:https",
@@ -783,6 +867,7 @@ const httpClients = [
   "dgram",
   "node:dgram",
 ];
+
 function requireReference(node) {
   const symbol = symbolOf(node);
   return (
@@ -792,6 +877,7 @@ function requireReference(node) {
     )
   );
 }
+
 function importSpecifier(node) {
   if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier;
   if (ts.isImportEqualsDeclaration(node))
@@ -804,6 +890,7 @@ function importSpecifier(node) {
   )
     return node.arguments[0];
 }
+
 function typeOnlyExport(node) {
   if (node.isTypeOnly) return true;
   return (
@@ -813,11 +900,13 @@ function typeOnlyExport(node) {
     node.exportClause.elements.every((binding) => binding.isTypeOnly)
   );
 }
+
 function typeOnlyImport(node) {
   if (ts.isExportDeclaration(node)) return typeOnlyExport(node);
   if (!ts.isImportDeclaration(node)) return false;
   return typeOnlyClause(node.importClause);
 }
+
 function typeOnlyClause(clause) {
   if (!clause) return false;
   if (clause.isTypeOnly) return true;
@@ -825,6 +914,7 @@ function typeOnlyClause(clause) {
   if (clause.name || !bindings || !ts.isNamedImports(bindings)) return false;
   return bindings.elements.length > 0 && bindings.elements.every((binding) => binding.isTypeOnly);
 }
+
 function createRequireReference(node) {
   const symbol = referenceSymbol(node);
   return (
@@ -834,6 +924,7 @@ function createRequireReference(node) {
     )
   );
 }
+
 function checkHttpImport(node) {
   if (typeOnlyImport(node) || typeReference(node)) return;
   const specifier = importSpecifier(node);
@@ -851,6 +942,7 @@ function checkHttpImport(node) {
   )
     fail(node, "http-client: app HTTP must use httpRequest.controller");
 }
+
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
@@ -860,6 +952,7 @@ function checkService(node) {
   if (!serviceAllocation(node) || graphOwner(node)) return;
   fail(node, "service-owner");
 }
+
 function callerOf(use) {
   let caller = enclosingFunction(use);
   while (caller && !functionName(caller)) {
@@ -876,6 +969,7 @@ function callerOf(use) {
   }
   return caller;
 }
+
 function anonymousCallerName(caller) {
   const owner = enclosingFunction(caller);
   const siblings = [];
@@ -884,6 +978,7 @@ function anonymousCallerName(caller) {
   });
   return `${owner ? callerName(owner) : "module"}.callback${siblings.indexOf(caller) + 1}`;
 }
+
 function callerName(caller) {
   const member = nameOf(functionName(caller)) || nameOf(caller.name);
   for (let parent = caller.parent; parent && !isFunction(parent); parent = parent.parent) {
@@ -891,9 +986,11 @@ function callerName(caller) {
   }
   return member || anonymousCallerName(caller);
 }
+
 function calledExpression(use) {
   return ts.isPropertyAccessExpression(use.parent) && use.parent.name === use ? use.parent : use;
 }
+
 function registeredCaller(expression) {
   const property = expression.parent;
   return (
@@ -902,6 +999,7 @@ function registeredCaller(expression) {
     optionsMember(property)
   );
 }
+
 function calledUse(expression) {
   const call = expression.parent;
   return (
@@ -910,12 +1008,15 @@ function calledUse(expression) {
       (call.arguments.includes(expression) && callbackArgument(call, expression)))
   );
 }
+
 function symbolUse(use, name, symbol) {
   return ts.isIdentifier(use) && use !== name && symbolOf(use) === symbol;
 }
+
 function callerLabel(use, caller) {
   return `${pathOf(use)}#${caller ? callerName(caller) : "module"}`;
 }
+
 function addCaller(use, name, symbol, node, source, callers) {
   if (!symbolUse(use, name, symbol)) return;
   const expression = calledExpression(use);
@@ -925,6 +1026,7 @@ function addCaller(use, name, symbol, node, source, callers) {
   if (caller === node) return;
   callers.set(caller ?? source, callerLabel(use, caller));
 }
+
 function callSites(name, node) {
   const symbol = symbolOf(name),
     callers = new Map();
@@ -948,6 +1050,7 @@ function paramRow(param) {
     fail(param, "plain-param");
   return `  - \`${nameOf(param.name)}\`: \`${param.type?.getText() ?? checker.typeToString(type)}\`. ${doc}`;
 }
+
 function effectReference(node) {
   if (ts.isIdentifier(node)) return /^(?:localStorage|sessionStorage)$/.test(node.text);
   return (
@@ -957,6 +1060,7 @@ function effectReference(node) {
     )
   );
 }
+
 function effectCall(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return false;
   return (
@@ -966,6 +1070,7 @@ function effectCall(node) {
     )
   );
 }
+
 function checkCast(node) {
   if (
     (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) &&
@@ -973,6 +1078,7 @@ function checkCast(node) {
   )
     fail(node, "plain-cast");
 }
+
 function checkEffect(node) {
   if (
     effectCall(node) ||
@@ -985,6 +1091,7 @@ function checkEffect(node) {
 }
 
 const plain = [];
+
 function checkScopeReturn(node) {
   const signature = checker.getSignatureFromDeclaration(node);
   if (
@@ -995,6 +1102,7 @@ function checkScopeReturn(node) {
   )
     fail(node, "exported-scope");
 }
+
 function checkComponent(node) {
   for (const param of node.parameters)
     if (contains(checker.getTypeAtLocation(param), "react")) fail(param, "component-param");
@@ -1002,6 +1110,7 @@ function checkComponent(node) {
     if (ts.isAwaitExpression(child)) fail(child, "component-await");
   });
 }
+
 function checkPlainFunction(node) {
   const name = functionName(node);
   const params = node.parameters.map(paramRow);
@@ -1017,6 +1126,7 @@ function checkPlainFunction(node) {
     `- **${pathOf(node)}#${nameOf(name)}**\n${params.join("\n")}\n  - Callers:\n${callers.map((caller) => `    - \`${caller}\``).join("\n")}`,
   );
 }
+
 function checkFunction(node) {
   if (!isFunction(node) || !node.body) return;
   if (ts.isClassDeclaration(node.parent) || ts.isClassExpression(node.parent)) return;
@@ -1035,6 +1145,7 @@ function nativeDomSymbol(symbol, name) {
     symbol.declarations?.some((decl) => decl.getSourceFile().fileName.endsWith("lib.dom.d.ts"))
   );
 }
+
 function wireType(type, name, seen = new Set()) {
   if (!type || seen.has(type)) return false;
   seen.add(type);
@@ -1042,12 +1153,14 @@ function wireType(type, name, seen = new Set()) {
   if (primitiveType(type) || callable(type)) return false;
   return nestedWireType(type, name, seen);
 }
+
 function nestedWireType(type, name, seen) {
   const awaited = checker.getAwaitedType(type);
   if (awaited && awaited !== type && wireType(awaited, name, seen)) return true;
   if (type.isUnionOrIntersection()) return type.types.some((part) => wireType(part, name, seen));
   return wireTypeArguments(type, name, seen) || wireProperties(type, name, seen);
 }
+
 function wireTypeArguments(type, name, seen) {
   return (
     type.flags & ts.TypeFlags.Object &&
@@ -1055,6 +1168,7 @@ function wireTypeArguments(type, name, seen) {
     checker.getTypeArguments(type).some((part) => wireType(part, name, seen))
   );
 }
+
 function wireProperties(type, name, seen) {
   return checker.getPropertiesOfType(type).some((property) => {
     const declaration = property.valueDeclaration ?? property.declarations?.at(0);
@@ -1065,10 +1179,12 @@ function wireProperties(type, name, seen) {
     );
   });
 }
+
 function variableInitializer(symbol) {
   const declaration = symbol?.valueDeclaration;
   return declaration && ts.isVariableDeclaration(declaration) ? declaration.initializer : undefined;
 }
+
 function requestSchema(node, seen = new Set()) {
   if (!node || seen.has(node)) return false;
   seen.add(node);
@@ -1091,10 +1207,12 @@ function requestSchema(node, seen = new Set()) {
   });
   return request;
 }
+
 function checkOperationInput(input) {
   if (requestSchema(input))
     fail(input, "operation-wire-input: requests belong to the protocol layer");
 }
+
 function functionImplementation(node, seen = new Set()) {
   node = unwrap(node);
   if (!node || seen.has(node)) return undefined;
@@ -1105,9 +1223,11 @@ function functionImplementation(node, seen = new Set()) {
     return symbol.valueDeclaration;
   return functionImplementation(variableInitializer(symbol), seen);
 }
+
 function checkOperationInputCast(node) {
   if (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) checkOperationInput(node.type);
 }
+
 function checkOperationRun(run) {
   if (!run) return;
   const expression = run.initializer ?? (ts.isShorthandPropertyAssignment(run) ? run.name : run);
@@ -1124,6 +1244,7 @@ function checkOperationRun(run) {
     });
   if (response) fail(run, "operation-wire-output: replies belong to the protocol layer");
 }
+
 function checkOperationWire(node) {
   if (!ts.isCallExpression(node) || !coreSymbol(node.expression, "operation")) return;
   const options = node.arguments[0];
@@ -1158,11 +1279,14 @@ for (const source of sources) {
     checkFunction(node);
   });
 }
+
 if (plain.length > PLAIN_MAX)
   failures.push(
     `PLAIN.md: plain-max ${plain.length} exceeds ${PLAIN_MAX}; raising the cap needs a decision`,
   );
+
 const list = `# Plain functions\n\nThis list is checked against src.\nCallers include direct calls and typed callback registrations.\nRepeated calls by one caller count once; self-calls do not count.\nTests and generated files do not count.\n\n${plain.join("\n\n")}\n`;
+
 if (process.argv.includes("--list")) process.stdout.write(list);
 else {
   const saved = await readFile(join(root, "PLAIN.md"), "utf8");
@@ -1175,14 +1299,17 @@ else {
     );
   }
 }
+
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
+
 if (!process.argv.includes("--list"))
   console.log(
     `Plain check passed: ${sources.length} files, ${plain.length} plain functions (cap ${PLAIN_MAX}).`,
   );
+
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
   const cases = [

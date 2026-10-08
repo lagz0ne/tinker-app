@@ -8,6 +8,7 @@ import { errorText } from "./error-text";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";
+
 function ProfileForm({ value }: { value: Profile.Value }) {
   const draft = useData(nameDraft);
   const last = useData(profileResult);
@@ -76,6 +77,7 @@ function ProfileForm({ value }: { value: Profile.Value }) {
     </form>
   );
 }
+
 export function ProfilePage() {
   const current = useData(profile);
   const message = useData(notice);

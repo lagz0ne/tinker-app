@@ -5,6 +5,7 @@ import { syncClient } from "@tinker/start/client";
 import { updateCounter } from "../transport/counter.functions";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "./ui/card";
+
 const increase = operation({
   label: "counter.increase",
   depends: { sync: syncClient },
@@ -13,6 +14,7 @@ const increase = operation({
     await sync.execute(executionId, { send: updateCounter, data: { executionId } }, signal);
   },
 });
+
 export function Counter() {
   const value = useData(counter);
   const action = useRun(increase);

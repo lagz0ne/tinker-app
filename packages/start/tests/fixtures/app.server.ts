@@ -11,6 +11,7 @@ import type { Database } from "../../src/parts/sync/database";
  */
 export const extensions: Many<Scope.Extension<unknown>> = [];
 export const signedIn = tag<ReadonlySet<string>>({ label: "test.signedIn", default: new Set() });
+
 export const auth = resource({
   label: "test.auth",
   depends: { accounts: signedIn },
@@ -25,7 +26,9 @@ export const auth = resource({
     },
   }),
 });
+
 export const readAccount = operation({ label: "test.readAccount", run: () => null });
+
 /** The app's snapshot for a request: no account, at the start of the public stream. */
 export const bootstrap = operation({
   label: "test.bootstrap",
@@ -46,6 +49,7 @@ FOR EACH STATEMENT EXECUTE FUNCTION start_sync_wake();
 
 /** Each scope owns a copy; the file owns the empty template and closes it after its tests. */
 export let syncTemplate: PGliteInterface;
+
 beforeAll(async () => {
   const [{ PGlite }] = await Promise.all([
     import("@electric-sql/pglite"),
@@ -56,6 +60,7 @@ beforeAll(async () => {
   syncTemplate = await PGlite.create();
   await syncTemplate.exec(syncTables);
 }, 60_000);
+
 afterAll(() => syncTemplate.close());
 
 /** An in-memory Postgres (PGlite, no server) with the sync tables, as the app's database. */

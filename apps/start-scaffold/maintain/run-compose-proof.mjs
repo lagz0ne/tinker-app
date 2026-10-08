@@ -9,6 +9,7 @@ const repo = resolve(app, "../..");
 const stage = await mkdtemp(join(tmpdir(), "start-refine-compose-stage-"));
 const container = "start-refine-browser-proof";
 const gates = [];
+
 function run(name, command, args) {
   const result = spawnSync(command, args, {
     cwd: repo,
@@ -22,6 +23,7 @@ function run(name, command, args) {
     assert.equal(result.status, 0, result.stdout + result.stderr);
   });
 }
+
 try {
   await run("pull", "docker", [
     "compose",

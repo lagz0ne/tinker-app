@@ -8,6 +8,7 @@ import { readExecution, readRetry, readFeatureResult } from "../contracts/sync";
 import type { Sync } from "../contracts/sync";
 import type { Profile } from "../contracts/profile";
 import { raise } from "../errors";
+
 export const readProfile = operation({
   label: "readProfile",
   depends: { principal, database },
@@ -29,6 +30,7 @@ export const readProfile = operation({
     );
   },
 });
+
 /** Mail runs after commit and outside a database lock; only its final event needs a transaction. */
 const notifyProfile = operation({
   label: "notifyProfile",
@@ -66,6 +68,7 @@ const notifyProfile = operation({
     return { executionId: input.executionId };
   },
 });
+
 /** One process owner coalesces duplicate requests; this is not a cross-process SMTP guarantee. */
 const notificationWork = resource({
   label: "profile.notificationWork",
@@ -85,6 +88,7 @@ const notificationWork = resource({
     };
   },
 });
+
 export const saveProfile = operation({
   label: "saveProfile",
   input: readProfileCommand,
@@ -127,6 +131,7 @@ export const saveProfile = operation({
     return notify.finish(input.executionId);
   },
 });
+
 export const retryNotification = operation({
   label: "retryNotification",
   input: readRetry,

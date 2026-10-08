@@ -1,6 +1,7 @@
 import type { Sync } from "../contracts/sync";
 import { createRootRouteWithContext, HeadContent, Scripts, Outlet } from "@tanstack/react-router";
 import styleUrl from "../style.css?url";
+
 export const Route = createRootRouteWithContext<{
   bootstrap: () => Promise<Sync.Snapshot>;
   account: () => Promise<string | null>;
