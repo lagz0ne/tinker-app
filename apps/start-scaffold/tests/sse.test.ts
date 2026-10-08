@@ -89,7 +89,7 @@ test("SQL notifications wake after commit, stay silent on rollback, and survive 
     if (refused.status !== "failed" || !isError(refused.error, "Rollback")) throw refused;
     expect(feed.revision()).toBe(before);
     await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
-    await feed.wait(subscription, before, stop.signal);
+    await feed.wait(subscription, before);
     expect(feed.revision()).toBeGreaterThan(before);
     feed.close(subscription);
   } finally {

@@ -24,8 +24,9 @@ const liveAccount = operation({
 /** A finished wait has no error to report and needs no per-wait exception stack. */
 const waitDone = Symbol("sync.waitDone");
 
-/** The frame a stream sends, then closes on, when its account signed out or changed. */
 const encoder = new TextEncoder();
+
+/** The frame a stream sends, then closes on, when its account signed out or changed. */
 const accountChange = encoder.encode('event: account\ndata: {"kind":"account-change"}\n\n');
 
 /**
@@ -48,12 +49,12 @@ export const eventStream = resource({
     let output: ReadableStreamDefaultController<Uint8Array> | undefined;
     let ended = false;
     let watching: Promise<void> | undefined;
-    let activity = Promise.withResolvers<boolean>();
+    let activity: ReturnType<typeof Promise.withResolvers<boolean>> | undefined;
     const close = () => {
       if (ended) return;
       ended = true;
       stop.abort(waitDone);
-      activity.resolve(false);
+      activity?.resolve(false);
       if (subscription) notifications.close(subscription);
       output?.close();
     };
@@ -103,15 +104,18 @@ export const eventStream = resource({
             });
           return checking;
         };
+        const authorizeWake = async () => {
+          while (!ended && notifications.revision() !== authorizedWake)
+            await recheck(notifications.revision());
+          return notifications.revision();
+        };
         /** The lease, the listener, and a wake since the last account read. */
-        const checkWake = async () => {
+        const checkWake = () => {
           if (notifications.ended(changes) || clock.currentTimeMillis() >= lease) {
             close();
             return notifications.revision();
           }
-          while (!ended && notifications.revision() !== authorizedWake)
-            await recheck(notifications.revision());
-          return notifications.revision();
+          return notifications.revision() === authorizedWake ? authorizedWake : authorizeWake();
         };
         /** A length-prefixed account ID keeps arbitrary account names in separate cache keys. */
         const readFrame = () => {
@@ -181,26 +185,14 @@ export const eventStream = resource({
             while (!ended) {
               const wake = await checkWake();
               if (ended) return;
-              const waiting = new AbortController();
-              const waitingSignal = AbortSignal.any([signal, waiting.signal]);
-              let heartbeat: boolean;
-              try {
-                heartbeat = await Promise.race([
-                  notifications.wait(changes, wake, waitingSignal).then(() => false),
-                  clock
-                    .sleep(Math.min(10_000, lease - clock.currentTimeMillis()), waitingSignal)
-                    .then(() => true),
-                ]);
-              } finally {
-                waiting.abort(waitDone);
-              }
+              const heartbeat = await notifications.wait(changes, wake, lease);
               await checkWake();
               if (heartbeat && !ended) {
                 await recheck(notifications.revision());
                 await checkWake();
               }
-              activity.resolve(heartbeat);
-              activity = Promise.withResolvers();
+              activity?.resolve(heartbeat);
+              activity = undefined;
             }
           } catch (error) {
             fail(error);
@@ -213,7 +205,7 @@ export const eventStream = resource({
           }
           ended = true;
           stop.abort(waitDone);
-          activity.resolve(false);
+          activity?.resolve(false);
           notifications.close(changes);
           output?.error(error);
         };
@@ -243,7 +235,7 @@ export const eventStream = resource({
             async pull(controller) {
               try {
                 while (!ended) {
-                  const awake = activity.promise;
+                  const awake = (activity ??= Promise.withResolvers<boolean>()).promise;
                   const wake = await checkWake();
                   if (ended) return;
                   if (await replay(wake, controller)) return;

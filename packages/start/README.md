@@ -407,6 +407,7 @@ The package's `exports` refuses every other path.
     resumes past its own revision,
     at most 100 to a frame,
     each frame with its resume cursor as its `id`.
+    If the clock wait fails, each waiting stream fails.
   - A stream opened after a wake still replays.
     A signed-in tab with no account cursor gets
     the account frame at once.

@@ -72,37 +72,20 @@ const row = (stream: string, revision: number, executionId: string, change: unkn
 
 const account = 'event: account\ndata: {"kind":"account-change"}\n\n';
 
-test("a wait holds until a wake, a close, or a stop, and returns at once when it has nothing to wait for", async () => {
+test("a wait holds until a wake or close, and returns at once after its revision moved", async () => {
   const { db, wake } = handWoken();
   const root = createScope({ presets: [db] });
   const feed = await root.resolve(notifications);
   const subscription = await feed.subscribe();
-  const stop = new AbortController();
-  const waiting = feed.wait(subscription, feed.revision(), stop.signal);
-  const held = subscription.waiting;
-  expect(held).toBeDefined();
-  expect(await settledFirst(waiting)).toBe("pending");
-  stop.abort();
-  expect(await settledFirst(held?.promise ?? waiting)).toBe("settled");
-  await waiting;
-  expect(subscription.waiting).toBeUndefined();
-  const woken = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  const waiting = feed.wait(subscription, feed.revision());
+  expect(await settledFirst(Promise.resolve(waiting))).toBe("pending");
   wake();
-  await woken;
-  const moved = feed.wait(subscription, 0, new AbortController().signal);
-  expect(subscription.waiting).toBeUndefined();
-  await moved;
-  const stopped = new AbortController();
-  stopped.abort();
-  const late = feed.wait(subscription, feed.revision(), stopped.signal);
-  expect(subscription.waiting).toBeUndefined();
-  await late;
-  const closing = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  expect(await waiting).toBe(false);
+  expect(feed.wait(subscription, 0)).toBe(false);
+  const closing = feed.wait(subscription, feed.revision());
   feed.close(subscription);
-  await closing;
-  const closed = feed.wait(subscription, feed.revision(), new AbortController().signal);
-  expect(subscription.waiting).toBeUndefined();
-  await closed;
+  expect(await closing).toBe(false);
+  expect(feed.wait(subscription, feed.revision())).toBe(false);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
@@ -126,7 +109,7 @@ test("a wait on a broken listener returns at once", async () => {
   const feed = await root.resolve(notifications);
   const subscription = await feed.subscribe();
   failures[0]?.();
-  const broken = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  const broken = feed.wait(subscription, feed.revision());
   expect(subscription.waiting).toBeUndefined();
   await broken;
   expect((await root.close({ graceful: true })).status).toBe("success");
@@ -140,7 +123,7 @@ test("notifications wake after a commit, stay silent on a rollback, and a read b
   expect(await root.settle(rolledBack)).toMatchObject({ status: "failed" });
   expect(feed.revision()).toBe(before);
   await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
-  await feed.wait(subscription, before, new AbortController().signal);
+  await feed.wait(subscription, before);
   expect(feed.revision()).toBeGreaterThan(before);
   expect(feed.ended(subscription)).toBe(false);
   feed.close(subscription);
@@ -390,7 +373,7 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
   });
   feed.close(left);
   listens[2]?.wake();
-  await feed.wait(second, 0, new AbortController().signal);
+  await feed.wait(second, 0);
   expect([feed.revision(), disconnected, gone]).toEqual([2, 2, 0]);
   expect((await root.close({ graceful: true })).status).toBe("success");
   expect(listens[2]?.stopped).toBe(true);
@@ -412,7 +395,7 @@ test("closing the root wakes and disconnects each subscriber", async () => {
   const subscription = await feed.subscribe(() => {
     disconnected += 1;
   });
-  const waiting = feed.wait(subscription, feed.revision(), new AbortController().signal);
+  const waiting = feed.wait(subscription, feed.revision());
   expect(await root.close({ graceful: true })).toMatchObject({
     status: "success",
     teardownErrors: undefined,
@@ -631,7 +614,7 @@ test("a stream opened after a wake still replays; a signed-in tab with no accoun
   const feed = await root.resolve(notifications);
   const subscription = await feed.subscribe();
   await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
-  await feed.wait(subscription, 0, new AbortController().signal);
+  await feed.wait(subscription, 0);
   feed.close(subscription);
   expect(feed.revision()).toBe(1);
   const guest = root.createSession({ tags: requestHeaders(new Headers()) });
@@ -1214,3 +1197,74 @@ test("a failed shared row read can be retried by another open stream", async () 
   expect((await second.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
 }, 30_000);
+
+test("staggered streams keep their own heartbeat and lease times", async () => {
+  const clock = makeTestClock();
+  const stop = new AbortController();
+  const root = createScope({
+    clock,
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  clock.advance(250);
+  const first = root.createSession();
+  const one = (
+    await first.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(one.read())).toBe(": connected\n\n");
+  clock.advance(1250);
+  const second = root.createSession();
+  const two = (
+    await second.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(two.read())).toBe(": connected\n\n");
+  const firstBeat = one.read();
+  const secondBeat = two.read();
+  await settledFirst(firstBeat);
+  await settledFirst(secondBeat);
+  clock.advance(8750);
+  expect(await text(firstBeat)).toBe(": heartbeat\n\n");
+  expect(await settledFirst(secondBeat)).toBe("pending");
+  clock.advance(1250);
+  expect(await text(secondBeat)).toBe(": heartbeat\n\n");
+  clock.advance(18_750);
+  expect((await one.read()).done).toBe(true);
+  clock.advance(1250);
+  expect((await two.read()).done).toBe(true);
+  expect((await first.close({ graceful: true })).status).toBe("success");
+  expect((await second.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a failed clock wait errors every stream waiting on it", async () => {
+  const time = makeTestClock();
+  const failure = Promise.withResolvers<void>();
+  const error = { kind: "clock-failed" };
+  const stop = new AbortController();
+  const root = createScope({
+    clock: {
+      currentTimeMillis: () => time.currentTimeMillis(),
+      currentTimeNanos: () => time.currentTimeNanos(),
+      sleep: () => failure.promise,
+    },
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+  });
+  const first = root.createSession();
+  const second = root.createSession();
+  const readers = await Promise.all(
+    [first, second].map(async (session) =>
+      (
+        await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
+      ).getReader(),
+    ),
+  );
+  await Promise.all(readers.map((reader) => reader.read()));
+  const held = readers.map((reader) => reader.read());
+  failure.reject(error);
+  expect(await Promise.allSettled(held)).toEqual([
+    { status: "rejected", reason: error },
+    { status: "rejected", reason: error },
+  ]);
+  expect((await first.close({ graceful: true })).status).toBe("success");
+  expect((await second.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
