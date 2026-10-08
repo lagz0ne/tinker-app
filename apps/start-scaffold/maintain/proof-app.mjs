@@ -15,7 +15,7 @@ export async function copyProofApp(source, target) {
   ])
     await cp(join(source, name), join(target, name), { recursive: true });
   await symlink(join(source, "node_modules"), join(target, "node_modules"), "dir");
-  const databaseFile = join(target, "src/backend/database.ts");
+  const databaseFile = join(target, "src/backend/database.server.ts");
   const database = await readFile(databaseFile, "utf8");
   const start = database.indexOf("export const database = resource({");
   const end = database.indexOf("export const migrate = operation({");
@@ -38,7 +38,7 @@ export async function copyProofApp(source, target) {
   });\n` +
       database.slice(end),
   );
-  const mailFile = join(target, "src/backend/mail.ts");
+  const mailFile = join(target, "src/backend/mail.server.ts");
   const mail = await readFile(mailFile, "utf8");
   const sender = mail.indexOf("export const mail = resource({");
   const send = mail.indexOf("export const sendMail = operation({");

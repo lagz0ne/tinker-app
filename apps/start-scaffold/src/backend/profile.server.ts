@@ -1,8 +1,10 @@
+import { eq } from "drizzle-orm";
+import { user } from "./schema.server";
 import { operation, resource } from "@tinker/core";
-import { principal, currentUser } from "./auth";
-import { database } from "./database";
-import { sendMail } from "./mail";
-import { eventHistory } from "@tinker/start/server";
+import { principal, currentUser } from "./auth.server";
+import { database } from "./database.server";
+import { sendMail } from "./mail.server";
+import { eventHistory, execution } from "@tinker/start/server";
 import { readProfileCommand } from "../contracts/commands";
 import { readExecution, readRetry, readFeatureResult } from "../contracts/sync";
 import type { Sync } from "../contracts/sync";
@@ -14,7 +16,6 @@ export const readProfile = operation({
   depends: { principal, database },
   run: async ({ principal, database }): Promise<Profile.Value | null> => {
     if (principal === null) return null;
-    const [{ eq }, { user }] = await Promise.all([import("drizzle-orm"), import("./schema")]);
     return (
       (
         await database
@@ -37,10 +38,6 @@ const notifyProfile = operation({
   input: readExecution,
   depends: { database, history: eventHistory, send: sendMail },
   run: async ({ database, history, send }, { input }) => {
-    const [{ eq }, { execution }] = await Promise.all([
-      import("drizzle-orm"),
-      import("@tinker/start/server"),
-    ]);
     const stored = (
       await database.select().from(execution).where(eq(execution.id, input.executionId))
     ).at(0);
@@ -73,17 +70,20 @@ const notifyProfile = operation({
 const notificationWork = resource({
   label: "profile.notificationWork",
   depends: { finish: notifyProfile },
-  factory: ({ finish }) => {
-    const running = new Map<string, Promise<Sync.Receipt>>();
+  factory: ({ finish }, { log, defer }) => {
+    const running = new Map<string, Promise<void>>();
+    defer(async () => {
+      await Promise.all(running.values());
+    });
     return {
       finish(executionId: string) {
-        const existing = running.get(executionId);
-        if (existing) return existing;
-        const completed = finish
-          .run({ input: { executionId } })
-          .finally(() => running.delete(executionId));
+        if (running.has(executionId)) return;
+        const completed = finish.settle({ input: { executionId } }).then((result) => {
+          running.delete(executionId);
+          if (result.status !== "success")
+            log.error("profile.notification.failed", { executionId, status: result.status });
+        });
         running.set(executionId, completed);
-        return completed;
       },
     };
   },
@@ -94,11 +94,6 @@ export const saveProfile = operation({
   input: readProfileCommand,
   depends: { currentUser, database, history: eventHistory, notify: notificationWork },
   run: async ({ currentUser, database, history, notify }, { input, clock }) => {
-    const [{ eq }, { user }, { execution }] = await Promise.all([
-      import("drizzle-orm"),
-      import("./schema"),
-      import("@tinker/start/server"),
-    ]);
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
       if (await history.find(tx, input.executionId, currentUser.id)) return;
@@ -128,7 +123,8 @@ export const saveProfile = operation({
         { kind: "change", change: { kind: "profile", profile: saved } },
       ]);
     });
-    return notify.finish(input.executionId);
+    notify.finish(input.executionId);
+    return { executionId: input.executionId };
   },
 });
 
@@ -137,7 +133,6 @@ export const retryNotification = operation({
   input: readRetry,
   depends: { currentUser, database, history: eventHistory, notify: notificationWork },
   run: async ({ currentUser, database, history, notify }, { input }) => {
-    const { execution } = await import("@tinker/start/server");
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
       if (await history.find(tx, input.executionId, currentUser.id)) return;
@@ -154,6 +149,7 @@ export const retryNotification = operation({
         notification: previous.notification,
       });
     });
-    return notify.finish(input.executionId);
+    notify.finish(input.executionId);
+    return { executionId: input.executionId };
   },
 });

@@ -20,7 +20,7 @@ if (import.meta.main) {
       appType: "custom",
     });
     try {
-      await vite.ssrLoadModule("/src/backend/index");
+      await vite.ssrLoadModule("/src/backend/index.server");
     } finally {
       await vite.close();
       hooks.deregister();

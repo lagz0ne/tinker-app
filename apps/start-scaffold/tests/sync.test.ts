@@ -118,9 +118,11 @@ test("private cursors cannot read another real account's history", async () => {
   }
 });
 
-test("failed notification keeps the saved profile and retry sends only the notification", async () => {
+test("failed notification keeps the saved profile and retry replies before sending only the notification", async () => {
   const stop = new AbortController();
   let refuse = true;
+  const accepted = Promise.withResolvers<void>();
+  const sending = Promise.withResolvers<void>();
   const messages: Mail.Message[] = [];
   const root = createScope({
     signal: stop.signal,
@@ -132,9 +134,16 @@ test("failed notification keeps the saved profile and retry sends only the notif
           if (message.subject !== "Your profile was updated") return;
           messages.push(message);
           if (refuse) raise("NotificationFailed", {});
+          sending.resolve();
+          await accepted.promise;
         },
       })),
     ],
+  });
+  onTestFinished(async () => {
+    accepted.resolve();
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
   });
   await root.ready;
   try {
@@ -147,38 +156,53 @@ test("failed notification keeps the saved profile and retry sends only the notif
       input: { executionId: crypto.randomUUID(), profile: { name: "Ada saved" } },
       tags: requestHeaders(account),
     });
-    const changes = await root.run(replayPrivate, {
-      input: { accountId: initial.stream, after: initial.revision },
-      tags: requestHeaders(account),
-    });
-    expect(changes.map((event) => event.payload.kind)).toEqual(["change", "result"]);
-    expect(changes.at(-1)?.payload).toMatchObject({
-      kind: "result",
-      result: {
-        kind: "partial",
-        action: "profile",
-        profileId: initial.profile.id,
-        notification: { kind: "failed" },
-      },
-    });
+    await expect
+      .poll(async () =>
+        (
+          await root.run(replayPrivate, {
+            input: { accountId: initial.stream, after: initial.revision },
+            tags: requestHeaders(account),
+          })
+        ).map((event) => event.payload),
+      )
+      .toMatchObject([
+        { kind: "change" },
+        {
+          kind: "result",
+          result: {
+            kind: "partial",
+            action: "profile",
+            profileId: initial.profile.id,
+            notification: { kind: "failed" },
+          },
+        },
+      ]);
     expect(await root.run(readProfile, { tags: requestHeaders(account) })).toMatchObject({
       name: "Ada saved",
     });
     refuse = false;
-    await root.run(retryNotification, {
+    const retry = root.run(retryNotification, {
       input: { executionId: crypto.randomUUID(), previousExecutionId: saved.executionId },
       tags: requestHeaders(account),
     });
-    const retried = await root.run(replayPrivate, {
-      input: { accountId: initial.stream, after: 2 },
-      tags: requestHeaders(account),
-    });
-    expect(retried.map((event) => event.payload)).toEqual([
-      {
-        kind: "result",
-        result: { kind: "complete", action: "profile", profileId: initial.profile.id },
-      },
-    ]);
+    await sending.promise;
+    await retry;
+    accepted.resolve();
+    await expect
+      .poll(async () =>
+        (
+          await root.run(replayPrivate, {
+            input: { accountId: initial.stream, after: 2 },
+            tags: requestHeaders(account),
+          })
+        ).map((event) => event.payload),
+      )
+      .toEqual([
+        {
+          kind: "result",
+          result: { kind: "complete", action: "profile", profileId: initial.profile.id },
+        },
+      ]);
     expect(messages.map((message) => message.text)).toEqual([
       "Your saved name is Ada saved.",
       "Your saved name is Ada saved.",
@@ -228,14 +252,20 @@ test("request exit cannot strand a profile that already committed", async () => 
     request.abort();
     accepted.resolve();
     await saving;
-    const changes = await root.run(replayPrivate, {
-      input: { accountId: initial.stream, after: 0 },
-      tags: requestHeaders(account),
-    });
-    expect(changes.at(-1)?.payload).toMatchObject({
-      kind: "result",
-      result: { kind: "complete", profileId: initial.profile.id },
-    });
+    await expect
+      .poll(
+        async () =>
+          (
+            await root.run(replayPrivate, {
+              input: { accountId: initial.stream, after: 0 },
+              tags: requestHeaders(account),
+            })
+          ).at(-1)?.payload,
+      )
+      .toMatchObject({
+        kind: "result",
+        result: { kind: "complete", profileId: initial.profile.id },
+      });
     expect(await root.run(readProfile, { tags: requestHeaders(account) })).toMatchObject({
       name: "Still saved",
     });
@@ -246,7 +276,7 @@ test("request exit cannot strand a profile that already committed", async () => 
   }
 });
 
-test("saved names stay readable while duplicate receipts share one pending notification", async () => {
+test("profile replies finish while duplicate receipts share one pending notification", async () => {
   const stop = new AbortController();
   const sending = Promise.withResolvers<void>();
   const accepted = Promise.withResolvers<void>();
@@ -284,7 +314,6 @@ test("saved names stay readable while duplicate receipts share one pending notif
     const second = root.settle(saveProfile, { input, tags: requestHeaders(account) });
     const saved = await root.run(bootstrapPrivate, { tags: requestHeaders(account) });
     expect(saved.profile.name).toBe("Visible before mail");
-    accepted.resolve();
     expect((await Promise.all([first, second])).map((result) => result.status)).toEqual([
       "success",
       "success",

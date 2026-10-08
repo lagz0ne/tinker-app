@@ -8,13 +8,13 @@ Tests and generated files do not count.
 - **src/contracts/commands.ts#readProfileCommand**
   - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.
   - Callers:
-    - `src/backend/profile.ts#saveProfile.input`
+    - `src/backend/profile.server.ts#saveProfile.input`
     - `src/transport/profile.functions.ts#module`
 
 - **src/contracts/commands.ts#readTodoCommand**
   - `raw`: `unknown`. From the todo request body; why: read its execution ID and todo change.
   - Callers:
-    - `src/backend/todos.ts#changeTodo.input`
+    - `src/backend/todos.server.ts#changeTodo.input`
     - `src/transport/todos.functions.ts#module`
 
 - **src/contracts/profile.ts#readProfileInput**
@@ -26,8 +26,8 @@ Tests and generated files do not count.
 - **src/contracts/sync.ts#readFeatureEvent**
   - `raw`: `unknown`. From a saved event row; why: validate its feature body before replay.
   - Callers:
-    - `src/backend/sync.ts#replayPrivate.run`
-    - `src/backend/sync.ts#replayPublic.run`
+    - `src/backend/sync.server.ts#replayPrivate.run`
+    - `src/backend/sync.server.ts#replayPublic.run`
 
 - **src/contracts/todos.ts#readTodoChange**
   - `raw`: `unknown`. From the todo command or form; why: validate one todo change.
@@ -39,16 +39,16 @@ Tests and generated files do not count.
   - `kind`: `N`. From the failing caller; why: choose the managed error.
   - `payload`: `Errors.Payload<N>`. From the failing caller; why: keep facts for that error.
   - Callers:
-    - `src/backend/auth.ts#currentUser.factory`
-    - `src/backend/counter.ts#incrementCounter.run.callback1`
-    - `src/backend/database.ts#databaseSettings.factory`
-    - `src/backend/mail.ts#mailSettings.factory`
-    - `src/backend/profile.ts#notifyProfile.run`
-    - `src/backend/profile.ts#retryNotification.run.callback1`
-    - `src/backend/profile.ts#saveProfile.run.callback1`
-    - `src/backend/sync.ts#bootstrapPrivate.run.callback1`
-    - `src/backend/sync.ts#replayPrivate.run`
-    - `src/backend/todos.ts#changeTodo.run.callback1`
+    - `src/backend/auth.server.ts#currentUser.factory`
+    - `src/backend/counter.server.ts#incrementCounter.run.callback1`
+    - `src/backend/database.server.ts#databaseSettings.factory`
+    - `src/backend/mail.server.ts#mailSettings.factory`
+    - `src/backend/profile.server.ts#notifyProfile.run`
+    - `src/backend/profile.server.ts#retryNotification.run.callback1`
+    - `src/backend/profile.server.ts#saveProfile.run.callback1`
+    - `src/backend/sync.server.ts#bootstrapPrivate.run.callback1`
+    - `src/backend/sync.server.ts#replayPrivate.run`
+    - `src/backend/todos.server.ts#changeTodo.run.callback1`
     - `src/contracts/profile.ts#readProfileInput`
     - `src/contracts/todos.ts#readTodoChange`
     - `src/frontend/auth-actions.ts#signIn.input`

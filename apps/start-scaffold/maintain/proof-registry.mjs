@@ -16,7 +16,7 @@ await Promise.all([packs, registry, consumer].map((dir) => mkdir(dir)));
 console.log(`Proof folder: ${scratch}`);
 const env = { ...process.env, CI: "true", npm_config_audit: "false", npm_config_fund: "false" };
 const servers = [];
-const mailSource = join(app, "src/backend/mail.ts");
+const mailSource = join(app, "src/backend/mail.server.ts");
 const original = await readFile(mailSource, "utf8");
 
 function run(command, args, cwd = consumer, extra = {}) {
@@ -155,7 +155,7 @@ try {
     "add",
     `${url}/mail-example.json`,
     "--diff",
-    "src/backend/mail.ts",
+    "src/backend/mail.server.ts",
   ]);
   assert.ok(diff.includes("mail.completed.changed"));
   assert.deepEqual(await hashes(join(consumer, "src")), userBefore);

@@ -117,7 +117,7 @@ async function fileContent(file, packages) {
   const text = await readFile(join(app, file.path), "utf8");
   if (!file.path.startsWith("tests/")) return text;
   return text
-    .replaceAll('"@tinker-start-scaffold/backend"', '"../src/backend/index"')
+    .replaceAll('"@tinker-start-scaffold/backend"', '"../src/backend/index.server"')
     .replaceAll('"@tinker-start-scaffold/frontend"', '"../src/frontend/index"')
     .replaceAll('"@tinker-start-scaffold/testing"', '"./presets"');
 }

@@ -1,8 +1,10 @@
+import { and, asc, eq } from "drizzle-orm";
+import { todo } from "./todos.schema.server";
 import { operation } from "@tinker/core";
-import { database } from "./database";
-import { currentUser } from "./auth";
+import { database } from "./database.server";
+import { currentUser } from "./auth.server";
 import { readTodoCommand } from "../contracts/commands";
-import { eventHistory } from "@tinker/start/server";
+import { eventHistory, execution } from "@tinker/start/server";
 import type { Todos } from "../contracts/todos";
 import type { Sync } from "../contracts/sync";
 import { raise } from "../errors";
@@ -10,11 +12,7 @@ import { raise } from "../errors";
 export const listTodos = operation({
   label: "listTodos",
   depends: { currentUser, database },
-  run: async ({ currentUser, database }): Promise<Todos.Row[]> => {
-    const [{ asc, eq }, { todo }] = await Promise.all([
-      import("drizzle-orm"),
-      import("./todos.schema"),
-    ]);
+  run: ({ currentUser, database }): Promise<Todos.Row[]> => {
     return database
       .select({ id: todo.id, title: todo.title, done: todo.done })
       .from(todo)
@@ -28,11 +26,6 @@ export const changeTodo = operation({
   input: readTodoCommand,
   depends: { currentUser, database, history: eventHistory },
   run: async ({ currentUser, database, history }, { input }) => {
-    const [{ and, asc, eq }, { todo }, { execution }] = await Promise.all([
-      import("drizzle-orm"),
-      import("./todos.schema"),
-      import("@tinker/start/server"),
-    ]);
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
       if (await history.find(tx, input.executionId, currentUser.id)) return;

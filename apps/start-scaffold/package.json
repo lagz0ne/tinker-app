@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./backend": "./src/backend/index.ts",
+    "./backend": "./src/backend/index.server.ts",
     "./frontend": "./src/frontend/index.ts",
     "./testing": "./tests/presets.ts"
   },

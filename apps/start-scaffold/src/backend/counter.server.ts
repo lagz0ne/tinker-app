@@ -1,6 +1,8 @@
+import { eq, sql } from "drizzle-orm";
+import { counter } from "./sync.schema.server";
 import { operation } from "@tinker/core";
-import { database } from "./database";
-import { eventHistory } from "@tinker/start/server";
+import { database } from "./database.server";
+import { eventHistory, execution } from "@tinker/start/server";
 import { readExecution } from "../contracts/sync";
 import { raise } from "../errors";
 
@@ -9,11 +11,6 @@ export const incrementCounter = operation({
   input: readExecution,
   depends: { database, history: eventHistory },
   run: async ({ database, history }, { input }) => {
-    const [{ eq, sql }, { counter }, { execution }] = await Promise.all([
-      import("drizzle-orm"),
-      import("./sync.schema"),
-      import("@tinker/start/server"),
-    ]);
     await database.transaction(async (tx) => {
       await history.lock(tx, "public");
       if (await history.find(tx, input.executionId, "public")) return;

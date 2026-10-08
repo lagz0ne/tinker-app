@@ -48,6 +48,7 @@ export const mail = resource({
     const { default: nodemailer } = await import("nodemailer");
     const transport = nodemailer.createTransport({
       host: settings.host,
+      pool: true,
       port: settings.port,
       secure: settings.port === 465,
       auth: settings.user ? { user: settings.user, pass: settings.password } : undefined,
@@ -68,5 +69,26 @@ export const sendMail = operation({
   run: async ({ mail }, { input, log }) => {
     await mail.send(input);
     log("mail.completed");
+  },
+});
+
+/** Auth has no result stream; this owner drains sends and reports failed delivery. */
+export const authMail = resource({
+  label: "mail.authWork",
+  depends: { send: sendMail },
+  factory: ({ send }, { log, defer }) => {
+    const running = new Set<Promise<void>>();
+    defer(async () => {
+      await Promise.all(running);
+    });
+    return {
+      enqueue(input: Mail.Message) {
+        const completed = send.settle({ input }).then((result) => {
+          running.delete(completed);
+          if (result.status !== "success") log.error("mail.failed", { status: result.status });
+        });
+        running.add(completed);
+      },
+    };
   },
 });

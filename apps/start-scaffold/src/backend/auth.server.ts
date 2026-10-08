@@ -1,21 +1,22 @@
 import { operation, resource } from "@tinker/core";
-import { database } from "./database";
-import { sendMail } from "./mail";
+import { database } from "./database.server";
+import { authMail } from "./mail.server";
 import { authSettings, requestHeaders } from "@tinker/start/server";
 
 export { authSettings } from "@tinker/start/server";
 import { raise } from "../errors";
 
+/** The root tracks each mail action; auth callbacks return before delivery. */
 export const auth = resource({
   label: "auth",
-  depends: { database, settings: authSettings, send: sendMail },
+  depends: { database, settings: authSettings, send: authMail },
   factory: async ({ database, settings, send }) => {
     const [{ betterAuth }, { drizzleAdapter }, { tanstackStartCookies }, schema] =
       await Promise.all([
         import("better-auth"),
         import("better-auth/adapters/drizzle"),
         import("better-auth/tanstack-start"),
-        import("./schema"),
+        import("./schema.server"),
       ]);
     return betterAuth({
       baseURL: settings.origin,
@@ -24,13 +25,13 @@ export const auth = resource({
       emailAndPassword: {
         enabled: true,
         sendResetPassword: async ({ user, url }) => {
-          await send.run({ input: { to: user.email, subject: "Reset your password", text: url } });
+          send.enqueue({ to: user.email, subject: "Reset your password", text: url });
         },
       },
       emailVerification: {
         sendOnSignUp: true,
         sendVerificationEmail: async ({ user, url }) => {
-          await send.run({ input: { to: user.email, subject: "Check your email", text: url } });
+          send.enqueue({ to: user.email, subject: "Check your email", text: url });
         },
       },
       plugins: [tanstackStartCookies()],

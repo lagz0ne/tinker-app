@@ -10,10 +10,10 @@ Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
 Use todos as the worked path.
 Read these files in this order:
 
-1. `src/backend/todos.schema.ts`: the feature table.
+1. `src/backend/todos.schema.server.ts`: the feature table.
 2. `src/contracts/todos.ts`: input reader and row type.
-3. `src/backend/todos.ts`: scoped read and write operations.
-4. `src/backend/sync.ts`: private snapshot and saved events.
+3. `src/backend/todos.server.ts`: scoped read and write operations.
+4. `src/backend/sync.server.ts`: private snapshot and saved events.
 5. `src/transport/todos.functions.ts`: Start function.
 6. `src/contracts/sync.ts`: change and result bodies.
 7. `src/frontend/records.ts`: apply changes to saved data.
@@ -34,7 +34,7 @@ Use `eventHistory` from `@tinker/start/server`.
 In one transaction, `lock` orders writes to the stream.
 `find` checks the execution ID before any saved effect.
 `append` stores the events with the saved change.
-See `changeTodo` in `src/backend/todos.ts`.
+See `changeTodo` in `src/backend/todos.server.ts`.
 A repeated execution ID must not repeat saved effects.
 
 For outgoing HTTP, depend on httpRequest.controller and run it.
@@ -43,7 +43,7 @@ Map the reply to a feature value or managed error (ADR 0103).
 The filled request example is in tinker-forms.
 Never call built-in fetch from feature code.
 
-Export backend operations from `src/backend/index.ts`.
+Export backend operations from `src/backend/index.server.ts`.
 Tests import `@tinker-start-scaffold/backend`.
 Export frontend operations from `src/frontend/index.ts`.
 

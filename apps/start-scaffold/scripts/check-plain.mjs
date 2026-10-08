@@ -824,7 +824,7 @@ function protocolUnitReference(node, file, name) {
 
 function checkRequestHeaders(node) {
   const file = pathOf(node);
-  if (file === "src/backend/auth.ts") return;
+  if (file === "src/backend/auth.server.ts") return;
   if (protocolUnitReference(node, "src/backend/headers.server.ts", "requestHeaders"))
     fail(node, "protocol-headers: app code must use principal or currentUser");
 }

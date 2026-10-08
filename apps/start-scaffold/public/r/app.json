@@ -30,10 +30,16 @@
       "content": "import { operation } from \"@tinker/core\";\nimport { z } from \"zod\";\n\nexport const greet = operation({\n  label: \"greet\",\n  input: z.object({ name: z.string().min(1) }),\n  run: (_deps, { input }) => ({ text: `Hello, ${input.name}.` }),\n});\n"
     },
     {
+      "path": "../start-min/src/transport/greet.functions.ts",
+      "type": "registry:file",
+      "target": "~/src/transport/greet.functions.ts",
+      "content": "import { createServerFn } from \"@tanstack/react-start\";\nimport { startRequests } from \"@tinker/start\";\nimport { readResult } from \"@tinker/start/server\";\nimport { greet } from \"../backend/greet\";\n\nexport const runGreet = createServerFn({ method: \"GET\" })\n  .middleware([startRequests.middleware])\n  .handler(async ({ context }) =>\n    readResult(\n      await context.session.settle(greet, {\n        input: { name: \"world\" },\n        signal: context.signal,\n      }),\n    ),\n  );\n"
+    },
+    {
       "path": "../start-min/src/routes/index.tsx",
       "type": "registry:file",
       "target": "~/src/routes/index.tsx",
-      "content": "import { createFileRoute } from \"@tanstack/react-router\";\nimport { createServerFn } from \"@tanstack/react-start\";\nimport { startRequests } from \"@tinker/start\";\nimport { readResult } from \"@tinker/start/server\";\nimport { greet } from \"../backend/greet\";\n\nconst runGreet = createServerFn({ method: \"GET\" })\n  .middleware([startRequests.middleware])\n  .handler(async ({ context }) =>\n    readResult(\n      await context.session.settle(greet, {\n        input: { name: \"world\" },\n        signal: context.signal,\n      }),\n    ),\n  );\n\nexport const Route = createFileRoute(\"/\")({\n  loader: () => runGreet(),\n  component: () => <p>{Route.useLoaderData().text}</p>,\n});\n"
+      "content": "import { createFileRoute } from \"@tanstack/react-router\";\nimport { runGreet } from \"../transport/greet.functions\";\n\nexport const Route = createFileRoute(\"/\")({\n  loader: () => runGreet(),\n  component: () => <p>{Route.useLoaderData().text}</p>,\n});\n"
     },
     {
       "path": "templates/tinker.ts.txt",

@@ -79,6 +79,8 @@ All settings and compose ports are in `.env.example`.
 `.tinker/routeTree.gen.ts` is generated.
 Never edit it by hand.
 Native clients load inside their resource factories.
+Requests share one auth instance.
+Backend files use `.server.ts`; server functions use `.functions.ts`.
 The browser build refuses server imports.
 
 ## Rules
@@ -94,9 +96,13 @@ A mutation returns an execution ID.
 Sync applies saved changes, then ends the wait for that ID.
 Remote changes use that same path.
 Draft text stays separate from saved data.
+Sign-up and password reset do not wait for mail.
+Auth mail failure writes `mail.failed` to the log sink.
+Profile save and retry return a receipt without waiting for mail.
 A profile save is complete after commit and mail acceptance.
 Mail failure gives a partial result and keeps the saved name.
 Retry sends mail without saving the name again.
+The process owns sends and waits for them on graceful close.
 The profile shows your email and the last result.
 
 The stream checks auth at open, once per wake, and on heartbeats.
@@ -127,11 +133,11 @@ export default defineConfig({
 `src/lib/tinker.server.ts`:
 
 ```ts
-import { databaseSetup } from "../backend/database";
+import { databaseSetup } from "../backend/database.server";
 export const extensions = [databaseSetup];
-export { database } from "../backend/database";
-export { auth, readAccount } from "../backend/auth";
-export { bootstrap } from "../backend/sync";
+export { database } from "../backend/database.server";
+export { auth, readAccount } from "../backend/auth.server";
+export { bootstrap } from "../backend/sync.server";
 ```
 
 Read the filled [browser seam](src/lib/tinker.ts) for
@@ -330,10 +336,10 @@ Keep your server extensions and add `databaseSetup`.
 The other server exports doctor names are:
 
 ```ts
-export { database } from "../backend/database";
-export { auth } from "../backend/auth";
-export { readAccount } from "../backend/auth";
-export { bootstrap } from "../backend/sync";
+export { database } from "../backend/database.server";
+export { auth } from "../backend/auth.server";
+export { readAccount } from "../backend/auth.server";
+export { bootstrap } from "../backend/sync.server";
 ```
 
 For an empty server seam, the filled startup list is:
@@ -353,7 +359,7 @@ For a server seam with your own extensions, keep that list
 and join the demo's startup extension:
 
 ```ts
-import { databaseSetup } from "../backend/database";
+import { databaseSetup } from "../backend/database.server";
 export const extensions = [databaseSetup];
 ```
 
@@ -390,7 +396,7 @@ Review newer mail source without writing any file:
 ```bash
 npx shadcn@4.21.0 add \
   http://127.0.0.1:4870/r/mail-example.json \
-  --diff src/backend/mail.ts
+  --diff src/backend/mail.server.ts
 ```
 
 Publishing waits for the user's go.
@@ -420,6 +426,7 @@ No package or registry is published by the local scripts.
 - Saved names stay readable while duplicate requests share a send.
 - Commit wakes SSE; rollback publishes no wake.
 - SSE replays saved events and refuses another account's cursor.
+  A held SSE reader receives the next saved batch.
 - A revoked session receives no queued private rows.
 - A quiet private stream closes at the heartbeat after sign-out.
 - A final result replay completes a wait after disconnect.

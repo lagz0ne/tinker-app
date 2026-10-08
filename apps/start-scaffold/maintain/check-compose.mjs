@@ -3,10 +3,10 @@ import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
-/** Reuse the real Postgres, Mailpit, better-auth, and two-tab proof; it owns all cleanup. */
+/** Run the app-owned Postgres, Mailpit, better-auth, and two-tab proof; it owns all cleanup. */
 const repo = resolve(import.meta.dirname, "../../..");
 
-const proof = spawn(process.execPath, [join(repo, "packages/start/scripts/scaffold-proof.mjs")], {
+const proof = spawn(process.execPath, [join(import.meta.dirname, "scaffold-proof.mjs")], {
   cwd: repo,
   env: {
     ...process.env,

@@ -1,7 +1,11 @@
+import { and, asc, eq, gt } from "drizzle-orm";
+import { user } from "./schema.server";
+import { todo } from "./todos.schema.server";
+import { counter } from "./sync.schema.server";
 import { operation } from "@tinker/core";
-import { database } from "./database";
-import { currentUser, principal } from "./auth";
-import { eventHistory } from "@tinker/start/server";
+import { database } from "./database.server";
+import { currentUser, principal } from "./auth.server";
+import { eventHistory, event } from "@tinker/start/server";
 import { readCursor, readPrivateCursor, readFeatureEvent } from "../contracts/sync";
 import type { Sync } from "../contracts/sync";
 import { raise } from "../errors";
@@ -9,8 +13,7 @@ import { raise } from "../errors";
 export const bootstrapPublic = operation({
   label: "bootstrapPublic",
   depends: { database, history: eventHistory },
-  run: async ({ database, history }) => {
-    const { counter } = await import("./sync.schema");
+  run: ({ database, history }) => {
     return database.transaction(async (tx) => {
       const revision = await history.lock(tx, "public");
       return {
@@ -25,12 +28,7 @@ export const bootstrapPublic = operation({
 export const bootstrapPrivate = operation({
   label: "bootstrapPrivate",
   depends: { currentUser, database, history: eventHistory },
-  run: async ({ currentUser, database, history }) => {
-    const [{ eq, asc }, { user }, { todo }] = await Promise.all([
-      import("drizzle-orm"),
-      import("./schema"),
-      import("./todos.schema"),
-    ]);
+  run: ({ currentUser, database, history }) => {
     return database.transaction(async (tx) => {
       const revision = await history.lock(tx, currentUser.id);
       const profile = (
@@ -73,10 +71,6 @@ export const replayPublic = operation({
   input: readCursor,
   depends: { database, principal },
   run: async ({ database, principal }, { input }) => {
-    const [{ and, eq, gt, asc }, { event }] = await Promise.all([
-      import("drizzle-orm"),
-      import("@tinker/start/server"),
-    ]);
     return {
       accountId: principal?.id ?? null,
       events: (
@@ -97,10 +91,6 @@ export const replayPrivate = operation({
   depends: { currentUser, database },
   run: async ({ currentUser, database }, { input }) => {
     if (input.accountId !== currentUser.id) raise("StreamDenied", {});
-    const [{ and, eq, gt, asc }, { event }] = await Promise.all([
-      import("drizzle-orm"),
-      import("@tinker/start/server"),
-    ]);
     return (
       await database
         .select()

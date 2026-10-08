@@ -11,13 +11,13 @@ Read this before adding app code.
 Choose one form for each piece of work:
 
 - Tag: fixed settings passed in by the entry.
-  See `databaseSettings` in `src/backend/database.ts`.
+  See `databaseSettings` in `src/backend/database.server.ts`.
 - Data: changing records, drafts, and visible progress.
   See `profile` and `nameDraft` in `src/frontend/state.ts`.
 - Resource: a client or work owned by the app or session.
   See `database` and `auth` in `src/backend/`.
 - Operation: an action, including a read, write, or send.
-  See `changeTodo` in `src/backend/todos.ts`.
+  See `changeTodo` in `src/backend/todos.server.ts`.
 
 Load a native library inside its resource factory.
 Release owned clients with `ctx.defer`.

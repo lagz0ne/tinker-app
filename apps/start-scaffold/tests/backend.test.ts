@@ -1,7 +1,7 @@
 import { env } from "@tinker/start/server";
 import { handleAuth } from "@tinker-start-scaffold/testing";
 import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
-import { test, expect } from "vite-plus/test";
+import { test, expect, onTestFinished } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { sql } from "drizzle-orm";
@@ -85,7 +85,7 @@ test("a real account can sign up, save its name, sign out and sign in", async ()
     });
     expect(signup.status).toBe(200);
     const cookie = readCookie(signup);
-    expect(messages.at(0)?.subject).toBe("Check your email");
+    await expect.poll(() => messages.at(0)?.subject).toBe("Check your email");
     const saved = await root.run(saveProfile, {
       input: {
         executionId: "10000000-0000-4000-8000-000000000002",
@@ -244,6 +244,9 @@ test("email check and reset callbacks use the declared mail action", async () =>
       }),
       tags: requestHeaders(new Headers()),
     });
+    await expect
+      .poll(() => messages.some((message) => message.subject === "Check your email"))
+      .toBe(true);
     const check = messages.find((message) => message.subject === "Check your email");
     if (!check) raise("BadInput", { reason: "missing check link" });
     const checked = await root.run(handleAuth, {
@@ -258,6 +261,9 @@ test("email check and reset callbacks use the declared mail action", async () =>
       }),
       tags: requestHeaders(new Headers()),
     });
+    await expect
+      .poll(() => messages.some((message) => message.subject === "Reset your password"))
+      .toBe(true);
     const reset = messages.find((message) => message.subject === "Reset your password");
     if (!reset) raise("BadInput", { reason: "missing reset link" });
     expect(new URL(reset.text).pathname).toContain("/reset-password/");
@@ -283,4 +289,49 @@ test("two requests share the auth instance", async () => {
   } finally {
     expect((await root.close({ graceful: true })).status).toBe("success");
   }
+});
+
+test("sign-up replies before held mail and logs its failure", async () => {
+  const accepted = Promise.withResolvers<void>();
+  const sending = Promise.withResolvers<void>();
+  const failed = Promise.withResolvers<void>();
+  const stop = new AbortController();
+  const root = createScope({
+    signal: stop.signal,
+    tags,
+    observe: {
+      log: (entry) => {
+        if (entry.message === "mail.failed" && entry.level === 50) failed.resolve();
+      },
+    },
+    presets: [
+      proofDatabase,
+      preset(mail, async () => ({
+        send: async () => {
+          sending.resolve();
+          await accepted.promise;
+          raise("NotificationFailed", {});
+        },
+      })),
+    ],
+  });
+  onTestFinished(async () => {
+    accepted.resolve();
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
+  });
+  await root.ready;
+  await root.run(migrate);
+  const reply = root.run(handleAuth, {
+    input: authRequest("sign-up/email", {
+      name: "Ada",
+      email: "ada@example.com",
+      password: "safe-password-42",
+    }),
+    tags: requestHeaders(new Headers()),
+  });
+  await sending.promise;
+  expect((await reply).status).toBe(200);
+  accepted.resolve();
+  await failed.promise;
 });

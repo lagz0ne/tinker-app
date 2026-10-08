@@ -1,6 +1,6 @@
-import { databaseSetup } from "../backend/database";
+import { databaseSetup } from "../backend/database.server";
 
 export const extensions = [databaseSetup];
-export { database } from "../backend/database";
-export { auth, readAccount } from "../backend/auth";
-export { bootstrap } from "../backend/sync";
+export { database } from "../backend/database.server";
+export { auth, readAccount } from "../backend/auth.server";
+export { bootstrap } from "../backend/sync.server";

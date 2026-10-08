@@ -86,7 +86,7 @@ async function wire(consumer, item) {
     for (const needed of Object.values(names)) {
       if (needed.include) {
         text =
-          `import { databaseSetup } from "../backend/database";
+          `import { databaseSetup } from "../backend/database.server";
 ` + text.replace("extensions = []", "extensions = [databaseSetup]");
       } else text += needed.line + "\n";
     }
