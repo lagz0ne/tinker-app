@@ -14,16 +14,14 @@ export const queue = resource({
   target: "scope",
   depends: { settings: telemetrySettings, health: exportHealth.controller, delivery },
   factory: ({ settings, health, delivery }, ctx) => {
-    let records: (
-      | { kind: "trace"; value: Telemetry.Span; bytes: number }
-      | { kind: "log"; value: Telemetry.Log; bytes: number }
-    )[] = [];
+    let records: Telemetry.Record[] = [];
     const browser = settings.side === "browser";
     const batchLimit = browser ? 32_000 : 48_000;
     /** Reserve the JSON envelope and one comma per browser record. */
     const recordLimit = browser ? batchLimit - 24 : batchLimit;
     const frameBytes = browser ? 23 : 0;
     const commaBytes = browser ? 1 : 0;
+    const scratch = new Uint8Array(recordLimit + 4);
     let queueBytes = 0;
     let dropped = 0;
     let timer: Promise<void> | undefined;
@@ -35,20 +33,35 @@ export const queue = resource({
     let failed = false;
     const owned = {
       ingest(batch: Telemetry.Batch) {
-        for (const value of batch.traces) owned.push({ kind: "trace", value, bytes: 0 });
-        for (const value of batch.logs) owned.push({ kind: "log", value, bytes: 0 });
+        for (let index = 0; index < batch.traces.length; index++) {
+          const { side, ...value } = batch.traces[index]!;
+          owned.add("trace", side, value);
+        }
+        for (let index = 0; index < batch.logs.length; index++) {
+          const value = batch.logs[index]!;
+          owned.add("log", value.side, value);
+        }
         if (batch.traces.length + batch.logs.length) owned.publishQueued();
       },
-      push(record: (typeof records)[number]) {
-        const full = state === "closed" || records.length >= 512;
-        const recordBytes = full ? 0 : encoder.encode(JSON.stringify(record.value)).byteLength;
-        if (full || recordBytes > recordLimit || queueBytes + recordBytes > 1_048_576) {
+      add(
+        kind: Telemetry.Record["kind"],
+        side: Telemetry.Side,
+        value: Telemetry.SpanBody | Telemetry.Log,
+      ) {
+        if (state === "closed" || records.length >= 512) {
+          dropped++;
+          return;
+        }
+        const json = JSON.stringify(value);
+        const { read, written } = encoder.encodeInto(json, scratch);
+        const bytes = written + (kind === "trace" ? side.length + 10 : 0);
+        if (read < json.length || bytes > recordLimit || queueBytes + bytes > 1_048_576) {
           dropped++;
         } else {
-          record.bytes = recordBytes;
-          records.push(record);
-          queueBytes += recordBytes;
+          records.push({ kind, side, json, bytes });
+          queueBytes += bytes;
         }
+        return json;
       },
       publishQueued() {
         if (publishing) {
@@ -90,14 +103,6 @@ export const queue = resource({
           .then(async () => {
             if (!records.length) return;
             const retained = owned.takeBatch();
-            const batch: Telemetry.Batch = {
-              traces: retained
-                .filter((record) => record.kind === "trace")
-                .map((record) => record.value),
-              logs: retained
-                .filter((record) => record.kind === "log")
-                .map((record) => record.value),
-            };
             if (publishing)
               health.set({ kind: "sending", pending: records.length, dropped: dropped });
             const request = new AbortController();
@@ -113,7 +118,7 @@ export const queue = resource({
             let result: Telemetry.Delivery;
             try {
               result = await delivery.send(
-                batch,
+                retained,
                 AbortSignal.any([request.signal, stopRequests.signal]),
               );
             } finally {

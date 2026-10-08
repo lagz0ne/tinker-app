@@ -15,6 +15,9 @@ export declare namespace Telemetry {
     | { side: "server" | "ssr"; traces: string; logs: string }
     | { side: "browser" }
   );
+  type SpanBody = Omit<Span, "side">;
+  /** Retained JSON is owned by the queue until storage accepts it. */
+  type Record = { kind: "trace" | "log"; side: Side; json: string; bytes: number };
   type Delivery = { traces: boolean; logs: boolean };
   /**
    * What the telemetry part gives the router entry (ADR 0106). The entry makes a telemetry root
@@ -30,17 +33,25 @@ export declare namespace Telemetry {
   type ServerPart = Part & { readonly appTags: Resource.Handle<Tag.Bindings> };
 }
 
+const replaceBigint = (_key: string, entry: unknown) =>
+  typeof entry === "bigint" ? entry.toString() : entry;
+
 /** Core attributes may contain bigint or cycles; one bad field must not lose its record.
  * @param value - From a span or log attribute; why: bound and safely encode its wire value.
  */
 export function encodeValue(value: unknown): string {
-  if (typeof value === "bigint") return value.toString().slice(0, 2048);
+  switch (typeof value) {
+    case "string":
+    case "number":
+    case "boolean":
+      return JSON.stringify(value).slice(0, 2048);
+    case "bigint":
+      return value.toString().slice(0, 2048);
+    case "undefined":
+      return "undefined";
+  }
   try {
-    return (
-      JSON.stringify(value, (_key, entry: unknown) =>
-        typeof entry === "bigint" ? entry.toString() : entry,
-      ) ?? "undefined"
-    ).slice(0, 2048);
+    return (JSON.stringify(value, replaceBigint) ?? "undefined").slice(0, 2048);
   } catch {
     return "[Unserializable]";
   }

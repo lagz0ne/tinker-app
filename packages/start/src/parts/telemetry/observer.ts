@@ -39,6 +39,49 @@ export const telemetryExport = extension({
   },
 });
 
+function nano(time: number) {
+  const millis = Math.trunc(time);
+  return millis === 0 ? "0" : `${millis}000000`;
+}
+
+function attributes(values: Observe.Span["attributes"]) {
+  return Object.entries(values)
+    .slice(0, 31)
+    .map(([key, value]) => ({
+      key: key.slice(0, 256),
+      value: { stringValue: encodeValue(value) },
+    }));
+}
+
+function events(span: Observe.Span) {
+  return span.events.slice(0, 32).map((event) => ({
+    name: event.name.slice(0, 256),
+    timeUnixNano: nano(event.time),
+    attributes: attributes(event.attributes),
+  }));
+}
+
+function readSpan(span: Observe.Span): Telemetry.SpanBody {
+  const pairs = attributes(span.attributes);
+  pairs.push({ key: "tinker.kind", value: { stringValue: span.kind } });
+  return {
+    traceId: span.traceId,
+    spanId: span.spanId,
+    parentSpanId: span.parentSpanId,
+    flags: span.sampled ? 1 : 0,
+    name: span.name.slice(0, 256),
+    kind: 1,
+    startTimeUnixNano: nano(span.start),
+    endTimeUnixNano: nano(span.end ?? span.start),
+    attributes: pairs,
+    events: span.events.length ? events(span) : [],
+    status:
+      span.status === "failed"
+        ? { code: 2, message: String(span.error).slice(0, 2048) }
+        : { code: 1 },
+  };
+}
+
 /**
  * The app root's observe option. Each finished span and each log line becomes a record in the
  * telemetry root's queue, and a line on the local console: JSON on the server, an object in the
@@ -50,8 +93,8 @@ export const observer = resource({
   factory: ({ queue, settings }, ctx): Observe.Config => {
     const { service, side } = settings;
     const write = (record: Telemetry.Log) => {
-      queue.ingest({ traces: [], logs: [record] });
-      if (side !== "browser") process.stdout.write(`${JSON.stringify(record)}\n`);
+      const json = queue.add("log", side, record);
+      if (side !== "browser") process.stdout.write(`${json ?? JSON.stringify(record)}\n`);
       else if (record.level >= LEVELS.error) console.error(record);
       else if (record.level >= LEVELS.warn) console.warn(record);
       else console.info(record);
@@ -60,45 +103,7 @@ export const observer = resource({
       history: 80,
       level: LEVELS.info,
       export(span) {
-        queue.ingest({
-          traces: [
-            {
-              side,
-              traceId: span.traceId,
-              spanId: span.spanId,
-              parentSpanId: span.parentSpanId,
-              flags: span.sampled ? 1 : 0,
-              name: span.name.slice(0, 256),
-              kind: 1,
-              startTimeUnixNano: (BigInt(Math.trunc(span.start)) * 1_000_000n).toString(),
-              endTimeUnixNano: (BigInt(Math.trunc(span.end ?? span.start)) * 1_000_000n).toString(),
-              attributes: [
-                ...Object.entries(span.attributes)
-                  .slice(0, 31)
-                  .map(([key, value]) => ({
-                    key: key.slice(0, 256),
-                    value: { stringValue: encodeValue(value) },
-                  })),
-                { key: "tinker.kind", value: { stringValue: span.kind } },
-              ],
-              events: span.events.slice(0, 32).map((event) => ({
-                name: event.name.slice(0, 256),
-                timeUnixNano: (BigInt(Math.trunc(event.time)) * 1_000_000n).toString(),
-                attributes: Object.entries(event.attributes)
-                  .slice(0, 31)
-                  .map(([key, value]) => ({
-                    key: key.slice(0, 256),
-                    value: { stringValue: encodeValue(value) },
-                  })),
-              })),
-              status:
-                span.status === "failed"
-                  ? { code: 2, message: String(span.error).slice(0, 2048) }
-                  : { code: 1 },
-            },
-          ],
-          logs: [],
-        });
+        queue.add("trace", side, readSpan(span));
         write({
           level: LEVELS.info,
           time: ctx.clock.currentTimeMillis(),
@@ -106,8 +111,10 @@ export const observer = resource({
           side,
           traceId: span.traceId,
           spanId: span.spanId,
+          attributes: undefined,
           msg: "core.span",
         });
+        queue.publishQueued();
       },
       log(entry) {
         write({
@@ -125,6 +132,7 @@ export const observer = resource({
           ),
           msg: entry.message.slice(0, 2048),
         });
+        queue.publishQueued();
       },
     };
   },
