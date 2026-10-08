@@ -16,6 +16,12 @@ const requestShape = z
   })
   .brand<"HttpRequest">();
 
+const failureShape = z.object({
+  name: z.string().optional().catch(undefined),
+  code: z.union([z.string(), z.number()]).optional().catch(undefined),
+  cause: z.unknown().optional(),
+});
+
 /** Closing this session or an ancestor ends HTTP waits before graceful work drains.
  * Stop tags also end waits without closing a layer; caller cancellation keeps Core's result. */
 export const http = resource({
@@ -74,11 +80,6 @@ export const httpRequest = operation({
         return response;
       } catch (cause) {
         signal.throwIfAborted();
-        const failureShape = z.object({
-          name: z.string().optional().catch(undefined),
-          code: z.union([z.string(), z.number()]).optional().catch(undefined),
-          cause: z.unknown().optional(),
-        });
         const failure = failureShape.safeParse(cause);
         if (!failure.success) raise("HttpRequestFailed", { method, path });
         const nested = failureShape.safeParse(failure.data.cause);

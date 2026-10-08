@@ -1,5 +1,4 @@
 import { resource } from "@tinker/core";
-import { ZodError } from "zod";
 import { readResult } from "../../backend/result.server";
 import { streamCursor, streamRequest } from "./protocol";
 import { openSync } from "./stream.server";
@@ -13,31 +12,40 @@ export const syncEndpoint = resource({
   label: "sync.endpoint",
   target: "session",
   depends: { open: openSync.controller },
-  factory: ({ open }) => ({
-    async answer(request: Request): Promise<Response> {
-      let cursor;
+  factory: ({ open }) => {
+    const readCursor = (request: Request) => {
       try {
-        const { search, lastEventId } = streamRequest.parse({
+        const read = streamRequest.safeParse({
           search: new URL(request.url).search,
           lastEventId: request.headers.get("Last-Event-ID"),
         });
+        if (!read.success) return;
+        const { search, lastEventId } = read.data;
         const supplied = lastEventId || new URLSearchParams(search).get("cursor");
-        cursor = streamCursor.parse(supplied ? JSON.parse(supplied) : { public: 0, private: null });
+        const parsed = streamCursor.safeParse(
+          supplied ? JSON.parse(supplied) : { public: 0, private: null },
+        );
+        return parsed.success ? parsed.data : undefined;
       } catch (error) {
-        if (!(error instanceof SyntaxError) && !(error instanceof ZodError)) throw error;
-        return new Response(null, { status: 400 });
+        if (!(error instanceof SyntaxError)) throw error;
       }
-      /** requestStop already binds cancellation; a call signal would close a shorter child session. */
-      const result = await open.settle({ input: { cursor } });
-      if (result.status === "failed" && Object(result.error).kind === "StreamDenied")
-        return new Response(null, { status: 403 });
-      return new Response(readResult(result), {
-        headers: {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-store",
-          "X-Accel-Buffering": "no",
-        },
-      });
-    },
-  }),
+    };
+    return {
+      async answer(request: Request): Promise<Response> {
+        const cursor = readCursor(request);
+        if (!cursor) return new Response(null, { status: 400 });
+        /** requestStop already binds cancellation; a call signal would close a shorter child session. */
+        const result = await open.settle({ input: { cursor } });
+        if (result.status === "failed" && Object(result.error).kind === "StreamDenied")
+          return new Response(null, { status: 403 });
+        return new Response(readResult(result), {
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+          },
+        });
+      },
+    };
+  },
 });

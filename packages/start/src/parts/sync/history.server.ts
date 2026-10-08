@@ -1,19 +1,19 @@
 import { resource } from "@tinker/core";
 import { raise } from "../../errors";
+import { drizzleOrm } from "../../modules.server";
 import type { Database } from "./database";
 import type { Sync } from "./envelopes";
+import { stream, event, execution } from "./schema";
 
 /**
  * The app's writes to a sync stream. A stream row stays locked until its records and events
- * commit together. drizzle loads on first use, so an app with sync off never loads it.
+ * commit together. The Drizzle module builds as a dep before the history body runs.
  */
 export const eventHistory = resource({
   label: "sync.history",
-  factory: async () => {
-    const [{ eq, sql }, { stream, event, execution }] = await Promise.all([
-      import("drizzle-orm"),
-      import("./schema"),
-    ]);
+  depends: { orm: drizzleOrm },
+  factory: async ({ orm }) => {
+    const { eq, sql } = orm;
     return {
       async lock(tx: Database.Transaction, id: string) {
         await tx.insert(stream).values({ id }).onConflictDoNothing();

@@ -43,6 +43,24 @@ so a fresh clone gets `.tinker/`:
 `.tinker/` is the generated folder.
 It is gitignored, and nobody edits it.
 
+## Lazy modules
+
+`drizzleOrm` on `@tinker/start/server` gives a body
+the Drizzle module namespace through its deps.
+It has one `module:drizzle-orm` load span per scope,
+shared across that scope's sessions.
+
+```ts
+import { operation } from "@tinker/core";
+import { drizzleOrm } from "@tinker/start/server";
+
+export const query = operation({
+  label: "query",
+  depends: { orm: drizzleOrm },
+  run: async ({ orm }) => orm.sql`select 1`,
+});
+```
+
 ## Parts
 
 A base part is an opt-in slice of the base,

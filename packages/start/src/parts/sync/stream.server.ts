@@ -4,7 +4,9 @@ import { auth, database } from "#tinker/app.server";
 import { requestHeaders } from "../../backend/headers.server";
 import { backendStop, requestStop } from "../../backend/lifetime";
 import { raise } from "../../errors";
+import { drizzleOrm } from "../../modules.server";
 import { notifications } from "./notifications.server";
+import { event } from "./schema";
 import { streamCursor } from "./protocol";
 import type { Stream } from "./protocol";
 
@@ -38,9 +40,16 @@ const accountChange = encoder.encode('event: account\ndata: {"kind":"account-cha
 export const eventStream = resource({
   label: "sync.stream",
   target: "session",
-  depends: { database, notifications, account: liveAccount, backendStop, requestStop },
+  depends: {
+    database,
+    notifications,
+    account: liveAccount,
+    backendStop,
+    requestStop,
+    orm: drizzleOrm,
+  },
   factory: async (
-    { database, notifications, account, backendStop, requestStop },
+    { database, notifications, account, backendStop, requestStop, orm },
     { signal: cleanup, defer, clock },
   ) => {
     const stop = new AbortController();
@@ -76,10 +85,7 @@ export const eventStream = resource({
         const initialAccount = await account.run();
         if (initial.private && initial.private.accountId !== initialAccount)
           raise("StreamDenied", {});
-        const [{ and, or, eq, gt, asc }, { event }] = await Promise.all([
-          import("drizzle-orm"),
-          import("./schema"),
-        ]);
+        const { and, or, eq, gt, asc } = orm;
         const cursor = { ...initial, private: initial.private ? { ...initial.private } : null };
         const lease = clock.currentTimeMillis() + 30_000;
         const expectedAccount = cursor.private?.accountId ?? null;

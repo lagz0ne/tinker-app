@@ -1,11 +1,21 @@
-import { resource } from "@tinker/core";
-import { transferResponseBodyOwnership } from "@tanstack/react-start/server";
+import { operation, resource } from "@tinker/core";
+import type { Operation } from "@tinker/core";
+import { startServer } from "../modules.server";
+
+/** Keeps the body owner synchronous while the module loads through this operation's deps. */
+const transferResponseBody = operation({
+  label: "start.transferResponseBody",
+  depends: { startServer },
+  run: async ({ startServer }, { input }: Operation.Ctx<{ source: Response; target: Response }>) =>
+    startServer.transferResponseBodyOwnership(input.source, input.target),
+});
 
 /** Retains request work until the consumer ends, fails, or cancels the body. */
 export const responseBodies = resource({
   label: "start.responseBodies",
   target: "scope",
-  factory: (_deps, ctx) => {
+  depends: { transfer: transferResponseBody.controller },
+  factory: ({ transfer }, ctx) => {
     const readers = new Set<{
       reader: ReadableStreamDefaultReader<Uint8Array>;
       finish: (graceful: boolean) => Promise<void>;
@@ -60,14 +70,16 @@ export const responseBodies = resource({
             }
           },
         });
-        return transferResponseBodyOwnership(
-          response,
-          new Response(body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-          }),
-        );
+        return transfer.run({
+          input: {
+            source: response,
+            target: new Response(body, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+            }),
+          },
+        });
       },
     };
   },

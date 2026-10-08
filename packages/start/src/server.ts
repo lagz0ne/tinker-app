@@ -4,6 +4,7 @@ export { env } from "./env";
 export { authSettings } from "./parts/auth/settings";
 export type { Auth } from "./parts/auth/settings";
 export { eventHistory } from "./parts/sync/history.server";
+export { drizzleOrm } from "./modules.server";
 export type { Database } from "./parts/sync/database";
 export { createServerEntry } from "./server-entry";
 export type { ServerEntry } from "./server-entry";
