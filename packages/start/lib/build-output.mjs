@@ -37,3 +37,32 @@ export function clientOutput(hints = true) {
     },
   };
 }
+
+/** Keep Start's request code out of TanStack's large module context in server builds. */
+export function serverOutput() {
+  return {
+    name: "tinker:server-output",
+    apply: "build",
+    configEnvironment(name) {
+      if (name !== "ssr") return;
+      return {
+        resolve: { external: ["@tinker/core"] },
+        build: {
+          rolldownOptions: {
+            output: {
+              codeSplitting: {
+                includeDependenciesRecursively: false,
+                groups: [
+                  {
+                    name: "tinker-start",
+                    test: /\/(?:packages\/start|node_modules\/@tinker\/start)\/src\/backend\/body\.server\.ts$/,
+                  },
+                ],
+              },
+            },
+          },
+        },
+      };
+    },
+  };
+}

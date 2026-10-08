@@ -11,7 +11,7 @@ import { buildChecks } from "./lib/doctor.mjs";
 import { partNotes, partsOn } from "./lib/parts.mjs";
 import { recordViolation, restartNote, startViolations } from "./lib/hooks.mjs";
 import { checkTypes } from "./lib/typecheck.mjs";
-import { clientOutput } from "./lib/build-output.mjs";
+import { clientOutput, serverOutput } from "./lib/build-output.mjs";
 import { prepare } from "./lib/prepare.mjs";
 
 /** @param {string} root - From tinker(); why: the app's paths, address, and tsconfig. */
@@ -137,5 +137,6 @@ export function tinker(options = {}) {
     react(),
     tailwind(root),
     clientOutput(options.compileHints ?? true),
+    serverOutput(),
   ];
 }
