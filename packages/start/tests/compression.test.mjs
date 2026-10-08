@@ -1,4 +1,5 @@
-import { brotliDecompressSync, gunzipSync } from "node:zlib";
+import { brotliDecompressSync, gunzipSync, createBrotliDecompress, createGunzip } from "node:zlib";
+import { Readable } from "node:stream";
 import { expect, test } from "vite-plus/test";
 import { compressResponse, readEncoding } from "../lib/compression.mjs";
 
@@ -111,4 +112,58 @@ test("HEAD cancels HTML and returns its negotiated encoding without a body", asy
     new Response(null, { headers: { "content-type": "text/html" } }),
   );
   expect(empty.headers.get("content-encoding")).toBe("br");
+});
+
+test.each(["gzip", "br"])("%s sends the HTML shell before the source ends", async (encoding) => {
+  const shell = "<!DOCTYPE html><body>" + "x".repeat(4000);
+  const tail = "</body>";
+  let source;
+  const body = new ReadableStream({
+    start(controller) {
+      source = controller;
+      controller.enqueue(new TextEncoder().encode(shell));
+    },
+  });
+  const response = await compressResponse(
+    new Request("http://app", { headers: { "accept-encoding": encoding } }),
+    new Response(body, { headers: { "content-type": "text/html" } }),
+  );
+  const encoded = Readable.fromWeb(response.body);
+  const decoded = encoded.pipe(encoding === "br" ? createBrotliDecompress() : createGunzip());
+  const chunks = decoded[Symbol.asyncIterator]();
+  try {
+    const first = await chunks.next();
+    expect(first.value.toString()).toBe(shell);
+    source.enqueue(new TextEncoder().encode(tail));
+    source.close();
+    let rest = "";
+    for await (const chunk of chunks) rest += chunk.toString();
+    expect(rest).toBe(tail);
+  } finally {
+    encoded.destroy();
+    decoded.destroy();
+  }
+});
+
+test("a source failure reaches the compressed response reader", async () => {
+  const failure = new Error("source failed");
+  const response = await compressResponse(
+    new Request("http://app", { headers: { "accept-encoding": "br" } }),
+    new Response(new ReadableStream({ start: (source) => source.error(failure) }), {
+      headers: { "content-type": "text/html" },
+    }),
+  );
+  await expect(response.arrayBuffer()).rejects.toBe(failure);
+});
+
+test("cancelling compressed HTML cancels the unfinished source", async () => {
+  const cancelled = Promise.withResolvers();
+  const response = await compressResponse(
+    new Request("http://app", { headers: { "accept-encoding": "br" } }),
+    new Response(new ReadableStream({ cancel: () => cancelled.resolve(true) }), {
+      headers: { "content-type": "text/html" },
+    }),
+  );
+  await response.body.cancel();
+  expect(await cancelled.promise).toBe(true);
 });

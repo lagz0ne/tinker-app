@@ -610,6 +610,10 @@ Example requirements also stop a build until they are joined.
 - The host picks Brotli or gzip from `Accept-Encoding`.
   With no copy, it compresses JS, CSS, and HTML on demand.
   HTML from the app keeps streaming.
+  Each write flushes Brotli or gzip output, so the shell reaches
+  the client before the source ends.
+  Source failures reach the response reader.
+  Cancelling the response cancels its unfinished source.
 - Responses that can be compressed have
   `Vary: Accept-Encoding`, even when sent plain.
 - Hashed files under `/assets/` have a one-year cache.

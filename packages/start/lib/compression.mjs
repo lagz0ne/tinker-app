@@ -3,8 +3,12 @@ import { promisify } from "node:util";
 import { brotliCompress, createBrotliCompress, createGzip, gzip, constants } from "node:zlib";
 
 const streams = {
-  br: () => createBrotliCompress({ params: { [constants.BROTLI_PARAM_QUALITY]: 4 } }),
-  gzip: createGzip,
+  br: () =>
+    createBrotliCompress({
+      flush: constants.BROTLI_OPERATION_FLUSH,
+      params: { [constants.BROTLI_PARAM_QUALITY]: 4 },
+    }),
+  gzip: () => createGzip({ flush: constants.Z_SYNC_FLUSH }),
 };
 const encoders = { br: promisify(brotliCompress), gzip: promisify(gzip) };
 
@@ -75,7 +79,7 @@ export function varyEncoding(headers) {
 }
 
 /**
- * Keep HTML streaming; the composed stream owns errors and cancellation.
+ * Keep HTML streaming; the encoded stream owns errors and cancellation.
  * @param {Request} request - From the host; why: encoding and HEAD semantics.
  * @param {Response} response - From the app; why: retain its body until consumed or cancelled.
  */
@@ -110,5 +114,9 @@ async function compressBody(request, body, encoding) {
     return null;
   }
   if (encoding === "identity" || body === null) return body;
-  return Readable.toWeb(Readable.fromWeb(body).compose(streams[encoding]()));
+  const source = Readable.fromWeb(body);
+  const zip = streams[encoding]();
+  source.once("error", (error) => zip.destroy(error));
+  zip.once("close", () => source.destroy());
+  return Readable.toWeb(source.pipe(zip));
 }
