@@ -418,7 +418,7 @@ test("a full queue drops records past 512 and reports them; each send stays with
   await tools.ready;
   const batch = { traces: [], logs: Array.from({ length: 64 }, () => record("queued")) };
   for (let index = 0; index < 9; index++) tools.run(ingestTelemetry, { input: batch });
-  expect(tools.resolve(exportHealth)).toEqual({ kind: "queued", pending: 512, dropped: 64 });
+  expect(tools.resolve(exportHealth)).toEqual({ kind: "sending", pending: 512, dropped: 64 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
   expect(sent.requests).toHaveLength(8);
   expect(
@@ -447,7 +447,7 @@ test("a record over 48 KB is dropped; one send takes at most 64 records", async 
     });
   await tools.run(flushTelemetry);
   expect(sent.bodyOf("http://storage.test/logs?").split("\n")).toHaveLength(64);
-  expect(tools.resolve(exportHealth)).toEqual({ kind: "queued", pending: 16, dropped: 1 });
+  expect(tools.resolve(exportHealth)).toEqual({ kind: "idle", pending: 0, dropped: 1 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
 
@@ -613,7 +613,7 @@ test("a record of exactly 48,000 bytes is kept; one byte more is dropped", async
   await tools.ready;
   tools.run(ingestTelemetry, { input: { traces: [], logs: [sized(48_000)] } });
   tools.run(ingestTelemetry, { input: { traces: [], logs: [sized(48_001)] } });
-  expect(tools.resolve(exportHealth)).toEqual({ kind: "queued", pending: 1, dropped: 1 });
+  expect(tools.resolve(exportHealth)).toEqual({ kind: "sending", pending: 1, dropped: 1 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
 
@@ -625,16 +625,16 @@ test("the queue holds 1 MiB to the byte, and counts what it holds after a refuse
   await tools.ready;
   const full = [...Array.from({ length: 22 }, () => sized(47_000)), sized(14_576)];
   for (const log of full) tools.run(ingestTelemetry, { input: { traces: [], logs: [log] } });
-  expect(tools.resolve(exportHealth)).toEqual({ kind: "queued", pending: 23, dropped: 0 });
+  expect(tools.resolve(exportHealth)).toEqual({ kind: "sending", pending: 23, dropped: 0 });
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("past the bound")] } });
-  expect(tools.resolve(exportHealth)).toEqual({ kind: "queued", pending: 23, dropped: 1 });
+  expect(tools.resolve(exportHealth)).toEqual({ kind: "sending", pending: 23, dropped: 1 });
   await tools.run(flushTelemetry);
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("still past it")] } });
   expect(tools.resolve(exportHealth)).toMatchObject({ kind: "failed", pending: 23, dropped: 2 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
 
-test("one send carries at most 48,000 bytes: four 12,000-byte records go, the fifth waits", async () => {
+test("one send carries at most 48,000 bytes: the fifth record goes in the next batch", async () => {
   const sent = storage();
   const tools = createScope({
     extensions: [telemetryExport],
@@ -645,7 +645,7 @@ test("one send carries at most 48,000 bytes: four 12,000-byte records go, the fi
   tools.run(ingestTelemetry, { input: { traces: [], logs } });
   await tools.run(flushTelemetry);
   expect(sent.bodyOf("http://storage.test/logs?").split("\n")).toHaveLength(4);
-  expect(tools.resolve(exportHealth)).toEqual({ kind: "queued", pending: 1, dropped: 0 });
+  expect(tools.resolve(exportHealth)).toEqual({ kind: "idle", pending: 0, dropped: 0 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
 

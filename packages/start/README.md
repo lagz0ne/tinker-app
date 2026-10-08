@@ -315,7 +315,15 @@ The package's `exports` refuses every other path.
     one server record is at most 48,000 bytes,
     and one tab record at most 31,976 bytes,
     and one send at most 64 records.
-    Each record is sized once when the queue takes it.
+    Each record is encoded and sized once when the queue takes it.
+    A full batch starts at once; each batch waits for the last.
+    A full batch arriving as a send ends is sent before any tick.
+    A burst drains without waiting for the next timer tick.
+    Local server console lines wait in a bounded batch,
+    at most 512 lines and 48,000 bytes.
+    A slow pipe keeps that batch bounded;
+    each dropped storage or console copy is counted.
+    Final health counts records dropped at close.
     Sent records free their room.
     A send that storage refuses, or that throws,
     in a tab or on the server,

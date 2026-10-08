@@ -33,7 +33,7 @@ export const telemetryExport = extension({
       await event.next();
     },
     async close(event) {
-      await event.resolve(queue).close();
+      await event.resolve(queue).close(true);
       return event.next();
     },
   },
@@ -93,8 +93,8 @@ export const observer = resource({
   factory: ({ queue, settings }, ctx): Observe.Config => {
     const { service, side } = settings;
     const write = (record: Telemetry.Log) => {
-      const json = queue.add("log", side, record);
-      if (side !== "browser") process.stdout.write(`${json ?? JSON.stringify(record)}\n`);
+      const encoded = queue.add("log", side, record);
+      if (side !== "browser") queue.writeConsole(encoded, record);
       else if (record.level >= LEVELS.error) console.error(record);
       else if (record.level >= LEVELS.warn) console.warn(record);
       else console.info(record);
