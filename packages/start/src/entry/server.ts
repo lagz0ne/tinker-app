@@ -1,3 +1,4 @@
+import type { Observe, Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { createStartHandler as createStart } from "@tanstack/react-start/server";
 import { defaultStreamHandler as renderStream } from "@tanstack/react-start/server";
@@ -13,7 +14,7 @@ import { abortReasons, raise } from "../errors";
 import { startRequests } from "../start";
 
 const renderRequest = createStart(async (context) => {
-  const { requestContext } = await (entry.owned ??= start());
+  const { requestContext } = entry.ready ?? (await (entry.owned ??= start()));
   const bodies = requestContext.scope.resolve(responseBodies);
   const router: typeof context.router & {
     close?: Awaited<ReturnType<typeof getRouter>>["close"];
@@ -58,7 +59,7 @@ async function start() {
   }
   let closed: Promise<void> | undefined;
   const close = () =>
-    (closed ??= Promise.resolve().then(async () => {
+    (closed ??= (async () => {
       stop.abort(abortReasons.closed);
       const end = await app.closed;
       toolStop.abort(abortReasons.closed);
@@ -67,23 +68,28 @@ async function start() {
       if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
       if (toolEnd.status === "failed") throw toolEnd.error;
       if (toolEnd.teardownErrors?.length) throw toolEnd.teardownErrors.at(0);
-    }));
+    })());
   if (import.meta.hot) import.meta.hot.dispose(close);
-  return {
+  return (entry.ready = {
     requestContext: app.resolve(startRequests),
     renderObserve: tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs }),
     close,
-  };
+  });
 }
 
 const entry: {
   owned?: ReturnType<typeof start>;
-  fetch(request: Request): Promise<Response>;
+  ready?: {
+    requestContext: { scope: Scope.Handle };
+    renderObserve: Observe.Config;
+    close(): Promise<void>;
+  };
+  fetch(request: Request): Response | Promise<Response>;
 } = {
   /** src/server.ts runs first; its `next` reaches the base's handler. */
-  async fetch(request: Request) {
+  fetch(request: Request) {
     return app.fetch(request, async (forwarded) => {
-      const { requestContext } = await (entry.owned ??= start());
+      const { requestContext } = entry.ready ?? (await (entry.owned ??= start()));
       const response = await renderRequest(forwarded, { context: requestContext });
       return import.meta.env.DEV ? devErrorPage(forwarded, response) : response;
     });
@@ -98,5 +104,5 @@ export async function close() {
 
 /** Server renders borrow observation; only process close ends its telemetry root. */
 export async function getRenderObserver() {
-  return (await (entry.owned ??= start())).renderObserve;
+  return (entry.ready ?? (await (entry.owned ??= start()))).renderObserve;
 }

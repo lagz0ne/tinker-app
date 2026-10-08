@@ -17,3 +17,14 @@ export { telemetry as serverTelemetry } from "./parts/telemetry/on.server";
 export { telemetry as offTelemetry } from "./parts/telemetry/off";
 
 export { abortReasons } from "./errors";
+
+export {
+  consumeConnection,
+  eventSource,
+  eventSourceBackend,
+  syncStreaming,
+} from "./parts/sync/client/events";
+
+export { syncRouter } from "./parts/sync/client/router";
+export { sync as offSync } from "./parts/sync/off";
+export { sync as onSync } from "./parts/sync/on";

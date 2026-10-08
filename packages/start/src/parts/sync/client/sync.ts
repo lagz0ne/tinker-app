@@ -11,7 +11,7 @@ import { accountOwner } from "./owner";
 export const syncClient = resource({
   label: "sync.client",
   depends: { owner: accountOwner, records },
-  factory: async ({ owner, records: appRecords }, { defer, log, clock }) => {
+  factory: ({ owner, records: appRecords }, { defer, log, clock }) => {
     const records: Sync.Records = appRecords;
     let accountId: string | null = null;
     const cursors = new Map<string, number>();

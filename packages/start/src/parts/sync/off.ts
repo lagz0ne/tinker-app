@@ -6,6 +6,6 @@ export const sync: SyncPart.Router<Record<never, never>> = {
   extensions: [],
   router: resource({
     label: "sync.off.router",
-    factory: async () => ({ options: {}, bind: () => {} }),
+    factory: () => ({ options: {}, bind: () => {} }),
   }),
 };

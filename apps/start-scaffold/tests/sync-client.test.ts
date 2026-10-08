@@ -47,7 +47,7 @@ test("an event before its receipt finishes only after saved records are applied"
   await root.ready;
   try {
     await root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
-    const client = await root.resolve(syncClient);
+    const client = root.resolve(syncClient);
     const waiting = root.run(send, { signal: call.signal });
     await sent.promise;
     await root.run(applyEvents, {
@@ -89,7 +89,7 @@ test("replayed events and older snapshots leave newer records and dirty drafts a
   await root.ready;
   try {
     await root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
-    const client = await root.resolve(syncClient);
+    const client = root.resolve(syncClient);
     const version = client.capture().version;
     root.controller(nameDraft).set("My unsaved text");
     const first: Sync.Event = {
@@ -149,7 +149,7 @@ test("account exit stops local waits and ignores an old account's late response"
   await root.ready;
   try {
     await root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
-    const client = await root.resolve(syncClient);
+    const client = root.resolve(syncClient);
     const oldVersion = client.capture().version;
     const waiting = root.settle(send);
     await sent.promise;

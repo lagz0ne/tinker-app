@@ -15,8 +15,6 @@ export declare namespace SyncPart {
   /** What a part gives the router entry: app root extensions, and a resource read from it. */
   type Router<O> = {
     readonly extensions: Many<Scope.Extension<unknown>>;
-    readonly router: Resource.Handle<
-      Promise<{ options: O; bind(close: () => Promise<void>): void }>
-    >;
+    readonly router: Resource.Handle<{ options: O; bind(close: () => Promise<void>): void }>;
   };
 }

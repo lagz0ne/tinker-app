@@ -4,23 +4,27 @@ import { expect, test } from "vite-plus/test";
 import { applied } from "#tinker/app";
 import {
   checkAccount,
+  loadSnapshot,
+  snapshotLoader,
+  applyBootstrap,
+  syncClient,
+} from "@tinker/start/client";
+import {
   consumeConnection,
   eventSource,
   eventSourceBackend,
-  loadSnapshot,
   receiveMessage,
   refreshAccount,
-  snapshotLoader,
   syncStreaming,
-} from "../src/parts/sync/client/events";
-import { snapshotSource } from "../src/parts/sync/functions";
-import { accountOwner } from "../src/parts/sync/client/owner";
-import { syncRouter } from "../src/parts/sync/client/router";
-import { applyBootstrap, syncClient } from "../src/parts/sync/client/sync";
-import { pageEvents, tabStop } from "../src/parts/sync/client/tab";
-import type { Sync } from "../src/parts/sync/envelopes";
-import { sync as off } from "../src/parts/sync/off";
-import { sync as on } from "../src/parts/sync/on";
+  snapshotSource,
+  accountOwner,
+  syncRouter,
+  pageEvents,
+  tabStop,
+  offSync as off,
+  onSync as on,
+} from "@tinker/start/testing";
+import type { Sync } from "@tinker/start";
 
 const id = "00000000-0000-4000-8000-000000000001";
 
@@ -118,7 +122,7 @@ test("a tab loads its snapshot once per account, and shares a load in flight", a
     ],
   });
   await root.ready;
-  const loader = await root.resolve(snapshotLoader);
+  const loader = root.resolve(snapshotLoader);
   const signal = new AbortController().signal;
   const first = loader.load(signal);
   const shared = loader.load(signal);
@@ -138,7 +142,7 @@ test("an account check keeps the same account, and leaves a changed one", async 
   });
   await root.ready;
   await root.run(loadSnapshot);
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   expect(await root.run(checkAccount)).toBe("ada");
   expect(client.capture().version).toBe(1);
   expect(await root.run(checkAccount)).toBe("grace");
@@ -186,7 +190,7 @@ test("a sign-in holds loads and checks until it completes, with its own load", a
     presets: [source],
   });
   await root.ready;
-  const loader = await root.resolve(snapshotLoader);
+  const loader = root.resolve(snapshotLoader);
   const signal = new AbortController().signal;
   const change = loader.beginAccountChange();
   const held = loader.load(signal);
@@ -209,7 +213,7 @@ test("a frame of changes applies; an account frame leaves the account; a stale v
   });
   await root.ready;
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   expect(
     await root.run(receiveMessage, {
       rawInput: { version: 1, data: changes(["public", 3, "p3"]) },
@@ -350,7 +354,7 @@ test("a refresh keeps the same account's cursors, and reloads after a change", a
   });
   await root.ready;
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   await root.run(refreshAccount);
   expect([client.cursors(), calls]).toEqual([
     { accountId: "ada", publicRevision: 2, privateRevision: 3 },
@@ -380,7 +384,7 @@ test("a refresh that ends after an account exit leaves the new account alone", a
   });
   await root.ready;
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   const refreshing = root.run(refreshAccount);
   await asked.promise;
   client.leave();
@@ -484,8 +488,8 @@ test("the router side loads and checks through the loader, dehydrates, and hydra
     presets: [source],
   });
   await root.ready;
-  const router = await root.resolve(on.router);
-  expect(router).toBe(await root.resolve(syncRouter));
+  const router = root.resolve(on.router);
+  expect(router).toBe(root.resolve(syncRouter));
   expect(await router.options.context.bootstrap()).toEqual(ada);
   expect(await router.options.context.account()).toBe("ada");
   expect(router.options.dehydrate()).toEqual(ada);
@@ -510,7 +514,7 @@ test("the on part streams through the tab's owner; the off part adds nothing and
   expect(on.extensions).toEqual([accountOwner, syncStreaming]);
   const root = createScope({ extensions: off.extensions });
   await root.ready;
-  const router = await root.resolve(off.router);
+  const router = root.resolve(off.router);
   expect(router.options).toEqual({});
   expect(() => router.bind(async () => undefined)).not.toThrow();
   expect(off.extensions).toEqual([]);
@@ -558,8 +562,8 @@ test("a load that cannot apply yet is tried again; a newer load is not dropped w
     ],
   });
   await root.ready;
-  const loader = await root.resolve(snapshotLoader);
-  const client = await root.resolve(syncClient);
+  const loader = root.resolve(snapshotLoader);
+  const client = root.resolve(syncClient);
   const signal = new AbortController().signal;
   const older = loader.load(signal);
   await Promise.resolve();
@@ -587,7 +591,7 @@ test("a snapshot that cannot apply while a write is pending is loaded again", as
   });
   await root.ready;
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   const sent = Promise.withResolvers<void>();
   const pending = client.execute(
     id,
@@ -610,7 +614,7 @@ test("an account change begun twice holds the tab until the latest one ends", as
     presets: [source],
   });
   await root.ready;
-  const loader = await root.resolve(snapshotLoader);
+  const loader = root.resolve(snapshotLoader);
   const order: string[] = [];
   const first = loader.beginAccountChange();
   const latest = loader.beginAccountChange();
@@ -785,7 +789,7 @@ test("the tab's sync work shows on the trace under its own names", async () => {
   const consuming = root.run(consumeConnection);
   (await opening).emit("error");
   await consuming;
-  await root.resolve(syncRouter);
+  root.resolve(syncRouter);
   const streaming = fake.next();
   root.resolve(syncStreaming).start();
   await streaming;

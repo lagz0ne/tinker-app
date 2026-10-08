@@ -14,7 +14,7 @@ import { tabStop } from "./tab";
 export const snapshotLoader = resource({
   label: "sync.snapshotLoader",
   depends: { sync: syncClient, apply: applyBootstrap, source: snapshotSource },
-  factory: async ({ sync, apply, source }) => {
+  factory: ({ sync, apply, source }) => {
     let loadedVersion = -1;
     let loading: { version: number; promise: Promise<Sync.Snapshot> } | undefined;
     let changing: ReturnType<typeof Promise.withResolvers<void>> | undefined;

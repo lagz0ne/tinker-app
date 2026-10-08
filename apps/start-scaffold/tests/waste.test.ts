@@ -148,7 +148,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   });
   await browser.ready;
   try {
-    const client = await browser.resolve(syncClient);
+    const client = browser.resolve(syncClient);
     const oldVersion = client.capture().version;
     const signingIn = browser.run(signIn, {
       input: {
@@ -230,7 +230,7 @@ test("a private route check clears cached records after another tab signs out", 
     });
     cookie = "";
     expect(await browser.run(checkAccount)).toBeNull();
-    expect((await browser.resolve(syncClient)).snapshot().private).toBeNull();
+    expect(browser.resolve(syncClient).snapshot().private).toBeNull();
     expect((await browser.run(loadSnapshot)).private).toBeNull();
   } finally {
     stop.abort();

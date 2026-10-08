@@ -2,15 +2,9 @@ import { createScope, operation } from "@tinker/core";
 import { makeTestClock } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 import { applied, savedPrivate, savedPublic } from "#tinker/app";
-import { accountOwner, tabLifetime } from "../src/parts/sync/client/owner";
-import {
-  applyBootstrap,
-  applyEvents,
-  leaveAccount,
-  syncClient,
-} from "../src/parts/sync/client/sync";
-import { pageEvents, tabStop } from "../src/parts/sync/client/tab";
-import type { Sync } from "../src/parts/sync/envelopes";
+import { applyBootstrap, applyEvents, leaveAccount, syncClient } from "@tinker/start/client";
+import { accountOwner, tabLifetime, pageEvents, tabStop } from "@tinker/start/testing";
+import type { Sync } from "@tinker/start";
 
 /** A page hide event; `persisted` true means the tab went into the back-forward cache. */
 const hide = (persisted: boolean) => Object.assign(new Event("pagehide"), { persisted });
@@ -97,7 +91,7 @@ test("a snapshot sets the records and cursors once; a stale version or an older 
     tags: tabStop(new AbortController().signal),
   });
   await root.ready;
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   expect(client.cursors()).toEqual({ accountId: null, publicRevision: -1, privateRevision: -1 });
   const first = {
     public: { stream: "public" as const, revision: 2 },
@@ -132,7 +126,7 @@ test("events apply in order: a repeat is skipped, a gap stops the batch, an unkn
   });
   await root.ready;
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   await root.run(applyEvents, {
     input: {
       version: 1,
@@ -293,7 +287,7 @@ test("an account exit stops local waits and ignores the old account's late event
   });
   await root.ready;
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   const waiting = root.settle(send);
   await sent.promise;
   await root.run(leaveAccount);
@@ -335,7 +329,7 @@ test("a snapshot for another account while a write is pending leaves the account
   });
   await root.ready;
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   const writing = root.settle(send);
   await sent.promise;
   const grace = { ...ada, private: { stream: "grace", revision: 0 } };
@@ -420,7 +414,7 @@ test("an anonymous snapshot keeps the tab anonymous on the public stream", async
     tags: tabStop(new AbortController().signal),
   });
   await root.ready;
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   const anonymous = { public: { stream: "public" as const, revision: 2 }, private: null };
   expect(await root.run(applyBootstrap, { input: { snapshot: anonymous, version: 0 } })).toBe(0);
   expect([client.cursors(), root.resolve(savedPrivate)]).toEqual([
@@ -437,7 +431,7 @@ test("an account that leaves and joins again takes its snapshot afresh", async (
     tags: tabStop(new AbortController().signal),
   });
   await root.ready;
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   await root.run(applyEvents, { input: { version: 1, events: [event("ada", 1, "a1")] } });
   await root.run(leaveAccount);
@@ -456,7 +450,7 @@ test("a wait for an old account version, or with a stopped signal, fails at once
     tags: tabStop(new AbortController().signal),
   });
   await root.ready;
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   const old = client.wait(ids[1], 5, new AbortController().signal);
   expect(await settledFirst(old)).toBe("settled");
   await expect(old).rejects.toMatchObject({ kind: "Cancelled" });
@@ -474,7 +468,7 @@ test("closing the root fails a wait that no signal stops", async () => {
     tags: tabStop(new AbortController().signal),
   });
   await root.ready;
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   const waiting = client.wait(ids[1], 0, new AbortController().signal);
   expect((await root.close({ graceful: true })).status).toBe("success");
   await expect(waiting).rejects.toMatchObject({ kind: "Cancelled" });
@@ -486,7 +480,7 @@ test("an account exit fails a wait that no signal stops", async () => {
     tags: tabStop(new AbortController().signal),
   });
   await root.ready;
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   const waiting = client.wait(ids[1], 0, new AbortController().signal);
   client.leave();
   await expect(waiting).rejects.toMatchObject({ kind: "Cancelled" });
@@ -502,7 +496,7 @@ test("a result for a write this tab did not send is not kept for a later write o
   });
   await root.ready;
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   client.apply([result("ada", 1, ids[2])], 1);
   const writing = root.run(write);
   await sent;
@@ -531,7 +525,7 @@ test("a finished write forgets its id: a repeat waits for its own result", async
   });
   await root.ready;
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   const first = heldWrite(ids[1], new AbortController().signal);
   const writing = root.run(first.write);
   await first.sent;
@@ -648,7 +642,7 @@ test("a result that lands as its call stops fails the call", async () => {
   });
   await root.ready;
   await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
-  const client = await root.resolve(syncClient);
+  const client = root.resolve(syncClient);
   const writing = root.settle(write);
   await sent;
   reply.resolve({ kind: "accepted", executionId: ids[1] });

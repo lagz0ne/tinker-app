@@ -10,5 +10,5 @@ export const handleAuth = operation({
   label: "handleAuth",
   input: z.instanceof(Request),
   depends: { auth },
-  run: async ({ auth }, { input }) => auth.handler(input),
+  run: ({ auth }, { input }) => auth.handler(input),
 });

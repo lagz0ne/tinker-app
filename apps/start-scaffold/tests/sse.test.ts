@@ -231,7 +231,7 @@ test("reconnecting from applied cursors finishes a save whose final event commit
         snapshot: { public: { stream: "public", revision: 0, value: 0 }, private: initial },
       },
     });
-    const client = await browser.resolve(syncClient);
+    const client = browser.resolve(syncClient);
     const executionId = crypto.randomUUID();
     const save = operation({
       label: "test.pendingSave",

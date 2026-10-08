@@ -2,6 +2,7 @@ import { abortReasons } from "../errors";
 import { createRouter } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import type { RouterConstructorOptions, RouterHistory } from "@tanstack/react-router";
+import type { Observe } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { ScopeProvider } from "@tinker/react";
 import { extensions } from "#tinker/app";
@@ -13,11 +14,16 @@ import { pageEvents, tabStop } from "../parts/sync/client/tab";
 import { TinkerError, TinkerNotFound } from "./fallbacks";
 
 /** Server renders borrow the process observer; each tab owns its telemetry root. */
+let serverTelemetry: { observe: Observe.Config; close: undefined } | undefined;
+let serverTelemetryPending: Promise<NonNullable<typeof serverTelemetry>> | undefined;
+
+async function loadServerTelemetry() {
+  const { getRenderObserver } = await import("./server");
+  return (serverTelemetry = { observe: await getRenderObserver(), close: undefined });
+}
+
 const readTelemetry = createIsomorphicFn()
-  .server(async () => {
-    const { getRenderObserver } = await import("./server");
-    return { observe: await getRenderObserver(), close: undefined };
-  })
+  .server(() => serverTelemetry ?? (serverTelemetryPending ??= loadServerTelemetry()))
   .client(async () => {
     const toolStop = new AbortController();
     const tools = createScope({
@@ -28,7 +34,7 @@ const readTelemetry = createIsomorphicFn()
     await tools.ready;
     return {
       observe: tools.resolve(telemetry.observe),
-      async close() {
+      close() {
         toolStop.abort(abortReasons.closed);
         return tools.closed;
       },
@@ -62,7 +68,8 @@ export type RouterOptions = (
  * the router gets sync's context, dehydrate, and hydrate; a real page hide closes the tab.
  */
 export async function getRouter() {
-  const tools = await readTelemetry();
+  const reading = readTelemetry();
+  const tools = reading instanceof Promise ? await reading : reading;
   const stop = new AbortController();
   const app = createScope({
     signal: stop.signal,
@@ -70,17 +77,19 @@ export async function getRouter() {
     observe: tools.observe,
     tags: [tabStop(stop.signal), pageEvents(readPage())],
   });
-  const tab = await app.ready
-    .then(() => app.resolve(sync.router))
-    .catch(async (error: unknown) => {
-      stop.abort(abortReasons.closed);
-      await app.closed;
-      await tools.close?.();
-      throw error;
-    });
+  let tab: Awaited<ReturnType<typeof sync.router.factory>>;
+  try {
+    await app.ready;
+    tab = app.resolve(sync.router);
+  } catch (error) {
+    stop.abort(abortReasons.closed);
+    await app.closed;
+    await tools.close?.();
+    throw error;
+  }
   let closed: Promise<void> | undefined;
   const close = () =>
-    (closed ??= Promise.resolve().then(async () => {
+    (closed ??= (async () => {
       stop.abort(abortReasons.closed);
       const end = await app.closed;
       const toolEnd = await tools.close?.();
@@ -88,7 +97,7 @@ export async function getRouter() {
         if (result?.status === "failed") throw result.error;
         if (result?.teardownErrors?.length) throw result.teardownErrors.at(0);
       }
-    }));
+    })());
   tab.bind(close);
   if (import.meta.hot) import.meta.hot.dispose(close);
   return Object.assign(

@@ -19,7 +19,7 @@ export const syncRouter = resource({
     streaming: syncStreaming,
     lifetime: tabLifetime,
   },
-  factory: async ({ sync, load, check, apply, streaming, lifetime }) => {
+  factory: ({ sync, load, check, apply, streaming, lifetime }) => {
     const options: SyncPart.Options = {
       context: { bootstrap: () => load.run(), account: () => check.run() },
       dehydrate: () => sync.snapshot(),
