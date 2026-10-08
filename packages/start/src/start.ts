@@ -4,6 +4,7 @@ import type { Scope } from "@tinker/core";
 import { requestHeaders } from "./backend/headers.server";
 import { raise } from "./errors";
 import { responseBodies } from "./backend/body.server";
+import { renderLifetime } from "./backend/render-lifetime.server";
 import { requestStop } from "./backend/lifetime";
 
 /** Start merges this registry to type the context supplied by the server entry. */
@@ -20,6 +21,7 @@ const middleware = createMiddleware().server(async ({ context, request, next }) 
   const session = scope.createSession({
     tags: [requestHeaders(new Headers(request.headers)), requestStop(request.signal)],
   });
+  session.resolve(renderLifetime).open(request);
   let closed: Promise<void> | undefined;
   const finish = (graceful: boolean) =>
     (closed ??= Promise.resolve(session.close({ graceful })).then((end) => {

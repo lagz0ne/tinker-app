@@ -1,7 +1,7 @@
 import { createScope, operation, resource } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 import { readResult } from "@tinker/start/server";
-import { requestHeaders, requestStop, startRequests } from "@tinker/start/testing";
+import { requestHeaders, requestStop, startRequests, retainRender } from "@tinker/start/testing";
 
 /** Runs until its session stops it by force. */
 const stoppable = operation({
@@ -151,3 +151,63 @@ test("cancelling a body stops active request work before it can close gracefully
   expect((await running.promise).status).toBe("cancelled");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
+
+test.each(["end", "cancel", "error"])(
+  "one body hold closes render and request before %s returns",
+  async (ending) => {
+    const root = createScope();
+    const request = new Request("http://app/");
+    const closed = [];
+    const render = createScope();
+    render.resolve(
+      resource({
+        label: "test.render-close",
+        factory: (_deps, ctx) => {
+          ctx.defer(() => {
+            closed.push("render");
+          });
+        },
+      }),
+    );
+    const recorder = resource({
+      label: "test.request-close",
+      target: "session",
+      factory: (_deps, ctx) => {
+        ctx.defer(() => {
+          closed.push("request");
+        });
+      },
+    });
+    const torn = new Error("source failed");
+    const source =
+      ending === "end"
+        ? new Response("page")
+        : new Response(
+            new ReadableStream({
+              pull(controller) {
+                if (ending === "error") controller.error(torn);
+              },
+            }),
+          );
+    const result = await startRequests.middleware.options.server({
+      request,
+      pathname: "/",
+      handlerType: "router",
+      context: { scope: root },
+      async next(options) {
+        options.context.session.resolve(recorder);
+        retainRender(request, async () => {
+          await render.close({ graceful: true });
+        });
+        return { request, pathname: "/", context: options.context, response: source };
+      },
+    });
+    expect(closed).toEqual([]);
+    if (ending === "cancel") await result.response.body.cancel();
+    else if (ending === "error") await expect(result.response.text()).rejects.toBe(torn);
+    else expect(await result.response.text()).toBe("page");
+    expect(closed).toEqual(["request", "render"]);
+    expect((await render.close({ graceful: true })).status).toBe("success");
+    expect((await root.close({ graceful: true })).status).toBe("success");
+  },
+);

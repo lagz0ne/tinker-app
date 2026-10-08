@@ -26,13 +26,12 @@ export const responseBodies = resource({
       isResponse(value: unknown): value is Response {
         return value instanceof Response;
       },
-      async hold(
+      hold(
         response: Response,
         finish: (graceful: boolean) => Promise<void>,
-      ): Promise<Response> {
+      ): Response | Promise<Response> {
         if (response.body === null) {
-          await finish(true);
-          return response;
+          return finish(true).then(() => response);
         }
         const reader = response.body.getReader();
         const owned = { reader, finish, cancelled: false };

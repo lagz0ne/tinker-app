@@ -28,3 +28,5 @@ export {
 export { syncRouter } from "./parts/sync/client/router";
 export { sync as offSync } from "./parts/sync/off";
 export { sync as onSync } from "./parts/sync/on";
+export { renderLifetime, retainRender } from "./backend/render-lifetime.server";
+export { responseBodies } from "./backend/body.server";

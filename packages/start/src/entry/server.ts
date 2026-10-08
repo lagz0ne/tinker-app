@@ -6,7 +6,7 @@ import { extensions } from "#tinker/app.server";
 import { auth, telemetry } from "#tinker/parts.server";
 import app from "#tinker/server";
 import type { getRouter } from "./router";
-import { responseBodies } from "../backend/body.server";
+import { retainRender } from "../backend/render-lifetime.server";
 import { devErrorPage } from "./dev-error";
 import { backendStop } from "../backend/lifetime";
 import { env } from "../env";
@@ -14,16 +14,13 @@ import { abortReasons, raise } from "../errors";
 import { startRequests } from "../start";
 
 const renderRequest = createStart(async (context) => {
-  const { requestContext } = entry.ready ?? (await (entry.owned ??= start()));
-  const bodies = requestContext.scope.resolve(responseBodies);
   const router: typeof context.router & {
     close?: Awaited<ReturnType<typeof getRouter>>["close"];
   } = context.router;
   if (typeof router.close !== "function") raise("StartScopeMissing", {});
+  retainRender(context.request, router.close);
   try {
-    const output = await renderStream(context);
-    if (bodies.isResponse(output)) return bodies.hold(output, router.close);
-    return { ...output, response: await bodies.hold(output.response, router.close) };
+    return await renderStream(context);
   } catch (error) {
     await router.close();
     throw error;
