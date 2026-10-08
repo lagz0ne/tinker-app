@@ -42,6 +42,7 @@ export const accountOwner = extension({
       });
       return {
         capture: () => ({ version, signal: stop.signal }),
+        version: () => version,
         reset: () => {
           stop.abort(abortReasons.changed);
           stop = new AbortController();

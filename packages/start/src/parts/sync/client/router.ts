@@ -25,7 +25,7 @@ export const syncRouter = resource({
       dehydrate: () => sync.snapshot(),
       hydrate: async (raw) => {
         const snapshot = readSnapshot.parse(raw);
-        await apply.run({ input: { snapshot, version: sync.capture().version } });
+        apply.run({ input: { snapshot, version: sync.version() } });
         streaming.start();
       },
     };

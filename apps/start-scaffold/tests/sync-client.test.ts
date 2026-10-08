@@ -46,7 +46,7 @@ test("an event before its receipt finishes only after saved records are applied"
   });
   await root.ready;
   try {
-    await root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
+    root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
     const client = root.resolve(syncClient);
     const waiting = root.run(send, { signal: call.signal });
     await sent.promise;
@@ -88,7 +88,7 @@ test("replayed events and older snapshots leave newer records and dirty drafts a
   });
   await root.ready;
   try {
-    await root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
+    root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
     const client = root.resolve(syncClient);
     const version = client.capture().version;
     root.controller(nameDraft).set("My unsaved text");
@@ -110,9 +110,9 @@ test("replayed events and older snapshots leave newer records and dirty drafts a
         change: { kind: "profile", profile: { ...ada, name: "Remote latest" } },
       },
     };
-    await root.run(applyEvents, { input: { version, events: [first, second] } });
-    await root.run(applyEvents, { input: { version, events: [first, second] } });
-    await root.run(applyBootstrap, { input: { version, snapshot: initial } });
+    root.run(applyEvents, { input: { version, events: [first, second] } });
+    root.run(applyEvents, { input: { version, events: [first, second] } });
+    root.run(applyBootstrap, { input: { version, snapshot: initial } });
     expect(root.resolve(profile)?.name).toBe("Remote latest");
     expect(root.resolve(nameDraft)).toBe("My unsaved text");
   } finally {
@@ -148,12 +148,12 @@ test("account exit stops local waits and ignores an old account's late response"
   });
   await root.ready;
   try {
-    await root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
+    root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
     const client = root.resolve(syncClient);
     const oldVersion = client.capture().version;
     const waiting = root.settle(send);
     await sent.promise;
-    await root.run(leaveAccount);
+    root.run(leaveAccount);
     expect((await waiting).status).toBe("failed");
     const grace = {
       public: initial.public,
@@ -164,11 +164,11 @@ test("account exit stops local waits and ignores an old account's late response"
         todos: [],
       },
     };
-    await root.run(applyBootstrap, {
+    root.run(applyBootstrap, {
       input: { snapshot: grace, version: client.capture().version },
     });
-    await root.run(applyBootstrap, { input: { snapshot: initial, version: oldVersion } });
-    await root.run(applyEvents, {
+    root.run(applyBootstrap, { input: { snapshot: initial, version: oldVersion } });
+    root.run(applyEvents, {
       input: {
         version: oldVersion,
         events: [

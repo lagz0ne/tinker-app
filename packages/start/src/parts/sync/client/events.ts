@@ -1,6 +1,6 @@
 import { extension, operation, resource, tag } from "@tinker/core";
+import type { Operation } from "@tinker/core";
 import { streamMessage } from "#tinker/app";
-import { streamInput } from "../envelopes";
 import type { Sync } from "../envelopes";
 import { snapshotSource } from "../functions";
 import type { Stream } from "../protocol";
@@ -25,12 +25,12 @@ export const snapshotLoader = resource({
       if (loading?.version === token.version) return loading.promise;
       const request = {
         version: token.version,
-        promise: Promise.resolve().then(async () => {
+        promise: (async () => {
           const snapshot = await source.load({ signal });
-          const version = await apply.run({ rawInput: { snapshot, version: token.version } });
+          const version = apply.run({ rawInput: { snapshot, version: token.version } });
           if (version !== undefined) loadedVersion = version;
           return sync.snapshot();
-        }),
+        })(),
       };
       loading = request;
       try {
@@ -60,16 +60,16 @@ export const snapshotLoader = resource({
         }
       },
       async ready() {
-        await changing?.promise;
+        if (changing) await changing.promise;
       },
       async account(signal: AbortSignal) {
-        await changing?.promise;
+        if (changing) await changing.promise;
         const accountId = await source.account({ signal });
         if (accountId !== sync.cursors().accountId) sync.leave();
         return accountId;
       },
       async load(signal: AbortSignal) {
-        await changing?.promise;
+        if (changing) await changing.promise;
         return fetchSnapshot(signal);
       },
     };
@@ -161,13 +161,12 @@ export const eventSource = resource({
 /** One frame: changes apply (false); an account change leaves the account (true). */
 export const receiveMessage = operation({
   label: "sync.receive",
-  input: (raw: unknown) => {
-    const { version, data } = streamInput.parse(raw);
-    return { version, message: streamMessage.parse(JSON.parse(data)) };
-  },
   depends: { sync: syncClient },
-  run: async ({ sync }, { input }) => {
-    if (input.version !== sync.capture().version) return false;
+  run: (
+    { sync },
+    { input }: Operation.Ctx<{ version: number; message: ReturnType<typeof streamMessage.parse> }>,
+  ) => {
+    if (input.version !== sync.version()) return false;
     if (input.message.kind === "changes") {
       sync.apply(input.message.events, input.version);
       return false;
@@ -204,7 +203,13 @@ export const consumeConnection = operation({
       for (;;) {
         const data = await source.next();
         if (data === undefined) return false;
-        const applied = await receive.settle({ rawInput: { data, version: token.version } });
+        let message: ReturnType<typeof streamMessage.parse>;
+        try {
+          message = streamMessage.parse(JSON.parse(data));
+        } catch {
+          return false;
+        }
+        const applied = receive.settle({ input: { version: token.version, message } });
         if (applied.status !== "success") return false;
         if (applied.value) return true;
       }
@@ -225,9 +230,9 @@ export const refreshAccount = operation({
   },
   run: async ({ sync, load, source, snapshots }, { signal }) => {
     await snapshots.ready();
-    const version = sync.capture().version;
+    const version = sync.version();
     const accountId = await source.account({ signal });
-    if (version !== sync.capture().version) return;
+    if (version !== sync.version()) return;
     if (accountId !== sync.cursors().accountId) {
       sync.leave();
       await load.run();

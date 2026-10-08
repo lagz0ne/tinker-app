@@ -1,7 +1,7 @@
 import { createScope } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
-import { applied } from "#tinker/app";
+import { applied, streamMessage } from "#tinker/app";
 import {
   checkAccount,
   loadSnapshot,
@@ -206,35 +206,50 @@ test("a sign-in holds loads and checks until it completes, with its own load", a
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("a frame of changes applies; an account frame leaves the account; a stale version or a bad frame does neither", async () => {
+test("a received frame settles in place after the tab is ready", async () => {
   const root = createScope({
     extensions: [accountOwner],
     tags: tabStop(new AbortController().signal),
   });
   await root.ready;
-  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  const settled = root.settle(receiveMessage, {
+    input: { version: 1, message: { kind: "changes", events: [] } },
+  });
+  expect(settled).toEqual({ status: "success", value: false });
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a frame of changes applies; an account frame leaves the account; a stale version does neither", async () => {
+  const root = createScope({
+    extensions: [accountOwner],
+    tags: tabStop(new AbortController().signal),
+  });
+  await root.ready;
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   const client = root.resolve(syncClient);
   expect(
-    await root.run(receiveMessage, {
-      rawInput: { version: 1, data: changes(["public", 3, "p3"]) },
+    root.run(receiveMessage, {
+      input: { version: 1, message: streamMessage.parse(JSON.parse(changes(["public", 3, "p3"]))) },
     }),
   ).toBe(false);
   expect(
-    await root.run(receiveMessage, {
-      rawInput: { version: 0, data: changes(["public", 4, "p4"]) },
+    root.run(receiveMessage, {
+      input: { version: 0, message: streamMessage.parse(JSON.parse(changes(["public", 4, "p4"]))) },
     }),
   ).toBe(false);
   expect(root.resolve(applied)).toEqual(["p3"]);
-  expect(await root.settle(receiveMessage, { rawInput: { version: 1, data: "{" } })).toMatchObject({
-    status: "failed",
-  });
-  expect(await root.run(receiveMessage, { rawInput: { version: 0, data: accountChange } })).toBe(
-    false,
-  );
+  expect(
+    root.run(receiveMessage, {
+      input: { version: 0, message: streamMessage.parse(JSON.parse(accountChange)) },
+    }),
+  ).toBe(false);
   expect(client.cursors().accountId).toBe("ada");
-  expect(await root.run(receiveMessage, { rawInput: { version: 1, data: accountChange } })).toBe(
-    true,
-  );
+  expect(
+    root.run(receiveMessage, {
+      input: { version: 1, message: streamMessage.parse(JSON.parse(accountChange)) },
+    }),
+  ).toBe(true);
   expect([client.cursors().accountId, client.capture().version]).toEqual([null, 2]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -246,7 +261,7 @@ test("a connection opens from the applied cursors, applies each frame, and ends 
     tags: [tabStop(new AbortController().signal), eventSourceBackend(fake.backend)],
   });
   await root.ready;
-  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   const opening = fake.next();
   const consuming = root.run(consumeConnection);
   const connection = await opening;
@@ -285,7 +300,7 @@ test("an error, a bad frame, a ninth unread frame, or a stop ends a connection f
     tags: [tabStop(tab.signal), eventSourceBackend(fake.backend)],
   });
   await root.ready;
-  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   const ends: unknown[] = [];
   for (const end of [
     (connection: { emit(type: string, data?: string): void }) => connection.emit("error"),
@@ -353,7 +368,7 @@ test("a refresh keeps the same account's cursors, and reloads after a change", a
     presets: [source],
   });
   await root.ready;
-  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   const client = root.resolve(syncClient);
   await root.run(refreshAccount);
   expect([client.cursors(), calls]).toEqual([
@@ -383,7 +398,7 @@ test("a refresh that ends after an account exit leaves the new account alone", a
     ],
   });
   await root.ready;
-  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   const client = root.resolve(syncClient);
   const refreshing = root.run(refreshAccount);
   await asked.promise;
@@ -417,7 +432,7 @@ test("the tab streams once started: an account frame reloads, an ended connectio
     presets: [source],
   });
   await root.ready;
-  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   const streaming = root.resolve(syncStreaming);
   const first = fake.next();
   streaming.start();
@@ -539,7 +554,7 @@ test("a tab whose snapshot came another way still loads its own at the next vers
     presets: [source],
   });
   await root.ready;
-  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   expect(await root.run(loadSnapshot)).toEqual(ada);
   expect(calls).toEqual(["load"]);
   expect((await root.close({ graceful: true })).status).toBe("success");
@@ -590,7 +605,7 @@ test("a snapshot that cannot apply while a write is pending is loaded again", as
     presets: [source],
   });
   await root.ready;
-  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   const client = root.resolve(syncClient);
   const sent = Promise.withResolvers<void>();
   const pending = client.execute(
@@ -619,19 +634,20 @@ test("an account change begun twice holds the tab until the latest one ends", as
   const first = loader.beginAccountChange();
   const latest = loader.beginAccountChange();
   loader.endAccountChange(first);
-  void loader.ready().then(() => order.push("ready"));
+  const ready = loader.ready().then(() => order.push("ready"));
   await Promise.resolve();
-  void latest.promise.then(() => order.push("latest ended"));
+  const latestEnded = latest.promise.then(() => order.push("latest ended"));
   loader.endAccountChange(latest);
   await loader.ready();
   const again = loader.beginAccountChange();
   const newest = loader.beginAccountChange();
   await loader.completeAccountChange(new AbortController().signal, again);
-  void loader.ready().then(() => order.push("ready again"));
+  const readyAgain = loader.ready().then(() => order.push("ready again"));
   await Promise.resolve();
-  void newest.promise.then(() => order.push("newest ended"));
+  const newestEnded = newest.promise.then(() => order.push("newest ended"));
   loader.endAccountChange(newest);
   await loader.ready();
+  await Promise.all([ready, latestEnded, readyAgain, newestEnded]);
   expect(order).toEqual(["latest ended", "ready", "newest ended", "ready again"]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -672,7 +688,7 @@ test("a connection that applies changes, then errors, ends false", async () => {
     tags: [tabStop(new AbortController().signal), eventSourceBackend(fake.backend)],
   });
   await root.ready;
-  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   const landed = Promise.withResolvers<void>();
   const stopWatching = root.controller(applied).watch(() => landed.resolve());
   const opening = fake.next();
@@ -723,7 +739,7 @@ test("the tab logs a reconnect only after a failure, and checks nothing more onc
     ],
   });
   await root.ready;
-  await root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
+  root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   const opening = fake.next();
   root.resolve(syncStreaming).start();
   const one = await opening;
@@ -784,7 +800,9 @@ test("the tab's sync work shows on the trace under its own names", async () => {
   await root.run(loadSnapshot);
   await root.run(checkAccount);
   await root.run(refreshAccount);
-  await root.run(receiveMessage, { rawInput: { version: 1, data: changes() } });
+  root.run(receiveMessage, {
+    input: { version: 1, message: streamMessage.parse(JSON.parse(changes())) },
+  });
   const opening = fake.next();
   const consuming = root.run(consumeConnection);
   (await opening).emit("error");

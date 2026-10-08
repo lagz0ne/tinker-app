@@ -163,8 +163,8 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
     const route = browser.run(loadSnapshot);
     allowed.resolve();
     await Promise.all([signingIn, reconnect, route]);
-    await browser.run(receiveMessage, {
-      rawInput: { data: '{"kind":"account-change"}', version: oldVersion },
+    browser.run(receiveMessage, {
+      input: { message: { kind: "account-change" }, version: oldVersion },
     });
     await browser.run(refreshAccount);
     await Promise.all([browser.run(loadSnapshot), browser.run(loadSnapshot)]);

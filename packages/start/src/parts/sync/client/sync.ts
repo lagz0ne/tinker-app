@@ -27,6 +27,7 @@ export const syncClient = resource({
     });
     const client = {
       capture: owner.capture,
+      version: owner.version,
       cursors: () => ({
         accountId,
         publicRevision: cursors.get("public") ?? -1,
@@ -48,13 +49,13 @@ export const syncClient = resource({
         local.clear();
       },
       bootstrap(snapshot: Sync.Snapshot, version: number) {
-        if (version !== owner.capture().version) return;
+        if (version !== owner.version()) return;
         const nextId = snapshot.private?.stream ?? null;
         if (nextId !== accountId) client.leave();
         if (local.size > 0) return;
         accountId = nextId;
         client.merge(snapshot);
-        return owner.capture().version;
+        return owner.version();
       },
       merge(snapshot: Sync.Snapshot) {
         const publicRevision = cursors.get("public") ?? -1;
@@ -75,7 +76,7 @@ export const syncClient = resource({
         waiters.get(executionId)?.resolve(result);
       },
       apply(events: Sync.Event[], version: number) {
-        if (version !== owner.capture().version) return;
+        if (version !== owner.version()) return;
         for (const event of events) {
           const previous = cursors.get(event.stream);
           if (previous === undefined || event.revision <= previous) continue;
@@ -86,7 +87,7 @@ export const syncClient = resource({
         }
       },
       async wait(executionId: string, version: number, signal: AbortSignal): Promise<Sync.Result> {
-        if (version !== owner.capture().version || signal.aborted) raise("Cancelled", {});
+        if (version !== owner.version() || signal.aborted) raise("Cancelled", {});
         const completed = results.get(executionId);
         if (completed) return completed;
         const waiting = Promise.withResolvers<Sync.Result>();
@@ -146,18 +147,18 @@ export const applyBootstrap = operation({
   label: "sync.bootstrap",
   input: readBootstrap,
   depends: { sync: syncClient },
-  run: async ({ sync }, { input }) => sync.bootstrap(input.snapshot, input.version),
+  run: ({ sync }, { input }) => sync.bootstrap(input.snapshot, input.version),
 });
 
 export const applyEvents = operation({
   label: "sync.apply",
   input: readBatch,
   depends: { sync: syncClient },
-  run: async ({ sync }, { input }) => sync.apply(input.events, input.version),
+  run: ({ sync }, { input }) => sync.apply(input.events, input.version),
 });
 
 export const leaveAccount = operation({
   label: "sync.leave",
   depends: { sync: syncClient },
-  run: async ({ sync }) => sync.leave(),
+  run: ({ sync }) => sync.leave(),
 });

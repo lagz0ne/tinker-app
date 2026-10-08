@@ -363,6 +363,7 @@ The package's `exports` refuses every other path.
     and a newer load is not dropped when an older one ends.
   - An account check keeps the same account,
     and leaves a changed one.
+  - A received frame settles in place after the tab is ready.
   - Changes apply in order: a repeat is skipped,
     and a gap stops the batch.
     An account frame leaves the account and reloads.

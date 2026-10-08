@@ -1,3 +1,4 @@
+import { streamMessage } from "../src/lib/tinker";
 import { env } from "@tinker/start/server";
 import { handleAuth } from "@tinker-start-scaffold/testing";
 import { test, expect } from "vite-plus/test";
@@ -225,7 +226,7 @@ test("reconnecting from applied cursors finishes a save whose final event commit
       await server.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
     );
     const initial = await server.run(bootstrapPrivate, { tags: requestHeaders(ada) });
-    await browser.run(applyBootstrap, {
+    browser.run(applyBootstrap, {
       input: {
         version: 0,
         snapshot: { public: { stream: "public", revision: 0, value: 0 }, private: initial },
@@ -261,7 +262,9 @@ test("reconnecting from applied cursors finishes a save whose final event commit
     const reader = response.getReader();
     const frame = new TextDecoder().decode((await reader.read()).value);
     const data = frame.split("\ndata: ").at(1)?.trim();
-    await browser.run(receiveMessage, { rawInput: { data, version: client.capture().version } });
+    browser.run(receiveMessage, {
+      input: { message: streamMessage.parse(JSON.parse(data ?? "")), version: client.version() },
+    });
     await reader.cancel();
     await first.close({ graceful: true });
     accepted.resolve();
@@ -278,10 +281,10 @@ test("reconnecting from applied cursors finishes a save whose final event commit
     let resultFrame = new TextDecoder().decode((await replay.read()).value);
     if (resultFrame.startsWith(":"))
       resultFrame = new TextDecoder().decode((await replay.read()).value);
-    await browser.run(receiveMessage, {
-      rawInput: {
-        data: resultFrame.split("\ndata: ").at(1)?.trim(),
-        version: client.capture().version,
+    browser.run(receiveMessage, {
+      input: {
+        message: streamMessage.parse(JSON.parse(resultFrame.split("\ndata: ").at(1)?.trim() ?? "")),
+        version: client.version(),
       },
     });
     expect(await waiting).toEqual({
