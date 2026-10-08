@@ -393,6 +393,9 @@ The package's `exports` refuses every other path.
     the tab lifetime binds without listening.
   - A real page hide closes the tab's app root;
     a back-forward cache hide does not.
+  - Closing the tab owner uses one shared AbortError reason.
+    Account changes reuse their own AbortError reason.
+    Both keep the name AbortError and code 20.
 - With sync on, `GET /api/sync` streams events:
   - The cursor comes from `Last-Event-ID`,
     else `?cursor=`, else the start.

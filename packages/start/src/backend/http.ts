@@ -1,6 +1,6 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
-import { raise } from "../errors";
+import { abortReasons, raise } from "../errors";
 import { httpBackend } from "./http-backend";
 import { backendStop, requestStop } from "./lifetime";
 
@@ -28,7 +28,7 @@ export const http = resource({
   },
   factory: ({ send, backendStop, requestStop }, { closing, defer }) => {
     const stop = new AbortController();
-    defer(() => stop.abort());
+    defer(() => stop.abort(abortReasons.closed));
     return {
       async send(url: string, init: RequestInit & { signal: AbortSignal }) {
         const signal = AbortSignal.any([

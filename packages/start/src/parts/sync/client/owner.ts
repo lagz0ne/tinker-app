@@ -1,3 +1,4 @@
+import { abortReasons } from "../../../errors";
 import { extension, resource } from "@tinker/core";
 import { pageEvents, tabStop } from "./tab";
 
@@ -33,19 +34,19 @@ export const accountOwner = extension({
       const signal = scope.resolve(tabStop);
       let stop = new AbortController();
       let version = 0;
-      const cancel = () => stop.abort();
+      const cancel = () => stop.abort(abortReasons.closed);
       signal.addEventListener("abort", cancel, { once: true });
       defer(() => {
         signal.removeEventListener("abort", cancel);
-        stop.abort();
+        stop.abort(abortReasons.closed);
       });
       return {
         capture: () => ({ version, signal: stop.signal }),
         reset: () => {
-          stop.abort();
+          stop.abort(abortReasons.changed);
           stop = new AbortController();
           version += 1;
-          if (signal.aborted) stop.abort();
+          if (signal.aborted) stop.abort(abortReasons.closed);
         },
       };
     },

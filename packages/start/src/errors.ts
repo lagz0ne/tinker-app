@@ -39,3 +39,11 @@ export function fail<N extends Errors.Name>(kind: N, payload: Errors.Payloads[N]
 export function isError<N extends Errors.Name>(error: unknown, kind: N): error is Errors.Of<N> {
   return error instanceof Error && "kind" in error && error.kind === kind;
 }
+
+/** Abort consumers keep the native AbortError name and code without a per-call stack. */
+export const abortReasons = {
+  closed: new DOMException("The owner closed", "AbortError"),
+  changed: new DOMException("The account changed", "AbortError"),
+  done: new DOMException("The wait ended", "AbortError"),
+  timeout: new DOMException("The deadline passed", "AbortError"),
+};

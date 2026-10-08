@@ -15,3 +15,5 @@ export { exportHealth } from "./parts/telemetry/health";
 export { flushTelemetry } from "./parts/telemetry/observer";
 export { telemetry as serverTelemetry } from "./parts/telemetry/on.server";
 export { telemetry as offTelemetry } from "./parts/telemetry/off";
+
+export { abortReasons } from "./errors";

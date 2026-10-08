@@ -1,3 +1,4 @@
+import { abortReasons } from "../errors";
 import { createRouter } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import type { RouterConstructorOptions, RouterHistory } from "@tanstack/react-router";
@@ -28,7 +29,7 @@ const readTelemetry = createIsomorphicFn()
     return {
       observe: tools.resolve(telemetry.observe),
       async close() {
-        toolStop.abort();
+        toolStop.abort(abortReasons.closed);
         return tools.closed;
       },
     };
@@ -71,7 +72,7 @@ export async function getRouter() {
   const tab = await app.ready
     .then(() => app.resolve(sync.router))
     .catch(async (error: unknown) => {
-      stop.abort();
+      stop.abort(abortReasons.closed);
       await app.closed;
       await tools.close?.();
       throw error;
@@ -79,7 +80,7 @@ export async function getRouter() {
   let closed: Promise<void> | undefined;
   const close = () =>
     (closed ??= Promise.resolve().then(async () => {
-      stop.abort();
+      stop.abort(abortReasons.closed);
       const end = await app.closed;
       const toolEnd = await tools.close?.();
       for (const result of [end, toolEnd]) {

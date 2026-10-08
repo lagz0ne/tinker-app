@@ -1,3 +1,4 @@
+import { abortReasons } from "../../errors";
 import { resource } from "@tinker/core";
 import type { Telemetry } from "./records";
 import { delivery } from "./delivery";
@@ -104,7 +105,7 @@ export const queue = resource({
             const alarm = Promise.resolve().then(async () => {
               try {
                 await ctx.clock.sleep(750, deadline.signal);
-                request.abort();
+                request.abort(abortReasons.timeout);
               } catch (error) {
                 if (!deadline.signal.aborted) throw error;
               }
@@ -116,7 +117,7 @@ export const queue = resource({
                 AbortSignal.any([request.signal, stopRequests.signal]),
               );
             } finally {
-              deadline.abort();
+              deadline.abort(abortReasons.done);
               await alarm;
             }
             const accepted = new Set(
@@ -149,12 +150,12 @@ export const queue = resource({
         if (state !== "open") return;
         state = "closing";
         publishing = false;
-        stopTimer.abort();
+        stopTimer.abort(abortReasons.closed);
         const deadline = new AbortController();
         const alarm = Promise.resolve().then(async () => {
           try {
             await ctx.clock.sleep(1500, deadline.signal);
-            stopRequests.abort();
+            stopRequests.abort(abortReasons.timeout);
           } catch (error) {
             if (!deadline.signal.aborted) throw error;
           }
@@ -167,8 +168,8 @@ export const queue = resource({
           }
         } finally {
           state = "closed";
-          stopRequests.abort();
-          deadline.abort();
+          stopRequests.abort(abortReasons.closed);
+          deadline.abort(abortReasons.done);
           await alarm;
           dropped += records.length;
           records = [];

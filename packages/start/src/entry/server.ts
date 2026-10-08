@@ -9,7 +9,7 @@ import { responseBodies } from "../backend/body.server";
 import { devErrorPage } from "./dev-error";
 import { backendStop } from "../backend/lifetime";
 import { env } from "../env";
-import { raise } from "../errors";
+import { abortReasons, raise } from "../errors";
 import { startRequests } from "../start";
 
 const renderRequest = createStart(async (context) => {
@@ -52,16 +52,16 @@ async function start() {
   try {
     await app.ready;
   } catch (error) {
-    toolStop.abort();
+    toolStop.abort(abortReasons.closed);
     await tools.closed;
     throw error;
   }
   let closed: Promise<void> | undefined;
   const close = () =>
     (closed ??= Promise.resolve().then(async () => {
-      stop.abort();
+      stop.abort(abortReasons.closed);
       const end = await app.closed;
-      toolStop.abort();
+      toolStop.abort(abortReasons.closed);
       const toolEnd = await tools.closed;
       if (end.status === "failed") throw end.error;
       if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
