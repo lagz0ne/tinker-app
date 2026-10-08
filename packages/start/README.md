@@ -299,6 +299,8 @@ The package's `exports` refuses every other path.
     encodes as text.
   - A server sends its spans grouped by side:
     server, then browser, then ssr.
+    Finished spans reach storage as OTLP JSON
+    (the OpenTelemetry data format).
   - The server and a tab send on their own
     once a second has passed;
     render close never waits for a telemetry send.
