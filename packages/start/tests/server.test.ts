@@ -84,11 +84,13 @@ function endOnce(ends: boolean[]) {
 test("a held response body ends the request when read to the end, or when cancelled", async () => {
   const root = createScope();
   const ends: boolean[] = [];
-  const read = await root.resolve(responseBodies).hold(new Response("hello"), endOnce(ends));
+  const read = await (
+    await root.resolve(responseBodies)
+  ).hold(new Response("hello"), endOnce(ends));
   expect(await read.text()).toBe("hello");
-  const open = await root
-    .resolve(responseBodies)
-    .hold(new Response(new ReadableStream()), endOnce(ends));
+  const open = await (
+    await root.resolve(responseBodies)
+  ).hold(new Response(new ReadableStream()), endOnce(ends));
   await open.body?.cancel();
   expect(ends).toEqual([true, false]);
   expect((await root.close({ graceful: true })).status).toBe("success");
@@ -128,7 +130,7 @@ test("dev passes on any response that is not a page load's JSON 500", async () =
 
 test("a response with no body ends its request at once and passes through", async () => {
   const root = createScope();
-  const bodies = root.resolve(responseBodies);
+  const bodies = await root.resolve(responseBodies);
   const ends: boolean[] = [];
   const empty = new Response(null, { status: 204 });
   expect(await bodies.hold(empty, async (graceful) => void ends.push(graceful))).toBe(empty);
@@ -141,12 +143,12 @@ test("a response with no body ends its request at once and passes through", asyn
 test("a held body keeps its status and headers, and ends its request once", async () => {
   const root = createScope();
   const ends: boolean[] = [];
-  const held = await root
-    .resolve(responseBodies)
-    .hold(
-      new Response("made", { status: 201, statusText: "Made", headers: { "x-app": "1" } }),
-      async (graceful) => void ends.push(graceful),
-    );
+  const held = await (
+    await root.resolve(responseBodies)
+  ).hold(
+    new Response("made", { status: 201, statusText: "Made", headers: { "x-app": "1" } }),
+    async (graceful) => void ends.push(graceful),
+  );
   expect([held.status, held.statusText, held.headers.get("x-app")]).toEqual([201, "Made", "1"]);
   expect(await held.text()).toBe("made");
   expect((await root.close({ graceful: true })).status).toBe("success");
@@ -162,9 +164,9 @@ test("a body that fails to read ends its request by force and fails the read", a
       controller.error(torn);
     },
   });
-  const held = await root
-    .resolve(responseBodies)
-    .hold(new Response(source), async (graceful) => void ends.push(graceful));
+  const held = await (
+    await root.resolve(responseBodies)
+  ).hold(new Response(source), async (graceful) => void ends.push(graceful));
   await expect(held.text()).rejects.toBe(torn);
   expect(ends).toEqual([false]);
   expect((await root.close({ graceful: true })).status).toBe("success");
@@ -175,7 +177,7 @@ test("closing the scope cancels each open body and ends its request by force", a
   const root = createScope();
   const ends: boolean[] = [];
   const cancelled: string[] = [];
-  const bodies = root.resolve(responseBodies);
+  const bodies = await root.resolve(responseBodies);
   const open = () =>
     new Response(
       new ReadableStream({
@@ -199,7 +201,7 @@ test("closing the scope cancels each open body and ends its request by force", a
 test("a request that cannot end fails the body's cancel, and the scope's close", async () => {
   const root = createScope();
   const lost = new Error("lost");
-  const bodies = root.resolve(responseBodies);
+  const bodies = await root.resolve(responseBodies);
   const cancelled = await bodies.hold(new Response(new ReadableStream()), async () => {
     throw lost;
   });

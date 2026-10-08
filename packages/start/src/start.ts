@@ -31,7 +31,7 @@ const middleware = createMiddleware().server(async ({ context, request, next }) 
     const result = await next({ context: { session, signal: request.signal } });
     return {
       ...result,
-      response: await session.resolve(responseBodies).hold(result.response, finish),
+      response: await (await session.resolve(responseBodies)).hold(result.response, finish),
     };
   } catch (error) {
     await finish(false);
