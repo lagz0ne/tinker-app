@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const nonzeroId = /[1-9a-f]/;
+
 const attribute = z.strictObject({
   key: z.string().max(256),
   value: z.strictObject({ stringValue: z.string().max(2048) }),
@@ -10,11 +12,11 @@ export const span = z.strictObject({
   traceId: z
     .string()
     .regex(/^[0-9a-f]{32}$/)
-    .refine((id) => /[1-9a-f]/.test(id)),
+    .refine((id) => nonzeroId.test(id)),
   spanId: z
     .string()
     .regex(/^[0-9a-f]{16}$/)
-    .refine((id) => /[1-9a-f]/.test(id)),
+    .refine((id) => nonzeroId.test(id)),
   parentSpanId: z
     .string()
     .regex(/^[0-9a-f]{16}$/)

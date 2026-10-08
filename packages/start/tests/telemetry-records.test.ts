@@ -58,7 +58,7 @@ test("a batch is taken only when every record keeps the wire rules", async () =>
     tags: [
       backendStop(stop.signal),
       requestStop(stop.signal),
-      browserTelemetry(async (batch) => {
+      browserTelemetry((batch) => {
         taken.push(batch);
       }),
     ],
@@ -108,9 +108,9 @@ test("a batch is taken only when every record keeps the wire rules", async () =>
     ["every side, every field", good],
     ["64 records", full],
   ] as const)
-    expect((await root.settle(receiveTelemetry, { rawInput: batch })).status, name).toBe("success");
+    expect(root.settle(receiveTelemetry, { rawInput: batch }).status, name).toBe("success");
   for (const [name, batch] of Object.entries(refused))
-    expect((await root.settle(receiveTelemetry, { rawInput: batch })).status, name).toBe("failed");
+    expect(root.settle(receiveTelemetry, { rawInput: batch }).status, name).toBe("failed");
   expect(taken).toEqual([good, full]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

@@ -308,6 +308,8 @@ The package's `exports` refuses every other path.
     its `https` one.
   - The route hands each good batch
     to the telemetry root, as a plain batch.
+    Taking a batch is sync: it returns a plain result.
+    A body split inside UTF-8 text still reads as one batch.
     A tab's record takes the server's service name.
   - A full queue drops what comes past 512 records,
     and counts the drops; each send stays within 64 KiB.
@@ -316,6 +318,7 @@ The package's `exports` refuses every other path.
     and one tab record at most 31,976 bytes,
     and one send at most 64 records.
     Each record is encoded and sized once when the queue takes it.
+    Cached records keep exact log bytes and trace fields through a retry.
     A full batch starts at once; each batch waits for the last.
     A full batch arriving as a send ends is sent before any tick.
     A burst drains without waiting for the next timer tick.
