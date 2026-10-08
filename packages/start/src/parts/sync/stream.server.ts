@@ -25,7 +25,8 @@ const liveAccount = operation({
 const waitDone = Symbol("sync.waitDone");
 
 /** The frame a stream sends, then closes on, when its account signed out or changed. */
-const accountChange = 'event: account\ndata: {"kind":"account-change"}\n\n';
+const encoder = new TextEncoder();
+const accountChange = encoder.encode('event: account\ndata: {"kind":"account-change"}\n\n');
 
 /**
  * The request resource owns the returned body, including pulls after the opening operation ends.
@@ -80,7 +81,6 @@ export const eventStream = resource({
         ]);
         const cursor = { ...initial, private: initial.private ? { ...initial.private } : null };
         const lease = clock.currentTimeMillis() + 30_000;
-        const encoder = new TextEncoder();
         const expectedAccount = cursor.private?.accountId ?? null;
         let afterWake = -1;
         let authorizedWake = initialAccount === expectedAccount ? openingWake : -1;
@@ -94,7 +94,7 @@ export const eventStream = resource({
               authorizedWake = wake;
               if (ended) return;
               if (current !== expectedAccount) {
-                output?.enqueue(encoder.encode(accountChange));
+                output?.enqueue(accountChange.slice());
                 close();
               }
             })
@@ -113,50 +113,66 @@ export const eventStream = resource({
             await recheck(notifications.revision());
           return notifications.revision();
         };
-        /** Up to 100 events after the cursor: public ones, and the account's own. */
-        const readRows = () =>
-          notifications.share(JSON.stringify(cursor), () =>
-            database
+        /** A length-prefixed account ID keeps arbitrary account names in separate cache keys. */
+        const readFrame = () => {
+          const privateKey = cursor.private
+            ? `${cursor.private.accountId.length}:${cursor.private.accountId}:${cursor.private.revision}`
+            : "-";
+          return notifications.share(`${cursor.public}:${privateKey}`, async () => {
+            const next = {
+              public: cursor.public,
+              private: cursor.private ? { ...cursor.private } : null,
+            };
+            const rows = await database
               .select()
               .from(event)
               .where(
                 or(
-                  and(eq(event.stream, "public"), gt(event.revision, cursor.public)),
-                  cursor.private
+                  and(eq(event.stream, "public"), gt(event.revision, next.public)),
+                  next.private
                     ? and(
-                        eq(event.stream, cursor.private.accountId),
-                        gt(event.revision, cursor.private.revision),
+                        eq(event.stream, next.private.accountId),
+                        gt(event.revision, next.private.revision),
                       )
                     : undefined,
                 ),
               )
               .orderBy(asc(event.stream), asc(event.revision))
-              .limit(100),
-          );
+              .limit(100);
+            for (const row of rows) {
+              if (row.stream === "public") next.public = row.revision;
+              else if (next.private) next.private.revision = row.revision;
+            }
+            return {
+              cursor: next,
+              count: rows.length,
+              bytes: rows.length
+                ? encoder.encode(
+                    `event: changes\nid: ${JSON.stringify(next)}\ndata: ${JSON.stringify({ kind: "changes", events: rows })}\n\n`,
+                  )
+                : new Uint8Array(),
+            };
+          });
+        };
         /** The rows after the cursor, as one frame; false when there are none. */
         const replay = async (
           wake: number,
           controller: ReadableStreamDefaultController<Uint8Array>,
         ) => {
           if (wake === afterWake) return false;
-          const rows = await readRows();
+          const frame = await readFrame();
           await checkWake();
           if (ended) return true;
-          if (!rows.length) {
+          if (!frame.count) {
             afterWake = wake;
             return false;
           }
           /** A short page has every row at this wake, so the next pull waits. */
-          if (rows.length < 100) afterWake = wake;
-          for (const row of rows) {
-            if (row.stream === "public") cursor.public = row.revision;
-            else if (cursor.private) cursor.private.revision = row.revision;
-          }
-          controller.enqueue(
-            encoder.encode(
-              `event: changes\nid: ${JSON.stringify(cursor)}\ndata: ${JSON.stringify({ kind: "changes", events: rows })}\n\n`,
-            ),
-          );
+          if (frame.count < 100) afterWake = wake;
+          cursor.public = frame.cursor.public;
+          if (cursor.private && frame.cursor.private)
+            cursor.private.revision = frame.cursor.private.revision;
+          controller.enqueue(frame.bytes.slice());
           return true;
         };
         /** The request owns this loop even while the client holds no pending read. */

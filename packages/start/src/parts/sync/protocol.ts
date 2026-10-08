@@ -13,6 +13,8 @@ export const streamCursor = z
 
 export declare namespace Stream {
   type Cursor = z.infer<typeof streamCursor>;
+  /** Streams copy the bytes and cursor values; neither retained value leaves the cache. */
+  type Frame = { cursor: Cursor; count: number; bytes: Uint8Array };
 }
 
 /** The two places a cursor can come from, each bounded before it is read. */
