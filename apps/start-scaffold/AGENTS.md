@@ -13,7 +13,10 @@ Choose one of these four forms before adding app work.
 - **Data:** changing records, drafts, and visible progress.
   Use a `kind` union when states carry different values.
 - **Resource:** a shared client, current user, or owned queue.
-  A unit body gets a library only from a lazy module dep.
+  A unit body, and every helper it calls, gets an outside library
+  only from a lazy module dep.
+  Declare one resource per import path in `src/backend/modules.ts`.
+  Take Drizzle helpers from `drizzleOrm` in `@tinker/start/server`.
   Import tables, schemas, and own code at the top.
   Release what it owns through `ctx.defer`.
 - **Operation:** an action, including reads, writes, sends, and retries.

@@ -42,6 +42,7 @@ Tests and generated files do not count.
     - `src/backend/profile.server.ts#saveProfile.run.callback1`
     - `src/backend/sync.server.ts#bootstrapPrivate.run.callback1`
     - `src/backend/sync.server.ts#replayPrivate.run`
+    - `src/backend/sync.server.ts#replayPublic.run`
     - `src/backend/todos.server.ts#changeTodo.run.callback1`
     - `src/contracts/profile.ts#readProfileInput`
     - `src/contracts/todos.ts#readTodoChange`
