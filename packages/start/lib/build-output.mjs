@@ -51,7 +51,7 @@ export function serverOutput() {
           rolldownOptions: {
             output: {
               codeSplitting: {
-                includeDependenciesRecursively: false,
+                includeDependenciesRecursively: true,
                 groups: [
                   {
                     name: "tinker-start",

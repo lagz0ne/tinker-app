@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
+import { build } from "vite-plus";
 import { expect, test } from "vite-plus/test";
-import { clientOutput } from "../lib/build-output.mjs";
+import { clientOutput, serverOutput } from "../lib/build-output.mjs";
 import { fixture } from "./fixture.mjs";
 
 test("only client entry chunks get Chrome's compile hint, on by default", () => {
@@ -44,4 +45,29 @@ test("the build writes Brotli and gzip copies of JS, CSS, and HTML", async () =>
     expect(brotliDecompressSync(readFileSync(join(root, `${file}.br`))).toString()).toBe(text);
     expect(gunzipSync(readFileSync(join(root, `${file}.gz`))).toString()).toBe(text);
   }
+});
+
+test("server body chunks do not import each other before deps are set", async () => {
+  const { output } = await build({
+    configFile: false,
+    root: new URL("..", import.meta.url).pathname,
+    logLevel: "silent",
+    plugins: [serverOutput()],
+    build: {
+      ssr: "src/start.ts",
+      write: false,
+      minify: false,
+      rolldownOptions: { external: /^(?:@tanstack\/|drizzle-orm$)/ },
+    },
+  });
+  const chunks = output.filter((file) => file.type === "chunk");
+  expect(chunks.length).toBeGreaterThan(1);
+  const cycles = chunks.flatMap((chunk) =>
+    chunks
+      .filter(
+        (other) => chunk.imports.includes(other.fileName) && other.imports.includes(chunk.fileName),
+      )
+      .map((other) => [chunk.fileName, other.fileName]),
+  );
+  expect(cycles).toEqual([]);
 });
