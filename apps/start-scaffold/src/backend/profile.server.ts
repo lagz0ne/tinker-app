@@ -137,11 +137,23 @@ export const saveProfile = operation({
   },
 });
 
+const readNotificationResult = operation({
+  label: "profile.readNotificationResult",
+  input: readFeatureResult,
+  run: (_deps, { input }) => input,
+});
+
 export const retryNotification = operation({
   label: "retryNotification",
   input: readRetry,
-  depends: { currentUser, database, history: eventHistory, notify: notificationWork },
-  run: async ({ currentUser, database, history, notify }, { input }) => {
+  depends: {
+    currentUser,
+    database,
+    history: eventHistory,
+    notify: notificationWork,
+    result: readNotificationResult,
+  },
+  run: async ({ currentUser, database, history, notify, result }, { input }) => {
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
       if (await history.find(tx, input.executionId, currentUser.id)) return;
@@ -149,7 +161,7 @@ export const retryNotification = operation({
       if (
         !previous?.notification ||
         !previous.result ||
-        readFeatureResult.parse(previous.result).kind !== "partial"
+        result.run({ rawInput: previous.result }).kind !== "partial"
       )
         raise("RetryNotAvailable", {});
       await tx.insert(execution).values({

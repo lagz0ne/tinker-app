@@ -1,11 +1,13 @@
 import { env } from "@tinker/start/server";
 import { handleAuth } from "@tinker-start-scaffold/testing";
 import { test, expect, onTestFinished } from "vite-plus/test";
-import { createScope } from "@tinker/core";
+import { createScope, isError as isCoreError } from "@tinker/core";
+import { sql } from "drizzle-orm";
 import { preset } from "@tinker/core/testing";
 import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
 import {
   migrate,
+  database,
   readProfile,
   saveProfile,
   retryNotification,
@@ -323,5 +325,55 @@ test("profile replies finish while duplicate receipts share one pending notifica
     accepted.resolve();
     stop.abort();
     expect((await root.closed).status).toBe("success");
+  }
+});
+
+test("a bad stored event returns a managed input failure", async () => {
+  const root = createScope({ tags, presets: [proofDatabase, proofMail] });
+  await root.ready;
+  try {
+    await root.run(migrate);
+    const db = await root.resolve(database);
+    await db.execute(sql`INSERT INTO sync_event (stream, revision, "executionId", payload)
+      VALUES ('public', 1, '10000000-0000-4000-8000-000000000001',
+        '{"kind":"change","change":{"kind":"counter","value":"bad"}}'::jsonb)`);
+    const result = await root.settle(replayPublic, {
+      input: { after: 0 },
+      tags: requestHeaders(new Headers()),
+    });
+    if (result.status !== "failed") raise("BadInput", { reason: "expected bad stored event" });
+    if (!isCoreError(result.error, "DataValidationFailed")) throw result.error;
+    expect(result.error.payload.label).toBe("sync.readReplayEvents");
+  } finally {
+    expect((await root.close({ graceful: true })).status).toBe("success");
+  }
+});
+
+test("a bad stored notification result returns a managed input failure", async () => {
+  const root = createScope({ tags, presets: [proofDatabase, proofMail] });
+  await root.ready;
+  try {
+    await root.run(migrate);
+    const account = headers(
+      await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
+    );
+    const snapshot = await root.run(bootstrapPrivate, { tags: requestHeaders(account) });
+    const db = await root.resolve(database);
+    await db.execute(sql`INSERT INTO sync_execution (id, stream, notification, result)
+      VALUES ('10000000-0000-4000-8000-000000000001', ${snapshot.stream},
+        '{"to":"Ada@example.com","subject":"Saved","text":"Saved"}'::jsonb,
+        '{"kind":"partial","action":"unknown"}'::jsonb)`);
+    const result = await root.settle(retryNotification, {
+      input: {
+        executionId: "10000000-0000-4000-8000-000000000002",
+        previousExecutionId: "10000000-0000-4000-8000-000000000001",
+      },
+      tags: requestHeaders(account),
+    });
+    if (result.status !== "failed") raise("BadInput", { reason: "expected bad stored result" });
+    if (!isCoreError(result.error, "DataValidationFailed")) throw result.error;
+    expect(result.error.payload.label).toBe("profile.readNotificationResult");
+  } finally {
+    expect((await root.close({ graceful: true })).status).toBe("success");
   }
 });

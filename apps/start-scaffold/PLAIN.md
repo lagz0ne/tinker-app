@@ -23,12 +23,6 @@ Tests and generated files do not count.
     - `src/contracts/commands.ts#readProfileCommand`
     - `src/frontend/profile-actions.ts#saveName.input`
 
-- **src/contracts/sync.ts#readFeatureEvent**
-  - `raw`: `unknown`. From a saved event row; why: validate its feature body before replay.
-  - Callers:
-    - `src/backend/sync.server.ts#replayPrivate.run`
-    - `src/backend/sync.server.ts#replayPublic.run`
-
 - **src/contracts/todos.ts#readTodoChange**
   - `raw`: `unknown`. From the todo command or form; why: validate one todo change.
   - Callers:

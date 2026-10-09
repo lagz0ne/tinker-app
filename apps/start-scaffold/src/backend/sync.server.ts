@@ -6,7 +6,7 @@ import { operation } from "@tinker/core";
 import { database } from "./database.server";
 import { currentUser, principal } from "./auth.server";
 import { eventHistory, event } from "@tinker/start/server";
-import { readCursor, readPrivateCursor, readFeatureEvent } from "../contracts/sync";
+import { readCursor, readPrivateCursor, readFeatureEvents } from "../contracts/sync";
 import type { Sync } from "../contracts/sync";
 import { raise } from "../errors";
 
@@ -67,22 +67,28 @@ export const bootstrap = operation({
   }),
 });
 
+const readReplayEvents = operation({
+  label: "sync.readReplayEvents",
+  input: readFeatureEvents,
+  run: (_deps, { input }) => input,
+});
+
 export const replayPublic = operation({
   label: "replayPublic",
   input: readCursor,
-  depends: { orm: drizzleOrm, database, principal },
-  run: async ({ orm, database, principal }, { input }) => {
+  depends: { orm: drizzleOrm, database, principal, events: readReplayEvents },
+  run: async ({ orm, database, principal, events }, { input }) => {
     const { and, asc, eq, gt } = orm;
     return {
       accountId: principal?.id ?? null,
-      events: (
-        await database
+      events: events.run({
+        rawInput: await database
           .select()
           .from(event)
           .where(and(eq(event.stream, "public"), gt(event.revision, input.after)))
           .orderBy(asc(event.revision))
-          .limit(200)
-      ).map(readFeatureEvent),
+          .limit(200),
+      }),
     };
   },
 });
@@ -90,17 +96,17 @@ export const replayPublic = operation({
 export const replayPrivate = operation({
   label: "replayPrivate",
   input: readPrivateCursor,
-  depends: { orm: drizzleOrm, currentUser, database },
-  run: async ({ orm, currentUser, database }, { input }) => {
+  depends: { orm: drizzleOrm, currentUser, database, events: readReplayEvents },
+  run: async ({ orm, currentUser, database, events }, { input }) => {
     const { and, asc, eq, gt } = orm;
     if (input.accountId !== currentUser.id) raise("StreamDenied", {});
-    return (
-      await database
+    return events.run({
+      rawInput: await database
         .select()
         .from(event)
         .where(and(eq(event.stream, currentUser.id), gt(event.revision, input.after)))
         .orderBy(asc(event.revision))
-        .limit(200)
-    ).map(readFeatureEvent);
+        .limit(200),
+    });
   },
 });

@@ -81,7 +81,4 @@ export const streamMessage = z.discriminatedUnion("kind", [
 ]);
 
 export const readFeatureResult = result;
-/**
- * @param raw - From a saved event row; why: validate its feature body before replay.
- */
-export const readFeatureEvent = (raw: unknown) => event.parse(raw);
+export const readFeatureEvents = z.array(event);

@@ -84,7 +84,7 @@ export const authMail = resource({
     });
     return {
       enqueue(input: Mail.Message) {
-        const completed = send.settle({ input }).then((result) => {
+        const completed = send.settle({ rawInput: input }).then((result) => {
           running.delete(completed);
           if (result.status !== "success") log.error("mail.failed", { status: result.status });
         });
