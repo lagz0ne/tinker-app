@@ -22,7 +22,12 @@ export async function copyProofApp(source, target) {
   assert.ok(start >= 0 && end > start, "the app declares its database before migrations");
   await writeFile(
     databaseFile,
-    database.slice(0, start) +
+    database
+      .slice(0, start)
+      .replace(
+        'import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";',
+        'import { drizzlePgCore, drizzleMigrator } from "./modules";',
+      ) +
       `export const database = resource({
     label: "proof.database",
     factory: async (_deps, { defer }): Promise<Database.Handle> => {
@@ -45,7 +50,7 @@ export async function copyProofApp(source, target) {
   assert.ok(sender >= 0 && send > sender, "the app declares its mail client before sends");
   await writeFile(
     mailFile,
-    mail.slice(0, sender) +
+    mail.slice(0, sender).replace('import { smtp } from "./modules";\n', "") +
       `export const mail = resource({
     label: "proof.mail",
     factory: async (): Promise<Mail.Sender> => ({ send: async () => {} }),
