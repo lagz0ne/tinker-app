@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { drizzleOrm } from "@tinker/start/server";
 import { user } from "./schema.server";
 import { operation, resource } from "@tinker/core";
 import { principal, currentUser } from "./auth.server";
@@ -13,8 +13,9 @@ import { raise } from "../errors";
 
 export const readProfile = operation({
   label: "readProfile",
-  depends: { principal, database },
-  run: async ({ principal, database }): Promise<Profile.Value | null> => {
+  depends: { orm: drizzleOrm, principal, database },
+  run: async ({ orm, principal, database }): Promise<Profile.Value | null> => {
+    const { eq } = orm;
     if (principal === null) return null;
     return (
       (
@@ -36,8 +37,9 @@ export const readProfile = operation({
 const notifyProfile = operation({
   label: "notifyProfile",
   input: readExecution,
-  depends: { database, history: eventHistory, send: sendMail },
-  run: async ({ database, history, send }, { input }) => {
+  depends: { orm: drizzleOrm, database, history: eventHistory, send: sendMail },
+  run: async ({ orm, database, history, send }, { input }) => {
+    const { eq } = orm;
     const stored = (
       await database.select().from(execution).where(eq(execution.id, input.executionId))
     ).at(0);
@@ -92,8 +94,15 @@ const notificationWork = resource({
 export const saveProfile = operation({
   label: "saveProfile",
   input: readProfileCommand,
-  depends: { currentUser, database, history: eventHistory, notify: notificationWork },
-  run: async ({ currentUser, database, history, notify }, { input, clock }) => {
+  depends: {
+    orm: drizzleOrm,
+    currentUser,
+    database,
+    history: eventHistory,
+    notify: notificationWork,
+  },
+  run: async ({ orm, currentUser, database, history, notify }, { input, clock }) => {
+    const { eq } = orm;
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
       if (await history.find(tx, input.executionId, currentUser.id)) return;

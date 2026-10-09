@@ -5,6 +5,7 @@ export type { Database } from "@tinker/start/server";
 import { env } from "@tinker/start/server";
 import { z } from "zod";
 import { raise } from "../errors";
+import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";
 
 const databaseEnv = z.object({ DATABASE_URL: z.string().min(1) });
 
@@ -25,12 +26,10 @@ export const databaseSettings = resource({
 /** Feature code uses native PostgreSQL queries, without the driver's client field. */
 export const database = resource({
   label: "database",
-  depends: { settings: databaseSettings },
-  factory: async ({ settings }, { defer }): Promise<Database.Handle> => {
-    const [{ default: pg }, { drizzle }] = await Promise.all([
-      import("pg"),
-      import("drizzle-orm/node-postgres"),
-    ]);
+  depends: { settings: databaseSettings, postgres, orm: drizzlePostgres },
+  factory: async ({ settings, postgres, orm }, { defer }): Promise<Database.Handle> => {
+    const { default: pg } = postgres;
+    const { drizzle } = orm;
     const client = new pg.Pool({ connectionString: settings.url });
     const listeners = new Set<AbortController>();
     defer(async () => {
@@ -70,12 +69,15 @@ export const database = resource({
 
 export const migrate = operation({
   label: "migrate",
-  depends: { database, settings: databaseSettings },
-  run: async ({ database, settings }) => {
-    const [{ migrate }, { readMigrationFiles }] = await Promise.all([
-      import("drizzle-orm/pg-core"),
-      import("drizzle-orm/migrator"),
-    ]);
+  depends: {
+    database,
+    settings: databaseSettings,
+    pgCore: drizzlePgCore,
+    migrator: drizzleMigrator,
+  },
+  run: async ({ database, settings, pgCore, migrator }) => {
+    const { migrate } = pgCore;
+    const { readMigrationFiles } = migrator;
     await migrate(readMigrationFiles({ migrationsFolder: settings.migrations }), database, {
       migrationsFolder: settings.migrations,
     });

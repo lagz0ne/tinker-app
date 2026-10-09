@@ -4,13 +4,15 @@ import { pending, notice, authMode } from "./state";
 import { syncClient, snapshotLoader } from "@tinker/start/client";
 import { credentials } from "../contracts/credentials";
 import { raise } from "../errors";
+import { betterAuthReact } from "./modules";
 
 const modeInput = z.enum(["signup", "signin"]);
 
 export const authClient = resource({
   label: "browser.auth",
-  factory: async () => {
-    const { createAuthClient } = await import("better-auth/react");
+  depends: { auth: betterAuthReact },
+  factory: async ({ auth }) => {
+    const { createAuthClient } = auth;
     return createAuthClient();
   },
 });

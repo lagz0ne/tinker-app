@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { drizzleOrm } from "@tinker/start/server";
 import { counter } from "./sync.schema.server";
 import { operation } from "@tinker/core";
 import { database } from "./database.server";
@@ -9,8 +9,9 @@ import { raise } from "../errors";
 export const incrementCounter = operation({
   label: "incrementCounter",
   input: readExecution,
-  depends: { database, history: eventHistory },
-  run: async ({ database, history }, { input }) => {
+  depends: { orm: drizzleOrm, database, history: eventHistory },
+  run: async ({ orm, database, history }, { input }) => {
+    const { eq, sql } = orm;
     await database.transaction(async (tx) => {
       await history.lock(tx, "public");
       if (await history.find(tx, input.executionId, "public")) return;

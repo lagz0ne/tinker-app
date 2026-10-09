@@ -1,6 +1,7 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 import { raise } from "../errors";
+import { smtp } from "./modules";
 
 const message = z.strictObject({ to: z.string(), subject: z.string(), text: z.string() });
 
@@ -43,9 +44,9 @@ export const mailSettings = resource({
 
 export const mail = resource({
   label: "mail.sender",
-  depends: { settings: mailSettings },
-  factory: async ({ settings }, { defer }): Promise<Mail.Sender> => {
-    const { default: nodemailer } = await import("nodemailer");
+  depends: { settings: mailSettings, smtp },
+  factory: async ({ settings, smtp }, { defer }): Promise<Mail.Sender> => {
+    const { default: nodemailer } = smtp;
     const transport = nodemailer.createTransport({
       host: settings.host,
       pool: true,

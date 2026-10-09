@@ -1,4 +1,4 @@
-import { and, asc, eq, gt } from "drizzle-orm";
+import { drizzleOrm } from "@tinker/start/server";
 import { user } from "./schema.server";
 import { todo } from "./todos.schema.server";
 import { counter } from "./sync.schema.server";
@@ -27,8 +27,9 @@ export const bootstrapPublic = operation({
 
 export const bootstrapPrivate = operation({
   label: "bootstrapPrivate",
-  depends: { currentUser, database, history: eventHistory },
-  run: ({ currentUser, database, history }) => {
+  depends: { orm: drizzleOrm, currentUser, database, history: eventHistory },
+  run: ({ orm, currentUser, database, history }) => {
+    const { asc, eq } = orm;
     return database.transaction(async (tx) => {
       const revision = await history.lock(tx, currentUser.id);
       const profile = (
@@ -69,8 +70,9 @@ export const bootstrap = operation({
 export const replayPublic = operation({
   label: "replayPublic",
   input: readCursor,
-  depends: { database, principal },
-  run: async ({ database, principal }, { input }) => {
+  depends: { orm: drizzleOrm, database, principal },
+  run: async ({ orm, database, principal }, { input }) => {
+    const { and, asc, eq, gt } = orm;
     return {
       accountId: principal?.id ?? null,
       events: (
@@ -88,8 +90,9 @@ export const replayPublic = operation({
 export const replayPrivate = operation({
   label: "replayPrivate",
   input: readPrivateCursor,
-  depends: { currentUser, database },
-  run: async ({ currentUser, database }, { input }) => {
+  depends: { orm: drizzleOrm, currentUser, database },
+  run: async ({ orm, currentUser, database }, { input }) => {
+    const { and, asc, eq, gt } = orm;
     if (input.accountId !== currentUser.id) raise("StreamDenied", {});
     return (
       await database

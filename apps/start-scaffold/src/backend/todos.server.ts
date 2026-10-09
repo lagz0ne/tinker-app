@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { drizzleOrm } from "@tinker/start/server";
 import { todo } from "./todos.schema.server";
 import { operation } from "@tinker/core";
 import { database } from "./database.server";
@@ -11,8 +11,9 @@ import { raise } from "../errors";
 
 export const listTodos = operation({
   label: "listTodos",
-  depends: { currentUser, database },
-  run: ({ currentUser, database }): Promise<Todos.Row[]> => {
+  depends: { orm: drizzleOrm, currentUser, database },
+  run: ({ orm, currentUser, database }): Promise<Todos.Row[]> => {
+    const { asc, eq } = orm;
     return database
       .select({ id: todo.id, title: todo.title, done: todo.done })
       .from(todo)
@@ -24,8 +25,9 @@ export const listTodos = operation({
 export const changeTodo = operation({
   label: "changeTodo",
   input: readTodoCommand,
-  depends: { currentUser, database, history: eventHistory },
-  run: async ({ currentUser, database, history }, { input }) => {
+  depends: { orm: drizzleOrm, currentUser, database, history: eventHistory },
+  run: async ({ orm, currentUser, database, history }, { input }) => {
+    const { and, asc, eq } = orm;
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
       if (await history.find(tx, input.executionId, currentUser.id)) return;

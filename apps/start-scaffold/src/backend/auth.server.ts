@@ -5,19 +5,24 @@ import { authSettings, requestHeaders } from "@tinker/start/server";
 
 export { authSettings } from "@tinker/start/server";
 import { raise } from "../errors";
+import * as schema from "./schema.server";
+import { betterAuthModule, betterAuthDrizzle, betterAuthStart } from "./modules";
 
 /** The root tracks each mail action; auth callbacks return before delivery. */
 export const auth = resource({
   label: "auth",
-  depends: { database, settings: authSettings, send: authMail },
-  factory: async ({ database, settings, send }) => {
-    const [{ betterAuth }, { drizzleAdapter }, { tanstackStartCookies }, schema] =
-      await Promise.all([
-        import("better-auth"),
-        import("better-auth/adapters/drizzle"),
-        import("better-auth/tanstack-start"),
-        import("./schema.server"),
-      ]);
+  depends: {
+    database,
+    settings: authSettings,
+    send: authMail,
+    auth: betterAuthModule,
+    adapter: betterAuthDrizzle,
+    start: betterAuthStart,
+  },
+  factory: async ({ database, settings, send, auth, adapter, start }) => {
+    const { betterAuth } = auth;
+    const { drizzleAdapter } = adapter;
+    const { tanstackStartCookies } = start;
     return betterAuth({
       baseURL: settings.origin,
       secret: settings.secret,
