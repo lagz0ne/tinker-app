@@ -21,6 +21,14 @@ if (import.meta.main) {
     });
     try {
       const backend = await vite.ssrLoadModule("/src/backend/index.server");
+      const services = [...loaded].filter((url) =>
+        /\/node_modules\/(?:pg|@electric-sql\/pglite|better-auth|nodemailer)(?:\/|$)/.test(url),
+      );
+      assert.deepEqual(
+        services,
+        [],
+        "Public backend import loaded a native driver, auth library, or mail client",
+      );
       const { createScope } = await vite.ssrLoadModule("@tinker/core");
       const { preset } = await vite.ssrLoadModule("@tinker/core/testing");
       const { env } = await vite.ssrLoadModule("@tinker/start/server");
@@ -50,16 +58,8 @@ if (import.meta.main) {
       await vite.close();
       hooks.deregister();
     }
-    const services = [...loaded].filter((url) =>
-      /\/node_modules\/(?:pg|@electric-sql\/pglite|better-auth|nodemailer)(?:\/|$)/.test(url),
-    );
-    assert.deepEqual(
-      services,
-      [],
-      "Public backend import loaded a native driver, auth library, or mail client",
-    );
     process.stdout.write(
-      "PASS: public backend import and recorded mail leave drivers, auth, and SMTP unloaded; Drizzle table declarations are allowed.\n",
+      "PASS: public backend import leaves drivers, auth, and SMTP unloaded; preset mail records its message.\n",
     );
   } else {
     const result = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--child"], {

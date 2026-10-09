@@ -42,18 +42,11 @@ export const mailSettings = resource({
   },
 });
 
-/** A recorded sender leaves the unused SMTP module dep unbuilt. */
-const loadSmtpModule = operation({
-  label: "mail.module",
-  depends: { smtp },
-  run: async ({ smtp }) => smtp,
-});
-
 export const mail = resource({
   label: "mail.sender",
-  depends: { settings: mailSettings, module: loadSmtpModule },
-  factory: async ({ settings, module }, { defer }): Promise<Mail.Sender> => {
-    const { default: nodemailer } = await module.run();
+  depends: { settings: mailSettings, smtp },
+  factory: async ({ settings, smtp }, { defer }): Promise<Mail.Sender> => {
+    const { default: nodemailer } = smtp;
     const transport = nodemailer.createTransport({
       host: settings.host,
       pool: true,

@@ -23,19 +23,11 @@ export const databaseSettings = resource({
   },
 });
 
-/** Native module deps stay unbuilt when a preset chooses PGlite. */
-const loadPostgresModules = operation({
-  label: "database.modules",
-  depends: { postgres, orm: drizzlePostgres },
-  run: async ({ postgres, orm }) => ({ postgres, orm }),
-});
-
 /** Feature code uses native PostgreSQL queries, without the driver's client field. */
 export const database = resource({
   label: "database",
-  depends: { settings: databaseSettings, modules: loadPostgresModules },
-  factory: async ({ settings, modules }, { defer }): Promise<Database.Handle> => {
-    const { postgres, orm } = await modules.run();
+  depends: { settings: databaseSettings, postgres, orm: drizzlePostgres },
+  factory: async ({ settings, postgres, orm }, { defer }): Promise<Database.Handle> => {
     const { default: pg } = postgres;
     const { drizzle } = orm;
     const client = new pg.Pool({ connectionString: settings.url });
