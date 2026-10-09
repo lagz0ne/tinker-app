@@ -7,7 +7,7 @@ import { raise } from "../../errors";
 import { drizzleOrm } from "../../modules.server";
 import { notifications } from "./notifications.server";
 import { event } from "./schema";
-import { streamCursor } from "./protocol";
+import { streamCursor, streamRequest } from "./protocol";
 import type { Stream } from "./protocol";
 
 /** Cookie caches and session refresh are off on this long-lived request. */
@@ -263,9 +263,19 @@ export const eventStream = resource({
   },
 });
 
+/** Raw cursor calls remain valid beside HTTP request fields; typed input skips this reader. */
+const streamInput = z.union([z.object({ cursor: streamCursor }), streamRequest]);
+
 export const openSync = operation({
   label: "sync.open",
-  input: z.object({ cursor: streamCursor }),
+  input: (raw: unknown) => {
+    const request = streamInput.parse(raw);
+    if ("cursor" in request) return request;
+    const supplied = request.lastEventId || new URLSearchParams(request.search).get("cursor");
+    return {
+      cursor: streamCursor.parse(supplied ? JSON.parse(supplied) : { public: 0, private: null }),
+    };
+  },
   depends: { stream: eventStream },
   run: async ({ stream }, { input }) => stream.open(input.cursor),
 });

@@ -1,6 +1,6 @@
-import { resource } from "@tinker/core";
+import { isError as isCoreError, resource } from "@tinker/core";
 import { readResult } from "../../backend/result.server";
-import { streamCursor, streamRequest } from "./protocol";
+import { isError } from "../../errors";
 import { openSync } from "./stream.server";
 
 /**
@@ -13,31 +13,20 @@ export const syncEndpoint = resource({
   target: "session",
   depends: { open: openSync.controller },
   factory: ({ open }) => {
-    const readCursor = (request: Request) => {
-      try {
-        const read = streamRequest.safeParse({
-          search: new URL(request.url).search,
-          lastEventId: request.headers.get("Last-Event-ID"),
-        });
-        if (!read.success) return;
-        const { search, lastEventId } = read.data;
-        const supplied = lastEventId || new URLSearchParams(search).get("cursor");
-        const parsed = streamCursor.safeParse(
-          supplied ? JSON.parse(supplied) : { public: 0, private: null },
-        );
-        return parsed.success ? parsed.data : undefined;
-      } catch (error) {
-        if (!(error instanceof SyntaxError)) throw error;
-      }
-    };
     return {
       async answer(request: Request): Promise<Response> {
-        const cursor = readCursor(request);
-        if (!cursor) return new Response(null, { status: 400 });
         /** requestStop already binds cancellation; a call signal would close a shorter child session. */
-        const result = await open.settle({ input: { cursor } });
-        if (result.status === "failed" && Object(result.error).kind === "StreamDenied")
-          return new Response(null, { status: 403 });
+        const result = await open.settle({
+          rawInput: {
+            search: new URL(request.url).search,
+            lastEventId: request.headers.get("Last-Event-ID"),
+          },
+        });
+        if (result.status === "failed") {
+          if (isCoreError(result.error, "DataValidationFailed"))
+            return new Response(null, { status: 400 });
+          if (isError(result.error, "StreamDenied")) return new Response(null, { status: 403 });
+        }
         return new Response(readResult(result), {
           headers: {
             "Content-Type": "text/event-stream; charset=utf-8",

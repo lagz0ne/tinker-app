@@ -16,6 +16,7 @@ const requestShape = z
   })
   .brand<"HttpRequest">();
 
+/** Caught native errors are not operation input; safeParse reads their failure fields. */
 const failureShape = z.object({
   name: z.string().optional().catch(undefined),
   code: z.union([z.string(), z.number()]).optional().catch(undefined),
