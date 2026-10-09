@@ -402,6 +402,7 @@ The package's `exports` refuses every other path.
     connection, so the tab replays instead of lagging.
     A connection that ends re-checks the account.
     The tab reconnects 500 ms after each end.
+    Frames from an old connection after a reconnect are dropped.
   - A write waits for its result event.
     A send that throws is retried after 500 ms;
     a rejected reply fails the write;
