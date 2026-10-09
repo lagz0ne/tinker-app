@@ -23,8 +23,10 @@ if (import.meta.main) {
       const backend = await vite.ssrLoadModule("/src/backend/index.server");
       const { createScope } = await vite.ssrLoadModule("@tinker/core");
       const { preset } = await vite.ssrLoadModule("@tinker/core/testing");
+      const { env } = await vite.ssrLoadModule("@tinker/start/server");
       const sent = [];
       const scope = createScope({
+        tags: env({ SMTP_HOST: "record", SMTP_PORT: "25", SMTP_FROM: "record@example.com" }),
         presets: [
           preset(backend.mail, async () => ({
             send: async (message) => {

@@ -335,3 +335,27 @@ test("sign-up replies before held mail and logs its failure", async () => {
   accepted.resolve();
   await failed.promise;
 });
+
+test("releasing mail makes a fresh sender", async () => {
+  const root = createScope({ tags });
+  await root.ready;
+  try {
+    const first = await root.resolve(mail);
+    root.release(mail);
+    expect(await root.resolve(mail)).not.toBe(first);
+  } finally {
+    expect((await root.close({ graceful: true })).status).toBe("success");
+  }
+});
+
+test("releasing database makes a fresh handle", async () => {
+  const root = createScope({ tags });
+  await root.ready;
+  try {
+    const first = await root.resolve(database);
+    root.release(database);
+    expect(await root.resolve(database)).not.toBe(first);
+  } finally {
+    expect((await root.close({ graceful: true })).status).toBe("success");
+  }
+});

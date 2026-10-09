@@ -23,11 +23,19 @@ export const databaseSettings = resource({
   },
 });
 
+/** Native module deps stay unbuilt when a preset chooses PGlite. */
+const loadPostgresModules = operation({
+  label: "database.modules",
+  depends: { postgres, orm: drizzlePostgres },
+  run: async ({ postgres, orm }) => ({ postgres, orm }),
+});
+
 /** Feature code uses native PostgreSQL queries, without the driver's client field. */
-const postgresDatabase = resource({
-  label: "database.postgres",
-  depends: { settings: databaseSettings, postgres, orm: drizzlePostgres },
-  factory: async ({ settings, postgres, orm }, { defer }): Promise<Database.Handle> => {
+export const database = resource({
+  label: "database",
+  depends: { settings: databaseSettings, modules: loadPostgresModules },
+  factory: async ({ settings, modules }, { defer }): Promise<Database.Handle> => {
+    const { postgres, orm } = await modules.run();
     const { default: pg } = postgres;
     const { drizzle } = orm;
     const client = new pg.Pool({ connectionString: settings.url });
@@ -65,19 +73,6 @@ const postgresDatabase = resource({
       },
     });
   },
-});
-
-/** A PGlite preset leaves the unused Postgres graph unbuilt. */
-const selectPostgresDatabase = operation({
-  label: "database.selectPostgres",
-  depends: { database: postgresDatabase },
-  run: async ({ database }) => database,
-});
-
-export const database = resource({
-  label: "database",
-  depends: { select: selectPostgresDatabase },
-  factory: async ({ select }): Promise<Database.Handle> => select.run(),
 });
 
 export const migrate = operation({
