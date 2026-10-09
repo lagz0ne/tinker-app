@@ -24,8 +24,8 @@ export const databaseSettings = resource({
 });
 
 /** Feature code uses native PostgreSQL queries, without the driver's client field. */
-export const database = resource({
-  label: "database",
+const postgresDatabase = resource({
+  label: "database.postgres",
   depends: { settings: databaseSettings, postgres, orm: drizzlePostgres },
   factory: async ({ settings, postgres, orm }, { defer }): Promise<Database.Handle> => {
     const { default: pg } = postgres;
@@ -65,6 +65,19 @@ export const database = resource({
       },
     });
   },
+});
+
+/** A PGlite preset leaves the unused Postgres graph unbuilt. */
+const selectPostgresDatabase = operation({
+  label: "database.selectPostgres",
+  depends: { database: postgresDatabase },
+  run: async ({ database }) => database,
+});
+
+export const database = resource({
+  label: "database",
+  depends: { select: selectPostgresDatabase },
+  factory: async ({ select }): Promise<Database.Handle> => select.run(),
 });
 
 export const migrate = operation({

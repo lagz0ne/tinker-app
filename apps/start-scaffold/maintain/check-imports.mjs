@@ -20,7 +20,30 @@ if (import.meta.main) {
       appType: "custom",
     });
     try {
-      await vite.ssrLoadModule("/src/backend/index.server");
+      const backend = await vite.ssrLoadModule("/src/backend/index.server");
+      const { createScope } = await vite.ssrLoadModule("@tinker/core");
+      const { preset } = await vite.ssrLoadModule("@tinker/core/testing");
+      const sent = [];
+      const scope = createScope({
+        presets: [
+          preset(backend.mail, async () => ({
+            send: async (message) => {
+              sent.push(message);
+            },
+          })),
+        ],
+      });
+      await scope.ready;
+      try {
+        await scope.run(backend.sendMail, {
+          rawInput: { to: "record@example.com", subject: "Recorded", text: "No SMTP" },
+        });
+        assert.deepEqual(sent, [
+          { to: "record@example.com", subject: "Recorded", text: "No SMTP" },
+        ]);
+      } finally {
+        assert.equal((await scope.close({ graceful: true })).status, "success");
+      }
     } finally {
       await vite.close();
       hooks.deregister();
@@ -34,7 +57,7 @@ if (import.meta.main) {
       "Public backend import loaded a native driver, auth library, or mail client",
     );
     process.stdout.write(
-      "PASS: public backend import leaves drivers, auth, and SMTP unloaded; Drizzle table declarations are allowed.\n",
+      "PASS: public backend import and recorded mail leave drivers, auth, and SMTP unloaded; Drizzle table declarations are allowed.\n",
     );
   } else {
     const result = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--child"], {

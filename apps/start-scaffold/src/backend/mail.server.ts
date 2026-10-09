@@ -42,8 +42,8 @@ export const mailSettings = resource({
   },
 });
 
-export const mail = resource({
-  label: "mail.sender",
+const smtpMail = resource({
+  label: "mail.smtp",
   depends: { settings: mailSettings, smtp },
   factory: async ({ settings, smtp }, { defer }): Promise<Mail.Sender> => {
     const { default: nodemailer } = smtp;
@@ -61,6 +61,19 @@ export const mail = resource({
       },
     };
   },
+});
+
+/** Presets replace the public owner without building the unused SMTP graph. */
+const selectSmtpMail = operation({
+  label: "mail.selectSmtp",
+  depends: { mail: smtpMail },
+  run: async ({ mail }) => mail,
+});
+
+export const mail = resource({
+  label: "mail.sender",
+  depends: { select: selectSmtpMail },
+  factory: async ({ select }): Promise<Mail.Sender> => select.run(),
 });
 
 export const sendMail = operation({
