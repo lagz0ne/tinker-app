@@ -263,6 +263,11 @@
           "target": "~/src/backend/mail.server.ts"
         },
         {
+          "path": "src/backend/modules.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/mail-modules.ts"
+        },
+        {
           "path": "src/errors.ts",
           "type": "registry:file",
           "target": "~/src/errors.ts"
@@ -651,6 +656,16 @@
           "path": ".env.example",
           "target": "~/examples/demo.env.example",
           "type": "registry:file"
+        },
+        {
+          "path": "src/backend/modules.ts",
+          "type": "registry:file",
+          "target": "~/src/backend/modules.ts"
+        },
+        {
+          "path": "src/frontend/modules.ts",
+          "type": "registry:file",
+          "target": "~/src/frontend/modules.ts"
         }
       ],
       "meta": {

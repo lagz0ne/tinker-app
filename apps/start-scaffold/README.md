@@ -408,6 +408,8 @@ No package or registry is published by the local scripts.
 ## Promises tested through app scopes
 
 - Real accounts can sign up, sign in, sign out, and save a profile.
+- A bad stored event returns a managed input failure.
+- A bad stored notification result returns a managed input failure.
 - Signed-out private writes open no transaction.
 - Refused work leaves the server root usable.
 - Failed transactions keep old data and publish no saved change.

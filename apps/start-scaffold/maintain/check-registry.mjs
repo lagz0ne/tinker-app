@@ -66,7 +66,7 @@ for (const item of items) {
   }
 }
 
-for (const composition of [["app"], ["app", "starter"]]) {
+for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]) {
   const consumer = await mkdtemp(join(tmpdir(), "start-registry-consumer-"));
   try {
     const copied = new Set();

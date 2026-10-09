@@ -111,11 +111,28 @@ function receipt(item) {
   ];
 }
 
+/** Mail alone ships only SMTP; the complete demo adds each other module once. */
+function moduleContent(file, text) {
+  if (file.path === "src/backend/modules.ts") {
+    const mailOnly = file.target === "~/src/backend/mail-modules.ts";
+    const [imports, ...modules] = text.trimEnd().split("\n\n");
+    return (
+      [
+        imports,
+        ...modules.filter((body) => body.startsWith("export const smtp ") === mailOnly),
+      ].join("\n\n") + "\n"
+    );
+  }
+  return file.path === "src/backend/mail.server.ts"
+    ? text.replace('from "./modules"', 'from "./mail-modules"')
+    : text;
+}
+
 /** Copied tests refer to the consumer's files, whatever name their package has. */
 async function fileContent(file, packages) {
   if (packages[file.path]) return JSON.stringify(packages[file.path], null, 2) + "\n";
   const text = await readFile(join(app, file.path), "utf8");
-  if (!file.path.startsWith("tests/")) return text;
+  if (!file.path.startsWith("tests/")) return moduleContent(file, text);
   return text
     .replaceAll('"@tinker-start-scaffold/backend"', '"../src/backend/index.server"')
     .replaceAll('"@tinker-start-scaffold/frontend"', '"../src/frontend/index"')

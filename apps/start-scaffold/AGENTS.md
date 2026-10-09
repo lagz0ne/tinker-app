@@ -13,7 +13,8 @@ Choose one of these four forms before adding app work.
 - **Data:** changing records, drafts, and visible progress.
   Use a `kind` union when states carry different values.
 - **Resource:** a shared client, current user, or owned queue.
-  Load the native library inside its factory.
+  A unit body gets a library only from a lazy module dep.
+  Import tables, schemas, and own code at the top.
   Release what it owns through `ctx.defer`.
 - **Operation:** an action, including reads, writes, sends, and retries.
   Declare its input and dependencies; let Core infer its context.

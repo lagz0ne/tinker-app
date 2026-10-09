@@ -19,7 +19,8 @@ Choose one form for each piece of work:
 - Operation: an action, including a read, write, or send.
   See `changeTodo` in `src/backend/todos.server.ts`.
 
-Load a native library inside its resource factory.
+A unit body gets a library only from a lazy module dep.
+Import tables, schemas, and own code at the top.
 Release owned clients with `ctx.defer`.
 Use `ctx.signal`, `ctx.clock`, and `ctx.random`.
 Use a `kind` union when states hold different values.
