@@ -425,6 +425,7 @@ No package or registry is published by the local scripts.
 - Events before receipts finish waits after saved records are applied.
 - Replayed events and old snapshots keep newer records and drafts.
 - Account exit stops waits and ignores late old responses.
+- A private route check clears cached records after another tab signs out.
 - Failed mail keeps the name and retry sends only mail.
 - Committed profile work finishes after its request exits.
 - Saved names stay readable while duplicate requests share a send.
