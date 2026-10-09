@@ -1,7 +1,7 @@
 import { env } from "@tinker/start/server";
 import { handleAuth } from "@tinker-start-scaffold/testing";
 import { test, expect, onTestFinished } from "vite-plus/test";
-import { createScope, isError as isCoreError } from "@tinker/core";
+import { createScope } from "@tinker/core";
 import { sql } from "drizzle-orm";
 import { preset } from "@tinker/core/testing";
 import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
@@ -342,14 +342,14 @@ test("a bad stored event returns a managed input failure", async () => {
       tags: requestHeaders(new Headers()),
     });
     if (result.status !== "failed") raise("BadInput", { reason: "expected bad stored event" });
-    if (!isCoreError(result.error, "DataValidationFailed")) throw result.error;
-    expect(result.error.payload.label).toBe("sync.readReplayEvents");
+    if (!isError(result.error, "BadInput")) throw result.error;
+    expect(result.error.payload.reason).toBe("Stored event data is invalid.");
   } finally {
     expect((await root.close({ graceful: true })).status).toBe("success");
   }
 });
 
-test("a bad stored notification result returns a managed input failure", async () => {
+test("a bad stored notification result has no retry available", async () => {
   const root = createScope({ tags, presets: [proofDatabase, proofMail] });
   await root.ready;
   try {
@@ -371,8 +371,8 @@ test("a bad stored notification result returns a managed input failure", async (
       tags: requestHeaders(account),
     });
     if (result.status !== "failed") raise("BadInput", { reason: "expected bad stored result" });
-    if (!isCoreError(result.error, "DataValidationFailed")) throw result.error;
-    expect(result.error.payload.label).toBe("profile.readNotificationResult");
+    if (!isError(result.error, "RetryNotAvailable")) throw result.error;
+    expect(result.error.payload).toEqual({});
   } finally {
     expect((await root.close({ graceful: true })).status).toBe("success");
   }

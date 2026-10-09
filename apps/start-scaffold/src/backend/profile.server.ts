@@ -137,12 +137,6 @@ export const saveProfile = operation({
   },
 });
 
-const readNotificationResult = operation({
-  label: "profile.readNotificationResult",
-  input: readFeatureResult,
-  run: (_deps, { input }) => input,
-});
-
 export const retryNotification = operation({
   label: "retryNotification",
   input: readRetry,
@@ -151,19 +145,15 @@ export const retryNotification = operation({
     database,
     history: eventHistory,
     notify: notificationWork,
-    result: readNotificationResult,
   },
-  run: async ({ currentUser, database, history, notify, result }, { input }) => {
+  run: async ({ currentUser, database, history, notify }, { input }) => {
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
       if (await history.find(tx, input.executionId, currentUser.id)) return;
       const previous = await history.find(tx, input.previousExecutionId, currentUser.id);
-      if (
-        !previous?.notification ||
-        !previous.result ||
-        result.run({ rawInput: previous.result }).kind !== "partial"
-      )
-        raise("RetryNotAvailable", {});
+      if (!previous?.notification || !previous.result) raise("RetryNotAvailable", {});
+      const result = readFeatureResult.safeParse(previous.result);
+      if (!result.success || result.data.kind !== "partial") raise("RetryNotAvailable", {});
       await tx.insert(execution).values({
         id: input.executionId,
         stream: currentUser.id,

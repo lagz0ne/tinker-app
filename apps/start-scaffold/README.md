@@ -411,7 +411,7 @@ No package or registry is published by the local scripts.
 - Releasing mail makes a fresh sender.
 - Releasing database makes a fresh handle.
 - A bad stored event returns a managed input failure.
-- A bad stored notification result returns a managed input failure.
+- A bad stored notification result has no retry available.
 - Signed-out private writes open no transaction.
 - Refused work leaves the server root usable.
 - Failed transactions keep old data and publish no saved change.

@@ -67,46 +67,41 @@ export const bootstrap = operation({
   }),
 });
 
-const readReplayEvents = operation({
-  label: "sync.readReplayEvents",
-  input: readFeatureEvents,
-  run: (_deps, { input }) => input,
-});
-
 export const replayPublic = operation({
   label: "replayPublic",
   input: readCursor,
-  depends: { orm: drizzleOrm, database, principal, events: readReplayEvents },
-  run: async ({ orm, database, principal, events }, { input }) => {
+  depends: { orm: drizzleOrm, database, principal },
+  run: async ({ orm, database, principal }, { input }) => {
     const { and, asc, eq, gt } = orm;
-    return {
-      accountId: principal?.id ?? null,
-      events: events.run({
-        rawInput: await database
-          .select()
-          .from(event)
-          .where(and(eq(event.stream, "public"), gt(event.revision, input.after)))
-          .orderBy(asc(event.revision))
-          .limit(200),
-      }),
-    };
+    const events = readFeatureEvents.safeParse(
+      await database
+        .select()
+        .from(event)
+        .where(and(eq(event.stream, "public"), gt(event.revision, input.after)))
+        .orderBy(asc(event.revision))
+        .limit(200),
+    );
+    if (!events.success) raise("BadInput", { reason: "Stored event data is invalid." });
+    return { accountId: principal?.id ?? null, events: events.data };
   },
 });
 
 export const replayPrivate = operation({
   label: "replayPrivate",
   input: readPrivateCursor,
-  depends: { orm: drizzleOrm, currentUser, database, events: readReplayEvents },
-  run: async ({ orm, currentUser, database, events }, { input }) => {
+  depends: { orm: drizzleOrm, currentUser, database },
+  run: async ({ orm, currentUser, database }, { input }) => {
     const { and, asc, eq, gt } = orm;
     if (input.accountId !== currentUser.id) raise("StreamDenied", {});
-    return events.run({
-      rawInput: await database
+    const events = readFeatureEvents.safeParse(
+      await database
         .select()
         .from(event)
         .where(and(eq(event.stream, currentUser.id), gt(event.revision, input.after)))
         .orderBy(asc(event.revision))
         .limit(200),
-    });
+    );
+    if (!events.success) raise("BadInput", { reason: "Stored event data is invalid." });
+    return events.data;
   },
 });
