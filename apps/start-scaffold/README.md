@@ -410,7 +410,7 @@ No package or registry is published by the local scripts.
 - Real accounts can sign up, sign in, sign out, and save a profile.
 - Releasing mail makes a fresh sender.
 - Releasing database makes a fresh handle.
-- A bad stored event returns a managed input failure.
+- A bad stored event fails with StoredDataInvalid, a server failure, never a rejected change.
 - A bad stored notification result has no retry available.
 - Signed-out private writes open no transaction.
 - Refused work leaves the server root usable.

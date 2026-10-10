@@ -350,6 +350,7 @@ test("a bad stored event returns a stored data failure", async () => {
   }
 });
 
+// readReceipt is used for changes; this only guards that an unknown error is thrown, never shown as rejected.
 test("a bad stored event is not shown to the user as a rejected change", async () => {
   const root = createScope({ tags, presets: [proofDatabase, proofMail] });
   await root.ready;
