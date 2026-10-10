@@ -81,7 +81,7 @@ export const replayPublic = operation({
         .orderBy(asc(event.revision))
         .limit(200),
     );
-    if (!events.success) raise("BadInput", { reason: "Stored event data is invalid." });
+    if (!events.success) raise("StoredDataInvalid", {});
     return { accountId: principal?.id ?? null, events: events.data };
   },
 });
@@ -101,7 +101,7 @@ export const replayPrivate = operation({
         .orderBy(asc(event.revision))
         .limit(200),
     );
-    if (!events.success) raise("BadInput", { reason: "Stored event data is invalid." });
+    if (!events.success) raise("StoredDataInvalid", {});
     return events.data;
   },
 });

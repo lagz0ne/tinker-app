@@ -8,6 +8,7 @@ export declare namespace Errors {
     BadInput: { reason: string };
     Rollback: Record<string, never>;
     RetryNotAvailable: Record<string, never>;
+    StoredDataInvalid: Record<string, never>;
     AuthFailed: { message: string };
   };
   type Name = keyof Payloads | BaseErrors.Name;

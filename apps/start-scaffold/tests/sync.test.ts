@@ -21,6 +21,7 @@ import {
   isError,
 } from "@tinker-start-scaffold/backend";
 import type { Mail } from "@tinker-start-scaffold/backend";
+import { readReceipt } from "../src/transport/result.server";
 
 const tags = env({
   DATABASE_URL: "postgres://proof",
@@ -328,7 +329,7 @@ test("profile replies finish while duplicate receipts share one pending notifica
   }
 });
 
-test("a bad stored event returns a managed input failure", async () => {
+test("a bad stored event returns a stored data failure", async () => {
   const root = createScope({ tags, presets: [proofDatabase, proofMail] });
   await root.ready;
   try {
@@ -342,8 +343,28 @@ test("a bad stored event returns a managed input failure", async () => {
       tags: requestHeaders(new Headers()),
     });
     if (result.status !== "failed") raise("BadInput", { reason: "expected bad stored event" });
-    if (!isError(result.error, "BadInput")) throw result.error;
-    expect(result.error.payload.reason).toBe("Stored event data is invalid.");
+    if (!isError(result.error, "StoredDataInvalid")) throw result.error;
+    expect(result.error.payload).toEqual({});
+  } finally {
+    expect((await root.close({ graceful: true })).status).toBe("success");
+  }
+});
+
+test("a bad stored event is not shown to the user as a rejected change", async () => {
+  const root = createScope({ tags, presets: [proofDatabase, proofMail] });
+  await root.ready;
+  try {
+    await root.run(migrate);
+    const db = await root.resolve(database);
+    await db.execute(sql`INSERT INTO sync_event (stream, revision, "executionId", payload)
+      VALUES ('public', 1, '10000000-0000-4000-8000-000000000001',
+        '{"kind":"change","change":{"kind":"counter","value":"bad"}}'::jsonb)`);
+    const result = await root.settle(replayPublic, {
+      input: { after: 0 },
+      tags: requestHeaders(new Headers()),
+    });
+    if (result.status !== "failed") raise("BadInput", { reason: "expected bad stored event" });
+    expect(() => readReceipt(result)).toThrow("StoredDataInvalid");
   } finally {
     expect((await root.close({ graceful: true })).status).toBe("success");
   }
