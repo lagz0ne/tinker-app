@@ -25,11 +25,6 @@ import { readReceipt } from "../src/transport/result.server";
 
 const tags = env({
   DATABASE_URL: "postgres://proof",
-  SMTP_HOST: "proof",
-  SMTP_PORT: "25",
-  SMTP_USER: "proof",
-  SMTP_PASSWORD: "proof",
-  SMTP_FROM: "proof@example.com",
   PUBLIC_ORIGIN: "http://localhost:4318",
   AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
 });
