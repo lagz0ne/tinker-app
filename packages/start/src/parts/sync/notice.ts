@@ -1,3 +1,6 @@
+/** The text every account notice starts with, built once from `accountNotice`. */
+const accountPrefix = accountNotice("");
+
 /**
  * The payload an auth path sends on the `start_sync` channel to name one account.
  * @param accountId - From the auth path; why: the account whose streams must re-read.
@@ -11,6 +14,5 @@ export function accountNotice(accountId: string) {
  * @param payload - From the listener; why: the text the channel sent with a notification.
  */
 export function accountOfNotice(payload: string) {
-  const prefix = accountNotice("");
-  return payload.startsWith(prefix) ? payload.slice(prefix.length) : null;
+  return payload.startsWith(accountPrefix) ? payload.slice(accountPrefix.length) : null;
 }
