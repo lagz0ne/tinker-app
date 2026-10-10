@@ -711,19 +711,24 @@ test("the sync part's work shows on the trace under its own names", async () => 
  * wakes none by itself.
  */
 function handWoken(logQuery?: (query: string) => void) {
-  const wakes: (() => void)[] = [];
+  const wakes: ((payload: string) => void)[] = [];
   const db = preset(database, async (_deps, { defer }) => {
     const { drizzle } = await import("drizzle-orm/pglite");
     const client = await syncTemplate.clone();
     defer(() => client.close());
     return Object.assign(drizzle({ client, logger: logQuery ? { logQuery } : undefined }), {
-      listen: async (wake: () => void) => {
+      listen: async (wake: (payload: string) => void) => {
         wakes.push(wake);
         return () => undefined;
       },
     });
   });
-  return { db, wake: () => wakes.forEach((wake) => wake()) };
+  return {
+    db,
+    wake: () => wakes.forEach((wake) => wake("sync_event")),
+    /** The notice an auth path sends on the sync channel: `account:` and the account ID. */
+    notice: (accountId: string) => wakes.forEach((wake) => wake(`account:${accountId}`)),
+  };
 }
 
 /**
@@ -835,7 +840,7 @@ test("a sign-out that lands during the heartbeat's account read sends the accoun
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("the stream reads the account once per wake, not once per pull", async () => {
+test("a save makes no account read on an open stream", async () => {
   const { db, wake } = handWoken();
   const reads = accountReads(["ada"]);
   const stop = new AbortController();
@@ -859,11 +864,80 @@ test("the stream reads the account once per wake, not once per pull", async () =
     wake();
     expect(await text(held)).toContain(`"change":"${change}"`);
   }
-  expect(reads.reads()).toBe(3);
+  expect(reads.reads()).toBe(1);
   await reader.cancel();
   expect((await session.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
+
+test("a notice re-reads only its account's streams; the one whose own session ended closes", async () => {
+  const { db, wake, notice } = handWoken();
+  const live = new Set(["ada-one", "ada-two", "grace"]);
+  const reads: string[] = [];
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [
+      db,
+      preset(auth, () => ({
+        handler: async () => new Response(null),
+        api: {
+          getSession: async ({ headers }: { headers: Headers }) => {
+            const token = headers.get("x-session");
+            const id = headers.get("x-account");
+            reads.push(token ?? "");
+            return token !== null && id !== null && live.has(token) ? { user: { id } } : null;
+          },
+        },
+      })),
+    ],
+  });
+  const tabs = [
+    { id: "ada", token: "ada-one" },
+    { id: "ada", token: "ada-two" },
+    { id: "grace", token: "grace" },
+  ].map(({ id, token }) => ({
+    id,
+    session: root.createSession({
+      tags: requestHeaders(new Headers({ "x-account": id, "x-session": token })),
+    }),
+  }));
+  const readers = await Promise.all(
+    tabs.map(async ({ id, session }) =>
+      (
+        await session.run(openSync, {
+          input: { cursor: { public: 0, private: { accountId: id, revision: 0 } } },
+        })
+      ).getReader(),
+    ),
+  );
+  expect(await Promise.all(readers.map((reader) => text(reader.read())))).toEqual(
+    tabs.map(() => ": connected\n\n"),
+  );
+  live.delete("ada-one");
+  notice("ada");
+  expect(await text(readers[0]!.read())).toBe(account);
+  await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["ada two"] } });
+  await root.run(publish, { input: { stream: "grace", executionId: ids[1], changes: ["grace"] } });
+  const held = readers.slice(1).map((reader) => reader.read());
+  wake();
+  expect(await Promise.all(held.map(text))).toEqual([
+    changesFrame([row("ada", 1, ids[0], "ada two")], {
+      public: 0,
+      private: { accountId: "ada", revision: 1 },
+    }),
+    changesFrame([row("grace", 1, ids[1], "grace")], {
+      public: 0,
+      private: { accountId: "grace", revision: 1 },
+    }),
+  ]);
+  expect(reads.filter((token) => token === "grace")).toHaveLength(1);
+  expect(reads.filter((token) => token === "ada-two")).toHaveLength(2);
+  await Promise.all(readers.map((reader) => reader.cancel()));
+  for (const { session } of tabs)
+    expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+}, 30_000);
 
 test("a listener that breaks while it connects fails the subscribe as disconnected", async () => {
   const root = createScope({
