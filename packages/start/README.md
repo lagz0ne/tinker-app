@@ -150,6 +150,33 @@ FOR EACH STATEMENT
 EXECUTE FUNCTION start_sync_wake();
 ```
 
+A saved change wakes every stream. A wake reads no account.
+
+A notice names one account on the same channel.
+Only that account's streams re-read it.
+A stream closes only if its own session ended.
+A notice closes a stream even when its client
+has stopped reading.
+Each notice path sends one notice after its commit:
+
+- Sign-out.
+- A session revoked or deleted.
+- A user deleted.
+- A user banned or a role changed: no path yet.
+  The scaffold has no ban or role field.
+
+The app sends a notice with `accountNotice(userId)`
+from `@tinker/start/server`:
+
+```sql
+select pg_notify('start_sync', 'account:<id>');
+```
+
+A new path that ends a session must send a notice.
+Without one, a stream closes at its 30 s lease.
+A sign-in sends no notice, so an anonymous tab
+learns its account at its lease.
+
 The client seam with sync on, filled in:
 
 ```ts
