@@ -756,28 +756,6 @@ test("the sync part's work shows on the trace under its own names", async () => 
  * The fixture database without its native listener: the test wakes streams by hand, so a commit
  * wakes none by itself.
  */
-/**
- * A test clock that counts the sleeps still open and keeps each sleep's length. The wheel holds
- * one open sleep while any stream waits on it.
- */
-function countingClock() {
-  const time = makeTestClock();
-  const lengths: number[] = [];
-  let open = 0;
-  const clock = {
-    currentTimeMillis: () => time.currentTimeMillis(),
-    currentTimeNanos: () => time.currentTimeNanos(),
-    sleep: (ms: number, signal?: AbortSignal) => {
-      lengths.push(ms);
-      open += 1;
-      return time.sleep(ms, signal).finally(() => {
-        open -= 1;
-      });
-    },
-  };
-  return { clock, time, lengths, pending: () => open };
-}
-
 function handWoken(logQuery?: (query: string) => void) {
   const wakes: ((payload: string) => void)[] = [];
   const db = preset(database, async (_deps, { defer }) => {
@@ -1035,7 +1013,19 @@ test("a notice that keeps its account sends no frame; the next save is the strea
 }, 30_000);
 
 test("a notice takes its stream off the wheel: closing the other waiter stops the wheel's clock", async () => {
-  const { clock, pending } = countingClock();
+  const time = makeTestClock();
+  let open = 0;
+  const pending = () => open;
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      open += 1;
+      return time.sleep(ms, signal).finally(() => {
+        open -= 1;
+      });
+    },
+  };
   const { db, notice } = handWoken();
   const root = createScope({ clock, presets: [db] });
   const feed = await root.resolve(notifications);
@@ -1055,7 +1045,19 @@ test("a notice takes its stream off the wheel: closing the other waiter stops th
 });
 
 test("a saved change takes every stream off the wheel: closing one waiter stops the wheel's clock", async () => {
-  const { clock, pending } = countingClock();
+  const time = makeTestClock();
+  let open = 0;
+  const pending = () => open;
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      open += 1;
+      return time.sleep(ms, signal).finally(() => {
+        open -= 1;
+      });
+    },
+  };
   const { db, wake } = handWoken();
   const root = createScope({ clock, presets: [db] });
   const feed = await root.resolve(notifications);
@@ -1074,7 +1076,19 @@ test("a saved change takes every stream off the wheel: closing one waiter stops 
 });
 
 test("waiting again moves a stream's wheel slot instead of adding one", async () => {
-  const { clock, pending } = countingClock();
+  const time = makeTestClock();
+  let open = 0;
+  const pending = () => open;
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      open += 1;
+      return time.sleep(ms, signal).finally(() => {
+        open -= 1;
+      });
+    },
+  };
   const { db } = handWoken();
   const root = createScope({ clock, presets: [db] });
   const feed = await root.resolve(notifications);
@@ -1090,7 +1104,16 @@ test("waiting again moves a stream's wheel slot instead of adding one", async ()
 });
 
 test("a wait with no lease sleeps the wheel for nothing", async () => {
-  const { clock, lengths } = countingClock();
+  const time = makeTestClock();
+  const lengths: number[] = [];
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      lengths.push(ms);
+      return time.sleep(ms, signal);
+    },
+  };
   const { db } = handWoken();
   const root = createScope({ clock, presets: [db] });
   const feed = await root.resolve(notifications);
@@ -1103,7 +1126,16 @@ test("a wait with no lease sleeps the wheel for nothing", async () => {
 });
 
 test("the wheel sleeps until a stream's heartbeat, not for zero time", async () => {
-  const { clock, lengths } = countingClock();
+  const time = makeTestClock();
+  const lengths: number[] = [];
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      lengths.push(ms);
+      return time.sleep(ms, signal);
+    },
+  };
   const { db } = handWoken();
   const root = createScope({ clock, presets: [db] });
   const feed = await root.resolve(notifications);
@@ -1116,7 +1148,16 @@ test("the wheel sleeps until a stream's heartbeat, not for zero time", async () 
 });
 
 test("a heartbeat takes its stream off the wheel, so the wheel sleeps no more", async () => {
-  const { clock, time, lengths } = countingClock();
+  const time = makeTestClock();
+  const lengths: number[] = [];
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      lengths.push(ms);
+      return time.sleep(ms, signal);
+    },
+  };
   const { db } = handWoken();
   const root = createScope({ clock, presets: [db] });
   const feed = await root.resolve(notifications);
@@ -1131,9 +1172,9 @@ test("a heartbeat takes its stream off the wheel, so the wheel sleeps no more", 
 });
 
 test("closing one waiter keeps the wheel running for the other's heartbeat", async () => {
-  const { clock, time } = countingClock();
+  const time = makeTestClock();
   const { db } = handWoken();
-  const root = createScope({ clock, presets: [db] });
+  const root = createScope({ clock: time, presets: [db] });
   const feed = await root.resolve(notifications);
   const first = await feed.subscribe();
   const second = await feed.subscribe();

@@ -151,6 +151,7 @@ EXECUTE FUNCTION start_sync_wake();
 ```
 
 A saved change wakes every stream. A wake reads no account.
+A stream sends each row once, then only the rows after it.
 
 A notice names one account on the same channel.
 Only that account's streams re-read it.
