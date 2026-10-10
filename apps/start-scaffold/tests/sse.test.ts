@@ -3,7 +3,7 @@ import { env } from "@tinker/start/server";
 import { handleAuth } from "@tinker-start-scaffold/testing";
 import { test, expect } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
-import { preset, makeTestClock } from "@tinker/core/testing";
+import { preset } from "@tinker/core/testing";
 import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
 import {
   database,
@@ -59,16 +59,6 @@ const rollBackEvent = operation({
       );
       raise("Rollback", {});
     });
-  },
-});
-
-/** Session wakes hide the heartbeat fallback; only this test database drops that trigger. */
-const disableSessionWake = operation({
-  label: "test.disableSessionWake",
-  depends: { database },
-  run: async ({ database }) => {
-    const { sql } = await import("drizzle-orm");
-    await database.execute(sql`DROP TRIGGER sync_session_changed ON session`);
   },
 });
 
@@ -302,19 +292,16 @@ test("reconnecting from applied cursors finishes a save whose final event commit
   }
 });
 
-test("a quiet private stream closes at the heartbeat after sign-out", async () => {
+test("a quiet private stream closes at once on sign-out, with no heartbeat", async () => {
   const stop = new AbortController();
-  const clock = makeTestClock();
   const root = createScope({
     signal: stop.signal,
-    clock,
     tags: [settings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
   try {
     await root.run(migrate);
-    await root.run(disableSessionWake);
     const ada = headers(
       await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
     );
@@ -335,7 +322,6 @@ test("a quiet private stream closes at the heartbeat after sign-out", async () =
         headers: new Headers([...ada, ["origin", "http://localhost:4318"]]),
       }),
     });
-    clock.advance(10_000);
     expect(new TextDecoder().decode((await waiting).value)).toBe(
       'event: account\ndata: {"kind":"account-change"}\n\n',
     );
