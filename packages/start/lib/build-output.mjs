@@ -1,6 +1,18 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { compressBytes } from "./compression.mjs";
+
+/** This base's folder: the parent of lib/, wherever it is installed or copied. */
+const baseRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+
+/** Escape a path so each character matches only itself in a RegExp. */
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** This base's own body chunk, found by its full path, not by folder names. */
+const bodyFile = new RegExp(`^${escapeRegExp(join(baseRoot, "src/backend/body.server.ts"))}$`);
 
 /**
  * Client output only: the hint changes the hash and shifts the source map by one line.
@@ -55,7 +67,7 @@ export function serverOutput() {
                 groups: [
                   {
                     name: "tinker-start",
-                    test: /\/(?:packages\/start|node_modules\/@tinker\/start)\/src\/backend\/body\.server\.ts$/,
+                    test: bodyFile,
                   },
                 ],
               },
