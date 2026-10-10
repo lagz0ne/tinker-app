@@ -756,6 +756,28 @@ test("the sync part's work shows on the trace under its own names", async () => 
  * The fixture database without its native listener: the test wakes streams by hand, so a commit
  * wakes none by itself.
  */
+/**
+ * A test clock that counts the sleeps still open and keeps each sleep's length. The wheel holds
+ * one open sleep while any stream waits on it.
+ */
+function countingClock() {
+  const time = makeTestClock();
+  const lengths: number[] = [];
+  let open = 0;
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      lengths.push(ms);
+      open += 1;
+      return time.sleep(ms, signal).finally(() => {
+        open -= 1;
+      });
+    },
+  };
+  return { clock, time, lengths, pending: () => open };
+}
+
 function handWoken(logQuery?: (query: string) => void) {
   const wakes: ((payload: string) => void)[] = [];
   const db = preset(database, async (_deps, { defer }) => {
@@ -1013,18 +1035,7 @@ test("a notice that keeps its account sends no frame; the next save is the strea
 }, 30_000);
 
 test("a notice takes its stream off the wheel: closing the other waiter stops the wheel's clock", async () => {
-  const time = makeTestClock();
-  let sleeping = 0;
-  const clock = {
-    currentTimeMillis: () => time.currentTimeMillis(),
-    currentTimeNanos: () => time.currentTimeNanos(),
-    sleep: (ms: number, signal?: AbortSignal) => {
-      sleeping += 1;
-      return time.sleep(ms, signal).finally(() => {
-        sleeping -= 1;
-      });
-    },
-  };
+  const { clock, pending } = countingClock();
   const { db, notice } = handWoken();
   const root = createScope({ clock, presets: [db] });
   const feed = await root.resolve(notifications);
@@ -1032,14 +1043,246 @@ test("a notice takes its stream off the wheel: closing the other waiter stops th
   const grace = await feed.subscribe();
   const adaWaiting = feed.wait(ada, feed.revision(), 30_000);
   const graceWaiting = feed.wait(grace, feed.revision(), 30_000);
-  expect(sleeping).toBe(1);
+  expect(pending()).toBe(1);
   notice("ada");
   expect(await adaWaiting).toBe(false);
   feed.close(grace);
   expect(await graceWaiting).toBe(false);
-  for (let turn = 0; turn < 100 && sleeping; turn += 1) await Promise.resolve();
-  expect(sleeping).toBe(0);
+  for (let turn = 0; turn < 100 && pending(); turn += 1) await Promise.resolve();
+  expect(pending()).toBe(0);
   feed.close(ada);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a saved change takes every stream off the wheel: closing one waiter stops the wheel's clock", async () => {
+  const { clock, pending } = countingClock();
+  const { db, wake } = handWoken();
+  const root = createScope({ clock, presets: [db] });
+  const feed = await root.resolve(notifications);
+  const first = await feed.subscribe();
+  const second = await feed.subscribe();
+  const firstWaiting = feed.wait(first, feed.revision(), 30_000);
+  const secondWaiting = feed.wait(second, feed.revision(), 30_000);
+  wake();
+  expect(await firstWaiting).toBe(false);
+  expect(await secondWaiting).toBe(false);
+  feed.close(first);
+  for (let turn = 0; turn < 100 && pending(); turn += 1) await Promise.resolve();
+  expect(pending()).toBe(0);
+  feed.close(second);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("waiting again moves a stream's wheel slot instead of adding one", async () => {
+  const { clock, pending } = countingClock();
+  const { db } = handWoken();
+  const root = createScope({ clock, presets: [db] });
+  const feed = await root.resolve(notifications);
+  const sub = await feed.subscribe();
+  void feed.wait(sub, feed.revision(), 30_000);
+  const again = feed.wait(sub, feed.revision(), 30_000);
+  expect(pending()).toBe(1);
+  feed.close(sub);
+  expect(await again).toBe(false);
+  for (let turn = 0; turn < 100 && pending(); turn += 1) await Promise.resolve();
+  expect(pending()).toBe(0);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a wait with no lease sleeps the wheel for nothing", async () => {
+  const { clock, lengths } = countingClock();
+  const { db } = handWoken();
+  const root = createScope({ clock, presets: [db] });
+  const feed = await root.resolve(notifications);
+  const sub = await feed.subscribe();
+  const waiting = feed.wait(sub, feed.revision());
+  expect(lengths).toEqual([]);
+  feed.close(sub);
+  expect(await waiting).toBe(false);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the wheel sleeps until a stream's heartbeat, not for zero time", async () => {
+  const { clock, lengths } = countingClock();
+  const { db } = handWoken();
+  const root = createScope({ clock, presets: [db] });
+  const feed = await root.resolve(notifications);
+  const sub = await feed.subscribe();
+  const waiting = feed.wait(sub, feed.revision(), 30_000);
+  expect(lengths).toEqual([10_000]);
+  feed.close(sub);
+  expect(await waiting).toBe(false);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a heartbeat takes its stream off the wheel, so the wheel sleeps no more", async () => {
+  const { clock, time, lengths } = countingClock();
+  const { db } = handWoken();
+  const root = createScope({ clock, presets: [db] });
+  const feed = await root.resolve(notifications);
+  const sub = await feed.subscribe();
+  const beat = feed.wait(sub, feed.revision(), 30_000);
+  time.advance(10_000);
+  expect(await beat).toBe(true);
+  for (let turn = 0; turn < 100; turn += 1) await Promise.resolve();
+  feed.close(sub);
+  expect(lengths).toEqual([10_000]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("closing one waiter keeps the wheel running for the other's heartbeat", async () => {
+  const { clock, time } = countingClock();
+  const { db } = handWoken();
+  const root = createScope({ clock, presets: [db] });
+  const feed = await root.resolve(notifications);
+  const first = await feed.subscribe();
+  const second = await feed.subscribe();
+  const firstWaiting = feed.wait(first, feed.revision(), 30_000);
+  const secondWaiting = feed.wait(second, feed.revision(), 30_000);
+  feed.close(first);
+  expect(await firstWaiting).toBe(false);
+  time.advance(10_000);
+  for (let turn = 0; turn < 100; turn += 1) await Promise.resolve();
+  expect(await settledFirst(Promise.resolve(secondWaiting))).toBe("settled");
+  expect(await secondWaiting).toBe(true);
+  feed.close(second);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("rows from wakes with no read pending wait for the next read, in one frame", async () => {
+  const { db, wake } = handWoken();
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    presets: [db],
+  });
+  const session = root.createSession();
+  const reader = (
+    await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
+  wake();
+  for (let turn = 0; turn < 100; turn += 1) await Promise.resolve();
+  await root.run(publish, { input: { stream: "public", executionId: ids[1], changes: [2] } });
+  wake();
+  for (let turn = 0; turn < 100; turn += 1) await Promise.resolve();
+  expect(await text(reader.read())).toBe(
+    changesFrame([row("public", 1, ids[0], 1), row("public", 2, ids[1], 2)], {
+      public: 2,
+      private: null,
+    }),
+  );
+  await reader.cancel();
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a private stream sends each row once; a later frame carries only the new rows", async () => {
+  const { db, wake } = handWoken();
+  const reads = accountReads(["ada"]);
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [db, reads.auth],
+  });
+  const session = root.createSession({ tags: requestHeaders(new Headers()) });
+  const reader = (
+    await session.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const first = reader.read();
+  await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["a1"] } });
+  wake();
+  expect(await text(first)).toBe(
+    changesFrame([row("ada", 1, ids[0], "a1")], {
+      public: 0,
+      private: { accountId: "ada", revision: 1 },
+    }),
+  );
+  const second = reader.read();
+  await root.run(publish, { input: { stream: "ada", executionId: ids[1], changes: ["a2"] } });
+  wake();
+  expect(await text(second)).toBe(
+    changesFrame([row("ada", 2, ids[1], "a2")], {
+      public: 0,
+      private: { accountId: "ada", revision: 2 },
+    }),
+  );
+  await reader.cancel();
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("streams that share one read each get their own copy of its bytes", async () => {
+  const { db, wake } = handWoken();
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    presets: [db],
+  });
+  const first = root.createSession();
+  const second = root.createSession();
+  const cursor = { public: 0, private: null };
+  const readers = await Promise.all(
+    [first, second].map(async (session) =>
+      (await session.run(openSync, { input: { cursor } })).getReader(),
+    ),
+  );
+  expect(await Promise.all(readers.map((reader) => text(reader.read())))).toEqual([
+    ": connected\n\n",
+    ": connected\n\n",
+  ]);
+  const held = readers.map((reader) => reader.read());
+  await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
+  wake();
+  const [one, two] = await Promise.all(held);
+  one.value?.fill(0);
+  expect(new TextDecoder().decode(two.value)).toBe(
+    changesFrame([row("public", 1, ids[0], 1)], { public: 1, private: null }),
+  );
+  await Promise.all(readers.map((reader) => reader.cancel()));
+  expect((await first.close({ graceful: true })).status).toBe("success");
+  expect((await second.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a sign-out frame is each stream's own copy", async () => {
+  const { db, notice } = handWoken();
+  const reads = accountReads(["ada", "ada", null]);
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [db, reads.auth],
+  });
+  const sessions = [
+    root.createSession({ tags: requestHeaders(new Headers()) }),
+    root.createSession({ tags: requestHeaders(new Headers()) }),
+  ];
+  const readers = await Promise.all(
+    sessions.map(async (session) =>
+      (
+        await session.run(openSync, {
+          input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+        })
+      ).getReader(),
+    ),
+  );
+  expect(await Promise.all(readers.map((reader) => text(reader.read())))).toEqual([
+    ": connected\n\n",
+    ": connected\n\n",
+  ]);
+  const held = readers.map((reader) => reader.read());
+  notice("ada");
+  const [one, two] = await Promise.all(held);
+  one.value?.fill(0);
+  expect(new TextDecoder().decode(two.value)).toBe(account);
+  expect((await readers[0]!.read()).done).toBe(true);
+  expect((await readers[1]!.read()).done).toBe(true);
+  for (const session of sessions)
+    expect((await session.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
