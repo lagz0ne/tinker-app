@@ -461,6 +461,7 @@ The package's `exports` refuses every other path.
     else `?cursor=`, else the start.
     A cursor that does not read is a `400`;
     another account's is a `403`.
+  - A dep whose parse fails fails the reply, not as a `400`.
   - It replays the events after the cursor,
     public and the account's own: each stream
     resumes past its own revision,
