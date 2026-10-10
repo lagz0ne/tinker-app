@@ -28,7 +28,7 @@ const settings = env({
   AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
 });
 
-test("a stream checks the session once at open and once for the next wake", async () => {
+test("a stream checks the session once at open, and a save does not check it again", async () => {
   const stop = new AbortController();
   const root = createScope({
     signal: stop.signal,
@@ -52,7 +52,7 @@ test("a stream checks the session once at open and once for the next wake", asyn
     const waiting = reader.read();
     await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
     await waiting;
-    expect(root.spans().filter((span) => span.name === "sync.liveAccount")).toHaveLength(2);
+    expect(root.spans().filter((span) => span.name === "sync.liveAccount")).toHaveLength(1);
     await reader.cancel();
   } finally {
     stop.abort();

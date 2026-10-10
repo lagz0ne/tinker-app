@@ -9,7 +9,7 @@ export const database = resource({
     const [{ PGlite }, { drizzle }] = await Promise.all([import("@electric-sql/pglite"), import("drizzle-orm/pglite")]);
     const client = await PGlite.create();
     defer(() => client.close());
-    return Object.assign(drizzle({ client }), { listen: async (wake: () => void) => client.listen("start_sync", wake) });
+    return Object.assign(drizzle({ client }), { listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake) });
   },
 });
 export const authSettings = tag<{

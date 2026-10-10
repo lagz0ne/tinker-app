@@ -1,5 +1,6 @@
 import { createScope, operation } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
+import { sql } from "drizzle-orm";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 import { auth, database, signedIn, syncTemplate } from "#tinker/app.server";
@@ -32,6 +33,14 @@ const publish = operation({
         input.changes.map((change) => ({ kind: "change" as const, change })),
       );
     }),
+});
+
+/** An auth path's notice: one `pg_notify` on the sync channel, with its payload. */
+const notify = operation({
+  label: "test.notify",
+  input: z.string(),
+  depends: { database },
+  run: ({ database }, { input }) => database.execute(sql`select pg_notify('start_sync', ${input})`),
 });
 
 const rolledBack = operation({
@@ -98,7 +107,7 @@ test("a wait on a broken listener returns at once", async () => {
         const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
-          listen: async (_wake: () => void, failed: () => void) => {
+          listen: async (_wake: (payload: string) => void, failed: () => void) => {
             failures.push(failed);
             return () => undefined;
           },
@@ -225,6 +234,7 @@ test("a held stream whose account signs out sends the account frame, then no sav
   expect(await text(reader.read())).toBe(": connected\n\n");
   const held = reader.read();
   accounts.delete("ada");
+  await root.run(notify, { input: "account:ada" });
   await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["secret"] } });
   expect(await text(held)).toBe(account);
   expect((await reader.read()).done).toBe(true);
@@ -232,10 +242,12 @@ test("a held stream whose account signs out sends the account frame, then no sav
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("an anonymous stream that signs in is an account change too", async () => {
+test("a sign-in sends no notice: an anonymous stream keeps its account to its 30 s lease", async () => {
+  const clock = makeTestClock();
   const stop = new AbortController();
   const accounts = new Set<string>();
   const root = createScope({
+    clock,
     tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
   });
   const tab = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
@@ -243,16 +255,20 @@ test("an anonymous stream that signs in is an account change too", async () => {
     await tab.run(openSync, { input: { cursor: { public: 0, private: null } } })
   ).getReader();
   expect(await text(reader.read())).toBe(": connected\n\n");
-  const held = reader.read();
   accounts.add("ada");
-  await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
-  expect(await text(held)).toBe(account);
-  expect((await reader.read()).done).toBe(true);
+  const held = reader.read();
+  await settledFirst(held);
+  clock.advance(10_000);
+  expect(await text(held)).toBe(": heartbeat\n\n");
+  const lastHeld = reader.read();
+  await settledFirst(lastHeld);
+  clock.advance(20_000);
+  expect(await text(lastHeld)).toBe("");
   expect((await tab.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and at a heartbeat after sign-out", async () => {
+test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and at once on a notice after sign-out", async () => {
   const clock = makeTestClock();
   const stop = new AbortController();
   const accounts = new Set(["ada"]);
@@ -284,7 +300,7 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
   const held = own.read();
   await settledFirst(held);
   accounts.delete("ada");
-  clock.advance(10_000);
+  await root.run(notify, { input: "account:ada" });
   expect(await text(held)).toBe(account);
   expect((await own.read()).done).toBe(true);
   expect((await ada.close({ graceful: true })).status).toBe("success");
@@ -331,7 +347,7 @@ test("a backend stop ends a held stream, and the request ends clean", async () =
 
 test("a listener that cannot start fails the subscribe; one that breaks ends its subscribers", async () => {
   const refused = new Error("listen refused");
-  const listens: { wake: () => void; failed: () => void; stopped: boolean }[] = [];
+  const listens: { wake: (payload: string) => void; failed: () => void; stopped: boolean }[] = [];
   const root = createScope({
     presets: [
       preset(database, async (_deps, { defer }) => {
@@ -339,7 +355,7 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
         const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
-          listen: async (wake: () => void, failed: () => void) => {
+          listen: async (wake: (payload: string) => void, failed: () => void) => {
             if (listens.length === 0) {
               listens.push({ wake, failed, stopped: true });
               throw refused;
@@ -372,7 +388,7 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
     gone += 1;
   });
   feed.close(left);
-  listens[2]?.wake();
+  listens[2]?.wake("sync_event");
   await feed.wait(second, 0);
   expect([feed.revision(), disconnected, gone]).toEqual([2, 2, 0]);
   expect((await root.close({ graceful: true })).status).toBe("success");
@@ -757,7 +773,7 @@ function accountReads(answers: (string | null)[], during: Record<number, () => v
 const settledFirst = (promise: Promise<unknown>) =>
   Promise.race([promise.then(() => "settled"), Promise.resolve().then(() => "pending")]);
 
-test("only the check before the rows read can catch a sign-out whose rows cannot be read", async () => {
+test("a notice checks the account before the rows read, so a sign-out whose rows cannot be read still gets its frame", async () => {
   const dropEvents = operation({
     label: "test.dropEvents",
     depends: { database },
@@ -766,7 +782,7 @@ test("only the check before the rows read can catch a sign-out whose rows cannot
       await database.execute(sql`DROP TABLE sync_event`);
     },
   });
-  const { db, wake } = handWoken();
+  const { db, notice } = handWoken();
   const reads = accountReads(["ada", null]);
   const stop = new AbortController();
   const root = createScope({
@@ -782,58 +798,7 @@ test("only the check before the rows read can catch a sign-out whose rows cannot
   expect(await text(reader.read())).toBe(": connected\n\n");
   const held = reader.read();
   await root.run(dropEvents);
-  wake();
-  expect(await text(held)).toBe(account);
-  expect((await reader.read()).done).toBe(true);
-  expect((await session.close({ graceful: true })).status).toBe("success");
-  expect((await root.close({ graceful: true })).status).toBe("success");
-});
-
-test("only the check after the rows read can stop rows of an account that signed out during it", async () => {
-  const { db, wake } = handWoken();
-  const reads = accountReads(["ada", "ada", null], { 2: () => wake() });
-  const stop = new AbortController();
-  const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
-    presets: [db, reads.auth],
-  });
-  const session = root.createSession({ tags: requestHeaders(new Headers()) });
-  const reader = (
-    await session.run(openSync, {
-      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
-    })
-  ).getReader();
-  expect(await text(reader.read())).toBe(": connected\n\n");
-  const held = reader.read();
-  await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["secret"] } });
-  wake();
-  expect(await text(held)).toBe(account);
-  expect((await reader.read()).done).toBe(true);
-  expect(reads.reads()).toBe(3);
-  expect((await session.close({ graceful: true })).status).toBe("success");
-  expect((await root.close({ graceful: true })).status).toBe("success");
-});
-
-test("a sign-out that lands during the heartbeat's account read sends the account frame, not a heartbeat", async () => {
-  const clock = makeTestClock();
-  const { db, wake } = handWoken();
-  const reads = accountReads(["ada", "ada", null], { 2: () => wake() });
-  const stop = new AbortController();
-  const root = createScope({
-    clock,
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
-    presets: [db, reads.auth],
-  });
-  const session = root.createSession({ tags: requestHeaders(new Headers()) });
-  const reader = (
-    await session.run(openSync, {
-      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
-    })
-  ).getReader();
-  expect(await text(reader.read())).toBe(": connected\n\n");
-  const held = reader.read();
-  await settledFirst(held);
-  clock.advance(10_000);
+  notice("ada");
   expect(await text(held)).toBe(account);
   expect((await reader.read()).done).toBe(true);
   expect((await session.close({ graceful: true })).status).toBe("success");
@@ -947,7 +912,7 @@ test("a listener that breaks while it connects fails the subscribe as disconnect
         const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
-          listen: async (_wake: () => void, failed: () => void) => {
+          listen: async (_wake: (payload: string) => void, failed: () => void) => {
             failed();
             return () => undefined;
           },
@@ -970,7 +935,7 @@ test("a subscribe whose listener is replaced while it connects fails as disconne
         const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
-          listen: async (_wake: () => void, failed: () => void) => {
+          listen: async (_wake: (payload: string) => void, failed: () => void) => {
             if (replacing === undefined) {
               failed();
               replacing = feed?.subscribe();
@@ -996,7 +961,7 @@ test("a closed subscriber is not told when the listener breaks", async () => {
         const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
-          listen: async (_wake: () => void, failed: () => void) => {
+          listen: async (_wake: (payload: string) => void, failed: () => void) => {
             failures.push(failed);
             return () => undefined;
           },
@@ -1015,9 +980,9 @@ test("a closed subscriber is not told when the listener breaks", async () => {
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("a quiet stream reads the account once per heartbeat, and once more only for a wake during it", async () => {
+test("a quiet stream reads no account at its heartbeats; each notice reads it once", async () => {
   const clock = makeTestClock();
-  const { db } = handWoken();
+  const { db, notice } = handWoken();
   const reads = accountReads(["ada", "ada", null]);
   const stop = new AbortController();
   const root = createScope({
@@ -1036,10 +1001,14 @@ test("a quiet stream reads the account once per heartbeat, and once more only fo
   await settledFirst(held);
   clock.advance(10_000);
   expect(await text(held)).toBe(": heartbeat\n\n");
-  expect(reads.reads()).toBe(2);
+  expect(reads.reads()).toBe(1);
   held = reader.read();
   await settledFirst(held);
-  clock.advance(10_000);
+  notice("ada");
+  for (let turn = 0; turn < 100 && reads.reads() < 2; turn += 1) await Promise.resolve();
+  expect(reads.reads()).toBe(2);
+  expect(await settledFirst(held)).toBe("pending");
+  notice("ada");
   expect(await text(held)).toBe(account);
   expect((await reader.read()).done).toBe(true);
   expect(reads.reads()).toBe(3);
@@ -1102,12 +1071,10 @@ test("the lease closes a client that stopped reading", async () => {
   expect(closedBeforeReading).toBe(true);
 }, 30_000);
 
-test("a heartbeat checks sign-out even when the client stopped reading", async () => {
-  const clock = makeTestClock();
+test("a notice closes a stream whose client stopped reading", async () => {
   const stop = new AbortController();
   const reads = accountReads(["ada", null]);
   const root = createScope({
-    clock,
     tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     presets: [reads.auth],
   });
@@ -1118,16 +1085,14 @@ test("a heartbeat checks sign-out even when the client stopped reading", async (
     })
   ).getReader();
   expect(await text(reader.read())).toBe(": connected\n\n");
-  clock.advance(10_000);
-  for (let turn = 0; turn < 100 && reads.reads() === 1; turn += 1) await Promise.resolve();
-  const checkedBeforeReading = reads.reads();
+  await root.run(notify, { input: "account:ada" });
   expect(await text(reader.read())).toBe(account);
   expect((await reader.read()).done).toBe(true);
+  expect(reads.reads()).toBe(2);
   await reader.cancel();
   expect((await session.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
-  expect(checkedBeforeReading).toBe(2);
-}, 30_000);
+});
 
 test("streams at the same cursor share one read per wake and skip the empty read after a short page", async () => {
   const queries: string[] = [];
@@ -1168,7 +1133,7 @@ test("streams at the same cursor share one read per wake and skip the empty read
 }, 30_000);
 
 test("shared private rows keep accounts apart and check each session after sign-out", async () => {
-  const { db, wake } = handWoken();
+  const { db, wake, notice } = handWoken();
   const live = new Set(["ada-one", "ada-two", "grace"]);
   const stop = new AbortController();
   const root = createScope({
@@ -1210,6 +1175,7 @@ test("shared private rows keep accounts apart and check each session after sign-
     tabs.map(() => ": connected\n\n"),
   );
   live.delete("ada-one");
+  notice("ada");
   await root.run(publish, {
     input: { stream: "ada", executionId: ids[0], changes: ["ada secret"] },
   });

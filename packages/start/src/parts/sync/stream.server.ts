@@ -34,8 +34,8 @@ const accountChange = encoder.encode('event: account\ndata: {"kind":"account-cha
 /**
  * The request resource owns the returned body, including pulls after the opening operation ends.
  * The stream replays events after the cursor, greets once, then waits for a wake or a 10 s
- * heartbeat. Each wake re-checks the account; it closes at a 30 s lease, on a broken listener,
- * or on an account change.
+ * heartbeat. A wake reads no account. A notice that names the stream's account makes it re-read
+ * the account; it closes at a 30 s lease, on a broken listener, or on an account change.
  */
 export const eventStream = resource({
   label: "sync.stream",
@@ -75,53 +75,48 @@ export const eventStream = resource({
     });
     return {
       async open(initial: Stream.Cursor) {
-        subscription = await notifications.subscribe(close);
+        const expectedAccount = initial.private?.accountId ?? null;
+        subscription = await notifications.subscribe(close, expectedAccount);
         if (signal.aborted) {
           notifications.close(subscription);
           raise("Cancelled", {});
         }
         const changes = subscription;
-        const openingWake = notifications.revision();
         const initialAccount = await account.run();
         if (initial.private && initial.private.accountId !== initialAccount)
           raise("StreamDenied", {});
         const { and, or, eq, gt, asc } = orm;
         const cursor = { ...initial, private: initial.private ? { ...initial.private } : null };
         const lease = clock.currentTimeMillis() + 30_000;
-        const expectedAccount = cursor.private?.accountId ?? null;
+        /** A stream opened as another account, or with none, re-reads before its first frame. */
+        if (initialAccount !== expectedAccount) changes.stale = true;
         let afterWake = -1;
-        let authorizedWake = initialAccount === expectedAccount ? openingWake : -1;
         let greeted = false;
-        let checking: Promise<void> | undefined;
-        /** Read the account at this wake; a change sends its frame and closes the stream. */
-        const recheck = (wake: number): Promise<void> => {
-          checking ??= account
+        let checking: Promise<number> | undefined;
+        /** Re-read the account after a notice; a change sends its frame and closes the stream. */
+        const recheck = (): Promise<number> =>
+          (checking = account
             .run()
             .then((current) => {
-              authorizedWake = wake;
-              if (ended) return;
-              if (current !== expectedAccount) {
+              if (!ended && current !== expectedAccount) {
                 output?.enqueue(accountChange.slice());
                 close();
               }
+              return notifications.revision();
             })
             .finally(() => {
               checking = undefined;
-            });
-          return checking;
-        };
-        const authorizeWake = async () => {
-          while (!ended && notifications.revision() !== authorizedWake)
-            await recheck(notifications.revision());
-          return notifications.revision();
-        };
-        /** The lease, the listener, and a wake since the last account read. */
-        const checkWake = () => {
+            }));
+        /** The lease and the listener close the stream; a notice re-reads the account first. */
+        const checkWake = (): number | Promise<number> => {
           if (notifications.ended(changes) || clock.currentTimeMillis() >= lease) {
             close();
             return notifications.revision();
           }
-          return notifications.revision() === authorizedWake ? authorizedWake : authorizeWake();
+          if (checking) return checking;
+          if (!changes.stale) return notifications.revision();
+          changes.stale = false;
+          return recheck();
         };
         /** A length-prefixed account ID keeps arbitrary account names in separate cache keys. */
         const readFrame = () => {
@@ -193,10 +188,6 @@ export const eventStream = resource({
               if (ended) return;
               const heartbeat = await notifications.wait(changes, wake, lease);
               await checkWake();
-              if (heartbeat && !ended) {
-                await recheck(notifications.revision());
-                await checkWake();
-              }
               activity?.resolve(heartbeat);
               activity = undefined;
             }

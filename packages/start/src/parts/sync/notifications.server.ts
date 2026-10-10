@@ -2,6 +2,7 @@ import { resource } from "@tinker/core";
 import { database } from "#tinker/app.server";
 import { raise } from "../../errors";
 import type { Stream } from "./protocol";
+import { accountOfNotice } from "./notice";
 
 const wheelStopped = Symbol("sync.wheelStopped");
 
@@ -22,6 +23,10 @@ export const notifications = resource({
     type Subscriber = {
       opened: NonNullable<typeof connection>;
       closed: boolean;
+      /** The account whose notices reach this stream; null for a stream with no account. */
+      accountId: string | null;
+      /** Set by a notice: the stream re-reads its account before it sends another frame. */
+      stale: boolean;
       disconnected: (() => void) | undefined;
       waiting: ReturnType<typeof Promise.withResolvers<boolean>> | undefined;
       bucket: Set<Subscriber> | undefined;
@@ -115,6 +120,21 @@ export const notifications = resource({
         resolveWait(subscriber, false);
       }
     };
+    /** A notice wakes only the streams of its account, and each one re-reads that account. */
+    const notice = (accountId: string) => {
+      for (const subscriber of watchers) {
+        if (subscriber.accountId !== accountId) continue;
+        subscriber.stale = true;
+        unschedule(subscriber);
+        resolveWait(subscriber, false);
+      }
+    };
+    /** A saved change wakes every stream; a notice names one account. */
+    const heard = (payload: string) => {
+      const accountId = accountOfNotice(payload);
+      if (accountId === null) wake();
+      else notice(accountId);
+    };
     const listenerFailed = () => {
       broken = true;
       wake();
@@ -128,7 +148,7 @@ export const notifications = resource({
       if (current?.kind === "connected") await current.close();
     });
     return {
-      async subscribe(disconnected?: () => void) {
+      async subscribe(disconnected?: () => void, accountId: string | null = null) {
         if (!connection || broken) {
           const previous = connection;
           broken = false;
@@ -138,7 +158,7 @@ export const notifications = resource({
             try {
               return {
                 kind: "connected" as const,
-                close: await database.listen(wake, listenerFailed),
+                close: await database.listen(heard, listenerFailed),
               };
             } catch (error) {
               broken = true;
@@ -153,6 +173,8 @@ export const notifications = resource({
         const subscriber: Subscriber = {
           opened,
           closed: false,
+          accountId,
+          stale: false,
           disconnected,
           waiting: undefined,
           bucket: undefined,
@@ -187,7 +209,7 @@ export const notifications = resource({
         if (!scheduled) timer?.abort(wheelStopped);
       },
       wait(subscriber: Subscriber, after: number, lease?: number) {
-        if (subscriber.closed || broken || after !== revision) return false;
+        if (subscriber.closed || broken || subscriber.stale || after !== revision) return false;
         const changed = Promise.withResolvers<boolean>();
         subscriber.waiting = changed;
         if (lease !== undefined) schedule(subscriber, lease);

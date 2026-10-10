@@ -11,3 +11,4 @@ export type { ServerEntry } from "./server-entry";
 export { httpRequest } from "./backend/http";
 export { requestHeaders } from "./backend/headers.server";
 export { event, execution, stream } from "./parts/sync/schema";
+export { accountNotice } from "./parts/sync/notice";

@@ -26,7 +26,7 @@ export const proofDatabase = preset(
     const client = await template.clone();
     defer(() => client.close());
     return Object.assign(drizzle({ client }), {
-      listen: async (wake: () => void) => client.listen("start_sync", wake),
+      listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
     });
   },
 );

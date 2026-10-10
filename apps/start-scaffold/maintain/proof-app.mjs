@@ -37,7 +37,7 @@ export async function copyProofApp(source, target) {
       const client = await PGlite.create();
       defer(() => client.close());
       return Object.assign(drizzle({ client }), {
-        listen: async (wake: () => void) => client.listen("start_sync", wake),
+        listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
       });
     },
   });\n` +

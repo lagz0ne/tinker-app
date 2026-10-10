@@ -452,7 +452,7 @@ export const database = resource({
         ('public', 2, '00000000-0000-4000-8000-000000000002', '{"kind":"change","change":{"count":2}}');
     `);
     return Object.assign(drizzle({ client }), {
-      listen: async (wake: () => void) => client.listen("start_sync", wake),
+      listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
     });
   },
 });

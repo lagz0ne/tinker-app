@@ -37,9 +37,10 @@ export const database = resource({
       await client.end();
     });
     return Object.assign(drizzle({ client }), {
-      async listen(wake: () => void, disconnected: () => void) {
+      async listen(heard: (payload: string) => void, disconnected: () => void) {
         const listener = await client.connect();
-        listener.on("notification", wake);
+        const notified = (message: { payload?: string }) => heard(message.payload ?? "");
+        listener.on("notification", notified);
         listener.on("error", disconnected);
         listener.on("end", disconnected);
         const stop = new AbortController();
@@ -48,7 +49,7 @@ export const database = resource({
           "abort",
           () => {
             listeners.delete(stop);
-            listener.removeListener("notification", wake);
+            listener.removeListener("notification", notified);
             listener.removeListener("error", disconnected);
             listener.removeListener("end", disconnected);
             listener.release(true);
