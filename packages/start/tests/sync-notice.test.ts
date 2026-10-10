@@ -3,7 +3,7 @@ import { accountNotice, accountOfNotice } from "../src/parts/sync/notice";
 
 test("a notice payload names its account, and a table wake names none", () => {
   expect(accountNotice("ada")).toBe("account:ada");
-  expect(accountOfNotice("account:ada")).toBe("ada");
+  expect(accountOfNotice(accountNotice("ada"))).toBe("ada");
   expect(accountOfNotice("sync_event")).toBeNull();
   expect(accountOfNotice("session")).toBeNull();
 });

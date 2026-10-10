@@ -8,6 +8,7 @@ import { requestHeaders } from "../src/backend/headers.server";
 import { backendStop, requestStop } from "../src/backend/lifetime";
 import { eventHistory } from "../src/parts/sync/history.server";
 import { notifications } from "../src/parts/sync/notifications.server";
+import { accountNotice } from "../src/parts/sync/notice";
 import { execution } from "../src/parts/sync/schema";
 import { eventStream, openSync } from "../src/parts/sync/stream.server";
 import { syncEndpoint } from "../src/parts/sync/endpoint.server";
@@ -17,6 +18,13 @@ const ids = [
   "00000000-0000-4000-8000-000000000002",
   "00000000-0000-4000-8000-000000000003",
 ];
+
+/** A query on the same connection as the stream's rows, so it finishes after them. */
+const ping = operation({
+  label: "test.ping",
+  depends: { database },
+  run: ({ database }) => database.execute(sql`select 1`),
+});
 
 /** An app write: lock the stream, then append its changes, in one transaction. */
 const publish = operation({
@@ -234,7 +242,7 @@ test("a held stream whose account signs out sends the account frame, then no sav
   expect(await text(reader.read())).toBe(": connected\n\n");
   const held = reader.read();
   accounts.delete("ada");
-  await root.run(notify, { input: "account:ada" });
+  await root.run(notify, { input: accountNotice("ada") });
   await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["secret"] } });
   expect(await text(held)).toBe(account);
   expect((await reader.read()).done).toBe(true);
@@ -300,7 +308,7 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
   const held = own.read();
   await settledFirst(held);
   accounts.delete("ada");
-  await root.run(notify, { input: "account:ada" });
+  await root.run(notify, { input: accountNotice("ada") });
   expect(await text(held)).toBe(account);
   expect((await own.read()).done).toBe(true);
   expect((await ada.close({ graceful: true })).status).toBe("success");
@@ -742,8 +750,8 @@ function handWoken(logQuery?: (query: string) => void) {
   return {
     db,
     wake: () => wakes.forEach((wake) => wake("sync_event")),
-    /** The notice an auth path sends on the sync channel: `account:` and the account ID. */
-    notice: (accountId: string) => wakes.forEach((wake) => wake(`account:${accountId}`)),
+    /** The notice an auth path sends on the sync channel, for one account. */
+    notice: (accountId: string) => wakes.forEach((wake) => wake(accountNotice(accountId))),
   };
 }
 
@@ -831,6 +839,51 @@ test("a save makes no account read on an open stream", async () => {
   }
   expect(reads.reads()).toBe(1);
   await reader.cancel();
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("only the check after the rows read can stop rows of an account that signed out during it", async () => {
+  let armed = false;
+  const { db, wake, notice } = handWoken((query) => {
+    if (!armed || !query.startsWith("select") || !query.includes("sync_event")) return;
+    armed = false;
+    notice("ada");
+  });
+  let reads = 0;
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [
+      db,
+      preset(auth, () => ({
+        handler: async () => new Response(null),
+        api: {
+          getSession: async () => {
+            reads += 1;
+            // The second read queues behind the rows read on the one PGlite connection, so it
+            // finishes after that read: only a check after the rows read can stop the rows.
+            if (reads === 2) await root.run(ping);
+            return reads === 1 ? { user: { id: "ada" } } : null;
+          },
+        },
+      })),
+    ],
+  });
+  const session = root.createSession({ tags: requestHeaders(new Headers()) });
+  const reader = (
+    await session.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const held = reader.read();
+  await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["secret"] } });
+  armed = true;
+  wake();
+  expect(await text(held)).toBe(account);
+  expect((await reader.read()).done).toBe(true);
+  expect(reads).toBe(2);
   expect((await session.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -1085,7 +1138,7 @@ test("a notice closes a stream whose client stopped reading", async () => {
     })
   ).getReader();
   expect(await text(reader.read())).toBe(": connected\n\n");
-  await root.run(notify, { input: "account:ada" });
+  await root.run(notify, { input: accountNotice("ada") });
   expect(await text(reader.read())).toBe(account);
   expect((await reader.read()).done).toBe(true);
   expect(reads.reads()).toBe(2);
