@@ -1,4 +1,4 @@
-import { createScope, operation } from "@tinker/core";
+import { createScope, operation, tag } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
 import { sql } from "drizzle-orm";
 import { expect, test } from "vite-plus/test";
@@ -502,6 +502,28 @@ test("a request that fails to read, or a stream that fails to open, fails the re
   await expect(
     root.resolve(syncEndpoint).answer(new Request("http://localhost/api/sync")),
   ).rejects.toBe(opened);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a dep whose parse fails fails the reply, not as a 400", async () => {
+  const count = tag<unknown>({ label: "test.count", parse: z.number() });
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    presets: [
+      preset(eventStream, async () => ({
+        open: async (): Promise<ReadableStream<Uint8Array>> => {
+          count("not a number");
+          return new ReadableStream<Uint8Array>();
+        },
+      })),
+    ],
+  });
+  const failure = await root
+    .resolve(syncEndpoint)
+    .answer(new Request("http://localhost/api/sync"))
+    .catch((error: unknown) => error);
+  expect(failure).toMatchObject({ kind: "DataValidationFailed", payload: { label: "test.count" } });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
@@ -1090,7 +1112,7 @@ test("a private cursor resumes past revision 0", async () => {
   });
   const ada = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
   const opened = await ada.settle(openSync, {
-    rawInput: { cursor: { public: 0, private: { accountId: "ada", revision: 5 } } },
+    input: { cursor: { public: 0, private: { accountId: "ada", revision: 5 } } },
   });
   if (opened.status !== "success") throw opened;
   await opened.value.cancel();

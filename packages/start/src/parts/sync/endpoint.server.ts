@@ -23,7 +23,10 @@ export const syncEndpoint = resource({
           },
         });
         if (result.status === "failed") {
-          if (isCoreError(result.error, "DataValidationFailed"))
+          if (
+            isCoreError(result.error, "DataValidationFailed") &&
+            result.error.payload.label === openSync.label
+          )
             return new Response(null, { status: 400 });
           if (isError(result.error, "StreamDenied")) return new Response(null, { status: 403 });
         }

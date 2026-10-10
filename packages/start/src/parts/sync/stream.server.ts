@@ -1,5 +1,4 @@
 import { operation, resource } from "@tinker/core";
-import { z } from "zod";
 import { auth, database } from "#tinker/app.server";
 import { requestHeaders } from "../../backend/headers.server";
 import { backendStop, requestStop } from "../../backend/lifetime";
@@ -254,14 +253,11 @@ export const eventStream = resource({
   },
 });
 
-/** Raw cursor calls remain valid beside HTTP request fields; typed input skips this reader. */
-const streamInput = z.union([z.object({ cursor: streamCursor }), streamRequest]);
-
+/** The raw HTTP request. Typed `input: { cursor }` skips this reader, so it has one raw shape. */
 export const openSync = operation({
   label: "sync.open",
   input: (raw: unknown) => {
-    const request = streamInput.parse(raw);
-    if ("cursor" in request) return request;
+    const request = streamRequest.parse(raw);
     const supplied = request.lastEventId || new URLSearchParams(request.search).get("cursor");
     return {
       cursor: streamCursor.parse(supplied ? JSON.parse(supplied) : { public: 0, private: null }),
