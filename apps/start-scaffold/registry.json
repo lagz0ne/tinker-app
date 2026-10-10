@@ -543,6 +543,16 @@
           "target": "~/drizzle/20261002110319_sync_notifications/snapshot.json"
         },
         {
+          "path": "drizzle/20261010090000_drop_session_wake/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261010090000_drop_session_wake/migration.sql"
+        },
+        {
+          "path": "drizzle/20261010090000_drop_session_wake/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261010090000_drop_session_wake/snapshot.json"
+        },
+        {
           "path": "src/backend/database.server.ts",
           "type": "registry:file",
           "target": "~/src/backend/database.server.ts"
