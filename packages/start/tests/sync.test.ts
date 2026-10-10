@@ -979,6 +979,70 @@ test("a notice re-reads only its account's streams; the one whose own session en
   expect((await root.close({ graceful: true })).status).toBe("success");
 }, 30_000);
 
+test("a notice that keeps its account sends no frame; the next save is the stream's next frame", async () => {
+  const { db, wake, notice } = handWoken();
+  const reads = accountReads(["ada", "ada"]);
+  const stop = new AbortController();
+  const root = createScope({
+    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    presets: [db, reads.auth],
+  });
+  const session = root.createSession({ tags: requestHeaders(new Headers()) });
+  const reader = (
+    await session.run(openSync, {
+      input: { cursor: { public: 0, private: { accountId: "ada", revision: 0 } } },
+    })
+  ).getReader();
+  expect(await text(reader.read())).toBe(": connected\n\n");
+  const held = reader.read();
+  notice("ada");
+  for (let turn = 0; turn < 100; turn += 1) await Promise.resolve();
+  expect(reads.reads()).toBe(2);
+  expect(await settledFirst(held)).toBe("pending");
+  await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["ada"] } });
+  wake();
+  expect(await text(held)).toBe(
+    changesFrame([row("ada", 1, ids[0], "ada")], {
+      public: 0,
+      private: { accountId: "ada", revision: 1 },
+    }),
+  );
+  await reader.cancel();
+  expect((await session.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+}, 30_000);
+
+test("a notice takes its stream off the wheel: closing the other waiter stops the wheel's clock", async () => {
+  const time = makeTestClock();
+  let sleeping = 0;
+  const clock = {
+    currentTimeMillis: () => time.currentTimeMillis(),
+    currentTimeNanos: () => time.currentTimeNanos(),
+    sleep: (ms: number, signal?: AbortSignal) => {
+      sleeping += 1;
+      return time.sleep(ms, signal).finally(() => {
+        sleeping -= 1;
+      });
+    },
+  };
+  const { db, notice } = handWoken();
+  const root = createScope({ clock, presets: [db] });
+  const feed = await root.resolve(notifications);
+  const ada = await feed.subscribe(undefined, "ada");
+  const grace = await feed.subscribe();
+  const adaWaiting = feed.wait(ada, feed.revision(), 30_000);
+  const graceWaiting = feed.wait(grace, feed.revision(), 30_000);
+  expect(sleeping).toBe(1);
+  notice("ada");
+  expect(await adaWaiting).toBe(false);
+  feed.close(grace);
+  expect(await graceWaiting).toBe(false);
+  for (let turn = 0; turn < 100 && sleeping; turn += 1) await Promise.resolve();
+  expect(sleeping).toBe(0);
+  feed.close(ada);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
 test("a listener that breaks while it connects fails the subscribe as disconnected", async () => {
   const root = createScope({
     presets: [
