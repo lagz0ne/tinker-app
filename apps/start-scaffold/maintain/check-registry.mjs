@@ -4,18 +4,10 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { app, registryItems } from "./registry-source.mjs";
+import { checkRegistryIndex } from "./check-registry-index.mjs";
 
 /** Match every built item to source, then build the two supported compositions. */
-const { registry, items } = await registryItems();
-assert.equal(new Set(items.map((item) => item.name)).size, items.length);
-const names = new Set(items.map((item) => item.name));
-assert.deepEqual(items.find((item) => item.name === "runtime").files, []);
-
-assert.deepEqual(
-  JSON.parse(await readFile(join(app, "public/r/registry.json"), "utf8")),
-  { ...registry, items },
-  "registry index must match source too",
-);
+const { registry, items, files } = await checkRegistryIndex();
 
 for (const target of new Set([
   ...registry.items.find((item) => item.name === "app").files.map((file) => file.target),
@@ -49,22 +41,6 @@ duplicate.items
   });
 
 await assert.rejects(registryItems({ registry: duplicate }), /already owned/);
-let files = 0;
-
-for (const item of items) {
-  const built = JSON.parse(await readFile(join(app, "public/r", `${item.name}.json`), "utf8"));
-  assert.deepEqual(built, item, `${item.name}: rebuild registry:build after changing source`);
-  for (const dependency of registry.items.find((entry) => entry.name === item.name)
-    .registryDependencies ?? [])
-    assert.ok(names.has(dependency.replace("@tinker-start/", "")), dependency);
-  assert.equal(new Set(item.files.map((file) => file.target)).size, item.files.length, item.name);
-  for (const file of item.files) {
-    assert.ok(file.target.startsWith("~/"), file.target);
-    assert.ok(!file.target.includes("/../"), file.target);
-    assert.ok(!/\/src\/scaffold\/|\/node_modules\/|\/\.tinker\//.test(file.target), file.target);
-    files++;
-  }
-}
 
 for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]) {
   const consumer = await mkdtemp(join(tmpdir(), "start-registry-consumer-"));
