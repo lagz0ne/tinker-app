@@ -13,7 +13,9 @@ The `0.7.0` release is prepared locally; it is not published.
 After the lead publishes it, start in an empty folder:
 
 ```bash
-npx shadcn@4.21.0 add https://raw.githubusercontent.com/lagz0ne/tinkered/start-v0.7.0/apps/start-scaffold/public/r/app.json --yes
+npx shadcn@4.21.0 add \
+  "https://raw.githubusercontent.com/lagz0ne/tinkered/\
+start-v0.7.0/apps/start-scaffold/public/r/app.json" --yes
 ```
 
 This is the smallest app, with telemetry on.
@@ -351,7 +353,13 @@ export { extensions } from "../examples/demo.server";
 The browser seam exports the copied demo's readers and types:
 
 ```ts
-export { records, readSnapshot, readBootstrap, readBatch, streamMessage } from "../examples/demo";
+export {
+  records,
+  readSnapshot,
+  readBootstrap,
+  readBatch,
+  streamMessage
+} from "../examples/demo";
 ```
 
 The copied module also adds the app's `Register` bodies.

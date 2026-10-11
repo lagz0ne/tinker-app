@@ -58,7 +58,11 @@ For outgoing HTTP, bind httpBackend through the base testing entry:
 const stop = new AbortController();
 const app = createScope({
   signal: stop.signal,
-  tags: [httpBackend(async () => new Response("saved", { status: 201 }))],
+  tags: [
+    httpBackend(
+      async () => new Response("saved", { status: 201 })
+    )
+  ],
 });
 await app.ready;
 try {
