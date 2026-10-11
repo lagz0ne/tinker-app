@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -17,6 +17,14 @@ const inputs = [
 
 /** Read the commit's index, including Git's temporary index for a commit by path. */
 async function checkStagedRegistry() {
+  const changed = spawnSync("git", ["diff", "--cached", "--quiet", "--", ...inputs], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  if (changed.error) throw changed.error;
+  if (changed.status === 0) return;
+  if (changed.status !== 1) throw new Error(changed.stderr.trim() || "git diff check failed");
+
   const copy = await mkdtemp(join(tmpdir(), "start-registry-staged-"));
   try {
     const files = execFileSync("git", ["ls-files", "-z", "--", ...inputs], { cwd: root });

@@ -19,6 +19,7 @@
     "test:serve": "node maintain/check-serve.mjs",
     "registry:build": "node maintain/build-registry.mjs",
     "test:registry": "node maintain/check-registry.mjs",
+    "test:registry-hook": "node --test maintain/test-registry-staged.mjs",
     "test:seam:fixture": "node maintain/check-seam-fixture.mjs",
     "test:schema": "node scripts/check-schema.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
