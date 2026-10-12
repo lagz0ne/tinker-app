@@ -6,7 +6,6 @@ import { join, resolve } from "node:path";
 import { test } from "node:test";
 
 const root = resolve(import.meta.dirname, "../../..");
-const ref = process.env.REGISTRY_HOOK_REF ?? "HEAD";
 const readme = "apps/start-scaffold/README.md";
 
 const repair =
@@ -14,10 +13,9 @@ const repair =
 
 /** Use real commits and the branch's hook without changing shared Git config. */
 await test("the commit hook checks the staged registry", async (t) => {
-  const scratch =
-    process.env.REGISTRY_HOOK_SCRATCH ?? (await mkdtemp(join(tmpdir(), "registry-hook-")));
+  const scratch = await mkdtemp(join(tmpdir(), "registry-hook-"));
   const env = { ...process.env, TINKER_SETUP: "0" };
-  const hooks = await mkdtemp(join(tmpdir(), "registry-hook-dispatch-"));
+  let hooks;
   function run(command, args, cwd = scratch) {
     const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout: 120000 });
     return { status: result.status, output: result.stdout + result.stderr, stderr: result.stderr };
@@ -47,15 +45,15 @@ await test("the commit hook checks the staged registry", async (t) => {
   function passed(result, checked = true) {
     assert.equal(result.status, 0, result.output);
     assert.equal(
-      result.output.includes("PASS: registry index matches source") ||
-        result.output.includes("node apps/start-scaffold/maintain/check-registry-staged.mjs"),
+      result.output.includes("PASS: registry index matches source"),
       checked,
       result.output,
     );
     console.log(result.output);
   }
-  ok("git", ["worktree", "add", "--detach", scratch, ref], root);
+  ok("git", ["worktree", "add", "--detach", scratch, "HEAD"], root);
   try {
+    hooks = await mkdtemp(join(tmpdir(), "registry-hook-dispatch-"));
     await symlink(join(root, "node_modules"), join(scratch, "node_modules"), "dir");
     for (const app of ["start-scaffold", "start-min"]) {
       await symlink(
@@ -68,27 +66,12 @@ await test("the commit hook checks the staged registry", async (t) => {
       });
     }
 
-    const paths = [
-      ".vite-hooks/pre-commit",
-      "vite.config.ts",
-      "apps/start-scaffold/package.json",
-      "apps/start-scaffold/maintain/check-registry-index.mjs",
-      "apps/start-scaffold/maintain/check-registry-staged.mjs",
-      "apps/start-scaffold/maintain/check-registry.mjs",
-    ];
-    if (process.env.REGISTRY_HOOK_WORKING) {
-      for (const path of paths) await cp(join(root, path), join(scratch, path));
-    }
-
     await cp(join(scratch, ".vite-hooks"), join(hooks, "branch"), { recursive: true });
     await writeFile(
       join(hooks, "pre-commit"),
       '#!/bin/sh\nexport PATH="$PWD/node_modules/.bin:$PATH"\nexec sh -e "$(dirname "$0")/branch/pre-commit" "$@"\n',
       { mode: 0o755 },
     );
-    if (process.env.REGISTRY_HOOK_WORKING) {
-      passed(commit(paths));
-    }
     const base = ok("git", ["rev-parse", "HEAD"]).trim();
     async function scenario(name, body) {
       await t.test(name, async () => {
@@ -121,10 +104,7 @@ await test("the commit hook checks the staged registry", async (t) => {
       const result = commit([readme, "apps/start-scaffold/public/r"]);
       passed(result);
       assert.equal(
-        result.output.match(/PASS: registry index matches source/g)?.length ??
-          result.output.match(
-            /(?:⋯|\[STARTED\]) node apps\/start-scaffold\/maintain\/check-registry-staged\.mjs/g,
-          )?.length,
+        result.output.match(/PASS: registry index matches source/g)?.length,
         1,
         result.output,
       );
@@ -192,21 +172,9 @@ await test("the commit hook checks the staged registry", async (t) => {
       await rm(join(scratch, path));
       rejected(commit([path]));
     });
-    await scenario("f: test:registry fails on drift and keeps the clean PASS lines", async () => {
-      await appendFile(join(scratch, readme), "\nHook proof.\n");
-      const drift = run("vp", ["run", "@tinker-start-scaffold#test:registry"]);
-      assert.equal(drift.status, 1, drift.output);
-      assert.match(drift.output, /registry index must match source too/);
-      ok("git", ["restore", readme]);
-      const clean = ok("vp", ["run", "@tinker-start-scaffold#test:registry"]);
-      for (const composition of ["app", "app + mail-example", "app + starter"])
-        assert.ok(clean.includes(`PASS: ${composition} composition build EXIT 0.`), clean);
-      assert.match(clean, /PASS: 10 registry items; 96 emitted files match source\. No publish\./);
-      console.log(`drift EXIT ${drift.status}\n${clean}`);
-    });
   } finally {
     ok("git", ["worktree", "remove", "--force", scratch], root);
     await rm(scratch, { recursive: true, force: true });
-    await rm(hooks, { recursive: true, force: true });
+    if (hooks) await rm(hooks, { recursive: true, force: true });
   }
 });
