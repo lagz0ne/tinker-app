@@ -4,16 +4,12 @@ import { expect, test } from "vite-plus/test";
 
 import { auth } from "#tinker/app.server";
 
-import { env } from "../src/env";
 import { handleAuth } from "../src/parts/auth/handle.server";
 import { auth as off } from "../src/parts/auth/off";
 import { auth as on } from "../src/parts/auth/on.server";
 import { authSettings, authStartup } from "../src/parts/auth/settings";
 
-const keys = env({
-  PUBLIC_ORIGIN: "https://shop.example",
-  AUTH_SECRET: "s".repeat(32),
-});
+const keys = authSettings({ origin: "https://shop.example", secret: "s".repeat(32) });
 
 test("handleAuth hands the whole request to the app's auth library and returns its reply", async () => {
   const root = createScope();
@@ -52,8 +48,10 @@ test("handleAuth takes only a request, and a failing auth library fails the call
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("the part reads its two keys once and hands them to the app's auth library", async () => {
-  const root = createScope({ tags: keys });
+test("the part fills its settings from its two keys at the entry", async () => {
+  const root = createScope({
+    tags: on.settings({ PUBLIC_ORIGIN: "https://shop.example", AUTH_SECRET: "s".repeat(32) }),
+  });
   expect(root.resolve(authSettings)).toEqual({
     origin: "https://shop.example",
     secret: "s".repeat(32),
@@ -61,34 +59,23 @@ test("the part reads its two keys once and hands them to the app's auth library"
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("an unset, empty, or refused key is named in one BadSettings", async () => {
-  const unset = createScope({ tags: env({ PUBLIC_ORIGIN: "", AUTH_SECRET: undefined }) });
-  expect(() => unset.resolve(authSettings)).toThrow(
+test("an unset, empty, or refused key is named in one BadSettings, before any scope", () => {
+  expect(() => on.settings({ PUBLIC_ORIGIN: "", AUTH_SECRET: undefined })).toThrow(
     expect.objectContaining({
       kind: "BadSettings",
       payload: { part: "auth", keys: ["PUBLIC_ORIGIN", "AUTH_SECRET"] },
     }),
   );
-  expect((await unset.close({ graceful: true })).status).toBe("success");
-
-  const refused = createScope({
-    tags: env({ PUBLIC_ORIGIN: "ftp://shop.example", AUTH_SECRET: "s".repeat(31) }),
-  });
-  expect(() => refused.resolve(authSettings)).toThrow(
+  expect(() =>
+    on.settings({ PUBLIC_ORIGIN: "ftp://shop.example", AUTH_SECRET: "s".repeat(31) }),
+  ).toThrow(
     expect.objectContaining({ payload: { part: "auth", keys: ["PUBLIC_ORIGIN", "AUTH_SECRET"] } }),
   );
-  expect((await refused.close({ graceful: true })).status).toBe("success");
 });
 
-test("with auth on, the app root does not start while an auth key is refused", async () => {
-  const root = createScope({
-    extensions: on.extensions,
-    tags: env({ PUBLIC_ORIGIN: "https://shop.example", AUTH_SECRET: "short" }),
-  });
-  await expect(root.ready).rejects.toMatchObject({
-    kind: "BadSettings",
-    payload: { part: "auth", keys: ["AUTH_SECRET"] },
-  });
+test("with auth on, the app root does not start without the auth settings", async () => {
+  const root = createScope({ extensions: on.extensions });
+  await expect(root.ready).rejects.toThrow();
   expect((await root.close({ graceful: true })).status).toBe("failed");
 });
 
@@ -101,20 +88,17 @@ test("with auth on and good keys, the app root starts with them read", async () 
 });
 
 test("with auth off, the app root reads no auth key", async () => {
-  const root = createScope({ extensions: off.extensions, tags: env({}) });
+  const root = createScope({ extensions: off.extensions, tags: off.settings({}) });
   await root.ready;
   expect(off.extensions).toEqual([]);
+  expect(off.settings({ AUTH_SECRET: "short" })).toEqual([]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("the auth part's work shows on the trace as auth.settings and handleAuth", async () => {
+test("the auth part's work shows on the trace as handleAuth; its settings are a tag", async () => {
   const root = createScope({ observe: { history: 20 }, extensions: [authStartup], tags: keys });
   await root.ready;
   await root.settle(handleAuth, { input: new Request("http://app/api/auth/get-session") });
-  expect(root.spans().map(({ name }) => name)).toEqual([
-    "auth.settings",
-    "test.auth",
-    "handleAuth",
-  ]);
+  expect(root.spans().map(({ name }) => name)).toEqual(["test.auth", "handleAuth"]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

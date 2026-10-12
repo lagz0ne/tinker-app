@@ -1,33 +1,40 @@
-import { extension, resource } from "@tinker/core";
+import { extension, tag } from "@tinker/core";
 import type { Many, Scope } from "@tinker/core";
 
 import { readPartEnv } from "../../../lib/part-env.mjs";
 import basePackage from "../../../package.json" with { type: "json" };
-import { env } from "../../env";
+import type { Env } from "../../env";
 import { raise } from "../../errors";
 
 export declare namespace Auth {
   /** What the app's `auth` resource builds on: the public origin and the signing secret. */
   type Settings = { origin: string; secret: string };
-  /** What the auth part gives the server entry (ADR 0106): extensions for the app root. */
-  type ServerPart = { readonly extensions: Many<Scope.Extension<unknown>> };
+  /**
+   * What the auth part gives the server entry (ADR 0106): extensions for the app root, and
+   * how the entry fills {@link authSettings} from env (ADR 0113).
+   */
+  type ServerPart = {
+    readonly extensions: Many<Scope.Extension<unknown>>;
+    readonly settings: Env.Read;
+  };
 }
 
-/**
- * The auth part's own env keys, read once and checked (ADR 0106). Neither has a default:
- * a secret must never fall back, and the origin is where the app is served.
- */
-export const authSettings = resource({
-  label: "auth.settings",
-  depends: { env },
-  factory: ({ env }): Auth.Settings => {
-    const { values, refused } = readPartEnv(basePackage.tinker.parts.auth.env, env);
-    if (refused.length > 0) raise("BadSettings", { part: "auth", keys: refused });
-    return { origin: values.PUBLIC_ORIGIN, secret: values.AUTH_SECRET };
-  },
-});
+/** What auth needs; the server entry fills it from env, a test fills it by hand (ADR 0113). */
+export const authSettings = tag<Auth.Settings>({ label: "auth.settings" });
 
-/** On the app root: it does not start while an auth key is unset or refused. */
+/**
+ * Fills {@link authSettings} from the auth part's env keys, checked once at start. Neither has
+ * a default: a secret must never fall back, and the origin is where the app is served.
+ * @param env - From the server entry's copy of process.env; why: the keys to check.
+ */
+export function readAuthSettings(env: Env.Values) {
+  const { values, refused } = readPartEnv(basePackage.tinker.parts.auth.env, env);
+  if (refused.length > 0) raise("BadSettings", { part: "auth", keys: refused });
+
+  return authSettings({ origin: values.PUBLIC_ORIGIN, secret: values.AUTH_SECRET });
+}
+
+/** On the app root: it does not start without the auth settings. */
 export const authStartup = extension({
   label: "auth",
   hooks: {

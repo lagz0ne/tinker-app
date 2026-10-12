@@ -8,7 +8,7 @@ import { raise } from "../../errors";
 import { ingestTelemetry } from "./observer";
 import type { Telemetry } from "./records";
 import { telemetryBatch } from "./records.server";
-import { telemetrySettings } from "./settings";
+import { telemetryService } from "./settings";
 
 /** Borrowed from the telemetry root. Requests neither create nor close that owner. */
 export const browserTelemetry = tag<(batch: Telemetry.Batch) => void>({
@@ -38,10 +38,10 @@ export const receiveTelemetry = operation({
  */
 export const browserIngest = resource({
   label: "telemetry.browserIngest",
-  depends: { ingest: ingestTelemetry.controller, settings: telemetrySettings },
-  factory: ({ ingest, settings }) => [
+  depends: { ingest: ingestTelemetry.controller, service: telemetryService },
+  factory: ({ ingest, service }) => [
     browserTelemetry((batch) => {
-      for (const record of batch.logs) record.service = settings.service;
+      for (const record of batch.logs) record.service = service;
       ingest.run({ input: batch });
     }),
   ],

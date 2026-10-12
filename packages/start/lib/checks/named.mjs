@@ -68,9 +68,12 @@ function augmentProblems(root) {
 export function named(root) {
   const installed = examples(root);
   const found = appFiles.filter(({ file, reads }) => reads && existsSync(join(root, file)));
-  const missing = found
-    .filter(({ file, reads }) => !mayExport(join(root, file), reads))
-    .map(({ file, reads }) => say.export(file, reads));
+  const missing = found.flatMap(({ file, reads }) =>
+    [reads]
+      .flat()
+      .filter((name) => !mayExport(join(root, file), name))
+      .map((name) => say.export(file, name)),
+  );
   const ignored = ignoredFiles
     .filter(({ file }) => existsSync(join(root, file)))
     .map(({ file, hint }) => say.ignored(file, hint));

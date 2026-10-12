@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 /**
  * App files the glue picks up, and nothing else (ADR 0106): the alias the base imports each by,
- * the export it reads, and the base default used while the file is absent.
+ * the exports it reads, and the base default used while the file is absent.
  * Named files: router, start, server, style, and the shell (a route, so it has no alias).
  * Seam files: the two src/lib/tinker files.
  */
@@ -36,7 +36,7 @@ export const appFiles = [
   {
     file: "src/lib/tinker.server.ts",
     alias: "#tinker/app.server",
-    reads: "extensions",
+    reads: ["extensions", "settings"],
     fallback: "src/defaults/app.server.ts",
   },
 ];

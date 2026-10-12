@@ -586,15 +586,15 @@ const breaks = [
   },
   {
     name: "a tab gets the storage URLs",
-    file: "src/parts/telemetry/settings.ts",
-    find: 'if (side === "browser") return { side, service };',
-    replace: "",
+    file: "src/parts/telemetry/delivery.ts",
+    find: 'if (side === "browser") {',
+    replace: "if (false) {",
   },
   {
     name: "a tab's batch keeps the tab's service",
     file: "src/parts/telemetry/ingest.server.ts",
-    find: "service: settings.service",
-    replace: "service: record.service",
+    find: "record.service = service;",
+    replace: "record.service = record.service;",
   },
   {
     name: "the ingest route takes any origin",

@@ -61,7 +61,8 @@ test("tinker() imported under another name, and called once, builds", () => {
 test("a valid export * in a seam file and a route file builds", () => {
   const root = goodApp({
     "src/lib/tinker.server.ts": 'export * from "../backend/seam.server";\n',
-    "src/backend/seam.server.ts": "export const extensions = [];\n",
+    "src/backend/seam.server.ts":
+      "export const extensions = [];\nexport const settings = () => [];\n",
     "src/routes/about.tsx": 'export * from "../frontend/about";\n',
     "src/frontend/about.tsx": 'export const Route = createFileRoute("/about")({});\n',
   });
@@ -84,7 +85,8 @@ test("a glue or version problem only warns: the build itself still works", () =>
 test("with auth on, a seam without readAccount stops the build with doctor's line", () => {
   const root = goodApp({
     ".tinker/base.json": JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] }),
-    "src/lib/tinker.server.ts": "export const extensions = [];\nexport const auth = 1;\n",
+    "src/lib/tinker.server.ts":
+      "export const extensions = [];\nexport const settings = () => [];\nexport const auth = 1;\n",
   });
   expect(buildChecks(root).errors).toEqual([
     "tinker doctor, named files: src/lib/tinker.server.ts:1 does not export readAccount; the auth part reads it",
@@ -95,7 +97,7 @@ test("with sync on, a client seam without streamMessage stops the build with doc
   const root = goodApp({
     ".tinker/base.json": JSON.stringify({ base: "0.6.0", parts: ["telemetry", "auth", "sync"] }),
     "src/lib/tinker.server.ts":
-      "export const extensions = [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
+      "export const extensions = [];\nexport const settings = () => [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
     "src/lib/tinker.ts":
       'export const extensions = [];\nexport const records = 1, readSnapshot = 2, readBootstrap = 3, readBatch = 4;\ndeclare module "@tinker/start" {\n  interface Register { change: number }\n}\n',
   });

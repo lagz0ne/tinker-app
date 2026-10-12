@@ -1,4 +1,4 @@
-import { createScope, operation } from "@tinker/core";
+import { createScope, operation, tag } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { version } from "../package.json";
@@ -6,13 +6,15 @@ import { responseBodies } from "../src/backend/body.server";
 import { health } from "../src/backend/health";
 import entry from "../src/defaults/server";
 import { devErrorPage } from "../src/entry/dev-error";
-import { env, readResult } from "../src/server";
+import { readResult } from "../src/server";
 import { startRequests } from "../src/start";
+
+const greetingName = tag<string>({ label: "test.greetingName", default: "nobody" });
 
 const greet = operation({
   label: "test.greet",
-  depends: { env },
-  run: ({ env }) => `Hello, ${env.GREETING_NAME ?? "nobody"}.`,
+  depends: { name: greetingName },
+  run: ({ name }) => `Hello, ${name}.`,
 });
 
 const refuse = operation({
@@ -21,7 +23,7 @@ const refuse = operation({
 });
 
 test("readResult returns a settled value and throws a settled failure as is", async () => {
-  const root = createScope({ tags: [env({ GREETING_NAME: "Ada" })] });
+  const root = createScope({ tags: [greetingName("Ada")] });
   expect(readResult(root.settle(greet))).toBe("Hello, Ada.");
 
   const failed = root.settle(refuse);

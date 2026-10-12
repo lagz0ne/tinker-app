@@ -50,7 +50,20 @@ try {
 }
 ```
 
-Give `settings` the database, auth, and mail tags.
+Fill each settings tag with a typed value.
+There is no `env` tag; bind the typed tag:
+
+```ts
+const settings = [
+  databaseUrl(new URL("postgres://proof")),
+  authSettings({
+    origin: "http://localhost:4318",
+    secret: "test-secret-with-32-letters-or-more",
+  }),
+];
+```
+
+`authSettings` comes from `@tinker/start/server`.
 The worked tests show their filled values.
 For outgoing HTTP, bind httpBackend through the base testing entry:
 

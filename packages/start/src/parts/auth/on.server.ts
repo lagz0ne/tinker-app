@@ -1,5 +1,5 @@
-import { authStartup } from "./settings";
+import { authStartup, readAuthSettings } from "./settings";
 import type { Auth } from "./settings";
 
-/** The auth part, on, for the server entry: the app root checks the auth keys at start. */
-export const auth: Auth.ServerPart = { extensions: [authStartup] };
+/** The auth part, on, for the server entry: the entry fills its settings; the root checks them. */
+export const auth: Auth.ServerPart = { extensions: [authStartup], settings: readAuthSettings };

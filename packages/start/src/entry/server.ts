@@ -3,13 +3,13 @@ import { defaultStreamHandler as renderStream } from "@tanstack/react-start/serv
 import type { Observe, Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 
-import { extensions } from "#tinker/app.server";
+import { extensions, settings as appSettings } from "#tinker/app.server";
 import { auth, telemetry } from "#tinker/parts.server";
 import app from "#tinker/server";
 
 import { backendStop } from "../backend/lifetime";
 import { retainRender } from "../backend/render-lifetime.server";
-import { env } from "../env";
+import type { Env } from "../env";
 import { abortReasons, raise } from "../errors";
 import { startRequests } from "../start";
 import { devErrorPage } from "./dev-error";
@@ -34,13 +34,16 @@ const renderRequest = createStart(async (context) => {
  * telemetry root observes the app root, so its own sends are never traced; it closes last.
  */
 async function start() {
-  const settings = env({ ...process.env });
+  const values = { ...process.env };
+  const readSettings: Env.Read = appSettings;
+  const toolSettings = telemetry.settings(values);
+  const appSettingTags = [auth.settings(values), readSettings(values)];
 
   const toolStop = new AbortController();
   const tools = createScope({
     signal: toolStop.signal,
     extensions: telemetry.extensions,
-    tags: [settings, telemetry.tags],
+    tags: [toolSettings, telemetry.tags],
   });
   await tools.ready;
 
@@ -49,7 +52,7 @@ async function start() {
     signal: stop.signal,
     observe: tools.resolve(telemetry.observe),
     extensions: [startRequests, auth.extensions, extensions],
-    tags: [backendStop(stop.signal), settings, tools.resolve(telemetry.appTags)],
+    tags: [backendStop(stop.signal), appSettingTags, tools.resolve(telemetry.appTags)],
   });
 
   try {

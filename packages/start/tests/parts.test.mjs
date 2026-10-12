@@ -17,13 +17,15 @@ test("a part switch that is not true or false fails the build", () => {
   expect(() => partsOn({ telemetry: 0 })).toThrow("tinker(): telemetry takes true or false");
 });
 
-test("the telemetry part mounts /api/telemetry and reads three keys, each with a default", () => {
+test("the telemetry part mounts /api/telemetry and reads five keys, each with a default", () => {
   expect(parts.telemetry.routes).toEqual({ "/api/telemetry": "src/routes/api.telemetry.ts" });
   expect(readPartEnv(parts.telemetry.env, {})).toEqual({
     values: {
       VICTORIA_TRACES_URL: "http://127.0.0.1:10428/insert/opentelemetry/v1/traces",
       VICTORIA_LOGS_URL: "http://127.0.0.1:9428/insert/jsonline",
       OTEL_SERVICE_NAME: "tinker-app",
+      LOG_LEVEL: "info",
+      SPAN_HISTORY: "80",
     },
     refused: [],
   });
@@ -46,8 +48,16 @@ test("a value that breaks its key's rule is refused, every such key at once", ()
       VICTORIA_TRACES_URL: "not a url",
       VICTORIA_LOGS_URL: "ftp://logs.example/insert",
       OTEL_SERVICE_NAME: "any text",
+      LOG_LEVEL: "loud",
+      SPAN_HISTORY: "-1",
     }).refused,
-  ).toEqual(["VICTORIA_TRACES_URL", "VICTORIA_LOGS_URL"]);
+  ).toEqual(["VICTORIA_TRACES_URL", "VICTORIA_LOGS_URL", "LOG_LEVEL", "SPAN_HISTORY"]);
+
+  expect(rules.level.accepts("warn")).toBe(true);
+  expect(rules.count.accepts("0")).toBe(true);
+  expect(rules.count.accepts("1.5")).toBe(false);
+  expect(rules.count.accepts("9".repeat(400))).toBe(false);
+
   expect(rules.http.wants).toBe("an http(s) URL");
   expect(rules.http.accepts("xhttp://a.example")).toBe(false);
   expect(rules.http.accepts("http://127.0.0.1:1/x")).toBe(true);

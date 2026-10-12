@@ -5,7 +5,7 @@ import { consoleOutput } from "./console";
 import { delivery } from "./delivery";
 import { exportHealth } from "./health";
 import type { Telemetry } from "./records";
-import { telemetrySettings } from "./settings";
+import { telemetrySide } from "./settings";
 
 /** One encoder for every record size; sizes are taken once, at ingest. */
 const encoder = new TextEncoder();
@@ -15,14 +15,14 @@ export const queue = resource({
   label: "telemetry.queue",
   target: "scope",
   depends: {
-    settings: telemetrySettings,
+    side: telemetrySide,
     health: exportHealth.controller,
     delivery,
     console: consoleOutput,
   },
-  factory: ({ settings, health, delivery, console }, ctx) => {
+  factory: ({ side, health, delivery, console }, ctx) => {
     let records: Telemetry.Record[] = [];
-    const browser = settings.side === "browser";
+    const browser = side === "browser";
     const batchLimit = browser ? 32_000 : 48_000;
     /** Reserve the JSON envelope and one comma per browser record. */
     const recordLimit = browser ? batchLimit - 24 : batchLimit;
@@ -30,7 +30,7 @@ export const queue = resource({
     const commaBytes = browser ? 1 : 0;
     const scratch = new Uint8Array(recordLimit + 4);
 
-    const stdout = browser ? undefined : (console ?? process.stdout);
+    const stdout = browser ? null : console;
     let consoleLines: string[] = [];
     let consoleBytes = 0;
     let draining = false;
@@ -126,7 +126,7 @@ export const queue = resource({
         }
       },
       start(flush: () => Promise<void>) {
-        if (settings.side !== "ssr") {
+        if (side !== "ssr") {
           timer = Promise.resolve().then(async () => {
             while (!stopTimer.signal.aborted) {
               try {

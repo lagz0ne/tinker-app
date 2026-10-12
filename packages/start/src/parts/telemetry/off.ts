@@ -8,6 +8,7 @@ export const telemetry = {
   tags: [],
   observe: resource({ label: "telemetry.off", factory: () => undefined }),
   appTags: resource({ label: "telemetry.off.appTags", factory: () => [] }),
+  settings: () => [],
   renderObserve: resource({ label: "telemetry.off.render", factory: () => undefined }),
   renderNs: namespace(),
 } satisfies Telemetry.ServerPart & {

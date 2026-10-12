@@ -3,6 +3,7 @@ import { operation, resource, tag } from "@tinker/core";
 import type { Many, Scope } from "@tinker/core";
 import { afterAll, beforeAll } from "vite-plus/test";
 
+import type { Env } from "../../src/env";
 import type { Database } from "../../src/parts/sync/database";
 
 /**
@@ -11,6 +12,7 @@ import type { Database } from "../../src/parts/sync/database";
  * and signs a request in by its `x-account` header, while that account is in `signedIn`.
  */
 export const extensions: Many<Scope.Extension<unknown>> = [];
+export const settings: Env.Read = () => [];
 export const signedIn = tag<ReadonlySet<string>>({ label: "test.signedIn", default: new Set() });
 
 export const auth = resource({

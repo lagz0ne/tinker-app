@@ -1089,6 +1089,22 @@ function addCaller(use, name, symbol, node, source, callers) {
   callers.set(caller ?? source, callerLabel(use, caller));
 }
 
+/**
+ * The base calls the server seam's `settings` once, at start (ADR 0113): env becomes the app's
+ * settings tags there. The function the seam exports as `settings` needs no second site.
+ */
+function baseCallers(node, name) {
+  const seam = sources.find((source) => pathOf(source) === "src/lib/tinker.server.ts");
+  const module = seam && checker.getSymbolAtLocation(seam);
+  const exported =
+    module && checker.getExportsOfModule(module).find((item) => item.name === "settings");
+  if (!exported) return [];
+
+  const target =
+    exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
+  return target === symbolOf(name) ? ["@tinker/start#serverEntry"] : [];
+}
+
 function callSites(name, node) {
   const symbol = symbolOf(name),
     callers = new Map();
@@ -1191,8 +1207,9 @@ function checkPlainFunction(node) {
     return;
   }
 
-  const callers = callSites(name, node);
-  if (callers.length < 2) fail(node, "two-sites");
+  const base = baseCallers(node, name);
+  const callers = [...callSites(name, node), ...base];
+  if (callers.length < 2 && base.length === 0) fail(node, "two-sites");
 
   plain.push(
     `- **${pathOf(node)}#${nameOf(name)}**\n${params.join("\n")}\n  - Callers:\n${callers.map((caller) => `    - \`${caller}\``).join("\n")}`,

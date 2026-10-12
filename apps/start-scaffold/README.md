@@ -137,10 +137,15 @@ export default defineConfig({
 ```ts
 import { databaseSetup } from "@/backend/database.server";
 export const extensions = [databaseSetup];
+export { settings } from "@/backend/settings.server";
 export { database } from "@/backend/database.server";
 export { auth, readAccount } from "@/backend/auth.server";
 export { bootstrap } from "@/backend/sync.server";
+export { settings } from "@/backend/settings.server";
 ```
+
+`settings` checks each env key with zod
+and fills the database and mail tags.
 
 Read the filled [browser seam](src/lib/tinker.ts) for
 records, wire readers, and the app's `Register` bodies.
@@ -294,8 +299,10 @@ The registry build refuses a protected app target.
 It also refuses two items that own the same target.
 
 - `mail-example`: SMTP settings, client, send action, and errors.
-  No base part or seam export is needed.
-  SMTP settings are needed only when sending mail.
+  No base part is needed.
+  Fill `smtpUrl` and `mailFrom` in `settings`
+  in `src/lib/tinker.server.ts`.
+  The app then needs the SMTP settings to start.
 - `postgres-auth-mail-example`: the shared demo bodies,
   migrations, UI, and a new page at `/demo`.
   It depends on mail.
@@ -342,12 +349,14 @@ export { database } from "@/backend/database.server";
 export { auth } from "@/backend/auth.server";
 export { readAccount } from "@/backend/auth.server";
 export { bootstrap } from "@/backend/sync.server";
+export { settings } from "@/backend/settings.server";
 ```
 
 For an empty server seam, the filled startup list is:
 
 ```ts
 export { extensions } from "@/examples/demo.server";
+export { settings } from "@/examples/demo.server";
 ```
 
 The browser seam exports the copied demo's readers and types:

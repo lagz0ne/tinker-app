@@ -1,6 +1,6 @@
 export { readResult } from "./backend/result.server";
 export { backendStop, requestStop } from "./backend/lifetime";
-export { env } from "./env";
+export type { Env } from "./env";
 export { authSettings } from "./parts/auth/settings";
 export type { Auth } from "./parts/auth/settings";
 export { eventHistory } from "./parts/sync/history.server";

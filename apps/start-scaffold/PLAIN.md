@@ -5,6 +5,11 @@ Callers include direct calls and typed callback registrations.
 Repeated calls by one caller count once; self-calls do not count.
 Tests and generated files do not count.
 
+- **src/backend/settings.server.ts#settings**
+  - `env`: `Env.Values`. From the base's server entry; why: the keys to check and convert.
+  - Callers:
+    - `@tinker/start#serverEntry`
+
 - **src/contracts/commands.ts#readProfileCommand**
   - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.
   - Callers:
@@ -35,11 +40,10 @@ Tests and generated files do not count.
   - Callers:
     - `src/backend/auth.server.ts#currentUser.factory`
     - `src/backend/counter.server.ts#incrementCounter.run.callback1`
-    - `src/backend/database.server.ts#databaseSettings.factory`
-    - `src/backend/mail.server.ts#mailSettings.factory`
     - `src/backend/profile.server.ts#notifyProfile.run`
     - `src/backend/profile.server.ts#retryNotification.run.callback1`
     - `src/backend/profile.server.ts#saveProfile.run.callback1`
+    - `src/backend/settings.server.ts#settings`
     - `src/backend/sync.server.ts#bootstrapPrivate.run.callback1`
     - `src/backend/sync.server.ts#replayPrivate.run`
     - `src/backend/sync.server.ts#replayPublic.run`

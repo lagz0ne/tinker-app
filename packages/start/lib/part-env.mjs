@@ -8,6 +8,14 @@ export const rules = {
     wants: "at least 32 characters",
     accepts: (value) => value.length >= 32,
   },
+  level: {
+    wants: "debug, info, warn, or error",
+    accepts: (value) => ["debug", "info", "warn", "error"].includes(value),
+  },
+  count: {
+    wants: "a whole number, 0 or more",
+    accepts: (value) => /^\d+$/.test(value) && Number.isSafeInteger(Number(value)),
+  },
 };
 
 /**

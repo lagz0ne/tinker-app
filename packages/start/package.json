@@ -104,6 +104,14 @@
           },
           "OTEL_SERVICE_NAME": {
             "default": "tinker-app"
+          },
+          "LOG_LEVEL": {
+            "default": "info",
+            "rule": "level"
+          },
+          "SPAN_HISTORY": {
+            "default": "80",
+            "rule": "count"
           }
         }
       },

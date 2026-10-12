@@ -1,6 +1,5 @@
 import { createScope, namespace, operation } from "@tinker/core";
 import { makeTestClock } from "@tinker/core/testing";
-import { env } from "@tinker/start/server";
 import {
   exportHealth,
   flushTelemetry,
@@ -9,6 +8,8 @@ import {
   serverTelemetry,
 } from "@tinker/start/testing";
 import { expect, test } from "vite-plus/test";
+
+import { logsUrl, telemetryService, tracesUrl } from "../src/parts/telemetry/settings";
 
 /** Main's server part has only `observe`; these defaults keep the regression runnable there. */
 const telemetry = Object.assign(
@@ -21,11 +22,11 @@ const off = Object.assign(
   offTelemetry,
 );
 
-const storageEnv = env({
-  VICTORIA_TRACES_URL: "http://storage.test/traces",
-  VICTORIA_LOGS_URL: "http://storage.test/logs",
-  OTEL_SERVICE_NAME: "test-start",
-});
+const storageTags = [
+  telemetryService("test-start"),
+  tracesUrl(new URL("http://storage.test/traces")),
+  logsUrl(new URL("http://storage.test/logs")),
+];
 
 const render = operation({ label: "test.render", run: () => "page" });
 
@@ -36,7 +37,7 @@ test("render close finishes while the process telemetry send is held", async () 
     clock: makeTestClock(),
     extensions: telemetry.extensions,
     tags: [
-      storageEnv,
+      storageTags,
       telemetry.tags,
       httpBackend(async () => {
         sending.resolve();
@@ -70,7 +71,7 @@ test("process close sends two renders from one queue with side ssr", async () =>
     clock: makeTestClock(),
     extensions: telemetry.extensions,
     tags: [
-      storageEnv,
+      storageTags,
       telemetry.tags,
       httpBackend(async (_input, init) => {
         requests.push(typeof init?.body === "string" ? init.body : "");

@@ -87,7 +87,8 @@ async function wire(consumer, item) {
   for (const [file, names] of Object.entries(item.meta.seams)) {
     const path = join(consumer, file);
     let text = await readFile(path, "utf8");
-    for (const needed of Object.values(names)) {
+    for (const [name, needed] of Object.entries(names)) {
+      text = text.replace(`export const ${name} = () => [];\n`, "");
       if (needed.include) {
         text =
           `import { databaseSetup } from "../backend/database.server";

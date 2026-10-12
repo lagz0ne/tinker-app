@@ -51,7 +51,7 @@
       "path": "templates/tinker.server.ts.txt",
       "type": "registry:file",
       "target": "~/src/lib/tinker.server.ts",
-      "content": "export const extensions = [];\n"
+      "content": "export const extensions = [];\nexport const settings = () => [];\n"
     },
     {
       "path": "templates/env.example",

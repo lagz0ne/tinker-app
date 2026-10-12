@@ -1,13 +1,13 @@
 import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { syncClient, applyBootstrap } from "@tinker/start/client";
-import { env } from "@tinker/start/server";
+import { authSettings } from "@tinker/start/server";
 import { accountOwner, tabStop, receiveMessage } from "@tinker/start/testing";
 import { openSync, notifications, backendStop, requestStop } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
 import { incrementCounter } from "@/backend/counter.server";
-import { database, migrate } from "@/backend/database.server";
+import { database, migrate, databaseUrl } from "@/backend/database.server";
 import { mail } from "@/backend/mail.server";
 import type { Mail } from "@/backend/mail.server";
 import { saveProfile } from "@/backend/profile.server";
@@ -18,11 +18,13 @@ import { streamMessage } from "@/lib/tinker";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
-const settings = env({
-  DATABASE_URL: "postgres://proof",
-  PUBLIC_ORIGIN: "http://localhost:4318",
-  AUTH_SECRET: "test-secret-with-at-least-thirty-two-letters",
-});
+const settings = [
+  databaseUrl(new URL("postgres://proof")),
+  authSettings({
+    origin: "http://localhost:4318",
+    secret: "test-secret-with-at-least-thirty-two-letters",
+  }),
+];
 
 function signup(name: string) {
   return new Request("http://localhost:4318/api/auth/sign-up/email", {

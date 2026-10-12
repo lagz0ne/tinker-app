@@ -10,6 +10,10 @@ Follow the parent repo's rules too, when present.
 Choose one of these four forms before adding app work.
 
 - **Tag:** fixed settings or a fact injected by the entry.
+  A unit depends on its own typed settings tags.
+  There is no `env` tag; the scope maker fills each tag.
+  Any outside effect (env, clock, network, console)
+  enters at a seam; unit bodies stay static.
 - **Data:** changing records, drafts, and visible progress.
   Use a `kind` union when states carry different values.
 - **Resource:** a shared client, current user, or owned queue.
@@ -97,6 +101,8 @@ node scripts/check-schema.mjs
 
 Run the repo's lint and strict style census when present.
 Settings come from `.env`; local services use `compose.yml`.
+The server seam's `settings(env)` checks the keys
+and fills each settings tag. The base calls it at start.
 
 ## TanStack setup
 

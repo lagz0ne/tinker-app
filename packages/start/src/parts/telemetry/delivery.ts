@@ -2,7 +2,7 @@ import { resource } from "@tinker/core";
 
 import { httpBackend } from "../../backend/http-backend";
 import type { Telemetry } from "./records";
-import { telemetrySettings } from "./settings";
+import { logsUrl, telemetryService, telemetrySide, tracesUrl } from "./settings";
 
 function browserBody(records: Telemetry.Record[]) {
   const traces: string[] = [];
@@ -38,9 +38,15 @@ function tracesBody(records: Telemetry.Record[], service: string) {
 /** Sends cached JSON without observing its own HTTP requests (ADR 0102). */
 export const delivery = resource({
   label: "telemetry.delivery",
-  depends: { settings: telemetrySettings, backend: httpBackend },
-  factory: ({ settings, backend }) => {
-    const logs = settings.side === "browser" ? undefined : new URL(settings.logs);
+  depends: {
+    side: telemetrySide,
+    service: telemetryService,
+    tracesUrl,
+    logsUrl,
+    backend: httpBackend,
+  },
+  factory: ({ side, service, tracesUrl, logsUrl, backend }) => {
+    const logs = side === "browser" ? undefined : new URL(logsUrl);
     logs?.searchParams.set("_time_field", "time");
     logs?.searchParams.set("_msg_field", "msg");
     logs?.searchParams.set("_stream_fields", "service,side");
@@ -71,7 +77,7 @@ export const delivery = resource({
 
     return {
       async send(records: Telemetry.Record[], signal: AbortSignal): Promise<Telemetry.Delivery> {
-        if (settings.side === "browser") {
+        if (side === "browser") {
           const accepted = await post(
             "/api/telemetry",
             browserBody(records),
@@ -84,7 +90,7 @@ export const delivery = resource({
         const lines: string[] = [];
         for (const record of records) if (record.kind === "log") lines.push(record.json);
         const [traces, acceptedLogs] = await Promise.all([
-          post(settings.traces, tracesBody(records, settings.service), signal, "application/json"),
+          post(tracesUrl.href, tracesBody(records, service), signal, "application/json"),
           post(
             logs!.href,
             lines.length ? lines.join("\n") : undefined,

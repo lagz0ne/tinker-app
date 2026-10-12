@@ -1,6 +1,7 @@
 import type { Many, Observe, Resource, Scope, Tag } from "@tinker/core";
 import type { z } from "zod";
 
+import type { Env } from "../../env";
 import type { span, logRecord, telemetryBatch } from "./records.server";
 
 export declare namespace Telemetry {
@@ -11,10 +12,6 @@ export declare namespace Telemetry {
   type Health = { pending: number; dropped: number } & (
     | { kind: "idle" | "queued" | "sending" }
     | { kind: "failed"; failure: string }
-  );
-  type Settings = { side: Side; service: string } & (
-    | { side: "server" | "ssr"; traces: string; logs: string }
-    | { side: "browser" }
   );
   type SpanBody = Omit<Span, "side">;
   /** Retained JSON is owned by the queue until storage accepts it. */
@@ -31,7 +28,11 @@ export declare namespace Telemetry {
     readonly observe: Resource.Handle<Observe.Config | undefined>;
   };
   /** What the telemetry part gives the server entry: also the app root's tags. */
-  type ServerPart = Part & { readonly appTags: Resource.Handle<Tag.Bindings> };
+  type ServerPart = Part & {
+    readonly appTags: Resource.Handle<Tag.Bindings>;
+    /** How the server entry fills the telemetry root's tags from env (ADR 0113). */
+    readonly settings: Env.Read;
+  };
 }
 
 const replaceBigint = (_key: string, entry: unknown) =>

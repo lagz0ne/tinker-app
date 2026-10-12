@@ -16,7 +16,8 @@ test("passes when each named and seam file exports what the base reads", () => {
     "src/start.ts": "export const startInstance = createStart(() => ({}));\n",
     "src/server.ts": "export default createServerEntry({ fetch: (r, next) => next(r) });\n",
     "src/lib/tinker.ts": "const extensions = [];\nexport { extensions };\n",
-    "src/lib/tinker.server.ts": "export function extensions() {}\n",
+    "src/lib/tinker.server.ts":
+      "export function extensions() {}\nexport const settings = () => [];\n",
   });
   expect(named(root).lines).toEqual([
     "each named or seam file exports what the base reads (src/router.ts, src/start.ts, src/server.ts, src/lib/tinker.ts, src/lib/tinker.server.ts); no Start file is ignored",
@@ -29,19 +30,22 @@ test("names each named or seam file that lacks the export the base imports", () 
     "src/start.ts": "export const start = 1;\n",
     "src/server.ts": "export const fetch = 1;\n",
     "src/lib/tinker.ts": "export const ext = [];\n",
+    "src/lib/tinker.server.ts": "export const extensions = [];\n",
   });
   expect(named(root).lines).toEqual([
     "src/router.ts:1 does not export router; the base imports it from this file",
     "src/start.ts:1 does not export startInstance; the base imports it from this file",
     "src/server.ts:1 does not export default; the base imports it from this file",
     "src/lib/tinker.ts:1 does not export extensions; the base imports it from this file",
+    "src/lib/tinker.server.ts:1 does not export settings; the base imports it from this file",
   ]);
 });
 
 test("follows export * to a local file, and skips the check when it cannot follow", () => {
   const followed = goodApp({
     "src/lib/tinker.server.ts": 'export * from "../backend/seam.server";\n',
-    "src/backend/seam.server.ts": "export const extensions = [];\nexport default 1;\n",
+    "src/backend/seam.server.ts":
+      "export const extensions = [];\nexport const settings = () => [];\nexport default 1;\n",
     "src/server.ts": 'export * from "./backend/seam.server";\n',
   });
   expect(named(followed).lines).toEqual([
@@ -79,7 +83,8 @@ test("with auth on, a missing server seam names the file and what the part reads
 test("with auth on, a seam without auth or readAccount names each missing name", () => {
   const root = goodApp({
     ".tinker/base.json": authOn,
-    "src/lib/tinker.server.ts": "export const extensions = [];\nexport const session = 1;\n",
+    "src/lib/tinker.server.ts":
+      "export const extensions = [];\nexport const settings = () => [];\nexport const session = 1;\n",
   });
   expect(named(root).lines).toEqual([
     "src/lib/tinker.server.ts:1 does not export auth; the auth part reads it",
@@ -90,7 +95,7 @@ test("with auth on, a seam without auth or readAccount names each missing name",
 test("with auth on, a seam with both names passes; with auth off, none is needed", () => {
   const seam = {
     "src/lib/tinker.server.ts":
-      'export const extensions = [];\nexport { auth, readAccount } from "../backend/auth";\n',
+      'export const extensions = [];\nexport const settings = () => [];\nexport { auth, readAccount } from "../backend/auth";\n',
     "src/backend/auth.ts": "export const auth = 1;\nexport const readAccount = 2;\n",
   };
   expect(named(goodApp({ ".tinker/base.json": authOn, ...seam })).status).toBe("ok");
@@ -111,7 +116,7 @@ test("with sync on, a server seam without database or bootstrap names each for t
     ".tinker/base.json": syncOn,
     ...clientSeam,
     "src/lib/tinker.server.ts":
-      "export const extensions = [];\nexport const auth = 1;\nexport const readAccount = 2;\n",
+      "export const extensions = [];\nexport const settings = () => [];\nexport const auth = 1;\nexport const readAccount = 2;\n",
   });
   expect(named(root).lines).toEqual([
     "src/lib/tinker.server.ts:1 does not export database; the sync part reads it",
@@ -123,7 +128,7 @@ test("with sync on, a client seam without a name the part reads names each, and 
   const root = goodApp({
     ".tinker/base.json": syncOn,
     "src/lib/tinker.server.ts":
-      "export const extensions = [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
+      "export const extensions = [];\nexport const settings = () => [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
     "src/lib/tinker.ts":
       "export const extensions = [];\nexport const records = 1, readBatch = 2;\n",
   });
@@ -140,7 +145,7 @@ test("with sync on, both seams and the Register bodies pass, wherever in src/ th
     ".tinker/base.json": syncOn,
     ...clientSeam,
     "src/lib/tinker.server.ts":
-      "export const extensions = [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
+      "export const extensions = [];\nexport const settings = () => [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
   });
   expect(named(root).status).toBe("ok");
 });
@@ -152,7 +157,7 @@ test("a Register augmentation of another module does not count", () => {
     "src/sync.ts":
       'export const records = 1, readSnapshot = 2, readBootstrap = 3, readBatch = 4, streamMessage = 5;\ndeclare module "@tanstack/react-router" {\n  interface Register { router: number }\n}\ndeclare module "@tinker/start" {\n  interface Other { x: number }\n}\n',
     "src/lib/tinker.server.ts":
-      "export const extensions = [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
+      "export const extensions = [];\nexport const settings = () => [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
   });
   expect(named(root).lines).toEqual([
     'src/ adds no Register bodies to "@tinker/start"; the sync part reads them: declare module "@tinker/start" { interface Register { … } }',

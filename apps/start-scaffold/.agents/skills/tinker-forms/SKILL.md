@@ -11,7 +11,7 @@ Read this before adding app code.
 Choose one form for each piece of work:
 
 - Tag: fixed settings passed in by the entry.
-  See `databaseSettings` in `src/backend/database.server.ts`.
+  See `databaseUrl` in `src/backend/database.server.ts`.
 - Data: changing records, drafts, and visible progress.
   See `profile` and `nameDraft` in `src/frontend/state.ts`.
 - Resource: a client or work owned by the app or session.
@@ -33,6 +33,46 @@ Say why none of the four forms can own that work.
 React views render data and invoke operations through hooks.
 Readers validate raw input once at the door.
 Never pass a scope or context bag to a helper.
+
+## Settings
+
+This is the authoring rule for every unit (ADR 0113).
+A provider exposes the exact values it needs as tags.
+It never reads `env`, and it never parses text.
+There is no `env` tag to depend on.
+Pick the type the provider uses, such as `URL`.
+See `smtpUrl` and `mailFrom` in `src/backend/mail.server.ts`:
+
+```ts
+export const smtpUrl = tag<URL>({
+  label: "mail.smtpUrl",
+});
+export const mailFrom = tag<string>({
+  label: "mail.from",
+});
+
+export const mail = resource({
+  label: "mail.sender",
+  depends: { url: smtpUrl, from: mailFrom, smtp },
+  /* … */
+});
+```
+
+Whoever makes the scope fills the tags:
+
+- the server seam's `settings(env)`, at start;
+- a test, with typed values.
+
+The base parts follow it too.
+Auth needs `authSettings`.
+Telemetry's units need `telemetrySide`, `telemetryService`,
+`tracesUrl`, `logsUrl`, `logLevel`, and `spanHistory`,
+each only what it uses.
+
+`settings` checks and converts env keys there.
+A refused key stops start with BadSettings.
+Test that conversion alone; no provider runs.
+See `tests/settings.test.ts`.
 
 ## Outgoing HTTP
 

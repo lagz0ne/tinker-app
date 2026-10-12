@@ -10,7 +10,6 @@ import { sync, telemetry } from "#tinker/parts";
 import { router } from "#tinker/router";
 import { routeTree } from "#tinker/routes";
 
-import { env } from "../env";
 import { abortReasons } from "../errors";
 import { pageEvents, tabStop } from "../parts/sync/client/tab";
 import { TinkerError, TinkerNotFound } from "./fallbacks";
@@ -31,7 +30,7 @@ const readTelemetry = createIsomorphicFn()
     const tools = createScope({
       signal: toolStop.signal,
       extensions: telemetry.extensions,
-      tags: [env({}), telemetry.tags],
+      tags: telemetry.tags,
     });
     await tools.ready;
     return {

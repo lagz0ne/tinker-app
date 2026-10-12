@@ -1,10 +1,11 @@
 import { extension, LEVELS, operation, resource } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 
+import { logConsole } from "./console";
 import { queue } from "./queue";
 import { encodeValue } from "./records";
 import type { Telemetry } from "./records";
-import { telemetrySettings } from "./settings";
+import { logLevel, spanHistory, telemetryService, telemetrySide } from "./settings";
 
 /**
  * Transfers trusted records to the telemetry root; callers must not edit them afterward.
@@ -86,23 +87,30 @@ function readSpan(span: Observe.Span): Telemetry.SpanBody {
 /**
  * The app root's observe option. Each finished span and each log line becomes a record in the
  * telemetry root's queue, and a line on the local console: JSON on the server, an object in the
- * browser. Core drops lines below info.
+ * browser. Core drops lines below {@link logLevel}.
  */
 export const observer = resource({
   label: "telemetry.observer",
-  depends: { queue, settings: telemetrySettings },
-  factory: ({ queue, settings }, ctx): Observe.Config => {
-    const { service, side } = settings;
+  depends: {
+    queue,
+    service: telemetryService,
+    side: telemetrySide,
+    level: logLevel,
+    history: spanHistory,
+    show: logConsole,
+  },
+  factory: ({ queue, service, side, level, history, show }, ctx): Observe.Config => {
     const write = (record: Telemetry.Log) => {
       const encoded = queue.add("log", side, record);
       if (side !== "browser") queue.writeConsole(encoded, record);
-      else if (record.level >= LEVELS.error) console.error(record);
-      else if (record.level >= LEVELS.warn) console.warn(record);
-      else console.info(record);
+      else if (!show) return;
+      else if (record.level >= LEVELS.error) show.error(record);
+      else if (record.level >= LEVELS.warn) show.warn(record);
+      else show.info(record);
     };
     return {
-      history: 80,
-      level: LEVELS.info,
+      history,
+      level,
       export(span) {
         queue.add("trace", side, readSpan(span));
         write({

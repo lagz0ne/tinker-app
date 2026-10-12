@@ -3,7 +3,6 @@ import { makeTestClock } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
 import { httpBackend } from "../src/backend/http-backend";
-import { env } from "../src/env";
 import { consoleOutput } from "../src/parts/telemetry/console";
 import { exportHealth } from "../src/parts/telemetry/health";
 import {
@@ -29,7 +28,6 @@ test("a 300-record burst is sent before the first tick, one batch at a time", as
     clock,
     extensions: [telemetryExport],
     tags: [
-      env({}),
       telemetrySide("server"),
       httpBackend(async (_input, init) => {
         active++;
@@ -87,7 +85,6 @@ test("a full batch arriving as a send ends is sent before any tick", async () =>
       clock,
       extensions: [telemetryExport],
       tags: [
-        env({}),
         telemetrySide("ssr"),
         httpBackend(async (_input, init) => {
           if (typeof init?.body === "string") sent += init.body.split("\n").length;
@@ -140,7 +137,6 @@ test("a slow console keeps a bounded batch and counts every dropped copy", async
   const root = createScope({
     extensions: [telemetryExport],
     tags: [
-      env({}),
       telemetrySide("ssr"),
       consoleOutput(sink),
       httpBackend(async (_input, init) => {
@@ -185,11 +181,7 @@ test("a slow console keeps a bounded batch and counts every dropped copy", async
 test("records refused during close are counted in the final health", async () => {
   const root = createScope({
     extensions: [telemetryExport],
-    tags: [
-      env({}),
-      telemetrySide("ssr"),
-      httpBackend(async () => new Response(null, { status: 503 })),
-    ],
+    tags: [telemetrySide("ssr"), httpBackend(async () => new Response(null, { status: 503 }))],
   });
   await root.ready;
   root.run(ingestTelemetry, { input: { traces: [], logs: [log] } });
@@ -204,11 +196,7 @@ test("records refused during close are counted in the final health", async () =>
 
 test("forcing close without the telemetry extension leaves no teardown error", async () => {
   const root = createScope({
-    tags: [
-      env({}),
-      telemetrySide("ssr"),
-      httpBackend(async () => new Response(null, { status: 503 })),
-    ],
+    tags: [telemetrySide("ssr"), httpBackend(async () => new Response(null, { status: 503 }))],
   });
   root.run(ingestTelemetry, { input: { traces: [], logs: [log] } });
   const closed = await root.close();

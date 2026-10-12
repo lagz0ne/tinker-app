@@ -15,7 +15,7 @@ App imports use only public entries:
 
 - `@tinker/start`: startRequests and sync types.
 - `@tinker/start/server`: eventHistory, readResult,
-  httpRequest, env, auth settings, and sync tables.
+  httpRequest, Env, auth settings, and sync tables.
 - `@tinker/start/client`: syncClient and snapshotLoader.
 - `@tinker/start/testing`: test bindings only.
 - `@tinker/start/vite`: the tinker plugin.
@@ -24,8 +24,12 @@ The base reads app values through two files:
 
 - `src/lib/tinker.ts`: extensions, records, readers,
   and the app's Register bodies.
-- `src/lib/tinker.server.ts`: extensions, database,
-  auth, readAccount, and bootstrap.
+- `src/lib/tinker.server.ts`: extensions, settings,
+  database, auth, readAccount, and bootstrap.
+
+`settings(env)` turns env into the app's settings tags.
+The base calls it once, at start.
+App units depend on those tags, never on `env`.
 
 Doctor 5 checks these names.
 Doctor 6 refuses base paths and private alias imports.

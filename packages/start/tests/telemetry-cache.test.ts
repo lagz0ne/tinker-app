@@ -2,11 +2,10 @@ import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { httpBackend } from "../src/backend/http-backend";
-import { env } from "../src/env";
 import { exportHealth } from "../src/parts/telemetry/health";
 import { flushTelemetry, ingestTelemetry, telemetryExport } from "../src/parts/telemetry/observer";
 import type { Telemetry } from "../src/parts/telemetry/records";
-import { telemetrySide } from "../src/parts/telemetry/settings";
+import { telemetryService, telemetrySide } from "../src/parts/telemetry/settings";
 
 const log: Telemetry.Log = {
   time: 1,
@@ -37,7 +36,7 @@ test("cached records keep exact log bytes and trace fields through a retry", asy
   const root = createScope({
     extensions: [telemetryExport],
     tags: [
-      env({ OTEL_SERVICE_NAME: "s" }),
+      telemetryService("s"),
       telemetrySide("ssr"),
       httpBackend(async (_input, init) => {
         bodies.push(typeof init?.body === "string" ? init.body : "");
@@ -78,7 +77,7 @@ test("cached records keep exact log bytes and trace fields through a retry", asy
 test("a full queue drops a record without reading its message", async () => {
   const root = createScope({
     extensions: [telemetryExport],
-    tags: [env({}), telemetrySide("ssr"), httpBackend(async () => new Response(null))],
+    tags: [telemetrySide("ssr"), httpBackend(async () => new Response(null))],
   });
   await root.ready;
 
