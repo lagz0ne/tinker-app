@@ -1,0 +1,1 @@
+{ "extends": "./.tinker/tsconfig.json" }
