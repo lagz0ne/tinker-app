@@ -9,8 +9,8 @@ Victoria stores traces and logs.
 This app runs on the package `@tinker/start`.
 The base owns entries, telemetry, auth routes, and sync.
 Core, React, and Start come from one GitHub release tag.
-The `0.7.0` release is prepared locally; it is not published.
-After the lead publishes it, start in an empty folder:
+There is no npm package; `package.json` names each tarball's URL.
+Start in an empty folder:
 
 ```bash
 npx shadcn@4.21.0 add \
