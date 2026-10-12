@@ -1,21 +1,26 @@
 # Tinker app
 
-A new app on `@tinker/start`.
-Each branch is one starting point.
-Each tag pins one of them to a release.
+Start a new app on `@tinker/start`.
+This branch holds no app.
+Each other branch is one starting point.
+Pick one below.
 
-## Start
+## Small app
 
-The small app needs no settings:
+One page, telemetry on, no settings:
 
 ```bash
-npx degit lagz0ne/tinker-app my-app
+npx degit lagz0ne/tinker-app#small my-app
 cd my-app
 npm install
 npm run dev
 ```
 
-The full demo has accounts, profiles, and todos.
+Source: [`small`](../../tree/small).
+
+## Full demo
+
+Accounts, profiles, todos, live sync, and mail.
 It needs Docker for Postgres and Mailpit:
 
 ```bash
@@ -28,15 +33,18 @@ npm run dev
 `npm run setup` writes `.env` with a new secret.
 It starts the local services and installs packages.
 
-Open `http://localhost:4318`.
+Source: [`demo`](../../tree/demo).
 
-## Pick a branch or a tag
+Open `http://localhost:4318` when dev starts.
 
-- `main`: the small app.
-- `demo`: the full demo.
-- `small-v0.8.0`, `demo-v0.8.0`: one release, pinned.
+## Pin a release
 
-Put the name after `#`:
+Each release tags every branch:
+
+- `small-v0.8.0`
+- `demo-v0.8.0`
+
+Put the tag after `#`:
 
 ```bash
 npx degit lagz0ne/tinker-app#demo-v0.8.0 my-app
@@ -53,9 +61,7 @@ lagz0ne/tinker-app/tar.gz/demo \
 
 ## Make it yours
 
-Click "Use this template" on GitHub for a repo of your own.
-It copies the `main` branch.
-For another branch, use degit, then push:
+After degit, push it as your own repo:
 
 ```bash
 git init && git add -A
