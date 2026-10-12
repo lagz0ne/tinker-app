@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { readProfileInput } from "./profile";
-import { readTodoChange } from "./todos";
+import { readProfileInput } from "./profile-contract";
+import { readTodoChange } from "./todos-contract";
 
 const profileCommand = z.object({ executionId: z.uuid(), profile: z.unknown() }).strict();
 const todoCommand = z.object({ executionId: z.uuid(), change: z.unknown() }).strict();

@@ -1,7 +1,7 @@
 import { Link, Navigate } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
 
-import type { Profile } from "@/contracts/profile";
+import type { Profile } from "@/contracts/profile-contract";
 
 import { signOut } from "./auth-actions";
 import { errorText } from "./error-text";

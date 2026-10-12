@@ -2,6 +2,44 @@
 
 `tinker upgrade` prints the sections between your old and new version.
 
+## 0.8.0
+
+Core, React, and Start move to 0.8.0 together.
+`tinker upgrade 0.8.0` sets all three release URLs.
+Five changes can need an app edit:
+
+- `env` is gone from `@tinker/start/server` (ADR 0113).
+  A unit never reads env; it names typed tags.
+  The `Env.Values` and `Env.Read` types stay.
+- `src/lib/tinker.server.ts`, when it exists,
+  must also export `settings`, an `Env.Read`:
+  `(env) => [bindings]` for the app's own tags.
+  Doctor names the file when it does not.
+  With no app tags: `export const settings = () => [];`.
+- A scope handle is not plain data (ADR 0108).
+  Do not spread it or destructure its verbs:
+  write `scope.run(op)`, not `const { run } = scope`.
+  `list.forEach(scope.release)` still works.
+- A preset replaces the whole node (ADR 0109).
+  Its factory or run gets empty deps;
+  a preset that needs a value makes it itself.
+- A path that ends a session sends
+  `accountNotice(userId)` from `@tinker/start/server`
+  after its commit (ADR 0110). Sign-out, session
+  revoke, and user delete in the scaffold already do.
+  Without it, a stream closes at its 30 s lease.
+
+New, with no edit needed:
+
+- `drizzleOrm` on `@tinker/start/server` gives a body
+  the Drizzle module through its deps (ADR 0107).
+- Telemetry reads `LOG_LEVEL` (default `info`)
+  and `SPAN_HISTORY` (default `80`).
+- One telemetry root per server process;
+  a render never waits for a telemetry send.
+- Faster core runs and closes, React handle reuse,
+  compressed HTML, and leaner sync frames.
+
 ## 0.7.0
 
 Core, React, and Start now share one version.

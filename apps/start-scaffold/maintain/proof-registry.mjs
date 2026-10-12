@@ -8,6 +8,14 @@ import { join, relative } from "node:path";
 
 import { app, root } from "./registry-source.mjs";
 
+/** The packed version, and a local next patch to upgrade to; follows every bump. */
+const current = JSON.parse(
+  await readFile(join(root, "packages/start/package.json"), "utf8"),
+).version;
+
+const [major, minor, patch] = current.split(".").map(Number);
+const nextVersion = `${major}.${minor}.${patch + 1}`;
+
 /** Real shadcn, packed releases, and HTTP; this proof stays outside scope tests. */
 const scratch = await mkdtemp(join(tmpdir(), "start-shadcn-proof-"));
 const packs = join(scratch, "packs");
@@ -70,15 +78,17 @@ try {
 
   const release = join(scratch, "new-base");
   await mkdir(release);
-  run("tar", ["-xzf", join(packs, "tinker-start-0.7.0.tgz"), "-C", release], root);
+  run("tar", ["-xzf", join(packs, `tinker-start-${current}.tgz`), "-C", release], root);
 
   const releaseRoot = join(release, "package");
   const next = JSON.parse(await readFile(join(releaseRoot, "package.json"), "utf8"));
-  next.version = "0.7.1";
+  next.version = nextVersion;
   await writeFile(join(releaseRoot, "package.json"), JSON.stringify(next, null, 2) + "\n");
   run("vp", ["pm", "pack", "--pack-destination", packs], releaseRoot);
 
-  console.log("Assumption: 0.7.1 is a local version-bump fixture, not a published release.");
+  console.log(
+    `Assumption: ${nextVersion} is a local version-bump fixture, not a published release.`,
+  );
 
   const staticServer = spawn(
     process.execPath,
@@ -200,14 +210,14 @@ try {
     configBefore[name] = await readFile(join(consumer, name), "utf8");
   }
 
-  run(tinker, ["upgrade", "0.7.1", "--from", packs]);
+  run(tinker, ["upgrade", nextVersion, "--from", packs]);
 
   assert.deepEqual(await hashes(join(consumer, "src")), userBefore);
   for (const [name, content] of Object.entries(configBefore)) {
     assert.equal(await readFile(join(consumer, name), "utf8"), content);
   }
   console.log(
-    "PASS: upgrade 0.7.0 -> 0.7.1 changed no user source or config; package.json and install files changed as expected.",
+    `PASS: upgrade ${current} -> ${nextVersion} changed no user source or config; package.json and install files changed as expected.`,
   );
 
   run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/todos-example.json`, "--yes"]);

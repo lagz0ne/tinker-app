@@ -1,6 +1,6 @@
 import { Link, Navigate } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
-import type { Profile } from "@/contracts/profile";
+import type { Profile } from "@/contracts/profile-contract";
 import { profile, nameDraft, pending, notice, profileResult } from "./state";
 import { signOut } from "./auth-actions";
 import { saveName, editName, retryMail } from "./profile-actions";

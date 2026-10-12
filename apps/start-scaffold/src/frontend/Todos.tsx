@@ -4,7 +4,7 @@ import { useData, useRun } from "@tinker/react";
 import { syncClient } from "@tinker/start/client";
 import { z } from "zod";
 
-import { readTodoChange } from "@/contracts/todos";
+import { readTodoChange } from "@/contracts/todos-contract";
 import { isError } from "@/errors";
 import { updateTodo } from "@/transport/todos.functions";
 

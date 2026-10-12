@@ -22,13 +22,13 @@ Tests and generated files do not count.
     - `src/backend/todos.server.ts#changeTodo.input`
     - `src/transport/todos.functions.ts#module`
 
-- **src/contracts/profile.ts#readProfileInput**
+- **src/contracts/profile-contract.ts#readProfileInput**
   - `raw`: `unknown`. From the profile command or draft; why: validate only the saved name.
   - Callers:
     - `src/contracts/commands.ts#readProfileCommand`
     - `src/frontend/profile-actions.ts#saveName.input`
 
-- **src/contracts/todos.ts#readTodoChange**
+- **src/contracts/todos-contract.ts#readTodoChange**
   - `raw`: `unknown`. From the todo command or form; why: validate one todo change.
   - Callers:
     - `src/contracts/commands.ts#readTodoCommand`
@@ -48,8 +48,8 @@ Tests and generated files do not count.
     - `src/backend/sync.server.ts#replayPrivate.run`
     - `src/backend/sync.server.ts#replayPublic.run`
     - `src/backend/todos.server.ts#changeTodo.run.callback1`
-    - `src/contracts/profile.ts#readProfileInput`
-    - `src/contracts/todos.ts#readTodoChange`
+    - `src/contracts/profile-contract.ts#readProfileInput`
+    - `src/contracts/todos-contract.ts#readTodoChange`
     - `src/frontend/auth-actions.ts#signIn.input`
     - `src/frontend/auth-actions.ts#signIn.run`
     - `src/frontend/auth-actions.ts#signOut.run`

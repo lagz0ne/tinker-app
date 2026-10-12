@@ -4,7 +4,7 @@ import { eventHistory, execution } from "@tinker/start/server";
 
 import { readTodoCommand } from "@/contracts/commands";
 import type { Sync } from "@/contracts/sync";
-import type { Todos } from "@/contracts/todos";
+import type { Todos } from "@/contracts/todos-contract";
 import { raise } from "@/errors";
 
 import { currentUser } from "./auth.server";

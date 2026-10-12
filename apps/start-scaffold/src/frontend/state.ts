@@ -1,8 +1,8 @@
 import { data } from "@tinker/core";
 
-import type { Profile } from "@/contracts/profile";
+import type { Profile } from "@/contracts/profile-contract";
 import type { Sync } from "@/contracts/sync";
-import type { Todos } from "@/contracts/todos";
+import type { Todos } from "@/contracts/todos-contract";
 
 export const profile = data<Profile.Value | null>({
   label: "profile",

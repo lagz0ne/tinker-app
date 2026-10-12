@@ -3,7 +3,7 @@ import { data, operation, isError as isCoreError } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import { updateTodo } from "@/transport/todos.functions";
-import { readTodoChange } from "@/contracts/todos";
+import { readTodoChange } from "@/contracts/todos-contract";
 import { todos, profile } from "./state";
 import { syncClient } from "@tinker/start/client";
 import { isError } from "@/errors";

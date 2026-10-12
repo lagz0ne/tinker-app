@@ -11,7 +11,7 @@ Use todos as the worked path.
 Read these files in this order:
 
 1. `src/backend/todos.schema.server.ts`: the feature table.
-2. `src/contracts/todos.ts`: input reader and row type.
+2. `src/contracts/todos-contract.ts`: input reader and row type.
 3. `src/backend/todos.server.ts`: scoped read and write operations.
 4. `src/backend/sync.server.ts`: private snapshot and saved events.
 5. `src/transport/todos.functions.ts`: Start function.

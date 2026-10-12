@@ -582,20 +582,20 @@ A fail stops the build with doctor's line.
 Core, React, and Start ship together on `lagz0ne/tinkered`.
 Each app pins three tarball URLs under one `start-v<version>` tag.
 The lockfile pins their bytes.
-The first set is `0.7.0`; it is prepared locally, not published.
+A version bump that lands on main publishes its set.
 Read [the release steps](../../docs/roadmap/start-base/RELEASE.md).
 
 ## Upgrade
 
 ```bash
-tinker upgrade 0.7.0
-tinker upgrade 0.7.0 --from ../packs
+tinker upgrade 0.8.0
+tinker upgrade 0.8.0 --from ../packs
 ```
 
 1. It stops when a base file in `node_modules`
    was edited (doctor check 2). `--force` goes on.
 2. `package.json` gets three GitHub tarball URLs:
-   Core, React, and Start from tag `start-v0.7.0`.
+   Core, React, and Start from tag `start-v0.8.0`.
    All three share one version because they ship together.
    Other peers move to the versions the new base tested.
    With `--from`, only Start uses a local packed file;

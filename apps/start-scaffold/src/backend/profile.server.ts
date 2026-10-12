@@ -3,7 +3,7 @@ import { drizzleOrm } from "@tinker/start/server";
 import { eventHistory, execution } from "@tinker/start/server";
 
 import { readProfileCommand } from "@/contracts/commands";
-import type { Profile } from "@/contracts/profile";
+import type { Profile } from "@/contracts/profile-contract";
 import { readExecution, readRetry, readFeatureResult } from "@/contracts/sync";
 import type { Sync } from "@/contracts/sync";
 import { raise } from "@/errors";

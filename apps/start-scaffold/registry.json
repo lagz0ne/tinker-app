@@ -428,9 +428,9 @@
           "target": "~/src/backend/todos.schema.server.ts"
         },
         {
-          "path": "src/contracts/todos.ts",
+          "path": "src/contracts/todos-contract.ts",
           "type": "registry:file",
-          "target": "~/src/contracts/todos.ts"
+          "target": "~/src/contracts/todos-contract.ts"
         },
         {
           "path": "templates/demo-frontend-Todos.tsx.txt",
@@ -453,9 +453,9 @@
           "target": "~/src/backend/profile.server.ts"
         },
         {
-          "path": "src/contracts/profile.ts",
+          "path": "src/contracts/profile-contract.ts",
           "type": "registry:file",
-          "target": "~/src/contracts/profile.ts"
+          "target": "~/src/contracts/profile-contract.ts"
         },
         {
           "path": "templates/demo-frontend-Profile.tsx.txt",
