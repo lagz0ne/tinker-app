@@ -828,6 +828,11 @@
           "target": "~/scripts/check-schema.mjs"
         },
         {
+          "path": "scripts/setup.mjs",
+          "type": "registry:file",
+          "target": "~/scripts/setup.mjs"
+        },
+        {
           "path": "tests/backend.test.ts",
           "type": "registry:file",
           "target": "~/tests/backend.test.ts"

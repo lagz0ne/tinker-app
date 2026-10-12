@@ -7,6 +7,7 @@
     "dev": "vp dev",
     "build": "vp build",
     "start": "tinker serve",
+    "setup": "node scripts/setup.mjs",
     "test": "vp test",
     "db:generate": "drizzle-kit generate",
     "test:schema": "node scripts/check-schema.mjs",
@@ -62,6 +63,6 @@
     ]
   },
   "overrides": {
-    "vite": "$vite"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0"
   }
 }

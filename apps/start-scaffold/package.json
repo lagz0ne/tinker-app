@@ -7,6 +7,7 @@
     "dev": "vp dev",
     "build": "vp build",
     "start": "tinker serve",
+    "setup": "node scripts/setup.mjs",
     "test": "vp test",
     "db:generate": "drizzle-kit generate",
     "test:imports": "node maintain/check-imports.mjs",

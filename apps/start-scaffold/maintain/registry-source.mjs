@@ -71,7 +71,8 @@ async function releasePackage(path, packs, releaseVersion) {
     }
   }
 
-  pkg.overrides = { vite: "$vite" };
+  // npm 10 cannot resolve a "$vite" reference to an alias spec, so name the spec itself.
+  pkg.overrides = { vite: pkg.devDependencies.vite };
   return pkg;
 }
 

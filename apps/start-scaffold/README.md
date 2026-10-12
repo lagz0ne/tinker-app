@@ -10,7 +10,23 @@ This app runs on the package `@tinker/start`.
 The base owns entries, telemetry, auth routes, and sync.
 Core, React, and Start come from one GitHub release tag.
 There is no npm package; `package.json` names each tarball's URL.
-Start in an empty folder:
+
+The fastest start is the template repo `lagz0ne/tinker-app`.
+Its `demo` branch is this app:
+
+```bash
+npx degit lagz0ne/tinker-app#demo my-app
+cd my-app
+npm run setup
+npm run dev
+```
+
+`npm run setup` writes `.env` with a new `AUTH_SECRET`.
+It starts the compose stack and installs packages.
+Its `small` branch is the smallest app;
+`main` lists every branch.
+
+To build an app from registry items, start in an empty folder:
 
 ```bash
 npx shadcn@4.21.0 add \
