@@ -23,14 +23,17 @@ export const saveName = operation({
     pending.set(true);
     notice.set("");
     defer(() => pending.set(false));
+
     const executionId = random.uuid();
     const completed = await sync.execute(
       executionId,
       { send: updateProfile, data: { executionId, profile: input } },
       signal,
     );
+
     result.set({ executionId, result: completed });
     if (completed.kind === "failed") raise("WriteRejected", { message: completed.message });
+
     draft.set(undefined);
     notice.set(
       completed.kind === "partial"
@@ -52,12 +55,14 @@ export const retryMail = operation({
   run: async ({ sync, pending, notice, result }, { defer, random, input, signal }) => {
     pending.set(true);
     defer(() => pending.set(false));
+
     const executionId = random.uuid();
     const completed = await sync.execute(
       executionId,
       { send: retryProfileNotification, data: { executionId, previousExecutionId: input } },
       signal,
     );
+
     result.set({ executionId, result: completed });
     notice.set(
       completed.kind === "complete"

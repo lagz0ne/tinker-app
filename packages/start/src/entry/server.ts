@@ -33,6 +33,7 @@ const renderRequest = createStart(async (context) => {
  */
 async function start() {
   const settings = env({ ...process.env });
+
   const toolStop = new AbortController();
   const tools = createScope({
     signal: toolStop.signal,
@@ -40,6 +41,7 @@ async function start() {
     tags: [settings, telemetry.tags],
   });
   await tools.ready;
+
   const stop = new AbortController();
   const app = createScope({
     signal: stop.signal,
@@ -47,6 +49,7 @@ async function start() {
     extensions: [startRequests, auth.extensions, extensions],
     tags: [backendStop(stop.signal), settings, tools.resolve(telemetry.appTags)],
   });
+
   try {
     await app.ready;
   } catch (error) {
@@ -54,19 +57,23 @@ async function start() {
     await tools.closed;
     throw error;
   }
+
   let closed: Promise<void> | undefined;
   const close = () =>
     (closed ??= (async () => {
       stop.abort(abortReasons.closed);
       const end = await app.closed;
+
       toolStop.abort(abortReasons.closed);
       const toolEnd = await tools.closed;
+
       if (end.status === "failed") throw end.error;
       if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
       if (toolEnd.status === "failed") throw toolEnd.error;
       if (toolEnd.teardownErrors?.length) throw toolEnd.teardownErrors.at(0);
     })());
   if (import.meta.hot) import.meta.hot.dispose(close);
+
   return (entry.ready = {
     requestContext: app.resolve(startRequests),
     renderObserve: tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs }),

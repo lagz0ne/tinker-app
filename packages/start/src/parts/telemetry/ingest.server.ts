@@ -128,9 +128,12 @@ class TelemetryEndpoint {
       refused(request, this.origin) ??
       (body === null ? 400 : await readBatch(body, this.bodyOwner));
     if (typeof read === "number") return new Response(null, { status: read });
+
     const result = await this.receive.settle({ input: read, signal: request.signal });
-    if (result.status === "failed" && Object(result.error).kind === "Cancelled")
+    if (result.status === "failed" && Object(result.error).kind === "Cancelled") {
       return new Response(null, { status: 503 });
+    }
+
     readResult(result);
     return new Response(null, { status: 202, headers: { "Cache-Control": "no-store" } });
   }

@@ -22,8 +22,9 @@ export async function checkRegistryIndex() {
     const built = JSON.parse(await readFile(join(app, "public/r", `${item.name}.json`), "utf8"));
     assert.deepEqual(built, item, `${item.name}: rebuild registry:build after changing source`);
     for (const dependency of registry.items.find((entry) => entry.name === item.name)
-      .registryDependencies ?? [])
+      .registryDependencies ?? []) {
       assert.ok(names.has(dependency.replace("@tinker-start/", "")), dependency);
+    }
     assert.equal(new Set(item.files.map((file) => file.target)).size, item.files.length, item.name);
     for (const file of item.files) {
       assert.ok(file.target.startsWith("~/"), file.target);

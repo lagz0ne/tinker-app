@@ -69,12 +69,15 @@ function treeImports(tree) {
 function treeGaps(root) {
   const tree = join(root, ".tinker/routeTree.gen.ts");
   if (!existsSync(tree)) return { noTree: true, gone: [], misses: [] };
+
   const imports = treeImports(tree);
   const listed = new Set(imports.map(({ base }) => base));
+
   const routesDir = join(root, "src/routes");
   const misses = listFiles(routesDir)
     .filter((file) => isRouteFile(file) && mayExport(join(routesDir, file), "Route"))
     .filter((file) => !listed.has(join(routesDir, file.replace(/\.[jt]sx?$/, ""))));
+
   return { noTree: false, gone: imports.filter(({ file }) => !file), misses };
 }
 

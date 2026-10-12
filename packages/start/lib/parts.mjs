@@ -21,10 +21,11 @@ export function partsOn(options) {
     .map(([name]) => name);
   const needed = chosen.flatMap((name) =>
     (parts[name].needs ?? []).map((need) => {
-      if (options[need] === false)
+      if (options[need] === false) {
         throw new Error(
           `tinker(): ${name} needs ${need}, but ${need} is false; drop ${need}: false, or set ${name}: false`,
         );
+      }
       return need;
     }),
   );

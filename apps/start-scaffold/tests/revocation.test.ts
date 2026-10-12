@@ -95,10 +95,12 @@ test("sign-out closes the account's open stream with the account frame", async (
     const ada = await signUp(root, "Ada");
     const { session, reader } = await openStream(root, ada.id, ada.cookie);
     const held = reader.read();
+
     await root.run(handleAuth, {
       input: authRequest("sign-out", {}, ada.cookie),
       tags: requestHeaders(new Headers({ cookie: ada.cookie })),
     });
+
     expect(await text(held)).toBe(account);
     expect((await session.close({ graceful: true })).status).toBe("success");
   });
@@ -112,16 +114,21 @@ test("revoking another device closes only that device's stream; this device's st
     const laptopStream = await openStream(root, laptop.id, laptop.cookie);
     const phoneHeld = phoneStream.reader.read();
     const laptopHeld = laptopStream.reader.read();
+
     await root.run(handleAuth, {
       input: authRequest("revoke-other-sessions", {}, laptop.cookie),
       tags: requestHeaders(new Headers({ cookie: laptop.cookie })),
     });
+
     expect(await text(phoneHeld)).toBe(account);
+
     await root.run(saveProfile, {
       input: { executionId: crypto.randomUUID(), profile: { name: "Ada laptop" } },
       tags: requestHeaders(new Headers({ cookie: laptop.cookie })),
     });
+
     expect(await text(laptopHeld)).toContain("event: changes");
+
     await laptopStream.reader.cancel();
     await phoneStream.session.close({ graceful: true });
     await laptopStream.session.close({ graceful: true });
@@ -133,9 +140,11 @@ test("a session the server deletes closes its account's stream", async () => {
     const ada = await signUp(root, "Ada");
     const { session, reader } = await openStream(root, ada.id, ada.cookie);
     const held = reader.read();
+
     const ctx = await (await root.resolve(auth)).$context;
     const [only] = await ctx.internalAdapter.listSessions(ada.id);
     await ctx.internalAdapter.deleteSession(only!.token);
+
     expect(await text(held)).toBe(account);
     expect((await session.close({ graceful: true })).status).toBe("success");
   });
@@ -146,8 +155,10 @@ test("deleting a user closes that account's open stream", async () => {
     const ada = await signUp(root, "Ada");
     const { session, reader } = await openStream(root, ada.id, ada.cookie);
     const held = reader.read();
+
     const ctx = await (await root.resolve(auth)).$context;
     await ctx.internalAdapter.deleteUser(ada.id);
+
     expect(await text(held)).toBe(account);
     expect((await session.close({ graceful: true })).status).toBe("success");
   });

@@ -33,6 +33,7 @@ test("a named file the app has wins; a missing one maps to the base default", ()
     "src/lib/tinker.server.ts": "export const extensions = [];\n",
   });
   const { paths } = JSON.parse(render(root)["tsconfig.json"]).compilerOptions;
+
   expect(paths["#tinker/router"]).toEqual([join(root, "src/router.ts")]);
   expect(paths["#tinker/app.server"]).toEqual([join(root, "src/lib/tinker.server.ts")]);
   expect(paths["#tinker/start"]).toEqual([join(baseDir, "src/defaults/start.ts")]);
@@ -58,6 +59,7 @@ test("prepare writes the tsconfig, the parts files, and the base version into .t
 test("each parts file exports the parts its entry reads, from the on or the off module", () => {
   const root = fixture({ "package.json": "{}" });
   const module = (part, file) => JSON.stringify(join(baseDir, "src/parts", part, file));
+
   const on = render(root, ["telemetry", "auth"]);
   expect(on["parts.ts"]).toBe(
     [
@@ -75,6 +77,7 @@ test("each parts file exports the parts its entry reads, from the on or the off 
       "",
     ].join("\n"),
   );
+
   const off = render(root, []);
   expect(off["parts.ts"]).toBe(
     [

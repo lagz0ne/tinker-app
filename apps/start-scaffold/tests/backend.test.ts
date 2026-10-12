@@ -75,6 +75,7 @@ test("a real account can sign up, save its name, sign out and sign in", async ()
   await root.ready;
   try {
     await root.run(migrate);
+
     const signup = await root.run(handleAuth, {
       input: authRequest("sign-up/email", {
         name: "Ada",
@@ -85,7 +86,9 @@ test("a real account can sign up, save its name, sign out and sign in", async ()
     });
     expect(signup.status).toBe(200);
     const cookie = readCookie(signup);
+
     await expect.poll(() => messages.at(0)?.subject).toBe("Check your email");
+
     const saved = await root.run(saveProfile, {
       input: {
         executionId: "10000000-0000-4000-8000-000000000002",
@@ -94,17 +97,21 @@ test("a real account can sign up, save its name, sign out and sign in", async ()
       tags: requestHeaders(new Headers({ cookie })),
     });
     expect(saved.executionId).toBe("10000000-0000-4000-8000-000000000002");
+
     expect(
       await root.run(readProfile, { tags: requestHeaders(new Headers({ cookie })) }),
     ).toMatchObject({ name: "Ada Lovelace", email: "ada@example.com" });
+
     const signout = await root.run(handleAuth, {
       input: authRequest("sign-out", {}, cookie),
       tags: requestHeaders(new Headers({ cookie })),
     });
     expect(signout.status).toBe(200);
+
     expect(
       await root.run(readProfile, { tags: requestHeaders(new Headers({ cookie })) }),
     ).toBeNull();
+
     const signin = await root.run(handleAuth, {
       input: authRequest("sign-in/email", {
         email: "ada@example.com",
@@ -156,6 +163,7 @@ test("a later action failure cannot undo a committed profile save", async () => 
   await root.ready;
   try {
     await root.run(migrate);
+
     const signup = await root.run(handleAuth, {
       input: authRequest("sign-up/email", {
         name: "Ada",
@@ -165,9 +173,11 @@ test("a later action failure cannot undo a committed profile save", async () => 
       tags: requestHeaders(new Headers()),
     });
     const headers = new Headers({ cookie: readCookie(signup) });
+
     const result = await root.settle(failAfterSave, { tags: requestHeaders(headers) });
     if (result.status !== "failed") raise("BadInput", { reason: "expected failed action" });
     if (!isError(result.error, "BadInput")) throw result.error;
+
     expect(await root.run(readProfile, { tags: requestHeaders(headers) })).toMatchObject({
       name: "Discard me",
     });
@@ -183,6 +193,7 @@ test("a native commit failure never returns a saved profile", async () => {
   await root.ready;
   try {
     await root.run(migrate);
+
     await root.run(handleAuth, {
       input: authRequest("sign-up/email", {
         name: "Grace",
@@ -191,6 +202,7 @@ test("a native commit failure never returns a saved profile", async () => {
       }),
       tags: requestHeaders(new Headers()),
     });
+
     const signup = await root.run(handleAuth, {
       input: authRequest("sign-up/email", {
         name: "Ada",
@@ -200,10 +212,12 @@ test("a native commit failure never returns a saved profile", async () => {
       tags: requestHeaders(new Headers()),
     });
     const headers = new Headers({ cookie: readCookie(signup) });
+
     const db = await root.resolve(database);
     await db.execute(
       sql`ALTER TABLE "user" ADD CONSTRAINT proof_name_unique UNIQUE (name) DEFERRABLE INITIALLY DEFERRED`,
     );
+
     const result = await root.settle(saveProfile, {
       input: { executionId: "10000000-0000-4000-8000-000000000004", profile: { name: "Grace" } },
       tags: requestHeaders(headers),
@@ -236,6 +250,7 @@ test("email check and reset callbacks use the declared mail action", async () =>
   await root.ready;
   try {
     await root.run(migrate);
+
     await root.run(handleAuth, {
       input: authRequest("sign-up/email", {
         name: "Ada",
@@ -244,9 +259,11 @@ test("email check and reset callbacks use the declared mail action", async () =>
       }),
       tags: requestHeaders(new Headers()),
     });
+
     await expect
       .poll(() => messages.some((message) => message.subject === "Check your email"))
       .toBe(true);
+
     const check = messages.find((message) => message.subject === "Check your email");
     if (!check) raise("BadInput", { reason: "missing check link" });
     const checked = await root.run(handleAuth, {
@@ -254,6 +271,7 @@ test("email check and reset callbacks use the declared mail action", async () =>
       tags: requestHeaders(new Headers()),
     });
     expect(checked.status).toBe(302);
+
     await root.run(handleAuth, {
       input: authRequest("request-password-reset", {
         email: "ada@example.com",
@@ -261,9 +279,11 @@ test("email check and reset callbacks use the declared mail action", async () =>
       }),
       tags: requestHeaders(new Headers()),
     });
+
     await expect
       .poll(() => messages.some((message) => message.subject === "Reset your password"))
       .toBe(true);
+
     const reset = messages.find((message) => message.subject === "Reset your password");
     if (!reset) raise("BadInput", { reason: "missing reset link" });
     expect(new URL(reset.text).pathname).toContain("/reset-password/");
@@ -296,6 +316,7 @@ test("sign-up replies before held mail and logs its failure", async () => {
   const sending = Promise.withResolvers<void>();
   const failed = Promise.withResolvers<void>();
   const stop = new AbortController();
+
   const root = createScope({
     signal: stop.signal,
     tags,
@@ -315,13 +336,16 @@ test("sign-up replies before held mail and logs its failure", async () => {
       })),
     ],
   });
+
   onTestFinished(async () => {
     accepted.resolve();
     stop.abort();
     expect((await root.closed).status).toBe("success");
   });
+
   await root.ready;
   await root.run(migrate);
+
   const reply = root.run(handleAuth, {
     input: authRequest("sign-up/email", {
       name: "Ada",
@@ -330,8 +354,10 @@ test("sign-up replies before held mail and logs its failure", async () => {
     }),
     tags: requestHeaders(new Headers()),
   });
+
   await sending.promise;
   expect((await reply).status).toBe(200);
+
   accepted.resolve();
   await failed.promise;
 });

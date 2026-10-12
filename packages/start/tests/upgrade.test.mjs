@@ -143,6 +143,7 @@ test("an upgrade stops on an edited base file, unless forced, and on a missing r
     "node_modules/@tinker/start/src/a.ts": "edited",
     "node_modules/@tinker/start/src/b.ts": "edited",
   });
+
   expect(planUpgrade(root, "9.1.0", { from: "packs", force: false })).toEqual({
     stop: "stop: node_modules/@tinker/start/src/a.ts changed; an install drops base edits, so use an extension point; node_modules/@tinker/start/src/b.ts changed; an install drops base edits, so use an extension point\nRun tinker doctor --fix first, or pass --force.",
   });

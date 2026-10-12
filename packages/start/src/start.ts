@@ -18,15 +18,18 @@ declare module "@tanstack/react-start" {
 const middleware = createMiddleware().server(async ({ context, request, next }) => {
   const scope = context.scope;
   if (scope === undefined) raise("StartScopeMissing", {});
+
   const session = scope.createSession({
     tags: [requestHeaders(new Headers(request.headers)), requestStop(request.signal)],
   });
   session.resolve(renderLifetime).open(request);
+
   let closed: Promise<void> | undefined;
   const finish = (graceful: boolean) =>
     (closed ??= Promise.resolve(session.close({ graceful })).then((end) => {
       if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
     }));
+
   try {
     const result = await next({ context: { session, signal: request.signal } });
     return {

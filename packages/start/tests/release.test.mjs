@@ -30,6 +30,7 @@ test("the release rewrite replaces old specs and keeps other dependencies withou
 });
 
 test("a missing version or a path cannot name a release", () => {
-  for (const version of [undefined, "", "../0.7.0", "0.7", "01.7.0"])
+  for (const version of [undefined, "", "../0.7.0", "0.7", "01.7.0"]) {
     expect(() => releaseUrls(version)).toThrow("release version must be X.Y.Z");
+  }
 });

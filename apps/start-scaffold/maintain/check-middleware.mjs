@@ -12,6 +12,7 @@ if (import.meta.main) {
   const previousDirectory = process.cwd();
   try {
     await copyProofApp(source, proof);
+
     await writeFile(
       join(proof, "src/proof-middleware.ts"),
       `
@@ -34,6 +35,7 @@ export const proofFunction = createMiddleware({type: "function"})
   });
 `,
     );
+
     await writeFile(
       join(proof, "src/proof-functions.ts"),
       `
@@ -51,6 +53,7 @@ export const readProof = createServerFn({method: "GET"})
   }));
 `,
     );
+
     await writeFile(
       join(proof, "src/proof.server.ts"),
       `
@@ -66,6 +69,7 @@ export const readProofUser = operation({
 });
 `,
     );
+
     await writeFile(
       join(proof, "src/routes/proof.native.tsx"),
       `
@@ -79,6 +83,7 @@ export const Route = createFileRoute("/proof/native")({
 });
 `,
     );
+
     await writeFile(
       join(proof, "src/start.ts"),
       `
@@ -87,6 +92,7 @@ import { proofRequest } from "./proof-middleware";
 export const startInstance = createStart(() => ({requestMiddleware: [proofRequest]}));
 `,
     );
+
     await writeFile(
       join(proof, "src/routes/proof.write.ts"),
       `
@@ -101,11 +107,13 @@ export const Route = createFileRoute("/proof/write")({server: {
 }});
 `,
     );
+
     const build = spawnSync("vp", ["build"], { cwd: proof, encoding: "utf8" });
     assert.equal(build.status, 0, build.stdout + build.stderr);
     process.chdir(proof);
     Object.assign(process.env, proofEnv);
     const app = await import(pathToFileURL(join(proof, "dist/server/server.js")).href);
+
     try {
       const results = await Promise.all(
         ["Ada", "Grace"].map(async (user) => {
@@ -118,14 +126,17 @@ export const Route = createFileRoute("/proof/write")({server: {
           const html = await response.text();
           const content = html.match(/<pre id="native-proof">(?<data>.*?)<\/pre>/)?.groups?.data;
           assert.ok(content, html);
+
           const data = JSON.parse(content.replaceAll("&quot;", '"'));
           assert.deepEqual(data, {
             first: { user, sameSession: true, requestRuns: 1, functionRuns: 1 },
             second: { user, sameSession: true, requestRuns: 1, functionRuns: 2 },
           });
+
           return user;
         }),
       );
+
       const stream = await app.default.fetch(new Request("http://localhost:4318/api/sync"));
       assert.equal(stream.headers.get("x-proof-requests"), "1");
       assert.equal(stream.headers.get("Content-Type"), "text/event-stream; charset=utf-8");
@@ -133,6 +144,7 @@ export const Route = createFileRoute("/proof/write")({server: {
       assert.equal(stream.headers.get("X-Accel-Buffering"), "no");
       const reader = stream.body.getReader();
       assert.equal(new TextDecoder().decode((await reader.read()).value), ": connected\n\n");
+
       const written = await app.default.fetch(
         new Request("http://localhost:4318/proof/write", { method: "POST" }),
       );
@@ -141,9 +153,11 @@ export const Route = createFileRoute("/proof/write")({server: {
       const frame = new TextDecoder().decode((await reader.read()).value);
       assert.ok(frame.startsWith("event: changes\nid: "), frame);
       assert.ok(frame.endsWith("\n\n"), frame);
+
       const data = JSON.parse(frame.split("\ndata: ").at(1));
       assert.equal(data.kind, "changes");
       assert.equal(data.events.at(0).payload.change.value, 1);
+
       const replay = await app.default.fetch(
         new Request(
           "http://localhost:4318/api/sync?cursor=" +
@@ -154,6 +168,7 @@ export const Route = createFileRoute("/proof/write")({server: {
       const repeated = replay.body.getReader();
       assert.equal(new TextDecoder().decode((await repeated.read()).value), frame);
       await repeated.cancel();
+
       const refused = await app.default.fetch(
         new Request("http://localhost:4318/api/sync", {
           headers: {
@@ -163,11 +178,13 @@ export const Route = createFileRoute("/proof/write")({server: {
       );
       assert.equal(refused.status, 403);
       await refused.text();
+
       const bad = await app.default.fetch(
         new Request("http://localhost:4318/api/sync", { headers: { "Last-Event-ID": "not-json" } }),
       );
       assert.equal(bad.status, 400);
       await bad.text();
+
       const requestStop = new AbortController();
       const abortedStream = await app.default.fetch(
         new Request(
@@ -181,9 +198,11 @@ export const Route = createFileRoute("/proof/write")({server: {
       const pendingRead = abortedReader.read();
       requestStop.abort();
       assert.equal((await pendingRead).done, true);
+
       const idle = reader.read();
       await app.close();
       assert.equal((await idle).done, true);
+
       process.stdout.write(
         "PASS: SSE serializes committed replay, dedupes native middleware, refuses private/bad cursors, and ends idle streams on host close.\n",
       );

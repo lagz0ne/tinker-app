@@ -135,6 +135,7 @@ try {
   const build = spawnSync("vp", ["build"], { cwd: app, env, encoding: "utf8", timeout: 120000 });
   say(`vp build: EXIT ${build.status}`);
   assert.equal(build.status, 0, build.stdout + build.stderr);
+
   const doctor = spawnSync("node", ["node_modules/@tinker/start/bin/tinker.mjs", "doctor"], {
     cwd: app,
     env,
@@ -144,10 +145,12 @@ try {
   say(doctor.stdout.trim());
   say(`tinker doctor: EXIT ${doctor.status}`);
   assert.equal(doctor.status, 0, doctor.stderr);
+
   startedCompose = true;
   compose("up", "-d", "--wait", "postgres", "mailpit");
   say("docker compose up --wait postgres mailpit: EXIT 0; isolated proof project");
   say("Own network uses 10.254.251.0/28; the host default address pools are full");
+
   relay = spawn(
     process.execPath,
     [
@@ -192,6 +195,7 @@ try {
     ],
     { cwd: app, env, stdio: ["ignore", "pipe", "pipe"] },
   );
+
   let relayErrors = "";
   relay.stderr.on("data", (chunk) => (relayErrors += chunk));
   const ready = await Promise.race([
@@ -204,6 +208,7 @@ try {
   say(
     "Own TCP relays reach Postgres and Mailpit through docker compose exec; host loopback is outside this workspace",
   );
+
   const migration = spawnSync(
     process.execPath,
     [
@@ -223,6 +228,7 @@ try {
   );
   say(`run app migrations: EXIT ${migration.status}`);
   assert.equal(migration.status, 0, migration.stderr);
+
   server = spawn("node", ["node_modules/@tinker/start/bin/tinker.mjs", "serve"], {
     cwd: app,
     env,
@@ -230,6 +236,7 @@ try {
   });
   server.stdout.on("data", (chunk) => (serverOutput += chunk));
   server.stderr.on("data", (chunk) => (serverOutput += chunk));
+
   const deadline = AbortSignal.timeout(30000);
   let health;
   while (!health) {
@@ -242,8 +249,10 @@ try {
       await setImmediate();
     }
   }
+
   assert.equal(health.status, 200, serverOutput + (await health.clone().text()));
   say(`GET /api/health: ${health.status} ${await health.text()}`);
+
   const migrated = compose(
     "exec",
     "-T",
@@ -258,6 +267,7 @@ try {
   );
   assert.equal(migrated, "4");
   say(`databaseSetup ran app migrations: ${migrated} migration rows on real Postgres`);
+
   const signup = authCurl("sign-up/email", {
     name: "Step One",
     email: "step-one@example.com",
@@ -265,6 +275,7 @@ try {
   });
   assert.equal(signup.user.email, "step-one@example.com");
   say("curl POST /api/auth/sign-up/email: 200; account step-one@example.com");
+
   const mailDeadline = AbortSignal.timeout(15_000);
   let verified = false;
   while (!mailDeadline.aborted) {
@@ -279,6 +290,7 @@ try {
   }
   assert.ok(verified, "verification mail must arrive after the sign-up reply");
   say("Mailpit: real SMTP verification message received");
+
   authCurl("sign-out", {});
   const signin = authCurl("sign-in/email", {
     email: "step-one@example.com",
@@ -286,8 +298,10 @@ try {
   });
   assert.equal(signin.user.id, signup.user.id);
   say("curl POST /api/auth/sign-in/email: 200; same real Postgres account");
+
   openedSessions.add(session);
   say("browser engine: Lightpanda (agent-browser default); 127.0.0.1 only");
+
   browser("open", origin);
   browser("find", "role", "button", "click", "--name", "Sign in", "--exact");
   browser("fill", 'input[name="email"]', "step-one@example.com");
@@ -295,8 +309,10 @@ try {
   browser("click", "form > button");
   browser("wait", "--text", "Open profile");
   say("tab one: real better-auth browser sign-in succeeded");
+
   browser("open", `${origin}/todos`);
   browser("wait", 'input[name="title"]');
+
   activeSession = otherSession;
   openedSessions.add(otherSession);
   browser("open", origin);
@@ -310,12 +326,14 @@ try {
   say(
     "two live Lightpanda tabs: one per session, same real account; Lightpanda permits one target per session",
   );
+
   activeSession = session;
   const todoTitle = "Step one crosses two tabs";
   browser("fill", 'input[name="title"]', todoTitle);
   browser("find", "role", "button", "click", "--name", "Add todo", "--exact");
   browser("wait", "--text", todoTitle);
   say(`tab one added todo: ${todoTitle}`);
+
   activeSession = otherSession;
   browser("wait", "--text", todoTitle);
   const shown = browser("eval", "document.body.textContent");
@@ -323,6 +341,7 @@ try {
   say(`tab two received todo through /api/sync: ${todoTitle}`);
   const requests = browser("network", "requests", "--filter", "/api/sync");
   say(`tab two sync requests: ${requests}`);
+
   const saved = compose(
     "exec",
     "-T",
@@ -337,12 +356,14 @@ try {
   );
   assert.ok(saved.includes(todoTitle));
   say(`Postgres saved todo: ${saved}`);
+
   activeSession = session;
   browser("open", `${origin}/profile`);
   browser("wait", "form input");
   browser("fill", "form input", "Step two saved name");
   browser("find", "role", "button", "click", "--name", "Save name", "--exact");
   browser("wait", "--text", "Name saved and notification accepted.");
+
   const notifications = await fetch(`${mailpitOrigin}/api/v1/messages`).then((response) =>
     response.json(),
   );
@@ -367,6 +388,7 @@ try {
       say(`browser cleanup failed: ${error.message}`);
     }
   }
+
   if (server && server.exitCode === null) {
     const ended = once(server, "close");
     server.kill("SIGTERM");
@@ -374,12 +396,14 @@ try {
     say(`server PID ${server.pid} stopped: EXIT ${code}; signal ${signal ?? "none"}`);
     if (code !== 0) failed ??= new Error("server stop failed");
   }
+
   if (relay && relay.exitCode === null) {
     const ended = once(relay, "close");
     relay.kill("SIGTERM");
     const [code] = await ended;
     say(`relay PID ${relay.pid} stopped: EXIT ${code}`);
   }
+
   if (startedCompose) {
     try {
       compose("down", "-v");
@@ -389,6 +413,7 @@ try {
       say(`compose cleanup failed: ${error.message}`);
     }
   }
+
   await writeFile(logFile, rows.join("\n") + "\n");
   if (!failed) await rm(scratch, { recursive: true });
 }

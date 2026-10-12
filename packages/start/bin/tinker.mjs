@@ -33,6 +33,7 @@ async function serve(root) {
   const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
   const asset = await createAssets(root);
   const render = async (request) => compressResponse(request, await built.default.fetch(request));
+
   const server = listen({
     overrideGlobalObjects: false,
     hostname: process.env.HOST ?? "127.0.0.1",
@@ -42,14 +43,17 @@ async function serve(root) {
   console.log(
     `tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${process.env.PORT ?? 4318}`,
   );
+
   const stopped = Promise.withResolvers();
   process.once("SIGINT", () => stopped.resolve());
   process.once("SIGTERM", () => stopped.resolve());
   await stopped.promise;
+
   await Promise.all([
     built.close(),
     new Promise((done, reject) => server.close((error) => (error ? reject(error) : done()))),
   ]);
+
   return 0;
 }
 
@@ -62,12 +66,14 @@ const commands = {
     const files = prepare(root);
     const blocked = generatorBlocked(root);
     if (blocked.length === 0) files.push(await writeRouteTree(root));
+
     const problems = blocked.length > 0 ? blocked : staleTree(root);
     console.log(
       problems.length > 0
         ? problems.join("\n")
         : `tinker prepare: wrote .tinker/${files.join(", .tinker/")}`,
     );
+
     return prepareExitCode(problems, process.env.npm_lifecycle_event);
   },
   doctor: () => {

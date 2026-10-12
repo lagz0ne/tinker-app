@@ -28,8 +28,9 @@ function partProblems(root, local, listed) {
   return recordedParts(root).flatMap((name) => {
     const keys = parts[name].env;
     return readPartEnv(keys, { ...local, ...process.env }).refused.flatMap((key) => {
-      if (!process.env[key] && !local[key])
+      if (!process.env[key] && !local[key]) {
         return listed.includes(key) ? [] : [say.unset(key, name)];
+      }
       const at = process.env[key]
         ? "the shell"
         : `.env:${lineAt(text, text.search(new RegExp(`^${key}=`, "m")))}`;
@@ -47,13 +48,16 @@ export function env(root) {
   const example = readText(join(root, ".env.example"));
   const local = readEnvFile(root);
   const keys = Object.keys(parseEnv(example));
+
   const missing = keys
     .filter((key) => !local[key] && !process.env[key])
     .map((key) => ({ key, line: lineAt(example, example.search(new RegExp(`^${key}=`, "m"))) }))
     .sort((a, b) => a.line - b.line)
     .map(({ key, line }) => say.missing(line, key));
+
   const on = recordedParts(root);
   const passed = [example ? say.passed(keys.length) : say.none];
   if (on.length > 0) passed.push(say.parts(on));
+
   return verdict([...missing, ...partProblems(root, local, keys)], passed.join("; "));
 }

@@ -47,13 +47,16 @@ function stalePins(root, pkg) {
 export function version(root) {
   const dir = installedBase(root);
   if (!dir) return fail([say.missing]);
+
   const base = readJson(join(dir, "package.json"));
   const read = readJsonc(join(root, "package.json"), { strict: true });
   const pkg = read.error ? { text: "", value: {} } : read;
+
   const tested = Object.entries(base.tinker.tested);
   const drift = tested
     .map(([name, want]) => [name, installedVersion(root, name), want])
     .filter(([, found, want]) => found !== want)
     .map(([name, found, want]) => say.drift(where(pkg, name), name, found, want));
+
   return verdict([...stalePins(root, pkg), ...drift], say.passed(base.version, tested.length));
 }

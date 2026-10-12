@@ -33,6 +33,7 @@ try {
     app,
     "pull",
   ]);
+
   await run("up", "docker", [
     "compose",
     "--project-name",
@@ -43,8 +44,10 @@ try {
     "-d",
     "--wait",
   ]);
+
   await run("browser-image", "docker", ["pull", "mcr.microsoft.com/playwright:v1.55.0-noble"]);
-  for (const name of ["core", "react"])
+
+  for (const name of ["core", "react"]) {
     await run(`pack-${name}`, "pnpm", [
       "--dir",
       join(repo, "packages", name),
@@ -52,12 +55,17 @@ try {
       "--out",
       join(stage, `${name}.tgz`),
     ]);
-  for (const name of ["dist", "drizzle", ".env"])
+  }
+
+  for (const name of ["dist", "drizzle", ".env"]) {
     await cp(join(app, name), join(stage, name), { recursive: true });
+  }
+
   await mkdir(join(stage, "scripts"));
   await mkdir(join(stage, "maintain"));
   await cp(join(app, "scripts/serve.mjs"), join(stage, "scripts/serve.mjs"));
   await cp(join(app, "maintain/check-compose.mjs"), join(stage, "maintain/check-compose.mjs"));
+
   const pkg = JSON.parse(await readFile(join(app, "starter.package.json"), "utf8"));
   delete pkg.devDependencies;
   delete pkg.overrides;
@@ -65,6 +73,7 @@ try {
   pkg.dependencies["@tinker/react"] = "file:react.tgz";
   pkg.dependencies.playwright = "1.55.0";
   await writeFile(join(stage, "package.json"), JSON.stringify(pkg, null, 2));
+
   await run("container-create", "docker", [
     "create",
     "--name",
@@ -79,6 +88,7 @@ try {
     "sleep",
     "infinity",
   ]);
+
   await run("container-copy", "docker", [
     "cp",
     "-a",
@@ -86,6 +96,7 @@ try {
     `${container}:/home/pwuser/app`,
   ]);
   await run("container-start", "docker", ["start", container]);
+
   await run("container-owner", "docker", [
     "exec",
     "--user",
@@ -96,6 +107,7 @@ try {
     "pwuser:pwuser",
     "/home/pwuser/app",
   ]);
+
   await run("container-install", "docker", [
     "exec",
     container,
@@ -103,6 +115,7 @@ try {
     "install",
     "--ignore-scripts",
   ]);
+
   await run("browser", "docker", [
     "exec",
     "-e",
@@ -123,6 +136,7 @@ try {
     "node",
     "maintain/check-compose.mjs",
   ]);
+
   await run("copy-proof-json", "docker", [
     "cp",
     `${container}:/tmp/start-refine-compose-proof.json`,

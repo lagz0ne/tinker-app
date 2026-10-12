@@ -21,10 +21,11 @@ test("encoding weights, exclusions, wildcard, and identity are honored", () => {
     ["BR; Q=1", "br"],
     ["gzip;q=bad", "identity"],
   ];
-  for (const [accepted, chosen] of choices)
+  for (const [accepted, chosen] of choices) {
     expect(
       readEncoding(new Request("http://app", { headers: { "accept-encoding": accepted } })),
     ).toBe(chosen);
+  }
 });
 
 test("streamed HTML is compressed and keeps existing Vary fields", async () => {
@@ -36,6 +37,7 @@ test("streamed HTML is compressed and keeps existing Vary fields", async () => {
     expect(response.headers.get("content-encoding")).toBe(encoding);
     expect(response.headers.get("content-length")).toBeNull();
     expect(response.headers.get("vary")).toBe("Cookie, Accept-Encoding");
+
     const bytes = Buffer.from(await response.arrayBuffer());
     expect((encoding === "br" ? brotliDecompressSync(bytes) : gunzipSync(bytes)).toString()).toBe(
       "<p>Hello</p>",
@@ -65,8 +67,9 @@ test("encoded, partial, no-transform, and non-text responses pass through", asyn
     new Response("x", {
       headers: { "content-type": "text/html", "cache-control": "no-transform" },
     }),
-  ])
+  ]) {
     expect(await compressResponse(new Request("http://app"), response)).toBe(response);
+  }
 });
 
 test("a refused encoding cancels HTML and drops its old length", async () => {
@@ -107,6 +110,7 @@ test("HEAD cancels HTML and returns its negotiated encoding without a body", asy
   expect(response.body).toBeNull();
   expect(response.headers.get("content-encoding")).toBe("br");
   expect(response.headers.get("content-length")).toBeNull();
+
   const empty = await compressResponse(
     new Request("http://app", { method: "HEAD", headers: { "accept-encoding": "br" } }),
     new Response(null, { headers: { "content-type": "text/html" } }),
@@ -128,14 +132,17 @@ test.each(["gzip", "br"])("%s sends the HTML shell before the source ends", asyn
     new Request("http://app", { headers: { "accept-encoding": encoding } }),
     new Response(body, { headers: { "content-type": "text/html" } }),
   );
+
   const encoded = Readable.fromWeb(response.body);
   const decoded = encoded.pipe(encoding === "br" ? createBrotliDecompress() : createGunzip());
   const chunks = decoded[Symbol.asyncIterator]();
   try {
     const first = await chunks.next();
     expect(first.value.toString()).toBe(shell);
+
     source.enqueue(new TextEncoder().encode(tail));
     source.close();
+
     let rest = "";
     for await (const chunk of chunks) rest += chunk.toString();
     expect(rest).toBe(tail);

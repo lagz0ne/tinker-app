@@ -67,9 +67,12 @@ export function Todos() {
   const account = useData(profile);
   const loading = useRouterState({ select: (state) => state.isLoading });
   const state = useData(flow);
+
   const save = useRun(attemptTodo);
   const busy = state.kind === "saving" || loading;
+
   if (account === null) return <Navigate to="/" />;
+
   return (
     <main className="mx-auto max-w-2xl px-5 py-8 sm:py-12">
       <header className="mb-8 flex items-center justify-between gap-4">
@@ -104,8 +107,9 @@ export function Todos() {
                 await save.runAsync({
                   rawInput: { kind: "add", title: new FormData(form).get("title") },
                 })
-              )
+              ) {
                 form.reset();
+              }
             }}
           >
             <label className="grid min-w-0 flex-1 gap-2 text-sm font-medium">

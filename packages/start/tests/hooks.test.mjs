@@ -18,9 +18,11 @@ test("a build's boundary record starts empty, and keeps each violation once, at 
   const found = startViolations(root);
   const path = join(root, ".tinker/violations.json");
   expect(JSON.parse(readFileSync(path, "utf8"))).toEqual([]);
+
   const info = { ...leak, importer: join(root, "src/routes/leak.tsx") };
   recordViolation(root, found, info);
   recordViolation(root, found, info);
+
   expect(JSON.parse(readFileSync(path, "utf8"))).toEqual([
     {
       env: "client",
@@ -37,6 +39,7 @@ test("tinker prepare and every tinker() load keep the last build's boundary reco
   const kept = '[{"importer":"src/routes/leak.tsx:6:24"}]\n';
   writeFileSync(join(root, ".tinker/violations.json"), kept);
   prepare(root);
+
   expect(readFileSync(join(root, ".tinker/violations.json"), "utf8")).toBe(kept);
 });
 

@@ -25,6 +25,7 @@ test("account changes reuse one AbortError reason", async () => {
     owner.reset();
     const second = owner.capture().signal;
     owner.reset();
+
     expect(first.reason).toBe(abortReasons.changed);
     expect(second.reason).toBe(first.reason);
     expect(first.reason.name).toBe("AbortError");

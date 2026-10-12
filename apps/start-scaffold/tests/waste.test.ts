@@ -40,13 +40,16 @@ test("a stream checks the session once at open, and a save does not check it aga
   try {
     await root.run(migrate);
     await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+
     const response = await root.run(openSync, { input: { cursor: { public: 0, private: null } } });
     const reader = response.getReader();
     await reader.read();
     await reader.read();
+
     const waiting = reader.read();
     await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
     await waiting;
+
     expect(root.spans().filter((span) => span.name === "sync.liveAccount")).toHaveLength(1);
     await reader.cancel();
   } finally {
@@ -58,6 +61,7 @@ test("a stream checks the session once at open, and a save does not check it aga
 test("a signed-out private redirect loads one snapshot across separate renders", async () => {
   const stop = new AbortController();
   let loads = 0;
+
   const source = preset(snapshotSource, () => ({
     async load() {
       loads += 1;
@@ -67,6 +71,7 @@ test("a signed-out private redirect loads one snapshot across separate renders",
       return null;
     },
   }));
+
   const page = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
@@ -79,6 +84,7 @@ test("a signed-out private redirect loads one snapshot across separate renders",
     tags: tabStop(stop.signal),
     presets: [source],
   });
+
   await Promise.all([page.ready, redirected.ready]);
   try {
     const account = await page.run(checkAccount);
@@ -98,6 +104,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   let loads = 0;
   const sent = Promise.withResolvers<void>();
   const allowed = Promise.withResolvers<void>();
+
   const server = createScope({
     signal: stop.signal,
     tags: settings,
@@ -105,6 +112,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   });
   await server.ready;
   await server.run(migrate);
+
   const browser = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
@@ -145,6 +153,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   try {
     const client = browser.resolve(syncClient);
     const oldVersion = client.capture().version;
+
     const signingIn = browser.run(signIn, {
       input: {
         mode: "signup",
@@ -153,14 +162,17 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
         password: "safe-password-42",
       },
     });
+
     await sent.promise;
     const reconnect = browser.run(refreshAccount);
     const route = browser.run(loadSnapshot);
     allowed.resolve();
     await Promise.all([signingIn, reconnect, route]);
+
     browser.run(receiveMessage, {
       input: { message: { kind: "account-change" }, version: oldVersion },
     });
+
     await browser.run(refreshAccount);
     await Promise.all([browser.run(loadSnapshot), browser.run(loadSnapshot)]);
     expect(loads).toBe(1);
@@ -175,11 +187,13 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
 test("a private route check clears cached records after another tab signs out", async () => {
   const stop = new AbortController();
   let cookie = "";
+
   const server = createScope({
     signal: stop.signal,
     tags: settings,
     presets: [proofDatabase, proofMail],
   });
+
   const browser = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
@@ -195,9 +209,11 @@ test("a private route check clears cached records after another tab signs out", 
       })),
     ],
   });
+
   await Promise.all([server.ready, browser.ready]);
   try {
     await server.run(migrate);
+
     const response = await server.run(handleAuth, {
       tags: requestHeaders(new Headers()),
       input: new Request("http://localhost:4318/api/auth/sign-up/email", {
@@ -214,8 +230,10 @@ test("a private route check clears cached records after another tab signs out", 
       .getSetCookie()
       .map((value) => value.split(";").at(0))
       .join("; ");
+
     const loaded = await browser.run(loadSnapshot);
     expect(loaded.private?.profile.name).toBe("Ada");
+
     await server.run(handleAuth, {
       tags: requestHeaders(new Headers({ cookie })),
       input: new Request("http://localhost:4318/api/auth/sign-out", {
@@ -224,6 +242,7 @@ test("a private route check clears cached records after another tab signs out", 
       }),
     });
     cookie = "";
+
     expect(await browser.run(checkAccount)).toBeNull();
     expect(browser.resolve(syncClient).snapshot().private).toBeNull();
     expect((await browser.run(loadSnapshot)).private).toBeNull();

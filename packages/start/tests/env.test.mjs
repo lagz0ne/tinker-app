@@ -8,10 +8,12 @@ test(".env loads, a reload takes an edited value, and a dropped key goes away", 
   const root = fixture({ ".env": "TINKER_TEST_GREETING=hello\nTINKER_TEST_GONE=x\n" });
   loadEnv(root);
   expect(process.env.TINKER_TEST_GREETING).toBe("hello");
+
   write(root, { ".env": "TINKER_TEST_GREETING=bye\n" });
   loadEnv(root);
   expect(process.env.TINKER_TEST_GREETING).toBe("bye");
   expect(process.env.TINKER_TEST_GONE).toBeUndefined();
+
   rmSync(join(root, ".env"));
   loadEnv(root);
   expect(process.env.TINKER_TEST_GREETING).toBeUndefined();

@@ -861,10 +861,12 @@ function messageBreaks() {
 function applyBreak(change) {
   const path = join(scratch, change.file);
   const text = readFileSync(path, "utf8");
-  if (change.at !== undefined)
+  if (change.at !== undefined) {
     return writeFileSync(path, `${text.slice(0, change.at)}~${text.slice(change.at)}`);
-  if (!text.includes(change.find))
+  }
+  if (!text.includes(change.find)) {
     throw new Error(`break "${change.name}": text not found in ${change.file}`);
+  }
   writeFileSync(
     path,
     text.replace(change.find, () => change.replace),
@@ -921,6 +923,7 @@ let caught = 0;
 for (const change of all) {
   freshScratch();
   applyBreak(change);
+
   const { failed, broken } = failedTests();
   const ok = failed > 0 && broken === 0;
   if (ok) caught += 1;

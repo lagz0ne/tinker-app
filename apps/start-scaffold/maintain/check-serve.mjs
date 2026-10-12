@@ -29,6 +29,7 @@ export async function checkServe(source) {
   let output = "";
   try {
     await copyProofApp(source, proof);
+
     await writeFile(
       join(proof, "src/routes/proof.response.ts"),
       `import { createFileRoute } from "@tanstack/react-router";
@@ -37,18 +38,21 @@ export const Route = createFileRoute("/proof/response")({
 });
 `,
     );
+
     const built = spawnSync(join(source, "node_modules/.bin/vp"), ["build"], {
       cwd: proof,
       encoding: "utf8",
       timeout: 120000,
     });
     assert.equal(built.status, 0, built.stdout + built.stderr);
+
     const listener = createServer();
     listener.listen(0, "127.0.0.1");
     await once(listener, "listening");
     const address = listener.address();
     assert.ok(address && typeof address !== "string");
     await new Promise((done) => listener.close(done));
+
     server = spawn(
       process.execPath,
       [join(source, "node_modules/@tinker/start/bin/tinker.mjs"), "serve"],
@@ -66,12 +70,14 @@ export const Route = createFileRoute("/proof/response")({
     );
     server.stdout.on("data", (data) => (output += data));
     server.stderr.on("data", (data) => (output += data));
+
     const response = await fetchWhenListening(
       `http://127.0.0.1:${address.port}/proof/response`,
       server,
     );
     const body = await response.text();
     console.log(`GET /proof/response: ${response.status} ${body}`);
+
     assert.equal(response.status, 200, output + body);
     assert.deepEqual(JSON.parse(body), { ok: true });
     console.log("PASS built starter serves native Response.json");

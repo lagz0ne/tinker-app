@@ -31,15 +31,19 @@ export const accountOwner = extension({
   hooks: {
     async start({ next, scope, defer }) {
       await next();
+
       const signal = scope.resolve(tabStop);
       let stop = new AbortController();
       let version = 0;
+
       const cancel = () => stop.abort(abortReasons.closed);
       signal.addEventListener("abort", cancel, { once: true });
+
       defer(() => {
         signal.removeEventListener("abort", cancel);
         stop.abort(abortReasons.closed);
       });
+
       return {
         capture: () => ({ version, signal: stop.signal }),
         version: () => version,

@@ -34,9 +34,11 @@ export const responseBodies = resource({
         if (response.body === null) {
           return finish(true).then(() => response);
         }
+
         const reader = response.body.getReader();
         const owned = { reader, finish, cancelled: false };
         readers.add(owned);
+
         const body = new ReadableStream<Uint8Array>({
           async pull(controller) {
             try {
@@ -61,6 +63,7 @@ export const responseBodies = resource({
             }
           },
         });
+
         return startServer.transferResponseBodyOwnership(
           response,
           new Response(body, {

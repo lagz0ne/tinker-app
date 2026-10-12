@@ -123,12 +123,15 @@ function finish(root) {
  */
 export function planUpgrade(root, version, options) {
   const pinned = bytes(root);
-  if (pinned.status === "fail" && !options.force)
+  if (pinned.status === "fail" && !options.force) {
     return {
       stop: `stop: ${pinned.lines.join("; ")}\nRun tinker doctor --fix first, or pass --force.`,
     };
+  }
+
   const next = release(root, version, options.from);
   if (next.missing) return { stop: `stop: ${next.missing} does not exist` };
+
   const pkg = readJson(join(root, "package.json"));
   const pinnedDependencies = pinDependencies(
     pkg.dependencies,
@@ -136,9 +139,11 @@ export function planUpgrade(root, version, options) {
     options.tested ?? next.tested,
     (name) => installedVersion(root, name),
   );
+
   const dependencies = options.from
     ? pinnedDependencies.dependencies
     : releaseDependencies(pinnedDependencies.dependencies, version);
+
   return {
     pkg: { ...pkg, dependencies },
     changes: Object.entries(dependencies)
@@ -179,6 +184,7 @@ export async function upgrade(root, version, options) {
     console.log(plan.stop);
     return 1;
   }
+
   if (!options.from) {
     const tested = await testedRelease(plan.pkg.dependencies["@tinker/start"]);
     plan = planUpgrade(root, version, { ...options, tested });
@@ -187,13 +193,17 @@ export async function upgrade(root, version, options) {
       return 1;
     }
   }
+
   writeFileSync(join(root, "package.json"), JSON.stringify(plan.pkg, null, 2) + "\n");
   for (const line of plan.changes) console.log(line);
+
   const { before } = plan;
   const status = finish(root);
+
   const notes = readFileSync(join(freshBase(root), "UPGRADE.md"), "utf8");
   console.log(
     `\nUpgrade notes, ${before} to ${version}:\n\n${notesBetween(notes, before, version)}`,
   );
+
   return status;
 }

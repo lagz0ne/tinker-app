@@ -69,8 +69,9 @@ test("passes a shell that renders Outlet, uses Outlet as is, or imports its comp
     'import { Layout } from "../layout";\nexport const Route = createRootRoute({ component: Layout });\n',
     "export const Route = createRootRoute({ shellComponent: ({ children }) => children });\n",
   ];
-  for (const shell of shells)
+  for (const shell of shells) {
     expect(routes(goodApp({ "src/routes/__root.tsx": shell })).status).toBe("ok");
+  }
 });
 
 test("a local value named Outlet is not TanStack's outlet", () => {

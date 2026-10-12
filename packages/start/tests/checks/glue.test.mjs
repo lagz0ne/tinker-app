@@ -50,11 +50,13 @@ test("counts tinker() under the name it is imported as, in any Vite config file 
   const renamed =
     'import { tinker as base } from "@tinker/start/vite";\nexport default { plugins: [base()] };\n';
   expect(glue(goodApp({ "vite.config.ts": renamed })).status).toBe("ok");
+
   const mts = goodApp({ "vite.config.mts": renamed });
   rmSync(join(mts, "vite.config.ts"));
   expect(glue(mts).lines).toEqual([
     "vite.config.mts calls tinker() once; tsconfig.json extends .tinker; postinstall runs tinker prepare",
   ]);
+
   const twice = goodApp({
     "vite.config.mjs":
       'import { tinker as base } from "@tinker/start/vite";\nexport default { plugins: [base(), base()] };\n',
@@ -117,6 +119,7 @@ test("a tsconfig.json that does not parse is named at its line, and --fix never 
   const broken = '{\n  "compilerOptions": {\n    "jsx": "react-jsx"\n    "strict": true\n  }\n}\n';
   const root = goodApp({ "tsconfig.json": broken });
   const result = glue(root);
+
   expect(result.lines).toEqual([
     "tsconfig.json:4 does not parse (CommaExpected); doctor never edits a file that does not parse",
   ]);
@@ -193,6 +196,7 @@ test("reads the extends list as tsc does: the last file that sets a key wins ove
     "paths.json": '{ "compilerOptions": { "strict": false, "paths": { "x": ["y"] } } }\n',
   });
   expect(glue(before).status).toBe("ok");
+
   const later = goodApp({
     "tsconfig.json":
       '{\n  "extends": ["./.tinker/tsconfig.json", "./loose.json", "./tight.json"]\n}\n',
@@ -200,6 +204,7 @@ test("reads the extends list as tsc does: the last file that sets a key wins ove
     "tight.json": '{\n  "compilerOptions": {\n    "strict": true\n  }\n}\n',
   });
   expect(glue(later).status).toBe("ok");
+
   const own = goodApp({
     "tsconfig.json":
       '{\n  "extends": ["./.tinker/tsconfig.json", "./loose.json"],\n  "compilerOptions": { "strict": true }\n}\n',
@@ -272,6 +277,7 @@ test("a package.json with a byte order mark is named, and --fix never writes it"
   const marked = '\uFEFF{\n  "name": "app"\n}\n';
   const root = goodApp({ "package.json": marked });
   const result = glue(root);
+
   expect(result.lines).toEqual(["package.json:1 starts with a byte order mark; vp cannot read it"]);
   expect(result.fix).toBeUndefined();
   expect(runCheck(root, glue, true).status).toBe("fail");
@@ -339,6 +345,7 @@ test("--fix writes only the key that is wrong", () => {
   const noScript = goodApp({ "tsconfig.json": tsconfig, "package.json": "{}\n" });
   expect(runCheck(noScript, glue, true).status).toBe("fixed");
   expect(readFileSync(join(noScript, "tsconfig.json"), "utf8")).toBe(tsconfig);
+
   const pkg = '{ "scripts": { "postinstall": "tinker prepare" } }\n';
   const noExtends = goodApp({ "tsconfig.json": "{}\n", "package.json": pkg });
   expect(runCheck(noExtends, glue, true).status).toBe("fixed");
@@ -365,6 +372,7 @@ test("--fix writes a missing tsconfig.json, and fills an empty extends list", ()
   expect(readFileSync(join(missing, "tsconfig.json"), "utf8")).toBe(
     '{\n  "extends": "./.tinker/tsconfig.json"\n}\n',
   );
+
   const empty = goodApp({ "tsconfig.json": '{ "extends": [] }\n' });
   expect(runCheck(empty, glue, true).status).toBe("fixed");
   expect(readFileSync(join(empty, "tsconfig.json"), "utf8")).toBe(

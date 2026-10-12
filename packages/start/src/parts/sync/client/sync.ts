@@ -19,12 +19,14 @@ export const syncClient = resource({
     const local = new Set<string>();
     const results = new Map<string, Sync.Result>();
     const waiters = new Map<string, ReturnType<typeof Promise.withResolvers<Sync.Result>>>();
+
     defer(() => {
       for (const waiting of waiters.values()) waiting.reject(fail("Cancelled", {}));
       waiters.clear();
       results.clear();
       local.clear();
     });
+
     const client = {
       capture: owner.capture,
       version: owner.version,
@@ -40,9 +42,11 @@ export const syncClient = resource({
         ),
       leave() {
         owner.reset();
+
         if (accountId !== null) cursors.delete(accountId);
         accountId = null;
         records.resetPrivate();
+
         for (const waiting of waiters.values()) waiting.reject(fail("Cancelled", {}));
         waiters.clear();
         results.clear();
@@ -50,9 +54,11 @@ export const syncClient = resource({
       },
       bootstrap(snapshot: Sync.Snapshot, version: number) {
         if (version !== owner.version()) return;
+
         const nextId = snapshot.private?.stream ?? null;
         if (nextId !== accountId) client.leave();
         if (local.size > 0) return;
+
         accountId = nextId;
         client.merge(snapshot);
         return owner.version();
@@ -90,10 +96,12 @@ export const syncClient = resource({
         if (version !== owner.version() || signal.aborted) raise("Cancelled", {});
         const completed = results.get(executionId);
         if (completed) return completed;
+
         const waiting = Promise.withResolvers<Sync.Result>();
         waiters.set(executionId, waiting);
         const stop = () => waiting.reject(fail("Cancelled", {}));
         signal.addEventListener("abort", stop, { once: true });
+
         try {
           return await waiting.promise;
         } finally {
@@ -129,6 +137,7 @@ export const syncClient = resource({
               continue;
             }
             if (reply.kind === "rejected") raise("WriteRejected", { message: reply.message });
+
             const result = await client.wait(executionId, token.version, signal);
             if (signal.aborted) raise("Cancelled", {});
             return result;
@@ -139,6 +148,7 @@ export const syncClient = resource({
         }
       },
     };
+
     return client;
   },
 });

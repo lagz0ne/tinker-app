@@ -110,6 +110,7 @@ test("doctor builds todos suggestions with no TypeScript module endings", async 
     "src/lib/tinker.server.ts": "export const extensions = [];",
   });
   const lines = examples(root).lines;
+
   expect(lines).toContain(
     'todos-example: src/lib/tinker.server.ts:1 needs database; add export { database } from "../backend/database";',
   );

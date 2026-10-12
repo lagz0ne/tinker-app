@@ -39,6 +39,7 @@ function checkTargets(registry) {
 /** Release specs replace workspace and catalog names; local packs never enter a normal build. */
 async function releasePackage(path, packs, releaseVersion) {
   const pkg = JSON.parse(await readFile(path, "utf8"));
+
   const workspace = await readFile(join(root, "pnpm-workspace.yaml"), "utf8");
   const catalog = Object.fromEntries(
     [
@@ -50,10 +51,12 @@ async function releasePackage(path, packs, releaseVersion) {
         .matchAll(/^  "?([^":]+)"?: (.+)$/gm),
     ].map(([, name, version]) => [name, version.replaceAll('"', "")]),
   );
+
   for (const dependencies of [pkg.dependencies, pkg.devDependencies]) {
     for (const [name, version] of Object.entries(dependencies)) {
-      if (version.startsWith("npm:") && !version.slice(4).includes("@"))
+      if (version.startsWith("npm:") && !version.slice(4).includes("@")) {
         dependencies[name] = version.slice(4);
+      }
       if (version === "catalog:") dependencies[name] = catalog[name];
       if (version === "workspace:*") {
         const release = JSON.parse(
@@ -67,6 +70,7 @@ async function releasePackage(path, packs, releaseVersion) {
       assert.ok(!dependencies[name].endsWith(":"), name);
     }
   }
+
   pkg.overrides = { vite: "$vite" };
   return pkg;
 }
@@ -145,32 +149,41 @@ export async function registryItems(options = {}) {
   const registry =
     options.registry ?? JSON.parse(await readFile(join(app, "registry.json"), "utf8"));
   checkTargets(registry);
+
   const full = await releasePackage(join(app, "package.json"), packs, version);
   const minimal = await releasePackage(join(root, "apps/start-min/package.json"), packs, version);
   minimal.name = "tinker-app";
+
   const tasks = Object.keys(full.scripts).filter(
     (name) => name.startsWith("test:") && name !== "test:schema",
   );
   for (const name of ["registry:build", ...tasks]) delete full.scripts[name];
   full.scripts.check =
     "vp check && vp run typecheck && vp run test && vp run check:plain && vp run test:schema && vp run doctor";
+
   const packages = { "app.package.json": minimal, "starter.package.json": full };
   const items = [];
+
   for (const item of registry.items) {
     const emitted = { $schema: "https://ui.shadcn.com/schema/registry-item.json", ...item };
     Object.assign(emitted, itemDependencies(item, full));
-    if (item.registryDependencies)
+
+    if (item.registryDependencies) {
       emitted.registryDependencies = item.registryDependencies.map(
         (name) => `${url.replace(/\/$/, "")}/${name.replace("@tinker-start/", "")}.json`,
       );
+    }
+
     emitted.files = await Promise.all(
       item.files.map(async (file) => ({
         ...file,
         content: await fileContent(file, packages),
       })),
     );
+
     emitted.files.push(...receipt(item));
     items.push(emitted);
   }
+
   return { registry, items, packages };
 }

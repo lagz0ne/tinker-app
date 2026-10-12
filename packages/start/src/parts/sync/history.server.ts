@@ -49,11 +49,12 @@ export const eventHistory = resource({
           })),
         );
         for (const payload of payloads) {
-          if (payload.kind === "result")
+          if (payload.kind === "result") {
             await tx
               .update(execution)
               .set({ result: payload.result })
               .where(eq(execution.id, executionId));
+          }
         }
       },
     };

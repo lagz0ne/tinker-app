@@ -40,12 +40,15 @@ function changedFiles(dir, pinned) {
 function restoreBase(root, dir, changed) {
   const spec = readJson(join(root, "package.json")).dependencies["@tinker/start"];
   if (!/^file:.*\.tgz$/.test(spec)) return say.reinstall(spec);
+
   const unpacked = mkdtempSync(join(tmpdir(), "tinker-restore-"));
   execFileSync("tar", ["-xzf", resolve(root, spec.slice(5)), "-C", unpacked]);
+
   for (const { file, kind } of changed) {
     if (kind === "added") rmSync(join(dir, file));
     else writeFileSync(join(dir, file), readFileSync(join(unpacked, "package", file)));
   }
+
   rmSync(unpacked, { recursive: true, force: true });
   return say.restored(changed.length, spec.slice(5).split("/").at(-1));
 }
@@ -56,8 +59,10 @@ export function bytes(root) {
   if (!dir) return fail([say.missing]);
   if (!dir.split(sep).includes("node_modules")) return skip(say.link(relative(root, dir)));
   if (!existsSync(join(dir, "files.json"))) return fail([say.noPins]);
+
   const pinned = readJson(join(dir, "files.json"));
   const changed = changedFiles(dir, pinned);
+
   return verdict(
     changed.map(({ file, kind }) => say.edited(file, kind)),
     say.passed(Object.keys(pinned).length),

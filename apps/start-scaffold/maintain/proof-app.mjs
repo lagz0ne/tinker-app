@@ -12,14 +12,18 @@ export async function copyProofApp(source, target) {
     "vite.config.ts",
     "tsconfig.json",
     "components.json",
-  ])
+  ]) {
     await cp(join(source, name), join(target, name), { recursive: true });
+  }
+
   await symlink(join(source, "node_modules"), join(target, "node_modules"), "dir");
+
   const databaseFile = join(target, "src/backend/database.server.ts");
   const database = await readFile(databaseFile, "utf8");
   const start = database.indexOf("export const database = resource({");
   const end = database.indexOf("export const migrate = operation({");
   assert.ok(start >= 0 && end > start, "the app declares its database before migrations");
+
   await writeFile(
     databaseFile,
     database
@@ -43,11 +47,13 @@ export async function copyProofApp(source, target) {
   });\n` +
       database.slice(end),
   );
+
   const mailFile = join(target, "src/backend/mail.server.ts");
   const mail = await readFile(mailFile, "utf8");
   const sender = mail.indexOf("export const mail = resource({");
   const send = mail.indexOf("export const sendMail = operation({");
   assert.ok(sender >= 0 && send > sender, "the app declares its mail client before sends");
+
   await writeFile(
     mailFile,
     mail.slice(0, sender).replace('import { smtp } from "./modules";\n', "") +

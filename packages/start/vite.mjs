@@ -104,9 +104,11 @@ export function tinker(options = {}) {
   const passed = passThrough(options);
   const on = partsOn(options);
   const root = resolve(options.root ?? process.cwd());
+
   loadEnv(root);
   if (!existsSync(join(root, "src/routes"))) throw new Error(`tinker: ${routeSay.missing}`);
   prepare(root, on);
+
   let noted = false;
   const glue = {
     name: "tinker:glue",
@@ -117,18 +119,22 @@ export function tinker(options = {}) {
       for (const note of partNotes(on)) config.logger.info(`tinker: ${note}`);
     },
   };
+
   const own = startOptions(root, on);
   const record = {};
   /** Returns nothing: Start drops a violation whose hook returns false. */
   const onViolation = (info) => {
     if (record.found) recordViolation(root, record.found, info);
   };
+
   const start = tanstackStart({
     ...own,
     ...passed,
     importProtection: { ...own.importProtection, onViolation },
   });
+
   if (process.env.VITEST) return [glue, start];
+
   return [
     glue,
     verify(root, record),

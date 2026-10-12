@@ -163,10 +163,12 @@ function winner(files, key) {
  */
 function tsconfigProblems(root, tsconfig) {
   if (tsconfig.error) return [parseProblem("tsconfig.json", tsconfig.error)];
+
   const { extends: parent } = tsconfig.value;
   const files = overriding(root, tsconfig);
   const paths = winner(files, "paths");
   const strict = winner(files, "strict");
+
   return [
     ![parent].flat().includes(tinkerConfig) && say.extends,
     ...files

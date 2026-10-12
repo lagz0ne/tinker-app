@@ -27,9 +27,11 @@ function run(command, args, cwd = consumer, extra = {}) {
     encoding: "utf8",
     timeout: 240000,
   });
+
   process.stdout.write(child.stdout ?? "");
   process.stdout.write(child.stderr ?? "");
   console.log(`EXIT ${child.status}`);
+
   assert.equal(child.status, 0, `${command}: ${child.error ?? "failed"}`);
   return child.stdout + child.stderr;
 }
@@ -40,10 +42,11 @@ async function hashes(dir) {
     for (const entry of await readdir(path, { withFileTypes: true })) {
       const file = join(path, entry.name);
       if (entry.isDirectory()) await visit(file);
-      else
+      else {
         result[relative(dir, file)] = createHash("sha256")
           .update(await readFile(file))
           .digest("hex");
+      }
     }
   }
   await visit(dir);
@@ -59,18 +62,23 @@ async function stop(child) {
 }
 
 try {
-  for (const name of ["core", "react"])
+  for (const name of ["core", "react"]) {
     run("vp", ["pm", "pack", "--pack-destination", packs], join(root, "packages", name));
+  }
   run(process.execPath, [join(root, "packages/start/scripts/pack.mjs"), packs], root);
+
   const release = join(scratch, "new-base");
   await mkdir(release);
   run("tar", ["-xzf", join(packs, "tinker-start-0.7.0.tgz"), "-C", release], root);
+
   const releaseRoot = join(release, "package");
   const next = JSON.parse(await readFile(join(releaseRoot, "package.json"), "utf8"));
   next.version = "0.7.1";
   await writeFile(join(releaseRoot, "package.json"), JSON.stringify(next, null, 2) + "\n");
   run("vp", ["pm", "pack", "--pack-destination", packs], releaseRoot);
+
   console.log("Assumption: 0.7.1 is a local version-bump fixture, not a published release.");
+
   const staticServer = spawn(
     process.execPath,
     [
@@ -94,12 +102,14 @@ try {
     { stdio: ["ignore", "inherit", "inherit", "ipc"] },
   );
   servers.push(staticServer);
+
   const port = await new Promise((done, fail) => {
     staticServer.once("message", done);
     staticServer.once("error", fail);
   });
   const url = `http://127.0.0.1:${port}/r`;
   console.log(`Local registry ${url}; server PID ${staticServer.pid}.`);
+
   const buildRegistry = () =>
     run(process.execPath, [join(app, "maintain/build-registry.mjs")], app, {
       TINKER_PACKAGE_DIR: packs,
@@ -107,13 +117,16 @@ try {
       TINKER_REGISTRY_OUT: registry,
     });
   buildRegistry();
+
   assert.deepEqual(await readdir(consumer), []);
   run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/app.json`, "--yes"]);
   console.log("PASS: one shadcn add wrote the empty app.");
+
   run("npm", ["install"]);
   run("vp", ["build"]);
   const tinker = join(consumer, "node_modules/.bin/tinker");
   run(tinker, ["doctor"]);
+
   const probe = createServer();
   await new Promise((done) => probe.listen(0, "127.0.0.1", done));
   const hostPort = probe.address().port;
@@ -124,6 +137,7 @@ try {
     stdio: ["ignore", "pipe", "inherit"],
   });
   servers.push(host);
+
   const hostUrl = await new Promise((done, fail) => {
     let output = "";
     host.stdout.on("data", (chunk) => {
@@ -136,19 +150,25 @@ try {
     host.once("exit", (code) => fail(new Error(`host exited ${code}`)));
   });
   console.log(`App server PID ${host.pid}: ${hostUrl}`);
+
   const html = run("curl", ["--fail", "--silent", `${hostUrl}/`]);
   assert.ok(html.includes("Hello, world."));
   console.log("PASS: GET / returned Hello, world. (HTTP 200).");
+
   await stop(host);
+
   run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/mail-example.json`, "--yes"]);
   run("vp", ["build"]);
   run(tinker, ["doctor"]);
   console.log("PASS: standalone mail builds and passes doctor without Postgres or SMTP.");
+
   const baseBefore = await hashes(join(consumer, "node_modules/@tinker/start"));
   const userBefore = await hashes(join(consumer, "src"));
   const packageBefore = await readFile(join(consumer, "package.json"), "utf8");
+
   await writeFile(mailSource, original.replace('"mail.completed"', '"mail.completed.changed"'));
   buildRegistry();
+
   const diff = run("npx", [
     "--yes",
     "shadcn@4.21.0",
@@ -164,8 +184,10 @@ try {
   console.log(
     "PASS: source change appears in --diff; user files, package.json, and every base byte stay unchanged.",
   );
+
   await writeFile(mailSource, original);
   buildRegistry();
+
   const configBefore = {};
   for (const name of [
     "vite.config.ts",
@@ -173,36 +195,53 @@ try {
     "components.json",
     ".env.example",
     ".gitignore",
-  ])
+  ]) {
     configBefore[name] = await readFile(join(consumer, name), "utf8");
+  }
+
   run(tinker, ["upgrade", "0.7.1", "--from", packs]);
+
   assert.deepEqual(await hashes(join(consumer, "src")), userBefore);
-  for (const [name, content] of Object.entries(configBefore))
+  for (const [name, content] of Object.entries(configBefore)) {
     assert.equal(await readFile(join(consumer, name), "utf8"), content);
+  }
   console.log(
     "PASS: upgrade 0.7.0 -> 0.7.1 changed no user source or config; package.json and install files changed as expected.",
   );
+
   run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/todos-example.json`, "--yes"]);
   const configPath = join(consumer, "vite.config.ts");
   await writeFile(
     configPath,
     (await readFile(configPath, "utf8")).replace("tinker()", "tinker({ auth: true, sync: true })"),
   );
+
   await writeFile(join(consumer, "src/lib/tinker.ts"), 'export * from "../examples/demo";\n');
   await writeFile(
     join(consumer, "src/lib/tinker.server.ts"),
     'export * from "../examples/demo.server";\nexport { extensions } from "../examples/demo.server";\n',
   );
   await cp(join(consumer, "examples/demo.env.example"), join(consumer, ".env"));
+
   run("vp", ["build"]);
   run(tinker, ["doctor"]);
-  for (const name of ["profile-example", "auth-pages-example", "counter-example", "example-wiring"])
+
+  for (const name of [
+    "profile-example",
+    "auth-pages-example",
+    "counter-example",
+    "example-wiring",
+  ]) {
     run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/${name}.json`, "--yes"]);
+  }
+
   run("vp", ["build"]);
   run(tinker, ["doctor"]);
+
   console.log(
     "PASS: todos, profile, auth pages, counter, wiring build and doctor EXIT 0 without a running Postgres.",
   );
+
   console.log(
     "These demo items need the auth + sync switches and Postgres + SMTP for live use. Their shared dependency copies all demo bodies.",
   );

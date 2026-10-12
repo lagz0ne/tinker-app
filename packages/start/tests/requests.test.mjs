@@ -31,6 +31,7 @@ test("each request runs in its own session, with its headers and stop signal, un
       return closed;
     },
   });
+
   const gate = Promise.withResolvers();
   const gated = operation({
     label: "test.gated",
@@ -39,6 +40,7 @@ test("each request runs in its own session, with its headers and stop signal, un
       return signal.aborted;
     },
   });
+
   const request = new Request("http://app/", { headers: { "x-who": "Ada" } });
   let asked;
   const running = Promise.withResolvers();
@@ -55,11 +57,14 @@ test("each request runs in its own session, with its headers and stop signal, un
       return { request, pathname: "/", context, response: new Response("hello") };
     },
   });
+
   expect(asked).toEqual({ who: "Ada", requestStop: request.signal });
   if (!result || result instanceof Response) return expect.unreachable("Start's result comes back");
+
   const reading = result.response.text();
   await closing.promise;
   expect(closed).toEqual([]);
+
   gate.resolve();
   expect(await reading).toBe("hello");
   expect(closed).toEqual(["session"]);
@@ -72,6 +77,7 @@ test("a request that throws stops its session by force and passes the error on",
   const request = new Request("http://app/");
   const boom = new Error("boom");
   const running = Promise.withResolvers();
+
   await expect(
     startRequests.middleware.options.server?.({
       request,
@@ -102,6 +108,7 @@ test("a teardown error in the request session fails the body read", async () => 
       return 1;
     },
   });
+
   const request = new Request("http://app/");
   const result = await startRequests.middleware.options.server?.({
     request,
@@ -115,6 +122,7 @@ test("a teardown error in the request session fails the body read", async () => 
     },
   });
   if (!result || result instanceof Response) return expect.unreachable("Start's result comes back");
+
   await expect(result.response.text()).rejects.toBe(lost);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -133,6 +141,7 @@ test("cancelling a body stops active request work before it can close gracefully
       signal.throwIfAborted();
     },
   });
+
   const request = new Request("http://app/");
   const result = await startRequests.middleware.options.server?.({
     request,
@@ -146,8 +155,10 @@ test("cancelling a body stops active request work before it can close gracefully
     },
   });
   if (!result || result instanceof Response) return expect.unreachable("Start's result comes back");
+
   await started.promise;
   await result.response.body.cancel();
+
   expect((await running.promise).status).toBe("cancelled");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -169,6 +180,7 @@ test.each(["end", "cancel", "error"])(
         },
       }),
     );
+
     const recorder = resource({
       label: "test.request-close",
       target: "session",
@@ -178,6 +190,7 @@ test.each(["end", "cancel", "error"])(
         });
       },
     });
+
     const torn = new Error("source failed");
     const source =
       ending === "end"
@@ -202,10 +215,12 @@ test.each(["end", "cancel", "error"])(
         return { request, pathname: "/", context: options.context, response: source };
       },
     });
+
     expect(closed).toEqual([]);
     if (ending === "cancel") await result.response.body.cancel();
     else if (ending === "error") await expect(result.response.text()).rejects.toBe(torn);
     else expect(await result.response.text()).toBe("page");
+
     expect(closed).toEqual(["request", "render"]);
     expect((await render.close({ graceful: true })).status).toBe("success");
     expect((await root.close({ graceful: true })).status).toBe("success");

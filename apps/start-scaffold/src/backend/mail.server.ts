@@ -26,11 +26,12 @@ export const mailSettings = resource({
   depends: { env },
   factory: ({ env }): Mail.Settings => {
     const parsed = mailEnv.safeParse(env);
-    if (!parsed.success)
+    if (!parsed.success) {
       raise("BadSettings", {
         part: "mail",
         keys: parsed.error.issues.map((issue) => issue.path.join(".")),
       });
+    }
     const settings = parsed.data;
     return {
       host: settings.SMTP_HOST,

@@ -70,10 +70,12 @@ export function examples(root) {
       const missingSeams = Object.entries(item.seams).flatMap(([file, names]) =>
         Object.entries(names).flatMap(([name, needed]) => {
           const path = join(root, file);
-          if (!existsSync(path) || !mayExport(path, name))
+          if (!existsSync(path) || !mayExport(path, name)) {
             return [say.seam(item.name, file, name, needed.line)];
-          if (needed.include && !hasSetup(path, needed))
+          }
+          if (needed.include && !hasSetup(path, needed)) {
             return [say.setup(item.name, file, needed.include.name, needed.line)];
+          }
           return [];
         }),
       );

@@ -9,6 +9,7 @@ test("a route's URL drops groups, pathless parts, and the ending index", () => {
   expect(routePath("(marketing)/about.tsx")).toBe("/about");
   expect(routePath("_auth/dashboard.tsx")).toBe("/dashboard");
   expect(routePath("posts/index.tsx")).toBe("/posts");
+
   expect(routePath("posts/route.tsx")).toBe("/posts");
   expect(routePath("index.tsx")).toBe("/");
   expect(routePath("files/[.]well-known.tsx")).toBe("/files/.well-known");
@@ -20,6 +21,7 @@ test("all six ways to take a base path clash", () => {
   expect(routeClash("(extra)/tinker.tsx", owned)).toBe("takes /tinker, a base route");
   expect(routeClash("_wrap/tinker.tsx", owned)).toBe("takes /tinker, a base route");
   expect(routeClash("tinker/index.tsx", owned)).toBe("takes /tinker, a base route");
+
   expect(routeClash("tinker/settings.tsx", owned)).toBe(
     "nests under /tinker, a base route with no outlet; the base page renders",
   );
@@ -49,6 +51,7 @@ test("a route under a base splat takes its path from the splat", () => {
   );
   expect(routeClash("api.auth.ts", splat)).toBe(null);
   expect(routeClash("api/authors.ts", splat)).toBe(null);
+
   expect(routeClash("tinker/more.tsx", ["/tinker"])).toBe(
     "nests under /tinker, a base route with no outlet; the base page renders",
   );

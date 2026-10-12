@@ -47,6 +47,7 @@ function isQuality(parameter) {
 export function readEncoding(request) {
   const accepted = request.headers.get("accept-encoding") ?? "";
   if (encodings.has(accepted)) return encodings.get(accepted);
+
   const encoding = selectEncoding(accepted);
   if (encodings.size === 128) encodings.clear();
   encodings.set(accepted, encoding);
@@ -59,8 +60,10 @@ function selectEncoding(accepted) {
   const fallback = weights.get("*") ?? 0;
   const choices = ["br", "gzip"].map((name) => ({ name, weight: weights.get(name) ?? fallback }));
   choices.push({ name: "identity", weight: weights.get("identity") ?? 0 });
+
   const best = choices.sort((a, b) => b.weight - a.weight).find(({ weight }) => weight > 0);
   if (best) return best.name;
+
   const identity = weights.get("identity") ?? Number(weights.get("*") !== 0);
   return identity > 0 ? "identity" : null;
 }
@@ -107,17 +110,20 @@ export async function compressResponse(request, response) {
   const headers = new Headers(response.headers);
   varyEncoding(headers);
   const encoding = readEncoding(request);
+
   if (encoding === null) {
     await response.body?.cancel();
     headers.delete("content-length");
     headers.delete("etag");
     return new Response(null, { status: 406, headers });
   }
+
   if (encoding !== "identity" && (response.body !== null || request.method === "HEAD")) {
     headers.set("content-encoding", encoding);
     headers.delete("content-length");
     headers.delete("etag");
   }
+
   const body = await compressBody(request, response.body, encoding);
   return new Response(body, { status: response.status, statusText: response.statusText, headers });
 }
@@ -132,7 +138,9 @@ async function compressBody(request, body, encoding) {
     await body?.cancel();
     return null;
   }
+
   if (encoding === "identity" || body === null) return body;
+
   const source = Readable.fromWeb(body);
   const zip = streams[encoding]();
   source.once("error", (error) => zip.destroy(error));

@@ -23,6 +23,7 @@ test("an event before its receipt finishes only after saved records are applied"
   const receipt = Promise.withResolvers<Sync.Reply>();
   const sent = Promise.withResolvers<void>();
   const executionId = crypto.randomUUID();
+
   const send = operation({
     label: "test.sync.send",
     depends: { sync: syncClient },
@@ -39,17 +40,20 @@ test("an event before its receipt finishes only after saved records are applied"
         signal,
       ),
   });
+
   const root = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
     tags: tabStop(stop.signal),
   });
   await root.ready;
+
   try {
     root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
     const client = root.resolve(syncClient);
     const waiting = root.run(send, { signal: call.signal });
     await sent.promise;
+
     await root.run(applyEvents, {
       input: {
         version: client.capture().version,
@@ -71,6 +75,7 @@ test("an event before its receipt finishes only after saved records are applied"
       signal: call.signal,
     });
     expect(root.resolve(counter)).toBe(1);
+
     receipt.resolve({ kind: "accepted", executionId });
     expect(await waiting).toEqual({ kind: "complete", action: "counter" });
   } finally {
@@ -91,7 +96,9 @@ test("replayed events and older snapshots leave newer records and dirty drafts a
     root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
     const client = root.resolve(syncClient);
     const version = client.capture().version;
+
     root.controller(nameDraft).set("My unsaved text");
+
     const first: Sync.Event = {
       stream: "ada",
       revision: 1,
@@ -110,9 +117,11 @@ test("replayed events and older snapshots leave newer records and dirty drafts a
         change: { kind: "profile", profile: { ...ada, name: "Remote latest" } },
       },
     };
+
     root.run(applyEvents, { input: { version, events: [first, second] } });
     root.run(applyEvents, { input: { version, events: [first, second] } });
     root.run(applyBootstrap, { input: { version, snapshot: initial } });
+
     expect(root.resolve(profile)?.name).toBe("Remote latest");
     expect(root.resolve(nameDraft)).toBe("My unsaved text");
   } finally {
@@ -125,6 +134,7 @@ test("account exit stops local waits and ignores an old account's late response"
   const stop = new AbortController();
   const sent = Promise.withResolvers<void>();
   const executionId = crypto.randomUUID();
+
   const send = operation({
     label: "test.sync.send",
     depends: { sync: syncClient },
@@ -141,20 +151,24 @@ test("account exit stops local waits and ignores an old account's late response"
         signal,
       ),
   });
+
   const root = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
     tags: tabStop(stop.signal),
   });
   await root.ready;
+
   try {
     root.run(applyBootstrap, { input: { snapshot: initial, version: 0 } });
     const client = root.resolve(syncClient);
     const oldVersion = client.capture().version;
+
     const waiting = root.settle(send);
     await sent.promise;
     root.run(leaveAccount);
     expect((await waiting).status).toBe("failed");
+
     const grace = {
       public: initial.public,
       private: {
@@ -164,10 +178,12 @@ test("account exit stops local waits and ignores an old account's late response"
         todos: [],
       },
     };
+
     root.run(applyBootstrap, {
       input: { snapshot: grace, version: client.capture().version },
     });
     root.run(applyBootstrap, { input: { snapshot: initial, version: oldVersion } });
+
     root.run(applyEvents, {
       input: {
         version: oldVersion,

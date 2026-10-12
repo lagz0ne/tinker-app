@@ -21,17 +21,21 @@ if (import.meta.main) {
     });
     try {
       const backend = await vite.ssrLoadModule("/src/backend/index.server");
+
       const services = [...loaded].filter((url) =>
         /\/node_modules\/(?:pg|@electric-sql\/pglite|better-auth|nodemailer)(?:\/|$)/.test(url),
       );
+
       assert.deepEqual(
         services,
         [],
         "Public backend import loaded a native driver, auth library, or mail client",
       );
+
       const { createScope } = await vite.ssrLoadModule("@tinker/core");
       const { preset } = await vite.ssrLoadModule("@tinker/core/testing");
       const { env } = await vite.ssrLoadModule("@tinker/start/server");
+
       const sent = [];
       const scope = createScope({
         tags: env({ SMTP_HOST: "record", SMTP_PORT: "25", SMTP_FROM: "record@example.com" }),
@@ -44,6 +48,7 @@ if (import.meta.main) {
         ],
       });
       await scope.ready;
+
       try {
         await scope.run(backend.sendMail, {
           rawInput: { to: "record@example.com", subject: "Recorded", text: "No SMTP" },

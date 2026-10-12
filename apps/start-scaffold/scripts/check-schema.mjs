@@ -33,11 +33,13 @@ try {
     await cp(join(app, name), join(consumer, name), { recursive: true });
   }
   await symlink(join(app, "node_modules"), join(consumer, "node_modules"), "dir");
+
   const prepared = spawnSync(join(app, "node_modules/.bin/tinker"), ["prepare"], {
     cwd: consumer,
     encoding: "utf8",
   });
   assert.equal(prepared.status, 0, prepared.stdout + prepared.stderr);
+
   const before = await inventory(join(consumer, "drizzle"));
   const result = spawnSync(join(app, "node_modules/.bin/drizzle-kit"), ["generate"], {
     cwd: consumer,
@@ -45,9 +47,11 @@ try {
   });
   process.stdout.write(result.stdout);
   process.stderr.write(result.stderr);
+
   assert.equal(result.status, 0, "drizzle-kit generate must accept the copied schema.");
   assert.match(result.stdout + result.stderr, /No schema changes/);
   assert.deepEqual(await inventory(join(consumer, "drizzle")), before);
+
   console.log(
     "PASS: drizzle-kit generate EXIT 0; No schema changes; no new migration files or folders.",
   );

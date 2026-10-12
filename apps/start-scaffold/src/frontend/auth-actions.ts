@@ -35,14 +35,17 @@ export const signIn = operation({
     pending.set(true);
     notice.set("");
     defer(() => pending.set(false));
+
     const change = snapshots.beginAccountChange();
     defer(() => snapshots.endAccountChange(change));
     sync.leave();
+
     const result =
       input.mode === "signup"
         ? await client.signUp.email(input, { signal: signal })
         : await client.signIn.email(input, { signal: signal });
     if (result.error) raise("AuthFailed", { message: result.error.message ?? "Sign in failed." });
+
     await snapshots.completeAccountChange(signal, change);
     notice.set("You are signed in. Open your profile or private list.");
     log("account.signedIn");

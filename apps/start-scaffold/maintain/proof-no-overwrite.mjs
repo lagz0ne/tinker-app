@@ -32,9 +32,11 @@ function run(command, args, cwd = root, extra = {}, expected = 0) {
     timeout: 240000,
     maxBuffer: 20 * 1024 * 1024,
   });
+
   process.stdout.write((result.stdout ?? "").replaceAll("\0", "\\0"));
   process.stdout.write((result.stderr ?? "").replaceAll("\0", "\\0"));
   console.log(`EXIT ${result.status}`);
+
   assert.equal(result.status, expected, `${command}: ${result.error ?? "unexpected exit"}`);
   return result.stdout + result.stderr;
 }
@@ -67,10 +69,11 @@ async function hashes(consumer) {
     ".env.example",
     ".gitignore",
     "components.json",
-  ])
+  ]) {
     result[file] = createHash("sha256")
       .update(await readFile(join(consumer, file)))
       .digest("hex");
+  }
   return result;
 }
 
@@ -101,12 +104,14 @@ async function wire(consumer, item) {
 async function serve(consumer, full, serviceEnv) {
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
+
   const child = spawn(join(consumer, "node_modules/.bin/tinker"), ["serve"], {
     cwd: consumer,
     env: { ...env, ...serviceEnv, HOST: "127.0.0.1", PORT: String(port), PUBLIC_ORIGIN: origin },
     stdio: ["ignore", "pipe", "inherit"],
   });
   servers.push(child);
+
   await new Promise((done, fail) => {
     let output = "";
     child.stdout.on("data", (chunk) => {
@@ -117,22 +122,27 @@ async function serve(consumer, full, serviceEnv) {
     child.once("error", fail);
     child.once("exit", (code) => fail(new Error(`app server exited ${code}`)));
   });
+
   console.log(`App server PID ${child.pid}: ${origin}`);
   assert.ok(run("curl", ["--fail", "--silent", `${origin}/`], consumer).includes("Hello, world."));
-  if (full)
+  if (full) {
     assert.ok(
       run("curl", ["--fail", "--silent", `${origin}/demo`], consumer).includes("A shared counter"),
     );
+  }
   console.log(
     `PASS: served ${full ? "/ and /demo" : "/"} HTTP 200; original first page still says Hello, world.`,
   );
+
   await stop(child);
 }
 
 try {
-  for (const name of ["core", "react"])
+  for (const name of ["core", "react"]) {
     run("vp", ["pm", "pack", "--pack-destination", packs], join(root, "packages", name));
+  }
   run(process.execPath, [join(root, "packages/start/scripts/pack.mjs"), packs]);
+
   const staticServer = spawn(
     process.execPath,
     [
@@ -156,19 +166,23 @@ try {
     { stdio: ["ignore", "inherit", "inherit", "ipc"] },
   );
   servers.push(staticServer);
+
   const port = await new Promise((done, fail) => {
     staticServer.once("message", done);
     staticServer.once("error", fail);
   });
   const url = `http://127.0.0.1:${port}/r`;
   console.log(`Local registry ${url}; server PID ${staticServer.pid}.`);
+
   run(process.execPath, [join(app, "maintain/build-registry.mjs")], app, {
     TINKER_PACKAGE_DIR: packs,
     TINKER_REGISTRY_URL: url,
     TINKER_REGISTRY_OUT: registry,
   });
+
   const postgresPort = await freePort();
   const smtpPort = await freePort();
+
   await writeFile(
     composeFile,
     JSON.stringify({
@@ -200,6 +214,7 @@ try {
   );
   services = true;
   run("docker", ["compose", "-p", project, "-f", composeFile, "up", "-d", "--wait"]);
+
   const relay = spawn(
     process.execPath,
     [
@@ -238,6 +253,7 @@ try {
     { stdio: ["ignore", "inherit", "inherit", "ipc"] },
   );
   servers.push(relay);
+
   await new Promise((done, fail) => {
     relay.once("message", done);
     relay.once("error", fail);
@@ -246,6 +262,7 @@ try {
   console.log(
     `Own TCP relay PID ${relay.pid} reaches Postgres and Mailpit through docker compose exec; Docker host loopback is outside this workspace.`,
   );
+
   const serviceEnv = {
     DATABASE_URL: `postgres://app:local-proof-password@127.0.0.1:${postgresPort}/app`,
     AUTH_SECRET: "registry-local-proof-secret-at-least-32-characters",
@@ -258,6 +275,7 @@ try {
     await mkdir(consumer);
     run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/app.json`, "--yes"], consumer);
     run("npm", ["install"], consumer);
+
     const config = join(consumer, "vite.config.ts");
     await writeFile(
       config,
@@ -276,10 +294,12 @@ try {
         (await readFile(path, "utf8")) + `export const user${name} = "keep-${name}";\n`,
       );
     }
+
     const before = await hashes(consumer);
     const scripts = JSON.parse(await readFile(join(consumer, "package.json"), "utf8")).scripts;
     console.log(`${item.name}: sha256 BEFORE ${JSON.stringify(before)}`);
     run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/${item.name}.json`, "--yes"], consumer);
+
     const after = await hashes(consumer);
     console.log(`${item.name}: sha256 AFTER ${JSON.stringify(after)}`);
     assert.deepEqual(after, before);
@@ -290,21 +310,25 @@ try {
     console.log(
       `PASS: ${item.name} added to a fresh app without --overwrite; edited config and both seams unchanged byte for byte; app scripts unchanged.`,
     );
+
     const tinker = join(consumer, "node_modules/.bin/tinker");
     const full = item.meta.parts?.includes("sync") ?? false;
     const report = run(tinker, ["doctor"], consumer, {}, full ? 1 : 0);
     if (full) {
       const plain = report.replace(/\s+/g, " ");
       for (const part of item.meta.parts) assert.ok(plain.includes(`tinker({ ${part}: true })`));
-      for (const names of Object.values(item.meta.seams))
+      for (const names of Object.values(item.meta.seams)) {
         for (const needed of Object.values(names)) assert.ok(plain.includes(needed.line));
+      }
       await wire(consumer, item);
     }
+
     run("vp", ["build"], consumer);
     run(tinker, ["doctor"], consumer);
     await serve(consumer, full, serviceEnv);
     console.log(`PASS: ${item.name}: build, doctor, serve EXIT 0.`);
   }
+
   console.log(
     "NOT PROVEN: independent feature bodies, copied-demo sign-in or mail sends, public registry hosting, published packages, or future releases.",
   );

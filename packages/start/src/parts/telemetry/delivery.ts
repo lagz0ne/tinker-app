@@ -17,8 +17,9 @@ function tracesBody(records: Telemetry.Record[], service: string) {
   const groups: string[] = [];
   for (const side of ["server", "browser", "ssr"]) {
     const spans: string[] = [];
-    for (const record of records)
+    for (const record of records) {
       if (record.kind === "trace" && record.side === side) spans.push(record.json);
+    }
     if (!spans.length) continue;
     const resource = JSON.stringify({
       attributes: [
@@ -42,6 +43,7 @@ export const delivery = resource({
     logs?.searchParams.set("_time_field", "time");
     logs?.searchParams.set("_msg_field", "msg");
     logs?.searchParams.set("_stream_fields", "service,side");
+
     const post = async (
       url: string,
       body: string | undefined,
@@ -65,6 +67,7 @@ export const delivery = resource({
         return false;
       }
     };
+
     return {
       async send(records: Telemetry.Record[], signal: AbortSignal): Promise<Telemetry.Delivery> {
         if (settings.side === "browser") {

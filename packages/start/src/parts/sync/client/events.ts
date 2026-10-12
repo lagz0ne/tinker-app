@@ -23,6 +23,7 @@ export const snapshotLoader = resource({
       const token = sync.capture();
       if (loadedVersion === token.version) return sync.snapshot();
       if (loading?.version === token.version) return loading.promise;
+
       const request = {
         version: token.version,
         promise: (async () => {
@@ -33,6 +34,7 @@ export const snapshotLoader = resource({
         })(),
       };
       loading = request;
+
       try {
         return await request.promise;
       } finally {
@@ -110,16 +112,20 @@ export const eventSource = resource({
   factory: ({ open }, { defer }) => {
     let close: (() => void) | undefined;
     defer(() => close?.());
+
     const queue: string[] = [];
     let ended = true;
     let waiting: ReturnType<typeof Promise.withResolvers<void>> | undefined;
+
     return {
       connect(cursor: Stream.Cursor, signal: AbortSignal) {
         close?.();
         const connection = open(`/api/sync?cursor=${encodeURIComponent(JSON.stringify(cursor))}`);
         ended = false;
+
         const closeConnection = () => {
           if (ended) return;
+
           ended = true;
           connection.close();
           queue.length = 0;
@@ -127,6 +133,7 @@ export const eventSource = resource({
           waiting?.resolve();
         };
         close = closeConnection;
+
         const receive = (event: MessageEvent<string>) => {
           if (ended) return;
           if (queue.length >= 8) {
@@ -136,6 +143,7 @@ export const eventSource = resource({
           queue.push(event.data);
           waiting?.resolve();
         };
+
         connection.addEventListener("changes", receive);
         connection.addEventListener("account", receive);
         connection.addEventListener("error", closeConnection);
@@ -203,12 +211,14 @@ export const consumeConnection = operation({
       for (;;) {
         const data = await source.next();
         if (data === undefined) return false;
+
         let message: ReturnType<typeof streamMessage.parse>;
         try {
           message = streamMessage.parse(JSON.parse(data));
         } catch {
           return false;
         }
+
         const applied = receive.settle({ input: { version: token.version, message } });
         if (applied.status !== "success") return false;
         if (applied.value) return true;
@@ -249,6 +259,7 @@ export const streamChanges = operation({
       const consumed = await consume.settle();
       if (consumed.status === "failed") log("sync.reconnecting");
       if (signal.aborted) return;
+
       const loaded =
         consumed.status === "success" && consumed.value
           ? await load.settle()

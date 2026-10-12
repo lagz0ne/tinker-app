@@ -52,19 +52,24 @@ test("concurrent public writes replay in commit order and a repeated receipt cha
   await root.ready;
   try {
     await root.run(migrate);
+
     expect(await root.run(bootstrapPublic)).toEqual({ stream: "public", revision: 0, value: 0 });
+
     const first = { executionId: crypto.randomUUID() };
     const second = { executionId: crypto.randomUUID() };
+
     await Promise.all([
       root.run(incrementCounter, { input: first }),
       root.run(incrementCounter, { input: second }),
     ]);
     await root.run(incrementCounter, { input: first });
+
     const replay = await root.run(replayPublic, {
       input: { after: 0 },
       tags: requestHeaders(new Headers()),
     });
     expect(replay.events.map((event) => event.revision)).toEqual([1, 2, 3, 4]);
+
     expect(
       replay.events
         .filter((event) => event.payload.kind === "change")
@@ -74,6 +79,7 @@ test("concurrent public writes replay in commit order and a repeated receipt cha
       { kind: "change", change: { kind: "counter", value: 2 } },
     ]);
     expect(await root.run(bootstrapPublic)).toEqual({ stream: "public", revision: 4, value: 2 });
+
     expect(
       (await root.run(replayPublic, { input: { after: 4 }, tags: requestHeaders(new Headers()) }))
         .events,
@@ -90,20 +96,24 @@ test("private cursors cannot read another real account's history", async () => {
   await root.ready;
   try {
     await root.run(migrate);
+
     const ada = headers(
       await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
     );
     const grace = headers(
       await root.run(handleAuth, { input: signup("Grace"), tags: requestHeaders(new Headers()) }),
     );
+
     const snapshot = await root.run(bootstrapPrivate, { tags: requestHeaders(ada) });
     const refused = await root.settle(replayPrivate, {
       input: { accountId: snapshot.stream, after: 0 },
       tags: requestHeaders(grace),
     });
-    if (refused.status !== "failed")
+    if (refused.status !== "failed") {
       raise("BadInput", { reason: "expected private stream refusal" });
+    }
     if (!isError(refused.error, "StreamDenied")) throw refused.error;
+
     const anonymous = await root.settle(replayPrivate, {
       input: { accountId: snapshot.stream, after: 0 },
       tags: requestHeaders(new Headers()),
@@ -122,6 +132,7 @@ test("failed notification keeps the saved profile and retry replies before sendi
   const accepted = Promise.withResolvers<void>();
   const sending = Promise.withResolvers<void>();
   const messages: Mail.Message[] = [];
+
   const root = createScope({
     signal: stop.signal,
     tags,
@@ -138,22 +149,27 @@ test("failed notification keeps the saved profile and retry replies before sendi
       })),
     ],
   });
+
   onTestFinished(async () => {
     accepted.resolve();
     stop.abort();
     expect((await root.closed).status).toBe("success");
   });
   await root.ready;
+
   try {
     await root.run(migrate);
+
     const account = headers(
       await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
     );
     const initial = await root.run(bootstrapPrivate, { tags: requestHeaders(account) });
+
     const saved = await root.run(saveProfile, {
       input: { executionId: crypto.randomUUID(), profile: { name: "Ada saved" } },
       tags: requestHeaders(account),
     });
+
     await expect
       .poll(async () =>
         (
@@ -175,9 +191,11 @@ test("failed notification keeps the saved profile and retry replies before sendi
           },
         },
       ]);
+
     expect(await root.run(readProfile, { tags: requestHeaders(account) })).toMatchObject({
       name: "Ada saved",
     });
+
     refuse = false;
     const retry = root.run(retryNotification, {
       input: { executionId: crypto.randomUUID(), previousExecutionId: saved.executionId },
@@ -186,6 +204,7 @@ test("failed notification keeps the saved profile and retry replies before sendi
     await sending.promise;
     await retry;
     accepted.resolve();
+
     await expect
       .poll(async () =>
         (
@@ -205,6 +224,7 @@ test("failed notification keeps the saved profile and retry replies before sendi
       "Your saved name is Ada saved.",
       "Your saved name is Ada saved.",
     ]);
+
     expect(await root.run(readProfile, { tags: requestHeaders(account) })).toMatchObject({
       name: "Ada saved",
     });
@@ -219,6 +239,7 @@ test("request exit cannot strand a profile that already committed", async () => 
   const request = new AbortController();
   const sending = Promise.withResolvers<void>();
   const accepted = Promise.withResolvers<void>();
+
   const root = createScope({
     signal: stop.signal,
     tags,
@@ -235,21 +256,26 @@ test("request exit cannot strand a profile that already committed", async () => 
     ],
   });
   await root.ready;
+
   try {
     await root.run(migrate);
+
     const account = headers(
       await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
     );
     const initial = await root.run(bootstrapPrivate, { tags: requestHeaders(account) });
+
     const saving = root.settle(saveProfile, {
       input: { executionId: crypto.randomUUID(), profile: { name: "Still saved" } },
       tags: requestHeaders(account),
       signal: request.signal,
     });
+
     await sending.promise;
     request.abort();
     accepted.resolve();
     await saving;
+
     await expect
       .poll(
         async () =>
@@ -264,6 +290,7 @@ test("request exit cannot strand a profile that already committed", async () => 
         kind: "result",
         result: { kind: "complete", profileId: initial.profile.id },
       });
+
     expect(await root.run(readProfile, { tags: requestHeaders(account) })).toMatchObject({
       name: "Still saved",
     });
@@ -279,6 +306,7 @@ test("profile replies finish while duplicate receipts share one pending notifica
   const sending = Promise.withResolvers<void>();
   const accepted = Promise.withResolvers<void>();
   let sends = 0;
+
   const root = createScope({
     signal: stop.signal,
     tags,
@@ -295,22 +323,28 @@ test("profile replies finish while duplicate receipts share one pending notifica
       })),
     ],
   });
+
   onTestFinished(async () => {
     accepted.resolve();
     stop.abort();
     await root.closed;
   });
   await root.ready;
+
   try {
     await root.run(migrate);
+
     const account = headers(
       await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
     );
+
     const input = { executionId: crypto.randomUUID(), profile: { name: "Visible before mail" } };
     const first = root.settle(saveProfile, { input, tags: requestHeaders(account) });
     await sending.promise;
+
     const second = root.settle(saveProfile, { input, tags: requestHeaders(account) });
     const saved = await root.run(bootstrapPrivate, { tags: requestHeaders(account) });
+
     expect(saved.profile.name).toBe("Visible before mail");
     expect((await Promise.all([first, second])).map((result) => result.status)).toEqual([
       "success",
@@ -330,9 +364,11 @@ test("a bad stored event returns a stored data failure", async () => {
   try {
     await root.run(migrate);
     const db = await root.resolve(database);
+
     await db.execute(sql`INSERT INTO sync_event (stream, revision, "executionId", payload)
       VALUES ('public', 1, '10000000-0000-4000-8000-000000000001',
         '{"kind":"change","change":{"kind":"counter","value":"bad"}}'::jsonb)`);
+
     const result = await root.settle(replayPublic, {
       input: { after: 0 },
       tags: requestHeaders(new Headers()),
@@ -352,9 +388,11 @@ test("a bad stored event is not shown to the user as a rejected change", async (
   try {
     await root.run(migrate);
     const db = await root.resolve(database);
+
     await db.execute(sql`INSERT INTO sync_event (stream, revision, "executionId", payload)
       VALUES ('public', 1, '10000000-0000-4000-8000-000000000001',
         '{"kind":"change","change":{"kind":"counter","value":"bad"}}'::jsonb)`);
+
     const result = await root.settle(replayPublic, {
       input: { after: 0 },
       tags: requestHeaders(new Headers()),
@@ -371,15 +409,18 @@ test("a bad stored notification result has no retry available", async () => {
   await root.ready;
   try {
     await root.run(migrate);
+
     const account = headers(
       await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
     );
     const snapshot = await root.run(bootstrapPrivate, { tags: requestHeaders(account) });
     const db = await root.resolve(database);
+
     await db.execute(sql`INSERT INTO sync_execution (id, stream, notification, result)
       VALUES ('10000000-0000-4000-8000-000000000001', ${snapshot.stream},
         '{"to":"Ada@example.com","subject":"Saved","text":"Saved"}'::jsonb,
         '{"kind":"partial","action":"unknown"}'::jsonb)`);
+
     const result = await root.settle(retryNotification, {
       input: {
         executionId: "10000000-0000-4000-8000-000000000002",

@@ -67,15 +67,19 @@ test("SQL notifications wake after commit, stay silent on rollback, and survive 
   await root.ready;
   try {
     await root.run(migrate);
+
     const feed = await root.resolve(notifications);
     const subscription = await feed.subscribe();
     const before = feed.revision();
+
     const refused = await root.settle(rollBackEvent);
     if (refused.status !== "failed" || !isError(refused.error, "Rollback")) throw refused;
     expect(feed.revision()).toBe(before);
+
     await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
     await feed.wait(subscription, before);
     expect(feed.revision()).toBeGreaterThan(before);
+
     feed.close(subscription);
   } finally {
     stop.abort();
@@ -99,20 +103,25 @@ test("SSE replays the supplied cursor and a held reader receives the next commit
   try {
     await root.run(migrate);
     await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+
     const response = await root.run(openSync, {
       input: { cursor: { public: 0, private: null } },
     });
     const reader = response.getReader();
+
     const first = new TextDecoder().decode((await reader.read()).value);
     expect(first).toContain('id: {"public":2,"private":null}');
     expect(first).toContain('"value":1');
     expect(new TextDecoder().decode((await reader.read()).value)).toBe(": connected\n\n");
+
     const waiting = reader.read();
     await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
     expect(new TextDecoder().decode((await waiting).value)).toContain('"value":2');
+
     const idle = reader.read();
     await reader.cancel();
     expect((await idle).done).toBe(true);
+
     const openingStop = new AbortController();
     const openingRequest = root.createSession({ tags: requestStop(openingStop.signal) });
     const opening = openingRequest.settle(openSync, {
@@ -138,6 +147,7 @@ test("private SSE cursors are refused and a revoked held stream sends no saved p
   await root.ready;
   try {
     await root.run(migrate);
+
     const ada = headers(
       await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
     );
@@ -149,18 +159,22 @@ test("private SSE cursors are refused and a revoked held stream sends no saved p
       public: 0,
       private: { accountId: snapshot.stream, revision: snapshot.revision },
     };
+
     const other = root.createSession({ tags: requestHeaders(grace) });
     const refused = await other.settle(openSync, {
       input: { cursor },
     });
     if (refused.status !== "failed" || !isError(refused.error, "StreamDenied")) throw refused;
     await other.close();
+
     const owner = root.createSession({ tags: requestHeaders(ada) });
     const response = await owner.run(openSync, { input: { cursor } });
+
     await root.run(saveProfile, {
       tags: requestHeaders(ada),
       input: { executionId: crypto.randomUUID(), profile: { name: "Never sent after revocation" } },
     });
+
     await root.run(handleAuth, {
       tags: requestHeaders(ada),
       input: new Request("http://localhost:4318/api/auth/sign-out", {
@@ -168,6 +182,7 @@ test("private SSE cursors are refused and a revoked held stream sends no saved p
         headers: new Headers([...ada, ["origin", "http://localhost:4318"]]),
       }),
     });
+
     const reader = response.getReader();
     expect(new TextDecoder().decode((await reader.read()).value)).toBe(
       'event: account\ndata: {"kind":"account-change"}\n\n',
@@ -184,6 +199,7 @@ test("reconnecting from applied cursors finishes a save whose final event commit
   const stop = new AbortController();
   const sending = Promise.withResolvers<void>();
   const accepted = Promise.withResolvers<void>();
+
   const server = createScope({
     signal: stop.signal,
     tags: [settings, backendStop(stop.signal), requestStop(stop.signal)],
@@ -199,24 +215,29 @@ test("reconnecting from applied cursors finishes a save whose final event commit
       })),
     ],
   });
+
   const browser = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
     tags: tabStop(stop.signal),
   });
+
   await Promise.all([server.ready, browser.ready]);
   try {
     await server.run(migrate);
+
     const ada = headers(
       await server.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
     );
     const initial = await server.run(bootstrapPrivate, { tags: requestHeaders(ada) });
+
     browser.run(applyBootstrap, {
       input: {
         version: 0,
         snapshot: { public: { stream: "public", revision: 0, value: 0 }, private: initial },
       },
     });
+
     const client = browser.resolve(syncClient);
     const executionId = crypto.randomUUID();
     const save = operation({
@@ -238,8 +259,10 @@ test("reconnecting from applied cursors finishes a save whose final event commit
           signal,
         ),
     });
+
     const waiting = browser.run(save);
     await sending.promise;
+
     const first = server.createSession({ tags: requestHeaders(ada) });
     const response = await first.run(openSync, {
       input: { cursor: { public: 0, private: { accountId: initial.stream, revision: 0 } } },
@@ -247,12 +270,15 @@ test("reconnecting from applied cursors finishes a save whose final event commit
     const reader = response.getReader();
     const frame = new TextDecoder().decode((await reader.read()).value);
     const data = frame.split("\ndata: ").at(1)?.trim();
+
     browser.run(receiveMessage, {
       input: { message: streamMessage.parse(JSON.parse(data ?? "")), version: client.version() },
     });
+
     await reader.cancel();
     await first.close({ graceful: true });
     accepted.resolve();
+
     const second = server.createSession({ tags: requestHeaders(ada) });
     const resumed = await second.run(openSync, {
       input: {
@@ -262,21 +288,26 @@ test("reconnecting from applied cursors finishes a save whose final event commit
         },
       },
     });
+
     const replay = resumed.getReader();
     let resultFrame = new TextDecoder().decode((await replay.read()).value);
-    if (resultFrame.startsWith(":"))
+    if (resultFrame.startsWith(":")) {
       resultFrame = new TextDecoder().decode((await replay.read()).value);
+    }
+
     browser.run(receiveMessage, {
       input: {
         message: streamMessage.parse(JSON.parse(resultFrame.split("\ndata: ").at(1)?.trim() ?? "")),
         version: client.version(),
       },
     });
+
     expect(await waiting).toEqual({
       kind: "complete",
       action: "profile",
       profileId: initial.profile.id,
     });
+
     await replay.cancel();
     expect((await second.close({ graceful: true })).status).toBe("success");
   } finally {
@@ -297,19 +328,23 @@ test("a quiet private stream closes at once on sign-out, with no heartbeat", asy
   await root.ready;
   try {
     await root.run(migrate);
+
     const ada = headers(
       await root.run(handleAuth, { input: signup("Ada"), tags: requestHeaders(new Headers()) }),
     );
     const snapshot = await root.run(bootstrapPrivate, { tags: requestHeaders(ada) });
+
     const owner = root.createSession({ tags: requestHeaders(ada) });
     const response = await owner.run(openSync, {
       input: {
         cursor: { public: 0, private: { accountId: snapshot.stream, revision: snapshot.revision } },
       },
     });
+
     const reader = response.getReader();
     expect(new TextDecoder().decode((await reader.read()).value)).toBe(": connected\n\n");
     const waiting = reader.read();
+
     await root.run(handleAuth, {
       tags: requestHeaders(ada),
       input: new Request("http://localhost:4318/api/auth/sign-out", {
@@ -317,6 +352,7 @@ test("a quiet private stream closes at once on sign-out, with no heartbeat", asy
         headers: new Headers([...ada, ["origin", "http://localhost:4318"]]),
       }),
     });
+
     expect(new TextDecoder().decode((await waiting).value)).toBe(
       'event: account\ndata: {"kind":"account-change"}\n\n',
     );

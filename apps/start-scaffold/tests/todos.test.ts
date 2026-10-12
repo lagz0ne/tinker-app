@@ -34,6 +34,7 @@ test("two real accounts can change only their own saved todos", async () => {
   await root.ready;
   try {
     await root.run(migrate);
+
     const ada = readHeaders(
       await root.run(handleAuth, {
         input: signupRequest("Ada"),
@@ -46,6 +47,7 @@ test("two real accounts can change only their own saved todos", async () => {
         tags: requestHeaders(new Headers()),
       }),
     );
+
     await root.run(changeTodo, {
       rawInput: {
         executionId: crypto.randomUUID(),
@@ -57,12 +59,14 @@ test("two real accounts can change only their own saved todos", async () => {
       input: { executionId: crypto.randomUUID(), change: { kind: "add", title: "Find a bug" } },
       tags: requestHeaders(grace),
     });
+
     const adaRows = await root.run(listTodos, { tags: requestHeaders(ada) });
     const adaTodo = adaRows.at(0);
     if (!adaTodo) raise("BadInput", { reason: "missing saved todo" });
     expect(adaRows).toEqual([{ id: adaTodo.id, title: "Write code", done: false }]);
     const graceRows = await root.run(listTodos, { tags: requestHeaders(grace) });
     expect(graceRows.map((row) => row.title)).toEqual(["Find a bug"]);
+
     for (const id of [adaTodo.id, 2_147_483_647]) {
       for (const input of [
         { kind: "setDone", id, done: true } as const,
@@ -72,12 +76,15 @@ test("two real accounts can change only their own saved todos", async () => {
           input: { executionId: crypto.randomUUID(), change: input },
           tags: requestHeaders(grace),
         });
-        if (result.status !== "failed")
+        if (result.status !== "failed") {
           raise("BadInput", { reason: "expected private todo refusal" });
+        }
         if (!isError(result.error, "TodoMissing")) throw result.error;
       }
     }
+
     expect(await root.run(listTodos, { tags: requestHeaders(ada) })).toEqual(adaRows);
+
     await root.run(changeTodo, {
       input: {
         executionId: crypto.randomUUID(),
@@ -92,13 +99,16 @@ test("two real accounts can change only their own saved todos", async () => {
       },
       tags: requestHeaders(ada),
     });
+
     expect(await root.run(listTodos, { tags: requestHeaders(ada) })).toEqual([
       { ...adaTodo, done: true },
     ]);
+
     await root.run(changeTodo, {
       input: { executionId: crypto.randomUUID(), change: { kind: "delete", id: adaTodo.id } },
       tags: requestHeaders(ada),
     });
+
     expect(await root.run(listTodos, { tags: requestHeaders(ada) })).toEqual([]);
     expect(await root.run(listTodos, { tags: requestHeaders(grace) })).toEqual(graceRows);
   } finally {
@@ -118,12 +128,14 @@ test("signed-out todo reads and writes are refused", async () => {
   await root.ready;
   try {
     await root.run(migrate);
+
     const result = await root.settle(changeTodo, {
       input: { executionId: crypto.randomUUID(), change: { kind: "add", title: "No account" } },
       tags: requestHeaders(new Headers()),
     });
     if (result.status !== "failed") raise("BadInput", { reason: "expected sign-in refusal" });
     if (!isError(result.error, "SignInRequired")) throw result.error;
+
     const read = await root.settle(listTodos, { tags: requestHeaders(new Headers()) });
     if (read.status !== "failed") raise("BadInput", { reason: "expected private list refusal" });
     if (!isError(read.error, "SignInRequired")) throw read.error;
@@ -148,6 +160,7 @@ test("todo changes reject empty titles, long titles, and caller-selected owners"
       });
       if (result.status !== "failed") raise("BadInput", { reason: "expected input refusal" });
       if (!isCoreError(result.error, "DataValidationFailed")) throw result.error;
+
       const cause = result.error.payload.cause;
       if (!isError(cause, "BadInput")) throw cause;
       expect(cause.payload.reason).toContain("valid todo change");

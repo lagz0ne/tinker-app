@@ -39,11 +39,13 @@ export const say = {
 function mergedPaths(root) {
   const own = readJsonc(join(root, "tsconfig.json"));
   if (own.error) return null;
+
   const parents = [own.value.extends ?? []]
     .flat()
     .filter((file) => /^\.{1,2}\//.test(file))
     .map((file) => readJsonc(resolve(root, file)));
   if (parents.some((parent) => parent.error)) return null;
+
   const found = [own, ...parents.reverse()].find((read) => read.value.compilerOptions?.paths);
   return found?.value.compilerOptions.paths ?? {};
 }
@@ -58,8 +60,9 @@ function mergedPaths(root) {
 function aliasTarget(root, paths, alias) {
   for (const [key, [target]] of Object.entries(paths)) {
     const prefix = key.replace(/\*$/, "");
-    if (key.endsWith("*") ? alias.startsWith(prefix) : alias === key)
+    if (key.endsWith("*") ? alias.startsWith(prefix) : alias === key) {
       return resolve(root, target.replace("*", alias.slice(prefix.length)));
+    }
   }
   return null;
 }
@@ -95,10 +98,13 @@ function componentsProblems(root) {
   const components = readJsonc(join(root, "components.json"), { strict: true });
   if (components.error) return [say.parse(components.error)];
   if (!components.text) return [];
+
   const { text, value } = components;
   const { aliases = {}, tailwind = {} } = value;
+
   const paths = mergedPaths(root);
   if (!paths) return [];
+
   return [
     ...aliasProblems(root, text, aliases, paths),
     cssProblem(text, tailwind.css),
@@ -141,8 +147,9 @@ function tailwindProblems(root) {
 
 /** @param {string} path - From linkedSheets; why: the module paths one stylesheet or source file names. */
 function linksOf(path) {
-  if (path.endsWith(".css"))
+  if (path.endsWith(".css")) {
     return [...cssText(path).matchAll(/@import\s+["']([^"']+)["']/g)].map((match) => match[1]);
+  }
   if (/\.[jt]sx?$/.test(path)) return specifiers(parseSource(path)).map(({ name }) => name);
   return [];
 }

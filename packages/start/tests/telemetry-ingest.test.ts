@@ -72,6 +72,7 @@ test("receiveTelemetry takes a plain batch and hands it to the telemetry root", 
       }),
     ],
   });
+
   expect(root.settle(receiveTelemetry, { rawInput: empty })).toEqual({
     status: "success",
     value: undefined,
@@ -89,12 +90,14 @@ test("receiveTelemetry raises Cancelled once the backend or the request stops", 
       browserTelemetry(() => expect.unreachable("a stopped request must not ingest")),
     ],
   });
+
   request.abort();
   const late = await root.settle(receiveTelemetry, {
     rawInput: empty,
     tags: requestStop(request.signal),
   });
   expect(late).toMatchObject({ status: "failed", error: { kind: "Cancelled", payload: {} } });
+
   backend.abort();
   const closing = await root.settle(receiveTelemetry, {
     rawInput: empty,
@@ -117,6 +120,7 @@ test("the ingest route answers each case with its status, and only a good batch 
       }),
     ],
   });
+
   const good = { traces: [], logs: [browserLog("from a tab")] };
   const cases = [
     { name: "good batch", body: JSON.stringify(good), status: 202 },
@@ -154,6 +158,7 @@ test("the ingest route answers each case with its status, and only a good batch 
     { name: "a body of 64 KiB", body: JSON.stringify(good).padEnd(65_536), status: 202 },
     { name: "closed backend", closed: true, status: 503 },
   ];
+
   for (const row of cases) {
     if (row.closed) stop.abort();
     const session = root.createSession();
@@ -168,6 +173,7 @@ test("the ingest route answers each case with its status, and only a good batch 
     });
     expect((await session.close({ graceful: true })).status).toBe("success");
   }
+
   expect(accepted).toEqual([good, { traces: [tabSpan], logs: [] }, good, good]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -190,12 +196,14 @@ test("with no origin bound, the route expects the request's own; a preview host'
       origin: "http://app.preview.tini.works:8080",
     },
   ];
+
   const statuses = [];
   for (const row of replies) {
     const session = root.createSession();
     statuses.push((await session.resolve(telemetryEndpoint).answer(post(row))).status);
     expect((await session.close({ graceful: true })).status).toBe("success");
   }
+
   expect(statuses).toEqual([202, 202, 403, 403, 202]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -212,6 +220,7 @@ test("a bound public origin is the one the route expects", async () => {
   });
   const session = root.createSession();
   const endpoint = session.resolve(telemetryEndpoint);
+
   expect((await endpoint.answer(post({ origin: "https://shop.example" }))).status).toBe(202);
   expect((await endpoint.answer(post({ origin: "http://localhost" }))).status).toBe(403);
   expect((await session.close({ graceful: true })).status).toBe("success");
@@ -232,6 +241,7 @@ test("closing the scope cancels an unfinished request body, and the route answer
     },
     { highWaterMark: 0 },
   );
+
   const request = new Request(
     "http://localhost/api/telemetry",
     Object.assign(
@@ -243,6 +253,7 @@ test("closing the scope cancels an unfinished request body, and the route answer
       { duplex: "half" },
     ),
   );
+
   const stop = new AbortController();
   const root = createScope({
     tags: [
@@ -253,6 +264,7 @@ test("closing the scope cancels an unfinished request body, and the route answer
   });
   const work = root.resolve(telemetryEndpoint).answer(request);
   await entered.promise;
+
   stop.abort();
   expect((await work).status).toBe(503);
   expect(cancelled).toBe(true);
@@ -276,10 +288,12 @@ test("a body that fails to read fails the reply, as the route's own error", asyn
       { duplex: "half" },
     ),
   );
+
   const stop = new AbortController();
   const root = createScope({
     tags: [backendStop(stop.signal), requestStop(stop.signal), browserTelemetry(() => {})],
   });
+
   await expect(root.resolve(telemetryEndpoint).answer(request)).rejects.toBe(torn);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -314,16 +328,19 @@ test("on the server, a tab's batch joins the telemetry root under the server's s
     ],
   });
   await tools.ready;
+
   const stop = new AbortController();
   const app = createScope({
     tags: [backendStop(stop.signal), requestStop(stop.signal), tools.resolve(serverPart.appTags)],
   });
   const batch = { traces: [], logs: [browserLog("from a tab")] };
+
   expect(app.settle(receiveTelemetry, { rawInput: batch })).toEqual({
     status: "success",
     value: undefined,
   });
   await tools.run(flushTelemetry);
+
   expect(sent.map((line) => JSON.parse(line))).toEqual([
     { ...browserLog("from a tab"), service: "shop" },
   ]);
@@ -339,6 +356,7 @@ test("the route lets go of the body it read, and the request ends clean", async 
   });
   const session = root.createSession();
   const request = post({});
+
   expect((await session.resolve(telemetryEndpoint).answer(request)).status).toBe(202);
   expect(request.body?.locked).toBe(false);
   expect(await session.close({ graceful: true })).toMatchObject({
@@ -355,6 +373,7 @@ test("a refused request never opens its body, and its session ends clean", async
   });
   const session = root.createSession();
   const request = post({ origin: "http://other.test" });
+
   expect((await session.resolve(telemetryEndpoint).answer(request)).status).toBe(403);
   expect(request.body?.locked).toBe(false);
   expect(await session.close({ graceful: true })).toMatchObject({
@@ -380,6 +399,7 @@ test("a body that comes while the backend stops is cancelled unread, and answere
     },
     { highWaterMark: 0 },
   );
+
   const request = new Request(
     "http://localhost/api/telemetry",
     Object.assign(
@@ -391,6 +411,7 @@ test("a body that comes while the backend stops is cancelled unread, and answere
       { duplex: "half" },
     ),
   );
+
   const stop = new AbortController();
   stop.abort();
   const root = createScope({
@@ -400,6 +421,7 @@ test("a body that comes while the backend stops is cancelled unread, and answere
       browserTelemetry(() => expect.unreachable("a stopped backend must not ingest")),
     ],
   });
+
   expect((await root.resolve(telemetryEndpoint).answer(request)).status).toBe(503);
   expect([pulled, cancelled]).toEqual([0, true]);
   expect((await root.close({ graceful: true })).status).toBe("success");
@@ -417,10 +439,12 @@ test("a browser batch split inside UTF-8 text is read from its byte views", asyn
       }),
     ],
   });
+
   const batch = { traces: [], logs: [browserLog("漢😀")] };
   const bytes = new TextEncoder().encode(`xx${JSON.stringify(batch)}yy`);
   const split = bytes.indexOf(0xe6) + 1;
   const chunks = [bytes.subarray(2, split), bytes.subarray(split, bytes.length - 2)];
+
   const request = new Request(
     "http://localhost/api/telemetry",
     Object.assign(
@@ -437,6 +461,7 @@ test("a browser batch split inside UTF-8 text is read from its byte views", asyn
       { duplex: "half" },
     ),
   );
+
   expect((await root.resolve(telemetryEndpoint).answer(request)).status).toBe(202);
   expect(accepted).toEqual([batch]);
   expect((await root.close({ graceful: true })).status).toBe("success");

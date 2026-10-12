@@ -83,8 +83,10 @@ export const httpRequest = operation({
         signal.throwIfAborted();
         const failure = failureShape.safeParse(cause);
         if (!failure.success) raise("HttpRequestFailed", { method, path });
+
         const nested = failureShape.safeParse(failure.data.cause);
         const details = nested.success ? nested.data : failure.data;
+
         raise("HttpRequestFailed", {
           method,
           path,

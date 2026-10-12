@@ -25,7 +25,8 @@ const todoChange = z.discriminatedUnion("kind", [
  */
 export function readTodoChange(raw: unknown): Todos.Change {
   const result = todoChange.safeParse(raw);
-  if (!result.success)
+  if (!result.success) {
     raise("BadInput", { reason: "Use a title with 1 to 200 characters and a valid todo change." });
+  }
   return result.data;
 }

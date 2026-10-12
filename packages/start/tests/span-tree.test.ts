@@ -20,9 +20,11 @@ test("an HTTP request makes two spans and records its status", async () => {
   await scope.ready;
   try {
     expect((await scope.run(post)).status).toBe(404);
+
     const spans = scope.spans();
     const caller = spans.find((span) => span.name === "test.post");
     const request = spans.find((span) => span.name === "http.request");
+
     expect(request?.parentId).toBe(caller?.id);
     expect(
       spans

@@ -10,10 +10,12 @@ export const requestBody = resource({
     const signal = AbortSignal.any([backendStop, requestStop, ctx.signal]);
     let reader: ReadableStreamDefaultReader<Uint8Array<ArrayBuffer>> | undefined;
     let cancellation: Promise<void> | undefined;
+
     const cancel = () => {
       cancellation ??= reader?.cancel();
     };
     signal.addEventListener("abort", cancel, { once: true });
+
     const release = async () => {
       signal.removeEventListener("abort", cancel);
       if (signal.aborted) cancel();
@@ -22,6 +24,7 @@ export const requestBody = resource({
       reader = undefined;
     };
     ctx.defer(release);
+
     return {
       signal,
       open(body: ReadableStream<Uint8Array<ArrayBuffer>>) {

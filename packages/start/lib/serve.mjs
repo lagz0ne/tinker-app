@@ -28,20 +28,26 @@ export async function createAssets(root) {
   const publicRoot = resolve(root, "dist/client");
   const files = new Set();
   const paths = new Map();
+
   try {
     for (const entry of await readdir(publicRoot, { recursive: true, withFileTypes: true })) {
       if (entry.isDirectory()) continue;
+
       const file = join(entry.parentPath, entry.name);
       files.add(file);
+
       const path = `/${relative(publicRoot, file)}`;
       if (dotPath.test(path)) continue;
+
       const type = types[extname(file)] ?? "application/octet-stream";
       paths.set(path, { file, type, compressible: isCompressible(type) });
     }
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
+
   addPages(paths);
+
   const cache = { bytes: new Map(), size: 0 };
   return (request) => asset(paths, files, cache, request);
 }
@@ -66,10 +72,11 @@ function asset(paths, files, cache, request) {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
   const path = decodeURIComponent(new URL(request.url).pathname).replace(slashes, "/");
   const file = paths.get(path);
-  if (!file)
+  if (!file) {
     return path.startsWith("/assets/") && !dotPath.test(path)
       ? new Response(null, { status: 404 })
       : null;
+  }
   return readStatic(files, cache, file, path, request);
 }
 
@@ -85,11 +92,14 @@ function readStatic(files, cache, file, path, request) {
     "content-type": file.type,
     "cache-control": readCacheControl(path),
   });
+
   const encoding = file.compressible ? readEncoding(request) : "identity";
   if (file.compressible) headers.set("vary", "Accept-Encoding");
   if (encoding === null) return new Response(null, { status: 406, headers });
   if (encoding !== "identity") headers.set("content-encoding", encoding);
+
   if (request.method === "HEAD") return new Response(null, { headers });
+
   const bytes = readEncoded(files, cache, file.file, encoding);
   return bytes instanceof Promise
     ? bytes.then((body) => staticResponse(body, headers, file.compressible))
@@ -117,6 +127,7 @@ function readEncoded(files, cache, candidate, encoding) {
     encoding === "identity" ? candidate : `${candidate}.${encoding === "br" ? "br" : "gz"}`;
   const kept = cache.bytes.get(encoded);
   if (kept !== undefined) return kept;
+
   const pending = loadBytes(files, cache, candidate, encoded, encoding);
   cache.bytes.set(encoded, pending);
   return pending;

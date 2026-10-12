@@ -18,8 +18,10 @@ test("a public/ file and a prerendered page are served, with revalidation", asyn
   const root = built();
   const asset = await createAssets(root);
   const robots = await asset(new Request("http://app/robots.txt"));
+
   expect(robots?.headers.get("content-type")).toBe("text/plain; charset=utf-8");
   expect(robots?.headers.get("cache-control")).toBe("public,max-age=0,must-revalidate");
+
   const about = await asset(new Request("http://app/about"));
   expect(await about?.text()).toBe("<p>About</p>");
   expect(about?.headers.get("content-type")).toBe("text/html; charset=utf-8");
@@ -37,6 +39,7 @@ test("a hashed asset is immutable, and a missing one is a 404", async () => {
 test("pages, dot paths, escapes, and writes pass on to the server entry", async () => {
   const root = built();
   const asset = await createAssets(root);
+
   expect(await asset(new Request("http://app/"))).toBeNull();
   expect(await asset(new Request("http://app/posts/1"))).toBeNull();
   expect(await asset(new Request("http://app/.vite/manifest.json"))).toBeNull();
@@ -91,7 +94,9 @@ test("a host keeps its file list until restart", async () => {
   const root = built();
   const asset = await createAssets(root);
   writeFileSync(join(root, "dist/client/new.html"), "<p>New</p>");
+
   expect(await asset(new Request("http://app/new.html"))).toBeNull();
+
   const restarted = await createAssets(root);
   expect(await (await restarted(new Request("http://app/new.html")))?.text()).toBe("<p>New</p>");
 });
@@ -136,6 +141,7 @@ test("the host uses a build's compressed copy", async () => {
   writeFileSync(`${file}.br`, brotliCompressSync("built copy"));
   const asset = await createAssets(root);
   unlinkSync(file);
+
   const response = await asset(
     new Request("http://app/assets/app-1a2b.js", { headers: { "accept-encoding": "br" } }),
   );
@@ -151,6 +157,7 @@ test("a public gzip download keeps its bytes and is not a response encoding", as
   const response = await asset(
     new Request("http://app/archive.txt.gz", { headers: { "accept-encoding": "br" } }),
   );
+
   expect(gunzipSync(Buffer.from(await response.arrayBuffer())).toString()).toBe("archive bytes");
   expect(response?.headers.get("content-type")).toBe("application/octet-stream");
   expect(response?.headers.get("content-encoding")).toBeNull();
@@ -163,10 +170,13 @@ test("a warmed host serves its retained raw and encoded bytes after files go awa
   const zipped = new Request("http://app/assets/app-1a2b.js", {
     headers: { "accept-encoding": "br" },
   });
+
   await (await asset(raw)).text();
   await (await asset(zipped)).arrayBuffer();
+
   unlinkSync(join(root, "dist/client/robots.txt"));
   unlinkSync(join(root, "dist/client/assets/app-1a2b.js"));
+
   const text = asset(raw);
   const bytes = asset(zipped);
   expect(text).toBeInstanceOf(Response);

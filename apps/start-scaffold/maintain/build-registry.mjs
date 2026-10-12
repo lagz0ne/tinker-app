@@ -13,14 +13,16 @@ const { registry, items, packages } = await registryItems({
 
 await mkdir(out, { recursive: true });
 
-for (const item of items)
+for (const item of items) {
   await writeFile(join(out, `${item.name}.json`), JSON.stringify(item, null, 2) + "\n");
+}
 
 await writeFile(join(out, "registry.json"), JSON.stringify({ ...registry, items }, null, 2) + "\n");
 
 if (!process.env.TINKER_REGISTRY_OUT) {
-  for (const [path, pkg] of Object.entries(packages))
+  for (const [path, pkg] of Object.entries(packages)) {
     await writeFile(join(app, path), JSON.stringify(pkg, null, 2) + "\n");
+  }
 }
 
 const formatted = spawnSync(

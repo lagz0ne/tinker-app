@@ -76,8 +76,9 @@ const levels = operation({
 function sized(bytes: number): Telemetry.Log {
   const attributes: Record<string, string> = {};
   const log = { ...record(""), attributes };
-  for (let index = 0; bytes - JSON.stringify(log).length > 2048; index++)
+  for (let index = 0; bytes - JSON.stringify(log).length > 2048; index++) {
     attributes[`a${index}`] = "x".repeat(1000);
+  }
   log.msg = "x".repeat(bytes - JSON.stringify(log).length);
   return log;
 }
@@ -100,10 +101,13 @@ test("finished spans reach storage as OTLP JSON", async () => {
   });
   await tools.ready;
   const app = createScope({ clock, observe: tools.resolve(observer) });
+
   expect(app.run(parent)).toBe("saved");
   expect(app.settle(rejected).status).toBe("failed");
+
   await tools.run(flushTelemetry);
   const traces = sent.requests.find(({ url }) => url === "http://storage.test/traces");
+
   expect(traces?.init).toMatchObject({
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -154,6 +158,7 @@ test("finished spans reach storage as OTLP JSON", async () => {
       },
     ],
   });
+
   expect((await app.close({ graceful: true })).status).toBe("success");
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
@@ -168,9 +173,11 @@ test("log lines reach storage as JSON lines, one per span too", async () => {
   });
   await tools.ready;
   const app = createScope({ clock, observe: tools.resolve(observer) });
+
   expect(app.run(parent)).toBe("saved");
   await tools.run(flushTelemetry);
   const logs = sent.requests.find(({ url }) => url.startsWith("http://storage.test/logs?"));
+
   expect(logs?.url).toBe(
     "http://storage.test/logs?_time_field=time&_msg_field=msg&_stream_fields=service%2Cside",
   );
@@ -179,6 +186,7 @@ test("log lines reach storage as JSON lines, one per span too", async () => {
     headers: { "content-type": "application/stream+json" },
     redirect: "error",
   });
+
   const lines = sent
     .bodyOf("http://storage.test/logs?")
     .split("\n")
@@ -215,11 +223,13 @@ test("lines below info are dropped; warn and error keep their level", async () =
   await tools.ready;
   const app = createScope({ observe: tools.resolve(observer) });
   app.run(levels);
+
   await tools.run(flushTelemetry);
   const lines = sent
     .bodyOf("http://storage.test/logs?")
     .split("\n")
     .map((line) => JSON.parse(line));
+
   expect(lines.map(({ level, msg, side }) => [level, msg, side])).toEqual([
     [40, "careful", "server"],
     [50, "broken", "server"],
@@ -263,9 +273,11 @@ test("a span that never ended is sent with its start as its end; long names are 
       ),
     })),
   });
+
   await tools.run(flushTelemetry);
   const [span] = JSON.parse(sent.bodyOf("http://storage.test/traces")).resourceSpans[0]
     .scopeSpans[0].spans;
+
   expect([span.name.length, span.flags, span.startTimeUnixNano, span.endTimeUnixNano]).toEqual([
     256,
     0,
@@ -275,6 +287,7 @@ test("a span that never ended is sent with its start as its end; long names are 
   expect(span.attributes).toHaveLength(32);
   expect(span.attributes[0].key).toHaveLength(256);
   expect(span.attributes.at(-1)).toEqual({ key: "tinker.kind", value: { stringValue: "manual" } });
+
   expect(span.events).toHaveLength(32);
   expect(span.events[0].name).toHaveLength(256);
   expect(span.attributes[0].value.stringValue).toHaveLength(2048);
@@ -284,6 +297,7 @@ test("a span that never ended is sent with its start as its end; long names are 
     timeUnixNano: "1000000",
     attributes: [],
   });
+
   expect(span.status).toEqual({ code: 1 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
@@ -296,7 +310,9 @@ test("a storage failure keeps the business result and retries the retained recor
   });
   await tools.ready;
   const app = createScope({ observe: tools.resolve(observer) });
+
   expect(app.run(child)).toBe("saved");
+
   await tools.run(flushTelemetry);
   expect(tools.resolve(exportHealth)).toEqual({
     kind: "failed",
@@ -304,6 +320,7 @@ test("a storage failure keeps the business result and retries the retained recor
     pending: 3,
     dropped: 0,
   });
+
   await tools.run(flushTelemetry);
   expect(tools.resolve(exportHealth)).toEqual({ kind: "idle", pending: 0, dropped: 0 });
   expect(sent.requests).toHaveLength(4);
@@ -320,6 +337,7 @@ test("only the kind storage refused is kept: accepted traces leave, refused logs
   await tools.ready;
   const app = createScope({ observe: tools.resolve(observer) });
   app.run(child);
+
   await tools.run(flushTelemetry);
   expect(tools.resolve(exportHealth)).toMatchObject({ kind: "failed", pending: 2 });
   expect((await app.close({ graceful: true })).status).toBe("success");
@@ -340,6 +358,7 @@ test("a storage that cannot be reached counts as a refusal", async () => {
   await tools.ready;
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("unsent")] } });
   await tools.run(flushTelemetry);
+
   expect(tools.resolve(exportHealth)).toMatchObject({ kind: "failed", pending: 1 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
@@ -353,6 +372,7 @@ test("closing the telemetry root sends the finished records", async () => {
   await tools.ready;
   const app = createScope({ observe: tools.resolve(observer) });
   app.run(child);
+
   expect(sent.requests).toEqual([]);
   expect((await app.close({ graceful: true })).status).toBe("success");
   expect((await tools.close({ graceful: true })).status).toBe("success");
@@ -374,9 +394,11 @@ test("a server root sends on its own once a second has passed", async () => {
       }),
     ],
   });
+
   await tools.ready;
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("first")] } });
   clock.advance(1000);
+
   expect(await arrived.promise).toMatch(/^http:\/\/storage\.test\/logs\?/);
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
@@ -399,13 +421,16 @@ test("a stuck storage request is aborted by the owned clock during close", async
       ),
     ],
   });
+
   await tools.ready;
   const app = createScope({ clock, observe: tools.resolve(observer) });
   app.run(child);
+
   expect((await app.close({ graceful: true })).status).toBe("success");
   const closing = tools.close({ graceful: true });
   await arrived.promise;
   clock.advance(1500);
+
   expect((await closing).status).toBe("success");
 });
 
@@ -418,6 +443,7 @@ test("a full queue drops records past 512 and reports them; each send stays with
   await tools.ready;
   const batch = { traces: [], logs: Array.from({ length: 64 }, () => record("queued")) };
   for (let index = 0; index < 9; index++) tools.run(ingestTelemetry, { input: batch });
+
   expect(tools.resolve(exportHealth)).toEqual({ kind: "sending", pending: 512, dropped: 64 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
   expect(sent.requests).toHaveLength(8);
@@ -439,13 +465,17 @@ test("a record over 48 KB is dropped; one send takes at most 64 records", async 
       Array.from({ length: 24 }, (_, index) => [`k${index}`, "x".repeat(2048)]),
     ),
   };
+
   tools.run(ingestTelemetry, { input: { traces: [], logs: [big] } });
   expect(tools.resolve(exportHealth)).toEqual({ kind: "queued", pending: 0, dropped: 1 });
-  for (let index = 0; index < 2; index++)
+
+  for (let index = 0; index < 2; index++) {
     tools.run(ingestTelemetry, {
       input: { traces: [], logs: Array.from({ length: 40 }, () => record("many")) },
     });
+  }
   await tools.run(flushTelemetry);
+
   expect(sent.bodyOf("http://storage.test/logs?").split("\n")).toHaveLength(64);
   expect(tools.resolve(exportHealth)).toEqual({ kind: "idle", pending: 0, dropped: 1 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
@@ -470,6 +500,7 @@ test("sent records free the byte budget for later records", async () => {
     });
     await tools.run(flushTelemetry);
   }
+
   expect(tools.resolve(exportHealth)).toEqual({ kind: "idle", pending: 0, dropped: 0 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
@@ -484,9 +515,11 @@ test("telemetry sends through httpBackend without tracing its own requests", asy
   await tools.ready;
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("bound backend")] } });
   await tools.run(flushTelemetry);
+
   expect(sent.requests.map(({ url }) => url)).toEqual([
     "http://storage.test/logs?_time_field=time&_msg_field=msg&_stream_fields=service%2Cside",
   ]);
+
   const names = tools.spans().map(({ name }) => name);
   expect(names).toContain("telemetry.export");
   expect(names.filter((name) => name.startsWith("http"))).toEqual([]);
@@ -502,6 +535,7 @@ test("a tab sends its batch to the base's ingest route: same origin, kept alive"
   await tools.ready;
   const app = createScope({ observe: tools.resolve(observer) });
   app.run(levels);
+
   await tools.run(flushTelemetry);
   expect(sent.requests[0]?.url).toBe("/api/telemetry");
   expect(sent.requests[0]?.init).toMatchObject({
@@ -511,6 +545,7 @@ test("a tab sends its batch to the base's ingest route: same origin, kept alive"
     keepalive: true,
     redirect: "error",
   });
+
   const batch = JSON.parse(sent.bodyOf("/api/telemetry"));
   expect(batch.traces.map(({ side, name }: Telemetry.Span) => [side, name])).toEqual([
     ["browser", "test.telemetry.levels"],
@@ -520,10 +555,12 @@ test("a tab sends its batch to the base's ingest route: same origin, kept alive"
     ["browser", "tinker-app", "broken"],
     ["browser", "tinker-app", "core.span"],
   ]);
+
   tools.run(ingestTelemetry, {
     input: { traces: [], logs: [{ ...record("refused"), side: "browser" }] },
   });
   await tools.run(flushTelemetry);
+
   expect(tools.resolve(exportHealth)).toMatchObject({ kind: "failed", pending: 1 });
   expect((await app.close({ graceful: true })).status).toBe("success");
   expect((await tools.close({ graceful: true })).status).toBe("success");
@@ -544,6 +581,7 @@ test("a tab whose send throws keeps its records for the next send", async () => 
   const app = createScope({ observe: tools.resolve(observer) });
   app.run(child);
   await tools.run(flushTelemetry);
+
   expect(tools.resolve(exportHealth)).toMatchObject({ kind: "failed", pending: 3 });
   expect((await app.close({ graceful: true })).status).toBe("success");
   expect((await tools.close({ graceful: true })).status).toBe("success");
@@ -558,6 +596,7 @@ test("the part reads its three keys once: defaults, set values, and the browser'
     logs: "http://127.0.0.1:9428/insert/jsonline",
   });
   expect((await server.close({ graceful: true })).status).toBe("success");
+
   const set = createScope({ tags: [storageEnv, telemetrySide("ssr")] });
   expect(set.resolve(telemetrySettings)).toEqual({
     side: "ssr",
@@ -566,6 +605,7 @@ test("the part reads its three keys once: defaults, set values, and the browser'
     logs: "http://storage.test/logs",
   });
   expect((await set.close({ graceful: true })).status).toBe("success");
+
   const tab = createScope({ tags: [storageEnv, telemetrySide("browser")] });
   expect(tab.resolve(telemetrySettings)).toEqual({ side: "browser", service: "test-start" });
   expect((await tab.close({ graceful: true })).status).toBe("success");
@@ -613,6 +653,7 @@ test("a record of exactly 48,000 bytes is kept; one byte more is dropped", async
   await tools.ready;
   tools.run(ingestTelemetry, { input: { traces: [], logs: [sized(48_000)] } });
   tools.run(ingestTelemetry, { input: { traces: [], logs: [sized(48_001)] } });
+
   expect(tools.resolve(exportHealth)).toEqual({ kind: "sending", pending: 1, dropped: 1 });
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
@@ -626,8 +667,10 @@ test("the queue holds 1 MiB to the byte, and counts what it holds after a refuse
   const full = [...Array.from({ length: 22 }, () => sized(47_000)), sized(14_576)];
   for (const log of full) tools.run(ingestTelemetry, { input: { traces: [], logs: [log] } });
   expect(tools.resolve(exportHealth)).toEqual({ kind: "sending", pending: 23, dropped: 0 });
+
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("past the bound")] } });
   expect(tools.resolve(exportHealth)).toEqual({ kind: "sending", pending: 23, dropped: 1 });
+
   await tools.run(flushTelemetry);
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("still past it")] } });
   expect(tools.resolve(exportHealth)).toMatchObject({ kind: "failed", pending: 23, dropped: 2 });
@@ -643,6 +686,7 @@ test("one send carries at most 48,000 bytes: the fifth record goes in the next b
   await tools.ready;
   const logs = Array.from({ length: 5 }, () => sized(12_000));
   tools.run(ingestTelemetry, { input: { traces: [], logs } });
+
   await tools.run(flushTelemetry);
   expect(sent.bodyOf("http://storage.test/logs?").split("\n")).toHaveLength(4);
   expect(tools.resolve(exportHealth)).toEqual({ kind: "idle", pending: 0, dropped: 0 });
@@ -663,13 +707,16 @@ test("while a send runs, the health says sending, and new records wait for the n
       }),
     ],
   });
+
   await tools.ready;
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("first")] } });
   const sending = tools.run(flushTelemetry);
   await arrived.promise;
   expect(tools.resolve(exportHealth)).toEqual({ kind: "sending", pending: 1, dropped: 0 });
+
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("second")] } });
   expect(tools.resolve(exportHealth)).toEqual({ kind: "sending", pending: 2, dropped: 0 });
+
   reply.resolve(new Response(null));
   await sending;
   expect(tools.resolve(exportHealth)).toEqual({ kind: "queued", pending: 1, dropped: 0 });
@@ -685,6 +732,7 @@ test("after a refused send, new records keep the failed health", async () => {
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("refused")] } });
   await tools.run(flushTelemetry);
   tools.run(ingestTelemetry, { input: { traces: [], logs: [record("later")] } });
+
   expect(tools.resolve(exportHealth)).toEqual({
     kind: "failed",
     failure: "Telemetry storage did not accept the batch",
@@ -718,23 +766,27 @@ test("closing gives up on storage after 1.5 s; what is left is dropped", async (
         const call = Promise.withResolvers<Response>();
         calls.push(call);
         if (calls.length > 3) return Promise.resolve(new Response(null));
+
         arrival.resolve(call);
         arrival = Promise.withResolvers();
         return call.promise;
       }),
     ],
   });
+
   await tools.ready;
-  for (let round = 0; round < 4; round++)
+  for (let round = 0; round < 4; round++) {
     tools.run(ingestTelemetry, {
       input: { traces: [], logs: Array.from({ length: 64 }, () => record("held")) },
     });
+  }
   const closing = tools.close({ graceful: true });
   for (let round = 0; round < 3; round++) {
     const call = await arrival.promise;
     clock.advance(600);
     call.resolve(new Response(null));
   }
+
   expect((await closing).status).toBe("success");
   expect(calls).toHaveLength(3);
 });
@@ -754,6 +806,7 @@ test("a log line outside any span, and long keys, messages, and errors, are cut"
     attributes: { ["k".repeat(300)]: "v" },
     span: undefined,
   });
+
   send?.({
     id: 1,
     parentId: undefined,
@@ -771,6 +824,7 @@ test("a log line outside any span, and long keys, messages, and errors, are cut"
     events: [{ name: "e", time: 1, attributes: { ["a".repeat(300)]: 1 } }],
   });
   await tools.run(flushTelemetry);
+
   const [line] = sent.bodyOf("http://storage.test/logs?").split("\n");
   expect(JSON.parse(line ?? "")).toEqual({
     level: 40,
@@ -780,6 +834,7 @@ test("a log line outside any span, and long keys, messages, and errors, are cut"
     attributes: { ["k".repeat(256)]: '"v"' },
     msg: "m".repeat(2048),
   });
+
   const [span] = JSON.parse(sent.bodyOf("http://storage.test/traces")).resourceSpans[0]
     .scopeSpans[0].spans;
   expect(span.status).toEqual({ code: 2, message: "e".repeat(2048) });
@@ -807,10 +862,13 @@ test("a server groups the spans it sends by side: server, browser, then ssr", as
     events: [],
     status: { code: 1 },
   });
+
   const traces = [span("ssr", "c"), span("browser", "b"), span("server", "a")];
   tools.run(ingestTelemetry, { input: { traces, logs: [] } });
   await tools.run(flushTelemetry);
+
   expect(sent.requests.map(({ url }) => url)).toEqual(["http://storage.test/traces"]);
+
   const groups = JSON.parse(sent.bodyOf("http://storage.test/traces")).resourceSpans;
   expect(
     groups.map(
@@ -847,6 +905,7 @@ test("a trace send that throws keeps the traces; the logs sent beside them leave
   const app = createScope({ observe: tools.resolve(observer) });
   app.run(child);
   await tools.run(flushTelemetry);
+
   expect(tools.resolve(exportHealth)).toMatchObject({ kind: "failed", pending: 1 });
   expect((await app.close({ graceful: true })).status).toBe("success");
   expect((await tools.close({ graceful: true })).status).toBe("success");
@@ -862,14 +921,18 @@ test("closing a tab never sends a batch over 32,000 UTF-8 bytes", async () => {
   const log = { ...record("é".repeat(1000)), side: "browser" as const };
   const large = { ...sized(32_000), side: "browser" as const };
   const fitting = { ...sized(31_972), side: "browser" as const };
+
   tools.run(ingestTelemetry, { input: { traces: [], logs: [large, fitting] } });
   tools.run(ingestTelemetry, {
     input: { traces: [], logs: Array.from({ length: 40 }, () => log) },
   });
+
   expect((await tools.close({ graceful: true })).status).toBe("success");
   expect(sent.requests.length).toBeGreaterThan(1);
-  for (const { body } of sent.requests)
+
+  for (const { body } of sent.requests) {
     expect(new TextEncoder().encode(body).byteLength).toBeLessThanOrEqual(32_000);
+  }
   expect(sent.requests.flatMap(({ body }) => JSON.parse(body).logs)).toEqual([
     fitting,
     ...Array.from({ length: 40 }, () => log),

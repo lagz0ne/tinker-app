@@ -63,6 +63,7 @@ test("a batch is taken only when every record keeps the wire rules", async () =>
       }),
     ],
   });
+
   const full = {
     traces: Array.from({ length: 32 }, () => span("ssr")),
     logs: Array.from({ length: 32 }, () => log("ssr")),
@@ -104,13 +105,17 @@ test("a batch is taken only when every record keeps the wire rules", async () =>
     "a log attribute value over 2048": withLog({ attributes: { k: "v".repeat(2049) } }),
     "65 records": { traces: full.traces, logs: [...full.logs, log("ssr")] },
   };
+
   for (const [name, batch] of [
     ["every side, every field", good],
     ["64 records", full],
-  ] as const)
+  ] as const) {
     expect(root.settle(receiveTelemetry, { rawInput: batch }).status, name).toBe("success");
-  for (const [name, batch] of Object.entries(refused))
+  }
+  for (const [name, batch] of Object.entries(refused)) {
     expect(root.settle(receiveTelemetry, { rawInput: batch }).status, name).toBe("failed");
+  }
+
   expect(taken).toEqual([good, full]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -120,7 +125,9 @@ test("a value is cut to 2048 characters; a bigint, undefined, or a cycle still e
   expect(encodeValue("x".repeat(3000))).toBe(`"${"x".repeat(2047)}`);
   expect(encodeValue({ n: 1n })).toBe('{"n":"1"}');
   expect(encodeValue(undefined)).toBe("undefined");
+
   const cycle: Record<string, unknown> = {};
   cycle.loop = cycle;
+
   expect(encodeValue(cycle)).toBe("[Unserializable]");
 });

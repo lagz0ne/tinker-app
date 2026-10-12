@@ -24,6 +24,7 @@ test("the base is the one in the app's node_modules, never one on NODE_PATH", ()
     env: { ...process.env, NODE_PATH: join(store, "node_modules") },
     encoding: "utf8",
   });
+
   expect(JSON.parse(lines)).toEqual([
     "package.json:1 does not install @tinker/start; add it and install",
   ]);

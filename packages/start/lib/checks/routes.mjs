@@ -88,6 +88,7 @@ function routeProblems(dir, file, mounted) {
 function shellProblems(root) {
   const path = join(root, shellFile);
   if (!existsSync(path)) return [];
+
   const source = parseSource(path);
   const imported = importedNames(source);
   const outlet = importsFrom(source, "@tanstack/react-router").find(
@@ -97,6 +98,7 @@ function shellProblems(root) {
     ({ value }) =>
       !(value.type === "Identifier" && imported.has(value.name) && value.name !== outlet?.local),
   );
+
   if (!component || (outlet && usesOf(source, outlet.local).length > 0)) return [];
   return [say.outlet(`${shellFile}:${source.line(component)}`)];
 }

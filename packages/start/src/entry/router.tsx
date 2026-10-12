@@ -70,6 +70,7 @@ export type RouterOptions = (
 export async function getRouter() {
   const reading = readTelemetry();
   const tools = reading instanceof Promise ? await reading : reading;
+
   const stop = new AbortController();
   const app = createScope({
     signal: stop.signal,
@@ -77,6 +78,7 @@ export async function getRouter() {
     observe: tools.observe,
     tags: [tabStop(stop.signal), pageEvents(readPage())],
   });
+
   let tab: Awaited<ReturnType<typeof sync.router.factory>>;
   try {
     await app.ready;
@@ -87,6 +89,7 @@ export async function getRouter() {
     await tools.close?.();
     throw error;
   }
+
   let closed: Promise<void> | undefined;
   const close = () =>
     (closed ??= (async () => {
@@ -98,8 +101,10 @@ export async function getRouter() {
         if (result?.teardownErrors?.length) throw result.teardownErrors.at(0);
       }
     })());
+
   tab.bind(close);
   if (import.meta.hot) import.meta.hot.dispose(close);
+
   return Object.assign(
     createRouter({
       scrollRestoration: true,
