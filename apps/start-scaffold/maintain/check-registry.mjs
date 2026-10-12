@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile, symlink } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { mkdtemp, mkdir, readFile, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { app, registryItems } from "./registry-source.mjs";
+
 import { checkRegistryIndex } from "./check-registry-index.mjs";
+import { app, registryItems } from "./registry-source.mjs";
 
 /** Match every built item to source, then build the two supported compositions. */
 const { registry, items, files } = await checkRegistryIndex();

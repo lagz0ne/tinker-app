@@ -1,4 +1,5 @@
 import { namespace, resource } from "@tinker/core";
+
 import { browserIngest } from "./ingest.server";
 import { observer, telemetryExport } from "./observer";
 import type { Telemetry } from "./records";

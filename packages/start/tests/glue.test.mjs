@@ -1,5 +1,7 @@
 import { join, relative, resolve } from "node:path";
+
 import { expect, test } from "vite-plus/test";
+
 import { aliases, passThrough, startOptions } from "../lib/glue.mjs";
 import { appFiles, ignoredFiles } from "../lib/named.mjs";
 import { baseDir } from "../lib/paths.mjs";

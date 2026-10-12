@@ -1,17 +1,19 @@
-import type { Observe, Scope } from "@tinker/core";
-import { createScope } from "@tinker/core";
 import { createStartHandler as createStart } from "@tanstack/react-start/server";
 import { defaultStreamHandler as renderStream } from "@tanstack/react-start/server";
+import type { Observe, Scope } from "@tinker/core";
+import { createScope } from "@tinker/core";
+
 import { extensions } from "#tinker/app.server";
 import { auth, telemetry } from "#tinker/parts.server";
 import app from "#tinker/server";
-import type { getRouter } from "./router";
-import { retainRender } from "../backend/render-lifetime.server";
-import { devErrorPage } from "./dev-error";
+
 import { backendStop } from "../backend/lifetime";
+import { retainRender } from "../backend/render-lifetime.server";
 import { env } from "../env";
 import { abortReasons, raise } from "../errors";
 import { startRequests } from "../start";
+import { devErrorPage } from "./dev-error";
+import type { getRouter } from "./router";
 
 const renderRequest = createStart(async (context) => {
   const router: typeof context.router & {

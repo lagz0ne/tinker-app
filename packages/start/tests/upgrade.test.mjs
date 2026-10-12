@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
+
 import { installCommand, notesBetween, pinDependencies, planUpgrade } from "../lib/upgrade.mjs";
 import { fixture, installedApp, write } from "./fixture.mjs";
 

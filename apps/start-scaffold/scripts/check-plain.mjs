@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { cp, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
+
 import ts from "typescript-api";
-import { createRequire } from "node:module";
 
 const PLAIN_MAX = 17;
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");

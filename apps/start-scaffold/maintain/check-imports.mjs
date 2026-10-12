@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readdirSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
+
 import { createServer } from "vite-plus";
 
 if (import.meta.main) {
@@ -18,9 +20,15 @@ if (import.meta.main) {
       root: fileURLToPath(new URL("..", import.meta.url)),
       server: { middlewareMode: true, watch: null },
       appType: "custom",
+      resolve: {
+        alias: [{ find: /^@\//, replacement: fileURLToPath(new URL("../src/", import.meta.url)) }],
+      },
     });
     try {
-      const backend = await vite.ssrLoadModule("/src/backend/index.server");
+      const root = fileURLToPath(new URL("../src/backend/", import.meta.url));
+      const features = readdirSync(root).filter((name) => name.endsWith(".server.ts"));
+      for (const name of features) await vite.ssrLoadModule(`/src/backend/${name}`);
+      const backend = await vite.ssrLoadModule("/src/backend/mail.server.ts");
 
       const services = [...loaded].filter((url) =>
         /\/node_modules\/(?:pg|@electric-sql\/pglite|better-auth|nodemailer)(?:\/|$)/.test(url),
@@ -29,7 +37,7 @@ if (import.meta.main) {
       assert.deepEqual(
         services,
         [],
-        "Public backend import loaded a native driver, auth library, or mail client",
+        "A backend module import loaded a native driver, auth library, or mail client",
       );
 
       const { createScope } = await vite.ssrLoadModule("@tinker/core");
@@ -64,7 +72,7 @@ if (import.meta.main) {
       hooks.deregister();
     }
     process.stdout.write(
-      "PASS: public backend import leaves drivers, auth, and SMTP unloaded; preset mail records its message.\n",
+      "PASS: every backend module import leaves drivers, auth, and SMTP unloaded; preset mail records its message.\n",
     );
   } else {
     const result = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--child"], {

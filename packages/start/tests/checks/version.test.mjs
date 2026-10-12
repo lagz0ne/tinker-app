@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+
 import { expect, test } from "vite-plus/test";
+
 import { version } from "../../lib/checks/version.mjs";
 import { baseDir, basePackage } from "../../lib/paths.mjs";
 import { fixture, goodApp } from "../fixture.mjs";

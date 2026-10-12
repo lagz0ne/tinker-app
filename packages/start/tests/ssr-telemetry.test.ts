@@ -1,6 +1,5 @@
 import { createScope, namespace, operation } from "@tinker/core";
 import { makeTestClock } from "@tinker/core/testing";
-import { expect, test } from "vite-plus/test";
 import { env } from "@tinker/start/server";
 import {
   exportHealth,
@@ -9,6 +8,7 @@ import {
   offTelemetry,
   serverTelemetry,
 } from "@tinker/start/testing";
+import { expect, test } from "vite-plus/test";
 
 /** Main's server part has only `observe`; these defaults keep the regression runnable there. */
 const telemetry = Object.assign(

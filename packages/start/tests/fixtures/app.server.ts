@@ -1,7 +1,8 @@
+import type { PGliteInterface } from "@electric-sql/pglite";
 import { operation, resource, tag } from "@tinker/core";
 import type { Many, Scope } from "@tinker/core";
-import type { PGliteInterface } from "@electric-sql/pglite";
 import { afterAll, beforeAll } from "vite-plus/test";
+
 import type { Database } from "../../src/parts/sync/database";
 
 /**

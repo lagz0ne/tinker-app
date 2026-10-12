@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+
 import { app, root } from "./registry-source.mjs";
 
 /** Real shadcn, packed releases, and HTTP; this proof stays outside scope tests. */

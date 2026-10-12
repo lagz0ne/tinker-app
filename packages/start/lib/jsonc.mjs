@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+
 import {
   applyEdits,
   findNodeAtLocation,
@@ -7,6 +8,7 @@ import {
   parseTree,
   printParseErrorCode,
 } from "jsonc-parser";
+
 import { lineAt, readText } from "./paths.mjs";
 
 /** A UTF-8 byte order mark: tsc accepts one at the start; the parser does not. */

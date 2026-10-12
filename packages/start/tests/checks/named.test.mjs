@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+
 import { named } from "../../lib/checks/named.mjs";
 import { goodApp } from "../fixture.mjs";
 

@@ -1,14 +1,16 @@
-import { drizzleOrm } from "@tinker/start/server";
-import { user } from "./schema.server";
-import { todo } from "./todos.schema.server";
-import { counter } from "./sync.schema.server";
 import { operation } from "@tinker/core";
-import { database } from "./database.server";
-import { currentUser, principal } from "./auth.server";
+import { drizzleOrm } from "@tinker/start/server";
 import { eventHistory, event } from "@tinker/start/server";
-import { readCursor, readPrivateCursor, readFeatureEvents } from "../contracts/sync";
-import type { Sync } from "../contracts/sync";
-import { raise } from "../errors";
+
+import { readCursor, readPrivateCursor, readFeatureEvents } from "@/contracts/sync";
+import type { Sync } from "@/contracts/sync";
+import { raise } from "@/errors";
+
+import { currentUser, principal } from "./auth.server";
+import { database } from "./database.server";
+import { user } from "./schema.server";
+import { counter } from "./sync.schema.server";
+import { todo } from "./todos.schema.server";
 
 export const bootstrapPublic = operation({
   label: "bootstrapPublic",

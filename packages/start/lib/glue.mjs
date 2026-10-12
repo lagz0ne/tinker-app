@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { join, relative } from "node:path";
+
 import { physical, rootRoute, route } from "@tanstack/virtual-file-routes";
+
 import { appFiles, pick, shellFile } from "./named.mjs";
 import { parts } from "./parts.mjs";
 import { baseDir, basePackage } from "./paths.mjs";

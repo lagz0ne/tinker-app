@@ -1,13 +1,7 @@
-import { env } from "@tinker/start/server";
-import { handleAuth } from "@tinker-start-scaffold/testing";
-import { test, expect } from "vite-plus/test";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { createAuthClient } from "better-auth/react";
-import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
-import { migrate, incrementCounter, bootstrap, readAccount } from "@tinker-start-scaffold/backend";
-import { authClient, signIn } from "@tinker-start-scaffold/frontend";
 import { syncClient, loadSnapshot, checkAccount } from "@tinker/start/client";
+import { env } from "@tinker/start/server";
 import {
   accountOwner,
   tabStop,
@@ -16,6 +10,17 @@ import {
   snapshotSource,
 } from "@tinker/start/testing";
 import { openSync, backendStop, requestStop } from "@tinker/start/testing";
+import { createAuthClient } from "better-auth/react";
+import { test, expect } from "vite-plus/test";
+
+import { readAccount } from "@/backend/auth.server";
+import { incrementCounter } from "@/backend/counter.server";
+import { migrate } from "@/backend/database.server";
+import { bootstrap } from "@/backend/sync.server";
+import { authClient, signIn } from "@/frontend/actions";
+
+import { handleAuth } from "./presets";
+import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const settings = env({
   DATABASE_URL: "postgres://proof",

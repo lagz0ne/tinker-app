@@ -1,5 +1,7 @@
 import { join, relative } from "node:path";
+
 import { expect, test } from "vite-plus/test";
+
 import { imports } from "../../lib/checks/imports.mjs";
 import { baseDir } from "../../lib/paths.mjs";
 import { goodApp, write } from "../fixture.mjs";

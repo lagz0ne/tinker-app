@@ -3,13 +3,15 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+
 import { serve as listen } from "@hono/node-server";
+
 import { generatorBlocked, staleTree } from "../lib/checks/generated.mjs";
+import { compressResponse } from "../lib/compression.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { loadEnv } from "../lib/env.mjs";
 import { prepare, prepareExitCode } from "../lib/prepare.mjs";
 import { createAssets } from "../lib/serve.mjs";
-import { compressResponse } from "../lib/compression.mjs";
 import { upgrade } from "../lib/upgrade.mjs";
 
 /**

@@ -1,24 +1,22 @@
-import { streamMessage } from "../src/lib/tinker";
-import { env } from "@tinker/start/server";
-import { handleAuth } from "@tinker-start-scaffold/testing";
-import { test, expect } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
-import {
-  database,
-  migrate,
-  incrementCounter,
-  bootstrapPrivate,
-  saveProfile,
-  isError,
-  raise,
-  mail,
-} from "@tinker-start-scaffold/backend";
-import type { Mail } from "@tinker-start-scaffold/backend";
 import { syncClient, applyBootstrap } from "@tinker/start/client";
+import { env } from "@tinker/start/server";
 import { accountOwner, tabStop, receiveMessage } from "@tinker/start/testing";
 import { openSync, notifications, backendStop, requestStop } from "@tinker/start/testing";
+import { test, expect } from "vite-plus/test";
+
+import { incrementCounter } from "@/backend/counter.server";
+import { database, migrate } from "@/backend/database.server";
+import { mail } from "@/backend/mail.server";
+import type { Mail } from "@/backend/mail.server";
+import { saveProfile } from "@/backend/profile.server";
+import { bootstrapPrivate } from "@/backend/sync.server";
+import { isError, raise } from "@/errors";
+import { streamMessage } from "@/lib/tinker";
+
+import { handleAuth } from "./presets";
+import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const settings = env({
   DATABASE_URL: "postgres://proof",

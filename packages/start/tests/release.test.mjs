@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+
 import { releaseDependencies, releaseUrls } from "../lib/release.mjs";
 
 test("release URLs name all three tarballs under the same tag", () => {

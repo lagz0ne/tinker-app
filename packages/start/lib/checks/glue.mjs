@@ -1,5 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+
 import { byteOrderMark, lineOfKey, prependExtends, readJsonc, writeKey } from "../jsonc.mjs";
 import { callsOf, importsFrom, parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";

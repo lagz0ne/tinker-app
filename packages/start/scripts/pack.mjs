@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+
 import { listFiles, readJson, sha256 } from "../lib/paths.mjs";
 
 /** Pack this base as a release: files.json pins every shipped file's bytes. */

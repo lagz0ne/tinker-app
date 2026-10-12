@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+
 import { findPackage } from "./paths.mjs";
 
 export const say = {

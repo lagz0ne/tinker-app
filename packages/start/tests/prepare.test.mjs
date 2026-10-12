@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
+
 import { baseDir, basePackage } from "../lib/paths.mjs";
 import { prepare, prepareExitCode, render } from "../lib/prepare.mjs";
 import { fixture, goodApp } from "./fixture.mjs";

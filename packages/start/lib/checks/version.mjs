@@ -1,4 +1,5 @@
 import { join } from "node:path";
+
 import { lineOfKey, readJsonc } from "../jsonc.mjs";
 import { installedBase, installedVersion, readJson } from "../paths.mjs";
 import { fail, verdict } from "./result.mjs";

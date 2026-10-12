@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+
 import { isRouteFile, routeClash, routePath } from "../lib/route-path.mjs";
 
 const owned = ["/api/health", "/tinker"];

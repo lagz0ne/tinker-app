@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+
 import { accountNotice, accountOfNotice } from "../src/parts/sync/notice";
 
 test("a notice payload names its account, and a table wake names none", () => {

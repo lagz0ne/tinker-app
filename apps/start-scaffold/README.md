@@ -135,11 +135,11 @@ export default defineConfig({
 `src/lib/tinker.server.ts`:
 
 ```ts
-import { databaseSetup } from "../backend/database.server";
+import { databaseSetup } from "@/backend/database.server";
 export const extensions = [databaseSetup];
-export { database } from "../backend/database.server";
-export { auth, readAccount } from "../backend/auth.server";
-export { bootstrap } from "../backend/sync.server";
+export { database } from "@/backend/database.server";
+export { auth, readAccount } from "@/backend/auth.server";
+export { bootstrap } from "@/backend/sync.server";
 ```
 
 Read the filled [browser seam](src/lib/tinker.ts) for
@@ -338,16 +338,16 @@ Keep your server extensions and add `databaseSetup`.
 The other server exports doctor names are:
 
 ```ts
-export { database } from "../backend/database.server";
-export { auth } from "../backend/auth.server";
-export { readAccount } from "../backend/auth.server";
-export { bootstrap } from "../backend/sync.server";
+export { database } from "@/backend/database.server";
+export { auth } from "@/backend/auth.server";
+export { readAccount } from "@/backend/auth.server";
+export { bootstrap } from "@/backend/sync.server";
 ```
 
 For an empty server seam, the filled startup list is:
 
 ```ts
-export { extensions } from "../examples/demo.server";
+export { extensions } from "@/examples/demo.server";
 ```
 
 The browser seam exports the copied demo's readers and types:
@@ -359,7 +359,7 @@ export {
   readBootstrap,
   readBatch,
   streamMessage
-} from "../examples/demo";
+} from "@/examples/demo";
 ```
 
 The copied module also adds the app's `Register` bodies.
@@ -367,7 +367,7 @@ For a server seam with your own extensions, keep that list
 and join the demo's startup extension:
 
 ```ts
-import { databaseSetup } from "../backend/database.server";
+import { databaseSetup } from "@/backend/database.server";
 export const extensions = [databaseSetup];
 ```
 

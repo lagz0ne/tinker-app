@@ -1,7 +1,7 @@
 import { createScope, operation, resource } from "@tinker/core";
-import { expect, test } from "vite-plus/test";
 import { readResult } from "@tinker/start/server";
 import { requestHeaders, requestStop, startRequests, retainRender } from "@tinker/start/testing";
+import { expect, test } from "vite-plus/test";
 
 /** Runs until its session stops it by force. */
 const stoppable = operation({

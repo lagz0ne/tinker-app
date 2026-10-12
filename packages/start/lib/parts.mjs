@@ -1,4 +1,5 @@
 import { join } from "node:path";
+
 import { basePackage, readJson } from "./paths.mjs";
 
 /** The base's parts (ADR 0106), from its package.json: each one's default, routes, and env keys. */

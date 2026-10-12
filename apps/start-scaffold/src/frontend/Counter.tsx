@@ -1,8 +1,10 @@
 import { operation } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
-import { counter } from "./state";
 import { syncClient } from "@tinker/start/client";
-import { updateCounter } from "../transport/counter.functions";
+
+import { updateCounter } from "@/transport/counter.functions";
+
+import { counter } from "./state";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "./ui/card";
 

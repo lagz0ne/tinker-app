@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
+
 import { compressBytes, isCompressible, readEncoding } from "./compression.mjs";
 
 const types = {

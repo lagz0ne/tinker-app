@@ -5,6 +5,7 @@ import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { app, root } from "./registry-source.mjs";
 
 /** Real CLI adds, hashes, doctor, builds, and local HTTP; never run inside scope tests. */

@@ -1,6 +1,8 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
+
 import { loadEnv } from "../lib/env.mjs";
 import { fixture, write } from "./fixture.mjs";
 

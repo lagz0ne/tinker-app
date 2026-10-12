@@ -1,4 +1,5 @@
 import type { ErrorComponentProps } from "@tanstack/react-router";
+
 import { errorDetail } from "./error-detail";
 
 /**

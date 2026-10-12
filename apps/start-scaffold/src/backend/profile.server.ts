@@ -1,15 +1,17 @@
-import { drizzleOrm } from "@tinker/start/server";
-import { user } from "./schema.server";
 import { operation, resource } from "@tinker/core";
+import { drizzleOrm } from "@tinker/start/server";
+import { eventHistory, execution } from "@tinker/start/server";
+
+import { readProfileCommand } from "@/contracts/commands";
+import type { Profile } from "@/contracts/profile";
+import { readExecution, readRetry, readFeatureResult } from "@/contracts/sync";
+import type { Sync } from "@/contracts/sync";
+import { raise } from "@/errors";
+
 import { principal, currentUser } from "./auth.server";
 import { database } from "./database.server";
 import { sendMail } from "./mail.server";
-import { eventHistory, execution } from "@tinker/start/server";
-import { readProfileCommand } from "../contracts/commands";
-import { readExecution, readRetry, readFeatureResult } from "../contracts/sync";
-import type { Sync } from "../contracts/sync";
-import type { Profile } from "../contracts/profile";
-import { raise } from "../errors";
+import { user } from "./schema.server";
 
 export const readProfile = operation({
   label: "readProfile",

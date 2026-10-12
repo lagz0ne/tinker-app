@@ -1,10 +1,11 @@
 import { createScope, operation } from "@tinker/core";
 import { makeTestClock } from "@tinker/core/testing";
-import { expect, test } from "vite-plus/test";
-import { applied, savedPrivate, savedPublic } from "#tinker/app";
+import type { Sync } from "@tinker/start";
 import { applyBootstrap, applyEvents, leaveAccount, syncClient } from "@tinker/start/client";
 import { accountOwner, tabLifetime, pageEvents, tabStop } from "@tinker/start/testing";
-import type { Sync } from "@tinker/start";
+import { expect, test } from "vite-plus/test";
+
+import { applied, savedPrivate, savedPublic } from "#tinker/app";
 
 /** A page hide event; `persisted` true means the tab went into the back-forward cache. */
 const hide = (persisted: boolean) => Object.assign(new Event("pagehide"), { persisted });

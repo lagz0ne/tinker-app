@@ -1,5 +1,5 @@
-import { accountOwner } from "./client/owner";
 import { syncStreaming } from "./client/events";
+import { accountOwner } from "./client/owner";
 import { syncRouter } from "./client/router";
 import type { SyncPart } from "./part";
 

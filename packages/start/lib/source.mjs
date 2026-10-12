@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+
 import { parseSync } from "oxc-parser";
+
 import { lineAt } from "./paths.mjs";
 
 /** @param {object} node - From oxc-parser; why: walk every child node. */

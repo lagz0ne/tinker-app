@@ -4,7 +4,9 @@ import type { Database } from "@tinker/start/server";
 export type { Database } from "@tinker/start/server";
 import { env } from "@tinker/start/server";
 import { z } from "zod";
-import { raise } from "../errors";
+
+import { raise } from "@/errors";
+
 import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";
 
 const databaseEnv = z.object({ DATABASE_URL: z.string().min(1) });

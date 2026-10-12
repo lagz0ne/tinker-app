@@ -1,4 +1,5 @@
 import { integer, jsonb, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
+
 import type { Sync } from "./envelopes";
 
 /**

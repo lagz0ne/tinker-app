@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { incrementCounter } from "../backend/index.server";
-import { readExecution } from "../contracts/sync";
 import { startRequests } from "@tinker/start";
+
+import { incrementCounter } from "@/backend/index.server";
+import { readExecution } from "@/contracts/sync";
+
 import { readReceipt } from "./result.server";
 
 export const updateCounter = createServerFn({ method: "POST" })

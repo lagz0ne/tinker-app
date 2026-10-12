@@ -1,8 +1,10 @@
 import { resource } from "@tinker/core";
+
 import { database } from "#tinker/app.server";
+
 import { raise } from "../../errors";
-import type { Stream } from "./protocol";
 import { accountOfNotice } from "./notice";
+import type { Stream } from "./protocol";
 
 const wheelStopped = Symbol("sync.wheelStopped");
 

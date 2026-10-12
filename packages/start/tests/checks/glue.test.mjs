@@ -1,6 +1,8 @@
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
+
 import { breaksBuild, glue } from "../../lib/checks/glue.mjs";
 import { runCheck } from "../../lib/doctor.mjs";
 import { fixture, goodApp } from "../fixture.mjs";

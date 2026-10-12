@@ -1,5 +1,7 @@
 import { resource } from "@tinker/core";
+
 import { readSnapshot } from "#tinker/app";
+
 import type { SyncPart } from "../part";
 import { checkAccount, loadSnapshot, syncStreaming } from "./events";
 import { tabLifetime } from "./owner";

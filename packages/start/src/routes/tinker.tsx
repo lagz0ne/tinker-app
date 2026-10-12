@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { version } from "../../package.json";
 
 export const Route = createFileRoute("/tinker")({

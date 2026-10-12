@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+
 import { app, registryItems } from "./registry-source.mjs";
 
 const out = resolve(process.env.TINKER_REGISTRY_OUT ?? join(app, "public/r"));

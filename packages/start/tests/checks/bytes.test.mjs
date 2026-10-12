@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
+
 import { expect, test } from "vite-plus/test";
+
 import { bytes } from "../../lib/checks/bytes.mjs";
 import { runCheck } from "../../lib/doctor.mjs";
 import { baseDir, basePackage } from "../../lib/paths.mjs";

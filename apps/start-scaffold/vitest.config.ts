@@ -1,5 +1,6 @@
-import { defineConfig } from "vite-plus";
 import { fileURLToPath } from "node:url";
+
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   resolve: {

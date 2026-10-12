@@ -1,13 +1,15 @@
-import { drizzleOrm } from "@tinker/start/server";
-import { todo } from "./todos.schema.server";
 import { operation } from "@tinker/core";
-import { database } from "./database.server";
-import { currentUser } from "./auth.server";
-import { readTodoCommand } from "../contracts/commands";
+import { drizzleOrm } from "@tinker/start/server";
 import { eventHistory, execution } from "@tinker/start/server";
-import type { Todos } from "../contracts/todos";
-import type { Sync } from "../contracts/sync";
-import { raise } from "../errors";
+
+import { readTodoCommand } from "@/contracts/commands";
+import type { Sync } from "@/contracts/sync";
+import type { Todos } from "@/contracts/todos";
+import { raise } from "@/errors";
+
+import { currentUser } from "./auth.server";
+import { database } from "./database.server";
+import { todo } from "./todos.schema.server";
 
 export const listTodos = operation({
   label: "listTodos",

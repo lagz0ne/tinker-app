@@ -1,6 +1,8 @@
 import { resource } from "@tinker/core";
+
+import type { Sync } from "@/contracts/sync";
+
 import { profile, todos, counter, nameDraft, profileResult } from "./state";
-import type { Sync } from "../contracts/sync";
 
 /** Saved records have one publisher; drafts belong to the local editor. */
 export const records = resource({

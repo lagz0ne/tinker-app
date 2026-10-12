@@ -1,4 +1,3 @@
-import { copyProofApp, proofEnv } from "./proof-app.mjs";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
@@ -7,6 +6,8 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setImmediate } from "node:timers/promises";
+
+import { copyProofApp, proofEnv } from "./proof-app.mjs";
 
 async function fetchWhenListening(url, server) {
   const deadline = AbortSignal.timeout(30000);

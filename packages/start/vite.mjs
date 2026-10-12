@@ -2,17 +2,19 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
+
+import { clientOutput, serverOutput } from "./lib/build-output.mjs";
 import { say as routeSay } from "./lib/checks/routes.mjs";
+import { buildChecks } from "./lib/doctor.mjs";
 import { loadEnv } from "./lib/env.mjs";
 import { aliases, passThrough, startOptions } from "./lib/glue.mjs";
-import { buildChecks } from "./lib/doctor.mjs";
-import { partNotes, partsOn } from "./lib/parts.mjs";
 import { recordViolation, restartNote, startViolations } from "./lib/hooks.mjs";
-import { checkTypes } from "./lib/typecheck.mjs";
-import { clientOutput, serverOutput } from "./lib/build-output.mjs";
+import { partNotes, partsOn } from "./lib/parts.mjs";
 import { prepare } from "./lib/prepare.mjs";
+import { checkTypes } from "./lib/typecheck.mjs";
 
 /** @param {string} root - From tinker(); why: the app's paths, address, and tsconfig. */
 function glueConfig(root) {

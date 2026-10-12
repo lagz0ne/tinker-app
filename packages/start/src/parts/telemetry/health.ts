@@ -1,4 +1,5 @@
 import { data } from "@tinker/core";
+
 import type { Telemetry } from "./records";
 
 /** What the telemetry queue holds, sends, and dropped; the queue alone writes it. */

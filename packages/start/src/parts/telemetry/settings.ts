@@ -1,6 +1,8 @@
 import { resource, tag } from "@tinker/core";
-import { readPartEnv } from "../../../lib/part-env.mjs";
+
 import { telemetryEnv } from "#tinker/telemetry-env";
+
+import { readPartEnv } from "../../../lib/part-env.mjs";
 import { env } from "../../env";
 import { raise } from "../../errors";
 import type { Telemetry } from "./records";

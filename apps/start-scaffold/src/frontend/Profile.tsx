@@ -1,13 +1,15 @@
 import { Link, Navigate } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
-import type { Profile } from "../contracts/profile";
-import { profile, nameDraft, pending, notice, profileResult } from "./state";
+
+import type { Profile } from "@/contracts/profile";
+
 import { signOut } from "./auth-actions";
-import { saveName, editName, retryMail } from "./profile-actions";
 import { errorText } from "./error-text";
+import { saveName, editName, retryMail } from "./profile-actions";
+import { profile, nameDraft, pending, notice, profileResult } from "./state";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";
+import { Input } from "./ui/input";
 
 function ProfileForm({ value }: { value: Profile.Value }) {
   const draft = useData(nameDraft);

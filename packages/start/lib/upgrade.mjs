@@ -9,9 +9,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
+
 import { bytes } from "./checks/bytes.mjs";
-import { releaseDependencies, releaseUrls } from "./release.mjs";
 import { installedBase, installedVersion, readJson } from "./paths.mjs";
+import { releaseDependencies, releaseUrls } from "./release.mjs";
 
 /** @param {string} root - From upgrade; why: pick the package manager its lockfile names. */
 export function installCommand(root) {

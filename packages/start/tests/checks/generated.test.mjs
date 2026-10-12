@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
+
 import { generated, generatorBlocked, staleTree } from "../../lib/checks/generated.mjs";
 import { runCheck } from "../../lib/doctor.mjs";
 import { basePackage } from "../../lib/paths.mjs";

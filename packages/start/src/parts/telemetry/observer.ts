@@ -1,8 +1,9 @@
 import { extension, LEVELS, operation, resource } from "@tinker/core";
 import type { Observe } from "@tinker/core";
+
+import { queue } from "./queue";
 import { encodeValue } from "./records";
 import type { Telemetry } from "./records";
-import { queue } from "./queue";
 import { telemetrySettings } from "./settings";
 
 /**

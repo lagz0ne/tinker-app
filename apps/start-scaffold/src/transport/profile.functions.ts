@@ -1,9 +1,11 @@
-import { readRetry } from "../contracts/sync";
 import { createServerFn } from "@tanstack/react-start";
-import { readProfileCommand } from "../contracts/commands";
-import { readProfile, saveProfile, retryNotification } from "../backend/index.server";
 import { startRequests } from "@tinker/start";
 import { readResult } from "@tinker/start/server";
+
+import { readProfile, saveProfile, retryNotification } from "@/backend/index.server";
+import { readProfileCommand } from "@/contracts/commands";
+import { readRetry } from "@/contracts/sync";
+
 import { readReceipt } from "./result.server";
 
 export const getProfile = createServerFn({ method: "GET" })

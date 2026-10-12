@@ -1,5 +1,5 @@
-import type { PluginOption } from "vite-plus";
 import type { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import type { PluginOption } from "vite-plus";
 
 type StartOptions = NonNullable<Parameters<typeof tanstackStart>[0]>;
 

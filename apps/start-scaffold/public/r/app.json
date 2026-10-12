@@ -15,7 +15,7 @@
       "path": "../start-min/vite.config.ts",
       "type": "registry:file",
       "target": "~/vite.config.ts",
-      "content": "import { defineConfig } from \"vite-plus\";\nimport { tinker } from \"@tinker/start/vite\";\n\nexport default defineConfig({\n  plugins: [tinker()],\n});\n"
+      "content": "import { tinker } from \"@tinker/start/vite\";\nimport { defineConfig } from \"vite-plus\";\n\nexport default defineConfig({\n  plugins: [tinker()],\n});\n"
     },
     {
       "path": "../start-min/tsconfig.json",
@@ -33,13 +33,13 @@
       "path": "../start-min/src/transport/greet.functions.ts",
       "type": "registry:file",
       "target": "~/src/transport/greet.functions.ts",
-      "content": "import { createServerFn } from \"@tanstack/react-start\";\nimport { startRequests } from \"@tinker/start\";\nimport { readResult } from \"@tinker/start/server\";\nimport { greet } from \"../backend/greet\";\n\nexport const runGreet = createServerFn({ method: \"GET\" })\n  .middleware([startRequests.middleware])\n  .handler(async ({ context }) =>\n    readResult(\n      await context.session.settle(greet, {\n        input: { name: \"world\" },\n        signal: context.signal,\n      }),\n    ),\n  );\n"
+      "content": "import { createServerFn } from \"@tanstack/react-start\";\nimport { startRequests } from \"@tinker/start\";\nimport { readResult } from \"@tinker/start/server\";\n\nimport { greet } from \"@/backend/greet\";\n\nexport const runGreet = createServerFn({ method: \"GET\" })\n  .middleware([startRequests.middleware])\n  .handler(async ({ context }) =>\n    readResult(\n      await context.session.settle(greet, {\n        input: { name: \"world\" },\n        signal: context.signal,\n      }),\n    ),\n  );\n"
     },
     {
       "path": "../start-min/src/routes/index.tsx",
       "type": "registry:file",
       "target": "~/src/routes/index.tsx",
-      "content": "import { createFileRoute } from \"@tanstack/react-router\";\nimport { runGreet } from \"../transport/greet.functions\";\n\nexport const Route = createFileRoute(\"/\")({\n  loader: () => runGreet(),\n  component: () => <p>{Route.useLoaderData().text}</p>,\n});\n"
+      "content": "import { createFileRoute } from \"@tanstack/react-router\";\n\nimport { runGreet } from \"@/transport/greet.functions\";\n\nexport const Route = createFileRoute(\"/\")({\n  loader: () => runGreet(),\n  component: () => <p>{Route.useLoaderData().text}</p>,\n});\n"
     },
     {
       "path": "templates/tinker.ts.txt",

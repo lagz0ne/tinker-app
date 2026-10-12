@@ -1,11 +1,12 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+
 import { appFiles, ignoredFiles } from "../named.mjs";
 import { parts, recordedParts } from "../parts.mjs";
 import { listFiles } from "../paths.mjs";
 import { augmentations, mayExport, parseSource } from "../source.mjs";
-import { verdict } from "./result.mjs";
 import { examples } from "./examples.mjs";
+import { verdict } from "./result.mjs";
 
 export const say = {
   export: (file, name) => `${file}:1 does not export ${name}; the base imports it from this file`,

@@ -1,12 +1,14 @@
 import { operation, resource } from "@tinker/core";
-import { database } from "./database.server";
-import { authMail } from "./mail.server";
 import { accountNotice, authSettings, drizzleOrm, requestHeaders } from "@tinker/start/server";
 
+import { database } from "./database.server";
+import { authMail } from "./mail.server";
+
 export { authSettings } from "@tinker/start/server";
-import { raise } from "../errors";
-import * as schema from "./schema.server";
+import { raise } from "@/errors";
+
 import { betterAuthModule, betterAuthDrizzle, betterAuthStart } from "./modules";
+import * as schema from "./schema.server";
 
 /**
  * The root tracks each mail action; auth callbacks return before delivery.

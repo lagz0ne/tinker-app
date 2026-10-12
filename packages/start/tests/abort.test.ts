@@ -1,6 +1,6 @@
 import { createScope } from "@tinker/core";
-import { expect, test } from "vite-plus/test";
 import { abortReasons, accountOwner, tabStop } from "@tinker/start/testing";
+import { expect, test } from "vite-plus/test";
 
 test("closing the tab owner uses the shared abort reason", async () => {
   const root = createScope({

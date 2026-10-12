@@ -1,10 +1,11 @@
-import { abortReasons } from "../../errors";
 import { resource } from "@tinker/core";
-import type { Telemetry } from "./records";
-import { delivery } from "./delivery";
-import { telemetrySettings } from "./settings";
-import { exportHealth } from "./health";
+
+import { abortReasons } from "../../errors";
 import { consoleOutput } from "./console";
+import { delivery } from "./delivery";
+import { exportHealth } from "./health";
+import type { Telemetry } from "./records";
+import { telemetrySettings } from "./settings";
 
 /** One encoder for every record size; sizes are taken once, at ingest. */
 const encoder = new TextEncoder();

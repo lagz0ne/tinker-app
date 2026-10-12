@@ -1,7 +1,7 @@
-import { expect, test } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
 import { drizzleOrm } from "@tinker/start/server";
 import * as drizzle from "drizzle-orm";
+import { expect, test } from "vite-plus/test";
 
 const readOrm = operation({
   label: "test.readOrm",

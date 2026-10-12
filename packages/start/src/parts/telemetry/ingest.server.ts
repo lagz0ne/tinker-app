@@ -1,12 +1,13 @@
 import type { Scope } from "@tinker/core";
 import { operation, resource, tag } from "@tinker/core";
+
 import { backendStop, requestStop } from "../../backend/lifetime";
 import { requestBody } from "../../backend/request-body.server";
 import { readResult } from "../../backend/result.server";
 import { raise } from "../../errors";
 import { ingestTelemetry } from "./observer";
-import { telemetryBatch } from "./records.server";
 import type { Telemetry } from "./records";
+import { telemetryBatch } from "./records.server";
 import { telemetrySettings } from "./settings";
 
 /** Borrowed from the telemetry root. Requests neither create nor close that owner. */

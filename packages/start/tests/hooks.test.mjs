@@ -1,6 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
+
 import { recordViolation, restartNote, startViolations } from "../lib/hooks.mjs";
 import { prepare } from "../lib/prepare.mjs";
 import { goodApp } from "./fixture.mjs";

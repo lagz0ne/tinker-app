@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { listFiles, readJson } from "../paths.mjs";
+import { dirname, join, resolve } from "node:path";
+
 import { recordedParts } from "../parts.mjs";
+import { listFiles, readJson } from "../paths.mjs";
 import { importsFrom, mayExport, parseSource } from "../source.mjs";
 import { verdict } from "./result.mjs";
 
@@ -15,14 +16,34 @@ export const say = {
 };
 
 /**
+ * The file a module path names, so `@/x` and `../x` from the same seam compare equal (ADR 0112).
+ * @param {string} root - From examples; why: `@/` is the app's `src/`.
+ * @param {string} path - From hasSetup; why: a relative path starts at the seam file.
+ * @param {string} name - From the seam or the receipt; why: the module path to place.
+ */
+function placeOf(root, path, name) {
+  if (name.startsWith("@/")) return join(root, "src", name.slice(2));
+  if (name.startsWith(".")) return resolve(dirname(path), name);
+  return name;
+}
+
+/**
  * An example's startup extension may be re-exported, or joined to the user's own list.
+ * @param {string} root - From examples; why: places `@/` module paths.
  * @param {string} path - From the seam check; why: the user's existing seam stays theirs.
  * @param {object} needed - From the copied item metadata; why: the extension and its module.
  */
-function hasSetup(path, needed) {
+function hasSetup(root, path, needed) {
   const source = parseSource(path);
+  const names = source.program.body.flatMap((node) => node.source?.value ?? []);
+  const named = (module) => {
+    const place = placeOf(root, path, module);
+    return names.filter((name) => placeOf(root, path, name) === place);
+  };
+
+  const fromDemo = named(needed.from);
   const reexport = source.program.body.some((node) => {
-    if (node.source?.value !== needed.from) return false;
+    if (!fromDemo.includes(node.source?.value)) return false;
     if (node.type === "ExportAllDeclaration") return !node.exported;
     return (
       node.type === "ExportNamedDeclaration" &&
@@ -32,10 +53,13 @@ function hasSetup(path, needed) {
     );
   });
   if (reexport) return true;
-  const names = [
-    ...importsFrom(source, needed.from).filter((item) => item.imported === "extensions"),
-    ...importsFrom(source, needed.include.from).filter(
-      (item) => item.imported === needed.include.name,
+
+  const locals = [
+    ...fromDemo.flatMap((module) =>
+      importsFrom(source, module).filter((item) => item.imported === "extensions"),
+    ),
+    ...named(needed.include.from).flatMap((module) =>
+      importsFrom(source, module).filter((item) => item.imported === needed.include.name),
     ),
   ].map((item) => item.local);
   return source.program.body.some((node) => {
@@ -47,7 +71,7 @@ function hasSetup(path, needed) {
           item.id.name === "extensions" &&
           item.init?.type === "ArrayExpression" &&
           item.init.elements.some((element) =>
-            names.includes(element?.name ?? element?.argument?.name),
+            locals.includes(element?.name ?? element?.argument?.name),
           ),
       )
     );
@@ -73,7 +97,7 @@ export function examples(root) {
           if (!existsSync(path) || !mayExport(path, name)) {
             return [say.seam(item.name, file, name, needed.line)];
           }
-          if (needed.include && !hasSetup(path, needed)) {
+          if (needed.include && !hasSetup(root, path, needed)) {
             return [say.setup(item.name, file, needed.include.name, needed.line)];
           }
           return [];

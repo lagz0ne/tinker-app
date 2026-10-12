@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 /** Run the app-owned Postgres, Mailpit, better-auth, and two-tab proof; it owns all cleanup. */
 const repo = resolve(import.meta.dirname, "../../..");

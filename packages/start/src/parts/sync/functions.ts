@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { resource } from "@tinker/core";
 import { setResponseHeader } from "@tanstack/react-start/server";
+import { resource } from "@tinker/core";
+
 import { bootstrap, readAccount } from "#tinker/app.server";
+
 import { readResult } from "../../backend/result.server";
 import { startRequests } from "../../start";
 import type { Sync } from "./envelopes";

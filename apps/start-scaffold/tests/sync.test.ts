@@ -1,27 +1,25 @@
-import { env } from "@tinker/start/server";
-import { handleAuth } from "@tinker-start-scaffold/testing";
-import { test, expect, onTestFinished } from "vite-plus/test";
 import { createScope } from "@tinker/core";
-import { sql } from "drizzle-orm";
 import { preset } from "@tinker/core/testing";
-import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
+import { env } from "@tinker/start/server";
+import { sql } from "drizzle-orm";
+import { test, expect, onTestFinished } from "vite-plus/test";
+
+import { incrementCounter } from "@/backend/counter.server";
+import { migrate, database } from "@/backend/database.server";
+import { mail } from "@/backend/mail.server";
+import type { Mail } from "@/backend/mail.server";
+import { readProfile, saveProfile, retryNotification } from "@/backend/profile.server";
 import {
-  migrate,
-  database,
-  readProfile,
-  saveProfile,
-  retryNotification,
   bootstrapPublic,
   bootstrapPrivate,
   replayPublic,
   replayPrivate,
-  incrementCounter,
-  mail,
-  raise,
-  isError,
-} from "@tinker-start-scaffold/backend";
-import type { Mail } from "@tinker-start-scaffold/backend";
-import { readReceipt } from "../src/transport/result.server";
+} from "@/backend/sync.server";
+import { raise, isError } from "@/errors";
+import { readReceipt } from "@/transport/result.server";
+
+import { handleAuth } from "./presets";
+import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const tags = env({
   DATABASE_URL: "postgres://proof",

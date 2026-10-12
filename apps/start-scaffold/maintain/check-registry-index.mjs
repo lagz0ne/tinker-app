@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+
 import { app, registryItems } from "./registry-source.mjs";
 
 /** The fast half of test:registry: each built item and the index must match source. No build runs here. */

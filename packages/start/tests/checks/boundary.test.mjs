@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+
 import { boundary } from "../../lib/checks/boundary.mjs";
 import { fixture } from "../fixture.mjs";
 

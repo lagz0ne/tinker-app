@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { prepare, render } from "../prepare.mjs";
+
 import {
   baseDir,
   basePackage,
@@ -11,10 +11,11 @@ import {
   readJson,
   readText,
 } from "../paths.mjs";
+import { prepare, render } from "../prepare.mjs";
 import { isRouteFile, routeClash } from "../route-path.mjs";
-import { ownedPaths, routes } from "./routes.mjs";
 import { mayExport } from "../source.mjs";
 import { fail, verdict } from "./result.mjs";
+import { ownedPaths, routes } from "./routes.mjs";
 
 export const say = {
   otherBase: (running, resolved) =>

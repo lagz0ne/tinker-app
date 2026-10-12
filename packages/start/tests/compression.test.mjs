@@ -1,6 +1,8 @@
-import { brotliDecompressSync, gunzipSync, createBrotliDecompress, createGunzip } from "node:zlib";
 import { Readable } from "node:stream";
+import { brotliDecompressSync, gunzipSync, createBrotliDecompress, createGunzip } from "node:zlib";
+
 import { expect, test } from "vite-plus/test";
+
 import { compressResponse, readEncoding } from "../lib/compression.mjs";
 
 /** A streamed HTML body with a length that must be removed after compression. */

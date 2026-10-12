@@ -3,15 +3,17 @@ import { makeTestClock, preset } from "@tinker/core/testing";
 import { sql } from "drizzle-orm";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
+
 import { auth, database, signedIn, syncTemplate } from "#tinker/app.server";
+
 import { requestHeaders } from "../src/backend/headers.server";
 import { backendStop, requestStop } from "../src/backend/lifetime";
+import { syncEndpoint } from "../src/parts/sync/endpoint.server";
 import { eventHistory } from "../src/parts/sync/history.server";
-import { notifications } from "../src/parts/sync/notifications.server";
 import { accountNotice } from "../src/parts/sync/notice";
+import { notifications } from "../src/parts/sync/notifications.server";
 import { execution } from "../src/parts/sync/schema";
 import { eventStream, openSync } from "../src/parts/sync/stream.server";
-import { syncEndpoint } from "../src/parts/sync/endpoint.server";
 
 const ids = [
   "00000000-0000-4000-8000-000000000001",

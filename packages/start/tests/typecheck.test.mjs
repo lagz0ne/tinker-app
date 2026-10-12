@@ -1,9 +1,11 @@
 import { mkdirSync, symlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
-import { checkTypes, typeErrors } from "../lib/typecheck.mjs";
+
 import { prepare } from "../lib/prepare.mjs";
+import { checkTypes, typeErrors } from "../lib/typecheck.mjs";
 import { fixture, write } from "./fixture.mjs";
 
 test("tsc's errors read as file:line:col, and detail lines drop", () => {

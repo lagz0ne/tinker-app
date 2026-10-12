@@ -1,10 +1,11 @@
-import { copyProofApp, proofEnv } from "./proof-app.mjs";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { spawnSync } from "node:child_process";
-import assert from "node:assert/strict";
+
+import { copyProofApp, proofEnv } from "./proof-app.mjs";
 
 if (import.meta.main) {
   const source = resolve(import.meta.dirname, "..");
@@ -97,7 +98,7 @@ export const startInstance = createStart(() => ({requestMiddleware: [proofReques
       join(proof, "src/routes/proof.write.ts"),
       `
 import { createFileRoute } from "@tanstack/react-router";
-import { incrementCounter } from "../backend/index.server";
+import { incrementCounter } from "../backend/counter.server";
 import { startRequests } from "@tinker/start";
 import { readResult } from "@tinker/start/server";
 export const Route = createFileRoute("/proof/write")({server: {

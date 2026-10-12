@@ -1,7 +1,8 @@
 import { expect, test } from "vite-plus/test";
+
+import { registryItems } from "../../../../apps/start-scaffold/maintain/registry-source.mjs";
 import { examples } from "../../lib/checks/examples.mjs";
 import { named } from "../../lib/checks/named.mjs";
-import { registryItems } from "../../../../apps/start-scaffold/maintain/registry-source.mjs";
 import { goodApp, write } from "../fixture.mjs";
 
 const receipt = JSON.stringify({
@@ -68,6 +69,16 @@ test("a user can join database startup to an existing extension list under an im
   expect(examples(root).status).toBe("ok");
 });
 
+test("an @/ import of the database startup counts as the receipt's relative path", () => {
+  const root = goodApp({
+    "src/examples/demo.tinker.json": receipt,
+    ".tinker/base.json": JSON.stringify({ parts: ["auth", "sync"] }),
+    "src/lib/tinker.server.ts":
+      'import { databaseSetup } from "@/backend/database"; export const auth = 1; export const extensions = [databaseSetup];',
+  });
+  expect(examples(root).status).toBe("ok");
+});
+
 test("a missing export in an existing seam gets the item's exact export line", () => {
   const root = goodApp({
     "src/examples/demo.tinker.json": receipt,
@@ -112,10 +123,10 @@ test("doctor builds todos suggestions with no TypeScript module endings", async 
   const lines = examples(root).lines;
 
   expect(lines).toContain(
-    'todos-example: src/lib/tinker.server.ts:1 needs database; add export { database } from "../backend/database";',
+    'todos-example: src/lib/tinker.server.ts:1 needs database; add export { database } from "@/backend/index.server";',
   );
   expect(lines).toContain(
-    'todos-example: src/lib/tinker.server.ts:1 needs databaseSetup in extensions; keep your extensions and add it, or use export { extensions } from "../examples/demo.server";',
+    'todos-example: src/lib/tinker.server.ts:1 needs databaseSetup in extensions; keep your extensions and add it, or use export { extensions } from "@/examples/demo.server";',
   );
   expect(lines.join("\n")).not.toMatch(/\.(ts|tsx|mts)["']/);
 });

@@ -132,15 +132,12 @@ function moduleContent(file, text) {
     : text;
 }
 
-/** Copied tests refer to the consumer's files, whatever name their package has. */
+/** Package files come from their template; tests are copied as they are. */
 async function fileContent(file, packages) {
   if (packages[file.path]) return JSON.stringify(packages[file.path], null, 2) + "\n";
+
   const text = await readFile(join(app, file.path), "utf8");
-  if (!file.path.startsWith("tests/")) return moduleContent(file, text);
-  return text
-    .replaceAll('"@tinker-start-scaffold/backend"', '"../src/backend/index.server"')
-    .replaceAll('"@tinker-start-scaffold/frontend"', '"../src/frontend/index"')
-    .replaceAll('"@tinker-start-scaffold/testing"', '"./presets"');
+  return file.path.startsWith("tests/") ? text : moduleContent(file, text);
 }
 
 /** Each item reads the app's source; targets keep shadcn inside the consumer's folder. */

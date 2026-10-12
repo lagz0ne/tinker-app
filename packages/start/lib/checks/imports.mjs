@@ -1,5 +1,6 @@
 import { readdirSync } from "node:fs";
 import { join, dirname, resolve, sep, isAbsolute } from "node:path";
+
 import { installedBase, listFiles } from "../paths.mjs";
 import { parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";

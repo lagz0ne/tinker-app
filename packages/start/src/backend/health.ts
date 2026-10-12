@@ -1,4 +1,5 @@
 import { operation } from "@tinker/core";
+
 import { version } from "../../package.json";
 
 /** The base's own probe: the protocol layer turns its value into the health reply. */

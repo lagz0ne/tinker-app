@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
+
 import { installedBase, listFiles, readJson, sha256 } from "../paths.mjs";
 import { fail, skip, verdict } from "./result.mjs";
 

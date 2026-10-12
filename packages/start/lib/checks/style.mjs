@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { shellFile } from "../named.mjs";
+
 import { lineOfKey, readJsonc } from "../jsonc.mjs";
+import { shellFile } from "../named.mjs";
 import { installedVersion, lineAt, listFiles, readText } from "../paths.mjs";
 import { parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";

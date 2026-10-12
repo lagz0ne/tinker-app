@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
+
 import { build } from "vite-plus";
 import { expect, test } from "vite-plus/test";
+
 import { clientOutput, serverOutput } from "../lib/build-output.mjs";
 import { fixture } from "./fixture.mjs";
 

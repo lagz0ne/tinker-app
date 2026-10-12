@@ -1,7 +1,6 @@
 import { createScope } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
-import { expect, test } from "vite-plus/test";
-import { applied, streamMessage } from "#tinker/app";
+import type { Sync } from "@tinker/start";
 import {
   checkAccount,
   loadSnapshot,
@@ -24,7 +23,9 @@ import {
   offSync as off,
   onSync as on,
 } from "@tinker/start/testing";
-import type { Sync } from "@tinker/start";
+import { expect, test } from "vite-plus/test";
+
+import { applied, streamMessage } from "#tinker/app";
 
 const id = "00000000-0000-4000-8000-000000000001";
 

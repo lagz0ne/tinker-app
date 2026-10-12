@@ -3,7 +3,9 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+
 import { onTestFinished } from "vite-plus/test";
+
 import { baseDir, basePackage } from "../lib/paths.mjs";
 
 /**

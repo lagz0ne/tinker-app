@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { readResult } from "../backend/result.server";
 import { handleAuth } from "../parts/auth/handle.server";
 import { startRequests } from "../start";

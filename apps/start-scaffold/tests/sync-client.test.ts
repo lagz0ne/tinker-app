@@ -1,9 +1,10 @@
-import { profile, counter, nameDraft } from "@tinker-start-scaffold/frontend";
-import { test, expect } from "vite-plus/test";
 import { createScope, operation } from "@tinker/core";
+import type { Sync } from "@tinker/start";
 import { syncClient, applyBootstrap, applyEvents, leaveAccount } from "@tinker/start/client";
 import { accountOwner, tabStop } from "@tinker/start/testing";
-import type { Sync } from "@tinker/start";
+import { test, expect } from "vite-plus/test";
+
+import { profile, counter, nameDraft } from "@/frontend/state";
 
 const ada = { id: "ada", name: "Ada", email: "ada@example.com", emailVerified: false };
 

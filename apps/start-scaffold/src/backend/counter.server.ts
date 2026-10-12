@@ -1,10 +1,12 @@
-import { drizzleOrm } from "@tinker/start/server";
-import { counter } from "./sync.schema.server";
 import { operation } from "@tinker/core";
-import { database } from "./database.server";
+import { drizzleOrm } from "@tinker/start/server";
 import { eventHistory, execution } from "@tinker/start/server";
-import { readExecution } from "../contracts/sync";
-import { raise } from "../errors";
+
+import { readExecution } from "@/contracts/sync";
+import { raise } from "@/errors";
+
+import { database } from "./database.server";
+import { counter } from "./sync.schema.server";
 
 export const incrementCounter = operation({
   label: "incrementCounter",

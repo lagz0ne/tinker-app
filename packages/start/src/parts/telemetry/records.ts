@@ -1,5 +1,6 @@
 import type { Many, Observe, Resource, Scope, Tag } from "@tinker/core";
 import type { z } from "zod";
+
 import type { span, logRecord, telemetryBatch } from "./records.server";
 
 export declare namespace Telemetry {

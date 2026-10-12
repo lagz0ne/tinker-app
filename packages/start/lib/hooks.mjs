@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+
 import { appFiles, shellFile } from "./named.mjs";
 
 /** @param {string} root - From a violation hook; why: the app's generated folder. */

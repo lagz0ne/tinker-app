@@ -1,10 +1,14 @@
+import { createScope } from "@tinker/core";
 import { backendStop, env, requestStop } from "@tinker/start/server";
 import { openSync } from "@tinker/start/testing";
-import { handleAuth } from "@tinker-start-scaffold/testing";
-import { proofDatabase, proofMail, requestHeaders } from "@tinker-start-scaffold/testing";
 import { test, expect } from "vite-plus/test";
-import { createScope } from "@tinker/core";
-import { auth, migrate, saveProfile } from "@tinker-start-scaffold/backend";
+
+import { auth } from "@/backend/auth.server";
+import { migrate } from "@/backend/database.server";
+import { saveProfile } from "@/backend/profile.server";
+
+import { handleAuth } from "./presets";
+import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const tags = env({
   DATABASE_URL: "postgres://proof",

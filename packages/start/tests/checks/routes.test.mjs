@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+
 import { routes } from "../../lib/checks/routes.mjs";
 import { fixture, goodApp } from "../fixture.mjs";
 

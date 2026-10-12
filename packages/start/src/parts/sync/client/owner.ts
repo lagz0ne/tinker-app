@@ -1,5 +1,6 @@
-import { abortReasons } from "../../../errors";
 import { extension, resource } from "@tinker/core";
+
+import { abortReasons } from "../../../errors";
 import { pageEvents, tabStop } from "./tab";
 
 /** Listens while the factory runs; `bind` only names what to close on a real page hide. */
