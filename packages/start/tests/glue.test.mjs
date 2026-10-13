@@ -40,7 +40,7 @@ test("an alias points at the app's named file, else at the base default, and kee
     join(root, "src/start.ts"),
     join(baseDir, "src/defaults/server.ts"),
     `${join(root, "src/style.css")}?url`,
-    join(baseDir, "src/defaults/app.server.ts"),
+    join(root, ".tinker/app.server.ts"),
     join(root, ".tinker/routeTree.gen.ts"),
     join(root, ".tinker/parts.ts"),
     join(root, ".tinker/parts.server.ts"),

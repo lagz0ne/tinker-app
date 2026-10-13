@@ -18,7 +18,7 @@ export function aliases(root) {
     { find: /^@\//, replacement: `${join(root, "src")}/` },
     ...appFiles.map((entry) => ({
       find: new RegExp(`^${entry.alias.replaceAll(".", "\\.")}(\\?.*)?$`),
-      replacement: `${pick(root, baseDir, entry)}$1`,
+      replacement: `${entry.alias.startsWith("#tinker/app") ? join(root, `.tinker/app${entry.alias.endsWith(".server") ? ".server" : ""}.ts`) : pick(root, baseDir, entry)}$1`,
     })),
     { find: /^#tinker\/routes$/, replacement: join(root, ".tinker/routeTree.gen.ts") },
     { find: /^#tinker\/parts$/, replacement: join(root, ".tinker/parts.ts") },

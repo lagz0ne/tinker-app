@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+import { joinProblems } from "../joins.mjs";
 import {
   baseDir,
   basePackage,
@@ -191,6 +192,9 @@ function folderProblems(root) {
  * config, and runs only while check 7 passes (see fixTree).
  */
 export function generated(root) {
+  const joins = joinProblems(root);
+  if (joins.length > 0) return fail(joins);
+
   const other = otherBase(root);
   if (other) return fail([other]);
   const missing = unignored(root);

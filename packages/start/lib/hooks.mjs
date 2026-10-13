@@ -50,5 +50,8 @@ export function recordViolation(root, found, info) {
  */
 export function restartNote(root, path, verb) {
   const picked = [shellFile, ...appFiles.map(({ file }) => file)].map((file) => join(root, file));
-  return picked.includes(path) ? `tinker: ${relative(root, path)} ${verb}; restarting` : null;
+  const isJoin = /^src\/joins\/[^/]+\.join(?:\.server)?\.ts$/.test(relative(root, path));
+  return picked.includes(path) || isJoin
+    ? `tinker: ${relative(root, path)} ${verb}; restarting`
+    : null;
 }

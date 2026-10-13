@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { appFile } from "./joins.mjs";
 import { appFiles, pick } from "./named.mjs";
 import { partNotes, parts, recordedParts } from "./parts.mjs";
 import { baseDir, basePackage, installedBase } from "./paths.mjs";
@@ -61,6 +62,8 @@ export function render(root, on = recordedParts(root)) {
   const paths = {
     "@/*": [`${join(root, "src")}/*`],
     ...Object.fromEntries(appFiles.map((entry) => [entry.alias, [pick(root, base, entry)]])),
+    "#tinker/app": [join(root, ".tinker/app.ts")],
+    "#tinker/app.server": [join(root, ".tinker/app.server.ts")],
     "#tinker/routes": [join(root, ".tinker/routeTree.gen.ts")],
     "#tinker/parts": [join(root, ".tinker/parts.ts")],
     "#tinker/parts.server": [join(root, ".tinker/parts.server.ts")],
@@ -75,10 +78,14 @@ export function render(root, on = recordedParts(root)) {
         "../vite.config.ts",
         "../vite.config.mts",
         "./routeTree.gen.ts",
+        "./app.ts",
+        "./app.server.ts",
       ],
       exclude: ["../dist", "../node_modules"],
     }),
     "base.json": json({ base: basePackage.version, parts: on }),
+    "app.ts": appFile(root, base, "client"),
+    "app.server.ts": appFile(root, base, "server"),
     "parts.ts": partsFile(base, on, "router"),
     "parts.server.ts": partsFile(base, on, "server"),
     "telemetry-env.ts": `export const telemetryEnv = ${JSON.stringify(basePackage.tinker.parts.telemetry.env)};\n`,

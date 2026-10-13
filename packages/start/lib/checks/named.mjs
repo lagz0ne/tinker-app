@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+import { joinProblems, seamExports } from "../joins.mjs";
 import { appFiles, ignoredFiles } from "../named.mjs";
 import { parts, recordedParts } from "../parts.mjs";
 import { listFiles } from "../paths.mjs";
@@ -30,9 +31,11 @@ export const say = {
 function partProblems(root) {
   return recordedParts(root).flatMap((part) =>
     Object.entries(parts[part].reads ?? {}).flatMap(([file, names]) => {
-      if (!existsSync(join(root, file))) return [say.noSeam(file, part, names)];
+      if (!existsSync(join(root, file)) && names.every((name) => !seamExports(root, file, name))) {
+        return [say.noSeam(file, part, names)];
+      }
       return names
-        .filter((name) => !mayExport(join(root, file), name))
+        .filter((name) => !seamExports(root, file, name))
         .map((name) => say.partExport(file, name, part));
     }),
   );
@@ -79,6 +82,7 @@ export function named(root) {
     .map(({ file, hint }) => say.ignored(file, hint));
   return verdict(
     [
+      ...joinProblems(root),
       ...missing,
       ...partProblems(root),
       ...augmentProblems(root),
