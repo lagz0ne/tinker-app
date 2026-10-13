@@ -58,30 +58,36 @@ export const mailFrom = tag<string>({ label: "mail.from" });
 `,
   );
   write(
-    "src/joins/postgres.join.server.ts",
+    "src/items/10-postgres/database.server.ts",
+    'export { database as default } from "@/backend/database.server";\n',
+  );
+  write(
+    "src/items/10-postgres/settings.server.ts",
     `import type { Env } from "@tinker/start/server";
 import { databaseUrl } from "@/backend/database.server";
-export { database } from "@/backend/database.server";
-export const needs = [] as const;
-export function settings(env: Env.Values) {
+export default function settings(env: Env.Values) {
   return [databaseUrl(new URL(env.DATABASE_URL!))];
 }
 `,
   );
   write(
-    "src/joins/mail.join.server.ts",
+    "src/items/20-mail/extensions.server.ts",
     `import { extension } from "@tinker/core";
-import type { Env } from "@tinker/start/server";
 import { mailFrom, smtpUrl } from "@/backend/mail.server";
-export const needs = ["postgres"] as const;
-export const extensions = [extension({ label: "mail", hooks: {
+export default [extension({ label: "mail", hooks: {
   async start({ resolve, next }) {
     resolve(smtpUrl);
     resolve(mailFrom);
     await next();
   },
 } })];
-export function settings(env: Env.Values) {
+`,
+  );
+  write(
+    "src/items/20-mail/settings.server.ts",
+    `import type { Env } from "@tinker/start/server";
+import { mailFrom, smtpUrl } from "@/backend/mail.server";
+export default function settings(env: Env.Values) {
   return [smtpUrl(new URL(env.SMTP_URL!)), mailFrom(env.MAIL_FROM!)];
 }
 `,
@@ -117,23 +123,22 @@ try {
   const response = await built.default.fetch(new Request('http://proof/'));
   const body = await response.text();
   if (response.status !== 200 || !body.includes('postgres://proof/db | smtp://proof:25 | proof@example.test')) throw new Error(body);
-  console.log('PASS three join tags reach Start; mail extension starts');
+  console.log('PASS three item tags reach Start; mail extension starts');
 } finally { await built.close(); }
 `,
   ]);
 
-  write(
-    "src/joins/other.join.server.ts",
-    "export const needs = [] as const;\nexport const database = 42;\n",
-  );
+  write("src/items/30-other/database.server.ts", "export default 42;\n");
   const conflict = run(process.execPath, [cli, "prepare"], 1);
-  assert.ok(conflict.includes("src/joins/other.join.server.ts"));
-  assert.ok(conflict.includes("src/joins/postgres.join.server.ts"));
+  assert.ok(conflict.includes("src/items/30-other/database.server.ts"));
+  assert.ok(conflict.includes("src/items/10-postgres/database.server.ts"));
   const doctor = run(process.execPath, [cli, "doctor"], 1).replaceAll(/\s+/g, " ");
   assert.ok(
-    doctor.includes("src/joins/other.join.server.ts and src/joins/postgres.join.server.ts"),
+    doctor.includes(
+      "src/items/10-postgres/database.server.ts and src/items/30-other/database.server.ts",
+    ),
   );
-  console.log("PASS join fixture builds; doctor 0; duplicate owners fail prepare and doctor");
+  console.log("PASS item fixture builds; doctor 0; duplicate owners fail prepare and doctor");
 } finally {
   rmSync(root, { recursive: true, force: true });
 }

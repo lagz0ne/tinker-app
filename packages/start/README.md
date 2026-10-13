@@ -43,50 +43,63 @@ so a fresh clone gets `.tinker/`:
 `.tinker/` is the generated folder.
 It is gitignored, and nobody edits it.
 
-## Item joins
+## Item roles
 
-An item may add `src/joins/postgres.join.server.ts`
-and `src/joins/postgres.join.ts`.
-All seam exports are optional in a join.
-Each join exports `needs` as a literal list of item names.
+An item puts one default export in each role file it supplies.
+The file name is the role. Other files are the item's own code;
+prepare reads only file names, never the role's source.
+
+Use a numeric folder prefix, such as `src/items/10-postgres/`.
+Items run in numeric order; equal numbers use folder-name order.
+Core runs the first extension on the outside.
+The last binding for the same tag wins.
+Your own `src/lib/tinker` seam files come last and stay yours.
+Prepare never edits them.
+
+`src/items/10-postgres/settings.server.ts`:
 
 ```ts
 import type { Env } from "@tinker/start/server";
 
 import { databaseUrl } from "@/backend/database.server";
 
-export { database } from "@/backend/database.server";
-export const needs = [] as const;
-export function settings(env: Env.Values) {
+export default function settings(env: Env.Values) {
   return [databaseUrl(new URL(env.DATABASE_URL!))];
 }
 ```
 
+`src/items/10-postgres/database.server.ts`:
+
+```ts
+export { database as default } from "@/backend/database.server";
+```
+
 Prepare writes `.tinker/app.server.ts` and `.tinker/app.ts`.
-It never edits your own `src/lib/tinker` seam files.
-Dependencies come first; your seam comes last.
-Dependencies without joins add no entries.
-A needs cycle or a nonliteral list stops prepare.
-Adding or removing a join restarts dev.
+Each role gets a default import and a type check.
+Adding or removing a role file restarts dev.
 
-- Lists: server `extensions` and `settings`,
-  and client `extensions`, join in needs order.
-- Server single names: `database`, `auth`,
-  `readAccount`, `bootstrap`.
-- Client single names: `records`, `readBatch`,
-  `readBootstrap`, `readSnapshot`, `streamMessage`.
-- Your single name wins over a join's export.
-  Two joins exporting the same single name stop prepare.
-  Doctor reports both files, even if your seam owns it too.
-- Unreadable star exports fail prepare and doctor.
+- Server list files: `extensions.server.ts`, `settings.server.ts`.
+  Client list file: `extensions.ts`.
+  Each item's list joins in folder order, then your seam's list.
+- Server single files: `database.server.ts`, `auth.server.ts`,
+  `readAccount.server.ts`, `bootstrap.server.ts`.
+- Client single files: `records.ts`, `readBatch.ts`,
+  `readBootstrap.ts`, `readSnapshot.ts`, `streamMessage.ts`.
+- Your single name wins over an item's role.
+  Two items with the same single role stop prepare.
+  Doctor reports both paths once, even if your seam owns it too.
+- An item folder with a role needs its numeric prefix.
+  A folder without role files has no effect.
+- Unreadable star exports in your seam fail prepare and doctor.
   Use explicit named exports from packages.
-- tsc checks typed settings bindings and each single name,
-  even when its base part is off.
-  It keeps each join's inferred sync change union.
-- With no joins, the generated files pass on your existing
-  seam exports and add no runtime work.
+  Local star exports, including `@/` paths, still work.
+- tsc rejects wrong settings bindings and wrong single roles,
+  even when the base part is off.
+  It keeps each role's inferred sync change union.
+- With no item roles, each generated file is one seam re-export.
+  Its exports and build output stay the same.
 
-Server joins keep `.server.` so Start blocks client imports.
+Server roles keep `.server.` so Start blocks client imports.
 Sync slices and per-item navigation are for a later card.
 
 ## Lazy modules
