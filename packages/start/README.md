@@ -43,6 +43,50 @@ so a fresh clone gets `.tinker/`:
 `.tinker/` is the generated folder.
 It is gitignored, and nobody edits it.
 
+## Item joins
+
+An item may add `src/joins/postgres.join.server.ts`
+and `src/joins/postgres.join.ts`.
+All seam exports are optional in a join.
+Each join exports `needs` as a literal list of item names.
+
+```ts
+import type { Env } from "@tinker/start/server";
+
+import { databaseUrl } from "@/backend/database.server";
+
+export { database } from "@/backend/database.server";
+export const needs = [] as const;
+export function settings(env: Env.Values) {
+  return [databaseUrl(new URL(env.DATABASE_URL!))];
+}
+```
+
+Prepare writes `.tinker/app.server.ts` and `.tinker/app.ts`.
+It never edits your own `src/lib/tinker` seam files.
+Dependencies come first; your seam comes last.
+Dependencies without joins add no entries.
+A needs cycle or a nonliteral list stops prepare.
+Adding or removing a join restarts dev.
+
+- Lists: server `extensions` and `settings`,
+  and client `extensions`, join in needs order.
+- Server single names: `database`, `auth`,
+  `readAccount`, `bootstrap`.
+- Client single names: `records`, `readBatch`,
+  `readBootstrap`, `readSnapshot`, `streamMessage`.
+- Your single name wins over a join's export.
+  Two joins exporting the same single name stop prepare.
+  Doctor reports both files, even if your seam owns it too.
+- tsc checks typed settings bindings and each single name,
+  even when its base part is off.
+  It keeps each join's inferred sync change union.
+- With no joins, the generated files pass on your existing
+  seam exports and add no runtime work.
+
+Server joins keep `.server.` so Start blocks client imports.
+Sync slices and per-item navigation are for a later card.
+
 ## Lazy modules
 
 `drizzleOrm` on `@tinker/start/server` gives a body
