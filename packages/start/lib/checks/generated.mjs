@@ -15,7 +15,7 @@ import {
 import { prepare, render } from "../prepare.mjs";
 import { isRouteFile, routeClash } from "../route-path.mjs";
 import { mayExport } from "../source.mjs";
-import { fail, verdict } from "./result.mjs";
+import { fail, skip, verdict } from "./result.mjs";
 import { ownedPaths, routes } from "./routes.mjs";
 
 export const say = {
@@ -193,7 +193,7 @@ function folderProblems(root) {
  */
 export function generated(root) {
   const joins = joinProblems(root);
-  if (joins.length > 0) return fail(joins);
+  if (joins.length > 0) return skip("fix the named files check before checking generated seams");
 
   const other = otherBase(root);
   if (other) return fail([other]);

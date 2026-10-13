@@ -7,7 +7,7 @@ import { parts, recordedParts } from "../parts.mjs";
 import { listFiles } from "../paths.mjs";
 import { augmentations, mayExport, parseSource } from "../source.mjs";
 import { examples } from "./examples.mjs";
-import { verdict } from "./result.mjs";
+import { fail, verdict } from "./result.mjs";
 
 export const say = {
   export: (file, name) => `${file}:1 does not export ${name}; the base imports it from this file`,
@@ -25,7 +25,7 @@ export const say = {
 
 /**
  * What each on part reads from a seam file: a missing file is named once per part, else each
- * name the file does not export. An `export *` from a package is not judged.
+ * name the file does not export. Unreadable seam exports fail the named check first.
  * @param {string} root - From the named check; why: the app and its recorded parts.
  */
 function partProblems(root) {
@@ -69,6 +69,9 @@ function augmentProblems(root) {
  * where the glue never reads it (ADR 0106). No fix.
  */
 export function named(root) {
+  const joins = joinProblems(root);
+  if (joins.length > 0) return fail(joins);
+
   const installed = examples(root);
   const found = appFiles.filter(({ file, reads }) => reads && existsSync(join(root, file)));
   const missing = found.flatMap(({ file, reads }) =>
@@ -82,7 +85,6 @@ export function named(root) {
     .map(({ file, hint }) => say.ignored(file, hint));
   return verdict(
     [
-      ...joinProblems(root),
       ...missing,
       ...partProblems(root),
       ...augmentProblems(root),

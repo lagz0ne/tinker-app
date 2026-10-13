@@ -78,6 +78,8 @@ Adding or removing a join restarts dev.
 - Your single name wins over a join's export.
   Two joins exporting the same single name stop prepare.
   Doctor reports both files, even if your seam owns it too.
+- Unreadable star exports fail prepare and doctor.
+  Use explicit named exports from packages.
 - tsc checks typed settings bindings and each single name,
   even when its base part is off.
   It keeps each join's inferred sync change union.

@@ -57,15 +57,21 @@ test("two joins owning database fail prepare and doctor with both file names, ev
       "export const needs = [] as const;\nexport const database = {};\n",
   });
 
-  expect(() => prepare(root)).toThrow(
-    "database: src/joins/first.join.server.ts and src/joins/second.join.server.ts",
-  );
+  const prepareApp = () => prepare(root);
   const checked = doctor(root, false);
 
-  expect(checked.code).toBe(1);
-  expect(checked.lines.join("\n").replaceAll(/\s+/g, " ")).toContain(
+  expect(prepareApp).toThrow(
     "database: src/joins/first.join.server.ts and src/joins/second.join.server.ts",
   );
+  expect(checked.code).toBe(1);
+  expect(
+    checked.lines
+      .join("\n")
+      .replaceAll(/\s+/g, " ")
+      .match(
+        /database: src\/joins\/first\.join\.server\.ts and src\/joins\/second\.join\.server\.ts/g,
+      ),
+  ).toHaveLength(1);
 });
 
 test("a new join file makes dev restart and unrelated files do not", () => {
@@ -91,20 +97,25 @@ test("the user's single names win and a dependency with no join adds no list", (
   expect(server).toContain('export { database } from "@/lib/tinker.server";');
 });
 
-test("prepare refuses a needs cycle and a nonliteral needs list", () => {
+test("prepare refuses a needs cycle", () => {
   const root = goodApp({
     "src/joins/mail.join.ts": 'export const needs = ["auth"] as const;\n',
     "src/joins/auth.join.ts": 'export const needs = ["mail"] as const;\n',
   });
 
-  expect(() => prepare(root)).toThrow(
-    "join needs cycle: src/joins/auth.join.ts and src/joins/mail.join.ts",
-  );
-  write(root, { "src/joins/auth.join.ts": "export const needs = getNeeds();\n" });
+  const prepareApp = () => prepare(root);
 
-  expect(() => prepare(root)).toThrow(
-    "src/joins/auth.join.ts: needs must be an exported literal list",
-  );
+  expect(prepareApp).toThrow("join needs cycle: src/joins/auth.join.ts and src/joins/mail.join.ts");
+});
+
+test("prepare refuses a nonliteral needs list", () => {
+  const root = goodApp({
+    "src/joins/auth.join.ts": "export const needs = getNeeds();\n",
+  });
+
+  const prepareApp = () => prepare(root);
+
+  expect(prepareApp).toThrow("src/joins/auth.join.ts: needs must be an exported literal list");
 });
 
 /** The app's real peers let tsc check generated joins without booting a framework. */
@@ -198,3 +209,31 @@ test("a user's alias star export still wins over a join owner", () => {
   expect(server).toContain('export { database } from "@/lib/tinker.server";');
   expect(server).toContain("ownSettings(env)");
 });
+
+for (const file of [
+  "src/lib/tinker.server.ts",
+  "src/lib/tinker.ts",
+  "src/joins/postgres.join.server.ts",
+  "src/joins/mail.join.ts",
+]) {
+  test(`prepare and doctor refuse unreadable star exports in ${file}`, () => {
+    const root = goodApp();
+    prepare(root);
+    write(root, {
+      ".tinker/routeTree.gen.ts": "import { Route } from './../src/routes/index'\n",
+      "src/joins/closed.join.server.ts": "export const needs = [] as const;\n",
+      [file]: 'export const needs = [] as const;\nexport * from "@acme/seam";\n',
+    });
+
+    const prepareApp = () => prepare(root);
+    const checked = doctor(root, false);
+
+    expect(prepareApp).toThrow(
+      `${file}:1 has an export * whose names prepare cannot read; use explicit named exports`,
+    );
+    expect(checked.code).toBe(1);
+    expect(checked.lines.join("\n").replaceAll(/\s+/g, " ")).toContain(
+      `${file}:1 has an export * whose names prepare cannot read; use explicit named exports`,
+    );
+  });
+}

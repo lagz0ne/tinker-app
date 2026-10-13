@@ -41,18 +41,19 @@ test("names each named or seam file that lacks the export the base imports", () 
   ]);
 });
 
-test("follows export * to a local file, and skips the check when it cannot follow", () => {
+test("follows local star exports without treating default as a star export", () => {
   const followed = goodApp({
     "src/lib/tinker.server.ts": 'export * from "../backend/seam.server";\n',
     "src/backend/seam.server.ts":
       "export const extensions = [];\nexport const settings = () => [];\nexport default 1;\n",
     "src/server.ts": 'export * from "./backend/seam.server";\n',
   });
-  expect(named(followed).lines).toEqual([
+
+  const checked = named(followed);
+
+  expect(checked.lines).toEqual([
     "src/server.ts:1 does not export default; the base imports it from this file",
   ]);
-  const unread = goodApp({ "src/lib/tinker.server.ts": 'export * from "some-package";\n' });
-  expect(named(unread).status).toBe("ok");
 });
 
 test("names each usual Start file the glue never reads", () => {
