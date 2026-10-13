@@ -69,7 +69,7 @@ export function readJoins(root, side) {
     const path = join(root, file);
     const read = readNeeds(path);
     problems.push(...read.problems.map((line) => line.replace(path, file)));
-    const { names } = exportsOf(path);
+    const { names } = exportsOf(path, new Set(), root);
 
     for (const single of singles[side]) {
       if (!names.has(single)) continue;
@@ -91,7 +91,7 @@ export function joinProblems(root) {
 /** Part reads may be supplied by a join; the user's seam still wins. */
 export function seamExports(root, file, name) {
   if (existsSync(join(root, file))) {
-    const own = exportsOf(join(root, file));
+    const own = exportsOf(join(root, file), new Set(), root);
     if (own.open || own.names.has(name)) return true;
   }
   const side = file.endsWith(".server.ts") ? "server" : "client";
@@ -116,8 +116,8 @@ function contract(side) {
     "settings?: (env: Readonly<Record<string, string | undefined>>) => Tag.Bindings;",
     "database?: Resource.Handle<Database.Handle | PromiseLike<Database.Handle>>;",
     "auth?: Resource.Handle<AuthPort | PromiseLike<AuthPort>>;",
-    "readAccount?: Operation.Handle<string | null | PromiseLike<string | null>, never>;",
-    "bootstrap?: Operation.Handle<Sync.Snapshot | PromiseLike<Sync.Snapshot>, never>;",
+    "readAccount?: Operation.Handle<string | null | PromiseLike<string | null>, void>;",
+    "bootstrap?: Operation.Handle<Sync.Snapshot | PromiseLike<Sync.Snapshot>, void>;",
   ];
 }
 
@@ -194,7 +194,7 @@ export function appFile(root, base, side) {
   if (read.items.length === 0) return `${header}\nexport * from ${JSON.stringify(ownModule)};\n`;
 
   const { lines, modules } = appHeader(read.items, ownModule, side, base);
-  const own = exportsOf(ownPath);
+  const own = exportsOf(ownPath, new Set(), root);
   const withOwn = [...modules, { id: "own", module: ownModule, names: own.names }];
   appendLists(lines, withOwn, side);
 

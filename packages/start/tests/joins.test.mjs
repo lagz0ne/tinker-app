@@ -121,7 +121,7 @@ function typedApp(files) {
     fileURLToPath(new URL("../../../apps/start-min/node_modules", import.meta.url)),
     join(root, "node_modules"),
   );
-  prepare(root, []);
+  prepare(root);
   return root;
 }
 
@@ -161,3 +161,40 @@ test("tsc keeps tag values and the sync change union exact through the generated
   expect(errors).toContain("TS2345");
   expect(errors).toContain("TS2322");
 }, 20000);
+
+test("joins accept the server operations and client resources the parts read", () => {
+  const root = typedApp({
+    "src/joins/auth.join.server.ts": `import { operation, resource } from "@tinker/core";
+export const needs = [] as const;
+export const readAccount = operation({ label: "account", run: () => null });
+export const bootstrap = operation({ label: "bootstrap", run: () => ({ public: { stream: "public" as const, revision: 0 }, private: null }) });
+export const auth = resource({ label: "auth", factory: () => ({ handler: async () => new Response(), api: { getSession: async () => null } }) });
+`,
+    "src/joins/sync.join.ts": `import { resource } from "@tinker/core";
+import type { Sync } from "@tinker/start";
+export const needs = [] as const;
+export const records = resource({ label: "records", factory: (): Sync.Records => ({ resetPrivate() {}, bootstrapPublic() {}, bootstrapPrivate() {}, change() {}, snapshot: () => ({ public: { stream: "public", revision: 0 }, private: null }) }) });
+`,
+    ".tinker/routeTree.gen.ts":
+      'import { createRootRoute } from "@tanstack/react-router";\nexport const routeTree = createRootRoute();\n',
+  });
+
+  const errors = checkTypes(root);
+
+  expect(errors).toEqual([]);
+}, 20000);
+
+test("a user's alias star export still wins over a join owner", () => {
+  const root = goodApp({
+    "src/lib/tinker.server.ts": 'export * from "@/backend/own.server";\n',
+    "src/backend/own.server.ts":
+      "export const extensions = [];\nexport const settings = () => [];\nexport const database = {};\n",
+    "src/joins/postgres.join.server.ts":
+      "export const needs = [] as const;\nexport const database = {};\n",
+  });
+
+  const server = render(root)["app.server.ts"];
+
+  expect(server).toContain('export { database } from "@/lib/tinker.server";');
+  expect(server).toContain("ownSettings(env)");
+});

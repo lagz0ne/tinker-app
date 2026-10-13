@@ -69,10 +69,12 @@ const tried = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/in
  * The file a relative `export * from` names, or null when it is a package or does not exist.
  * @param {string} from - From exportsOf; why: resolve the path from this file.
  * @param {string} name - From the export statement; why: the module path it names.
+ * @param {string | undefined} root - From the join reader; why: resolve app aliases when supplied.
  */
-function localModule(from, name) {
-  if (!name.startsWith(".")) return null;
-  const base = resolve(dirname(from), name);
+function localModule(from, name, root) {
+  const ownAlias = root && name.startsWith("@/");
+  if (!ownAlias && !name.startsWith(".")) return null;
+  const base = ownAlias ? resolve(root, "src", name.slice(2)) : resolve(dirname(from), name);
   return (
     tried.map((end) => base + end).find((path) => existsSync(path) && statSync(path).isFile()) ??
     null
@@ -84,13 +86,14 @@ function localModule(from, name) {
  * @param {string} from - From exportsOf; why: the file holding the statement.
  * @param {object} node - From exportsOf; why: one ExportAllDeclaration.
  * @param {Set<string>} seen - From exportsOf; why: a cycle of `export *` ends.
+ * @param {string | undefined} root - From the join reader; why: resolve app aliases when supplied.
  */
-function exportAll(from, node, seen) {
-  const target = localModule(from, node.source.value);
+function exportAll(from, node, seen, root) {
+  const target = localModule(from, node.source.value, root);
   if (!target) return { names: new Map(), open: true };
   if (seen.has(target)) return { names: new Map(), open: false };
 
-  const inner = exportsOf(target, seen);
+  const inner = exportsOf(target, seen, root);
   inner.names.delete("default");
   return inner;
 }
@@ -102,8 +105,9 @@ function exportAll(from, node, seen) {
  * @param {ReturnType<typeof parseSource>} source - From exportsOf; why: lines of its nodes.
  * @param {object} node - From exportsOf; why: one statement.
  * @param {Set<string>} seen - From exportsOf; why: a cycle of `export *` ends.
+ * @param {string | undefined} root - From the join reader; why: resolve app aliases when supplied.
  */
-function statementExports(path, source, node, seen) {
+function statementExports(path, source, node, seen, root) {
   const closed = (names) => ({ names, open: false });
   if (node.type === "ExportDefaultDeclaration") return closed([["default", source.line(node)]]);
   if (node.type === "ExportNamedDeclaration") {
@@ -114,7 +118,7 @@ function statementExports(path, source, node, seen) {
   if (node.exported) {
     return closed([[node.exported.name ?? node.exported.value, source.line(node)]]);
   }
-  const all = exportAll(path, node, seen);
+  const all = exportAll(path, node, seen, root);
   return { names: [...all.names], open: all.open };
 }
 
@@ -123,15 +127,16 @@ function statementExports(path, source, node, seen) {
  * `open` is true when one cannot be (a package), so a missing name then proves nothing.
  * @param {string} path - From a check; why: the file to read.
  * @param {Set<string>} [seen] - From exportAll; why: the files already read.
+ * @param {string} [root] - From the join reader; why: resolve the app's `@/` export paths.
  */
-export function exportsOf(path, seen = new Set()) {
+export function exportsOf(path, seen = new Set(), root) {
   seen.add(path);
   const source = parseSource(path);
   const names = new Map();
   let open = false;
 
   for (const node of source.program.body) {
-    const found = statementExports(path, source, node, seen);
+    const found = statementExports(path, source, node, seen, root);
     for (const [name, line] of found.names) if (!names.has(name)) names.set(name, line);
     open ||= found.open;
   }
