@@ -197,7 +197,9 @@ export function appFile(root, base, side) {
   for (const item of modules) {
     lines.push(`import ${item.id}Export from ${JSON.stringify(item.module)};`);
   }
-  lines.push(`import * as own from ${JSON.stringify(ownModule)};`, "");
+  const readsOwn = own.names.has("extensions") || (side === "server" && own.names.has("settings"));
+  if (readsOwn) lines.push(`import * as own from ${JSON.stringify(ownModule)};`);
+  lines.push("");
 
   appendRoles(lines, modules, own);
   appendLists(lines, modules, own, side);

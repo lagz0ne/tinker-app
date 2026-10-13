@@ -212,6 +212,21 @@ test("tsc keeps tag values and the sync change union exact through the generated
   expect(errors).toContain("TS2322");
 }, 20000);
 
+test("tsc passes when the user's seams export no list the generated file reads", () => {
+  const root = typedApp({
+    "src/lib/tinker.server.ts": "export const unused = 1;\n",
+    "src/lib/tinker.ts": "export const settings = 1;\n",
+    "src/items/10-mail/settings.server.ts": "export default () => [];\n",
+    "src/items/10-mail/extensions.ts": "export default [];\n",
+  });
+
+  expect(checkTypes(root)).toEqual([]);
+  expect(readFileSync(join(root, ".tinker/app.ts"), "utf8")).not.toContain("import * as own");
+  expect(readFileSync(join(root, ".tinker/app.server.ts"), "utf8")).not.toContain(
+    "import * as own",
+  );
+}, 20000);
+
 test("roles accept server operations and client resources", () => {
   const root = typedApp({
     "src/items/10-auth/readAccount.server.ts":
