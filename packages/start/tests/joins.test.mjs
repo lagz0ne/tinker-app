@@ -1,12 +1,12 @@
-import { readFileSync, symlinkSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdirSync, readFileSync, symlinkSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { expect, test } from "vite-plus/test";
 
 import { doctor } from "../lib/doctor.mjs";
 import { aliases } from "../lib/glue.mjs";
 import { restartNote } from "../lib/hooks.mjs";
+import { baseDir, basePackage, findPackage } from "../lib/paths.mjs";
 import { prepare, render } from "../lib/prepare.mjs";
 import { checkTypes } from "../lib/typecheck.mjs";
 import { fixture, goodApp, write } from "./fixture.mjs";
@@ -118,20 +118,30 @@ test("prepare refuses a nonliteral needs list", () => {
   expect(prepareApp).toThrow("src/joins/auth.join.ts: needs must be an exported literal list");
 });
 
+const peers = [
+  ...Object.keys(basePackage.tinker.tested),
+  "typescript",
+  "@types/node",
+  "vite",
+  "zod",
+];
+
+const typedFiles = {
+  "package.json": "{}",
+  "tsconfig.json": JSON.stringify({ extends: "./.tinker/tsconfig.json" }),
+  "src/lib/tinker.server.ts": "export const extensions = [];\nexport const settings = () => [];\n",
+  "src/lib/tinker.ts": "export const extensions = [];\n",
+};
+
 /** The app's real peers let tsc check generated joins without booting a framework. */
 function typedApp(files) {
-  const root = fixture({
-    "package.json": "{}",
-    "tsconfig.json": JSON.stringify({ extends: "./.tinker/tsconfig.json" }),
-    "src/lib/tinker.server.ts":
-      "export const extensions = [];\nexport const settings = () => [];\n",
-    "src/lib/tinker.ts": "export const extensions = [];\n",
-    ...files,
-  });
-  symlinkSync(
-    fileURLToPath(new URL("../../../apps/start-min/node_modules", import.meta.url)),
-    join(root, "node_modules"),
-  );
+  const root = fixture({ ...typedFiles, ...files });
+  for (const name of peers) {
+    const target = findPackage(baseDir, name);
+    mkdirSync(dirname(join(root, "node_modules", name)), { recursive: true });
+    symlinkSync(target, join(root, "node_modules", name));
+  }
+  symlinkSync(baseDir, join(root, "node_modules/@tinker/start"));
   prepare(root);
   return root;
 }
