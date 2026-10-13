@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
+import { isRoleFile } from "./joins.mjs";
 import { appFiles, shellFile } from "./named.mjs";
 
 /** @param {string} root - From a violation hook; why: the app's generated folder. */
@@ -50,8 +51,8 @@ export function recordViolation(root, found, info) {
  */
 export function restartNote(root, path, verb) {
   const picked = [shellFile, ...appFiles.map(({ file }) => file)].map((file) => join(root, file));
-  const isJoin = /^src\/joins\/[^/]+\.join(?:\.server)?\.ts$/.test(relative(root, path));
-  return picked.includes(path) || isJoin
+  const isItemRole = isRoleFile(relative(root, path));
+  return picked.includes(path) || isItemRole
     ? `tinker: ${relative(root, path)} ${verb}; restarting`
     : null;
 }

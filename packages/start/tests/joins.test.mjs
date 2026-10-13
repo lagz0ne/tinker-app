@@ -11,30 +11,33 @@ import { prepare, render } from "../lib/prepare.mjs";
 import { checkTypes } from "../lib/typecheck.mjs";
 import { fixture, goodApp, write } from "./fixture.mjs";
 
-test("prepare joins items in needs order, then the user's seam, without editing it", () => {
+test("prepare uses numeric item order, then the user's seam, without reading role bodies", () => {
   const own = "export const extensions = [];\nexport const settings = () => [];\n";
   const root = goodApp({
     "src/lib/tinker.server.ts": own,
-    "src/joins/mail.join.server.ts":
-      'export const needs = ["postgres"] as const;\nexport const extensions = [];\nexport const settings = () => [];\n',
-    "src/joins/postgres.join.server.ts":
-      "export const needs = [] as const;\nexport const database = {};\nexport const settings = () => [];\n",
-    "src/joins/mail.join.ts": "export const needs = [] as const;\nexport const extensions = [];\n",
+    "src/items/20-mail/extensions.server.ts": "export default [];\n",
+    "src/items/20-mail/settings.server.ts": "export default () => [];\n",
+    "src/items/3-postgres/database.server.ts": "not even parseable source",
+    "src/items/3-postgres/settings.server.ts": "export default () => [];\n",
+    "src/items/20-mail/extensions.ts": "export default [];\n",
+    "src/items/helpers/database.ts": "export default 42;\n",
+    "src/items/20-mail/other.server.ts": "export const database = 42;\n",
   });
 
   const files = render(root);
   prepare(root);
 
   const server = files["app.server.ts"];
-  expect(server).toContain('import * as join0 from "@/joins/postgres.join.server";');
-  expect(server).toContain('import * as join1 from "@/joins/mail.join.server";');
-  expect(server).toContain(
-    "export const extensions = [join1.extensions, own.extensions] as const;",
-  );
-  expect(server).toContain("return [join0Settings(env), join1Settings(env), ownSettings(env)];");
-  expect(server).toContain('export { database } from "@/joins/postgres.join.server";');
+  expect(server).toContain('from "@/items/3-postgres/database.server";');
+  expect(server).toContain('from "@/items/20-mail/extensions.server";');
+  expect(server.indexOf("3-postgres")).toBeLessThan(server.indexOf("20-mail"));
+  expect(server).toContain("own.extensions] as const;");
+  expect(server).toContain("Settings(env), ownSettings(env)");
+  expect(server).toContain(" as database };");
+  expect(server).not.toContain("other.server");
+  expect(server).not.toContain("helpers/database");
   expect(readFileSync(join(root, "src/lib/tinker.server.ts"), "utf8")).toBe(own);
-  expect(files["app.ts"]).not.toContain(".join.server");
+  expect(files["app.ts"]).not.toContain(".server");
   expect(JSON.parse(files["tsconfig.json"]).compilerOptions.paths["#tinker/app.server"]).toEqual([
     join(root, ".tinker/app.server.ts"),
   ]);
@@ -43,7 +46,7 @@ test("prepare joins items in needs order, then the user's seam, without editing 
   );
 });
 
-test("two joins owning database fail prepare and doctor with both file names, even with a user owner", () => {
+test("two item database files fail prepare and doctor once, even with a user owner", () => {
   const root = goodApp({
     "src/lib/tinker.server.ts":
       "export const extensions = [];\nexport const settings = () => [];\nexport const database = {};\n",
@@ -51,45 +54,39 @@ test("two joins owning database fail prepare and doctor with both file names, ev
   prepare(root);
   write(root, {
     ".tinker/routeTree.gen.ts": "import { Route } from './../src/routes/index'\n",
-    "src/joins/first.join.server.ts":
-      "export const needs = [] as const;\nexport const database = {};\n",
-    "src/joins/second.join.server.ts":
-      "export const needs = [] as const;\nexport const database = {};\n",
+    "src/items/10-first/database.server.ts": "export default {};\n",
+    "src/items/20-second/database.server.ts": "export default {};\n",
   });
 
   const prepareApp = () => prepare(root);
   const checked = doctor(root, false);
 
-  expect(prepareApp).toThrow(
-    "database: src/joins/first.join.server.ts and src/joins/second.join.server.ts",
-  );
+  const message =
+    "database: src/items/10-first/database.server.ts and src/items/20-second/database.server.ts";
+  expect(prepareApp).toThrow(message);
   expect(checked.code).toBe(1);
+  expect(checked.lines.join("\n").replaceAll(/\s+/g, " ").split(message)).toHaveLength(2);
+});
+
+test("adding or removing role files restarts dev; other item files do not", () => {
+  expect(restartNote("/app", "/app/src/items/10-mail/settings.server.ts", "added")).toBe(
+    "tinker: src/items/10-mail/settings.server.ts added; restarting",
+  );
+  expect(restartNote("/app", "/app/src/items/10-mail/extensions.ts", "removed")).toBe(
+    "tinker: src/items/10-mail/extensions.ts removed; restarting",
+  );
+  expect(restartNote("/app", "/app/src/items/10-mail/readme.ts", "added")).toBeNull();
+  expect(restartNote("/app", "/app/src/items/10-mail/database.ts", "added")).toBeNull();
   expect(
-    checked.lines
-      .join("\n")
-      .replaceAll(/\s+/g, " ")
-      .match(
-        /database: src\/joins\/first\.join\.server\.ts and src\/joins\/second\.join\.server\.ts/g,
-      ),
-  ).toHaveLength(1);
+    restartNote("/app", "/app/src/items/10-mail/nested/settings.server.ts", "added"),
+  ).toBeNull();
 });
 
-test("a new join file makes dev restart and unrelated files do not", () => {
-  expect(restartNote("/app", "/app/src/joins/mail.join.server.ts", "added")).toBe(
-    "tinker: src/joins/mail.join.server.ts added; restarting",
-  );
-  expect(restartNote("/app", "/app/src/joins/mail.join.ts", "removed")).toBe(
-    "tinker: src/joins/mail.join.ts removed; restarting",
-  );
-  expect(restartNote("/app", "/app/src/joins/readme.ts", "added")).toBeNull();
-});
-
-test("the user's single names win and a dependency with no join adds no list", () => {
+test("the user's single names win over item roles", () => {
   const root = goodApp({
     "src/lib/tinker.server.ts":
       "export const extensions = [];\nexport const settings = () => [];\nexport const database = {};\n",
-    "src/joins/postgres.join.server.ts":
-      'export const needs = ["errors"] as const;\nexport const database = {};\n',
+    "src/items/10-postgres/database.server.ts": "export default {};\n",
   });
 
   const server = render(root)["app.server.ts"];
@@ -97,25 +94,31 @@ test("the user's single names win and a dependency with no join adds no list", (
   expect(server).toContain('export { database } from "@/lib/tinker.server";');
 });
 
-test("prepare refuses a needs cycle", () => {
+test("role folders require a numeric prefix; folders without roles are ignored", () => {
   const root = goodApp({
-    "src/joins/mail.join.ts": 'export const needs = ["auth"] as const;\n',
-    "src/joins/auth.join.ts": 'export const needs = ["mail"] as const;\n',
+    "src/items/mail/settings.server.ts": "export default () => [];\n",
+    "src/items/notes/helpers.ts": "export const helper = 42;\n",
   });
 
   const prepareApp = () => prepare(root);
+  const checked = doctor(root, false);
 
-  expect(prepareApp).toThrow("join needs cycle: src/joins/auth.join.ts and src/joins/mail.join.ts");
+  expect(prepareApp).toThrow("src/items/mail: role folders need a numeric prefix, such as 10-mail");
+  expect(checked.code).toBe(1);
 });
 
-test("prepare refuses a nonliteral needs list", () => {
+test("no item roles generates only the original seam re-export", () => {
   const root = goodApp({
-    "src/joins/auth.join.ts": "export const needs = getNeeds();\n",
+    "src/items/helpers/helper.ts": "export default 42;\n",
+    "src/lib/tinker.server.ts":
+      "export const extensions = [];\nexport const settings = () => [];\n",
+    "src/lib/tinker.ts": "export const extensions = [];\n",
   });
 
-  const prepareApp = () => prepare(root);
+  const files = render(root);
 
-  expect(prepareApp).toThrow("src/joins/auth.join.ts: needs must be an exported literal list");
+  expect(files["app.server.ts"]).toBe('export * from "@/lib/tinker.server";\n');
+  expect(files["app.ts"]).toBe('export * from "@/lib/tinker";\n');
 });
 
 const peers = [
@@ -133,7 +136,7 @@ const typedFiles = {
   "src/lib/tinker.ts": "export const extensions = [];\n",
 };
 
-/** The app's real peers let tsc check generated joins without booting a framework. */
+/** The app's real peers let tsc check generated roles without booting a framework. */
 function typedApp(files) {
   const root = fixture({ ...typedFiles, ...files });
   for (const name of peers) {
@@ -148,32 +151,33 @@ function typedApp(files) {
 
 test("tsc rejects wrong settings bindings and a single name even with its part off", () => {
   const root = typedApp({
-    "src/joins/mail.join.server.ts":
-      "export const needs = [] as const;\nexport const settings = () => [42];\n",
-    "src/joins/postgres.join.server.ts":
-      "export const needs = [] as const;\nexport const database = 42;\n",
+    "src/items/20-mail/settings.server.ts": "export default () => [42];\n",
+    "src/items/10-postgres/database.server.ts": "export default 42;\n",
   });
 
   const errors = checkTypes(root).join("\n");
 
-  expect(errors).toContain("settings");
-  expect(errors).toContain("database");
+  expect(errors).toContain("TS2322");
+  expect(errors).toContain("TS1360");
 }, 20000);
 
 test("tsc keeps tag values and the sync change union exact through the generated seam", () => {
   const root = typedApp({
-    "src/joins/mail.join.server.ts":
-      'import { tag } from "@tinker/core";\nexport const needs = [] as const;\nconst smtpUrl = tag<URL>({ label: "mail.smtpUrl" });\nexport const settings = () => [smtpUrl(new URL("smtp://mail"))];\n',
-    "src/joins/sync.join.ts":
-      'import { z } from "zod";\nexport const needs = [] as const;\nexport const readBatch = z.object({ version: z.number(), events: z.array(z.object({ stream: z.string(), revision: z.number(), executionId: z.string(), payload: z.object({ kind: z.literal("change"), change: z.object({ kind: z.literal("counter"), value: z.number() }) }) })) });\n',
+    "src/items/20-mail/settings.server.ts":
+      'import { tag } from "@tinker/core";\nconst smtpUrl = tag<URL>({ label: "mail.smtpUrl" });\nexport default () => [smtpUrl(new URL("smtp://mail"))];\n',
+    "src/items/30-sync/readBatch.ts":
+      'import { z } from "zod";\nexport default z.object({ version: z.number(), events: z.array(z.object({ stream: z.string(), revision: z.number(), executionId: z.string(), payload: z.object({ kind: z.literal("change"), change: z.object({ kind: z.literal("counter"), value: z.number() }) }) })) });\n',
     "src/check.ts":
       'import { readBatch } from "#tinker/app";\nexport const change: ReturnType<typeof readBatch.parse>["events"][number]["payload"]["change"] = { kind: "counter", value: 1 };\n',
   });
 
-  expect(checkTypes(root)).toEqual([]);
+  const valid = checkTypes(root);
+
+  expect(valid).toEqual([]);
+
   write(root, {
-    "src/joins/mail.join.server.ts":
-      'import { tag } from "@tinker/core";\nexport const needs = [] as const;\nconst smtpUrl = tag<URL>({ label: "mail.smtpUrl" });\nexport const settings = () => [smtpUrl("not-a-url")];\n',
+    "src/items/20-mail/settings.server.ts":
+      'import { tag } from "@tinker/core";\nconst smtpUrl = tag<URL>({ label: "mail.smtpUrl" });\nexport default () => [smtpUrl("not-a-url")];\n',
     "src/check.ts":
       'import { readBatch } from "#tinker/app";\nexport const change: ReturnType<typeof readBatch.parse>["events"][number]["payload"]["change"] = { kind: "nope", value: 1 };\n',
   });
@@ -183,18 +187,17 @@ test("tsc keeps tag values and the sync change union exact through the generated
   expect(errors).toContain("TS2322");
 }, 20000);
 
-test("joins accept the server operations and client resources the parts read", () => {
+test("roles accept server operations and client resources", () => {
   const root = typedApp({
-    "src/joins/auth.join.server.ts": `import { operation, resource } from "@tinker/core";
-export const needs = [] as const;
-export const readAccount = operation({ label: "account", run: () => null });
-export const bootstrap = operation({ label: "bootstrap", run: () => ({ public: { stream: "public" as const, revision: 0 }, private: null }) });
-export const auth = resource({ label: "auth", factory: () => ({ handler: async () => new Response(), api: { getSession: async () => null } }) });
-`,
-    "src/joins/sync.join.ts": `import { resource } from "@tinker/core";
+    "src/items/10-auth/readAccount.server.ts":
+      'import { operation } from "@tinker/core";\nexport default operation({ label: "account", run: () => null });\n',
+    "src/items/10-auth/bootstrap.server.ts":
+      'import { operation } from "@tinker/core";\nexport default operation({ label: "bootstrap", run: () => ({ public: { stream: "public" as const, revision: 0 }, private: null }) });\n',
+    "src/items/10-auth/auth.server.ts":
+      'import { resource } from "@tinker/core";\nexport default resource({ label: "auth", factory: () => ({ handler: async () => new Response(), api: { getSession: async () => null } }) });\n',
+    "src/items/30-sync/records.ts": `import { resource } from "@tinker/core";
 import type { Sync } from "@tinker/start";
-export const needs = [] as const;
-export const records = resource({ label: "records", factory: (): Sync.Records => ({ resetPrivate() {}, bootstrapPublic() {}, bootstrapPrivate() {}, change() {}, snapshot: () => ({ public: { stream: "public", revision: 0 }, private: null }) }) });
+export default resource({ label: "records", factory: (): Sync.Records => ({ resetPrivate() {}, bootstrapPublic() {}, bootstrapPrivate() {}, change() {}, snapshot: () => ({ public: { stream: "public", revision: 0 }, private: null }) }) });
 `,
     ".tinker/routeTree.gen.ts":
       'import { createRootRoute } from "@tanstack/react-router";\nexport const routeTree = createRootRoute();\n',
@@ -205,13 +208,12 @@ export const records = resource({ label: "records", factory: (): Sync.Records =>
   expect(errors).toEqual([]);
 }, 20000);
 
-test("a user's alias star export still wins over a join owner", () => {
+test("a user's alias star export still wins over an item owner", () => {
   const root = goodApp({
     "src/lib/tinker.server.ts": 'export * from "@/backend/own.server";\n',
     "src/backend/own.server.ts":
       "export const extensions = [];\nexport const settings = () => [];\nexport const database = {};\n",
-    "src/joins/postgres.join.server.ts":
-      "export const needs = [] as const;\nexport const database = {};\n",
+    "src/items/10-postgres/database.server.ts": "export default {};\n",
   });
 
   const server = render(root)["app.server.ts"];
@@ -220,19 +222,13 @@ test("a user's alias star export still wins over a join owner", () => {
   expect(server).toContain("ownSettings(env)");
 });
 
-for (const file of [
-  "src/lib/tinker.server.ts",
-  "src/lib/tinker.ts",
-  "src/joins/postgres.join.server.ts",
-  "src/joins/mail.join.ts",
-]) {
+for (const file of ["src/lib/tinker.server.ts", "src/lib/tinker.ts"]) {
   test(`prepare and doctor refuse unreadable star exports in ${file}`, () => {
     const root = goodApp();
     prepare(root);
     write(root, {
       ".tinker/routeTree.gen.ts": "import { Route } from './../src/routes/index'\n",
-      "src/joins/closed.join.server.ts": "export const needs = [] as const;\n",
-      [file]: 'export const needs = [] as const;\nexport * from "@acme/seam";\n',
+      [file]: 'export * from "@acme/seam";\n',
     });
 
     const prepareApp = () => prepare(root);

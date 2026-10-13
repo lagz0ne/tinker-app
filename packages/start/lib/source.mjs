@@ -69,7 +69,7 @@ const tried = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/in
  * The file a relative `export * from` names, or null when it is a package or does not exist.
  * @param {string} from - From exportsOf; why: resolve the path from this file.
  * @param {string} name - From the export statement; why: the module path it names.
- * @param {string | undefined} root - From the join reader; why: resolve app aliases when supplied.
+ * @param {string | undefined} root - From the seam reader; why: resolve app aliases when supplied.
  */
 function localModule(from, name, root) {
   const ownAlias = root && name.startsWith("@/");
@@ -86,7 +86,7 @@ function localModule(from, name, root) {
  * @param {string} from - From exportsOf; why: the file holding the statement.
  * @param {object} node - From exportsOf; why: one ExportAllDeclaration.
  * @param {Set<string>} seen - From exportsOf; why: a cycle of `export *` ends.
- * @param {string | undefined} root - From the join reader; why: resolve app aliases when supplied.
+ * @param {string | undefined} root - From the seam reader; why: resolve app aliases when supplied.
  */
 function exportAll(from, node, seen, root) {
   const target = localModule(from, node.source.value, root);
@@ -105,7 +105,7 @@ function exportAll(from, node, seen, root) {
  * @param {ReturnType<typeof parseSource>} source - From exportsOf; why: lines of its nodes.
  * @param {object} node - From exportsOf; why: one statement.
  * @param {Set<string>} seen - From exportsOf; why: a cycle of `export *` ends.
- * @param {string | undefined} root - From the join reader; why: resolve app aliases when supplied.
+ * @param {string | undefined} root - From the seam reader; why: resolve app aliases when supplied.
  */
 function statementExports(path, source, node, seen, root) {
   const closed = (names) => ({ names, open: false });
@@ -127,7 +127,7 @@ function statementExports(path, source, node, seen, root) {
  * `open` is true when one cannot be (a package), so a missing name then proves nothing.
  * @param {string} path - From a check; why: the file to read.
  * @param {Set<string>} [seen] - From exportAll; why: the files already read.
- * @param {string} [root] - From the join reader; why: resolve the app's `@/` export paths.
+ * @param {string} [root] - From the seam reader; why: resolve the app's `@/` export paths.
  */
 export function exportsOf(path, seen = new Set(), root) {
   seen.add(path);

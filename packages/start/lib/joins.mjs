@@ -2,14 +2,33 @@ import { existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 
 import { appFiles, pick } from "./named.mjs";
-import { exportsOf, parseSource } from "./source.mjs";
+import { exportsOf } from "./source.mjs";
 
 const singles = {
   server: ["database", "auth", "readAccount", "bootstrap"],
   client: ["records", "readBatch", "readBootstrap", "readSnapshot", "streamMessage"],
 };
 
-/** Prepare must know every name before composing lists or choosing owners. */
+const roles = {
+  server: ["extensions", "settings", ...singles.server],
+  client: ["extensions", ...singles.client],
+};
+
+/** The role's exact file name separates server code from client code. */
+function roleName(name, side) {
+  return `${name}${side === "server" ? ".server" : ""}.ts`;
+}
+
+/** Only these file names take part in composition; other item code is private. */
+export function isRoleFile(file) {
+  const segments = file.split("/");
+  if (segments.length !== 4 || segments[0] !== "src" || segments[1] !== "items") return false;
+  return Object.entries(roles).some(([side, names]) =>
+    names.some((name) => segments[3] === roleName(name, side)),
+  );
+}
+
+/** Prepare must know the user seam's names before composing lists or choosing owners. */
 function readExports(root, path) {
   const { names, open } = exportsOf(path, new Set(), root);
   const problems = open
@@ -20,98 +39,69 @@ function readExports(root, path) {
   return { names, problems };
 }
 
-/** User seams follow the same explicit-export rule as joins. */
-function seamProblems(root) {
-  return appFiles
-    .filter((entry) => entry.alias.startsWith("#tinker/app") && existsSync(join(root, entry.file)))
-    .flatMap((entry) => readExports(root, join(root, entry.file)).problems);
-}
-
-/** Read literal needs without loading app code or starting its effects. */
-function readNeeds(path) {
-  const source = parseSource(path);
-  const declarations = source.program.body.flatMap((node) =>
-    node.type === "ExportNamedDeclaration" ? (node.declaration?.declarations ?? []) : [],
+/** Core's extensions run in order and its last same-tag binding wins. */
+function itemOrder(a, b) {
+  return (
+    Number(a.name.split("-")[0]) - Number(b.name.split("-")[0]) || a.name.localeCompare(b.name)
   );
-  let value = declarations.find((item) => item.id.name === "needs")?.init;
-  while (["TSAsExpression", "TSSatisfiesExpression"].includes(value?.type)) {
-    value = value.expression;
-  }
-
-  if (
-    value?.type !== "ArrayExpression" ||
-    value.elements.some((item) => typeof item?.value !== "string")
-  ) {
-    return {
-      needs: [],
-      problems: [`${path}: needs must be an exported literal list of item names`],
-    };
-  }
-  return { needs: value.elements.map((item) => item.value), problems: [] };
 }
 
-/** A stable dependency order; a dependency without a join adds no list entries. */
-function orderJoins(items, problems) {
-  const remaining = new Map(items.map((item) => [item.name, item]));
-  const ordered = [];
-  while (remaining.size > 0) {
-    const ready = [...remaining.values()].find((item) =>
-      item.needs.every((name) => !remaining.has(name)),
-    );
-    if (!ready) {
-      problems.push(
-        `join needs cycle: ${[...remaining.values()].map((item) => item.file).join(" and ")}`,
-      );
-      break;
-    }
-
-    ordered.push(ready);
-    remaining.delete(ready.name);
-  }
-  return ordered;
+/** One folder's known roles, selected by name without reading any source. */
+function folderRoles(dir, folder, side) {
+  const files = new Set(
+    readdirSync(join(dir, folder), { withFileTypes: true })
+      .filter((file) => file.isFile())
+      .map((file) => file.name),
+  );
+  const suffix = side === "server" ? ".server.ts" : ".ts";
+  return roles[side].filter((name) => files.has(name + suffix));
 }
 
-/** The join files and ownership errors, shared by prepare and doctor. */
-export function readJoins(root, side) {
-  const dir = join(root, "src/joins");
-  const suffix = side === "server" ? ".join.server.ts" : ".join.ts";
-  const files = existsSync(dir)
-    ? readdirSync(dir)
-        .filter((file) => file.endsWith(suffix))
-        .sort()
+/** Read only folder and file names, never parse or load an item's role code. */
+export function readItems(root, side) {
+  const dir = join(root, "src/items");
+  const folders = existsSync(dir)
+    ? readdirSync(dir, { withFileTypes: true }).filter((item) => item.isDirectory())
     : [];
-  const problems = [];
+  const items = [];
   const owners = new Map();
-  const items = files.map((name) => {
-    const file = `src/joins/${name}`;
-    const path = join(root, file);
-    const read = readNeeds(path);
-    problems.push(...read.problems.map((line) => line.replace(path, file)));
-    const exported = readExports(root, path);
-    const { names } = exported;
-    problems.push(...exported.problems);
+  const problems = [];
 
-    for (const single of singles[side]) {
-      if (!names.has(single)) continue;
-      if (owners.has(single)) {
-        problems.push(`${single}: ${owners.get(single)} and ${file} both export ${single}`);
-      } else owners.set(single, file);
+  for (const folder of folders.sort(itemOrder)) {
+    const found = folderRoles(dir, folder.name, side);
+    if (found.length === 0) continue;
+    if (!/^\d+-.+/.test(folder.name)) {
+      problems.push(
+        `src/items/${folder.name}: role folders need a numeric prefix, such as 10-mail`,
+      );
     }
-    return { name: name.slice(0, -suffix.length), file, needs: read.needs, names };
-  });
 
-  return { items: orderJoins(items, problems), owners, problems };
+    for (const name of found) {
+      const file = `src/items/${folder.name}/${roleName(name, side)}`;
+      items.push({ name, file });
+      if (!singles[side].includes(name)) continue;
+      if (owners.has(name)) {
+        problems.push(`${name}: ${owners.get(name)} and ${file} both own ${name}`);
+      } else owners.set(name, file);
+    }
+  }
+  return { items, owners, problems };
 }
 
-/** Doctor checks join errors even when generated files are absent or stale. */
+/** Doctor reports composition problems once, even if generated files are stale. */
 export function joinProblems(root) {
+  const seams = appFiles.filter(
+    (entry) => entry.alias.startsWith("#tinker/app") && existsSync(join(root, entry.file)),
+  );
   return [
-    ...seamProblems(root),
-    ...["server", "client"].flatMap((side) => readJoins(root, side).problems),
+    ...new Set([
+      ...seams.flatMap((entry) => readExports(root, join(root, entry.file)).problems),
+      ...["server", "client"].flatMap((side) => readItems(root, side).problems),
+    ]),
   ];
 }
 
-/** Part reads may be supplied by a join; the user's seam still wins. */
+/** Part reads may come from an item role; the user's seam still wins. */
 export function seamExports(root, file, name) {
   if (existsSync(join(root, file))) {
     const own = readExports(root, join(root, file));
@@ -119,89 +109,56 @@ export function seamExports(root, file, name) {
     if (own.names.has(name)) return true;
   }
   const side = file.endsWith(".server.ts") ? "server" : "client";
-  return readJoins(root, side).owners.has(name);
+  return readItems(root, side).owners.has(name);
 }
 
-/** Type-only checks keep inferred unions and reject wrong exports without widening them. */
-function contract(side) {
-  const common = "extensions?: Many<Scope.Extension<unknown>>;";
-  if (side === "client") {
-    return [
-      common,
-      "records?: Resource.Handle<Sync.Records | PromiseLike<Sync.Records>>;",
-      "readBatch?: Data.Parse<{ version: number; events: Sync.Event[] }>;",
-      "readBootstrap?: Data.Parse<{ version: number; snapshot: Sync.Snapshot }>;",
-      "readSnapshot?: Data.Parse<Sync.Snapshot>;",
-      'streamMessage?: Data.Parse<{ kind: "changes"; events: Sync.Event[] } | { kind: "account-change" }>;',
-    ];
-  }
-  return [
-    common,
-    "settings?: (env: Readonly<Record<string, string | undefined>>) => Tag.Bindings;",
-    "database?: Resource.Handle<Database.Handle | PromiseLike<Database.Handle>>;",
-    "auth?: Resource.Handle<AuthPort | PromiseLike<AuthPort>>;",
-    "readAccount?: Operation.Handle<string | null | PromiseLike<string | null>, void>;",
-    "bootstrap?: Operation.Handle<Sync.Snapshot | PromiseLike<Sync.Snapshot>, void>;",
-  ];
-}
-
-/** The generated header has no runtime checks or casts. */
-function appHeader(items, ownModule, side, base) {
-  const lines = ["/** GENERATED by tinker prepare. Edit src/joins or your own seam. */"];
-  lines.push(
-    `import type { ${side === "server" ? "Many, Operation, Resource, Scope, Tag" : "Data, Many, Resource, Scope"} } from "@tinker/core";`,
-  );
-  lines.push(
-    `import type { Sync } from ${JSON.stringify(join(base, "src/parts/sync/envelopes"))};`,
-  );
-  if (side === "server") lines.push('import type { Database } from "@tinker/start/server";');
-
-  const modules = items.map((item, index) => ({
-    ...item,
-    id: `join${index}`,
-    module: `@/${item.file.slice(4, -3)}`,
-  }));
+/** Named typed constants keep single-role inference and check settings callability. */
+function appendRoles(lines, modules, own) {
   for (const item of modules) {
-    lines.push(`import * as ${item.id} from ${JSON.stringify(item.module)};`);
-  }
-  lines.push(`import * as own from ${JSON.stringify(ownModule)};`, "");
-  if (side === "server") {
+    const type = item.name[0].toUpperCase() + item.name.slice(1);
     lines.push(
-      "type AuthPort = { handler(request: Request): Response | Promise<Response>; api: { getSession(options: { headers: Headers; query?: { disableCookieCache: boolean; disableRefresh: boolean } }): Promise<{ user: { id: string } } | null> } };",
+      item.name === "settings"
+        ? `const ${item.id}: App.Settings = ${item.id}Export;`
+        : `const ${item.id} = ${item.id}Export satisfies App.${type};`,
     );
-  }
-  lines.push(
-    `type Check<T extends { needs: readonly string[]; ${contract(side).join(" ")} }> = T;`,
-  );
-  for (const item of modules) {
-    lines.push(`export type Join${item.id.slice(4)} = Check<typeof ${item.id}>;`);
-  }
-
-  return { lines, modules };
-}
-
-/** Lists stay nested so Core keeps each extension and binding identity. */
-function appendLists(lines, withOwn, side) {
-  const lists = withOwn
-    .filter((item) => item.names.has("extensions"))
-    .map((item) => `${item.id}.extensions`);
-  lines.push(`export const extensions = [${lists.join(", ")}] as const;`);
-  if (side === "server") {
-    const settings = withOwn.filter((item) => item.names.has("settings"));
-    for (const item of settings) {
-      lines.push(
-        `const ${item.id}Settings: (env: Readonly<Record<string, string | undefined>>) => Tag.Bindings = ${item.id}.settings;`,
-      );
+    if (own.names.has(item.name) && !["extensions", "settings"].includes(item.name)) {
+      lines.push(`void ${item.id};`);
     }
-    lines.push(
-      "export function settings(env: Readonly<Record<string, string | undefined>>): Tag.Bindings {",
-      `  return [${settings.map((item) => `${item.id}Settings(env)`).join(", ")}];`,
-      "}",
-    );
+  }
+  lines.push("");
+}
+
+/** Nested lists preserve extension and binding identities; the user is last. */
+function appendLists(lines, modules, own, side) {
+  const extensions = modules.filter((item) => item.name === "extensions").map((item) => item.id);
+  if (own.names.has("extensions")) extensions.push("own.extensions");
+  lines.push(`export const extensions = [${extensions.join(", ")}] as const;`);
+  if (side !== "server") return;
+
+  const settings = modules.filter((item) => item.name === "settings").map((item) => item.id);
+  if (own.names.has("settings")) {
+    lines.push("const ownSettings: App.Settings = own.settings;");
+    settings.push("ownSettings");
+  }
+  lines.push(
+    "export function settings(env: App.Env): App.Bindings {",
+    `  return [${settings.map((id) => `${id}(env)`).join(", ")}];`,
+    "}",
+  );
+}
+
+/** Only known single roles are exposed; each user name takes precedence. */
+function appendSingles(lines, modules, own, ownModule, side) {
+  for (const name of singles[side]) {
+    if (own.names.has(name)) lines.push(`export { ${name} } from ${JSON.stringify(ownModule)};`);
+    else {
+      const owner = modules.find((item) => item.name === name);
+      if (owner) lines.push(`export { ${owner.id} as ${name} };`);
+    }
   }
 }
 
-/** Generate eager namespace imports and exact exports. No joins preserves the original module. */
+/** Generate explicit default imports; no roles passes on the original seam in one line. */
 export function appFile(root, base, side) {
   const entry = appFiles.find(
     (item) => item.alias === `#tinker/app${side === "server" ? ".server" : ""}`,
@@ -211,23 +168,31 @@ export function appFile(root, base, side) {
     ownPath === join(root, entry.file)
       ? `@/${entry.file.slice(4, -3)}`
       : ownPath.replace(/\.ts$/, "");
-  const read = readJoins(root, side);
+
+  const read = readItems(root, side);
   const own = readExports(root, ownPath);
   const problems = [...read.problems, ...own.problems];
   if (problems.length > 0) throw new Error(problems.join("\n"));
+  if (read.items.length === 0) return `export * from ${JSON.stringify(ownModule)};\n`;
 
-  const header = "/** GENERATED by tinker prepare. Edit src/joins or your own seam. */";
-  if (read.items.length === 0) return `${header}\nexport * from ${JSON.stringify(ownModule)};\n`;
-
-  const { lines, modules } = appHeader(read.items, ownModule, side, base);
-  const withOwn = [...modules, { id: "own", module: ownModule, names: own.names }];
-  appendLists(lines, withOwn, side);
-
-  for (const name of singles[side]) {
-    const owner = own.names.has(name)
-      ? withOwn.at(-1)
-      : modules.find((item) => item.names.has(name));
-    if (owner) lines.push(`export { ${name} } from ${JSON.stringify(owner.module)};`);
+  const modules = read.items.map((item, index) => ({
+    ...item,
+    id: `item${index}${item.name[0].toUpperCase()}${item.name.slice(1)}`,
+    module: `@/${item.file.slice(4, -3)}`,
+  }));
+  const lines = [
+    "/** GENERATED by tinker prepare. Edit src/items or your own seam. */",
+    `import type { App } from ${JSON.stringify(join(base, "lib/app"))};`,
+  ];
+  for (const item of modules) {
+    lines.push(`import ${item.id}Export from ${JSON.stringify(item.module)};`);
   }
+  lines.push(`import * as own from ${JSON.stringify(ownModule)};`, "");
+  if (!own.names.has("extensions") && !own.names.has("settings")) lines.push("void own;", "");
+
+  appendRoles(lines, modules, own);
+  appendLists(lines, modules, own, side);
+  lines.push("");
+  appendSingles(lines, modules, own, ownModule, side);
   return `${lines.join("\n")}\n`;
 }
