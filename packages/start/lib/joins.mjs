@@ -41,9 +41,7 @@ function readExports(root, path) {
 
 /** Core's extensions run in order and its last same-tag binding wins. */
 function itemOrder(a, b) {
-  return (
-    Number(a.name.split("-")[0]) - Number(b.name.split("-")[0]) || a.name.localeCompare(b.name)
-  );
+  return a.number - b.number || a.name.localeCompare(b.name);
 }
 
 /** One folder's known roles, selected by name without reading any source. */
@@ -57,26 +55,38 @@ function folderRoles(dir, folder, side) {
   return roles[side].filter((name) => files.has(name + suffix));
 }
 
-/** Read only folder and file names, never parse or load an item's role code. */
-export function readItems(root, side) {
-  const dir = join(root, "src/items");
+/** Only numbered folders with role files enter the sort; helper folders have no effect. */
+function itemFolders(dir, side, problems) {
   const folders = existsSync(dir)
     ? readdirSync(dir, { withFileTypes: true }).filter((item) => item.isDirectory())
     : [];
-  const items = [];
-  const owners = new Map();
-  const problems = [];
+  const found = [];
 
-  for (const folder of folders.sort(itemOrder)) {
-    const found = folderRoles(dir, folder.name, side);
-    if (found.length === 0) continue;
-    if (!/^\d+-.+/.test(folder.name)) {
+  for (const folder of folders) {
+    const names = folderRoles(dir, folder.name, side);
+    if (names.length === 0) continue;
+    const prefix = /^(\d+)-/.exec(folder.name);
+    if (!prefix) {
       problems.push(
         `src/items/${folder.name}: role folders need a numeric prefix, such as 10-mail`,
       );
+      continue;
     }
 
-    for (const name of found) {
+    found.push({ name: folder.name, number: Number(prefix[1]), roles: names });
+  }
+  return found.sort(itemOrder);
+}
+
+/** Read only folder and file names, never parse or load an item's role code. */
+export function readItems(root, side) {
+  const items = [];
+  const owners = new Map();
+  const problems = [];
+  const folders = itemFolders(join(root, "src/items"), side, problems);
+
+  for (const folder of folders) {
+    for (const name of folder.roles) {
       const file = `src/items/${folder.name}/${roleName(name, side)}`;
       items.push({ name, file });
       if (!singles[side].includes(name)) continue;
@@ -188,7 +198,6 @@ export function appFile(root, base, side) {
     lines.push(`import ${item.id}Export from ${JSON.stringify(item.module)};`);
   }
   lines.push(`import * as own from ${JSON.stringify(ownModule)};`, "");
-  if (!own.names.has("extensions") && !own.names.has("settings")) lines.push("void own;", "");
 
   appendRoles(lines, modules, own);
   appendLists(lines, modules, own, side);

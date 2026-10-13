@@ -31,8 +31,8 @@ test("prepare uses numeric item order, then the user's seam, without reading rol
   expect(server).toContain('from "@/items/3-postgres/database.server";');
   expect(server).toContain('from "@/items/20-mail/extensions.server";');
   expect(server.indexOf("3-postgres")).toBeLessThan(server.indexOf("20-mail"));
-  expect(server).toContain("own.extensions] as const;");
-  expect(server).toContain("Settings(env), ownSettings(env)");
+  expect(server).toContain("export const extensions = [item2Extensions, own.extensions] as const;");
+  expect(server).toContain("  return [item0Settings(env), item3Settings(env), ownSettings(env)];");
   expect(server).toContain(" as database };");
   expect(server).not.toContain("other.server");
   expect(server).not.toContain("helpers/database");
@@ -43,6 +43,31 @@ test("prepare uses numeric item order, then the user's seam, without reading rol
   ]);
   expect(aliases(root).find(({ find }) => find.test("#tinker/app")).replacement).toBe(
     `${join(root, ".tinker/app.ts")}$1`,
+  );
+});
+
+test("a 2fa helper folder cannot change numeric role order or full-name ties", () => {
+  const root = goodApp({
+    "src/lib/tinker.server.ts":
+      "export const extensions = [];\nexport const settings = () => [];\n",
+    "src/items/10-auth/extensions.server.ts": "export default [];\n",
+    "src/items/10-auth/settings.server.ts": "export default () => [];\n",
+    "src/items/2fa/helper.ts": "export const helper = 42;\n",
+    "src/items/3-db/extensions.server.ts": "export default [];\n",
+    "src/items/3-db/settings.server.ts": "export default () => [];\n",
+    "src/items/3-mail/settings.server.ts": "export default () => [];\n",
+  });
+
+  const server = render(root)["app.server.ts"];
+
+  expect(server.indexOf("3-db")).toBeLessThan(server.indexOf("3-mail"));
+  expect(server.indexOf("3-mail")).toBeLessThan(server.indexOf("10-auth"));
+  expect(server).not.toContain("2fa");
+  expect(server).toContain(
+    "export const extensions = [item0Extensions, item3Extensions, own.extensions] as const;",
+  );
+  expect(server).toContain(
+    "  return [item1Settings(env), item2Settings(env), item4Settings(env), ownSettings(env)];",
   );
 });
 
