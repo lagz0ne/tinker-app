@@ -265,7 +265,7 @@ try {
     "-Atc",
     "SELECT count(*) FROM drizzle.__drizzle_migrations",
   );
-  assert.equal(migrated, "4");
+  assert.equal(migrated, "5");
   say(`databaseSetup ran app migrations: ${migrated} migration rows on real Postgres`);
 
   const signup = authCurl("sign-up/email", {
