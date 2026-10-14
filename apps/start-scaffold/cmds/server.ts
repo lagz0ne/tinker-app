@@ -2,13 +2,19 @@ import { createScope } from "@tinker/core";
 import * as start from "@tinker/start/server";
 
 import { createScopeClose, createServerEntry } from "~/base/server";
-import * as demo from "~/components/demo/index.server";
-import { auth, bootstrap, database, readAccount } from "~/components/demo/index.server";
+import {
+  auth,
+  bootstrap,
+  database,
+  databaseSetup,
+  readAccount,
+  settings,
+} from "~/components/demo/index.server";
 import * as mail from "~/components/mail/index.server";
 
 const parts = start.serverParts({ auth, bootstrap, database, readAccount });
 const values = { ...process.env };
-const tags = [parts, start.auth.settings(values), demo.settings(values), mail.settings(values)];
+const appTags = [parts, start.auth.settings(values), settings(values), mail.settings(values)];
 const stop = { tools: new AbortController(), app: new AbortController() };
 
 const tools = createScope({
@@ -22,14 +28,12 @@ await tools.ready;
 const app = createScope({
   signal: stop.app.signal,
   observe: tools.resolve(start.telemetry.observe),
-  extensions: [start.startRequests, start.auth.extensions, demo.databaseSetup],
-  tags: [start.backendStop(stop.app.signal), tags, tools.resolve(start.telemetry.appTags)],
+  extensions: [start.startRequests, start.auth.extensions, databaseSetup],
+  tags: [start.backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],
 });
 
 const close = createScopeClose({ tools, app }, stop);
-
 await app.ready.catch(close);
-
 if (import.meta.hot) import.meta.hot.dispose(close);
 
 export default createServerEntry({

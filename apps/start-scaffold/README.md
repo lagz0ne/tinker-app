@@ -159,7 +159,8 @@ export default defineConfig({
 [cmds/server.ts](cmds/server.ts) starts and closes the roots.
 It imports the demo's public server API.
 It fills settings and lists extensions by hand.
-The file is 39 lines.
+The file is 43 lines.
+The one named demo import takes eight lines to keep unused exports out of the build.
 It calls the copied helpers in `tinker/base/server.ts`.
 [cmds/router.ts](cmds/router.ts) wires the browser readers.
 The component index adds its `Register` types.

@@ -163,11 +163,6 @@
           "path": "tinker/components/mail/settings.server.ts",
           "type": "registry:file",
           "target": "~/tinker/components/mail/settings.server.ts"
-        },
-        {
-          "path": "tinker/components/mail/errors.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/mail/errors.ts"
         }
       ],
       "meta": {

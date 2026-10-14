@@ -1,7 +1,6 @@
 import type { Env } from "@tinker/start/server";
 import { z } from "zod";
 
-import { raise } from "./errors";
 import { mailFrom, smtpUrl } from "./mail.server";
 
 const mailEnv = z.object({
@@ -19,16 +18,21 @@ const mailEnv = z.object({
 export function settings(env: Env.Values) {
   const parsed = mailEnv.safeParse(env);
   if (!parsed.success) {
-    raise("BadSettings", {
-      part: "mail",
-      keys: parsed.error.issues.map((issue) => issue.path.join(".")),
+    throw Object.assign(new Error("BadSettings"), {
+      kind: "BadSettings",
+      payload: { part: "mail", keys: parsed.error.issues.map((issue) => issue.path.join(".")) },
     });
   }
 
   const keys = parsed.data;
   const host = keys.SMTP_HOST.includes(":") ? `[${keys.SMTP_HOST}]` : keys.SMTP_HOST;
   const address = `smtp://${host}:${keys.SMTP_PORT}`;
-  if (!URL.canParse(address)) raise("BadSettings", { part: "mail", keys: ["SMTP_HOST"] });
+  if (!URL.canParse(address)) {
+    throw Object.assign(new Error("BadSettings"), {
+      kind: "BadSettings",
+      payload: { part: "mail", keys: ["SMTP_HOST"] },
+    });
+  }
 
   const smtp = new URL(address);
   smtp.username = keys.SMTP_USER;

@@ -1224,8 +1224,7 @@ function checkPlainFunction(node) {
 
   const base = baseCallers(node, name);
   const callers = [...new Set([...callSites(name, node), ...base])];
-  const errorRegistry = nameOf(name) === "raise" && pathOf(node).endsWith("/errors.ts");
-  if (callers.length < 2 && base.length === 0 && !errorRegistry) fail(node, "two-sites");
+  if (callers.length < 2 && base.length === 0) fail(node, "two-sites");
 
   plain.push(
     `- **${pathOf(node)}#${nameOf(name)}**\n${params.join("\n")}\n  - Callers:\n${callers.map((caller) => `    - \`${caller}\``).join("\n")}`,
@@ -2012,6 +2011,12 @@ if (process.argv.includes("--prove")) {
       "function probe(a: number, b: number, c: number, d: number) { return a+b+c+d; } probe(1,2,3,4); probe(2,3,4,5);",
     ],
     ["one-site", "two-sites", "function probe(a: number) { return a; } probe(1);"],
+    [
+      "error-registry-one-caller",
+      "two-sites",
+      'import { operation } from "@tinker/core";\n/** @param value - From the operation; why: return its value. */\nexport function raise(value: number) { return value; }\nconst probe = operation({ run: () => raise(1) });',
+      "tinker/components/one-caller/errors.ts",
+    ],
     ["no-doc", "param-doc", "function probe(a: number) { return a; } probe(1); probe(2);"],
     [
       "scope-factory",
@@ -2358,6 +2363,11 @@ if (process.argv.includes("--prove")) {
 
       assert.equal(red.status, rule ? 1 : 0, name);
       if (rule) assert.ok(red.stderr.includes(rule), `${name}: must fail by ${rule}`);
+      if (name === "error-registry-one-caller") {
+        assert.ok(
+          red.stderr.split("\n").includes("tinker/components/one-caller/errors.ts:3: two-sites"),
+        );
+      }
       if (name === "src-base-import" || name === "component-base-import") {
         const owner = name === "src-base-import" ? "src" : "components";
         const specifier = name === "src-base-import" ? "~/base/server" : "../../base/server";
