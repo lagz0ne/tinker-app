@@ -22,7 +22,7 @@
       "#tinker/routes": ["../../apps/start-min/.tinker/routeTree.gen.ts"],
       "#tinker/parts": ["./tests/fixtures/parts.ts"],
       "#tinker/parts.server": ["./tests/fixtures/parts.server.ts"],
-      "~/base/server": ["./tests/fixtures/base/server.ts"]
+      "~/base/*": ["../../apps/start-scaffold/tinker/base/*"]
     }
   },
   "include": ["src", "tests"]

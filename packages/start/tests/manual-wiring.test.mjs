@@ -16,7 +16,14 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
   const root = fixture({
     "package.json": "{}",
     "cmds/server.ts": entry,
-    "tinker/base/server.ts": readFileSync(join(baseDir, "tests/fixtures/base/server.ts"), "utf8"),
+    ...Object.fromEntries(
+      ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(
+        (file) => [
+          `tinker/base/${file}`,
+          readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
+        ],
+      ),
+    ),
     "tinker/components/mail/component.json": '{"requires":["missing"]}',
     "tinker/components/mail/index.server.ts": "export const settings = () => [];",
   });
@@ -39,7 +46,14 @@ test("a component settings file is not bound unless the user calls its public AP
   const root = fixture({
     "package.json": '{"type":"module"}',
     "cmds/server.ts": entry,
-    "tinker/base/server.ts": readFileSync(join(baseDir, "tests/fixtures/base/server.ts"), "utf8"),
+    ...Object.fromEntries(
+      ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(
+        (file) => [
+          `tinker/base/${file}`,
+          readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
+        ],
+      ),
+    ),
     "tinker/components/mail/component.json": '{"requires":[]}',
     "tinker/components/mail/index.server.ts": `import { tag, operation } from "@tinker/core";
 export const recipient = tag({ label: "mail.recipient" });
@@ -56,6 +70,7 @@ export default () => [recipient("Ada")];`,
     resolve: {
       alias: [
         { find: "@tinker/start/server", replacement: join(baseDir, "src/server.ts") },
+        { find: /^@tinker\/start$/, replacement: join(baseDir, "src/index.ts") },
         ...aliases(root),
       ],
     },

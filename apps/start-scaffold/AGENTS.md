@@ -70,7 +70,8 @@ Hidden object methods and arrow properties follow the plain rule.
 React props cannot carry Core handles or signals; components cannot await.
 The plain-function cap is 17; raising it needs a decision.
 
-The base lives in `node_modules/@tinker/start/`.
+The copied base entries live in `tinker/base/`.
+The remaining runtime parts stay in `@tinker/start` during the move.
 Keep feature units in app files.
 
 ## The app server entry
@@ -97,12 +98,19 @@ It lists extensions and settings by hand, in the user's order.
 It imports each component's public index.
 There are no generated wiring files or role files.
 Import createScope from @tinker/core.
-The copied tinker/base/server.ts holds the entry and close helpers.
+The copied `tinker/base/close.ts` holds reverse root close.
+`server-entry.ts` renders over the supplied app handle.
+`panics.server.ts` reports process failures without wrapping the handle.
+`router-entry.tsx` receives optional parts from the client command.
+`start-entry.ts` puts CSRF and requests before app middleware.
+The command binds the renderObservation tag from `base/observe.ts`.
+Each server render reads that tag from its request root.
 Its close helper alone may borrow named roots and their stop controllers.
 Helpers keep only repeated code; the main keeps startup steps.
 Commands sit directly under cmds; nested command files fail the checks.
 Src and components never import tinker/base or cmds.
-Start owns backendStop; copied base code owns only the two helpers.
+Start owns backendStop until the requests component moves.
+Copied base code owns only entry, close, panic, and observation glue.
 Commands import only ~/, @/, @tinker/core, and their framework entry.
 @tinker/start is allowed until Start is decomposed into base registry components (next card).
 Fill the serverParts tag with the component exports; never re-export them from the main.

@@ -53,8 +53,8 @@ if (import.meta.main) {
         "A backend module import loaded a native driver, auth library, or mail client",
       );
 
-      const { createScope } = await vite.ssrLoadModule("@tinker/core");
-      const { preset } = await vite.ssrLoadModule("@tinker/core/testing");
+      const { createScope } = await import("@tinker/core");
+      const { preset } = await import("@tinker/core/testing");
 
       const sent = [];
       const scope = createScope({

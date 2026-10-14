@@ -1,10 +1,11 @@
 import { createScope, operation, tag } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
+import { devErrorPage } from "~/base/panics";
+
 import { version } from "../package.json";
 import { responseBodies } from "../src/backend/body.server";
 import { health } from "../src/backend/health";
-import { devErrorPage } from "../src/entry/dev-error";
 import { readResult } from "../src/server";
 import { startRequests } from "../src/start";
 

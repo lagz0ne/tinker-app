@@ -1,5 +1,5 @@
 export { startRequests } from "./start";
-export type { RouterOptions, RouteTree } from "./entry/router";
+export type { RouterOptions, RouteTree } from "~/base/router-entry";
 
 export {
   batchEnvelope,
@@ -14,3 +14,5 @@ export {
 
 export type { Register, Sync } from "./parts/sync/envelopes";
 export type { Errors } from "./errors";
+
+export { abortReasons, raise, fail, isError } from "./errors";

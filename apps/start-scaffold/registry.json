@@ -65,8 +65,48 @@
           "target": "~/components.json"
         },
         {
-          "path": "tinker/base/server.ts",
-          "target": "~/tinker/base/server.ts",
+          "path": "tinker/base/close.ts",
+          "target": "~/tinker/base/close.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/base/observe.ts",
+          "target": "~/tinker/base/observe.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/base/panics.server.ts",
+          "target": "~/tinker/base/panics.server.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/base/panics.tsx",
+          "target": "~/tinker/base/panics.tsx",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/base/router-entry.tsx",
+          "target": "~/tinker/base/router-entry.tsx",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/base/server-entry.ts",
+          "target": "~/tinker/base/server-entry.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/base/start-entry.ts",
+          "target": "~/tinker/base/start-entry.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "../start-min/cmds/start.ts",
+          "target": "~/cmds/start.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "../start-min/src/start.ts",
+          "target": "~/src/start.ts",
           "type": "registry:file"
         }
       ],

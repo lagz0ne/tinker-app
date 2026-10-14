@@ -49,7 +49,14 @@ export function goodApp(files = {}) {
       'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({ serverEntry: "cmds/server.ts" })] };\n',
     "tsconfig.json": JSON.stringify({ extends: "./.tinker/tsconfig.json" }),
     ".gitignore": ".tinker/\n.tanstack/\n",
-    "tinker/base/server.ts": readFileSync(join(baseDir, "tests/fixtures/base/server.ts"), "utf8"),
+    ...Object.fromEntries(
+      ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(
+        (file) => [
+          `tinker/base/${file}`,
+          readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
+        ],
+      ),
+    ),
     "cmds/server.ts": readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8"),
     "src/routes/index.tsx": 'export const Route = createFileRoute("/")({});\n',
     ...Object.fromEntries(

@@ -30,7 +30,8 @@
       "default": "./vite.mjs"
     },
     "./package.json": "./package.json",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./router": "./src/router.ts"
   },
   "scripts": {
     "release": "node scripts/pack.mjs",

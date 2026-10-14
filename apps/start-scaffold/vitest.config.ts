@@ -7,6 +7,7 @@ export default defineConfig({
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
       "~": fileURLToPath(new URL("./tinker", import.meta.url)),
+      "#tinker/routes": fileURLToPath(new URL("./.tinker/routeTree.gen.ts", import.meta.url)),
       "#tinker/router": fileURLToPath(new URL("./cmds/router.ts", import.meta.url)),
       "#tinker/parts": fileURLToPath(new URL("./.tinker/parts.ts", import.meta.url)),
       "#tinker/parts.server": fileURLToPath(new URL("./.tinker/parts.server.ts", import.meta.url)),

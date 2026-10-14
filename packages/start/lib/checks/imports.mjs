@@ -51,6 +51,7 @@ const entries = new Set([
   "@tinker/start",
   "@tinker/start/server",
   "@tinker/start/client",
+  "@tinker/start/router",
   "@tinker/start/vite",
 ]);
 
@@ -61,7 +62,12 @@ export function commandImport(name) {
     name.startsWith("@/") ||
     name === "@tinker/core" ||
     name === "@tanstack/react-start/server-entry" ||
-    ["@tinker/start", "@tinker/start/server", "@tinker/start/client"].includes(name)
+    [
+      "@tinker/start",
+      "@tinker/start/server",
+      "@tinker/start/client",
+      "@tinker/start/router",
+    ].includes(name)
   ) {
     return null;
   }
@@ -264,7 +270,9 @@ export function imports(root) {
         message:
           /^cmds\/[^/]+\.[cm]?[jt]sx?$/.test(file) && name === "@tanstack/react-start/server-entry"
             ? null
-            : badImport(name, path, base),
+            : file === "tinker/base/router-entry.tsx" && name === "#tinker/routes"
+              ? null
+              : badImport(name, path, base),
       }))
       .filter(({ message }) => message)
       .map(({ name, at, message }) => message(at, name));

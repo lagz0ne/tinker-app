@@ -1,7 +1,11 @@
 import { createScope } from "@tinker/core";
 import * as start from "@tinker/start/server";
 
-import { createScopeClose, createServerEntry } from "~/base/server";
+import { createScopeClose } from "~/base/close";
+import { renderObservation } from "~/base/observe";
+import { observeServerPanics } from "~/base/panics.server";
+import { createServerHandler } from "~/base/server-entry";
+import type { ServerEntry } from "~/base/server-entry";
 
 import { auth, bootstrap, database, readAccount } from "@/notes.server";
 
@@ -22,18 +26,24 @@ const app = createScope({
   signal: stop.app.signal,
   observe: tools.resolve(start.telemetry.observe),
   extensions: [start.startRequests, start.auth.extensions],
-  tags: [start.backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],
+  tags: [start.backendStop(stop.app.signal), renderObservation(tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs })), appTags, tools.resolve(start.telemetry.appTags)],
 });
 
 const close = createScopeClose({ tools, app }, stop);
 
 await app.ready.catch(close);
 
-const server = createServerEntry({
+const server = {
   requestContext: app.resolve(start.startRequests),
   renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
   close,
-});
+} satisfies ServerEntry.Handle;
 
-if (import.meta.hot) import.meta.hot.dispose(close);
-export default server;
+observeServerPanics(server);
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(close);
+  import.meta.hot.on("vite:beforeFullReload", close);
+}
+export { close };
+export default createServerHandler(server);

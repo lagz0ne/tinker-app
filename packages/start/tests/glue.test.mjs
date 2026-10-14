@@ -71,11 +71,11 @@ test("Start's usual files the glue does not read are listed, and the read ones a
   expect(files).not.toContain("cmds/server.ts");
 });
 
-test("Start's entries and base routes point into the base, relative to the app's src", () => {
+test("Start runs the app commands and mounts remaining package routes", () => {
   const root = fixture({ "src/routes/index.tsx": "" });
   const options = startOptions(root, ["telemetry"]);
-  expect(resolve(root, "src", options.server.entry)).toBe(join(baseDir, "src/entry/server.ts"));
-  expect(resolve(root, "src", options.router.entry)).toBe(join(baseDir, "src/entry/router.tsx"));
+  expect(resolve(root, "src", options.server.entry)).toBe(join(root, "cmds/server.ts"));
+  expect(resolve(root, "src", options.router.entry)).toBe(join(root, "cmds/router.ts"));
 
   const { virtualRouteConfig: tree } = options.router;
   expect(resolve(root, "src/routes", tree.file)).toBe(join(baseDir, "src/routes/root.tsx"));
@@ -102,14 +102,14 @@ test("a part that is off mounts no route, so its path is the app's", () => {
 
 test("Start runs the base's entries, the generated route tree, and the base's import rules", () => {
   const root = fixture({ "src/routes/index.tsx": "" });
-  const fromSrc = (file) => relative(join(root, "src"), join(baseDir, "src", file));
+  const fromSrc = (file) => relative(join(root, "src"), join(root, file));
   const { virtualRouteConfig, ...router } = startOptions(root, []).router;
   expect({ ...startOptions(root, []), router }).toEqual({
     srcDirectory: "src",
-    start: { entry: fromSrc("entry/start.ts") },
-    server: { entry: fromSrc("entry/server.ts") },
+    start: { entry: fromSrc("cmds/start.ts") },
+    server: { entry: fromSrc("cmds/server.ts") },
     router: {
-      entry: fromSrc("entry/router.tsx"),
+      entry: fromSrc("cmds/router.ts"),
       generatedRouteTree: "../.tinker/routeTree.gen.ts",
     },
     importProtection: {

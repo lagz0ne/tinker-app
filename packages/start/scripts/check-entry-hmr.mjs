@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { createServer } from "vite-plus";
 
@@ -14,7 +13,6 @@ const app = resolve(process.argv[2]);
 const fixture = mkdtempSync(join(tmpdir(), "start-entry-hmr-"));
 let vite;
 const entries = [];
-const routers = [];
 
 try {
   cpSync(app, fixture, {
@@ -24,9 +22,9 @@ try {
   symlinkSync(join(app, "node_modules"), join(fixture, "node_modules"), "dir");
   const entry = join(fixture, serverFile(fixture).file);
   const source = `export const renderSpans = [];\n${readFileSync(entry, "utf8")
-    .replace(
-      "renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs })",
-      "renderObserve: { export: (span) => renderSpans.push(span) }",
+    .replaceAll(
+      "tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs })",
+      "{ export: (span) => renderSpans.push(span) }",
     )
     .replace(
       "await tools.ready;",
@@ -68,9 +66,9 @@ export const extensions = [extension({
   const first = firstModule.default;
   entries.push(first);
   assert.equal((await vite.environments.ssr.runner.import(entry)).default, first);
-  const routerPath = fileURLToPath(new URL("../src/entry/router.tsx", import.meta.url));
-  const routerEntry = await vite.environments.ssr.runner.import(routerPath);
-  routers.push(await routerEntry.getRouter());
+  const rendered = await fetch(new URL("/", address));
+  assert.equal(rendered.status, 200);
+  await rendered.text();
   assert.ok(firstModule.renderSpans.length > 0, "the first render must use the first observer");
 
   writeFileSync(entry, version("second"));
@@ -96,8 +94,9 @@ export const extensions = [extension({
   const second = secondModule.default;
   entries.push(second);
   assert.notEqual(second.requestContext.scope, first.requestContext.scope);
-  const nextRouterEntry = await vite.environments.ssr.runner.import(routerPath);
-  routers.push(await nextRouterEntry.getRouter());
+  const nextRendered = await fetch(new URL("/", address));
+  assert.equal(nextRendered.status, 200);
+  await nextRendered.text();
   assert.ok(secondModule.renderSpans.length > 0, "HMR renders must use the new observer");
   assert.equal((await fetch(new URL("/api/health", address))).status, 200);
   if (recordedParts(fixture).includes("auth")) {
@@ -111,7 +110,6 @@ export const extensions = [extension({
     "HMR: unchanged entry reused; both old roots closed; new requests and renders use the new entry; EXIT 0",
   );
 } finally {
-  for (const router of routers) await router.close();
   for (const entry of entries) await entry.close();
   await vite?.close();
   rmSync(fixture, { recursive: true, force: true });

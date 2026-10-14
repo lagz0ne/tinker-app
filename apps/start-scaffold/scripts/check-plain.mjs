@@ -479,7 +479,7 @@ function classifyNativeCallback(node) {
 
 function graphOwner(node) {
   for (let parent = enclosingFunction(node); parent; parent = enclosingFunction(parent)) {
-    if (optionsMember(parent) || factoryBody(parent)) return true;
+    if (optionsMember(parent) || factoryBody(parent) || isEntryHelper(parent)) return true;
   }
   return false;
 }
@@ -638,6 +638,9 @@ function isCommand(node) {
 
 function checkRoots(node) {
   if (isCommand(node)) return;
+  if (pathOf(node) === "tinker/base/router-entry.tsx" && entryFunction(enclosingFunction(node))) {
+    return;
+  }
 
   checkScopeReference(node);
   if (!moduleBinding(node) || !contains(checker.getTypeAtLocation(node.name), "holder")) return;
@@ -905,6 +908,7 @@ const responseDeclarations = new Set(builtinResponse.declarations);
 function checkResponse(node) {
   const file = pathOf(node);
   if (file.startsWith("src/routes/")) return;
+  if (["tinker/base/server-entry.ts", "tinker/base/panics.tsx"].includes(file)) return;
   if (nativeReference(node, responseDeclarations)) {
     fail(node, "protocol-response: replies belong to routes or the base");
   }
@@ -1232,16 +1236,23 @@ function checkPlainFunction(node) {
 }
 
 function isClientRouter(node) {
-  return pathOf(node) === clientEntry && nameOf(functionName(node)) === "router";
+  return (
+    pathOf(node) === clientEntry && ["router", "getRouter"].includes(nameOf(functionName(node)))
+  );
 }
 
-/** These copied helpers only check the hand-off and repeat reverse root cleanup. */
+/** Copied entry functions keep native framework and lifetime contracts, as the package entries did. */
 function isEntryHelper(node) {
   if (!node) return false;
-  return (
-    pathOf(node) === "tinker/base/server.ts" &&
-    ["createServerEntry", "createScopeClose", "closeRoots"].includes(nameOf(functionName(node)))
-  );
+  const helpers = {
+    "tinker/base/close.ts": ["createScopeClose", "closeRoots"],
+    "tinker/base/panics.server.ts": ["observeServerPanics"],
+    "tinker/base/panics.tsx": ["devErrorPage", "errorDetail"],
+    "tinker/base/router-entry.tsx": ["createRouterEntry", "getRouter"],
+    "tinker/base/server-entry.ts": ["createServerHandler"],
+    "tinker/base/start-entry.ts": ["createStartEntry", "readOptions"],
+  };
+  return helpers[pathOf(node)]?.includes(nameOf(functionName(node))) ?? false;
 }
 
 function commandModulePath(node) {
@@ -1254,7 +1265,12 @@ function commandModulePath(node) {
 }
 
 function entryFunction(node) {
-  return isClientRouter(node) || isEntryHelper(node) || isEntryHelper(enclosingFunction(node));
+  if (!node) return false;
+  if (isClientRouter(node)) return true;
+  for (let parent = node; parent; parent = enclosingFunction(parent)) {
+    if (isEntryHelper(parent)) return true;
+  }
+  return false;
 }
 
 function checkCommandImport(node) {
@@ -1480,6 +1496,18 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    [
+      "unknown-base-root",
+      "scope-entry-only",
+      'import { createScope } from "@tinker/core"; export const root = createScope();',
+      "tinker/base/feature-probe.ts",
+    ],
+    [
+      "unknown-base-response",
+      "protocol-response",
+      'export const reply = new Response("wire");',
+      "tinker/base/feature-probe.ts",
+    ],
     ["command-package-import", "command-import", 'import "node:fs";', "cmds/cli-import-probe.ts"],
     ["src-base-import", "base-import", 'import "~/base/server";', "src/base-import-probe.ts"],
     [

@@ -3,7 +3,7 @@ import { createScope, operation, resource, tag } from "@tinker/core";
 import type { Many, Scope } from "@tinker/core";
 import { afterAll, beforeAll } from "vite-plus/test";
 
-import { createScopeClose, createServerEntry } from "~/base/server";
+import { createScopeClose } from "~/base/close";
 
 import type { Env } from "../../src/env";
 import type { Database } from "../../src/parts/sync/database";
@@ -90,8 +90,8 @@ await root.ready;
 const close = createScopeClose({ root }, { root: stop });
 afterAll(close);
 
-export default createServerEntry({
+export default {
   requestContext: { scope: root },
   renderObserve: {},
   close,
-});
+};

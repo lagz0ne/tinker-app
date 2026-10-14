@@ -6,7 +6,11 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   resolve: {
     alias: {
-      "~/base/server": fileURLToPath(new URL("tests/fixtures/base/server.ts", import.meta.url)),
+      "~/base": fileURLToPath(new URL("../../apps/start-scaffold/tinker/base", import.meta.url)),
+      "#tinker/routes": fileURLToPath(
+        new URL("../../apps/start-min/.tinker/routeTree.gen.ts", import.meta.url),
+      ),
+      "#tinker/parts": fileURLToPath(new URL("tests/fixtures/parts.ts", import.meta.url)),
       "#tinker/telemetry-env": fileURLToPath(
         new URL("tests/fixtures/telemetry-env.ts", import.meta.url),
       ),

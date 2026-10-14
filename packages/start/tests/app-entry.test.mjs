@@ -6,7 +6,7 @@ import { createScope, extension } from "@tinker/core";
 import { createServer } from "vite-plus";
 import { expect, onTestFinished, test } from "vite-plus/test";
 
-import { createScopeClose } from "~/base/server";
+import { createScopeClose } from "~/base/close";
 
 import { named } from "../lib/checks/named.mjs";
 import { doctor } from "../lib/doctor.mjs";
@@ -57,7 +57,14 @@ test.each(["", "postinstall"])(
 async function loadEntry(wiring, entry = source) {
   const root = fixture({
     "package.json": '{"type":"module"}',
-    "tinker/base/server.ts": readFileSync(join(baseDir, "tests/fixtures/base/server.ts"), "utf8"),
+    ...Object.fromEntries(
+      ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(
+        (file) => [
+          `tinker/base/${file}`,
+          readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
+        ],
+      ),
+    ),
     "cmds/server.ts": entry
       .replace(
         'import * as start from "@tinker/start/server";',
@@ -81,6 +88,7 @@ async function loadEntry(wiring, entry = source) {
     resolve: {
       alias: [
         { find: "@tinker/start/server", replacement: join(baseDir, "src/server.ts") },
+        { find: /^@tinker\/start$/, replacement: join(baseDir, "src/index.ts") },
         ...aliases(root),
       ],
     },

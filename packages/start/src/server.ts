@@ -15,3 +15,5 @@ export { requestHeaders } from "./backend/headers.server";
 export { event, execution, stream } from "./parts/sync/schema";
 export { accountNotice } from "./parts/sync/notice";
 export { serverParts } from "./server-parts";
+
+export { retainRender } from "./backend/render-lifetime.server";

@@ -3,7 +3,7 @@ import { join, relative } from "node:path";
 
 import { physical, rootRoute, route } from "@tanstack/virtual-file-routes";
 
-import { appFiles, pick, shellFile } from "./named.mjs";
+import { appFiles, pick, serverFile, shellFile } from "./named.mjs";
 import { parts } from "./parts.mjs";
 import { baseDir, basePackage } from "./paths.mjs";
 
@@ -29,7 +29,7 @@ export function aliases(root) {
 }
 
 /**
- * Start's options: entries and base routes point into the base, by paths relative to the app's
+ * Start's options: commands use copied base entries; routes still point into the package, relative to
  * src/ (Start resolves no package name or absolute path there). A part's routes mount only while
  * it is on, so an off part leaves its paths to the app.
  * @param {string} root - From tinker(); why: Start takes paths relative to that app's src.
@@ -38,7 +38,7 @@ export function aliases(root) {
 export function startOptions(root, on) {
   const src = join(root, "src");
   const routes = join(src, "routes");
-  const fromSrc = (file) => relative(src, join(baseDir, "src", file));
+  const fromSrc = (file) => relative(src, join(root, file));
   const fromRoutes = (file) => relative(routes, join(baseDir, file));
 
   const shell = existsSync(join(root, shellFile))
@@ -50,10 +50,10 @@ export function startOptions(root, on) {
 
   return {
     srcDirectory: "src",
-    start: { entry: fromSrc("entry/start.ts") },
-    server: { entry: fromSrc("entry/server.ts") },
+    start: { entry: fromSrc("cmds/start.ts") },
+    server: { entry: fromSrc(serverFile(root).file) },
     router: {
-      entry: fromSrc("entry/router.tsx"),
+      entry: fromSrc("cmds/router.ts"),
       generatedRouteTree: "../.tinker/routeTree.gen.ts",
       virtualRouteConfig: rootRoute(shell, [...mounted, physical("", ".")]),
     },

@@ -1,25 +1,4 @@
-import { inspect } from "node:util";
-
 import type { Scope } from "@tinker/core";
-import type { ServerEntry } from "@tinker/start/server";
-
-/** Unhandled process work is reported and closes the main before exit; no scope starts here. */
-export function createServerEntry(entry: ServerEntry.Handle): ServerEntry.Handle {
-  const fail = async (error: unknown) => {
-    process.stderr.write(`server: unhandled rejection ${inspect(error)}\n`);
-    try {
-      await entry.close();
-    } finally {
-      process.exit(1);
-    }
-  };
-
-  process.on("unhandledRejection", fail);
-  entry.requestContext.scope.onClose(() => {
-    process.off("unhandledRejection", fail);
-  });
-  return entry;
-}
 
 /** The main retains named roots in start order and stop controllers with the same names; repeated close calls share one promise. */
 export function createScopeClose<T extends Record<string, Scope.RootHandle>>(
