@@ -1,5 +1,5 @@
 {
-  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "$schema": "https://ui.shadcn.com/schema/registry-component.json",
   "name": "auth-pages-example",
   "type": "registry:file",
   "title": "Auth pages example",

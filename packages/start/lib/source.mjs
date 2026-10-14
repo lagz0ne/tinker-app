@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 
 import { parseSync } from "oxc-parser";
 
@@ -72,13 +72,10 @@ const tried = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/in
  * The file a relative `export * from` names, or null when it is a package or does not exist.
  * @param {string} from - From exportsOf; why: resolve the path from this file.
  * @param {string} name - From the export statement; why: the module path it names.
- * @param {string | undefined} root - From the seam reader; why: resolve app aliases while keeping item source unread.
  */
-function localModule(from, name, root) {
-  const ownAlias = root && name.startsWith("@/");
-  if (!ownAlias && !name.startsWith(".")) return null;
-  const base = ownAlias ? resolve(root, "src", name.slice(2)) : resolve(dirname(from), name);
-  if (root && base.startsWith(resolve(root, "src/items") + sep)) return null;
+function localModule(from, name) {
+  if (!name.startsWith(".")) return null;
+  const base = resolve(dirname(from), name);
 
   return (
     tried.map((end) => base + end).find((path) => existsSync(path) && statSync(path).isFile()) ??
@@ -91,14 +88,13 @@ function localModule(from, name, root) {
  * @param {string} from - From exportsOf; why: the file holding the statement.
  * @param {object} node - From exportsOf; why: one ExportAllDeclaration.
  * @param {Set<string>} seen - From exportsOf; why: a cycle of `export *` ends.
- * @param {string | undefined} root - From the seam reader; why: resolve app aliases while keeping item source unread.
  */
-function exportAll(from, node, seen, root) {
-  const target = localModule(from, node.source.value, root);
+function exportAll(from, node, seen) {
+  const target = localModule(from, node.source.value);
   if (!target) return { names: new Map(), open: true };
   if (seen.has(target)) return { names: new Map(), open: false };
 
-  const inner = exportsOf(target, seen, root);
+  const inner = exportsOf(target, seen);
   inner.names.delete("default");
   return inner;
 }
@@ -110,9 +106,8 @@ function exportAll(from, node, seen, root) {
  * @param {ReturnType<typeof parseSource>} source - From exportsOf; why: lines of its nodes.
  * @param {object} node - From exportsOf; why: one statement.
  * @param {Set<string>} seen - From exportsOf; why: a cycle of `export *` ends.
- * @param {string | undefined} root - From the seam reader; why: resolve app aliases while keeping item source unread.
  */
-function statementExports(path, source, node, seen, root) {
+function statementExports(path, source, node, seen) {
   const closed = (names) => ({ names, open: false });
   if (node.type === "ExportDefaultDeclaration") return closed([["default", source.line(node)]]);
   if (node.type === "ExportNamedDeclaration") {
@@ -123,7 +118,7 @@ function statementExports(path, source, node, seen, root) {
   if (node.exported) {
     return closed([[node.exported.name ?? node.exported.value, source.line(node)]]);
   }
-  const all = exportAll(path, node, seen, root);
+  const all = exportAll(path, node, seen);
   return { names: [...all.names], open: all.open };
 }
 
@@ -132,16 +127,15 @@ function statementExports(path, source, node, seen, root) {
  * `open` is true when one cannot be (a package), so a missing name then proves nothing.
  * @param {string} path - From a check; why: the file to read.
  * @param {Set<string>} [seen] - From exportAll; why: the files already read.
- * @param {string} [root] - From the seam reader; why: resolve the app's `@/` export paths.
  */
-export function exportsOf(path, seen = new Set(), root) {
+export function exportsOf(path, seen = new Set()) {
   seen.add(path);
   const source = parseSource(path);
   const names = new Map();
   let open = false;
 
   for (const node of source.program.body) {
-    const found = statementExports(path, source, node, seen, root);
+    const found = statementExports(path, source, node, seen);
     for (const [name, line] of found.names) if (!names.has(name)) names.set(name, line);
     open ||= found.open;
   }

@@ -2,11 +2,11 @@ import { operation } from "@tinker/core";
 import { syncClient } from "@tinker/start/client";
 import { z } from "zod";
 
-import { readProfileInput } from "@/contracts/profile-contract";
-import { raise } from "@/errors";
-import { updateProfile, retryProfileNotification } from "@/transport/profile.functions";
+import { readProfileInput } from "~/components/demo";
+import { raise } from "~/components/demo";
+import { nameDraft, pending, notice, profileResult } from "~/components/demo";
 
-import { nameDraft, pending, notice, profileResult } from "./state";
+import { updateProfile, retryProfileNotification } from "@/transport/profile.functions";
 
 const notificationId = z.uuid();
 const draftInput = z.string();

@@ -23,6 +23,7 @@ test("the build's tsc checks vite.config.ts too, so a tinker() option type is ch
   expect(include).toEqual([
     "../src",
     "../cmds",
+    "../tinker",
     "../cmds/server.ts",
     "../tests",
     "../vite.config.ts",

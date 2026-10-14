@@ -1,10 +1,10 @@
 import type { Env } from "@tinker/start/server";
 import { z } from "zod";
 
-import { raise } from "@/errors";
+import { raise } from "~/components/demo/errors";
+import { mailFrom, smtpUrl } from "~/components/mail/index.server";
 
 import { databaseUrl } from "./database.server";
-import { mailFrom, smtpUrl } from "./mail.server";
 
 const appEnv = z.object({
   DATABASE_URL: z.url(),

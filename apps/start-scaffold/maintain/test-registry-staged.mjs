@@ -173,7 +173,7 @@ await test("the commit hook checks the staged registry", async (t) => {
     }
 
     await scenario("formatter edits cannot commit a stale index", async () => {
-      const path = "apps/start-scaffold/src/backend/mail.server.ts";
+      const path = "apps/start-scaffold/tinker/components/mail/mail.server.ts";
       await appendFile(join(scratch, path), "\nconst hookProof={value:1};\nvoid hookProof;\n");
       ok("vp", ["run", "@tinker-start-scaffold#registry:build"]);
 
@@ -190,7 +190,7 @@ await test("the commit hook checks the staged registry", async (t) => {
     });
 
     await scenario("a delete-only input commit fails the hook", async () => {
-      const path = "apps/start-scaffold/src/backend/mail.server.ts";
+      const path = "apps/start-scaffold/tinker/components/mail/mail.server.ts";
       await rm(join(scratch, path));
       rejected(commit([path]));
     });

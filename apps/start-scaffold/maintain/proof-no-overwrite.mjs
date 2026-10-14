@@ -63,8 +63,8 @@ async function hashes(consumer) {
   for (const file of [
     "vite.config.ts",
     "tsconfig.json",
-    "src/lib/tinker.ts",
-    "src/lib/tinker.server.ts",
+    "cmds/router.ts",
+    "cmds/server.ts",
     "src/routes/index.tsx",
     "src/backend/greet.ts",
     ".env.example",
@@ -82,20 +82,13 @@ async function wire(consumer, item) {
   const config = join(consumer, "vite.config.ts");
   await writeFile(
     config,
-    (await readFile(config, "utf8")).replace("tinker()", "tinker({ auth: true, sync: true })"),
+    (await readFile(config, "utf8")).replace(
+      'serverEntry: "cmds/server.ts"',
+      'serverEntry: "cmds/server.ts", auth: true, sync: true',
+    ),
   );
-  for (const [file, names] of Object.entries(item.meta.seams)) {
-    const path = join(consumer, file);
-    let text = await readFile(path, "utf8");
-    for (const [name, needed] of Object.entries(names)) {
-      text = text.replace(`export const ${name} = () => [];\n`, "");
-      if (needed.include) {
-        text =
-          `import { databaseSetup } from "../backend/database.server";
-` + text.replace("extensions = []", "extensions = [databaseSetup]");
-      } else text += needed.line + "\n";
-    }
-    await writeFile(path, text);
+  for (const name of ["server.ts", "router.ts"]) {
+    await cp(join(app, "cmds", name), join(consumer, "cmds", name));
   }
   await cp(join(consumer, "examples/demo.env.example"), join(consumer, ".env"));
   console.log(
@@ -287,10 +280,10 @@ try {
       ),
     );
     for (const [file, name] of [
-      ["tinker.ts", "client"],
-      ["tinker.server.ts", "server"],
+      ["router.ts", "client"],
+      ["server.ts", "server"],
     ]) {
-      const path = join(consumer, "src/lib", file);
+      const path = join(consumer, "cmds", file);
       await writeFile(
         path,
         (await readFile(path, "utf8")) + `export const user${name} = "keep-${name}";\n`,
@@ -319,9 +312,6 @@ try {
     if (full) {
       const plain = report.replace(/\s+/g, " ");
       for (const part of item.meta.parts) assert.ok(plain.includes(`tinker({ ${part}: true })`));
-      for (const names of Object.values(item.meta.seams)) {
-        for (const needed of Object.values(names)) assert.ok(plain.includes(needed.line));
-      }
       await wire(consumer, item);
     }
 

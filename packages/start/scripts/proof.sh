@@ -16,7 +16,7 @@
 set -uo pipefail
 repo=$(pwd)
 out=$repo/docs/roadmap/start-base/proof
-app_entry=$(node --input-type=module -e 'import {serverFile} from "./packages/start/lib/named.mjs"; process.stdout.write(serverFile.file)')
+app_entry=$(node --input-type=module -e 'import {serverFile} from "./packages/start/lib/named.mjs"; process.stdout.write(serverFile(process.cwd() + "/apps/start-min").file)')
 scratch=/tmp/tinker-proof
 clean() { sed -e "s|$scratch/app/||g" -e "s|$scratch|\$S|g" -e "s|$repo/||g" -e "s|$HOME|~|g"; }
 say() { echo "\$ $*"; }
@@ -170,7 +170,7 @@ tar -xzf packages/start/packs/tinker-start-*.tgz -C "$scratch/base"
   doctor
 
   mistake "two tinker() calls in vite.config.ts"
-  sed -i 's/plugins: \[tinker()\]/plugins: [tinker(), tinker()]/' vite.config.ts
+  sed -i 's/plugins: \[tinker({ serverEntry: "cmds\/server.ts" })\]/plugins: [tinker({ serverEntry: "cmds\/server.ts" }), tinker({ serverEntry: "cmds\/server.ts" })]/' vite.config.ts
   build
   doctor
 
@@ -180,17 +180,18 @@ tar -xzf packages/start/packs/tinker-start-*.tgz -C "$scratch/base"
   doctor
 
   mistake "a tinker() option the base would drop"
-  sed -i 's/tinker()/tinker({ prerendr: { enabled: true } })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", prerendr: { enabled: true } })/' vite.config.ts
   build 2
 } 2>&1 | clean > "$out/9-build-stops.txt"
 
 {
-  mistake "named files: src/router.ts, src/start.ts, app server entry, src/style.css"
+  mistake "named files: cmds/router.ts, src/start.ts, app server entry, src/style.css"
   mkdir -p src/frontend
   printf 'export const NotFound = () => <p>app 404 page</p>;\n' > src/frontend/not-found.tsx
   printf '%s\n' 'import type { RouterOptions } from "@tinker/start";' \
-    'import { NotFound } from "./frontend/not-found";' \
-    'export const router: RouterOptions = () => ({ defaultNotFoundComponent: NotFound });' > src/router.ts
+    'import { NotFound } from "@/frontend/not-found";' \
+    'export const extensions = [];' \
+    'export const router: RouterOptions = () => ({ defaultNotFoundComponent: NotFound });' > cmds/router.ts
   printf '%s\n' 'import { createMiddleware, createStart } from "@tanstack/react-start";' \
     'import { setResponseHeader } from "@tanstack/react-start/server";' \
     'const stamp = createMiddleware().server(({ next }) => {' \
@@ -297,7 +298,7 @@ tab='{"traces":[],"logs":[{"time":1,"level":30,"msg":"from a tab","side":"browse
   grep -ac '"msg":"core.span"' /tmp/tinker-proof-serve.log
 
   mistake "telemetry off: /api/telemetry is the app's own route"
-  sed -i 's/tinker()/tinker({ telemetry: false })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", telemetry: false })/' vite.config.ts
   printf '%s\n' 'import { createFileRoute } from "@tanstack/react-router";' \
     'export const Route = createFileRoute("/api/telemetry")({' \
     '  server: { handlers: { POST: () => new Response("the app takes it", { status: 200 }) } },' \
@@ -330,6 +331,7 @@ tab='{"traces":[],"logs":[{"time":1,"level":30,"msg":"from a tab","side":"browse
 
 # The auth part's stand-in server seam: an auth library that answers with what it was sent.
 seam() {
+  printf 'export { auth, readAccount } from "@/proof.server";\n' >> "$app_entry"
   mkdir -p src/lib
   printf '%s\n' 'import { operation, resource } from "@tinker/core";' \
     'import { authSettings } from "@tinker/start/server";' \
@@ -341,9 +343,9 @@ seam() {
     '    handler: async (request: Request) =>' \
     '      Response.json({ handled: `${request.method} ${new URL(request.url).pathname}`, origin: settings.origin }),' \
     '  }),' \
-    '});' > src/lib/tinker.server.ts
+    '});' > src/proof.server.ts
   [[ ${1:-} == no-readAccount ]] && return
-  printf '%s\n' 'export const readAccount = operation({ label: "readAccount", run: () => null });' >> src/lib/tinker.server.ts
+  printf '%s\n' 'export const readAccount = operation({ label: "readAccount", run: () => null });' >> src/proof.server.ts
 }
 keys() { printf 'PUBLIC_ORIGIN=http://127.0.0.1:4318\nAUTH_SECRET=%s\n' "$(printf 's%.0s' $(seq 1 32))" > .env; }
 appAuthRoute() {
@@ -355,7 +357,7 @@ appAuthRoute() {
 
 {
   mistake "auth on, with a stand-in seam: the handler answers /api/auth/*"
-  sed -i 's/tinker()/tinker({ auth: true })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", auth: true })/' vite.config.ts
   seam
   keys
   build
@@ -379,7 +381,7 @@ appAuthRoute() {
   serve_down
 
   mistake "auth on, and the app's own /api/auth/\$: the build names the switch"
-  sed -i 's/tinker()/tinker({ auth: true })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", auth: true })/' vite.config.ts
   seam
   keys
   appAuthRoute
@@ -387,20 +389,20 @@ appAuthRoute() {
   doctor
 
   mistake "auth on, and a seam without readAccount: the build stops"
-  sed -i 's/tinker()/tinker({ auth: true })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", auth: true })/' vite.config.ts
   seam no-readAccount
   keys
   build
   doctor
 
   mistake "auth on, and no seam at all: the build stops"
-  sed -i 's/tinker()/tinker({ auth: true })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", auth: true })/' vite.config.ts
   keys
   build
   doctor
 
   mistake "auth on, a short secret and no origin: doctor names them"
-  sed -i 's/tinker()/tinker({ auth: true })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", auth: true })/' vite.config.ts
   seam
   printf '# auth\nAUTH_SECRET=short\n' > .env
   build
@@ -410,11 +412,12 @@ appAuthRoute() {
 # The sync part's stand-in server seam: auth with no one signed in, and an in-memory PGlite
 # database with the sync tables and two public events. PGlite is linked from the base's dev tools.
 syncSeam() {
+  printf 'export { auth, readAccount, database, bootstrap } from "@/proof.server";\n' >> "$app_entry"
   ln -sfn "$(readlink -f "$repo/packages/start/node_modules/@electric-sql/pglite")" node_modules/@electric-sql/pglite 2>/dev/null ||
     { mkdir -p node_modules/@electric-sql && ln -sfn "$(readlink -f "$repo/packages/start/node_modules/@electric-sql/pglite")" node_modules/@electric-sql/pglite; }
   ln -sfn "$(readlink -f "$repo/packages/start/node_modules/drizzle-orm")" node_modules/drizzle-orm
   mkdir -p src/lib
-  cat > src/lib/tinker.server.ts <<'TS'
+  cat > src/proof.server.ts <<'TS'
 import { operation, resource } from "@tinker/core";
 import { authSettings } from "@tinker/start/server";
 import type { Database } from "@tinker/start/server";
@@ -434,8 +437,13 @@ export const auth = resource({
 });
 export const readAccount = operation({ label: "readAccount", run: () => null });
 TS
+  if [[ ${1:-} != client ]]; then
+    printf 'export const bootstrap = operation({ label: "bootstrap", run: () => ({ public: { stream: "public" as const, revision: 0 }, private: null }) });\n' >> src/proof.server.ts
+  fi
+  cp "$repo/packages/start/tests/fixtures/app.ts" cmds/router.ts
+  sed -i 's|../../src/parts/sync/envelopes|@tinker/start|g; s|../../src/index|@tinker/start|g' cmds/router.ts
   [[ ${1:-} == no-database ]] && return
-  cat >> src/lib/tinker.server.ts <<'TS'
+  cat >> src/proof.server.ts <<'TS'
 export const database = resource({
   label: "database",
   factory: async (_deps, { defer }): Promise<Database.Handle> => {
@@ -470,7 +478,7 @@ appSyncRoute() {
 
 {
   mistake "sync on, with stand-in seams: /api/sync streams the database's events"
-  sed -i 's/tinker()/tinker({ sync: true })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", sync: true })/' vite.config.ts
   syncSeam
   keys
   build
@@ -499,7 +507,7 @@ appSyncRoute() {
   serve_down
 
   mistake "sync on, and the app's own /api/sync: the build names the switch"
-  sed -i 's/tinker()/tinker({ sync: true })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", sync: true })/' vite.config.ts
   syncSeam
   keys
   appSyncRoute
@@ -507,14 +515,14 @@ appSyncRoute() {
   doctor
 
   mistake "sync on, and a seam without database: the build stops"
-  sed -i 's/tinker()/tinker({ sync: true })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", sync: true })/' vite.config.ts
   syncSeam no-database
   keys
   build
   doctor
 
   mistake "sync on, with auth: false: the build fails"
-  sed -i 's/tinker()/tinker({ sync: true, auth: false })/' vite.config.ts
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", sync: true, auth: false })/' vite.config.ts
   syncSeam
   keys
   build 2
@@ -523,10 +531,10 @@ appSyncRoute() {
 # The sync app: stand-in seams on both sides, a page that shows the public count from the tab's
 # records, and a route that commits the next count as a sync event.
 syncApp() {
-  sed -i 's/tinker()/tinker({ sync: true })/' vite.config.ts
-  syncSeam
+  sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", sync: true })/' vite.config.ts
+  syncSeam client
   keys
-  cat >> src/lib/tinker.server.ts <<'TS'
+  cat >> src/proof.server.ts <<'TS'
 export const bootstrap = operation({
   label: "bootstrap",
   depends: { database, history: eventHistory },
@@ -537,15 +545,16 @@ export const bootstrap = operation({
     }),
 });
 TS
-  sed -i 's|^import { authSettings } from "@tinker/start/server";|import { authSettings, eventHistory } from "@tinker/start/server";|' src/lib/tinker.server.ts
-  sed -i 's|        payload jsonb NOT NULL, PRIMARY KEY (stream, revision));|        payload jsonb NOT NULL, PRIMARY KEY (stream, revision));\n      CREATE FUNCTION start_sync_wake() RETURNS trigger LANGUAGE plpgsql AS $$\n      BEGIN PERFORM pg_notify('"'"'start_sync'"'"', TG_TABLE_NAME); RETURN NULL; END; $$;\n      CREATE TRIGGER sync_event_committed AFTER INSERT ON sync_event\n      FOR EACH STATEMENT EXECUTE FUNCTION start_sync_wake();|' src/lib/tinker.server.ts
-  sed -i "s|      INSERT INTO sync_event VALUES|      INSERT INTO sync_stream VALUES ('public', 2);\n      INSERT INTO sync_event VALUES|" src/lib/tinker.server.ts
+  sed -i 's|^import { authSettings } from "@tinker/start/server";|import { authSettings, eventHistory } from "@tinker/start/server";|' src/proof.server.ts
+  sed -i 's|        payload jsonb NOT NULL, PRIMARY KEY (stream, revision));|        payload jsonb NOT NULL, PRIMARY KEY (stream, revision));\n      CREATE FUNCTION start_sync_wake() RETURNS trigger LANGUAGE plpgsql AS $$\n      BEGIN PERFORM pg_notify('"'"'start_sync'"'"', TG_TABLE_NAME); RETURN NULL; END; $$;\n      CREATE TRIGGER sync_event_committed AFTER INSERT ON sync_event\n      FOR EACH STATEMENT EXECUTE FUNCTION start_sync_wake();|' src/proof.server.ts
+  sed -i "s|      INSERT INTO sync_event VALUES|      INSERT INTO sync_stream VALUES ('public', 2);\n      INSERT INTO sync_event VALUES|" src/proof.server.ts
   mkdir -p src/frontend src/backend
   cat > src/frontend/count.ts <<'TS'
 import { data } from "@tinker/core";
 export const count = data<number>({ label: "count", initial: 0 });
 TS
-  cat > src/lib/tinker.ts <<'TS'
+  printf 'export { extensions, records, readSnapshot, readBootstrap, readBatch, streamMessage } from "@/proof";\nexport const router: import("@tinker/start").RouterOptions = () => ({});\n' > cmds/router.ts
+  cat > src/proof.ts <<'TS'
 import { resource } from "@tinker/core";
 import {
   batchEnvelope,
@@ -555,7 +564,7 @@ import {
 } from "@tinker/start";
 import type { Sync } from "@tinker/start";
 import { z } from "zod";
-import { count } from "../frontend/count";
+import { count } from "@/frontend/count";
 
 declare module "@tinker/start" {
   interface Register {
@@ -606,7 +615,7 @@ TS
   cat > src/backend/bump.ts <<'TS'
 import { operation } from "@tinker/core";
 import { eventHistory } from "@tinker/start/server";
-import { database } from "../lib/tinker.server";
+import { database } from "@/proof.server";
 export const bump = operation({
   label: "bump",
   depends: { database, history: eventHistory },
@@ -641,7 +650,7 @@ TS
   cat > src/routes/index.tsx <<'TS'
 import { createFileRoute } from "@tanstack/react-router";
 import { useData } from "@tinker/react";
-import { count } from "../frontend/count";
+import { count } from "@/frontend/count";
 function Count() {
   return <p>count {useData(count)}</p>;
 }
@@ -709,13 +718,13 @@ browse() {
 
   mistake "sync on, and a client seam without streamMessage: the build stops"
   syncApp
-  sed -i 's/^export const streamMessage = /const streamMessage = /' src/lib/tinker.ts
+  sed -i 's/^export const streamMessage = /const streamMessage = /' src/proof.ts
   build
   doctor
 
   mistake "sync on, and no Register bodies: the build stops"
   syncApp
-  sed -i '/^declare module "@tinker\/start" {/,/^}/d' src/lib/tinker.ts
+  sed -i '/^declare module "@tinker\/start" {/,/^}/d' src/proof.ts
   build
   doctor
 } 2>&1 | clean > "$out/15-sync-client.txt"

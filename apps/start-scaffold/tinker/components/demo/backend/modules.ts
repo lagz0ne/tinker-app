@@ -41,9 +41,3 @@ export const betterAuthStart = resource({
   target: "scope",
   factory: () => import("better-auth/tanstack-start"),
 });
-
-export const smtp = resource({
-  label: "module:nodemailer",
-  target: "scope",
-  factory: () => import("nodemailer"),
-});

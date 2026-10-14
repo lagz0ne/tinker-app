@@ -1,0 +1,68 @@
+import assert from "node:assert/strict";
+import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join, resolve } from "node:path";
+
+import { createServer } from "vite-plus";
+
+import { serverFile } from "../lib/named.mjs";
+
+const app = resolve(process.argv[2]);
+const fixture = mkdtempSync(join(tmpdir(), "start-entry-hmr-"));
+let vite;
+const entries = [];
+
+try {
+  cpSync(app, fixture, {
+    recursive: true,
+    filter: (file) => !["node_modules", "dist", ".tinker", ".tanstack"].includes(basename(file)),
+  });
+  symlinkSync(join(app, "node_modules"), join(fixture, "node_modules"), "dir");
+  const entry = join(fixture, serverFile(fixture).file);
+  const source = readFileSync(entry, "utf8");
+  const version = (value) =>
+    source.replace(
+      "  close,",
+      `  fetch(request, next) {\n    return new URL(request.url).pathname === "/scope-proof" ? new Response("${value}") : next(request);\n  },\n  close,`,
+    );
+  writeFileSync(entry, version("first"));
+
+  process.chdir(fixture);
+  vite = await createServer({
+    root: fixture,
+    server: { port: 0, watch: { usePolling: true, interval: 50 } },
+  });
+  await vite.listen();
+  const address = `http://127.0.0.1:${vite.httpServer.address().port}/scope-proof`;
+  assert.equal(await (await fetch(address)).text(), "first");
+  const first = (await vite.environments.ssr.runner.import(entry)).default;
+  entries.push(first);
+  assert.equal((await vite.environments.ssr.runner.import(entry)).default, first);
+
+  writeFileSync(entry, version("second"));
+  const closed = await Promise.race([
+    first.requestContext.scope.closed,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("HMR did not close the old app root")), 20000),
+    ),
+  ]);
+  assert.equal(closed.status, "success");
+  let response;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    response = await (await fetch(address)).text();
+    if (response === "second") break;
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  assert.equal(response, "second");
+  const second = (await vite.environments.ssr.runner.import(entry)).default;
+  entries.push(second);
+  assert.notEqual(second.requestContext.scope, first.requestContext.scope);
+  await second.close();
+  console.log(
+    "HMR: unchanged entry reused; old root closed; new requests use the new entry; EXIT 0",
+  );
+} finally {
+  for (const entry of entries) await entry.close();
+  await vite?.close();
+  rmSync(fixture, { recursive: true, force: true });
+}

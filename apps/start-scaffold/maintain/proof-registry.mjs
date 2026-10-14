@@ -25,7 +25,7 @@ await Promise.all([packs, registry, consumer].map((dir) => mkdir(dir)));
 console.log(`Proof folder: ${scratch}`);
 const env = { ...process.env, CI: "true", npm_config_audit: "false", npm_config_fund: "false" };
 const servers = [];
-const mailSource = join(app, "src/backend/mail.server.ts");
+const mailSource = join(app, "tinker/components/mail/mail.server.ts");
 const original = await readFile(mailSource, "utf8");
 
 function run(command, args, cwd = consumer, extra = {}) {
@@ -186,7 +186,7 @@ try {
     "add",
     `${url}/mail-example.json`,
     "--diff",
-    "src/backend/mail.server.ts",
+    "tinker/components/mail/mail.server.ts",
   ]);
   assert.ok(diff.includes("mail.completed.changed"));
   assert.deepEqual(await hashes(join(consumer, "src")), userBefore);
@@ -224,14 +224,15 @@ try {
   const configPath = join(consumer, "vite.config.ts");
   await writeFile(
     configPath,
-    (await readFile(configPath, "utf8")).replace("tinker()", "tinker({ auth: true, sync: true })"),
+    (await readFile(configPath, "utf8")).replace(
+      'serverEntry: "cmds/server.ts"',
+      'serverEntry: "cmds/server.ts", auth: true, sync: true',
+    ),
   );
 
-  await writeFile(join(consumer, "src/lib/tinker.ts"), 'export * from "../examples/demo";\n');
-  await writeFile(
-    join(consumer, "src/lib/tinker.server.ts"),
-    'export * from "../examples/demo.server";\nexport { extensions } from "../examples/demo.server";\n',
-  );
+  for (const name of ["server.ts", "router.ts"]) {
+    await cp(join(app, "cmds", name), join(consumer, "cmds", name));
+  }
   await cp(join(consumer, "examples/demo.env.example"), join(consumer, ".env"));
 
   run("vp", ["build"]);

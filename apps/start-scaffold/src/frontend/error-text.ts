@@ -1,4 +1,4 @@
-import { isError } from "@/errors";
+import { isError } from "~/components/demo";
 
 /**
  * @param error - From a form action failure; why: pick the shown message.

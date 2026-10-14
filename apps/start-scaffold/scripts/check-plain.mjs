@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -18,8 +18,7 @@ const base = dirname(
   createRequire(join(root, "package.json")).resolve("@tinker/start/package.json"),
 );
 
-const { serverFile, appFiles } = createRequire(join(base, "package.json"))("./lib/named.mjs");
-const entryFile = serverFile(root).file;
+const { appFiles } = createRequire(join(base, "package.json"))("./lib/named.mjs");
 const clientEntry = appFiles(root).find((entry) => entry.alias === "#tinker/router").file;
 
 const failures = [];
@@ -37,6 +36,7 @@ async function scan(folder) {
 
 await scan(join(root, "src"));
 await scan(join(root, "cmds"));
+await scan(join(root, "tinker"));
 const config = ts.readConfigFile(join(root, "tsconfig.json"), (path) => ts.sys.readFile(path));
 assert.equal(config.error, undefined, "tsconfig must be readable");
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
@@ -623,8 +623,12 @@ function checkScopeReference(node) {
   fail(node, "scope-entry-only");
 }
 
+function isCommand(node) {
+  return /^cmds\/[^/]+\.tsx?$/.test(pathOf(node));
+}
+
 function checkRoots(node) {
-  if (pathOf(node) === entryFile) return;
+  if (isCommand(node)) return;
 
   checkScopeReference(node);
   if (!moduleBinding(node) || !contains(checker.getTypeAtLocation(node.name), "holder")) return;
@@ -879,7 +883,7 @@ function protocolUnitReference(node, file, name) {
 
 function checkRequestHeaders(node) {
   const file = pathOf(node);
-  if (file === "src/backend/auth.server.ts") return;
+  if (file === "tinker/components/demo/backend/auth.server.ts") return;
   if (protocolUnitReference(node, "src/backend/headers.server.ts", "requestHeaders")) {
     fail(node, "protocol-headers: app code must use principal or currentUser");
   }
@@ -1011,7 +1015,7 @@ function checkHttpImport(node) {
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
-    if (pathOf(node) === entryFile) return;
+    if (isCommand(node)) return;
     if (!moduleDeclarationCall(node)) fail(node, "module-effect");
     return;
   }
@@ -1102,8 +1106,9 @@ function addCaller(use, name, symbol, node, source, callers) {
  * settings tags there. The function the seam exports as `settings` needs no second site.
  */
 function baseCallers(node, name) {
-  const entry = `${entryFile}#module`;
-  return nameOf(name) === "settings" && callSites(name, node).includes(entry) ? [entry] : [];
+  return nameOf(name) === "settings"
+    ? callSites(name, node).filter((site) => /^cmds\/[^/]+\.tsx?#module$/.test(site))
+    : [];
 }
 
 function callSites(name, node) {
@@ -1401,7 +1406,7 @@ if (plain.length > PLAIN_MAX) {
   );
 }
 
-const list = `# Plain functions\n\nThis list is checked against src.\nCallers include direct calls and typed callback registrations.\nRepeated calls by one caller count once; self-calls do not count.\nTests and generated files do not count.\n\n${plain.join("\n\n")}\n`;
+const list = `# Plain functions\n\nThis list is checked against src, cmds, and tinker.\nCallers include direct calls and typed callback registrations.\nRepeated calls by one caller count once; self-calls do not count.\nTests and generated files do not count.\n\n${plain.join("\n\n")}\n`;
 
 if (process.argv.includes("--list")) process.stdout.write(list);
 else {
@@ -2060,6 +2065,30 @@ if (process.argv.includes("--prove")) {
       "function probe(v: number) { return v; } String(probe); String(probe);",
     ],
     [
+      "cmd-cli-scope",
+      undefined,
+      'import { createScope } from "@tinker/core"; const root = createScope({}); await root.ready; await root.close({ graceful: true });',
+      "cmds/cli-probe.ts",
+    ],
+    [
+      "cmd-worker-scope",
+      undefined,
+      'import { createScope } from "@tinker/core"; const root = createScope({}); await root.ready; await root.close({ graceful: true });',
+      "cmds/worker-probe.ts",
+    ],
+    [
+      "component-scope",
+      "scope-entry-only",
+      'import { createScope } from "@tinker/core"; createScope({});',
+      "tinker/components/demo/scope-probe.ts",
+    ],
+    [
+      "nested-command-scope",
+      "scope-entry-only",
+      'import { createScope } from "@tinker/core"; createScope({});',
+      "cmds/nested/scope-probe.ts",
+    ],
+    [
       "scope-element",
       "scope-entry-only",
       'import * as Core from "@tinker/core"; Core["createScope"]({});',
@@ -2235,7 +2264,15 @@ if (process.argv.includes("--prove")) {
 
   try {
     await cp(join(root, "src"), join(planted, "src"), { recursive: true });
-    for (const file of ["tsconfig.json", "PLAIN.md", "package.json", ".tinker"]) {
+    for (const file of [
+      "tsconfig.json",
+      "vite.config.ts",
+      "cmds",
+      "tinker",
+      "PLAIN.md",
+      "package.json",
+      ".tinker",
+    ]) {
       await cp(join(root, file), join(planted, file), { recursive: true });
     }
     await cp(join(root, "tests"), join(planted, "tests"), { recursive: true });
@@ -2250,6 +2287,7 @@ if (process.argv.includes("--prove")) {
         if (error.code === "ENOENT") return "";
         throw error;
       });
+      await mkdir(dirname(path), { recursive: true });
       await writeFile(path, original + source + "\n");
       if (name === "list") await writeFile(join(planted, "PLAIN.md"), "wrong list\n");
 

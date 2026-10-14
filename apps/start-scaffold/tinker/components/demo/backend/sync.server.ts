@@ -2,9 +2,9 @@ import { operation } from "@tinker/core";
 import { drizzleOrm } from "@tinker/start/server";
 import { eventHistory, event } from "@tinker/start/server";
 
-import { readCursor, readPrivateCursor, readFeatureEvents } from "@/contracts/sync";
-import type { Sync } from "@/contracts/sync";
-import { raise } from "@/errors";
+import { readCursor, readPrivateCursor, readFeatureEvents } from "~/components/demo/contracts/sync";
+import type { Sync } from "~/components/demo/contracts/sync";
+import { raise } from "~/components/demo/errors";
 
 import { currentUser, principal } from "./auth.server";
 import { database } from "./database.server";

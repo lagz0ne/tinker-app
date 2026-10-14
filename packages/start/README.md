@@ -11,11 +11,11 @@ for a Tinkered app, as one package
 
 The smallest app is `apps/start-min` in the Tinkered repo:
 a server entry, a greet operation, its server function,
-and a page, plus the two glue lines below.
+and a page, plus the config below.
 
 ## The glue
 
-Two config lines join an app to the base.
+The app owns its entry path and aliases.
 
 `vite.config.ts`:
 
@@ -24,14 +24,17 @@ import { defineConfig } from "vite-plus";
 import { tinker } from "@tinker/start/vite";
 
 export default defineConfig({
-  plugins: [tinker()],
+  plugins: [tinker({ serverEntry: "cmds/server.ts" })],
 });
 ```
 
 `tsconfig.json`:
 
 ```json
-{ "extends": "./.tinker/tsconfig.json" }
+{
+  "extends": "./.tinker/tsconfig.json",
+  "include": ["src", "cmds", "tinker", "tests"]
+}
 ```
 
 Add one script to `package.json`,
@@ -60,7 +63,66 @@ They never write an entry for the app.
 
 The entry reads env once, starts telemetry, then the app.
 It lists extensions and settings by hand, in the user's order.
-It imports each item's public index.
+It imports each component's public index.
+The scaffold entry is filled in below:
+
+```ts
+import * as start from "@tinker/start/server";
+
+import * as demo from "~/components/demo/index.server";
+
+export const { auth, bootstrap, database, readAccount } = demo;
+const values = { ...process.env };
+const toolTags = [
+  start.telemetry.settings(values), start.telemetry.tags,
+];
+const appTags = [start.auth.settings(values), demo.settings(values)];
+const stop = {
+  tools: new AbortController(),
+  app: new AbortController(),
+};
+
+const tools = start.createScope({
+  signal: stop.tools.signal,
+  extensions: start.telemetry.extensions,
+  tags: toolTags,
+});
+
+await tools.ready;
+
+const app = start.createScope({
+  signal: stop.app.signal,
+  observe: tools.resolve(start.telemetry.observe),
+  extensions: [
+    start.startRequests, start.auth.extensions,
+    demo.databaseSetup,
+  ],
+  tags: [
+    start.backendStop(stop.app.signal), appTags,
+    tools.resolve(start.telemetry.appTags),
+  ],
+});
+
+const close = start.createScopeClose([
+  { scope: tools, stop: stop.tools },
+  { scope: app, stop: stop.app },
+]);
+
+await app.ready.catch(close);
+
+const server = start.createServerEntry({
+  requestContext: app.resolve(start.startRequests),
+  renderObserve: tools.resolve(
+    start.telemetry.renderObserve,
+    { ns: start.telemetry.renderNs },
+  ),
+  close,
+});
+
+if (import.meta.hot) import.meta.hot.dispose(close);
+export default server;
+```
+
 There are no generated wiring files or role files.
 The app calls `createScopeClose` to close the app, then telemetry.
 That helper starts nothing and shares one close promise.
@@ -75,12 +137,16 @@ The entry closes on HMR replacement and process shutdown.
 The scaffold's client wiring lives in `cmds/router.ts`.
 It exports router options, extensions, and the sync readers.
 No app code may import a command file.
-Commands may import app code and item public entries.
+Commands may import app code and component public entries.
+Every file directly under cmds may build its own scope.
+Src and components may not create scopes.
+Doctor checks each command with the same import rules.
+Start builds only the named server entry; other builds come later.
 
-## Items
+## Components
 
-Items live in `src/items/<name>/`.
-Each item has `item.json` and a public `index.ts`.
+Components live in `tinker/components/<name>/`.
+Each item has `component.json` and a public `index.ts`.
 Server code may use `index.server.ts` too.
 
 ```json
@@ -88,9 +154,9 @@ Server code may use `index.server.ts` too.
 ```
 
 Only `requires` is allowed.
-Doctor checks missing items, self-requires, and cycles.
+Doctor checks missing components, self-requires, and cycles.
 Imports of another item need a direct requires entry.
-Imports through another item's private files fail doctor.
+Imports through another component's private files fail doctor.
 Prepare never chooses an order or reads item code.
 The entry writes the order of extensions and tag bindings.
 The last binding for a tag wins, as Core defines.
@@ -122,7 +188,10 @@ Turning a part off frees its route path for the app.
 
 ```ts
 export default defineConfig({
-  plugins: [tinker({ telemetry: false, auth: true })],
+  plugins: [tinker({
+    serverEntry: "cmds/server.ts",
+    telemetry: false, auth: true,
+  })],
 });
 ```
 
@@ -152,13 +221,13 @@ export default defineConfig({
 The server seam with auth on, filled in:
 
 ```ts
-// cmds/server.ts
-export const extensions = [];
-export { auth, readAccount } from "../backend/auth";
+// In cmds/server.ts, beside its scope code:
+export { auth, readAccount }
+  from "~/components/accounts/index.server";
 ```
 
 ```ts
-// src/backend/auth.ts
+// tinker/components/accounts/index.server.ts
 import { resource } from "@tinker/core";
 import { authSettings } from "@tinker/start/server";
 
@@ -240,6 +309,7 @@ The client seam with sync on, filled in:
 
 ```ts
 // cmds/router.ts
+export const router: RouterOptions = () => ({});
 export const extensions = [];
 export { records } from "../frontend/records";
 export { readSnapshot, readBootstrap } from "./sync";
@@ -729,7 +799,7 @@ so app snapshot fields keep their types in both entries.
 Installed examples record their part switches in
 `src/examples/*.tinker.json`.
 Doctor names a missing `tinker({ part: true })` switch.
-The app wires each copied item's public API by hand.
+The app wires each copied component's public API by hand.
 
 ## Built files and compression
 
@@ -758,5 +828,21 @@ The app wires each copied item's public API by hand.
   To turn it off:
 
   ```ts
-  tinker({ compileHints: false });
+  tinker({
+    serverEntry: "cmds/server.ts",
+    compileHints: false,
+  });
   ```
+
+## More scope promises
+
+With auth on, the app root does not start without auth settings.
+An account ID keeps its colons; a similar prefix names no account.
+The router loads and checks through the snapshot loader.
+It dehydrates on the server, hydrates in the tab, then streams.
+A notice removes that stream's wait.
+Closing the last other waiter stops the shared clock.
+Waiting again replaces the stream's old wait; it adds no second wait.
+Streams that share one read each get their own byte copy.
+The router part binds stdout as the sink on a server render.
+The observer takes Core's level and span history from its tags.

@@ -4,18 +4,23 @@ import { authSettings } from "@tinker/start/server";
 import { sql } from "drizzle-orm";
 import { test, expect, onTestFinished } from "vite-plus/test";
 
-import { incrementCounter } from "@/backend/counter.server";
-import { migrate, database, databaseUrl } from "@/backend/database.server";
-import { mail } from "@/backend/mail.server";
-import type { Mail } from "@/backend/mail.server";
-import { readProfile, saveProfile, retryNotification } from "@/backend/profile.server";
+import { incrementCounter } from "~/components/demo/backend/counter.server";
+import { migrate, database, databaseUrl } from "~/components/demo/backend/database.server";
+import {
+  readProfile,
+  saveProfile,
+  retryNotification,
+} from "~/components/demo/backend/profile.server";
 import {
   bootstrapPublic,
   bootstrapPrivate,
   replayPublic,
   replayPrivate,
-} from "@/backend/sync.server";
-import { raise, isError } from "@/errors";
+} from "~/components/demo/backend/sync.server";
+import { raise, isError } from "~/components/demo/errors";
+import { mail } from "~/components/mail/index.server";
+import type { Mail } from "~/components/mail/index.server";
+
 import { readReceipt } from "@/transport/result.server";
 
 import { handleAuth } from "./presets";
@@ -398,7 +403,9 @@ test("a bad stored event is not shown to the user as a rejected change", async (
       tags: requestHeaders(new Headers()),
     });
     if (result.status !== "failed") raise("BadInput", { reason: "expected bad stored event" });
-    expect(() => readReceipt(result)).toThrow("StoredDataInvalid");
+    expect(() => readReceipt(result)).toThrow(
+      expect.objectContaining({ kind: "StoredDataInvalid", payload: {} }),
+    );
   } finally {
     expect((await root.close({ graceful: true })).status).toBe("success");
   }

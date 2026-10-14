@@ -82,9 +82,12 @@ export const database = resource({
 
 const stop = new AbortController();
 const root = createScope({ signal: stop.signal });
+await root.ready;
+const close = createScopeClose([{ scope: root, stop }]);
+afterAll(close);
 
 export default createServerEntry({
   requestContext: { scope: root },
   renderObserve: {},
-  close: createScopeClose([{ scope: root, stop }]),
+  close,
 });

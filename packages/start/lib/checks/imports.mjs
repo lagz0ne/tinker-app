@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import { join, dirname, resolve, sep, isAbsolute, posix } from "node:path";
 
-import { readItemModules } from "../item-modules.mjs";
+import { readComponentModules } from "../component-modules.mjs";
 import { installedBase } from "../paths.mjs";
 import { parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";
@@ -15,7 +15,7 @@ export const say = {
   path: (at, name) => `${at} "${name}" reaches into the base by path; use a base entry`,
   serverEntry: (at, name) =>
     `${at} "${name}" skips the base's scope; use createServerEntry from @tinker/start/server`,
-  passed: (count) => `${count} files in src/ import the base only through its entries`,
+  passed: (count) => `${count} source files import the base only through its entries`,
 };
 
 const skipped = new Set([
@@ -89,68 +89,81 @@ function isPrivate(path, file) {
 }
 
 /** Missing helper manifests need a file to add, rather than an edit to an absent file. */
-function checkItemRequires(at, name, item, owner, folders) {
+function checkComponentRequires(at, name, item, owner, folders) {
   if (!owner) return null;
   const from = folders.find((folder) => folder.name === owner);
   if (from?.requires.includes(item)) return null;
 
-  const manifest = `src/items/${owner}/item.json`;
-  return from?.files.has("item.json")
+  const manifest = `tinker/components/${owner}/component.json`;
+  return from?.files.has("component.json")
     ? `${at} "${name}" needs "${item}" in ${manifest} requires`
     : `${at} "${name}" needs "${item}"; add ${manifest} with { "requires": ["${item}"] }`;
 }
 
 /** Import paths, including re-exports and dynamic imports, obey one item's public entry. */
-function itemImport(name, file, line, folders) {
-  const resolved = name.startsWith(".")
-    ? posix.join(posix.dirname(file), name).replace(/^src\//, "@/")
-    : posix.normalize(name);
-  const target = /^@\/items\/([^/]+)(?:\/(.*))?$/.exec(resolved);
+function componentImport(name, file, line, folders, root) {
+  const resolved = sourcePath(name, file, root);
+  const target = /^tinker\/components\/([^/]+)(?:\/(.*))?$/.exec(resolved ?? "");
   if (!target) return [];
   const [, item, path] = target;
 
-  const owner = /^src\/items\/([^/]+)\//.exec(file)?.[1];
+  const owner = /^tinker\/components\/([^/]+)\//.exec(file)?.[1];
   if (owner === item) return [];
   const at = `${file}:${line}`;
   const problems = [];
 
   if (isPrivate(path, file)) {
     const serverEntry = /\.server\.[cm]?[jt]sx?$/.test(file)
-      ? ` or "@/items/${item}/index.server"`
+      ? ` or "~/components/${item}/index.server"`
       : "";
     problems.push(
-      `${at} "${name}" is private to item ${item}; use "@/items/${item}"${serverEntry}`,
+      `${at} "${name}" is private to component ${item}; use "~/components/${item}"${serverEntry}`,
     );
   }
 
-  const missing = checkItemRequires(at, name, item, owner, folders);
+  const missing = checkComponentRequires(at, name, item, owner, folders);
   if (missing) problems.push(missing);
   return problems;
 }
 
 /** Graph errors belong to named files; check 6 reports import boundaries without loading items. */
-function itemImports(root, sources) {
-  const { declared: folders } = readItemModules(root);
+function componentImports(root, sources) {
+  const { declared: folders } = readComponentModules(root);
   return sources.flatMap(({ file, imports }) =>
-    imports.flatMap(({ name, line }) => itemImport(name, file, line, folders)),
+    imports.flatMap(({ name, line }) => componentImport(name, file, line, folders, root)),
   );
 }
 
 /** Map app aliases and relative imports to the same project path. */
-function sourcePath(name, file) {
+function sourcePath(name, file, root) {
+  if (isAbsolute(name)) return posix.relative(root, name);
   if (name.startsWith("@/")) return posix.normalize(`src/${name.slice(2)}`);
   if (name.startsWith("~/")) return posix.normalize(`tinker/${name.slice(2)}`);
   return name.startsWith(".") ? posix.join(posix.dirname(file), name) : null;
 }
 
-function isolation(sources) {
+/** The source folder determines which direction an import may cross. */
+function isolatedImport(root, file, name, line) {
+  const target = sourcePath(name, file, root);
+  const owner = file.startsWith("src/")
+    ? "src"
+    : file.startsWith("tinker/components/")
+      ? "components"
+      : null;
+  if (!owner || !target) return [];
+
+  if (target.startsWith("cmds/")) {
+    return [`${file}:${line} "${name}" imports a command; ${owner} must not import cmds`];
+  }
+  if (owner === "components" && target.startsWith("src/")) {
+    return [`${file}:${line} "${name}" imports user code; components must not import src`];
+  }
+  return [];
+}
+
+function isolation(root, sources) {
   return sources.flatMap(({ file, imports }) =>
-    imports.flatMap(({ name, line }) => {
-      const target = sourcePath(name, file);
-      return file.startsWith("src/") && target?.startsWith("cmds/")
-        ? [`${file}:${line} "${name}" imports a command; src must not import cmds`]
-        : [];
-    }),
+    imports.flatMap(({ name, line }) => isolatedImport(root, file, name, line)),
   );
 }
 
@@ -165,7 +178,9 @@ export function imports(root) {
     file,
     imports: specifiers(parseSource(join(root, file))),
   }));
-  const files = sources.filter(({ file }) => file.startsWith("src/") && /\.[jt]sx?$/.test(file));
+  const files = sources.filter(
+    ({ file }) => /^(src|cmds|tinker)\//.test(file) && /\.[cm]?[jt]sx?$/.test(file),
+  );
 
   const bad = files.flatMap(({ file, imports }) => {
     const path = join(root, file);
@@ -179,7 +194,12 @@ export function imports(root) {
       .map(({ name, at, message }) => message(at, name));
   });
   return verdict(
-    [...bad, ...extensionImports(sources), ...itemImports(root, sources), ...isolation(sources)],
+    [
+      ...bad,
+      ...extensionImports(sources),
+      ...componentImports(root, sources),
+      ...isolation(root, sources),
+    ],
     say.passed(files.length),
   );
 }

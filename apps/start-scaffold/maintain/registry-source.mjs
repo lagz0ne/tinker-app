@@ -15,8 +15,8 @@ function checkTargets(registry) {
     "~/vite.config.ts",
     "~/vite.config.mts",
     "~/tsconfig.json",
-    "~/src/lib/tinker.ts",
-    "~/src/lib/tinker.server.ts",
+    "~/cmds/router.ts",
+    "~/cmds/server.ts",
   ]);
   const owners = new Map();
   for (const item of registry.items) {
@@ -111,29 +111,12 @@ function receipt(item) {
   ];
 }
 
-/** Mail alone ships only SMTP; the complete demo adds each other module once. */
-function moduleContent(file, text) {
-  if (file.path === "src/backend/modules.ts") {
-    const mailOnly = file.target === "~/src/backend/mail-modules.ts";
-    const [imports, ...modules] = text.trimEnd().split("\n\n");
-    return (
-      [
-        imports,
-        ...modules.filter((body) => body.startsWith("export const smtp ") === mailOnly),
-      ].join("\n\n") + "\n"
-    );
-  }
-  return file.path === "src/backend/mail.server.ts"
-    ? text.replace('from "./modules"', 'from "./mail-modules"')
-    : text;
-}
-
 /** Package files come from their template; tests are copied as they are. */
 async function fileContent(file, packages) {
   if (packages[file.path]) return JSON.stringify(packages[file.path], null, 2) + "\n";
 
   const text = await readFile(join(app, file.path), "utf8");
-  return file.path.startsWith("tests/") ? text : moduleContent(file, text);
+  return text;
 }
 
 /** Each item reads the app's source; targets keep shadcn inside the consumer's folder. */
@@ -158,7 +141,7 @@ export async function registryItems(options = {}) {
   const items = [];
 
   for (const item of registry.items) {
-    const emitted = { $schema: "https://ui.shadcn.com/schema/registry-item.json", ...item };
+    const emitted = { $schema: "https://ui.shadcn.com/schema/registry-component.json", ...item };
     Object.assign(emitted, itemDependencies(item, full));
 
     if (item.registryDependencies) {

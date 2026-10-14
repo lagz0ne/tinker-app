@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
 import { byteOrderMark, lineOfKey, prependExtends, readJsonc, writeKey } from "../jsonc.mjs";
+import { appFiles } from "../named.mjs";
 import { callsOf, importsFrom, parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";
 
@@ -19,7 +20,7 @@ export const say = {
   mark: (file) => `${file}:1 starts with a byte order mark; vp cannot read it`,
   extends: 'tsconfig.json:1 does not extend "./.tinker/tsconfig.json"',
   paths: (file, line) =>
-    `${file}:${line} sets compilerOptions.paths; it replaces the base's #tinker/* and @/* paths, so remove it`,
+    `${file}:${line} sets compilerOptions.paths without every #tinker/* path; copy the private paths from .tinker/tsconfig.json`,
   strict: (file, line) => `${file}:${line} turns strict off; the base's files need strict`,
   postinstall:
     'package.json:1 has no "postinstall": "tinker prepare"; a fresh clone has no .tinker/',
@@ -158,6 +159,18 @@ function winner(files, key) {
   };
 }
 
+/** Public aliases may be user-owned; TypeScript still needs the private glue aliases. */
+function completePaths(root, paths) {
+  const keys = [
+    ...appFiles(root).map((entry) => entry.alias),
+    "#tinker/routes",
+    "#tinker/parts",
+    "#tinker/parts.server",
+    "#tinker/telemetry-env",
+  ];
+  return keys.every((key) => Array.isArray(paths[key]) && paths[key].length > 0);
+}
+
 /**
  * @param {string} root - From the glue check; why: read the files tsconfig.json extends.
  * @param {ReturnType<typeof readJsonc>} tsconfig - From the glue check; why: the parsed tsconfig.json.
@@ -175,7 +188,7 @@ function tsconfigProblems(root, tsconfig) {
     ...files
       .filter(({ read }) => read.error)
       .map(({ file, read }) => parseProblem(file, read.error)),
-    paths && say.paths(paths.file, paths.line),
+    paths && !completePaths(root, paths.value) && say.paths(paths.file, paths.line),
     strict?.value === false && say.strict(strict.file, strict.line),
   ];
 }

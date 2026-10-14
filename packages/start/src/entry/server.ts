@@ -1,12 +1,20 @@
 import { createStartHandler as createStart } from "@tanstack/react-start/server";
 import { defaultStreamHandler as renderStream } from "@tanstack/react-start/server";
 
-import app from "#tinker/server";
+import initialApp from "#tinker/server";
 
 import { retainRender } from "../backend/render-lifetime.server";
 import { raise } from "../errors";
 import { devErrorPage } from "./dev-error";
 import type { getRouter } from "./router";
+
+let app = initialApp;
+
+if (import.meta.hot) {
+  import.meta.hot.accept("#tinker/server", async () => {
+    app = (await import("#tinker/server")).default;
+  });
+}
 
 const renderRequest = createStart(async (context) => {
   const router: typeof context.router & {

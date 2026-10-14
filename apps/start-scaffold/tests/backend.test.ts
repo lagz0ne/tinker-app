@@ -4,12 +4,12 @@ import { authSettings } from "@tinker/start/server";
 import { sql } from "drizzle-orm";
 import { test, expect, onTestFinished } from "vite-plus/test";
 
-import { auth } from "@/backend/auth.server";
-import { database, migrate, databaseUrl } from "@/backend/database.server";
-import { mail, mailFrom, smtpUrl } from "@/backend/mail.server";
-import type { Mail } from "@/backend/mail.server";
-import { readProfile, saveProfile } from "@/backend/profile.server";
-import { raise, isError } from "@/errors";
+import { auth } from "~/components/demo/backend/auth.server";
+import { database, migrate, databaseUrl } from "~/components/demo/backend/database.server";
+import { readProfile, saveProfile } from "~/components/demo/backend/profile.server";
+import { raise, isError } from "~/components/demo/errors";
+import { mail, mailFrom, smtpUrl } from "~/components/mail/index.server";
+import type { Mail } from "~/components/mail/index.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";

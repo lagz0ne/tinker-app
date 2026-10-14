@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 
-import { settings } from "@/backend/settings.server";
+import { settings } from "~/components/demo/backend/settings.server";
 
 test("env becomes the typed tags mail and the database need, with no unit running", () => {
   const bindings = settings({

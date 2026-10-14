@@ -1,6 +1,6 @@
 import * as start from "@tinker/start/server";
 
-import * as demo from "@/items/demo/index.server";
+import * as demo from "~/components/demo/index.server";
 
 export const { auth, bootstrap, database, readAccount } = demo;
 const values = { ...process.env };

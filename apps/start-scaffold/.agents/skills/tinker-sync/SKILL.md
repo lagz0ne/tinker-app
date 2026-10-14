@@ -46,7 +46,7 @@ Results describe the operation's required work:
 - Failed: required work failed before a usable save.
   Show the failure and keep the old saved record.
 
-See `src/contracts/sync.ts` for the exact bodies.
+See `tinker/components/demo/contracts/sync.ts` for the exact bodies.
 Retry uses the same execution ID for a lost reply.
 Mail retry uses a new ID and keeps the old profile save.
 Account exit cancels waits and ignores old responses.

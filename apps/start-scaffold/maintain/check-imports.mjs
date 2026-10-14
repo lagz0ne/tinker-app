@@ -21,14 +21,27 @@ if (import.meta.main) {
       server: { middlewareMode: true, watch: null },
       appType: "custom",
       resolve: {
-        alias: [{ find: /^@\//, replacement: fileURLToPath(new URL("../src/", import.meta.url)) }],
+        alias: [
+          {
+            find: /^#tinker\/parts\.server$/,
+            replacement: fileURLToPath(new URL("../.tinker/parts.server.ts", import.meta.url)),
+          },
+          {
+            find: /^#tinker\/telemetry-env$/,
+            replacement: fileURLToPath(new URL("../.tinker/telemetry-env.ts", import.meta.url)),
+          },
+          { find: /^@\//, replacement: fileURLToPath(new URL("../src/", import.meta.url)) },
+          { find: /^~\//, replacement: fileURLToPath(new URL("../tinker/", import.meta.url)) },
+        ],
       },
     });
     try {
-      const root = fileURLToPath(new URL("../src/backend/", import.meta.url));
+      const root = fileURLToPath(new URL("../tinker/components/demo/backend/", import.meta.url));
       const features = readdirSync(root).filter((name) => name.endsWith(".server.ts"));
-      for (const name of features) await vite.ssrLoadModule(`/src/backend/${name}`);
-      const backend = await vite.ssrLoadModule("/src/backend/mail.server.ts");
+      for (const name of features) {
+        await vite.ssrLoadModule(`/tinker/components/demo/backend/${name}`);
+      }
+      const backend = await vite.ssrLoadModule("/tinker/components/mail/mail.server.ts");
 
       const services = [...loaded].filter((url) =>
         /\/node_modules\/(?:pg|@electric-sql\/pglite|better-auth|nodemailer)(?:\/|$)/.test(url),

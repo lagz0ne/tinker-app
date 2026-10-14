@@ -71,16 +71,16 @@ test("doctor counts every failing check in its last line", () => {
 });
 
 for (const statement of [
-  'import { secret } from "@/items/mail/secret";',
-  'export { secret } from "@/items/mail/secret";',
-  'const secret = import("@/items/mail/secret");',
-  'type Secret = import("@/items/mail/secret").Secret;',
+  'import { secret } from "~/components/mail/secret";',
+  'export { secret } from "~/components/mail/secret";',
+  'const secret = import("~/components/mail/secret");',
+  'type Secret = import("~/components/mail/secret").Secret;',
 ]) {
   test(`doctor blocks private item paths in ${statement}`, () => {
     const root = preparedApp({
-      "src/items/mail/item.json": '{"requires":[]}',
-      "src/items/mail/index.ts": "export const mail = 1;",
-      "src/items/mail/secret.ts": "export const secret = 1;",
+      "tinker/components/mail/component.json": '{"requires":[]}',
+      "tinker/components/mail/index.ts": "export const mail = 1;",
+      "tinker/components/mail/secret.ts": "export const secret = 1;",
       "src/consumer.ts": `\n${statement}\n`,
     });
 
@@ -88,7 +88,7 @@ for (const statement of [
 
     expect(checked.code).toBe(1);
     expect(checked.lines.join(" ").replaceAll(/\s+/g, " ")).toContain(
-      'src/consumer.ts:2 "@/items/mail/secret" is private to item mail; use "@/items/mail"',
+      'src/consumer.ts:2 "~/components/mail/secret" is private to component mail; use "~/components/mail"',
     );
     expect(checked.lines.join(" ")).not.toContain("index.server");
   });
@@ -97,36 +97,36 @@ for (const statement of [
 for (const { file, name, symbol, messages } of [
   {
     file: "src/consumer.ts",
-    name: "./items/mail/secret",
+    name: "../tinker/components/mail/secret",
     symbol: "s",
     messages: [
-      'src/consumer.ts:1 "./items/mail/secret" is private to item mail; use "@/items/mail"',
+      'src/consumer.ts:1 "../tinker/components/mail/secret" is private to component mail; use "~/components/mail"',
     ],
   },
   {
-    file: "src/items/inbox/x.ts",
+    file: "tinker/components/inbox/x.ts",
     name: "../mail/secret",
     symbol: "s",
     messages: [
-      'src/items/inbox/x.ts:1 "../mail/secret" is private to item mail; use "@/items/mail"',
-      'src/items/inbox/x.ts:1 "../mail/secret" needs "mail" in src/items/inbox/item.json requires',
+      'tinker/components/inbox/x.ts:1 "../mail/secret" is private to component mail; use "~/components/mail"',
+      'tinker/components/inbox/x.ts:1 "../mail/secret" needs "mail" in tinker/components/inbox/component.json requires',
     ],
   },
   {
-    file: "src/items/inbox/x.ts",
+    file: "tinker/components/inbox/x.ts",
     name: "../mail",
     symbol: "m",
     messages: [
-      'src/items/inbox/x.ts:1 "../mail" needs "mail" in src/items/inbox/item.json requires',
+      'tinker/components/inbox/x.ts:1 "../mail" needs "mail" in tinker/components/inbox/component.json requires',
     ],
   },
 ]) {
   test(`doctor checks the relative item import ${name} in ${file}`, () => {
     const root = preparedApp({
-      "src/items/inbox/item.json": '{"requires":[]}',
-      "src/items/mail/item.json": '{"requires":[]}',
-      "src/items/mail/index.ts": "export const m = 1;",
-      "src/items/mail/secret.ts": "export const s = 1;",
+      "tinker/components/inbox/component.json": '{"requires":[]}',
+      "tinker/components/mail/component.json": '{"requires":[]}',
+      "tinker/components/mail/index.ts": "export const m = 1;",
+      "tinker/components/mail/secret.ts": "export const s = 1;",
       [file]: `import { ${symbol} } from "${name}";`,
     });
 
@@ -141,33 +141,34 @@ for (const { file, name, symbol, messages } of [
 
 test("doctor requires a direct dependency for another item's public API", () => {
   const root = preparedApp({
-    "src/items/mail/item.json": '{"requires":[]}',
-    "src/items/mail/index.ts": 'import { db } from "@/items/postgres"; export const mail = db;',
-    "src/items/postgres/item.json": '{"requires":[]}',
-    "src/items/postgres/index.ts": "export const db = 1;",
+    "tinker/components/mail/component.json": '{"requires":[]}',
+    "tinker/components/mail/index.ts":
+      'import { db } from "~/components/postgres"; export const mail = db;',
+    "tinker/components/postgres/component.json": '{"requires":[]}',
+    "tinker/components/postgres/index.ts": "export const db = 1;",
   });
 
   const checked = doctor(root, false);
 
   expect(checked.code).toBe(1);
   expect(checked.lines.join(" ").replaceAll(/\s+/g, " ")).toContain(
-    'src/items/mail/index.ts:1 "@/items/postgres" needs "postgres" in src/items/mail/item.json requires',
+    'tinker/components/mail/index.ts:1 "~/components/postgres" needs "postgres" in tinker/components/mail/component.json requires',
   );
 });
 
 test("doctor allows declared public imports, own private files, and private test imports", () => {
   const root = preparedApp({
-    "src/items/mail/item.json": '{"requires":["postgres"]}',
-    "src/items/mail/index.ts":
+    "tinker/components/mail/component.json": '{"requires":["postgres"]}',
+    "tinker/components/mail/index.ts":
       'import { db } from "../postgres/index"; import { secret } from "./secret"; export const mail = db + secret;',
-    "src/items/mail/secret.ts": "export const secret = 1;",
-    "src/items/postgres/item.json": '{"requires":[]}',
-    "src/items/postgres/index.ts": "export const db = 1;",
-    "src/items/postgres/index.server.ts": "export const server = 1;",
+    "tinker/components/mail/secret.ts": "export const secret = 1;",
+    "tinker/components/postgres/component.json": '{"requires":[]}',
+    "tinker/components/postgres/index.ts": "export const db = 1;",
+    "tinker/components/postgres/index.server.ts": "export const server = 1;",
     "src/consumer.ts":
-      'import { mail } from "@/items/mail"; import { server } from "@/items/postgres/index.server";',
-    "tests/mail.test.ts": 'import { secret } from "@/items/mail/secret";',
-    "src/mail.test.ts": 'import { secret } from "@/items/mail/secret";',
+      'import { mail } from "~/components/mail"; import { server } from "~/components/postgres/index.server";',
+    "tests/mail.test.ts": 'import { secret } from "~/components/mail/secret";',
+    "src/mail.test.ts": 'import { secret } from "~/components/mail/secret";',
   });
 
   const checked = doctor(root, false);
@@ -175,31 +176,32 @@ test("doctor allows declared public imports, own private files, and private test
   expect(checked.code).toBe(0);
 });
 
-for (const name of ["@/items/postgres", "@/items/mail/../postgres"]) {
+for (const name of ["~/components/postgres", "~/components/mail/../postgres"]) {
   test(`a helper-only item must declare its import of ${name}`, () => {
     const root = preparedApp({
-      "src/items/mail/reader.ts": `import { db } from "${name}"; export const mail = db;`,
-      "src/items/postgres/item.json": '{"requires":[]}',
-      "src/items/postgres/index.ts": "export const db = 1;",
+      "tinker/components/mail/reader.ts": `import { db } from "${name}"; export const mail = db;`,
+      "tinker/components/postgres/component.json": '{"requires":[]}',
+      "tinker/components/postgres/index.ts": "export const db = 1;",
     });
 
     const checked = doctor(root, false);
 
     expect(checked.code).toBe(1);
     expect(checked.lines.join(" ").replaceAll(/\s+/g, " ")).toContain(
-      `src/items/mail/reader.ts:1 "${name}" needs "postgres"; add src/items/mail/item.json with { "requires": ["postgres"] }`,
+      `tinker/components/mail/reader.ts:1 "${name}" needs "postgres"; add tinker/components/mail/component.json with { "requires": ["postgres"] }`,
     );
   });
 }
 
 test("a graph error elsewhere does not make declared imports undeclared", () => {
   const root = preparedApp({
-    "src/items/mail/item.json": '{"requires":["postgres"]}',
-    "src/items/mail/index.ts": 'import { db } from "@/items/postgres"; export const mail = db;',
-    "src/items/postgres/item.json": '{"requires":[]}',
-    "src/items/postgres/index.ts": "export const db = 1;",
+    "tinker/components/mail/component.json": '{"requires":["postgres"]}',
+    "tinker/components/mail/index.ts":
+      'import { db } from "~/components/postgres"; export const mail = db;',
+    "tinker/components/postgres/component.json": '{"requires":[]}',
+    "tinker/components/postgres/index.ts": "export const db = 1;",
   });
-  write(root, { "src/items/broken/item.json": '{"requires":["missing"]}' });
+  write(root, { "tinker/components/broken/component.json": '{"requires":["missing"]}' });
 
   const checked = doctor(root, false);
 
@@ -208,36 +210,36 @@ test("a graph error elsewhere does not make declared imports undeclared", () => 
 
 test("doctor includes the server public entry for a private server import", () => {
   const root = preparedApp({
-    "src/items/mail/item.json": '{"requires":[]}',
-    "src/items/mail/index.server.ts": "export const mail = 1;",
-    "src/items/mail/secret.server.ts": "export const secret = 1;",
-    "src/consumer.server.ts": 'import { secret } from "./items/mail/secret.server";',
+    "tinker/components/mail/component.json": '{"requires":[]}',
+    "tinker/components/mail/index.server.ts": "export const mail = 1;",
+    "tinker/components/mail/secret.server.ts": "export const secret = 1;",
+    "src/consumer.server.ts": 'import { secret } from "../tinker/components/mail/secret.server";',
   });
 
   const checked = doctor(root, false);
 
   expect(checked.lines.join(" ").replaceAll(/\s+/g, " ")).toContain(
-    'src/consumer.server.ts:1 "./items/mail/secret.server" is private to item mail; use "@/items/mail" or "@/items/mail/index.server"',
+    'src/consumer.server.ts:1 "../tinker/components/mail/secret.server" is private to component mail; use "~/components/mail" or "~/components/mail/index.server"',
   );
 });
 
 test("item tests can use private relative paths only with a declared dependency", () => {
   const root = preparedApp({
-    "src/items/inbox/item.json": '{"requires":[]}',
-    "src/items/inbox/x.test.ts": 'import { secret } from "../mail/secret";',
-    "src/items/mail/item.json": '{"requires":[]}',
-    "src/items/mail/secret.ts": "export const secret = 1;",
+    "tinker/components/inbox/component.json": '{"requires":[]}',
+    "tinker/components/inbox/x.test.ts": 'import { secret } from "../mail/secret";',
+    "tinker/components/mail/component.json": '{"requires":[]}',
+    "tinker/components/mail/secret.ts": "export const secret = 1;",
   });
 
   const missing = doctor(root, false);
 
   expect(missing.lines).toContain("fail  6 imports");
   expect(missing.lines.join(" ").replaceAll(/\s+/g, " ")).toContain(
-    'src/items/inbox/x.test.ts:1 "../mail/secret" needs "mail" in src/items/inbox/item.json requires',
+    'tinker/components/inbox/x.test.ts:1 "../mail/secret" needs "mail" in tinker/components/inbox/component.json requires',
   );
   expect(missing.lines.join(" ")).not.toContain("is private");
 
-  write(root, { "src/items/inbox/item.json": '{"requires":["mail"]}' });
+  write(root, { "tinker/components/inbox/component.json": '{"requires":["mail"]}' });
 
   const declared = doctor(root, false);
 

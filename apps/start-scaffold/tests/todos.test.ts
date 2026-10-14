@@ -2,9 +2,9 @@ import { createScope, isError as isCoreError } from "@tinker/core";
 import { authSettings } from "@tinker/start/server";
 import { test, expect } from "vite-plus/test";
 
-import { migrate, databaseUrl } from "@/backend/database.server";
-import { listTodos, changeTodo } from "@/backend/todos.server";
-import { raise, isError } from "@/errors";
+import { migrate, databaseUrl } from "~/components/demo/backend/database.server";
+import { listTodos, changeTodo } from "~/components/demo/backend/todos.server";
+import { raise, isError } from "~/components/demo/errors";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";

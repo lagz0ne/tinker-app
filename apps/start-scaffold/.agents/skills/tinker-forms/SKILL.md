@@ -11,17 +11,17 @@ Read this before adding app code.
 Choose one form for each piece of work:
 
 - Tag: fixed settings passed in by the entry.
-  See `databaseUrl` in `src/backend/database.server.ts`.
+  See `databaseUrl` in `tinker/components/demo/backend/database.server.ts`.
 - Data: changing records, drafts, and visible progress.
-  See `profile` and `nameDraft` in `src/frontend/state.ts`.
+  See `profile` and `nameDraft` in `tinker/components/demo/frontend/state.ts`.
 - Resource: a client or work owned by the app or session.
   See `database` and `auth` in `src/backend/`.
 - Operation: an action, including a read, write, or send.
-  See `changeTodo` in `src/backend/todos.server.ts`.
+  See `changeTodo` in `tinker/components/demo/backend/todos.server.ts`.
 
 A unit body, and every helper it calls, gets an outside library
 only from a lazy module dep.
-Declare one resource per import path in `src/backend/modules.ts`.
+Declare one resource per import path in `tinker/components/demo/backend/modules.ts`.
 Take Drizzle helpers from `drizzleOrm` in `@tinker/start/server`.
 Import tables, schemas, and own code at the top.
 Release owned clients with `ctx.defer`.
@@ -41,7 +41,7 @@ A provider exposes the exact values it needs as tags.
 It never reads `env`, and it never parses text.
 There is no `env` tag to depend on.
 Pick the type the provider uses, such as `URL`.
-See `smtpUrl` and `mailFrom` in `src/backend/mail.server.ts`:
+See `smtpUrl` and `mailFrom` in `tinker/components/mail/mail.server.ts`:
 
 ```ts
 export const smtpUrl = tag<URL>({
@@ -241,8 +241,8 @@ Never expose a send method that bypasses flush dedupe.
 Core callbacks are direct run, factory, input, and hooks members of a unit's options object.
 Wrapping a factory callback in Object.freeze gives no exception.
 Only the resource unit's direct factory grants owned public methods.
-Process entries live in the installed base.
-App files get no root entry exception.
+Process entries live in user-owned cmds.
+Each file directly under cmds owns its roots.
 An extension hook may return its public value, just as a resource factory does.
 Other inline callbacks are allowed only in a callback slot whose callee is outside src, or a JSX attribute.
 A native options object may supply that native callee's named callbacks.
@@ -314,20 +314,19 @@ The root entry may create only its root stop controllers outside that graph.
 The tabLifetime resource owns the pagehide listener and removes it on close.
 An option value evaluated at import has none.
 
-App files never call Core createScope.
-The base owns both roots; scope tests own theirs.
+Only direct cmds files and scope tests call createScope.
+The app owns both server roots.
 
 Imports alone are allowed.
 Aliases, parentheses, casts, arrays, call, and Reflect.apply give no exception.
-No module-level root creation, even in an entry file.
+Root creation is allowed in any file directly under cmds.
 No helper exports a scope, a scope getter, or a start function.
 Exported accessors and arrow properties returning a scope fail too.
 
 Outside entries, no module-level let or const may hold a live Core handle,
 AbortController, or native client, including nested and promised values.
 Declared Core units may live at module scope; their handles are forbidden in plain params and React props.
-The base holds its roots.
-The app server seam declares its extensions.
+The app command holds its roots and lists its extensions.
 
 At module scope, calls and new expressions fail unless they declare app setup.
 The allowed calls are:
@@ -358,5 +357,5 @@ Run `node scripts/check-plain.mjs` before review.
 Use `node scripts/check-plain.mjs --list` to inspect the list.
 Review every entry before copying that output into `PLAIN.md`.
 The list and code must agree; the cap still applies to list output.
-The check reads src and skips .gen, .generated, and declaration files.
+The check reads src, cmds, and tinker and skips .gen, .generated, and declaration files.
 It follows symbols, imports, aliases, and library signal properties.

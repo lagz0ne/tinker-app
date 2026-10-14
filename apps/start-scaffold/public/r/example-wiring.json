@@ -1,5 +1,5 @@
 {
-  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "$schema": "https://ui.shadcn.com/schema/registry-component.json",
   "name": "example-wiring",
   "type": "registry:file",
   "title": "Shared app seams, records, contracts, UI, and migrations",

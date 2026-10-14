@@ -27,6 +27,7 @@ try {
     "drizzle.config.ts",
     "src",
     "cmds",
+    "tinker",
     "package.json",
     "tsconfig.json",
     "vite.config.ts",

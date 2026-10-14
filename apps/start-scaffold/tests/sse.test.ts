@@ -6,14 +6,14 @@ import { accountOwner, tabStop, receiveMessage } from "@tinker/start/testing";
 import { openSync, notifications, backendStop, requestStop } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
-import { incrementCounter } from "@/backend/counter.server";
-import { database, migrate, databaseUrl } from "@/backend/database.server";
-import { mail } from "@/backend/mail.server";
-import type { Mail } from "@/backend/mail.server";
-import { saveProfile } from "@/backend/profile.server";
-import { bootstrapPrivate } from "@/backend/sync.server";
-import { isError, raise } from "@/errors";
-import { streamMessage } from "@/items/demo";
+import { streamMessage } from "~/components/demo";
+import { incrementCounter } from "~/components/demo/backend/counter.server";
+import { database, migrate, databaseUrl } from "~/components/demo/backend/database.server";
+import { saveProfile } from "~/components/demo/backend/profile.server";
+import { bootstrapPrivate } from "~/components/demo/backend/sync.server";
+import { isError, raise } from "~/components/demo/errors";
+import { mail } from "~/components/mail/index.server";
+import type { Mail } from "~/components/mail/index.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";

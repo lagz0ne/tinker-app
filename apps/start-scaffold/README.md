@@ -83,11 +83,13 @@ All settings and compose ports are in `.env.example`.
   Update it with `tinker upgrade`; never edit its files.
 - `.tinker/`: generated config, route tree, and parts.
   It is ignored by git; never edit it by hand.
-- `src/lib/tinker.ts`: your browser values and `Register` types.
-- `src/lib/tinker.server.ts`: your server values.
-- `src/backend/`: database, auth, mail, and feature operations.
-- `src/frontend/`: saved data, drafts, actions, and views.
-- `src/contracts/`: readers for raw input and wire values.
+- `cmds/router.ts`: your browser wiring and router options.
+- `cmds/server.ts`: your server values.
+- `tinker/components/demo/`: database, auth, sync, and saved data.
+- `tinker/components/mail/`: mail and its lazy module.
+- `component.json`: each component's requires list.
+- `src/frontend/`: actions and views.
+- `tinker/components/demo/contracts/`: input readers and wire values.
 - `src/transport/`: Start server functions.
 - `src/routes/`: pages and HTTP routes.
 - `drizzle/`: checked-in database migrations.
@@ -138,33 +140,41 @@ Scope close cancels response readers left open by their consumer.
 import { defineConfig } from "vite-plus";
 import { tinker } from "@tinker/start/vite";
 export default defineConfig({
-  plugins: [tinker({ auth: true, sync: true })],
+  plugins: [tinker({
+    serverEntry: "cmds/server.ts",
+    auth: true, sync: true,
+  })],
 });
 ```
 
 `tsconfig.json`:
 
 ```json
-{ "extends": "./.tinker/tsconfig.json" }
+{
+  "extends": "./.tinker/tsconfig.json",
+  "include": ["src", "cmds", "tinker", "tests"]
+}
 ```
 
-`src/lib/tinker.server.ts`:
+[cmds/server.ts](cmds/server.ts) starts and closes the roots.
+It imports the demo's public server API.
+It fills settings and lists extensions by hand.
+The file is 40 lines, with no app helper beside it.
+[cmds/router.ts](cmds/router.ts) wires the browser readers.
+The component index adds its `Register` types.
 
-```ts
-import { databaseSetup } from "@/backend/database.server";
-export const extensions = [databaseSetup];
-export { settings } from "@/backend/settings.server";
-export { database } from "@/backend/database.server";
-export { auth, readAccount } from "@/backend/auth.server";
-export { bootstrap } from "@/backend/sync.server";
-export { settings } from "@/backend/settings.server";
-```
+`@/*` names src; `~/*` names tinker.
+Both aliases are visible in the app's Vite and tsconfig files.
+Tsconfig keeps the private glue paths because its paths replace
+rather than merge the generated paths.
 
-`settings` checks each env key with zod
-and fills the database and mail tags.
-
-Read the filled [browser seam](src/lib/tinker.ts) for
-records, wire readers, and the app's `Register` bodies.
+Doctor checks the import direction:
+cmds may import src and component public indexes.
+Src may import component public indexes, but never cmds.
+Components never import src or cmds.
+Imports of another component need a direct requires entry.
+Requires tells a future add command what else to fetch.
+It never chooses a wiring order.
 
 ## Checks
 
@@ -317,7 +327,7 @@ It also refuses two items that own the same target.
 - `mail-example`: SMTP settings, client, send action, and errors.
   No base part is needed.
   Fill `smtpUrl` and `mailFrom` in `settings`
-  in `src/lib/tinker.server.ts`.
+  in `cmds/server.ts`.
   The app then needs the SMTP settings to start.
 - `postgres-auth-mail-example`: the shared demo bodies,
   migrations, UI, and a new page at `/demo`.
@@ -351,57 +361,50 @@ npx shadcn@4.21.0 add \
 npx tinker doctor
 ```
 
-Keep your config and add these switches to its `tinker()` call:
+Keep your config and name the server entry:
 
 ```ts
-tinker({ auth: true, sync: true });
+tinker({
+  serverEntry: "cmds/server.ts",
+  auth: true, sync: true,
+});
 ```
 
-Keep your server extensions and add `databaseSetup`.
-The other server exports doctor names are:
+Wire copied components by hand in your command files.
+The server imports its public API:
 
 ```ts
-export { database } from "@/backend/database.server";
-export { auth } from "@/backend/auth.server";
-export { readAccount } from "@/backend/auth.server";
-export { bootstrap } from "@/backend/sync.server";
-export { settings } from "@/backend/settings.server";
+import * as demo
+  from "~/components/demo/index.server";
+
+export const {
+  database, auth, readAccount, bootstrap,
+} = demo;
 ```
 
-For an empty server seam, the filled startup list is:
+Add `demo.databaseSetup` to the app scope's extensions.
+Call `demo.settings(values)` beside auth settings.
+Keep your own bindings in the order you need.
+Start generates no wiring and checks no shared tag override.
+Missing wiring fails in your code at type check or run time.
+The full server file is [cmds/server.ts](cmds/server.ts).
 
-```ts
-export { extensions } from "@/examples/demo.server";
-export { settings } from "@/examples/demo.server";
-```
-
-The browser seam exports the copied demo's readers and types:
+The browser command imports the copied readers:
 
 ```ts
 export {
-  records,
-  readSnapshot,
-  readBootstrap,
-  readBatch,
-  streamMessage
-} from "@/examples/demo";
+  records, readSnapshot, readBootstrap,
+  readBatch, streamMessage,
+} from "~/components/demo";
 ```
 
-The copied module also adds the app's `Register` bodies.
-For a server seam with your own extensions, keep that list
-and join the demo's startup extension:
-
-```ts
-import { databaseSetup } from "@/backend/database.server";
-export const extensions = [databaseSetup];
-```
-
-Then set the env values and check:
+Keep its router options and extension list too.
+The copied component declares its `Register` bodies.
 
 ```bash
 cp examples/demo.env.example .env
 vp build
-npx tinker doctor
+tinker doctor
 ```
 
 Build and doctor need no running Postgres or SMTP.
@@ -420,7 +423,7 @@ node apps/start-scaffold/maintain/\
 
 It uses real shadcn and a local registry at 127.0.0.1.
 Each item is added to a fresh app without overwrite.
-It checks config and seam hashes before applying doctor's lines.
+It checks config and command hashes before user wiring.
 All servers stop by their own PID.
 Nothing is published.
 
@@ -429,7 +432,7 @@ Review newer mail source without writing any file:
 ```bash
 npx shadcn@4.21.0 add \
   http://127.0.0.1:4870/r/mail-example.json \
-  --diff src/backend/mail.server.ts
+  --diff tinker/components/mail/mail.server.ts
 ```
 
 Publishing waits for the user's go.

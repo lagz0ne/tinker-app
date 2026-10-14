@@ -1,11 +1,12 @@
 import { operation, resource } from "@tinker/core";
 import { accountNotice, authSettings, drizzleOrm, requestHeaders } from "@tinker/start/server";
 
+import { authMail } from "~/components/mail/index.server";
+
 import { database } from "./database.server";
-import { authMail } from "./mail.server";
 
 export { authSettings } from "@tinker/start/server";
-import { raise } from "@/errors";
+import { raise } from "~/components/demo/errors";
 
 import { betterAuthModule, betterAuthDrizzle, betterAuthStart } from "./modules";
 import * as schema from "./schema.server";

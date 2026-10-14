@@ -88,7 +88,7 @@ test("names a tsconfig that does not extend .tinker, or overrides paths or stric
   });
   expect(glue(root).lines).toEqual([
     'tsconfig.json:1 does not extend "./.tinker/tsconfig.json"',
-    "tsconfig.json:4 sets compilerOptions.paths; it replaces the base's #tinker/* and @/* paths, so remove it",
+    "tsconfig.json:4 sets compilerOptions.paths without every #tinker/* path; copy the private paths from .tinker/tsconfig.json",
     "tsconfig.json:3 turns strict off; the base's files need strict",
   ]);
 });
@@ -188,7 +188,7 @@ test("names paths or strict: false in a local file the extends list reads after 
       '{\n  "compilerOptions": {\n    "strict": false,\n    "paths": { "x": ["y"] }\n  }\n}\n',
   });
   expect(glue(root).lines).toEqual([
-    "configs/strict.json:4 sets compilerOptions.paths; it replaces the base's #tinker/* and @/* paths, so remove it",
+    "configs/strict.json:4 sets compilerOptions.paths without every #tinker/* path; copy the private paths from .tinker/tsconfig.json",
     "configs/strict.json:3 turns strict off; the base's files need strict",
   ]);
 });
@@ -222,7 +222,7 @@ test("finds an extended file as tsc does: a name with no .json gets .json added"
     "configs/strict.json": '{\n  "compilerOptions": {\n    "paths": { "x": ["y"] }\n  }\n}\n',
   });
   expect(glue(root).lines).toEqual([
-    "configs/strict.json:3 sets compilerOptions.paths; it replaces the base's #tinker/* and @/* paths, so remove it",
+    "configs/strict.json:3 sets compilerOptions.paths without every #tinker/* path; copy the private paths from .tinker/tsconfig.json",
   ]);
 });
 
@@ -261,7 +261,7 @@ test("an extends chain that loops is read once", () => {
     "b.json": '{\n  "extends": "./a.json",\n  "compilerOptions": { "paths": {} }\n}\n',
   });
   expect(glue(root).lines).toEqual([
-    "b.json:3 sets compilerOptions.paths; it replaces the base's #tinker/* and @/* paths, so remove it",
+    "b.json:3 sets compilerOptions.paths without every #tinker/* path; copy the private paths from .tinker/tsconfig.json",
   ]);
 });
 

@@ -15,6 +15,7 @@ import { baseDir, basePackage } from "./paths.mjs";
  */
 export function aliases(root) {
   return [
+    { find: /^~\//, replacement: `${join(root, "tinker")}/` },
     { find: /^@\//, replacement: `${join(root, "src")}/` },
     ...appFiles(root).map((entry) => ({
       find: new RegExp(`^${entry.alias.replaceAll(".", "\\.")}(\\?.*)?$`),

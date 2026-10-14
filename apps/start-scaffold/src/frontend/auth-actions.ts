@@ -2,11 +2,11 @@ import { operation, resource } from "@tinker/core";
 import { syncClient, snapshotLoader } from "@tinker/start/client";
 import { z } from "zod";
 
-import { credentials } from "@/contracts/credentials";
-import { raise } from "@/errors";
+import { credentials } from "~/components/demo";
+import { raise } from "~/components/demo";
+import { pending, notice, authMode } from "~/components/demo";
 
 import { betterAuthReact } from "./modules";
-import { pending, notice, authMode } from "./state";
 
 const modeInput = z.enum(["signup", "signin"]);
 

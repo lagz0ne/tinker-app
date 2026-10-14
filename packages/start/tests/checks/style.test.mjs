@@ -159,7 +159,7 @@ test("names a shadcn alias with no path, and a CSS file the base does not link",
   });
   prepare(root);
   expect(style(root).lines).toEqual([
-    'components.json:6 aliases.ui "~/ui" matches no tsconfig path',
+    'components.json:6 aliases.ui "~/ui" lands at tinker/ui, outside src/; shadcn writes there',
     'components.json:3 tailwind.css is "src/app.css"; the base links src/style.css',
   ]);
 });

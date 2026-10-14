@@ -30,6 +30,11 @@
           "target": "~/cmds/server.ts"
         },
         {
+          "path": "../start-min/cmds/router.ts",
+          "type": "registry:file",
+          "target": "~/cmds/router.ts"
+        },
+        {
           "path": "../start-min/src/backend/greet.ts",
           "type": "registry:file",
           "target": "~/src/backend/greet.ts"
@@ -130,19 +135,24 @@
       "description": "Mail example",
       "files": [
         {
-          "path": "src/backend/mail.server.ts",
+          "path": "tinker/components/mail/mail.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/mail.server.ts"
+          "target": "~/tinker/components/mail/mail.server.ts"
         },
         {
-          "path": "src/backend/modules.ts",
+          "path": "tinker/components/mail/modules.ts",
           "type": "registry:file",
-          "target": "~/src/backend/mail-modules.ts"
+          "target": "~/tinker/components/mail/modules.ts"
         },
         {
-          "path": "src/errors.ts",
+          "path": "tinker/components/mail/index.server.ts",
           "type": "registry:file",
-          "target": "~/src/errors.ts"
+          "target": "~/tinker/components/mail/index.server.ts"
+        },
+        {
+          "path": "tinker/components/mail/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/mail/component.json"
         }
       ],
       "meta": {
@@ -192,19 +202,19 @@
       "description": "All examples with their shared wiring",
       "files": [
         {
-          "path": "src/backend/todos.server.ts",
+          "path": "tinker/components/demo/backend/todos.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/todos.server.ts"
+          "target": "~/tinker/components/demo/backend/todos.server.ts"
         },
         {
-          "path": "src/backend/todos.schema.server.ts",
+          "path": "tinker/components/demo/backend/todos.schema.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/todos.schema.server.ts"
+          "target": "~/tinker/components/demo/backend/todos.schema.server.ts"
         },
         {
-          "path": "src/contracts/todos-contract.ts",
+          "path": "tinker/components/demo/contracts/todos-contract.ts",
           "type": "registry:file",
-          "target": "~/src/contracts/todos-contract.ts"
+          "target": "~/tinker/components/demo/contracts/todos-contract.ts"
         },
         {
           "path": "templates/demo-frontend-Todos.tsx.txt",
@@ -222,14 +232,14 @@
           "target": "~/src/transport/todos.functions.ts"
         },
         {
-          "path": "src/backend/profile.server.ts",
+          "path": "tinker/components/demo/backend/profile.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/profile.server.ts"
+          "target": "~/tinker/components/demo/backend/profile.server.ts"
         },
         {
-          "path": "src/contracts/profile-contract.ts",
+          "path": "tinker/components/demo/contracts/profile-contract.ts",
           "type": "registry:file",
-          "target": "~/src/contracts/profile-contract.ts"
+          "target": "~/tinker/components/demo/contracts/profile-contract.ts"
         },
         {
           "path": "templates/demo-frontend-Profile.tsx.txt",
@@ -252,19 +262,19 @@
           "target": "~/src/transport/profile.functions.ts"
         },
         {
-          "path": "src/backend/auth.server.ts",
+          "path": "tinker/components/demo/backend/auth.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/auth.server.ts"
+          "target": "~/tinker/components/demo/backend/auth.server.ts"
         },
         {
-          "path": "src/backend/schema.server.ts",
+          "path": "tinker/components/demo/backend/schema.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/schema.server.ts"
+          "target": "~/tinker/components/demo/backend/schema.server.ts"
         },
         {
-          "path": "src/contracts/credentials.ts",
+          "path": "tinker/components/demo/contracts/credentials.ts",
           "type": "registry:file",
-          "target": "~/src/contracts/credentials.ts"
+          "target": "~/tinker/components/demo/contracts/credentials.ts"
         },
         {
           "path": "src/frontend/App.tsx",
@@ -277,9 +287,9 @@
           "target": "~/src/frontend/auth-actions.ts"
         },
         {
-          "path": "src/backend/counter.server.ts",
+          "path": "tinker/components/demo/backend/counter.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/counter.server.ts"
+          "target": "~/tinker/components/demo/backend/counter.server.ts"
         },
         {
           "path": "src/frontend/Counter.tsx",
@@ -342,39 +352,39 @@
           "target": "~/drizzle/20261010090000_drop_session_wake/snapshot.json"
         },
         {
-          "path": "src/backend/database.server.ts",
+          "path": "tinker/components/demo/backend/database.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/database.server.ts"
+          "target": "~/tinker/components/demo/backend/database.server.ts"
         },
         {
-          "path": "src/backend/settings.server.ts",
+          "path": "tinker/components/demo/backend/settings.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/settings.server.ts"
+          "target": "~/tinker/components/demo/backend/settings.server.ts"
         },
         {
-          "path": "src/backend/index.server.ts",
+          "path": "tinker/components/demo/index.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/index.server.ts"
+          "target": "~/tinker/components/demo/index.server.ts"
         },
         {
-          "path": "src/backend/sync.schema.server.ts",
+          "path": "tinker/components/demo/backend/sync.schema.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/sync.schema.server.ts"
+          "target": "~/tinker/components/demo/backend/sync.schema.server.ts"
         },
         {
-          "path": "src/backend/sync.server.ts",
+          "path": "tinker/components/demo/backend/sync.server.ts",
           "type": "registry:file",
-          "target": "~/src/backend/sync.server.ts"
+          "target": "~/tinker/components/demo/backend/sync.server.ts"
         },
         {
-          "path": "src/contracts/commands.ts",
+          "path": "tinker/components/demo/contracts/commands.ts",
           "type": "registry:file",
-          "target": "~/src/contracts/commands.ts"
+          "target": "~/tinker/components/demo/contracts/commands.ts"
         },
         {
-          "path": "src/contracts/sync.ts",
+          "path": "tinker/components/demo/contracts/sync.ts",
           "type": "registry:file",
-          "target": "~/src/contracts/sync.ts"
+          "target": "~/tinker/components/demo/contracts/sync.ts"
         },
         {
           "path": "src/frontend/actions.ts",
@@ -387,14 +397,14 @@
           "target": "~/src/frontend/error-text.ts"
         },
         {
-          "path": "src/frontend/records.ts",
+          "path": "tinker/components/demo/frontend/records.ts",
           "type": "registry:file",
-          "target": "~/src/frontend/records.ts"
+          "target": "~/tinker/components/demo/frontend/records.ts"
         },
         {
-          "path": "src/frontend/state.ts",
+          "path": "tinker/components/demo/frontend/state.ts",
           "type": "registry:file",
-          "target": "~/src/frontend/state.ts"
+          "target": "~/tinker/components/demo/frontend/state.ts"
         },
         {
           "path": "src/frontend/ui/button.tsx",
@@ -457,14 +467,29 @@
           "type": "registry:file"
         },
         {
-          "path": "src/backend/modules.ts",
+          "path": "tinker/components/demo/backend/modules.ts",
           "type": "registry:file",
-          "target": "~/src/backend/modules.ts"
+          "target": "~/tinker/components/demo/backend/modules.ts"
         },
         {
           "path": "src/frontend/modules.ts",
           "type": "registry:file",
           "target": "~/src/frontend/modules.ts"
+        },
+        {
+          "path": "tinker/components/demo/errors.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/demo/errors.ts"
+        },
+        {
+          "path": "tinker/components/demo/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/demo/component.json"
+        },
+        {
+          "path": "tinker/components/demo/index.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/demo/index.ts"
         }
       ],
       "meta": {
@@ -601,21 +626,6 @@
           "path": "vitest.config.ts",
           "type": "registry:file",
           "target": "~/vitest.config.ts"
-        },
-        {
-          "path": "src/items/demo/item.json",
-          "type": "registry:file",
-          "target": "~/src/items/demo/item.json"
-        },
-        {
-          "path": "src/items/demo/index.ts",
-          "type": "registry:file",
-          "target": "~/src/items/demo/index.ts"
-        },
-        {
-          "path": "src/items/demo/index.server.ts",
-          "type": "registry:file",
-          "target": "~/src/items/demo/index.server.ts"
         }
       ],
       "meta": {

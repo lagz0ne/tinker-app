@@ -56,15 +56,15 @@ async function loadEntry(wiring) {
     "cmds/server.ts": source
       .replace(
         'import * as start from "@tinker/start/server";',
-        'import * as start from "@tinker/start/server";\nimport { extensions, settings } from "@/items/proof/index.server";',
+        'import * as start from "@tinker/start/server";\nimport { extensions, settings } from "~/components/proof/index.server";',
       )
       .replace(
         "const appTags = [start.auth.settings(values)];",
         "const appTags = [start.auth.settings(values), settings(values)];",
       )
       .replace("start.auth.extensions]", "start.auth.extensions, extensions]"),
-    "src/items/proof/item.json": '{"requires":[]}',
-    "src/items/proof/index.server.ts": wiring,
+    "tinker/components/proof/component.json": '{"requires":[]}',
+    "tinker/components/proof/index.server.ts": wiring,
   });
   symlinkSync(join(baseDir, "../../apps/start-min/node_modules"), join(root, "node_modules"));
   prepare(root, []);
@@ -94,7 +94,7 @@ export const settings = () => [];
 
 test("the app file starts before any request, reuses its roots, and closes once", async () => {
   const { vite, root } = await loadEntry(wiring);
-  const proof = await vite.ssrLoadModule(join(root, "src/items/proof/index.server.ts"));
+  const proof = await vite.ssrLoadModule(join(root, "tinker/components/proof/index.server.ts"));
 
   const { default: server } = await vite.ssrLoadModule(join(root, "cmds/server.ts"));
   const again = await vite.ssrLoadModule(join(root, "cmds/server.ts"));
@@ -113,7 +113,7 @@ test("the app entry reports a teardown error after closing its roots", async () 
     wiring.replace('events.push("app.closed");', 'events.push("app.closed"); throw failure;') +
       'export const failure = { kind: "proof.teardown" };\n',
   );
-  const proof = await vite.ssrLoadModule(join(root, "src/items/proof/index.server.ts"));
+  const proof = await vite.ssrLoadModule(join(root, "tinker/components/proof/index.server.ts"));
   const { default: server } = await vite.ssrLoadModule(join(root, "cmds/server.ts"));
 
   const closing = server.close();
@@ -128,7 +128,7 @@ test("an app startup failure closes the entry's roots and keeps the original err
     wiring.replace('events.push("app.ready");', "throw failure;") +
       'export const failure = { kind: "proof.startup" };\n',
   );
-  const proof = await vite.ssrLoadModule(join(root, "src/items/proof/index.server.ts"));
+  const proof = await vite.ssrLoadModule(join(root, "tinker/components/proof/index.server.ts"));
 
   const started = vite.ssrLoadModule(join(root, "cmds/server.ts"));
 

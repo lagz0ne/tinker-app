@@ -50,7 +50,7 @@ export function recordViolation(root, found, info) {
  */
 export function restartNote(root, path, verb) {
   const file = relative(root, path);
-  const manifest = /^src\/items\/[^/]+\/item\.json$/.test(file);
+  const manifest = /^tinker\/components\/[^/]+\/component\.json$/.test(file);
   if (verb === "changed" && !manifest) return null;
 
   const picked = [

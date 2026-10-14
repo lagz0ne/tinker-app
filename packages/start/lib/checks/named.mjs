@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { readItemModules } from "../item-modules.mjs";
+import { readComponentModules } from "../component-modules.mjs";
 import { appFiles, ignoredFiles, serverFile } from "../named.mjs";
 import { parts, recordedParts } from "../parts.mjs";
 import { listFiles } from "../paths.mjs";
@@ -58,7 +58,7 @@ function augmentProblems(root) {
     ),
   );
   if (needed.length === 0) return [];
-  const found = ["src", "cmds"]
+  const found = ["src", "cmds", "tinker"]
     .flatMap((dir) => listFiles(join(root, dir)).map((file) => `${dir}/${file}`))
     .filter((file) => /\.tsx?$/.test(file))
     .flatMap((file) => augmentations(parseSource(join(root, file))));
@@ -82,7 +82,7 @@ export function serverProblems(root) {
 export function named(root) {
   if (!serverFile(root).file) return fail(serverProblems(root));
 
-  const graph = readItemModules(root);
+  const graph = readComponentModules(root);
   if (graph.problems.length > 0) return fail(graph.problems);
 
   const installed = examples(root);
@@ -94,7 +94,10 @@ export function named(root) {
       .map((name) => say.export(file, name)),
   );
   const ignored = ignoredFiles
-    .filter(({ file }) => existsSync(join(root, file)))
+    .filter(
+      ({ file }) =>
+        existsSync(join(root, file)) && !appFiles(root).some((entry) => entry.file === file),
+    )
     .map(({ file, hint }) => say.ignored(file, hint));
   return verdict(
     [

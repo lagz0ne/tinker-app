@@ -4,7 +4,7 @@ import { syncClient, applyBootstrap, applyEvents, leaveAccount } from "@tinker/s
 import { accountOwner, tabStop } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
-import { profile, counter, nameDraft } from "@/frontend/state";
+import { profile, counter, nameDraft } from "~/components/demo/frontend/state";
 
 const ada = { id: "ada", name: "Ada", email: "ada@example.com", emailVerified: false };
 

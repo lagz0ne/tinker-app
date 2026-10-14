@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { raise } from "@/errors";
+import { raise } from "~/components/demo/errors";
 
 export declare namespace Profile {
   type Value = { id: string; name: string; email: string; emailVerified: boolean };

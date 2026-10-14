@@ -16,8 +16,8 @@ for (const target of new Set([
   "~/vite.config.ts",
   "~/vite.config.mts",
   "~/tsconfig.json",
-  "~/src/lib/tinker.ts",
-  "~/src/lib/tinker.server.ts",
+  "~/cmds/router.ts",
+  "~/cmds/server.ts",
 ])) {
   const planted = structuredClone(registry);
   planted.items
@@ -36,9 +36,9 @@ const duplicate = structuredClone(registry);
 duplicate.items
   .find((item) => item.name === "todos-example")
   .files.push({
-    path: "src/errors.ts",
+    path: "tinker/components/demo/errors.ts",
     type: "registry:file",
-    target: "~/src/errors.ts",
+    target: "~/tinker/components/demo/errors.ts",
   });
 
 await assert.rejects(registryItems({ registry: duplicate }), /already owned/);

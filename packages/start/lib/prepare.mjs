@@ -60,6 +60,7 @@ export function render(root, on = recordedParts(root)) {
   const base = installedBase(root) ?? baseDir;
   const paths = {
     "@/*": [`${join(root, "src")}/*`],
+    "~/*": [`${join(root, "tinker")}/*`],
     ...Object.fromEntries(appFiles(root).map((entry) => [entry.alias, [pick(root, base, entry)]])),
     "#tinker/routes": [join(root, ".tinker/routeTree.gen.ts")],
     "#tinker/parts": [join(root, ".tinker/parts.ts")],
@@ -72,6 +73,7 @@ export function render(root, on = recordedParts(root)) {
       include: [
         "../src",
         "../cmds",
+        "../tinker",
         ...appFiles(root)
           .filter((entry) => entry.required)
           .map((entry) => `../${entry.file}`),

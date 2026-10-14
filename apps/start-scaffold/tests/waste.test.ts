@@ -13,10 +13,11 @@ import { openSync, backendStop, requestStop } from "@tinker/start/testing";
 import { createAuthClient } from "better-auth/react";
 import { test, expect } from "vite-plus/test";
 
-import { readAccount } from "@/backend/auth.server";
-import { incrementCounter } from "@/backend/counter.server";
-import { migrate, databaseUrl } from "@/backend/database.server";
-import { bootstrap } from "@/backend/sync.server";
+import { readAccount } from "~/components/demo/backend/auth.server";
+import { incrementCounter } from "~/components/demo/backend/counter.server";
+import { migrate, databaseUrl } from "~/components/demo/backend/database.server";
+import { bootstrap } from "~/components/demo/backend/sync.server";
+
 import { authClient, signIn } from "@/frontend/actions";
 
 import { handleAuth } from "./presets";

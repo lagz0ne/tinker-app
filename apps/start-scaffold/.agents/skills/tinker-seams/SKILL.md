@@ -22,28 +22,30 @@ App imports use only public entries:
 
 The base reads app values through two files:
 
-- `src/lib/tinker.ts`: extensions, records, readers,
+- `cmds/router.ts`: extensions, records, readers,
   and the app's Register bodies.
-- `src/lib/tinker.server.ts`: extensions, settings,
+- `cmds/server.ts`: extensions, settings,
   database, auth, readAccount, and bootstrap.
 
 `settings(env)` turns env into the app's settings tags.
-The base calls it once, at start.
+The app server entry calls it once, at start.
 App units depend on those tags, never on `env`.
 
 Doctor 5 checks these names.
 Doctor 6 refuses base paths and private alias imports.
 Doctor 10 reports the last build's import violations.
 
-Fill `Register` on `@tinker/start` in the client seam.
-See `src/contracts/sync.ts` for this app's bodies.
+Fill `Register` on `@tinker/start` in the component public index.
+Commands import `~/components/name`; components never import src or cmds.
+A component imports another public index only with a direct requires entry.
+See `tinker/components/demo/contracts/sync.ts` for this app's bodies.
 Put raw-input readers in `src/contracts/`.
 
 Feature HTTP operations import httpRequest from
 `@tinker/start/server`.
 Tests bind httpBackend from `@tinker/start/testing`.
 App code never uses that tag or the raw http resource.
-Import feature operations directly from their files.
+Import component operations from their public index.
 A server seam that re-exports a feature can form a loop.
 
 The app owns its migrations and wake triggers.

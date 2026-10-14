@@ -2,9 +2,9 @@ import type { PGliteInterface } from "@electric-sql/pglite";
 import { preset } from "@tinker/core/testing";
 import { afterAll, beforeAll } from "vite-plus/test";
 
-import { database } from "@/backend/database.server";
-import type { Database } from "@/backend/database.server";
-import { mail } from "@/backend/mail.server";
+import { database } from "~/components/demo/backend/database.server";
+import type { Database } from "~/components/demo/backend/database.server";
+import { mail } from "~/components/mail/index.server";
 
 /** Keep migration inside each test; copy only the empty database's ready state. */
 let template: PGliteInterface;

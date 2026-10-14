@@ -19,7 +19,7 @@ Choose one of these four forms before adding app work.
 - **Resource:** a shared client, current user, or owned queue.
   A unit body, and every helper it calls, gets an outside library
   only from a lazy module dep.
-  Declare one resource per import path in `src/backend/modules.ts`.
+  Declare one resource per import path in `tinker/components/demo/backend/modules.ts`.
   Take Drizzle helpers from `drizzleOrm` in `@tinker/start/server`.
   Import tables, schemas, and own code at the top.
   Release what it owns through `ctx.defer`.
@@ -57,12 +57,13 @@ Their helpers still follow the strict rule.
 
 A service must never exist outside the graph of primitives.
 Resources own long-lived clients, connections, clocks, timers, and queues.
-Only `cmds/server.ts`, the base client entry, and scope tests create roots.
+Every file directly under `cmds/` may create and own roots.
+The base client entry and scope tests own their roots too.
 The entry owns each root and its stop signal.
 No helper module keeps a scope singleton or exports a scope getter.
 Outside an entry, no module-level let or const holds a live handle,
 stop controller, or native client.
-Other app files never call createScope.
+Src and components never call createScope.
 Module calls are restricted to the declaration list in tinker-forms.
 Only a factory's returned public methods get its owned-method exception.
 Hidden object methods and arrow properties follow the plain rule.
@@ -74,21 +75,26 @@ Keep feature units in app files.
 
 ## The app server entry
 
-`cmds/server.ts` owns the server roots.
+[cmds/server.ts](cmds/server.ts) owns the server roots.
 The app names it in `vite.config.ts`:
 
 ```ts
 tinker({ serverEntry: "cmds/server.ts" });
 ```
 
-The app's tsconfig includes `cmds`.
+The app's tsconfig includes `cmds` and `tinker`.
+`@/*` names src; `~/*` names the committed tinker folder.
+Components have component.json and public indexes.
+Components never import src or cmds.
+Imports of another component need a direct requires entry.
+Src imports components only through their public indexes.
 There is no default server entry.
 Prepare and doctor name a missing entry and show starter code.
 They never write an entry for the app.
 
 The entry reads env once, starts telemetry, then the app.
 It lists extensions and settings by hand, in the user's order.
-It imports each item's public index.
+It imports each component's public index.
 There are no generated wiring files or role files.
 The app calls `createScopeClose` to close the app, then telemetry.
 That helper starts nothing and shares one close promise.
@@ -103,7 +109,7 @@ The entry closes on HMR replacement and process shutdown.
 The scaffold's client wiring lives in `cmds/router.ts`.
 It exports router options, extensions, and the sync readers.
 No app code may import a command file.
-Commands may import app code and item public entries.
+Commands may import app code and component public entries.
 
 ## App skills
 

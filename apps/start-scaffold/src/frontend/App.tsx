@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
 
+import { profile, pending, notice, authMode } from "~/components/demo";
+
 import { signIn, setAuthMode } from "./auth-actions";
 import { Counter } from "./Counter";
 import { errorText } from "./error-text";
-import { profile, pending, notice, authMode } from "./state";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Input } from "./ui/input";

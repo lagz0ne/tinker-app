@@ -4,11 +4,12 @@ import { useData, useRun } from "@tinker/react";
 import { syncClient } from "@tinker/start/client";
 import { z } from "zod";
 
-import { readTodoChange } from "@/contracts/todos-contract";
-import { isError } from "@/errors";
+import { readTodoChange } from "~/components/demo";
+import { isError } from "~/components/demo";
+import { todos, profile } from "~/components/demo";
+
 import { updateTodo } from "@/transport/todos.functions";
 
-import { todos, profile } from "./state";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";
 import { Input } from "./ui/input";

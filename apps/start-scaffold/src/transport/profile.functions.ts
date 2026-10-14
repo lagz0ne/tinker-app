@@ -2,9 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { startRequests } from "@tinker/start";
 import { readResult } from "@tinker/start/server";
 
-import { readProfile, saveProfile, retryNotification } from "@/backend/index.server";
-import { readProfileCommand } from "@/contracts/commands";
-import { readRetry } from "@/contracts/sync";
+import { readProfileCommand } from "~/components/demo";
+import { readRetry } from "~/components/demo";
+import { readProfile, saveProfile, retryNotification } from "~/components/demo/index.server";
 
 import { readReceipt } from "./result.server";
 

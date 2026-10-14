@@ -3,9 +3,9 @@ import { authSettings, backendStop, requestStop } from "@tinker/start/server";
 import { openSync } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
-import { auth } from "@/backend/auth.server";
-import { migrate, databaseUrl } from "@/backend/database.server";
-import { saveProfile } from "@/backend/profile.server";
+import { auth } from "~/components/demo/backend/auth.server";
+import { migrate, databaseUrl } from "~/components/demo/backend/database.server";
+import { saveProfile } from "~/components/demo/backend/profile.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
