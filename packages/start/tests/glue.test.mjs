@@ -80,12 +80,10 @@ test("Start runs the app commands and mounts remaining package routes", () => {
   const { virtualRouteConfig: tree } = options.router;
   expect(resolve(root, "src/routes", tree.file)).toBe(join(baseDir, "src/routes/root.tsx"));
   expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([
-    "/api/health",
-    "/tinker",
     "/api/telemetry",
     "",
   ]);
-  expect(resolve(root, "src/routes", tree.children[2].file)).toBe(
+  expect(resolve(root, "src/routes", tree.children[0].file)).toBe(
     join(baseDir, "src/routes/api.telemetry.ts"),
   );
 });
@@ -93,11 +91,7 @@ test("Start runs the app commands and mounts remaining package routes", () => {
 test("a part that is off mounts no route, so its path is the app's", () => {
   const root = fixture({ "src/routes/index.tsx": "" });
   const { virtualRouteConfig: tree } = startOptions(root, []).router;
-  expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([
-    "/api/health",
-    "/tinker",
-    "",
-  ]);
+  expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([""]);
 });
 
 test("Start runs the base's entries, the generated route tree, and the base's import rules", () => {
@@ -147,13 +141,11 @@ test("with auth on, its route mounts at /api/auth/$ from the base", () => {
   const root = fixture({ "src/routes/index.tsx": "" });
   const { virtualRouteConfig: tree } = startOptions(root, ["telemetry", "auth"]).router;
   expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([
-    "/api/health",
-    "/tinker",
     "/api/telemetry",
     "/api/auth/$",
     "",
   ]);
-  expect(resolve(root, "src/routes", tree.children[3].file)).toBe(
+  expect(resolve(root, "src/routes", tree.children[1].file)).toBe(
     join(baseDir, "src/routes/api.auth.ts"),
   );
 });
@@ -162,13 +154,11 @@ test("with sync on, its route mounts at /api/sync from the base", () => {
   const root = fixture({ "src/routes/index.tsx": "" });
   const { virtualRouteConfig: tree } = startOptions(root, ["auth", "sync"]).router;
   expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([
-    "/api/health",
-    "/tinker",
     "/api/auth/$",
     "/api/sync",
     "",
   ]);
-  expect(resolve(root, "src/routes", tree.children[3].file)).toBe(
+  expect(resolve(root, "src/routes", tree.children[1].file)).toBe(
     join(baseDir, "src/routes/api.sync.ts"),
   );
 });

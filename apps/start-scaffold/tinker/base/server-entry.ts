@@ -3,9 +3,9 @@ import {
   defaultStreamHandler as renderStream,
 } from "@tanstack/react-start/server";
 import type { Observe, Scope } from "@tinker/core";
-import { retainRender } from "@tinker/start/server";
 
 import { raise } from "~/components/errors";
+import { retainRender } from "~/components/requests/index.server";
 
 import { devErrorPage } from "./panics";
 import type { createRouterEntry } from "./router-entry";

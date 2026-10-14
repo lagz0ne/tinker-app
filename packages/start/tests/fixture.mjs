@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   readFileSync,
+  readdirSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -65,6 +66,19 @@ export function goodApp(files = {}) {
           "utf8",
         ),
       ]),
+    ),
+    ...Object.fromEntries(
+      ["requests", "health"].flatMap((component) =>
+        readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
+          (file) => [
+            `tinker/components/${component}/${file}`,
+            readFileSync(
+              join(baseDir, "../../apps/start-scaffold/tinker/components", component, file),
+              "utf8",
+            ),
+          ],
+        ),
+      ),
     ),
     "cmds/server.ts": readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8"),
     "src/routes/index.tsx": 'export const Route = createFileRoute("/")({});\n',

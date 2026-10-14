@@ -27,7 +27,7 @@
       "path": "../start-min/cmds/server.ts",
       "type": "registry:file",
       "target": "~/cmds/server.ts",
-      "content": "import { createScope } from \"@tinker/core\";\nimport * as start from \"@tinker/start/server\";\n\nimport { createScopeClose } from \"~/base/close\";\nimport { renderObservation } from \"~/base/observe\";\nimport { observeServerPanics } from \"~/base/panics.server\";\nimport { createServerHandler } from \"~/base/server-entry\";\nimport type { ServerEntry } from \"~/base/server-entry\";\n\nconst values = { ...process.env };\nconst appTags = [start.auth.settings(values)];\nconst stop = { tools: new AbortController(), app: new AbortController() };\n\nconst tools = createScope({\n  signal: stop.tools.signal,\n  extensions: start.telemetry.extensions,\n  tags: [start.telemetry.settings(values), start.telemetry.tags],\n});\n\nawait tools.ready;\n\nconst app = createScope({\n  signal: stop.app.signal,\n  observe: tools.resolve(start.telemetry.observe),\n  extensions: [start.startRequests, start.auth.extensions],\n  tags: [\n    start.backendStop(stop.app.signal),\n    renderObservation(\n      tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),\n    ),\n    appTags,\n    tools.resolve(start.telemetry.appTags),\n  ],\n});\n\nconst close = createScopeClose({ tools, app }, stop);\n\nawait app.ready.catch(close);\n\nconst server = {\n  requestContext: app.resolve(start.startRequests),\n  renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),\n  close,\n} satisfies ServerEntry.Handle;\n\nobserveServerPanics(server);\n\nif (import.meta.hot) {\n  import.meta.hot.dispose(close);\n  import.meta.hot.on(\"vite:beforeFullReload\", close);\n}\n\nexport { close };\nexport default createServerHandler(server);\n"
+      "content": "import { createScope } from \"@tinker/core\";\nimport * as start from \"@tinker/start/server\";\n\nimport { createScopeClose } from \"~/base/close\";\nimport { renderObservation } from \"~/base/observe\";\nimport { observeServerPanics } from \"~/base/panics.server\";\nimport { createServerHandler } from \"~/base/server-entry\";\nimport type { ServerEntry } from \"~/base/server-entry\";\nimport { startRequests } from \"~/components/requests\";\nimport { backendStop } from \"~/components/requests/index.server\";\n\nconst values = { ...process.env };\nconst appTags = [start.auth.settings(values)];\nconst stop = { tools: new AbortController(), app: new AbortController() };\n\nconst tools = createScope({\n  signal: stop.tools.signal,\n  extensions: start.telemetry.extensions,\n  tags: [start.telemetry.settings(values), start.telemetry.tags],\n});\n\nawait tools.ready;\n\nconst app = createScope({\n  signal: stop.app.signal,\n  observe: tools.resolve(start.telemetry.observe),\n  extensions: [startRequests, start.auth.extensions],\n  tags: [\n    backendStop(stop.app.signal),\n    renderObservation(\n      tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),\n    ),\n    appTags,\n    tools.resolve(start.telemetry.appTags),\n  ],\n});\n\nconst close = createScopeClose({ tools, app }, stop);\n\nawait app.ready.catch(close);\n\nconst server = {\n  requestContext: app.resolve(startRequests),\n  renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),\n  close,\n} satisfies ServerEntry.Handle;\n\nobserveServerPanics(server);\n\nif (import.meta.hot) {\n  import.meta.hot.dispose(close);\n  import.meta.hot.on(\"vite:beforeFullReload\", close);\n}\n\nexport { close };\nexport default createServerHandler(server);\n"
     },
     {
       "path": "../start-min/cmds/router.ts",
@@ -45,7 +45,7 @@
       "path": "../start-min/src/transport/greet.functions.ts",
       "type": "registry:file",
       "target": "~/src/transport/greet.functions.ts",
-      "content": "import { createServerFn } from \"@tanstack/react-start\";\nimport { startRequests } from \"@tinker/start\";\nimport { readResult } from \"@tinker/start/server\";\n\nimport { greet } from \"@/backend/greet\";\n\nexport const runGreet = createServerFn({ method: \"GET\" })\n  .middleware([startRequests.middleware])\n  .handler(async ({ context }) =>\n    readResult(\n      await context.session.settle(greet, {\n        input: { name: \"world\" },\n        signal: context.signal,\n      }),\n    ),\n  );\n"
+      "content": "import { createServerFn } from \"@tanstack/react-start\";\n\nimport { startRequests } from \"~/components/requests\";\nimport { readResult } from \"~/components/requests/index.server\";\n\nimport { greet } from \"@/backend/greet\";\n\nexport const runGreet = createServerFn({ method: \"GET\" })\n  .middleware([startRequests.middleware])\n  .handler(async ({ context }) =>\n    readResult(\n      await context.session.settle(greet, {\n        input: { name: \"world\" },\n        signal: context.signal,\n      }),\n    ),\n  );\n"
     },
     {
       "path": "../start-min/src/routes/index.tsx",
@@ -105,13 +105,13 @@
       "path": "tinker/base/server-entry.ts",
       "target": "~/tinker/base/server-entry.ts",
       "type": "registry:file",
-      "content": "import {\n  createStartHandler as createStart,\n  defaultStreamHandler as renderStream,\n} from \"@tanstack/react-start/server\";\nimport type { Observe, Scope } from \"@tinker/core\";\nimport { retainRender } from \"@tinker/start/server\";\n\nimport { raise } from \"~/components/errors\";\n\nimport { devErrorPage } from \"./panics\";\nimport type { createRouterEntry } from \"./router-entry\";\n\n/** The command retains both roots; Start borrows context and observation. */\nexport declare namespace ServerEntry {\n  type Next = (request: Request) => Promise<Response>;\n  type Handle = {\n    requestContext: { scope: Scope.Handle };\n    renderObserve: Observe.Config;\n    close(): Promise<void>;\n    fetch?(request: Request, next: Next): Promise<Response> | Response;\n  };\n}\n\n/** Render over the supplied app; request bodies retain each render's close. */\nexport function createServerHandler(app: ServerEntry.Handle) {\n  const renderRequest = createStart(async (context) => {\n    const router: typeof context.router & {\n      close?: Awaited<ReturnType<typeof createRouterEntry>>[\"close\"];\n    } = context.router;\n    if (typeof router.close !== \"function\") raise(\"StartScopeMissing\", {});\n    retainRender(context.request, router.close);\n\n    try {\n      return await renderStream(context);\n    } catch (error) {\n      await router.close();\n      throw error;\n    }\n  });\n\n  return {\n    ...app,\n    fetch(request: Request) {\n      const next = async (forwarded: Request) => {\n        const response = await renderRequest(forwarded, { context: app.requestContext });\n        return import.meta.env.DEV ? devErrorPage(forwarded, response) : response;\n      };\n      return app.fetch ? app.fetch(request, next) : next(request);\n    },\n  };\n}\n"
+      "content": "import {\n  createStartHandler as createStart,\n  defaultStreamHandler as renderStream,\n} from \"@tanstack/react-start/server\";\nimport type { Observe, Scope } from \"@tinker/core\";\n\nimport { raise } from \"~/components/errors\";\nimport { retainRender } from \"~/components/requests/index.server\";\n\nimport { devErrorPage } from \"./panics\";\nimport type { createRouterEntry } from \"./router-entry\";\n\n/** The command retains both roots; Start borrows context and observation. */\nexport declare namespace ServerEntry {\n  type Next = (request: Request) => Promise<Response>;\n  type Handle = {\n    requestContext: { scope: Scope.Handle };\n    renderObserve: Observe.Config;\n    close(): Promise<void>;\n    fetch?(request: Request, next: Next): Promise<Response> | Response;\n  };\n}\n\n/** Render over the supplied app; request bodies retain each render's close. */\nexport function createServerHandler(app: ServerEntry.Handle) {\n  const renderRequest = createStart(async (context) => {\n    const router: typeof context.router & {\n      close?: Awaited<ReturnType<typeof createRouterEntry>>[\"close\"];\n    } = context.router;\n    if (typeof router.close !== \"function\") raise(\"StartScopeMissing\", {});\n    retainRender(context.request, router.close);\n\n    try {\n      return await renderStream(context);\n    } catch (error) {\n      await router.close();\n      throw error;\n    }\n  });\n\n  return {\n    ...app,\n    fetch(request: Request) {\n      const next = async (forwarded: Request) => {\n        const response = await renderRequest(forwarded, { context: app.requestContext });\n        return import.meta.env.DEV ? devErrorPage(forwarded, response) : response;\n      };\n      return app.fetch ? app.fetch(request, next) : next(request);\n    },\n  };\n}\n"
     },
     {
       "path": "tinker/base/start-entry.ts",
       "target": "~/tinker/base/start-entry.ts",
       "type": "registry:file",
-      "content": "import { createCsrfMiddleware, createStart } from \"@tanstack/react-start\";\nimport { startRequests } from \"@tinker/start\";\n\n/** The command passes app options; CSRF and requests run before its middleware. */\nexport function createStartEntry(app: { getOptions: Parameters<typeof createStart>[0] }) {\n  const csrf = createCsrfMiddleware({ filter: (ctx) => ctx.handlerType === \"serverFn\" });\n  let options: ReturnType<typeof readOptions> | undefined;\n\n  async function readOptions() {\n    const own = await app.getOptions();\n    return {\n      ...own,\n      requestMiddleware: [csrf, startRequests.middleware, ...(own.requestMiddleware ?? [])],\n    };\n  }\n\n  return createStart(() => (options ??= readOptions()));\n}\n"
+      "content": "import { createCsrfMiddleware, createStart } from \"@tanstack/react-start\";\n\nimport { startRequests } from \"~/components/requests\";\n\n/** The command passes app options; CSRF and requests run before its middleware. */\nexport function createStartEntry(app: { getOptions: Parameters<typeof createStart>[0] }) {\n  const csrf = createCsrfMiddleware({ filter: (ctx) => ctx.handlerType === \"serverFn\" });\n  let options: ReturnType<typeof readOptions> | undefined;\n\n  async function readOptions() {\n    const own = await app.getOptions();\n    return {\n      ...own,\n      requestMiddleware: [csrf, startRequests.middleware, ...(own.requestMiddleware ?? [])],\n    };\n  }\n\n  return createStart(() => (options ??= readOptions()));\n}\n"
     },
     {
       "path": "../start-min/cmds/start.ts",
@@ -148,6 +148,108 @@
       "target": "~/tinker/components/errors/index.ts",
       "type": "registry:file",
       "content": "export { raise, fail, isError, abortReasons } from \"./errors\";\nexport type { Errors } from \"./errors\";\nexport type { Env } from \"./env\";\n"
+    },
+    {
+      "path": "tinker/components/requests/body.server.ts",
+      "target": "~/tinker/components/requests/body.server.ts",
+      "type": "registry:file",
+      "content": "import { resource } from \"@tinker/core\";\n\nimport { startServer } from \"./modules.server\";\n\n/** Retains request work until the consumer ends, fails, or cancels the body. */\nexport const responseBodies = resource({\n  label: \"start.responseBodies\",\n  target: \"scope\",\n  depends: { startServer },\n  factory: async ({ startServer }, ctx) => {\n    const readers = new Set<{\n      reader: ReadableStreamDefaultReader<Uint8Array>;\n      finish: (graceful: boolean) => Promise<void>;\n      cancelled: boolean;\n    }>();\n    ctx.defer(async () => {\n      const results = await Promise.allSettled(\n        [...readers].map(async (owned) => {\n          owned.cancelled = true;\n          readers.delete(owned);\n          const ended = await Promise.allSettled([owned.reader.cancel(), owned.finish(false)]);\n          for (const result of ended) if (result.status === \"rejected\") throw result.reason;\n        }),\n      );\n      for (const result of results) if (result.status === \"rejected\") throw result.reason;\n    });\n    return {\n      isResponse(value: unknown): value is Response {\n        return value instanceof Response;\n      },\n      hold(\n        response: Response,\n        finish: (graceful: boolean) => Promise<void>,\n      ): Response | Promise<Response> {\n        if (response.body === null) {\n          return finish(true).then(() => response);\n        }\n\n        const reader = response.body.getReader();\n        const owned = { reader, finish, cancelled: false };\n        readers.add(owned);\n\n        const body = new ReadableStream<Uint8Array>({\n          async pull(controller) {\n            try {\n              const part = await reader.read();\n              if (part.done) {\n                readers.delete(owned);\n                await finish(!owned.cancelled);\n                if (!owned.cancelled) controller.close();\n              } else if (!owned.cancelled) controller.enqueue(part.value);\n            } catch (error) {\n              readers.delete(owned);\n              await finish(false);\n              if (!owned.cancelled) controller.error(error);\n            }\n          },\n          async cancel(reason) {\n            owned.cancelled = true;\n            readers.delete(owned);\n            const results = await Promise.allSettled([finish(false), reader.cancel(reason)]);\n            for (const result of results) {\n              if (result.status === \"rejected\") throw result.reason;\n            }\n          },\n        });\n\n        return startServer.transferResponseBodyOwnership(\n          response,\n          new Response(body, {\n            status: response.status,\n            statusText: response.statusText,\n            headers: response.headers,\n          }),\n        );\n      },\n    };\n  },\n});\n"
+    },
+    {
+      "path": "tinker/components/requests/component.json",
+      "target": "~/tinker/components/requests/component.json",
+      "type": "registry:file",
+      "content": "{ \"requires\": [\"errors\"] }\n"
+    },
+    {
+      "path": "tinker/components/requests/headers.server.ts",
+      "target": "~/tinker/components/requests/headers.server.ts",
+      "type": "registry:file",
+      "content": "import { tag } from \"@tinker/core\";\n\n/** Only request wiring and auth borrow the raw headers; app operations use principal. */\nexport const requestHeaders = tag<Headers>({ label: \"request.headers\" });\n"
+    },
+    {
+      "path": "tinker/components/requests/index.server.ts",
+      "target": "~/tinker/components/requests/index.server.ts",
+      "type": "registry:file",
+      "content": "export { startRequests, backendStop, requestStop } from \"./index\";\nexport { readResult } from \"./result.server\";\nexport { requestHeaders } from \"./headers.server\";\nexport { requestBody } from \"./request-body.server\";\nexport { responseBodies } from \"./body.server\";\nexport { renderLifetime, retainRender } from \"./render-lifetime.server\";\n"
+    },
+    {
+      "path": "tinker/components/requests/index.ts",
+      "target": "~/tinker/components/requests/index.ts",
+      "type": "registry:file",
+      "content": "export { startRequests } from \"./start\";\nexport { backendStop, requestStop } from \"./lifetime\";\n"
+    },
+    {
+      "path": "tinker/components/requests/lifetime.ts",
+      "target": "~/tinker/components/requests/lifetime.ts",
+      "type": "registry:file",
+      "content": "import { tag } from \"@tinker/core\";\n\n/** The main supplies its host signal before graceful drain joins held requests. */\nexport const backendStop = tag<AbortSignal>({ label: \"lifetime.backendStop\" });\n\nexport const requestStop = tag<AbortSignal>({ label: \"lifetime.requestStop\" });\n"
+    },
+    {
+      "path": "tinker/components/requests/modules.server.ts",
+      "target": "~/tinker/components/requests/modules.server.ts",
+      "type": "registry:file",
+      "content": "import { resource } from \"@tinker/core\";\n\nexport const startServer = resource({\n  label: \"module:@tanstack/react-start/server\",\n  target: \"scope\",\n  factory: () => import(\"@tanstack/react-start/server\"),\n});\n"
+    },
+    {
+      "path": "tinker/components/requests/render-lifetime.server.ts",
+      "target": "~/tinker/components/requests/render-lifetime.server.ts",
+      "type": "registry:file",
+      "content": "import { resource } from \"@tinker/core\";\n\nimport { raise } from \"~/components/errors\";\n\nconst renders = new WeakMap<Request, { close: (() => Promise<void>) | undefined }>();\n\n/** The request session retains the render close until its one body ends. */\nexport const renderLifetime = resource({\n  label: \"request.renderLifetime\",\n  target: \"session\",\n  factory: (_deps, ctx) => {\n    const owned: { close: (() => Promise<void>) | undefined } = { close: undefined };\n    let request: Request | undefined;\n    ctx.defer(() => {\n      if (request) renders.delete(request);\n      request = undefined;\n      const close = owned.close;\n      owned.close = undefined;\n      return close?.();\n    });\n    return {\n      open(value: Request) {\n        request = value;\n        renders.set(value, owned);\n      },\n    };\n  },\n});\n\n/** The render entry transfers close to the already-open request session. */\nexport function retainRender(request: Request, close: () => Promise<void>) {\n  const owned = renders.get(request);\n  if (owned === undefined) raise(\"StartScopeMissing\", {});\n  owned.close = close;\n}\n"
+    },
+    {
+      "path": "tinker/components/requests/request-body.server.ts",
+      "target": "~/tinker/components/requests/request-body.server.ts",
+      "type": "registry:file",
+      "content": "import { resource } from \"@tinker/core\";\n\nimport { backendStop, requestStop } from \"./lifetime\";\n\n/** The request owns the reader; its route borrows it until all body checks finish. */\nexport const requestBody = resource({\n  label: \"request.body\",\n  target: \"session\",\n  depends: { backendStop, requestStop },\n  factory: ({ backendStop, requestStop }, ctx) => {\n    const signal = AbortSignal.any([backendStop, requestStop, ctx.signal]);\n    let reader: ReadableStreamDefaultReader<Uint8Array<ArrayBuffer>> | undefined;\n    let cancellation: Promise<void> | undefined;\n\n    const cancel = () => {\n      cancellation ??= reader?.cancel();\n    };\n    signal.addEventListener(\"abort\", cancel, { once: true });\n\n    const release = async () => {\n      signal.removeEventListener(\"abort\", cancel);\n      if (signal.aborted) cancel();\n      await cancellation;\n      reader?.releaseLock();\n      reader = undefined;\n    };\n    ctx.defer(release);\n\n    return {\n      signal,\n      open(body: ReadableStream<Uint8Array<ArrayBuffer>>) {\n        reader = body.getReader();\n        if (signal.aborted) cancel();\n        return reader;\n      },\n      release,\n    };\n  },\n});\n"
+    },
+    {
+      "path": "tinker/components/requests/result.server.ts",
+      "target": "~/tinker/components/requests/result.server.ts",
+      "type": "registry:file",
+      "content": "import type { RunResult } from \"@tinker/core\";\n\nimport { raise } from \"~/components/errors\";\n\n/** HTTP boundaries handle a settled failure without failing the server root.\n * @param result - From a settled boundary call; why: return its value or raise its failure.\n */\nexport function readResult<T>(result: RunResult<T>): T {\n  if (result.status === \"failed\") throw result.error;\n  if (result.status === \"cancelled\") raise(\"Cancelled\", {});\n  return result.value;\n}\n"
+    },
+    {
+      "path": "tinker/components/requests/start.ts",
+      "target": "~/tinker/components/requests/start.ts",
+      "type": "registry:file",
+      "content": "import { createMiddleware } from \"@tanstack/react-start\";\nimport { extension } from \"@tinker/core\";\nimport type { Scope } from \"@tinker/core\";\n\nimport { raise } from \"~/components/errors\";\n\nimport { responseBodies } from \"./body.server\";\nimport { requestHeaders } from \"./headers.server\";\nimport { requestStop } from \"./lifetime\";\nimport { renderLifetime } from \"./render-lifetime.server\";\n\n/** Start merges this registry to type the context supplied by the server entry. */\ndeclare module \"@tanstack/react-start\" {\n  interface Register {\n    server: { requestContext: { scope?: Scope.Handle } };\n  }\n}\n\n/** This root middleware uses only fetch context, before global middleware has run. */\nconst middleware = createMiddleware().server(async ({ context, request, next }) => {\n  const scope = context.scope;\n  if (scope === undefined) raise(\"StartScopeMissing\", {});\n\n  const session = scope.createSession({\n    tags: [requestHeaders(new Headers(request.headers)), requestStop(request.signal)],\n  });\n  session.resolve(renderLifetime).open(request);\n\n  let closed: Promise<void> | undefined;\n  const finish = (graceful: boolean) =>\n    (closed ??= Promise.resolve(session.close({ graceful })).then((end) => {\n      if (end.teardownErrors?.length) throw end.teardownErrors.at(0);\n    }));\n\n  try {\n    const result = await next({ context: { session, signal: request.signal } });\n    return {\n      ...result,\n      response: await (await session.resolve(responseBodies)).hold(result.response, finish),\n    };\n  } catch (error) {\n    await finish(false);\n    throw error;\n  }\n});\n\n/** Startup supplies the root context; all Start boundaries share this middleware. */\nexport const startRequests = Object.assign(\n  extension({\n    label: \"start.requests\",\n    hooks: {\n      async start(event) {\n        await event.next();\n        return { scope: event.scope };\n      },\n    },\n  }),\n  { middleware },\n);\n"
+    },
+    {
+      "path": "tinker/components/health/component.json",
+      "target": "~/tinker/components/health/component.json",
+      "type": "registry:file",
+      "content": "{ \"requires\": [\"requests\"] }\n"
+    },
+    {
+      "path": "tinker/components/health/health.ts",
+      "target": "~/tinker/components/health/health.ts",
+      "type": "registry:file",
+      "content": "import { operation } from \"@tinker/core\";\n\n/** The copied base version; it changes when this component is updated. */\nexport const baseVersion = \"0.8.0\";\n\nexport const health = operation({\n  label: \"tinker.health\",\n  run: () => ({ ok: true, base: baseVersion }),\n});\n"
+    },
+    {
+      "path": "tinker/components/health/index.server.ts",
+      "target": "~/tinker/components/health/index.server.ts",
+      "type": "registry:file",
+      "content": "export { health, baseVersion } from \"./health\";\n"
+    },
+    {
+      "path": "tinker/components/health/index.ts",
+      "target": "~/tinker/components/health/index.ts",
+      "type": "registry:file",
+      "content": "export { health, baseVersion } from \"./health\";\n"
+    },
+    {
+      "path": "../start-min/src/routes/api.health.ts",
+      "target": "~/src/routes/api.health.ts",
+      "type": "registry:file",
+      "content": "import { createFileRoute } from \"@tanstack/react-router\";\n\nimport { health } from \"~/components/health\";\nimport { startRequests } from \"~/components/requests\";\nimport { readResult } from \"~/components/requests/index.server\";\n\nexport const Route = createFileRoute(\"/api/health\")({\n  server: {\n    middleware: [startRequests.middleware],\n    handlers: {\n      GET: async ({ context }) =>\n        Response.json(\n          readResult(await context.session.settle(health, { signal: context.signal })),\n          {\n            headers: { \"Cache-Control\": \"no-store\" },\n          },\n        ),\n    },\n  },\n});\n"
+    },
+    {
+      "path": "../start-min/src/routes/tinker.tsx",
+      "target": "~/src/routes/tinker.tsx",
+      "type": "registry:file",
+      "content": "import { createFileRoute } from \"@tanstack/react-router\";\n\nimport { baseVersion } from \"~/components/health\";\n\nexport const Route = createFileRoute(\"/tinker\")({\n  component: () => (\n    <main>\n      <h1>Tinker base</h1>\n      <p>@tinker/start {baseVersion}</p>\n    </main>\n  ),\n});\n"
     }
   ],
   "meta": {

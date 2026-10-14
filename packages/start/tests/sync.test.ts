@@ -4,17 +4,18 @@ import { sql } from "drizzle-orm";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
+import { backendStop, requestStop } from "~/components/requests";
+import { startRequests } from "~/components/requests";
+import { requestHeaders } from "~/components/requests/index.server";
+
 import { auth, database, signedIn, syncTemplate, bindings } from "#tinker/server";
 
-import { requestHeaders } from "../src/backend/headers.server";
-import { backendStop, requestStop } from "../src/backend/lifetime";
 import { syncEndpoint } from "../src/parts/sync/endpoint.server";
 import { eventHistory } from "../src/parts/sync/history.server";
 import { accountNotice } from "../src/parts/sync/notice";
 import { notifications } from "../src/parts/sync/notifications.server";
 import { execution } from "../src/parts/sync/schema";
 import { eventStream, openSync } from "../src/parts/sync/stream.server";
-import { startRequests } from "../src/start";
 
 const ids = [
   "00000000-0000-4000-8000-000000000001",

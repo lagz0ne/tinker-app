@@ -1,6 +1,6 @@
 import { resource } from "@tinker/core";
 
-import { raise } from "../errors";
+import { raise } from "~/components/errors";
 
 const renders = new WeakMap<Request, { close: (() => Promise<void>) | undefined }>();
 

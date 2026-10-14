@@ -1,6 +1,7 @@
 import { isError as isCoreError, resource } from "@tinker/core";
 
-import { readResult } from "../../backend/result.server";
+import { readResult } from "~/components/requests/index.server";
+
 import { isError } from "../../errors";
 import { openSync } from "./stream.server";
 

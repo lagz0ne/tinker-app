@@ -11,9 +11,13 @@ try {
   await mkdir(join(fixture, "cmds"), { recursive: true });
   await mkdir(join(fixture, "src/routes"), { recursive: true });
   await cp(join(app, "tinker/base"), join(fixture, "tinker/base"), { recursive: true });
-  await cp(join(app, "tinker/components/errors"), join(fixture, "tinker/components/errors"), {
-    recursive: true,
-  });
+  for (const component of ["errors", "requests", "health"]) {
+    await cp(
+      join(app, "tinker/components", component),
+      join(fixture, "tinker/components", component),
+      { recursive: true },
+    );
+  }
 
   for (const file of await readdir(join(app, "maintain/fixtures/note-app"))) {
     const name = file.replace(/\.txt$/, "");

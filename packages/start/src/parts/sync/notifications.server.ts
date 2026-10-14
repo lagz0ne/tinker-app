@@ -1,8 +1,9 @@
 import { resource } from "@tinker/core";
 
+import { startRequests } from "~/components/requests/index";
+
 import { raise } from "../../errors";
 import { serverParts } from "../../server-parts";
-import { startRequests } from "../../start";
 import { accountOfNotice } from "./notice";
 import type { Stream } from "./protocol";
 

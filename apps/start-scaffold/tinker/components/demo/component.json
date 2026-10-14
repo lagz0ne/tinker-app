@@ -1,1 +1,3 @@
-{ "requires": ["mail"] }
+{
+  "requires": ["mail", "requests"]
+}

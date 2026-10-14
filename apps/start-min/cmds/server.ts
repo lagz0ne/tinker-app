@@ -6,6 +6,8 @@ import { renderObservation } from "~/base/observe";
 import { observeServerPanics } from "~/base/panics.server";
 import { createServerHandler } from "~/base/server-entry";
 import type { ServerEntry } from "~/base/server-entry";
+import { startRequests } from "~/components/requests";
+import { backendStop } from "~/components/requests/index.server";
 
 const values = { ...process.env };
 const appTags = [start.auth.settings(values)];
@@ -22,9 +24,9 @@ await tools.ready;
 const app = createScope({
   signal: stop.app.signal,
   observe: tools.resolve(start.telemetry.observe),
-  extensions: [start.startRequests, start.auth.extensions],
+  extensions: [startRequests, start.auth.extensions],
   tags: [
-    start.backendStop(stop.app.signal),
+    backendStop(stop.app.signal),
     renderObservation(
       tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
     ),
@@ -38,7 +40,7 @@ const close = createScopeClose({ tools, app }, stop);
 await app.ready.catch(close);
 
 const server = {
-  requestContext: app.resolve(start.startRequests),
+  requestContext: app.resolve(startRequests),
   renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
   close,
 } satisfies ServerEntry.Handle;

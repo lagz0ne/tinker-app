@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, rmSync, symlinkSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 
 import { createScope, extension } from "@tinker/core";
@@ -73,6 +73,19 @@ async function loadEntry(wiring, entry = source) {
           "utf8",
         ),
       ]),
+    ),
+    ...Object.fromEntries(
+      ["requests", "health"].flatMap((component) =>
+        readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
+          (file) => [
+            `tinker/components/${component}/${file}`,
+            readFileSync(
+              join(baseDir, "../../apps/start-scaffold/tinker/components", component, file),
+              "utf8",
+            ),
+          ],
+        ),
+      ),
     ),
     "cmds/server.ts": entry
       .replace(

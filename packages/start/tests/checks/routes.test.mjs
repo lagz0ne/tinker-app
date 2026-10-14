@@ -1,6 +1,7 @@
 import { expect, test } from "vite-plus/test";
 
 import { routes } from "../../lib/checks/routes.mjs";
+import { basePackage } from "../../lib/paths.mjs";
 import { fixture, goodApp } from "../fixture.mjs";
 
 const page = (path) =>
@@ -9,9 +10,7 @@ const page = (path) =>
 test("passes when every route exports Route and none takes a base path", () => {
   expect(routes(goodApp())).toEqual({
     status: "ok",
-    lines: [
-      "route files export Route; none takes a base path (/api/health, /tinker, /api/telemetry)",
-    ],
+    lines: ["route files export Route; none takes a base path (/api/telemetry)"],
   });
 });
 
@@ -85,8 +84,15 @@ test("a local value named Outlet is not TanStack's outlet", () => {
   ]);
 });
 
-test("names each of the six ways a route takes a base path", () => {
-  const root = goodApp({
+test("names each of the six ways a route takes a legacy package path", () => {
+  const root = fixture({
+    "node_modules/@tinker/start/package.json": JSON.stringify({
+      ...basePackage,
+      tinker: {
+        ...basePackage.tinker,
+        routes: { "/tinker": "src/routes/tinker.tsx", "/api/health": "src/routes/api.health.ts" },
+      },
+    }),
     "src/routes/tinker.tsx": page("/tinker"),
     "src/routes/api.health.ts": page("/api/health"),
     "src/routes/(extra)/tinker.tsx": page("/(extra)/tinker"),
@@ -123,7 +129,7 @@ test("with the part off, as the last tinker() call recorded, its path is the app
   });
   expect(routes(root)).toEqual({
     status: "ok",
-    lines: ["route files export Route; none takes a base path (/api/health, /tinker)"],
+    lines: ["route files export Route; none takes a base path ()"],
   });
 });
 

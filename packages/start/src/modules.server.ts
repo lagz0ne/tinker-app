@@ -5,9 +5,3 @@ export const drizzleOrm = resource({
   target: "scope",
   factory: () => import("drizzle-orm"),
 });
-
-export const startServer = resource({
-  label: "module:@tanstack/react-start/server",
-  target: "scope",
-  factory: () => import("@tanstack/react-start/server"),
-});

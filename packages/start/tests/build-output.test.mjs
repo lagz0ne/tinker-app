@@ -55,11 +55,20 @@ test("the build writes Brotli and gzip copies of JS, CSS, and HTML", async () =>
 test("server body chunks do not import each other before deps are set", async () => {
   const { output } = await build({
     configFile: false,
+    resolve: {
+      alias: {
+        "~/components": new URL("../../../apps/start-scaffold/tinker/components", import.meta.url)
+          .pathname,
+      },
+    },
     root: new URL("..", import.meta.url).pathname,
     logLevel: "silent",
     plugins: [serverOutput()],
     build: {
-      ssr: "src/start.ts",
+      ssr: new URL(
+        "../../../apps/start-scaffold/tinker/components/requests/start.ts",
+        import.meta.url,
+      ).pathname,
       write: false,
       minify: false,
       rolldownOptions: { external: /^(?:@tanstack\/|drizzle-orm$)/ },

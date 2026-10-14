@@ -2,12 +2,12 @@ import { createScope, operation, tag } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { devErrorPage } from "~/base/panics";
+import { health } from "~/components/health";
+import { startRequests } from "~/components/requests";
+import { responseBodies } from "~/components/requests/index.server";
 
 import { version } from "../package.json";
-import { responseBodies } from "../src/backend/body.server";
-import { health } from "../src/backend/health";
 import { readResult } from "../src/server";
-import { startRequests } from "../src/start";
 
 const greetingName = tag<string>({ label: "test.greetingName", default: "nobody" });
 

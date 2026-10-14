@@ -1,7 +1,7 @@
 export { http, httpRequest } from "./backend/http";
 export { httpBackend } from "./backend/http-backend";
-export { backendStop, requestStop } from "./backend/lifetime";
-export { requestHeaders } from "./backend/headers.server";
+export { backendStop, requestStop } from "~/components/requests";
+export { requestHeaders } from "~/components/requests/index.server";
 export { handleAuth } from "./parts/auth/handle.server";
 export { openSync } from "./parts/sync/stream.server";
 export { notifications } from "./parts/sync/notifications.server";
@@ -9,7 +9,7 @@ export { accountOwner, tabLifetime } from "./parts/sync/client/owner";
 export { tabStop, pageEvents } from "./parts/sync/client/tab";
 export { receiveMessage, refreshAccount } from "./parts/sync/client/events";
 export { snapshotSource } from "./parts/sync/functions";
-export { startRequests } from "./start";
+export { startRequests } from "~/components/requests";
 export { isError, raise } from "./errors";
 export { exportHealth } from "./parts/telemetry/health";
 export { flushTelemetry } from "./parts/telemetry/observer";
@@ -28,5 +28,4 @@ export {
 export { syncRouter } from "./parts/sync/client/router";
 export { sync as offSync } from "./parts/sync/off";
 export { sync as onSync } from "./parts/sync/on";
-export { renderLifetime, retainRender } from "./backend/render-lifetime.server";
-export { responseBodies } from "./backend/body.server";
+export { retainRender } from "~/components/requests/index.server";

@@ -1,7 +1,8 @@
 import { operation, resource } from "@tinker/core";
-import { accountNotice, authSettings, drizzleOrm, requestHeaders } from "@tinker/start/server";
+import { accountNotice, authSettings, drizzleOrm } from "@tinker/start/server";
 
 import { authMail } from "~/components/mail/index.server";
+import { requestHeaders } from "~/components/requests/index.server";
 
 import { database } from "./database.server";
 

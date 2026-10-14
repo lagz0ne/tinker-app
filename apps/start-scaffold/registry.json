@@ -128,6 +128,91 @@
           "path": "tinker/components/errors/index.ts",
           "target": "~/tinker/components/errors/index.ts",
           "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/body.server.ts",
+          "target": "~/tinker/components/requests/body.server.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/component.json",
+          "target": "~/tinker/components/requests/component.json",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/headers.server.ts",
+          "target": "~/tinker/components/requests/headers.server.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/index.server.ts",
+          "target": "~/tinker/components/requests/index.server.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/index.ts",
+          "target": "~/tinker/components/requests/index.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/lifetime.ts",
+          "target": "~/tinker/components/requests/lifetime.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/modules.server.ts",
+          "target": "~/tinker/components/requests/modules.server.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/render-lifetime.server.ts",
+          "target": "~/tinker/components/requests/render-lifetime.server.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/request-body.server.ts",
+          "target": "~/tinker/components/requests/request-body.server.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/result.server.ts",
+          "target": "~/tinker/components/requests/result.server.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/start.ts",
+          "target": "~/tinker/components/requests/start.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/health/component.json",
+          "target": "~/tinker/components/health/component.json",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/health/health.ts",
+          "target": "~/tinker/components/health/health.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/health/index.server.ts",
+          "target": "~/tinker/components/health/index.server.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/health/index.ts",
+          "target": "~/tinker/components/health/index.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "../start-min/src/routes/api.health.ts",
+          "target": "~/src/routes/api.health.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "../start-min/src/routes/tinker.tsx",
+          "target": "~/src/routes/tinker.tsx",
+          "type": "registry:file"
         }
       ],
       "meta": {

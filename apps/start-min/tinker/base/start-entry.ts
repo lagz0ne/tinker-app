@@ -1,5 +1,6 @@
 import { createCsrfMiddleware, createStart } from "@tanstack/react-start";
-import { startRequests } from "@tinker/start";
+
+import { startRequests } from "~/components/requests";
 
 /** The command passes app options; CSRF and requests run before its middleware. */
 export function createStartEntry(app: { getOptions: Parameters<typeof createStart>[0] }) {

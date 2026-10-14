@@ -1,11 +1,12 @@
 import { operation, resource } from "@tinker/core";
 
-import { requestHeaders } from "../../backend/headers.server";
-import { backendStop, requestStop } from "../../backend/lifetime";
+import { backendStop, requestStop } from "~/components/requests/index";
+import { startRequests } from "~/components/requests/index";
+import { requestHeaders } from "~/components/requests/index.server";
+
 import { raise } from "../../errors";
 import { drizzleOrm } from "../../modules.server";
 import { serverParts } from "../../server-parts";
-import { startRequests } from "../../start";
 import { notifications } from "./notifications.server";
 import { streamCursor, streamRequest } from "./protocol";
 import type { Stream } from "./protocol";

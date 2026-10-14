@@ -1,9 +1,10 @@
 import type { Scope } from "@tinker/core";
 import { operation, resource, tag } from "@tinker/core";
 
-import { backendStop, requestStop } from "../../backend/lifetime";
-import { requestBody } from "../../backend/request-body.server";
-import { readResult } from "../../backend/result.server";
+import { backendStop, requestStop } from "~/components/requests/index";
+import { requestBody } from "~/components/requests/index.server";
+import { readResult } from "~/components/requests/index.server";
+
 import { raise } from "../../errors";
 import { ingestTelemetry } from "./observer";
 import type { Telemetry } from "./records";

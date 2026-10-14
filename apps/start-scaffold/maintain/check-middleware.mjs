@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -14,11 +14,31 @@ if (import.meta.main) {
   try {
     await copyProofApp(source, proof);
 
+    const serverFile = join(proof, "cmds/server.ts");
+    const server = await readFile(serverFile, "utf8");
+    assert.ok(server.includes("await app.ready.catch(close);"));
+    await writeFile(
+      serverFile,
+      server.replace(
+        "await app.ready.catch(close);",
+        `
+await app.ready.catch(close);
+const createRequestSession = app.createSession.bind(app);
+let requestSessionCount = 0;
+app.createSession = (...args) => {
+  requestSessionCount++;
+  return createRequestSession(...args);
+};
+export const createdRequestSessions = () => requestSessionCount;
+`,
+      ),
+    );
+
     await writeFile(
       join(proof, "src/proof-middleware.ts"),
       `
 import { createMiddleware } from "@tanstack/react-start";
-import { startRequests } from "@tinker/start";
+import { startRequests } from "~/components/requests";
 export const proofRequest = createMiddleware()
   .middleware([startRequests.middleware])
   .server(async ({context, request, next}) => {
@@ -42,7 +62,7 @@ export const proofFunction = createMiddleware({type: "function"})
       `
 import { createServerFn } from "@tanstack/react-start";
 import { proofRequest, proofFunction } from "./proof-middleware";
-import { readResult } from "@tinker/start/server";
+import { readResult } from "~/components/requests/index.server";
 import { readProofUser } from "./proof.server";
 export const readProof = createServerFn({method: "GET"})
   .middleware([proofRequest, proofFunction, proofFunction])
@@ -59,7 +79,7 @@ export const readProof = createServerFn({method: "GET"})
       join(proof, "src/proof.server.ts"),
       `
 import { operation } from "@tinker/core";
-import { requestHeaders } from "@tinker/start/server";
+import { requestHeaders } from "~/components/requests/index.server";
 export const readProofUser = operation({
   label: "test.nativeRequest",
   depends: {headers: requestHeaders},
@@ -99,8 +119,8 @@ export const startInstance = createStart(() => ({requestMiddleware: [proofReques
       `
 import { createFileRoute } from "@tanstack/react-router";
 import { incrementCounter } from "~/components/demo/index.server";
-import { startRequests } from "@tinker/start";
-import { readResult } from "@tinker/start/server";
+import { startRequests } from "~/components/requests";
+import { readResult } from "~/components/requests/index.server";
 export const Route = createFileRoute("/proof/write")({server: {
   middleware: [startRequests.middleware], handlers: {
     POST: async ({context}) => Response.json(readResult(await context.session.settle(incrementCounter, {input: {executionId: crypto.randomUUID()}}))),
@@ -137,6 +157,8 @@ export const Route = createFileRoute("/proof/write")({server: {
           return user;
         }),
       );
+
+      assert.equal(app.createdRequestSessions(), 2, "one request session per SSR request");
 
       const stream = await app.default.fetch(new Request("http://localhost:4318/api/sync"));
       assert.equal(stream.headers.get("x-proof-requests"), "1");

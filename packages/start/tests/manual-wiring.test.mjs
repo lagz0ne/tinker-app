@@ -1,4 +1,4 @@
-import { readFileSync, symlinkSync } from "node:fs";
+import { readdirSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 
 import { createServer } from "vite-plus";
@@ -23,6 +23,19 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
           "utf8",
         ),
       ]),
+    ),
+    ...Object.fromEntries(
+      ["requests", "health"].flatMap((component) =>
+        readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
+          (file) => [
+            `tinker/components/${component}/${file}`,
+            readFileSync(
+              join(baseDir, "../../apps/start-scaffold/tinker/components", component, file),
+              "utf8",
+            ),
+          ],
+        ),
+      ),
     ),
     "cmds/server.ts": entry,
     ...Object.fromEntries(
@@ -62,6 +75,19 @@ test("a component settings file is not bound unless the user calls its public AP
           "utf8",
         ),
       ]),
+    ),
+    ...Object.fromEntries(
+      ["requests", "health"].flatMap((component) =>
+        readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
+          (file) => [
+            `tinker/components/${component}/${file}`,
+            readFileSync(
+              join(baseDir, "../../apps/start-scaffold/tinker/components", component, file),
+              "utf8",
+            ),
+          ],
+        ),
+      ),
     ),
     "cmds/server.ts": entry,
     ...Object.fromEntries(

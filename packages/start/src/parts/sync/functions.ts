@@ -2,9 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { resource } from "@tinker/core";
 
-import { readResult } from "../../backend/result.server";
+import { startRequests } from "~/components/requests/index";
+import { readResult } from "~/components/requests/index.server";
+
 import { serverParts } from "../../server-parts";
-import { startRequests } from "../../start";
 import type { Sync } from "./envelopes";
 
 /** The app's snapshot for this request's account: what a tab loads before it streams. */

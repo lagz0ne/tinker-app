@@ -2,13 +2,14 @@ import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
+import { startRequests } from "~/components/requests";
+
 import { auth, bindings } from "#tinker/server";
 
 import { handleAuth } from "../src/parts/auth/handle.server";
 import { auth as off } from "../src/parts/auth/off";
 import { auth as on } from "../src/parts/auth/on.server";
 import { authSettings, authStartup } from "../src/parts/auth/settings";
-import { startRequests } from "../src/start";
 
 const keys = authSettings({ origin: "https://shop.example", secret: "s".repeat(32) });
 

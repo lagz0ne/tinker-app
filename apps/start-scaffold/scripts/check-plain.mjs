@@ -888,7 +888,8 @@ function protocolUnitReference(node, file, name) {
   return target?.declarations?.some(
     (decl) =>
       ts.isVariableDeclaration(decl) &&
-      resolve(decl.getSourceFile().fileName) === join(base, file) &&
+      resolve(decl.getSourceFile().fileName) ===
+        join(file.startsWith("tinker/") ? root : base, file) &&
       nameOf(decl.name) === name,
   );
 }
@@ -896,7 +897,16 @@ function protocolUnitReference(node, file, name) {
 function checkRequestHeaders(node) {
   const file = pathOf(node);
   if (file === "tinker/components/demo/backend/auth.server.ts") return;
-  if (protocolUnitReference(node, "src/backend/headers.server.ts", "requestHeaders")) {
+  if (
+    ["start.ts", "headers.server.ts", "index.server.ts"].some(
+      (name) => file === `tinker/components/requests/${name}`,
+    )
+  ) {
+    return;
+  }
+  if (
+    protocolUnitReference(node, "tinker/components/requests/headers.server.ts", "requestHeaders")
+  ) {
     fail(node, "protocol-headers: app code must use principal or currentUser");
   }
 }
@@ -908,6 +918,7 @@ const responseDeclarations = new Set(builtinResponse.declarations);
 function checkResponse(node) {
   const file = pathOf(node);
   if (file.startsWith("src/routes/")) return;
+  if (file === "tinker/components/requests/body.server.ts") return;
   if (["tinker/base/server-entry.ts", "tinker/base/panics.tsx"].includes(file)) return;
   if (nativeReference(node, responseDeclarations)) {
     fail(node, "protocol-response: replies belong to routes or the base");
@@ -1260,6 +1271,9 @@ function isEntryHelper(node) {
   if (!node) return false;
   const helpers = {
     "tinker/components/errors/errors.ts": ["raise", "fail", "isError"],
+    "tinker/components/requests/start.ts": ["finish"],
+    "tinker/components/requests/render-lifetime.server.ts": ["retainRender"],
+    "tinker/components/requests/result.server.ts": ["readResult"],
     "tinker/base/close.ts": ["createScopeClose", "closeRoots"],
     "tinker/base/panics.server.ts": ["observeServerPanics"],
     "tinker/base/panics.tsx": ["devErrorPage", "errorDetail"],
@@ -1554,6 +1568,18 @@ if (process.argv.includes("--prove")) {
       'import {resource} from "@tinker/core"; const probe = resource({factory: () => Reflect.construct(Response, [])});',
     ],
     ["response-type-reference", "protocol-response", "export type Probe = Response;"],
+    [
+      "requests-extra-response",
+      "protocol-response",
+      "export type Probe = Response;",
+      "tinker/components/requests/plain-probe.ts",
+    ],
+    [
+      "requests-extra-headers",
+      "protocol-headers",
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "./headers.server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      "tinker/components/requests/plain-probe.ts",
+    ],
     [
       "response-route-allowed",
       null,

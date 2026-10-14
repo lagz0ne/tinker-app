@@ -1,8 +1,9 @@
 import { operation } from "@tinker/core";
 import { z } from "zod";
 
+import { startRequests } from "~/components/requests/index";
+
 import { serverParts } from "../../server-parts";
-import { startRequests } from "../../start";
 
 /**
  * ADR 0103's named protocol exception: the app's auth library owns its HTTP contract, so this

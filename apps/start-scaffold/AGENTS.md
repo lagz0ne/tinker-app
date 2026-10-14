@@ -109,7 +109,7 @@ Its close helper alone may borrow named roots and their stop controllers.
 Helpers keep only repeated code; the main keeps startup steps.
 Commands sit directly under cmds; nested command files fail the checks.
 Src and components never import tinker/base or cmds.
-Start owns backendStop until the requests component moves.
+The requests component owns backendStop and the request middleware.
 Copied base code owns only entry, close, panic, and observation glue.
 Commands import only ~/, @/, @tinker/core, and their framework entry.
 @tinker/start is allowed until Start is decomposed into base registry components (next card).

@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { version } from "../../package.json";
+import { baseVersion } from "~/components/health";
 
 export const Route = createFileRoute("/tinker")({
   component: () => (
     <main>
       <h1>Tinker base</h1>
-      <p>@tinker/start {version}</p>
+      <p>@tinker/start {baseVersion}</p>
     </main>
   ),
 });

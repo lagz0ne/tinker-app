@@ -80,10 +80,7 @@
       "@tinker/core": "0.8.0",
       "@tinker/react": "0.8.0"
     },
-    "routes": {
-      "/api/health": "src/routes/api.health.ts",
-      "/tinker": "src/routes/tinker.tsx"
-    },
+    "routes": {},
     "parts": {
       "telemetry": {
         "on": true,

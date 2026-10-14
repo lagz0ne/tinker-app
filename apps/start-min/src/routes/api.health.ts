@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { health } from "../backend/health";
-import { readResult } from "../backend/result.server";
-import { startRequests } from "../start";
+import { health } from "~/components/health";
+import { startRequests } from "~/components/requests";
+import { readResult } from "~/components/requests/index.server";
 
 export const Route = createFileRoute("/api/health")({
   server: {

@@ -15,6 +15,8 @@ import {
   settings,
 } from "~/components/demo/index.server";
 import * as mail from "~/components/mail/index.server";
+import { startRequests } from "~/components/requests";
+import { backendStop } from "~/components/requests/index.server";
 
 const parts = start.serverParts({ auth, bootstrap, database, readAccount });
 const values = { ...process.env };
@@ -32,9 +34,9 @@ await tools.ready;
 const app = createScope({
   signal: stop.app.signal,
   observe: tools.resolve(start.telemetry.observe),
-  extensions: [start.startRequests, start.auth.extensions, databaseSetup],
+  extensions: [startRequests, start.auth.extensions, databaseSetup],
   tags: [
-    start.backendStop(stop.app.signal),
+    backendStop(stop.app.signal),
     renderObservation(
       tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
     ),
@@ -47,7 +49,7 @@ const close = createScopeClose({ tools, app }, stop);
 await app.ready.catch(close);
 
 const server = {
-  requestContext: app.resolve(start.startRequests),
+  requestContext: app.resolve(startRequests),
   renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
   close,
 } satisfies ServerEntry.Handle;

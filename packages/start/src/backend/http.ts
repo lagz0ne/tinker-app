@@ -1,9 +1,10 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 
+import { backendStop, requestStop } from "~/components/requests/index";
+
 import { abortReasons, raise } from "../errors";
 import { httpBackend } from "./http-backend";
-import { backendStop, requestStop } from "./lifetime";
 
 const requestShape = z
   .strictObject({

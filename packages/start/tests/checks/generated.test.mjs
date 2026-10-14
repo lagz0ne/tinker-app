@@ -83,7 +83,7 @@ test("a route file that re-exports Route from another file counts as a route", (
 
 test("leaves a route that clashes with the base to check 7, not to tinker prepare", () => {
   const root = preparedApp({
-    "src/routes/tinker.tsx": 'export const Route = createFileRoute("/tinker")({});\n',
+    "src/routes/api.telemetry.tsx": 'export const Route = createFileRoute("/api/telemetry")({});\n',
   });
   expect(generated(root).status).toBe("ok");
 });
@@ -182,8 +182,8 @@ const fakeVite = (onResolve) => ({
 });
 
 test("--fix never runs the generator while a route clashes: check 3's lines come back", () => {
-  const clash = 'export const Route = createFileRoute("/tinker")({});\n';
-  const root = preparedApp({ ...fakeVite(""), ...later, "src/routes/tinker.tsx": clash });
+  const clash = 'export const Route = createFileRoute("/api/telemetry")({});\n';
+  const root = preparedApp({ ...fakeVite(""), ...later, "src/routes/api.telemetry.ts": clash });
   expect(runCheck(root, generated, true)).toMatchObject({
     status: "fail",
     lines: [
@@ -191,7 +191,7 @@ test("--fix never runs the generator while a route clashes: check 3's lines come
     ],
   });
   expect(existsSync(join(root, ".generator-ran"))).toBe(false);
-  expect(readFileSync(join(root, "src/routes/tinker.tsx"), "utf8")).toBe(clash);
+  expect(readFileSync(join(root, "src/routes/api.telemetry.ts"), "utf8")).toBe(clash);
 });
 
 test("--fix runs the generator when check 7 passes; a prepare that fails leaves check 3's lines, not a crash", () => {
