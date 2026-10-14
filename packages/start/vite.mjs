@@ -79,6 +79,7 @@ function restartOn(root) {
       };
       server.watcher.on("add", restart("added"));
       server.watcher.on("unlink", restart("removed"));
+      server.watcher.on("change", restart("changed"));
     },
   };
 }

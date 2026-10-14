@@ -1,6 +1,7 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join, relative } from "node:path";
 
+import { readItemModules } from "./item-modules.mjs";
 import { appFiles, pick } from "./named.mjs";
 import { exportsOf } from "./source.mjs";
 
@@ -39,56 +40,20 @@ function readExports(root, path) {
   return { names, problems };
 }
 
-/** Core's extensions run in order and its last same-tag binding wins. */
-function itemOrder(a, b) {
-  return a.number - b.number || a.name.localeCompare(b.name);
-}
-
-/** One folder's known roles, selected by name without reading any source. */
-function folderRoles(dir, folder, side) {
-  const files = new Set(
-    readdirSync(join(dir, folder), { withFileTypes: true })
-      .filter((file) => file.isFile())
-      .map((file) => file.name),
-  );
-  const suffix = side === "server" ? ".server.ts" : ".ts";
-  return roles[side].filter((name) => files.has(name + suffix));
-}
-
-/** Only numbered folders with role files enter the sort; helper folders have no effect. */
-function itemFolders(dir, side, problems) {
-  const folders = existsSync(dir)
-    ? readdirSync(dir, { withFileTypes: true }).filter((item) => item.isDirectory())
-    : [];
-  const found = [];
-
-  for (const folder of folders) {
-    const names = folderRoles(dir, folder.name, side);
-    if (names.length === 0) continue;
-    const prefix = /^(\d+)-/.exec(folder.name);
-    if (!prefix) {
-      problems.push(
-        `src/items/${folder.name}: role folders need a numeric prefix, such as 10-mail`,
-      );
-      continue;
-    }
-
-    found.push({ name: folder.name, number: Number(prefix[1]), roles: names });
-  }
-  return found.sort(itemOrder);
-}
-
-/** Read only folder and file names, never parse or load an item's role code. */
+/** Read manifests and file names, never parse or load an item's role code. */
 export function readItems(root, side) {
   const items = [];
   const owners = new Map();
-  const problems = [];
-  const folders = itemFolders(join(root, "src/items"), side, problems);
+  const { folders, problems } = readItemModules(root, isRoleFile);
 
   for (const folder of folders) {
-    for (const name of folder.roles) {
+    for (const name of roles[side].filter((name) => folder.files.has(roleName(name, side)))) {
       const file = `src/items/${folder.name}/${roleName(name, side)}`;
-      items.push({ name, file });
+      items.push({
+        name,
+        file,
+        ancestors: [...folder.ancestors].map((name) => `src/items/${name}/settings.server.ts`),
+      });
       if (!singles[side].includes(name)) continue;
       if (owners.has(name)) {
         problems.push(`${name}: ${owners.get(name)} and ${file} both own ${name}`);
@@ -145,16 +110,22 @@ function appendLists(lines, modules, own, side) {
   lines.push(`export const extensions = [${extensions.join(", ")}] as const;`);
   if (side !== "server") return;
 
-  const settings = modules.filter((item) => item.name === "settings").map((item) => item.id);
-  if (own.names.has("settings")) {
-    lines.push("const ownSettings: App.Settings = own.settings;");
-    settings.push("ownSettings");
-  }
-  lines.push(
-    "export function settings(env: App.Env): App.Bindings {",
-    `  return [${settings.map((id) => `${id}(env)`).join(", ")}];`,
-    "}",
-  );
+  const settings = modules.filter((item) => item.name === "settings");
+  if (own.names.has("settings")) lines.push("const ownSettings: App.Settings = own.settings;");
+  lines.push("export function settings(env: App.Env): App.Bindings {");
+  const lists = [];
+  if (settings.length > 1) {
+    lines.push("  const items = joinSettings([");
+    for (const item of settings) {
+      lines.push(
+        `    { file: ${JSON.stringify(item.file)}, requires: ${JSON.stringify(item.ancestors)}, bindings: ${item.id}(env) },`,
+      );
+    }
+    lines.push("  ]);");
+    lists.push("items");
+  } else lists.push(...settings.map((item) => `${item.id}(env)`));
+  if (own.names.has("settings")) lists.push("ownSettings(env)");
+  lines.push(`  return [${lists.join(", ")}];`, "}");
 }
 
 /** Only known single roles are exposed; each user name takes precedence. */
@@ -166,6 +137,21 @@ function appendSingles(lines, modules, own, ownModule, side) {
       if (owner) lines.push(`export { ${owner.id} as ${name} };`);
     }
   }
+}
+
+/** Runtime tag checks are imported only when two item settings could collide. */
+function appendImports(lines, modules, own, ownModule, side, base) {
+  if (side === "server" && modules.filter((item) => item.name === "settings").length > 1) {
+    lines.push(
+      `import { joinSettings } from ${JSON.stringify(join(base, "lib/item-settings.mjs"))};`,
+    );
+  }
+  for (const item of modules) {
+    lines.push(`import ${item.id}Export from ${JSON.stringify(item.module)};`);
+  }
+  const readsOwn = own.names.has("extensions") || (side === "server" && own.names.has("settings"));
+  if (readsOwn) lines.push(`import * as own from ${JSON.stringify(ownModule)};`);
+  lines.push("");
 }
 
 /** Generate explicit default imports; no roles passes on the original seam in one line. */
@@ -194,12 +180,7 @@ export function appFile(root, base, side) {
     "/** GENERATED by tinker prepare. Edit src/items or your own seam. */",
     `import type { App } from ${JSON.stringify(join(base, "lib/app"))};`,
   ];
-  for (const item of modules) {
-    lines.push(`import ${item.id}Export from ${JSON.stringify(item.module)};`);
-  }
-  const readsOwn = own.names.has("extensions") || (side === "server" && own.names.has("settings"));
-  if (readsOwn) lines.push(`import * as own from ${JSON.stringify(ownModule)};`);
-  lines.push("");
+  appendImports(lines, modules, own, ownModule, side, base);
 
   appendRoles(lines, modules, own);
   appendLists(lines, modules, own, side);

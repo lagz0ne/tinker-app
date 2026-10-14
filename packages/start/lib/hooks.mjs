@@ -47,12 +47,16 @@ export function recordViolation(root, found, info) {
  * config time, so adding or removing one needs a restart. The line to log, or null.
  * @param {string} root - From tinker()'s dev server; why: the picked files live there.
  * @param {string} path - From Vite's watcher; why: the file that came or went.
- * @param {"added" | "removed"} verb - From Vite's watcher; why: what happened to it.
+ * @param {"added" | "removed" | "changed"} verb - From Vite's watcher; why: what happened to it.
  */
 export function restartNote(root, path, verb) {
+  const file = relative(root, path);
+  const manifest = /^src\/items\/[^/]+\/item\.json$/.test(file);
+  if (verb === "changed" && !manifest) return null;
+
   const picked = [shellFile, ...appFiles.map(({ file }) => file)].map((file) => join(root, file));
-  const isItemRole = isRoleFile(relative(root, path));
-  return picked.includes(path) || isItemRole
-    ? `tinker: ${relative(root, path)} ${verb}; restarting`
+  const isItemRole = isRoleFile(file);
+  return picked.includes(path) || isItemRole || manifest
+    ? `tinker: ${file} ${verb}; restarting`
     : null;
 }

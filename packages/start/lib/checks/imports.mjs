@@ -1,7 +1,9 @@
 import { readdirSync } from "node:fs";
-import { join, dirname, resolve, sep, isAbsolute } from "node:path";
+import { join, dirname, resolve, sep, isAbsolute, posix } from "node:path";
 
-import { installedBase, listFiles } from "../paths.mjs";
+import { readItemModules } from "../item-modules.mjs";
+import { isRoleFile } from "../joins.mjs";
+import { installedBase } from "../paths.mjs";
 import { parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";
 
@@ -38,9 +40,9 @@ function appSources(root, dir = "") {
 }
 
 /** A finding at the module path's own line, including a dynamic or type-only import. */
-function extensionImports(root) {
-  return appSources(root).flatMap((file) =>
-    specifiers(parseSource(join(root, file)))
+function extensionImports(sources) {
+  return sources.flatMap(({ file, imports }) =>
+    imports
       .filter(({ name }) => /\.(ts|tsx|mts)$/.test(name))
       .map(({ name, line }) => say.extension(`${file}:${line}`, name)),
   );
@@ -77,6 +79,64 @@ function badImport(name, file, base) {
   return reachesBase(name, file, base) ? say.path : null;
 }
 
+/** Test files may reach private files, as with the package barrel rule. */
+function isTest(file) {
+  return /(?:^|\/)tests\//.test(file) || /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file);
+}
+
+/** Public entries have fixed names; tests may import any file. */
+function isPrivate(path, file) {
+  return Boolean(path) && !["index", "index.server"].includes(path) && !isTest(file);
+}
+
+/** Missing helper manifests need a file to add, rather than an edit to an absent file. */
+function checkItemRequires(at, name, item, owner, folders) {
+  if (!owner) return null;
+  const from = folders.find((folder) => folder.name === owner);
+  if (from?.requires.includes(item)) return null;
+
+  const manifest = `src/items/${owner}/item.json`;
+  return from?.files.has("item.json")
+    ? `${at} "${name}" needs "${item}" in ${manifest} requires`
+    : `${at} "${name}" needs "${item}"; add ${manifest} with { "requires": ["${item}"] }`;
+}
+
+/** Import paths, including re-exports and dynamic imports, obey one item's public entry. */
+function itemImport(name, file, line, folders) {
+  const resolved = name.startsWith(".")
+    ? posix.join(posix.dirname(file), name).replace(/^src\//, "@/")
+    : posix.normalize(name);
+  const target = /^@\/items\/([^/]+)(?:\/(.*))?$/.exec(resolved);
+  if (!target) return [];
+  const [, item, path] = target;
+
+  const owner = /^src\/items\/([^/]+)\//.exec(file)?.[1];
+  if (owner === item) return [];
+  const at = `${file}:${line}`;
+  const problems = [];
+
+  if (isPrivate(path, file)) {
+    const serverEntry = /\.server\.[cm]?[jt]sx?$/.test(file)
+      ? ` or "@/items/${item}/index.server"`
+      : "";
+    problems.push(
+      `${at} "${name}" is private to item ${item}; use "@/items/${item}"${serverEntry}`,
+    );
+  }
+
+  const missing = checkItemRequires(at, name, item, owner, folders);
+  if (missing) problems.push(missing);
+  return problems;
+}
+
+/** Graph errors belong to named files; check 6 reports import boundaries without loading items. */
+function itemImports(root, sources) {
+  const { declared: folders } = readItemModules(root, isRoleFile);
+  return sources.flatMap(({ file, imports }) =>
+    imports.flatMap(({ name, line }) => itemImport(name, file, line, folders)),
+  );
+}
+
 /**
  * Check 6: app code reaches the base only through its entries, and never by a base-only
  * `#tinker/*` name or a path into the package. App imports omit TypeScript file endings.
@@ -84,17 +144,25 @@ function badImport(name, file, base) {
  */
 export function imports(root) {
   const base = installedBase(root);
-  const files = listFiles(join(root, "src")).filter((file) => /\.[jt]sx?$/.test(file));
-  const bad = files.flatMap((file) => {
-    const path = join(root, "src", file);
-    return specifiers(parseSource(path))
+  const sources = appSources(root).map((file) => ({
+    file,
+    imports: specifiers(parseSource(join(root, file))),
+  }));
+  const files = sources.filter(({ file }) => file.startsWith("src/") && /\.[jt]sx?$/.test(file));
+
+  const bad = files.flatMap(({ file, imports }) => {
+    const path = join(root, file);
+    return imports
       .map(({ name, line }) => ({
         name,
-        at: `src/${file}:${line}`,
+        at: `${file}:${line}`,
         message: badImport(name, path, base),
       }))
       .filter(({ message }) => message)
       .map(({ name, at, message }) => message(at, name));
   });
-  return verdict([...bad, ...extensionImports(root)], say.passed(files.length));
+  return verdict(
+    [...bad, ...extensionImports(sources), ...itemImports(root, sources)],
+    say.passed(files.length),
+  );
 }

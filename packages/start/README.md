@@ -47,16 +47,39 @@ It is gitignored, and nobody edits it.
 
 An item puts one default export in each role file it supplies.
 The file name is the role. Other files are the item's own code;
-prepare reads only file names, never the role's source.
+prepare reads only file names and `item.json`, never role source.
 
-Use a numeric folder prefix, such as `src/items/10-postgres/`.
-Items run in numeric order; equal numbers use folder-name order.
+Use `src/items/mail/`, with a name like `[a-z][a-z0-9-]*`.
+The folder name is the module name and registry item name.
+Declare the items `mail` needs in `src/items/mail/item.json`:
+
+```json
+{ "requires": ["errors", "postgres"] }
+```
+
+`"postgres"` in that list names the API at `@/items/postgres`.
+Old numbered role folders fail with a rename message.
+
+Dependencies run first; ready items sort by name.
+Every folder with role files or a public index needs `item.json`.
+A missing file stops prepare and doctor.
+An item with no dependencies uses:
+
+```json
+{ "requires": [] }
+```
+
+An existing empty object also means no dependencies.
+Only `requires` is allowed; no `name`, `version`, or `hash`.
+`tsc` checks that item APIs match their callers.
+Unknown keys, missing items, self-requires, and cycles fail prepare.
+The errors name paths; a missing-item error says to `shadcn add` it.
 Core runs the first extension on the outside.
 The last binding for the same tag wins.
 Your own `src/lib/tinker` seam files come last and stay yours.
 Prepare never edits them.
 
-`src/items/10-postgres/settings.server.ts`:
+`src/items/postgres/settings.server.ts`:
 
 ```ts
 import type { Env } from "@tinker/start/server";
@@ -68,19 +91,22 @@ export default function settings(env: Env.Values) {
 }
 ```
 
-`src/items/10-postgres/database.server.ts`:
+`src/items/postgres/database.server.ts`:
 
 ```ts
-export { database as default } from "@/backend/database.server";
+export {
+  database as default,
+} from "@/backend/database.server";
 ```
 
 Prepare writes `.tinker/app.server.ts` and `.tinker/app.ts`.
 Each role gets a default import and a type check.
 Adding or removing a role file restarts dev.
+Adding, removing, or editing `item.json` also restarts it.
 
 - Server list files: `extensions.server.ts`, `settings.server.ts`.
   Client list file: `extensions.ts`.
-  Each item's list joins in folder order, then your seam's list.
+  Each item's list joins in dependency order, then your seam's list.
 - Server single files: `database.server.ts`, `auth.server.ts`,
   `readAccount.server.ts`, `bootstrap.server.ts`.
 - Client single files: `records.ts`, `readBatch.ts`,
@@ -88,11 +114,32 @@ Adding or removing a role file restarts dev.
 - Your single name wins over an item's role.
   Two items with the same single role stop prepare.
   Doctor reports both paths once, even if your seam owns it too.
-- An item folder with a role needs its numeric prefix.
-  A folder without role files has no effect.
+- Two unrelated items binding the same tag fail when settings runs.
+  Both settings paths appear in the error.
+  A declared dependency, even through another item, allows a later
+  binding to win on purpose.
+  Your own settings still wins over items.
+- Public files are `index.ts` and `index.server.ts`.
+  Other code imports `@/items/mail` or
+  `@/items/mail/index.server`.
+  Doctor rejects imports of private item files at file:line.
+  Relative imports obey the same item rules as `@/items` aliases.
+  Errors show the path as written in the import.
+  Client hints name the item index; server hints also name `index.server`.
+  Tests may import private files; own-item imports stay free.
+  An item importing another item's API must list it in `requires`.
+  This dependency rule applies to tests inside an item too.
+  An indirect dependency does not grant direct imports.
+- An item with a manifest and no roles can satisfy a dependency.
+  A folder with only helper files does not join the lists.
+  It must still declare imports of other items.
+  If its manifest is missing, doctor shows the file to add
+  with the required item in its `requires` list.
 - Unreadable star exports in your seam fail prepare and doctor.
   Use explicit named exports from packages.
-  Local star exports, including `@/` paths, still work.
+  Local star exports, including `@/` paths, still work outside items.
+  A seam star export of an item fails with the same message.
+  Use named exports there so prepare never reads item source.
 - tsc rejects wrong settings bindings and wrong single roles,
   even when the base part is off.
   It keeps each role's inferred sync change union.
