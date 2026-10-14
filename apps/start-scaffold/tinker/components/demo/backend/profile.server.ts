@@ -2,6 +2,9 @@ import { operation, resource } from "@tinker/core";
 import { drizzleOrm } from "@tinker/start/server";
 import { eventHistory, execution } from "@tinker/start/server";
 
+import { user } from "~/components/auth/index.server";
+import { principal } from "~/components/auth/index.server";
+import { database } from "~/components/database/index.server";
 import { readProfileCommand } from "~/components/demo/contracts/commands";
 import type { Profile } from "~/components/demo/contracts/profile-contract";
 import { readExecution, readRetry, readFeatureResult } from "~/components/demo/contracts/sync";
@@ -9,9 +12,7 @@ import type { Sync } from "~/components/demo/contracts/sync";
 import { raise } from "~/components/demo/errors";
 import { sendMail } from "~/components/mail/index.server";
 
-import { principal, currentUser } from "./auth.server";
-import { database } from "./database.server";
-import { user } from "./schema.server";
+import { currentUser } from "./auth.server";
 
 export const readProfile = operation({
   label: "readProfile",

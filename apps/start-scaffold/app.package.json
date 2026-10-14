@@ -17,12 +17,15 @@
     "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
     "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
     "@tinker/start": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-start-0.8.0.tgz",
+    "drizzle-orm": "1.0.0-rc.4",
+    "pg": "8.20.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^24",
+    "@types/pg": "^8.15.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "typescript": "^7.0.2",

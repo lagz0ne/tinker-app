@@ -1,22 +1,24 @@
+import type { Scope } from "@tinker/core";
 import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { authSettings, serverParts, startRequests } from "@tinker/start/server";
 import { sql } from "drizzle-orm";
 import { test, expect, onTestFinished } from "vite-plus/test";
 
-import { auth } from "~/components/demo/backend/auth.server";
-import { database, migrate, databaseUrl } from "~/components/demo/backend/database.server";
+import { auth } from "~/components/auth/index.server";
+import { database, migrate, databaseUrl } from "~/components/database/index.server";
 import { readProfile, saveProfile } from "~/components/demo/backend/profile.server";
 import { raise, isError } from "~/components/demo/errors";
 import * as demo from "~/components/demo/index.server";
 import { mail, mailFrom, smtpUrl } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
 
+import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const tags = [
-  serverParts(demo),
+  serverParts({ auth, database, bootstrap: demo.bootstrap, readAccount: demo.readAccount }),
   databaseUrl(new URL("postgres://proof")),
   smtpUrl(new URL("smtp://proof:proof@proof:25")),
   mailFrom("proof@example.com"),
@@ -61,7 +63,7 @@ test("a real account can sign up, save its name, sign out and sign in", async ()
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -134,7 +136,7 @@ test("a refused save leaves the root usable", async () => {
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [proofDatabase, proofMail],
     observe: { history: 80 },
   });
@@ -162,7 +164,7 @@ test("a later action failure cannot undo a committed profile save", async () => 
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -197,7 +199,7 @@ test("a native commit failure never returns a saved profile", async () => {
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -248,7 +250,7 @@ test("email check and reset callbacks use the declared mail action", async () =>
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -307,7 +309,7 @@ test("email check and reset callbacks use the declared mail action", async () =>
 test("two requests share the auth instance", async () => {
   const root = createScope({
     extensions: [startRequests],
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -335,7 +337,7 @@ test("sign-up replies before held mail and logs its failure", async () => {
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     observe: {
       log: (entry) => {
         if (entry.message === "mail.failed" && entry.level === 50) failed.resolve();
@@ -380,7 +382,10 @@ test("sign-up replies before held mail and logs its failure", async () => {
 });
 
 test("releasing mail makes a fresh sender", async () => {
-  const root = createScope({ extensions: [startRequests], tags });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: [tags, authBindings((): Scope.Handle => root)],
+  });
   await root.ready;
   try {
     const first = await root.resolve(mail);
@@ -392,7 +397,10 @@ test("releasing mail makes a fresh sender", async () => {
 });
 
 test("releasing database makes a fresh handle", async () => {
-  const root = createScope({ extensions: [startRequests], tags });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: [tags, authBindings((): Scope.Handle => root)],
+  });
   await root.ready;
   try {
     const first = await root.resolve(database);

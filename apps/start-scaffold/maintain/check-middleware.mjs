@@ -35,7 +35,7 @@ if (import.meta.main) {
         name: "proof:second-requests",
         enforce: "pre",
         transform(code, id) {
-          if (id.split("?")[0].endsWith("/routes/api.${plant}.ts")) {
+          if (["/routes/api.${plant}.ts", "/routes/api.${plant}.$.ts"].some((path) => id.split("?")[0].endsWith(path))) {
             return code.replace('from "~/components/requests/index"', 'from "~/components/requests/second-start"');
           }
         },

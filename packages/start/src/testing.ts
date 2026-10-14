@@ -2,7 +2,7 @@ export { http, httpRequest } from "~/components/http/index.server";
 export { httpBackend } from "~/components/http";
 export { backendStop, requestStop } from "~/components/requests";
 export { requestHeaders } from "~/components/requests/index.server";
-export { handleAuth } from "./parts/auth/handle.server";
+export { handleAuth } from "~/components/auth/index.server";
 export { openSync } from "./parts/sync/stream.server";
 export { notifications } from "./parts/sync/notifications.server";
 export { accountOwner, tabLifetime } from "./parts/sync/client/owner";

@@ -154,8 +154,21 @@ test("with no base installed, no path is the base's", () => {
   });
 });
 
-test("with auth on, a route on or under /api/auth/$ names the switch that frees it", () => {
-  const root = goodApp({
+test("a legacy installed package still reserves its mounted auth route", () => {
+  const root = fixture({
+    "node_modules/@tinker/start/package.json": JSON.stringify({
+      ...basePackage,
+      tinker: {
+        ...basePackage.tinker,
+        parts: {
+          ...basePackage.tinker.parts,
+          auth: {
+            ...basePackage.tinker.parts.auth,
+            routes: { "/api/auth/$": "src/routes/api.auth.ts" },
+          },
+        },
+      },
+    }),
     ".tinker/base.json": JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] }),
     "src/routes/api.auth.$.ts": page("/api/auth/$"),
     "src/routes/api/auth/login.ts": page("/api/auth/login"),
@@ -183,4 +196,15 @@ test("with sync on, a route at /api/sync names the switch that frees it", () => 
     "src/routes/api.sync.ts:2 takes /api/sync, a base route; tinker({ sync: false }) frees it",
   ]);
   expect(routes(goodApp({ "src/routes/api.sync.ts": page("/api/sync") })).status).toBe("ok");
+});
+
+test("copied auth routes belong to the app even when the old auth switch is recorded", () => {
+  const root = goodApp({
+    ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: ["auth"] }),
+    "src/routes/api.auth.$.ts": page("/api/auth/$"),
+  });
+  expect(routes(root)).toEqual({
+    status: "ok",
+    lines: ["route files export Route; none takes a base path ()"],
+  });
 });

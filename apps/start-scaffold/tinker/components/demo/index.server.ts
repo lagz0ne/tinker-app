@@ -1,21 +1,4 @@
-export {
-  auth,
-  authSettings,
-  principal,
-  currentUser,
-  readAccount,
-} from "~/components/demo/backend/auth.server";
-
 export { incrementCounter } from "~/components/demo/backend/counter.server";
-
-export type { Database } from "~/components/demo/backend/database.server";
-
-export {
-  database,
-  databaseSetup,
-  databaseUrl,
-  migrate,
-} from "~/components/demo/backend/database.server";
 
 export {
   readProfile,
@@ -23,7 +6,7 @@ export {
   retryNotification,
 } from "~/components/demo/backend/profile.server";
 
-export { settings } from "~/components/demo/backend/settings.server";
+export { currentUser, readAccount } from "./backend/auth.server";
 
 export {
   bootstrap,

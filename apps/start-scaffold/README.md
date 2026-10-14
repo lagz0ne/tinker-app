@@ -375,15 +375,20 @@ Wire copied components by hand in your command files.
 The server imports its public API:
 
 ```ts
-import * as demo
-  from "~/components/demo/index.server";
+import { serverParts } from "@tinker/start/server";
 
-const parts = start.serverParts(demo);
+import { auth } from "~/components/auth/index.server";
+import { database } from "~/components/database/index.server";
+import { bootstrap, readAccount } from "~/components/demo/index.server";
+
+const parts = serverParts({ auth, database, bootstrap, readAccount });
 // Add parts to the app scope tags.
 ```
 
-Add `demo.databaseSetup` to the app scope's extensions.
-Call `demo.settings(values)` beside auth settings.
+Import `databaseSetup` and `settings` from the database component.
+Add `databaseSetup` to the app scope's extensions and call `settings(values)`.
+Bind auth's `sendAuthMail` and `sessionDeleted` tags in the command,
+as shown in [cmds/server.ts](cmds/server.ts).
 Keep your own bindings in the order you need.
 Start generates no wiring and checks no shared tag override.
 Missing wiring fails in your code at type check or run time.

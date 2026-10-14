@@ -238,6 +238,56 @@
           "path": "tinker/components/http/index.server.ts",
           "type": "registry:file",
           "target": "~/tinker/components/http/index.server.ts"
+        },
+        {
+          "path": "tinker/components/database/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/database/component.json"
+        },
+        {
+          "path": "tinker/components/database/database.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database/database.server.ts"
+        },
+        {
+          "path": "tinker/components/database/index.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database/index.server.ts"
+        },
+        {
+          "path": "tinker/components/database/index.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database/index.ts"
+        },
+        {
+          "path": "tinker/components/database/modules.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database/modules.ts"
+        },
+        {
+          "path": "tinker/components/database/settings.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database/settings.server.ts"
+        },
+        {
+          "path": "tinker/components/database/types.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database/types.ts"
+        },
+        {
+          "path": "tinker/components/auth/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/auth/component.json"
+        },
+        {
+          "path": "tinker/components/auth/settings.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/auth/settings.server.ts"
+        },
+        {
+          "path": "tinker/components/auth/slots.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/auth/slots.ts"
         }
       ],
       "meta": {
@@ -447,11 +497,6 @@
           "target": "~/tinker/components/demo/backend/auth.server.ts"
         },
         {
-          "path": "tinker/components/demo/backend/schema.server.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/schema.server.ts"
-        },
-        {
           "path": "tinker/components/demo/contracts/credentials.ts",
           "type": "registry:file",
           "target": "~/tinker/components/demo/contracts/credentials.ts"
@@ -530,16 +575,6 @@
           "path": "drizzle/20261010090000_drop_session_wake/snapshot.json",
           "type": "registry:file",
           "target": "~/drizzle/20261010090000_drop_session_wake/snapshot.json"
-        },
-        {
-          "path": "tinker/components/demo/backend/database.server.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/database.server.ts"
-        },
-        {
-          "path": "tinker/components/demo/backend/settings.server.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/settings.server.ts"
         },
         {
           "path": "tinker/components/demo/index.server.ts",
@@ -647,11 +682,6 @@
           "type": "registry:file"
         },
         {
-          "path": "tinker/components/demo/backend/modules.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/modules.ts"
-        },
-        {
           "path": "src/frontend/modules.ts",
           "type": "registry:file",
           "target": "~/src/frontend/modules.ts"
@@ -670,6 +700,41 @@
           "path": "tinker/components/demo/index.ts",
           "type": "registry:file",
           "target": "~/tinker/components/demo/index.ts"
+        },
+        {
+          "path": "tinker/components/auth/auth.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/auth/auth.server.ts"
+        },
+        {
+          "path": "tinker/components/auth/handle.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/auth/handle.server.ts"
+        },
+        {
+          "path": "tinker/components/auth/index.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/auth/index.server.ts"
+        },
+        {
+          "path": "tinker/components/auth/index.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/auth/index.ts"
+        },
+        {
+          "path": "tinker/components/auth/modules.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/auth/modules.ts"
+        },
+        {
+          "path": "tinker/components/auth/schema.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/auth/schema.server.ts"
+        },
+        {
+          "path": "src/routes/api.auth.$.ts",
+          "type": "registry:file",
+          "target": "~/src/routes/api.auth.$.ts"
         }
       ],
       "meta": {

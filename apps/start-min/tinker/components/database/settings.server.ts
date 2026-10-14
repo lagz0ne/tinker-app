@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { raise } from "~/components/demo/errors";
+import { raise } from "~/components/errors";
 import type { Env } from "~/components/errors";
 
 import { databaseUrl } from "./database.server";
@@ -17,7 +17,7 @@ export function settings(env: Env.Values) {
   const parsed = appEnv.safeParse(env);
   if (!parsed.success) {
     raise("BadSettings", {
-      part: "app",
+      part: "database",
       keys: parsed.error.issues.map((issue) => issue.path.join(".")),
     });
   }

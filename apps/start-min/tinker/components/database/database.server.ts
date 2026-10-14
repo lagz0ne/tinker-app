@@ -1,8 +1,7 @@
 import { extension, operation, resource, tag } from "@tinker/core";
-import type { Database } from "@tinker/start/server";
 
-export type { Database } from "@tinker/start/server";
 import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";
+import type { Database } from "./types";
 
 /** Where Postgres is. */
 export const databaseUrl = tag<URL>({ label: "database.url" });

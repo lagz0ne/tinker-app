@@ -925,7 +925,7 @@ function protocolUnitReference(node, file, name) {
 
 function checkRequestHeaders(node) {
   const file = pathOf(node);
-  if (file === "tinker/components/demo/backend/auth.server.ts") return;
+  if (file === "tinker/components/auth/auth.server.ts") return;
   if (
     ["start.ts", "headers.server.ts", "index.server.ts"].some(
       (name) => file === `tinker/components/requests/${name}`,
@@ -955,7 +955,15 @@ function checkResponse(node) {
 }
 
 function checkMountedAuth(node) {
-  if (protocolUnitReference(node, "src/parts/auth/handle.server.ts", "handleAuth")) {
+  if (
+    pathOf(node) === "tinker/components/auth/handle.server.ts" ||
+    pathOf(node) === "tinker/components/auth/index.server.ts" ||
+    pathOf(node) === "src/routes/api.auth.$.ts"
+  ) {
+    return;
+  }
+
+  if (protocolUnitReference(node, "tinker/components/auth/handle.server.ts", "handleAuth")) {
     fail(node, "protocol-auth: only the auth route may use the mounted handler");
   }
 }
@@ -1500,8 +1508,17 @@ function checkOperationRun(run) {
   if (response) fail(run, "operation-wire-output: replies belong to the protocol layer");
 }
 
+function mountedAuthDeclaration(node) {
+  return (
+    pathOf(node) === "tinker/components/auth/handle.server.ts" &&
+    nameOf(node.parent.name) === "handleAuth"
+  );
+}
+
 function checkOperationWire(node) {
   if (!ts.isCallExpression(node) || !coreSymbol(node.expression, "operation")) return;
+  if (mountedAuthDeclaration(node)) return;
+
   const options = node.arguments[0];
   if (
     !options ||
@@ -1575,6 +1592,12 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    [
+      "auth-mount-other-operation",
+      "operation-wire-input",
+      "const probe = operation({input: z.instanceof(Request), run: () => true});",
+      "tinker/components/auth/handle.server.ts",
+    ],
     [
       "http-owner-extra-fetch",
       "http-request",

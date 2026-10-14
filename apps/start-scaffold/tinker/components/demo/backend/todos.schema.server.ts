@@ -1,6 +1,6 @@
 import { pgTable, integer, text, boolean, index } from "drizzle-orm/pg-core";
 
-import { user } from "./schema.server";
+import { user } from "~/components/auth/index.server";
 
 export const todo = pgTable(
   "todo",

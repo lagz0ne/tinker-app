@@ -2,13 +2,13 @@ import { operation } from "@tinker/core";
 import { drizzleOrm } from "@tinker/start/server";
 import { eventHistory, execution } from "@tinker/start/server";
 
+import { database } from "~/components/database/index.server";
 import { readTodoCommand } from "~/components/demo/contracts/commands";
 import type { Sync } from "~/components/demo/contracts/sync";
 import type { Todos } from "~/components/demo/contracts/todos-contract";
 import { raise } from "~/components/demo/errors";
 
 import { currentUser } from "./auth.server";
-import { database } from "./database.server";
 import { todo } from "./todos.schema.server";
 
 export const listTodos = operation({

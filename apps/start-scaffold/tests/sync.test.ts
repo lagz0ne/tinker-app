@@ -1,11 +1,13 @@
+import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { authSettings, serverParts, startRequests } from "@tinker/start/server";
 import { sql } from "drizzle-orm";
 import { test, expect, onTestFinished } from "vite-plus/test";
 
+import { auth } from "~/components/auth/index.server";
+import { migrate, database, databaseUrl } from "~/components/database/index.server";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
-import { migrate, database, databaseUrl } from "~/components/demo/backend/database.server";
 import {
   readProfile,
   saveProfile,
@@ -24,11 +26,12 @@ import type { Mail } from "~/components/mail/index.server";
 
 import { readReceipt } from "@/transport/result.server";
 
+import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const tags = [
-  serverParts(demo),
+  serverParts({ auth, database, bootstrap: demo.bootstrap, readAccount: demo.readAccount }),
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -58,7 +61,7 @@ test("concurrent public writes replay in commit order and a repeated receipt cha
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -107,7 +110,7 @@ test("private cursors cannot read another real account's history", async () => {
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -153,7 +156,7 @@ test("failed notification keeps the saved profile and retry replies before sendi
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -262,7 +265,7 @@ test("request exit cannot strand a profile that already committed", async () => 
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -330,7 +333,7 @@ test("profile replies finish while duplicate receipts share one pending notifica
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -383,7 +386,7 @@ test("profile replies finish while duplicate receipts share one pending notifica
 test("a bad stored event returns a stored data failure", async () => {
   const root = createScope({
     extensions: [startRequests],
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -411,7 +414,7 @@ test("a bad stored event returns a stored data failure", async () => {
 test("a bad stored event is not shown to the user as a rejected change", async () => {
   const root = createScope({
     extensions: [startRequests],
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -439,7 +442,7 @@ test("a bad stored event is not shown to the user as a rejected change", async (
 test("a bad stored notification result has no retry available", async () => {
   const root = createScope({
     extensions: [startRequests],
-    tags,
+    tags: [tags, authBindings((): Scope.Handle => root)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;

@@ -20,7 +20,7 @@ export async function copyProofApp(source, target) {
 
   await symlink(join(source, "node_modules"), join(target, "node_modules"), "dir");
 
-  const databaseFile = join(target, "tinker/components/demo/backend/database.server.ts");
+  const databaseFile = join(target, "tinker/components/database/database.server.ts");
   const database = await readFile(databaseFile, "utf8");
   const start = database.indexOf("export const database = resource({");
   const end = database.indexOf("export const migrate = operation({");

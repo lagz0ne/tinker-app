@@ -34,6 +34,13 @@ Each value sync needs from the app has its own tag, as in ADR 0105.
 The command binds each tag. Sync never imports the app or its commands.
 This replaces reads through `#tinker/server` and `#tinker/router`.
 
+Auth follows the same seam rule from ADR 0113. The lead approved two
+required tags: `sendAuthMail` and `sessionDeleted`. The command binds
+the mail queue and the sync notice operation, one plain value per tag.
+Neither tag has a default. Auth checks both at start and names a missing
+binding in `cmds/server.ts`. Auth requires only errors, requests, and
+database; it never imports mail or sync.
+
 ## D2: env rules
 
 `component.json` gains `env`. Doctor reads that JSON only, as in ADR 0117.

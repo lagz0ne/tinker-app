@@ -1,7 +1,1 @@
-import { resource } from "@tinker/core";
-
-export const drizzleOrm = resource({
-  label: "module:drizzle-orm",
-  target: "scope",
-  factory: () => import("drizzle-orm"),
-});
+export { drizzleOrm } from "~/components/database/index.server";

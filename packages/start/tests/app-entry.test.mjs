@@ -75,7 +75,7 @@ async function loadEntry(wiring, entry = source) {
       ]),
     ),
     ...Object.fromEntries(
-      ["requests", "health", "http"].flatMap((component) =>
+      ["requests", "health", "http", "database", "auth"].flatMap((component) =>
         readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
           (file) => [
             `tinker/components/${component}/${file}`,

@@ -1,19 +1,22 @@
+import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { authSettings, requestStop, serverParts, startRequests } from "@tinker/start/server";
 import { backendStop } from "@tinker/start/server";
 import { openSync } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
-import { auth } from "~/components/demo/backend/auth.server";
-import { migrate, databaseUrl } from "~/components/demo/backend/database.server";
+import { auth } from "~/components/auth/index.server";
+import { database } from "~/components/database/index.server";
+import { migrate, databaseUrl } from "~/components/database/index.server";
 import { saveProfile } from "~/components/demo/backend/profile.server";
 import * as demo from "~/components/demo/index.server";
 
+import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const tags = [
-  serverParts(demo),
+  serverParts({ auth, database, bootstrap: demo.bootstrap, readAccount: demo.readAccount }),
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -87,7 +90,10 @@ async function withRoot(run: (root: ReturnType<typeof createScope>) => Promise<v
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags: [tags, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [
+      [tags, backendStop(stop.signal), requestStop(stop.signal)],
+      authBindings((): Scope.Handle => root),
+    ],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;

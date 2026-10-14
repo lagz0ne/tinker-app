@@ -2,13 +2,14 @@ import { operation } from "@tinker/core";
 import { drizzleOrm } from "@tinker/start/server";
 import { eventHistory, event } from "@tinker/start/server";
 
+import { user } from "~/components/auth/index.server";
+import { principal } from "~/components/auth/index.server";
+import { database } from "~/components/database/index.server";
 import { readCursor, readPrivateCursor, readFeatureEvents } from "~/components/demo/contracts/sync";
 import type { Sync } from "~/components/demo/contracts/sync";
 import { raise } from "~/components/demo/errors";
 
-import { currentUser, principal } from "./auth.server";
-import { database } from "./database.server";
-import { user } from "./schema.server";
+import { currentUser } from "./auth.server";
 import { counter } from "./sync.schema.server";
 import { todo } from "./todos.schema.server";
 

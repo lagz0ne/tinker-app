@@ -32,7 +32,12 @@ Tests and generated files do not count.
     - `src/transport/profile.functions.ts#updateProfile.callback`
     - `src/transport/todos.functions.ts#updateTodo.callback`
 
-- **tinker/components/demo/backend/settings.server.ts#settings**
+- **tinker/components/auth/settings.server.ts#settings**
+  - `env`: `Env.Values`. From the command's copy of process.env; why: check auth's two keys once.
+  - Callers:
+    - `cmds/server.ts#module`
+
+- **tinker/components/database/settings.server.ts#settings**
   - `env`: `Env.Values`. From the app's server entry; why: the keys to check and convert.
   - Callers:
     - `cmds/server.ts#module`
@@ -75,7 +80,6 @@ Tests and generated files do not count.
     - `tinker/components/demo/backend/profile.server.ts#notifyProfile.run`
     - `tinker/components/demo/backend/profile.server.ts#retryNotification.run.callback1`
     - `tinker/components/demo/backend/profile.server.ts#saveProfile.run.callback1`
-    - `tinker/components/demo/backend/settings.server.ts#settings`
     - `tinker/components/demo/backend/sync.server.ts#bootstrapPrivate.run.callback1`
     - `tinker/components/demo/backend/sync.server.ts#replayPrivate.run`
     - `tinker/components/demo/backend/sync.server.ts#replayPublic.run`
@@ -96,6 +100,8 @@ Tests and generated files do not count.
   - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
   - Callers:
     - `tinker/base/server-entry.ts#renderRequest.callback`
+    - `tinker/components/auth/settings.server.ts#settings`
+    - `tinker/components/database/settings.server.ts#settings`
     - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
     - `tinker/components/requests/render-lifetime.server.ts#retain`
     - `tinker/components/requests/start.ts#middleware.callback`
@@ -122,6 +128,8 @@ Tests and generated files do not count.
 - **tinker/components/requests/result.server.ts#readResult**
   - `result`: `RunResult<T>`. From a settled boundary call; why: return its value or raise its failure.
   - Callers:
+    - `src/routes/api.auth.$.ts#Route.GET`
+    - `src/routes/api.auth.$.ts#Route.POST`
     - `src/routes/api.health.ts#Route.GET`
     - `src/transport/profile.functions.ts#getProfile.callback`
     - `src/transport/todos.functions.ts#getTodos.callback`

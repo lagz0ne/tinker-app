@@ -92,8 +92,8 @@ test("auth is off by default, and tinker({ auth: true }) turns it on", () => {
   expect(() => partsOn({ auth: "yes" })).toThrow("tinker(): auth takes true or false");
 });
 
-test("the auth part mounts /api/auth/$, reads two keys with no default", () => {
-  expect(parts.auth.routes).toEqual({ "/api/auth/$": "src/routes/api.auth.ts" });
+test("the legacy auth switch mounts no route and still checks its two keys", () => {
+  expect(parts.auth.routes).toEqual({});
   expect(parts.auth.reads).toBeUndefined();
   expect(readPartEnv(parts.auth.env, {})).toEqual({
     values: { PUBLIC_ORIGIN: undefined, AUTH_SECRET: undefined },

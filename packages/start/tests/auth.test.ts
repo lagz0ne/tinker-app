@@ -1,20 +1,33 @@
+import type { Resource } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
+import { auth, handleAuth, sendAuthMail, sessionDeleted } from "~/components/auth/index.server";
 import { startRequests } from "~/components/requests";
 
-import { auth, bindings } from "#tinker/server";
+import { bindings } from "#tinker/server";
 
-import { handleAuth } from "../src/parts/auth/handle.server";
 import { auth as off } from "../src/parts/auth/off";
 import { auth as on } from "../src/parts/auth/on.server";
 import { authSettings, authStartup } from "../src/parts/auth/settings";
+import type { ServerParts } from "../src/server-parts";
+
+const hooks = [sendAuthMail(() => {}), sessionDeleted(async () => {})];
+
+/** The same auth descriptor, typed only to the two methods the mount uses. */
+const authPort: Resource.Handle<Promise<ServerParts.Auth>> = auth;
+
+const proofAuth = preset(authPort, async () => ({
+  handler: async (request: Request) =>
+    Response.json({ method: request.method, path: new URL(request.url).pathname }),
+  api: { getSession: async () => null },
+}));
 
 const keys = authSettings({ origin: "https://shop.example", secret: "s".repeat(32) });
 
-test("handleAuth hands the whole request to the app's auth library and returns its reply", async () => {
-  const root = createScope({ extensions: [startRequests], tags: bindings });
+test("handleAuth hands the whole request to the auth library and returns its reply", async () => {
+  const root = createScope({ extensions: [startRequests], tags: bindings, presets: [proofAuth] });
   await root.ready;
   const get = await root.settle(handleAuth, {
     input: new Request("http://app/api/auth/get-session"),
@@ -36,7 +49,7 @@ test("handleAuth takes only a request, and a failing auth library fails the call
     tags: bindings,
     extensions: [startRequests],
     presets: [
-      preset(auth, () => ({
+      preset(authPort, async () => ({
         handler: async () => {
           throw lost;
         },
@@ -87,7 +100,7 @@ test("with auth on, the app root does not start without the auth settings", asyn
 });
 
 test("with auth on and good keys, the app root starts with them read", async () => {
-  const root = createScope({ extensions: [authStartup], tags: keys });
+  const root = createScope({ extensions: [authStartup], tags: [keys, hooks] });
   await root.ready;
   expect(root.resolve(authSettings).origin).toBe("https://shop.example");
   expect(on.extensions).toEqual([authStartup]);
@@ -106,11 +119,12 @@ test("the auth part's work shows on the trace as handleAuth; its settings are a 
   const root = createScope({
     observe: { history: 20 },
     extensions: [authStartup, startRequests],
-    tags: [bindings, keys],
+    tags: [bindings, keys, hooks],
+    presets: [proofAuth],
   });
   await root.ready;
   await root.settle(handleAuth, { input: new Request("http://app/api/auth/get-session") });
-  expect(root.spans().map(({ name }) => name)).toEqual(["test.auth", "handleAuth"]);
+  expect(root.spans().map(({ name }) => name)).toEqual(["auth", "handleAuth"]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
@@ -124,7 +138,22 @@ test("missing app auth wiring reports the tag instead of importing the main", as
 
   expect(result).toMatchObject({
     status: "failed",
-    error: { kind: "MissingTag", payload: { label: "start.serverParts" } },
+    error: { kind: "MissingTag", payload: { label: "database.url" } },
   });
   expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("auth startup names each missing required hook before any auth client starts", async () => {
+  for (const [provided, missing] of [
+    [sessionDeleted(async () => {}), "auth.sendMail"],
+    [sendAuthMail(() => {}), "auth.sessionDeleted"],
+  ] as const) {
+    const root = createScope({ extensions: [authStartup], tags: [keys, provided] });
+    await expect(root.ready).rejects.toMatchObject({
+      kind: "MissingTag",
+      payload: { label: missing },
+      message: `Auth startup needs "${missing}" in cmds/server.ts`,
+    });
+    expect((await root.close({ graceful: true })).status).toBe("failed");
+  }
 });

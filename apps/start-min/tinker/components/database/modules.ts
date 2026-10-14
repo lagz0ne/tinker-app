@@ -24,20 +24,8 @@ export const drizzleMigrator = resource({
   factory: () => import("drizzle-orm/migrator"),
 });
 
-export const betterAuthModule = resource({
-  label: "module:better-auth",
+export const drizzleOrm = resource({
+  label: "module:drizzle-orm",
   target: "scope",
-  factory: () => import("better-auth"),
-});
-
-export const betterAuthDrizzle = resource({
-  label: "module:better-auth/adapters/drizzle",
-  target: "scope",
-  factory: () => import("better-auth/adapters/drizzle"),
-});
-
-export const betterAuthStart = resource({
-  label: "module:better-auth/tanstack-start",
-  target: "scope",
-  factory: () => import("better-auth/tanstack-start"),
+  factory: () => import("drizzle-orm"),
 });

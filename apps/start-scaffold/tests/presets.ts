@@ -1,9 +1,13 @@
 import type { PGliteInterface } from "@electric-sql/pglite";
+import type { Scope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
+import { publishAccountNotice } from "@tinker/start/server";
 import { afterAll, beforeAll } from "vite-plus/test";
 
-import { database } from "~/components/demo/backend/database.server";
-import type { Database } from "~/components/demo/backend/database.server";
+import { sendAuthMail, sessionDeleted } from "~/components/auth/index.server";
+import { database } from "~/components/database/index.server";
+import type { Database } from "~/components/database/index.server";
+import { authMail } from "~/components/mail/index.server";
 import { mail } from "~/components/mail/index.server";
 
 /** Keep migration inside each test; copy only the empty database's ready state. */
@@ -40,3 +44,11 @@ export const proofMail = preset(mail, async (_deps, { log }) => ({
 
 export { requestHeaders } from "@tinker/start/testing";
 export { handleAuth } from "@tinker/start/testing";
+
+/** Test entries bind the same two hooks as the server command. */
+export function authBindings(root: () => Scope.Handle) {
+  return [
+    sendAuthMail((message) => root().resolve(authMail).enqueue(message)),
+    sessionDeleted((accountId) => root().run(publishAccountNotice, { rawInput: { accountId } })),
+  ];
+}

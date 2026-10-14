@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 import { expect, test } from "vite-plus/test";
@@ -137,28 +138,28 @@ test("Start's static output options pass on; an unknown option fails the build",
   });
 });
 
-test("with auth on, its route mounts at /api/auth/$ from the base", () => {
-  const root = fixture({ "src/routes/index.tsx": "" });
-  const { virtualRouteConfig: tree } = startOptions(root, ["telemetry", "auth"]).router;
-  expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([
-    "/api/telemetry",
-    "/api/auth/$",
-    "",
-  ]);
-  expect(resolve(root, "src/routes", tree.children[1].file)).toBe(
-    join(baseDir, "src/routes/api.auth.ts"),
+test("auth's copied route stays in the physical app tree with either old switch value", () => {
+  const file = readFileSync(
+    join(baseDir, "../../apps/start-scaffold/src/routes/api.auth.$.ts"),
+    "utf8",
   );
+  const root = fixture({ "src/routes/index.tsx": "", "src/routes/api.auth.$.ts": file });
+  for (const on of [["telemetry", "auth"], ["telemetry"]]) {
+    const { virtualRouteConfig: tree } = startOptions(root, on).router;
+    expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([
+      "/api/telemetry",
+      "",
+    ]);
+    expect(tree.children.at(-1)).toEqual({ type: "physical", directory: ".", pathPrefix: "" });
+    expect(readFileSync(join(root, "src/routes/api.auth.$.ts"), "utf8")).toBe(file);
+  }
 });
 
 test("with sync on, its route mounts at /api/sync from the base", () => {
   const root = fixture({ "src/routes/index.tsx": "" });
   const { virtualRouteConfig: tree } = startOptions(root, ["auth", "sync"]).router;
-  expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([
-    "/api/auth/$",
-    "/api/sync",
-    "",
-  ]);
-  expect(resolve(root, "src/routes", tree.children[1].file)).toBe(
+  expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual(["/api/sync", ""]);
+  expect(resolve(root, "src/routes", tree.children[0].file)).toBe(
     join(baseDir, "src/routes/api.sync.ts"),
   );
 });

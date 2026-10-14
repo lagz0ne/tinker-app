@@ -1,3 +1,4 @@
+import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { syncClient, loadSnapshot, checkAccount } from "@tinker/start/client";
@@ -13,19 +14,22 @@ import { openSync, backendStop, requestStop } from "@tinker/start/testing";
 import { createAuthClient } from "better-auth/react";
 import { test, expect } from "vite-plus/test";
 
+import { auth } from "~/components/auth/index.server";
+import { database } from "~/components/database/index.server";
+import { migrate, databaseUrl } from "~/components/database/index.server";
 import { readAccount } from "~/components/demo/backend/auth.server";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
-import { migrate, databaseUrl } from "~/components/demo/backend/database.server";
 import { bootstrap } from "~/components/demo/backend/sync.server";
 import * as demo from "~/components/demo/index.server";
 
 import { authClient, signIn } from "@/frontend/actions";
 
+import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const settings = [
-  serverParts(demo),
+  serverParts({ auth, database, bootstrap: demo.bootstrap, readAccount: demo.readAccount }),
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -39,10 +43,8 @@ test("a stream checks the session once at open, and a save does not check it aga
     extensions: [startRequests],
     signal: stop.signal,
     tags: [
-      settings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      [settings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+      authBindings((): Scope.Handle => root),
     ],
     presets: [proofDatabase, proofMail],
     observe: { history: 100 },
@@ -86,13 +88,13 @@ test("a signed-out private redirect loads one snapshot across separate renders",
   const page = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
-    tags: tabStop(stop.signal),
+    tags: [tabStop(stop.signal), authBindings((): Scope.Handle => page)],
     presets: [source],
   });
   const redirected = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
-    tags: tabStop(stop.signal),
+    tags: [tabStop(stop.signal), authBindings((): Scope.Handle => redirected)],
     presets: [source],
   });
 
@@ -119,7 +121,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   const server = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags: settings,
+    tags: [settings, authBindings((): Scope.Handle => server)],
     presets: [proofDatabase, proofMail],
   });
   await server.ready;
@@ -128,7 +130,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   const browser = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
-    tags: tabStop(stop.signal),
+    tags: [tabStop(stop.signal), authBindings((): Scope.Handle => browser)],
     presets: [
       preset(authClient, async () =>
         createAuthClient({
@@ -203,14 +205,14 @@ test("a private route check clears cached records after another tab signs out", 
   const server = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags: settings,
+    tags: [settings, authBindings((): Scope.Handle => server)],
     presets: [proofDatabase, proofMail],
   });
 
   const browser = createScope({
     signal: stop.signal,
     extensions: [accountOwner],
-    tags: tabStop(stop.signal),
+    tags: [tabStop(stop.signal), authBindings((): Scope.Handle => browser)],
     presets: [
       preset(snapshotSource, () => ({
         async load() {

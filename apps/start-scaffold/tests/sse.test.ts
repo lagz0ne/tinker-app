@@ -1,3 +1,4 @@
+import type { Scope } from "@tinker/core";
 import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { syncClient, applyBootstrap } from "@tinker/start/client";
@@ -6,9 +7,10 @@ import { accountOwner, tabStop, receiveMessage } from "@tinker/start/testing";
 import { openSync, notifications, backendStop, requestStop } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
+import { auth } from "~/components/auth/index.server";
+import { database, migrate, databaseUrl } from "~/components/database/index.server";
 import { streamMessage } from "~/components/demo";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
-import { database, migrate, databaseUrl } from "~/components/demo/backend/database.server";
 import { saveProfile } from "~/components/demo/backend/profile.server";
 import { bootstrapPrivate } from "~/components/demo/backend/sync.server";
 import { isError, raise } from "~/components/demo/errors";
@@ -16,11 +18,12 @@ import * as demo from "~/components/demo/index.server";
 import { mail } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
 
+import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const settings = [
-  serverParts(demo),
+  serverParts({ auth, database, bootstrap: demo.bootstrap, readAccount: demo.readAccount }),
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -64,7 +67,7 @@ test("SQL notifications wake after commit, stay silent on rollback, and survive 
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags: settings,
+    tags: [settings, authBindings((): Scope.Handle => root)],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -96,10 +99,8 @@ test("SSE replays the supplied cursor and a held reader receives the next commit
     extensions: [startRequests],
     signal: stop.signal,
     tags: [
-      settings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      [settings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+      authBindings((): Scope.Handle => root),
     ],
     presets: [proofDatabase, proofMail],
   });
@@ -146,7 +147,10 @@ test("private SSE cursors are refused and a revoked held stream sends no saved p
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags: [settings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [
+      [settings, backendStop(stop.signal), requestStop(stop.signal)],
+      authBindings((): Scope.Handle => root),
+    ],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -208,7 +212,10 @@ test("reconnecting from applied cursors finishes a save whose final event commit
   const server = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags: [settings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [
+      [settings, backendStop(stop.signal), requestStop(stop.signal)],
+      authBindings((): Scope.Handle => server),
+    ],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -225,7 +232,7 @@ test("reconnecting from applied cursors finishes a save whose final event commit
   const browser = createScope({
     signal: stop.signal,
     extensions: [startRequests, accountOwner],
-    tags: tabStop(stop.signal),
+    tags: [tabStop(stop.signal), authBindings((): Scope.Handle => browser)],
   });
 
   await Promise.all([server.ready, browser.ready]);
@@ -329,7 +336,10 @@ test("a quiet private stream closes at once on sign-out, with no heartbeat", asy
   const root = createScope({
     extensions: [startRequests],
     signal: stop.signal,
-    tags: [settings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [
+      [settings, backendStop(stop.signal), requestStop(stop.signal)],
+      authBindings((): Scope.Handle => root),
+    ],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;

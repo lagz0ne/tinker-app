@@ -118,9 +118,7 @@
         "entries": {
           "server": "on.server.ts"
         },
-        "routes": {
-          "/api/auth/$": "src/routes/api.auth.ts"
-        },
+        "routes": {},
         "env": {
           "PUBLIC_ORIGIN": {
             "rule": "http"

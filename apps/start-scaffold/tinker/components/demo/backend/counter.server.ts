@@ -2,10 +2,10 @@ import { operation } from "@tinker/core";
 import { drizzleOrm } from "@tinker/start/server";
 import { eventHistory, execution } from "@tinker/start/server";
 
+import { database } from "~/components/database/index.server";
 import { readExecution } from "~/components/demo/contracts/sync";
 import { raise } from "~/components/demo/errors";
 
-import { database } from "./database.server";
 import { counter } from "./sync.schema.server";
 
 export const incrementCounter = operation({

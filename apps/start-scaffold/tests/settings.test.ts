@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 
-import { settings as databaseSettings } from "~/components/demo/index.server";
+import { settings as databaseSettings } from "~/components/database/index.server";
 import { settings as mailSettings } from "~/components/mail/index.server";
 
 test("env becomes the typed tags mail and the database need, with no unit running", () => {
@@ -26,7 +26,7 @@ test("a bad or missing key stops start with BadSettings naming each key", () => 
   expect(() => databaseSettings({ DATABASE_URL: "not a url" })).toThrow(
     expect.objectContaining({
       kind: "BadSettings",
-      payload: { part: "app", keys: ["DATABASE_URL"] },
+      payload: { part: "database", keys: ["DATABASE_URL"] },
     }),
   );
 });
