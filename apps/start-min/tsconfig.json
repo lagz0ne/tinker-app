@@ -1,1 +1,4 @@
-{ "extends": "./.tinker/tsconfig.json" }
+{
+  "extends": "./.tinker/tsconfig.json",
+  "include": ["src", "cmds", "tests", "vite.config.ts", ".tinker/routeTree.gen.ts"]
+}

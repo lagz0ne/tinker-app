@@ -8,13 +8,13 @@ const app = resolve(import.meta.dirname, "..");
 const fixture = await mkdtemp(join(tmpdir(), "start-seam-note-"));
 
 try {
-  await mkdir(join(fixture, "src/lib"), { recursive: true });
+  await mkdir(join(fixture, "cmds"), { recursive: true });
   await mkdir(join(fixture, "src/routes"), { recursive: true });
 
   for (const file of await readdir(join(app, "maintain/fixtures/note-app"))) {
     const name = file.replace(/\.txt$/, "");
-    const target = name.startsWith("tinker.")
-      ? `src/lib/${name}`
+    const target = ["server.ts", "router.ts"].includes(name)
+      ? `cmds/${name}`
       : name === "index.tsx"
         ? "src/routes/index.tsx"
         : `src/${name}`;
@@ -37,7 +37,6 @@ try {
 
   assert.deepEqual((await readdir(join(fixture, "src"))).sort(), [
     "contracts.ts",
-    "lib",
     "notes.server.ts",
     "records.ts",
     "routes",

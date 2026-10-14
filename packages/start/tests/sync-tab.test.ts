@@ -25,7 +25,7 @@ import {
 } from "@tinker/start/testing";
 import { expect, test } from "vite-plus/test";
 
-import { applied, streamMessage } from "#tinker/app";
+import { applied, streamMessage } from "#tinker/router";
 
 const id = "00000000-0000-4000-8000-000000000001";
 

@@ -22,25 +22,24 @@ test("the build's tsc checks vite.config.ts too, so a tinker() option type is ch
   const { include } = JSON.parse(render(fixture({ "package.json": "{}" }))["tsconfig.json"]);
   expect(include).toEqual([
     "../src",
-    "../src/server.ts",
+    "../cmds",
+    "../cmds/server.ts",
     "../tests",
     "../vite.config.ts",
     "../vite.config.mts",
     "./routeTree.gen.ts",
-    "./app.ts",
-    "./app.server.ts",
   ]);
 });
 
 test("a named file the app has wins; a missing one maps to the base default", () => {
   const root = goodApp({
-    "src/router.ts": "export const router = () => ({});\n",
-    "src/lib/tinker.server.ts": "export const extensions = [];\n",
+    "cmds/router.ts": "export const router = () => ({});\n",
+    "cmds/server.ts": "export const extensions = [];\n",
   });
   const { paths } = JSON.parse(render(root)["tsconfig.json"]).compilerOptions;
 
-  expect(paths["#tinker/router"]).toEqual([join(root, "src/router.ts")]);
-  expect(paths["#tinker/app.server"]).toEqual([join(root, ".tinker/app.server.ts")]);
+  expect(paths["#tinker/router"]).toEqual([join(root, "cmds/router.ts")]);
+  expect(paths["#tinker/server"]).toEqual([join(root, "cmds/server.ts")]);
   expect(paths["#tinker/start"]).toEqual([join(baseDir, "src/defaults/start.ts")]);
   expect(paths["#tinker/routes"]).toEqual([join(root, ".tinker/routeTree.gen.ts")]);
 });
@@ -50,8 +49,6 @@ test("prepare writes the tsconfig, the parts files, and the base version into .t
   expect(prepare(root)).toEqual([
     "tsconfig.json",
     "base.json",
-    "app.ts",
-    "app.server.ts",
     "parts.ts",
     "parts.server.ts",
     "telemetry-env.ts",

@@ -18,7 +18,9 @@ const base = dirname(
   createRequire(join(root, "package.json")).resolve("@tinker/start/package.json"),
 );
 
-const { serverFile } = createRequire(join(base, "package.json"))("./lib/named.mjs");
+const { serverFile, appFiles } = createRequire(join(base, "package.json"))("./lib/named.mjs");
+const entryFile = serverFile(root).file;
+const clientEntry = appFiles(root).find((entry) => entry.alias === "#tinker/router").file;
 
 const failures = [];
 const files = [];
@@ -34,6 +36,7 @@ async function scan(folder) {
 }
 
 await scan(join(root, "src"));
+await scan(join(root, "cmds"));
 const config = ts.readConfigFile(join(root, "tsconfig.json"), (path) => ts.sys.readFile(path));
 assert.equal(config.error, undefined, "tsconfig must be readable");
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
@@ -621,7 +624,7 @@ function checkScopeReference(node) {
 }
 
 function checkRoots(node) {
-  if (pathOf(node) === serverFile.file) return;
+  if (pathOf(node) === entryFile) return;
 
   checkScopeReference(node);
   if (!moduleBinding(node) || !contains(checker.getTypeAtLocation(node.name), "holder")) return;
@@ -1008,7 +1011,7 @@ function checkHttpImport(node) {
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
-    if (pathOf(node) === serverFile.file) return;
+    if (pathOf(node) === entryFile) return;
     if (!moduleDeclarationCall(node)) fail(node, "module-effect");
     return;
   }
@@ -1099,15 +1102,8 @@ function addCaller(use, name, symbol, node, source, callers) {
  * settings tags there. The function the seam exports as `settings` needs no second site.
  */
 function baseCallers(node, name) {
-  const seam = sources.find((source) => pathOf(source) === "src/lib/tinker.server.ts");
-  const module = seam && checker.getSymbolAtLocation(seam);
-  const exported =
-    module && checker.getExportsOfModule(module).find((item) => item.name === "settings");
-  if (!exported) return [];
-
-  const target =
-    exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
-  return target === symbolOf(name) ? [`${serverFile.file}#module`] : [];
+  const entry = `${entryFile}#module`;
+  return nameOf(name) === "settings" && callSites(name, node).includes(entry) ? [entry] : [];
 }
 
 function callSites(name, node) {
@@ -1221,9 +1217,15 @@ function checkPlainFunction(node) {
   );
 }
 
+function isClientRouter(node) {
+  return pathOf(node) === clientEntry && nameOf(functionName(node)) === "router";
+}
+
 function checkFunction(node) {
   if (!isFunction(node) || !node.body) return;
   if (ts.isClassDeclaration(node.parent) || ts.isClassExpression(node.parent)) return;
+
+  if (isClientRouter(node)) return;
 
   checkScopeReturn(node);
 

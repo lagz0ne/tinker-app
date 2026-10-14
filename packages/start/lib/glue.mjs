@@ -16,9 +16,9 @@ import { baseDir, basePackage } from "./paths.mjs";
 export function aliases(root) {
   return [
     { find: /^@\//, replacement: `${join(root, "src")}/` },
-    ...appFiles.map((entry) => ({
+    ...appFiles(root).map((entry) => ({
       find: new RegExp(`^${entry.alias.replaceAll(".", "\\.")}(\\?.*)?$`),
-      replacement: `${entry.alias.startsWith("#tinker/app") ? join(root, `.tinker/app${entry.alias.endsWith(".server") ? ".server" : ""}.ts`) : pick(root, baseDir, entry)}$1`,
+      replacement: `${pick(root, baseDir, entry)}$1`,
     })),
     { find: /^#tinker\/routes$/, replacement: join(root, ".tinker/routeTree.gen.ts") },
     { find: /^#tinker\/parts$/, replacement: join(root, ".tinker/parts.ts") },
@@ -60,11 +60,7 @@ export function startOptions(root, on) {
       behavior: "error",
       client: {
         files: [/\.server\./, /\/backend\//],
-        specifiers: [
-          "@tanstack/react-start/server",
-          "@tinker/start/server",
-          "@tinker/start/wiring",
-        ],
+        specifiers: ["@tanstack/react-start/server", "@tinker/start/server"],
       },
       server: { files: [/\.client\./] },
     },
@@ -80,7 +76,7 @@ const passed = ["prerender", "pages", "spa", "sitemap"];
  * @param {Record<string, unknown>} options - From vite.config.ts; why: what the app asked for.
  */
 export function passThrough(options) {
-  const known = ["root", "compileHints", ...passed, ...Object.keys(parts)];
+  const known = ["root", "serverEntry", "compileHints", ...passed, ...Object.keys(parts)];
   const unknown = Object.keys(options).filter((key) => !known.includes(key));
   if (unknown.length > 0) {
     throw new Error(`tinker(): unknown option ${unknown.join(", ")}; known: ${known.join(", ")}`);

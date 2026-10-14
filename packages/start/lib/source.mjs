@@ -57,7 +57,10 @@ export function specifiers(source) {
  * @param {object} node - From exportsOf; why: one ExportNamedDeclaration.
  */
 function exportedIds(node) {
-  const declared = node.declaration?.declarations?.map((item) => item.id) ?? [];
+  const declared =
+    node.declaration?.declarations?.flatMap((item) =>
+      item.id.type === "ObjectPattern" ? item.id.properties.map((field) => field.value) : [item.id],
+    ) ?? [];
   const named = node.specifiers.map((item) => item.exported);
   return [...declared, node.declaration?.id, ...named].filter(Boolean);
 }

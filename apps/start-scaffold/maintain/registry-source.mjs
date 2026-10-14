@@ -106,12 +106,7 @@ function receipt(item) {
       path: `src/examples/${item.name}.tinker.json`,
       target: `~/src/examples/${item.name}.tinker.json`,
       type: "registry:file",
-      content:
-        JSON.stringify(
-          { name: item.name, parts: item.meta.parts, seams: item.meta.seams },
-          null,
-          2,
-        ) + "\n",
+      content: JSON.stringify({ name: item.name, parts: item.meta.parts }, null, 2) + "\n",
     },
   ];
 }

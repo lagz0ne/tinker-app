@@ -7,14 +7,12 @@ import { appFiles, ignoredFiles } from "../lib/named.mjs";
 import { baseDir } from "../lib/paths.mjs";
 import { fixture } from "./fixture.mjs";
 
-test("the glue picks up exactly five named files and two seam files", () => {
-  expect(appFiles.map(({ file }) => file)).toEqual([
-    "src/router.ts",
+test("the glue picks up the app entry and the three optional named files", () => {
+  expect(appFiles(fixture({})).map(({ file }) => file)).toEqual([
+    "cmds/router.ts",
     "src/start.ts",
-    "src/server.ts",
+    expect.stringContaining("cmds/server.ts"),
     "src/style.css",
-    "src/lib/tinker.ts",
-    "src/lib/tinker.server.ts",
   ]);
 });
 
@@ -25,7 +23,7 @@ test("an alias points at the app's named file, else at the base default, and kee
     "#tinker/start",
     "#tinker/server",
     "#tinker/style?url",
-    "#tinker/app.server",
+    "#tinker/router",
     "#tinker/routes",
     "#tinker/parts",
     "#tinker/parts.server",
@@ -38,9 +36,9 @@ test("an alias points at the app's named file, else at the base default, and kee
     }),
   ).toEqual([
     join(root, "src/start.ts"),
-    join(root, "src/server.ts"),
+    join(root, "cmds/server.ts"),
     `${join(root, "src/style.css")}?url`,
-    join(root, ".tinker/app.server.ts"),
+    join(baseDir, "src/defaults/router.ts"),
     join(root, ".tinker/routeTree.gen.ts"),
     join(root, ".tinker/parts.ts"),
     join(root, ".tinker/parts.server.ts"),
@@ -68,9 +66,9 @@ test("Start's usual files the glue does not read are listed, and the read ones a
   expect(files).toContain("src/client.tsx");
   expect(files).toContain("src/routeTree.gen.ts");
 
-  expect(files).not.toContain("src/router.ts");
+  expect(files).not.toContain("cmds/router.ts");
   expect(files).not.toContain("src/start.ts");
-  expect(files).not.toContain("src/server.ts");
+  expect(files).not.toContain("cmds/server.ts");
 });
 
 test("Start's entries and base routes point into the base, relative to the app's src", () => {
@@ -118,11 +116,7 @@ test("Start runs the base's entries, the generated route tree, and the base's im
       behavior: "error",
       client: {
         files: [/\.server\./, /\/backend\//],
-        specifiers: [
-          "@tanstack/react-start/server",
-          "@tinker/start/server",
-          "@tinker/start/wiring",
-        ],
+        specifiers: ["@tanstack/react-start/server", "@tinker/start/server"],
       },
       server: { files: [/\.client\./] },
     },
@@ -142,7 +136,7 @@ test("Start's static output options pass on; an unknown option fails the build",
     prerender: { enabled: true },
   });
   expect(() => passThrough({ prerendr: {}, sap: {} })).toThrow(
-    "tinker(): unknown option prerendr, sap; known: root, compileHints, prerender, pages, spa, sitemap, telemetry, auth, sync",
+    "tinker(): unknown option prerendr, sap; known: root, serverEntry, compileHints, prerender, pages, spa, sitemap, telemetry, auth, sync",
   );
   expect(passThrough({ telemetry: false, auth: true, spa: { enabled: true } })).toStrictEqual({
     spa: { enabled: true },

@@ -1,4 +1,3 @@
-export const extensions = [];
 export { records } from "@/frontend/records";
 export { readBatch, readBootstrap, readSnapshot, streamMessage } from "@/contracts/sync";
 import type { FeatureSync } from "@/contracts/sync";

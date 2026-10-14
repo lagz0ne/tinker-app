@@ -9,7 +9,7 @@
       "path": "src/examples/profile-example.tinker.json",
       "target": "~/src/examples/profile-example.tinker.json",
       "type": "registry:file",
-      "content": "{\n  \"name\": \"profile-example\",\n  \"parts\": [\n    \"auth\",\n    \"sync\"\n  ],\n  \"seams\": {\n    \"src/lib/tinker.server.ts\": {\n      \"extensions\": {\n        \"line\": \"export { extensions } from \\\"@/examples/demo.server\\\";\",\n        \"from\": \"@/examples/demo.server\",\n        \"include\": {\n          \"name\": \"databaseSetup\",\n          \"from\": \"@/backend/index.server\"\n        }\n      },\n      \"settings\": {\n        \"line\": \"export { settings } from \\\"@/examples/demo.server\\\";\"\n      },\n      \"database\": {\n        \"line\": \"export { database } from \\\"@/backend/index.server\\\";\"\n      },\n      \"auth\": {\n        \"line\": \"export { auth } from \\\"@/backend/index.server\\\";\"\n      },\n      \"readAccount\": {\n        \"line\": \"export { readAccount } from \\\"@/backend/index.server\\\";\"\n      },\n      \"bootstrap\": {\n        \"line\": \"export { bootstrap } from \\\"@/backend/index.server\\\";\"\n      }\n    },\n    \"src/lib/tinker.ts\": {\n      \"records\": {\n        \"line\": \"export { records } from \\\"@/examples/demo\\\";\"\n      },\n      \"readSnapshot\": {\n        \"line\": \"export { readSnapshot } from \\\"@/examples/demo\\\";\"\n      },\n      \"readBootstrap\": {\n        \"line\": \"export { readBootstrap } from \\\"@/examples/demo\\\";\"\n      },\n      \"readBatch\": {\n        \"line\": \"export { readBatch } from \\\"@/examples/demo\\\";\"\n      },\n      \"streamMessage\": {\n        \"line\": \"export { streamMessage } from \\\"@/examples/demo\\\";\"\n      }\n    }\n  }\n}\n"
+      "content": "{\n  \"name\": \"profile-example\",\n  \"parts\": [\n    \"auth\",\n    \"sync\"\n  ]\n}\n"
     }
   ],
   "meta": {
@@ -17,51 +17,7 @@
     "ownership": "userland",
     "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
     "parts": ["auth", "sync"],
-    "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
-    "seams": {
-      "src/lib/tinker.server.ts": {
-        "extensions": {
-          "line": "export { extensions } from \"@/examples/demo.server\";",
-          "from": "@/examples/demo.server",
-          "include": {
-            "name": "databaseSetup",
-            "from": "@/backend/index.server"
-          }
-        },
-        "settings": {
-          "line": "export { settings } from \"@/examples/demo.server\";"
-        },
-        "database": {
-          "line": "export { database } from \"@/backend/index.server\";"
-        },
-        "auth": {
-          "line": "export { auth } from \"@/backend/index.server\";"
-        },
-        "readAccount": {
-          "line": "export { readAccount } from \"@/backend/index.server\";"
-        },
-        "bootstrap": {
-          "line": "export { bootstrap } from \"@/backend/index.server\";"
-        }
-      },
-      "src/lib/tinker.ts": {
-        "records": {
-          "line": "export { records } from \"@/examples/demo\";"
-        },
-        "readSnapshot": {
-          "line": "export { readSnapshot } from \"@/examples/demo\";"
-        },
-        "readBootstrap": {
-          "line": "export { readBootstrap } from \"@/examples/demo\";"
-        },
-        "readBatch": {
-          "line": "export { readBatch } from \"@/examples/demo\";"
-        },
-        "streamMessage": {
-          "line": "export { streamMessage } from \"@/examples/demo\";"
-        }
-      }
-    }
+    "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand."
   },
   "registryDependencies": [
     "https://raw.githubusercontent.com/lagz0ne/tinkered/start-v0.8.0/apps/start-scaffold/public/r/postgres-auth-mail-example.json"

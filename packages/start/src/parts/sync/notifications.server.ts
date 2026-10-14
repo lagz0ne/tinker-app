@@ -1,6 +1,6 @@
 import { resource } from "@tinker/core";
 
-import { database } from "#tinker/app.server";
+import { database } from "#tinker/server";
 
 import { raise } from "../../errors";
 import { accountOfNotice } from "./notice";

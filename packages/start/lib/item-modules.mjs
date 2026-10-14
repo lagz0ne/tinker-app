@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const itemName = /^[a-z][a-z0-9-]*$/;
 
-/** JSON is the only item content prepare reads; participating items must declare it. */
+/** Doctor reads requires from each item manifest. */
 function readRequires(root, name, problems) {
   const file = `src/items/${name}/item.json`;
   if (!existsSync(join(root, file))) {
@@ -61,24 +61,16 @@ function cyclePath(pending) {
 }
 
 /** Kahn's ready set is re-sorted after each item, so newly ready names compete with old ones. */
-function sortModules(folders, problems) {
+function checkCycles(folders, problems) {
   const pending = new Map(folders.map((folder) => [folder.name, folder]));
   const counts = new Map(folders.map((folder) => [folder.name, folder.requires.length]));
   const ready = folders
     .filter((folder) => folder.requires.length === 0)
     .map((folder) => folder.name);
-  const sorted = [];
 
   while (ready.length > 0) {
     ready.sort((a, b) => a.localeCompare(b));
     const folder = pending.get(ready.shift());
-    folder.ancestors = new Set(folder.requires);
-    for (const dependency of folder.requires) {
-      for (const ancestor of sorted.find((item) => item.name === dependency).ancestors) {
-        folder.ancestors.add(ancestor);
-      }
-    }
-    sorted.push(folder);
     pending.delete(folder.name);
 
     for (const next of pending.values()) {
@@ -89,20 +81,16 @@ function sortModules(folders, problems) {
     }
   }
   if (pending.size > 0) problems.push(`item requires cycle: ${cyclePath(pending)}`);
-  return sorted;
 }
 
-/** Folders containing only helper files have no composition role. */
-function readFolder(root, name, isRoleFile, problems) {
+/** Every non-empty item folder declares its imports. */
+function readFolder(root, name, problems) {
   const files = new Set(
     readdirSync(join(root, "src/items", name), { withFileTypes: true })
       .filter((file) => file.isFile())
       .map((file) => file.name),
   );
-  const participates =
-    [...files].some((file) => isRoleFile(`src/items/${name}/${file}`)) ||
-    ["item.json", "index.ts", "index.server.ts"].some((file) => files.has(file));
-  if (!participates) return [];
+  if (files.size === 0) return [];
 
   if (!itemName.test(name)) {
     const renamed = name.replace(/^\d+-/, "");
@@ -131,17 +119,17 @@ function checkDependencies(folders, problems) {
   }
 }
 
-/** Role detection is supplied by joins, keeping manifests independent of server/client selection. */
-export function readItemModules(root, isRoleFile) {
+/** Doctor checks manifests and cycles; it never chooses the app's wiring order. */
+export function readItemModules(root) {
   const dir = join(root, "src/items");
   const entries = existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : [];
   const problems = [];
   const folders = entries
     .filter((entry) => entry.isDirectory())
     .sort((a, b) => a.name.localeCompare(b.name))
-    .flatMap((entry) => readFolder(root, entry.name, isRoleFile, problems));
+    .flatMap((entry) => readFolder(root, entry.name, problems));
 
   checkDependencies(folders, problems);
-  const ordered = problems.length === 0 ? sortModules(folders, problems) : [];
-  return { folders: ordered, declared: folders, problems };
+  if (problems.length === 0) checkCycles(folders, problems);
+  return { declared: folders, problems };
 }

@@ -94,7 +94,7 @@ test("auth is off by default, and tinker({ auth: true }) turns it on", () => {
 
 test("the auth part mounts /api/auth/$, reads the server seam, and two keys with no default", () => {
   expect(parts.auth.routes).toEqual({ "/api/auth/$": "src/routes/api.auth.ts" });
-  expect(parts.auth.reads).toEqual({ "src/lib/tinker.server.ts": ["auth", "readAccount"] });
+  expect(parts.auth.reads).toEqual({ "#tinker/server": ["auth", "readAccount"] });
   expect(readPartEnv(parts.auth.env, {})).toEqual({
     values: { PUBLIC_ORIGIN: undefined, AUTH_SECRET: undefined },
     refused: ["PUBLIC_ORIGIN", "AUTH_SECRET"],
@@ -132,8 +132,8 @@ test("sync with auth: false fails the build with the two ways out", () => {
 test("the sync part mounts /api/sync, reads both seams and the Register bodies, and no env key", () => {
   expect(parts.sync.routes).toEqual({ "/api/sync": "src/routes/api.sync.ts" });
   expect(parts.sync.reads).toEqual({
-    "src/lib/tinker.server.ts": ["database", "bootstrap"],
-    "src/lib/tinker.ts": ["records", "readSnapshot", "readBootstrap", "readBatch", "streamMessage"],
+    "#tinker/server": ["database", "bootstrap"],
+    "#tinker/router": ["records", "readSnapshot", "readBootstrap", "readBatch", "streamMessage"],
   });
   expect(parts.sync.augments).toEqual({ "@tinker/start": ["Register"] });
   expect(readPartEnv(parts.sync.env, {})).toEqual({ values: {}, refused: [] });

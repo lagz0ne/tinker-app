@@ -79,11 +79,9 @@ for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]
         join(consumer, "vite.config.ts"),
         await readFile(join(app, "vite.config.ts")),
       );
-      for (const seam of ["tinker.ts", "tinker.server.ts"]) {
-        await writeFile(
-          join(consumer, "src/lib", seam),
-          await readFile(join(app, "src/lib", seam)),
-        );
+      await mkdir(join(consumer, "cmds"), { recursive: true });
+      for (const entry of ["server.ts", "router.ts"]) {
+        await writeFile(join(consumer, "cmds", entry), await readFile(join(app, "cmds", entry)));
       }
     }
 

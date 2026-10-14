@@ -57,7 +57,7 @@ Their helpers still follow the strict rule.
 
 A service must never exist outside the graph of primitives.
 Resources own long-lived clients, connections, clocks, timers, and queues.
-Only `src/server.ts`, the base client entry, and scope tests create roots.
+Only `cmds/server.ts`, the base client entry, and scope tests create roots.
 The entry owns each root and its stop signal.
 No helper module keeps a scope singleton or exports a scope getter.
 Outside an entry, no module-level let or const holds a live handle,
@@ -74,79 +74,36 @@ Keep feature units in app files.
 
 ## The app server entry
 
-`src/server.ts` owns the server roots.
-It reads env once, starts telemetry first, then the app.
-It closes the app first, then telemetry, and reports errors.
-The base never creates or starts these roots.
-The app calls `createScopeClose` to close in reverse order.
+`cmds/server.ts` owns the server roots.
+The app names it in `vite.config.ts`:
+
+```ts
+tinker({ serverEntry: "cmds/server.ts" });
+```
+
+The app's tsconfig includes `cmds`.
+There is no default server entry.
+Prepare and doctor name a missing entry and show starter code.
+They never write an entry for the app.
+
+The entry reads env once, starts telemetry, then the app.
+It lists extensions and settings by hand, in the user's order.
+It imports each item's public index.
+There are no generated wiring files or role files.
+The app calls `createScopeClose` to close the app, then telemetry.
 That helper starts nothing and shares one close promise.
+A start or close error is rethrown after both roots end.
 
 The default export has three fields:
 `requestContext`, `renderObserve`, and `close`.
 Start borrows the context and observer.
-The app keeps the roots and their stop signals.
 An optional `fetch(request, next)` can wrap requests.
+The entry closes on HMR replacement and process shutdown.
 
-The item wiring is one import line from
-`@tinker/start/wiring`, which reads `.tinker/app.server.ts`.
-To use a script-owned wiring file later, replace that line:
-
-```ts
-import { extensions, settings }
-  from "@/scaffold/wiring.server";
-```
-
-No other entry code or Start code changes.
-This file needs no app helper files.
-Missing the file stops prepare, doctor, and build;
-each names the file and prints this starter code:
-
-```ts
-import * as start from "@tinker/start/server";
-import { extensions, settings } from "@tinker/start/wiring";
-
-const values = { ...process.env };
-const toolTags = [start.telemetry.settings(values), start.telemetry.tags];
-const appTags = [start.auth.settings(values), settings(values)];
-const stop = { tools: new AbortController(), app: new AbortController() };
-
-const tools = start.createScope({
-  signal: stop.tools.signal,
-  extensions: start.telemetry.extensions,
-  tags: toolTags,
-});
-
-await tools.ready;
-
-const app = start.createScope({
-  signal: stop.app.signal,
-  observe: tools.resolve(start.telemetry.observe),
-  extensions: [start.startRequests, start.auth.extensions, extensions],
-  tags: [
-    start.backendStop(stop.app.signal), appTags,
-    tools.resolve(start.telemetry.appTags),
-  ],
-});
-
-const close = start.createScopeClose([
-  { scope: tools, stop: stop.tools },
-  { scope: app, stop: stop.app },
-]);
-
-await app.ready.catch(close);
-
-const server = start.createServerEntry({
-  requestContext: app.resolve(start.startRequests),
-  renderObserve: tools.resolve(
-    start.telemetry.renderObserve,
-    { ns: start.telemetry.renderNs },
-  ),
-  close,
-});
-
-if (import.meta.hot) import.meta.hot.dispose(close);
-export default server;
-```
+The scaffold's client wiring lives in `cmds/router.ts`.
+It exports router options, extensions, and the sync readers.
+No app code may import a command file.
+Commands may import app code and item public entries.
 
 ## App skills
 

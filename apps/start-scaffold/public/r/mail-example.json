@@ -27,7 +27,7 @@
       "path": "src/examples/mail-example.tinker.json",
       "target": "~/src/examples/mail-example.tinker.json",
       "type": "registry:file",
-      "content": "{\n  \"name\": \"mail-example\",\n  \"parts\": [],\n  \"seams\": {}\n}\n"
+      "content": "{\n  \"name\": \"mail-example\",\n  \"parts\": []\n}\n"
     }
   ],
   "meta": {
@@ -35,8 +35,7 @@
     "ownership": "userland",
     "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
     "parts": [],
-    "requires": "No base parts or Postgres. Fill smtpUrl and mailFrom in the server seam's settings(env); the app then needs the SMTP keys to start.",
-    "seams": {}
+    "requires": "No base parts or Postgres. Fill smtpUrl and mailFrom in the server seam's settings(env); the app then needs the SMTP keys to start."
   },
   "dependencies": ["nodemailer@10.0.13"],
   "devDependencies": ["@types/nodemailer@^7.0.11"]

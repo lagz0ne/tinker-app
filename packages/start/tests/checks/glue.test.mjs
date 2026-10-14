@@ -31,6 +31,7 @@ test("fails with no vite.config.ts", () => {
     "tsconfig.json": JSON.stringify({ extends: "./.tinker/tsconfig.json" }),
     "package.json": JSON.stringify({ scripts: { postinstall: "tinker prepare" } }),
   });
+  rmSync(join(root, "vite.config.ts"));
   expect(glue(root).lines).toEqual(["vite.config.ts is missing; add one with plugins: [tinker()]"]);
 });
 

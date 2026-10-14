@@ -1,7 +1,7 @@
 import { operation } from "@tinker/core";
 import { z } from "zod";
 
-import { auth } from "#tinker/app.server";
+import { auth } from "#tinker/server";
 
 /**
  * ADR 0103's named protocol exception: the app's auth library owns its HTTP contract, so this

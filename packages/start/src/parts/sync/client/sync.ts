@@ -1,6 +1,6 @@
 import { operation, resource } from "@tinker/core";
 
-import { readBatch, readBootstrap, records } from "#tinker/app";
+import { readBatch, readBootstrap, records } from "#tinker/router";
 
 import { fail, raise } from "../../../errors";
 import type { Sync } from "../envelopes";

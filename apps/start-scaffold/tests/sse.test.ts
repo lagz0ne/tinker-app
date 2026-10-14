@@ -13,7 +13,7 @@ import type { Mail } from "@/backend/mail.server";
 import { saveProfile } from "@/backend/profile.server";
 import { bootstrapPrivate } from "@/backend/sync.server";
 import { isError, raise } from "@/errors";
-import { streamMessage } from "@/lib/tinker";
+import { streamMessage } from "@/items/demo";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";

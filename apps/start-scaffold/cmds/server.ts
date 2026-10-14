@@ -1,9 +1,11 @@
 import * as start from "@tinker/start/server";
-import { extensions, settings } from "@tinker/start/wiring";
 
+import * as demo from "@/items/demo/index.server";
+
+export const { auth, bootstrap, database, readAccount } = demo;
 const values = { ...process.env };
 const toolTags = [start.telemetry.settings(values), start.telemetry.tags];
-const appTags = [start.auth.settings(values), settings(values)];
+const appTags = [start.auth.settings(values), demo.settings(values)];
 const stop = { tools: new AbortController(), app: new AbortController() };
 
 const tools = start.createScope({
@@ -17,7 +19,7 @@ await tools.ready;
 const app = start.createScope({
   signal: stop.app.signal,
   observe: tools.resolve(start.telemetry.observe),
-  extensions: [start.startRequests, start.auth.extensions, extensions],
+  extensions: [start.startRequests, start.auth.extensions, demo.databaseSetup],
   tags: [start.backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],
 });
 

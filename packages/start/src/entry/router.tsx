@@ -5,9 +5,8 @@ import type { Observe } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { ScopeProvider } from "@tinker/react";
 
-import { extensions } from "#tinker/app";
 import { sync, telemetry } from "#tinker/parts";
-import { router } from "#tinker/router";
+import { extensions, router } from "#tinker/router";
 import { routeTree } from "#tinker/routes";
 
 import { abortReasons } from "../errors";

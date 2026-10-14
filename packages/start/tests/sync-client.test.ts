@@ -5,7 +5,7 @@ import { applyBootstrap, applyEvents, leaveAccount, syncClient } from "@tinker/s
 import { accountOwner, tabLifetime, pageEvents, tabStop } from "@tinker/start/testing";
 import { expect, test } from "vite-plus/test";
 
-import { applied, savedPrivate, savedPublic } from "#tinker/app";
+import { applied, savedPrivate, savedPublic } from "#tinker/router";
 
 /** A page hide event; `persisted` true means the tab went into the back-forward cache. */
 const hide = (persisted: boolean) => Object.assign(new Event("pagehide"), { persisted });

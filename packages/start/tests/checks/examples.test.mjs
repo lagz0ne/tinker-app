@@ -1,132 +1,28 @@
 import { expect, test } from "vite-plus/test";
 
-import { registryItems } from "../../../../apps/start-scaffold/maintain/registry-source.mjs";
 import { examples } from "../../lib/checks/examples.mjs";
-import { named } from "../../lib/checks/named.mjs";
-import { goodApp, write } from "../fixture.mjs";
+import { goodApp } from "../fixture.mjs";
 
-const receipt = JSON.stringify({
-  name: "demo",
-  parts: ["auth", "sync"],
-  seams: {
-    "src/lib/tinker.server.ts": {
-      auth: { line: 'export { auth } from "../backend/auth";' },
-      extensions: {
-        line: 'export { extensions } from "../examples/demo.server";',
-        from: "../examples/demo.server",
-        include: { name: "databaseSetup", from: "../backend/database" },
-      },
-    },
-  },
-});
+test("an installed example names each missing part switch", () => {
+  const root = goodApp({
+    "src/examples/demo.tinker.json": JSON.stringify({ name: "demo", parts: ["auth", "sync"] }),
+  });
 
-test("an installed example names each missing part switch and the export lines", () => {
-  const root = goodApp({ "src/examples/demo.tinker.json": receipt });
-  expect(examples(root).lines).toEqual([
+  const checked = examples(root);
+
+  expect(checked.lines).toEqual([
     "demo: needs the auth part; set tinker({ auth: true }) in vite.config.ts",
     "demo: needs the sync part; set tinker({ sync: true }) in vite.config.ts",
-    'demo: src/lib/tinker.server.ts:1 needs auth; add export { auth } from "../backend/auth";',
-    'demo: src/lib/tinker.server.ts:1 needs extensions; add export { extensions } from "../examples/demo.server";',
   ]);
 });
 
-test("an empty extension list does not install the example's database startup", () => {
+test("with its parts on, the app owns the example's wiring", () => {
   const root = goodApp({
-    "src/examples/demo.tinker.json": receipt,
-    ".tinker/base.json": JSON.stringify({ parts: ["auth", "sync"] }),
-    "src/lib/tinker.server.ts": "export const auth = 1; export const extensions = [];",
+    ".tinker/base.json": '{"parts":["auth","sync"]}',
+    "src/examples/demo.tinker.json": JSON.stringify({ name: "demo", parts: ["auth", "sync"] }),
   });
-  expect(examples(root).lines).toEqual([
-    'demo: src/lib/tinker.server.ts:1 needs databaseSetup in extensions; keep your extensions and add it, or use export { extensions } from "../examples/demo.server";',
-  ]);
-});
 
-test("example exports and a startup re-export satisfy the copied requirements", () => {
-  const root = goodApp({
-    "src/examples/demo.tinker.json": receipt,
-    ".tinker/base.json": JSON.stringify({ parts: ["auth", "sync"] }),
-    "src/lib/tinker.server.ts":
-      'export const auth = 1; export { extensions } from "../examples/demo.server";',
-  });
-  expect(examples(root)).toEqual({
-    status: "ok",
-    lines: ["installed examples have their parts and seam exports"],
-  });
-});
+  const checked = examples(root);
 
-test("a user can join database startup to an existing extension list under an import alias", () => {
-  const root = goodApp({
-    "src/examples/demo.tinker.json": receipt,
-    ".tinker/base.json": JSON.stringify({ parts: ["auth", "sync"] }),
-    "src/lib/tinker.server.ts":
-      'import { databaseSetup as setup } from "../backend/database"; export const auth = 1; const mine = {}; export const extensions = [mine, setup];',
-  });
-  expect(examples(root).status).toBe("ok");
-  write(root, {
-    "src/lib/tinker.server.ts":
-      'import { extensions as demo } from "../examples/demo.server"; export const auth = 1; const mine = {}; export const extensions = [mine, ...demo];',
-  });
-  expect(examples(root).status).toBe("ok");
-});
-
-test("an @/ import of the database startup counts as the receipt's relative path", () => {
-  const root = goodApp({
-    "src/examples/demo.tinker.json": receipt,
-    ".tinker/base.json": JSON.stringify({ parts: ["auth", "sync"] }),
-    "src/lib/tinker.server.ts":
-      'import { databaseSetup } from "@/backend/database"; export const auth = 1; export const extensions = [databaseSetup];',
-  });
-  expect(examples(root).status).toBe("ok");
-});
-
-test("a missing export in an existing seam gets the item's exact export line", () => {
-  const root = goodApp({
-    "src/examples/demo.tinker.json": receipt,
-    ".tinker/base.json": JSON.stringify({ parts: ["auth", "sync"] }),
-    "src/lib/tinker.server.ts": 'export { extensions } from "../examples/demo.server";',
-  });
-  expect(examples(root).lines).toEqual([
-    'demo: src/lib/tinker.server.ts:1 needs auth; add export { auth } from "../backend/auth";',
-  ]);
-});
-
-test("ordinary example JSON is not an install receipt", () => {
-  expect(examples(goodApp({ "src/examples/data.json": "{}" })).status).toBe("ok");
-});
-
-test("a user can export the copied demo server seam as a whole", () => {
-  const root = goodApp({
-    "src/examples/demo.tinker.json": receipt,
-    ".tinker/base.json": JSON.stringify({ parts: ["auth", "sync"] }),
-    "src/examples/demo.server.ts": "export const auth = 1; export const extensions = [];",
-    "src/lib/tinker.server.ts": 'export * from "../examples/demo.server";',
-  });
-  expect(examples(root).status).toBe("ok");
-});
-
-test("doctor's named check includes an installed example's part switch", () => {
-  const result = named(goodApp({ "src/examples/demo.tinker.json": receipt }));
-  expect(result.lines).toContain(
-    "demo: needs the sync part; set tinker({ sync: true }) in vite.config.ts",
-  );
-});
-
-test("doctor builds todos suggestions with no TypeScript module endings", async () => {
-  const { items } = await registryItems();
-  const item = items.find((item) => item.name === "todos-example");
-  const receipt = item.files.find((file) => file.path.endsWith(".tinker.json"));
-  const root = goodApp({
-    "src/examples/todos-example.tinker.json": receipt.content,
-    ".tinker/base.json": JSON.stringify({ parts: item.meta.parts }),
-    "src/lib/tinker.server.ts": "export const extensions = [];",
-  });
-  const lines = examples(root).lines;
-
-  expect(lines).toContain(
-    'todos-example: src/lib/tinker.server.ts:1 needs database; add export { database } from "@/backend/index.server";',
-  );
-  expect(lines).toContain(
-    'todos-example: src/lib/tinker.server.ts:1 needs databaseSetup in extensions; keep your extensions and add it, or use export { extensions } from "@/examples/demo.server";',
-  );
-  expect(lines.join("\n")).not.toMatch(/\.(ts|tsx|mts)["']/);
+  expect(checked.status).toBe("ok");
 });

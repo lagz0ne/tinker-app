@@ -1,7 +1,7 @@
 import { extension, operation, resource, tag } from "@tinker/core";
 import type { Operation } from "@tinker/core";
 
-import { streamMessage } from "#tinker/app";
+import { streamMessage } from "#tinker/router";
 
 import type { Sync } from "../envelopes";
 import { snapshotSource } from "../functions";

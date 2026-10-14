@@ -20,7 +20,7 @@ test("each silent mistake stops the build with doctor's file:line message", () =
     "src/styles.css": "",
   });
   expect(buildChecks(root).errors).toEqual([
-    "tinker doctor, named files: src/router.tsx:1 is a Start file the base does not read; router options go in src/router.ts",
+    "tinker doctor, named files: src/router.tsx:1 is a Start file the base does not read; router options and client wiring go in cmds/router.ts",
     'tinker doctor, imports: src/backend/peek.ts:1 "#tinker/routes" is a base-only name; app code cannot import it',
     "tinker doctor, routes: src/routes/index.tsx:1 does not export Route; TanStack skips the file, so / is a 404",
     "tinker doctor, routes: src/routes/tinker/settings.tsx:1 nests under /tinker, a base route with no outlet; the base page renders",
@@ -32,7 +32,7 @@ test("each silent mistake stops the build with doctor's file:line message", () =
 test("a second tinker() or tanstackStart() stops the build: Start would fail later with no cause", () => {
   const root = goodApp({
     "vite.config.ts":
-      'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker(), tinker(), tanstackStart()] };\n',
+      'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({serverEntry:"cmds/server.ts"}), tinker(), tanstackStart()] };\n',
   });
   expect(buildChecks(root)).toEqual({
     errors: [
@@ -53,14 +53,14 @@ test("a components.json that does not parse stops the build with its line", () =
 test("tinker() imported under another name, and called once, builds", () => {
   const root = goodApp({
     "vite.config.ts":
-      'import { tinker as base } from "@tinker/start/vite";\nexport default { plugins: [base()] };\n',
+      'import { tinker as base } from "@tinker/start/vite";\nexport default { plugins: [base({serverEntry:"cmds/server.ts"})] };\n',
   });
   expect(buildChecks(root)).toEqual({ errors: [], warnings: [] });
 });
 
 test("a valid export * in a seam file and a route file builds", () => {
   const root = goodApp({
-    "src/lib/tinker.server.ts": 'export * from "../backend/seam.server";\n',
+    "cmds/server.ts": 'export default 1;\nexport * from "../backend/seam.server";\n',
     "src/backend/seam.server.ts":
       "export const extensions = [];\nexport const settings = () => [];\n",
     "src/routes/about.tsx": 'export * from "../frontend/about";\n',
@@ -85,23 +85,23 @@ test("a glue or version problem only warns: the build itself still works", () =>
 test("with auth on, a seam without readAccount stops the build with doctor's line", () => {
   const root = goodApp({
     ".tinker/base.json": JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] }),
-    "src/lib/tinker.server.ts":
-      "export const extensions = [];\nexport const settings = () => [];\nexport const auth = 1;\n",
+    "cmds/server.ts":
+      "export default 1;\nexport const extensions = [];\nexport const settings = () => [];\nexport const auth = 1;\n",
   });
   expect(buildChecks(root).errors).toEqual([
-    "tinker doctor, named files: src/lib/tinker.server.ts:1 does not export readAccount; the auth part reads it",
+    "tinker doctor, named files: cmds/server.ts:1 does not export readAccount; the auth part reads it",
   ]);
 });
 
 test("with sync on, a client seam without streamMessage stops the build with doctor's line", () => {
   const root = goodApp({
     ".tinker/base.json": JSON.stringify({ base: "0.6.0", parts: ["telemetry", "auth", "sync"] }),
-    "src/lib/tinker.server.ts":
-      "export const extensions = [];\nexport const settings = () => [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
-    "src/lib/tinker.ts":
-      'export const extensions = [];\nexport const records = 1, readSnapshot = 2, readBootstrap = 3, readBatch = 4;\ndeclare module "@tinker/start" {\n  interface Register { change: number }\n}\n',
+    "cmds/server.ts":
+      "export default 1;\nexport const extensions = [];\nexport const settings = () => [];\nexport const auth = 1, readAccount = 2, database = 3, bootstrap = 4;\n",
+    "cmds/router.ts":
+      'export const router = () => ({});\nexport const extensions = [];\nexport const records = 1, readSnapshot = 2, readBootstrap = 3, readBatch = 4;\ndeclare module "@tinker/start" {\n  interface Register { change: number }\n}\n',
   });
   expect(buildChecks(root).errors).toEqual([
-    "tinker doctor, named files: src/lib/tinker.ts:1 does not export streamMessage; the sync part reads it",
+    "tinker doctor, named files: cmds/router.ts:1 does not export streamMessage; the sync part reads it",
   ]);
 });

@@ -15,11 +15,11 @@ import * as serverApi from "../src/server";
 import { fixture, goodApp } from "./fixture.mjs";
 
 const source = readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8");
-const missing = `src/server.ts is missing; add this server entry:\n${source}`;
+const missing = `cmds/server.ts is missing; add this server entry:\n${source}`;
 
 test("doctor names a missing app server entry and shows its starter code", () => {
   const root = goodApp();
-  rmSync(join(root, "src/server.ts"), { force: true });
+  rmSync(join(root, "cmds/server.ts"), { force: true });
 
   const checked = named(root);
   const printed = doctor(root, false);
@@ -37,7 +37,7 @@ test("doctor names a missing app server entry and shows its starter code", () =>
 
 test("prepare refuses a missing app server entry with the same starter code", () => {
   const root = goodApp();
-  rmSync(join(root, "src/server.ts"), { force: true });
+  rmSync(join(root, "cmds/server.ts"), { force: true });
 
   const ran = spawnSync(process.execPath, [join(baseDir, "bin/tinker.mjs"), "prepare"], {
     cwd: root,
@@ -53,8 +53,18 @@ test("prepare refuses a missing app server entry with the same starter code", ()
 async function loadEntry(wiring) {
   const root = fixture({
     "package.json": '{"type":"module"}',
-    "src/server.ts": source.replace('"@tinker/start/wiring"', '"@/wiring.server"'),
-    "src/wiring.server.ts": wiring,
+    "cmds/server.ts": source
+      .replace(
+        'import * as start from "@tinker/start/server";',
+        'import * as start from "@tinker/start/server";\nimport { extensions, settings } from "@/items/proof/index.server";',
+      )
+      .replace(
+        "const appTags = [start.auth.settings(values)];",
+        "const appTags = [start.auth.settings(values), settings(values)];",
+      )
+      .replace("start.auth.extensions]", "start.auth.extensions, extensions]"),
+    "src/items/proof/item.json": '{"requires":[]}',
+    "src/items/proof/index.server.ts": wiring,
   });
   symlinkSync(join(baseDir, "../../apps/start-min/node_modules"), join(root, "node_modules"));
   prepare(root, []);
@@ -84,10 +94,10 @@ export const settings = () => [];
 
 test("the app file starts before any request, reuses its roots, and closes once", async () => {
   const { vite, root } = await loadEntry(wiring);
-  const proof = await vite.ssrLoadModule(join(root, "src/wiring.server.ts"));
+  const proof = await vite.ssrLoadModule(join(root, "src/items/proof/index.server.ts"));
 
-  const { default: server } = await vite.ssrLoadModule(join(root, "src/server.ts"));
-  const again = await vite.ssrLoadModule(join(root, "src/server.ts"));
+  const { default: server } = await vite.ssrLoadModule(join(root, "cmds/server.ts"));
+  const again = await vite.ssrLoadModule(join(root, "cmds/server.ts"));
   expect(proof.events).toEqual(["app.ready"]);
   expect(again.default.requestContext.scope).toBe(server.requestContext.scope);
   const closing = server.close();
@@ -103,8 +113,8 @@ test("the app entry reports a teardown error after closing its roots", async () 
     wiring.replace('events.push("app.closed");', 'events.push("app.closed"); throw failure;') +
       'export const failure = { kind: "proof.teardown" };\n',
   );
-  const proof = await vite.ssrLoadModule(join(root, "src/wiring.server.ts"));
-  const { default: server } = await vite.ssrLoadModule(join(root, "src/server.ts"));
+  const proof = await vite.ssrLoadModule(join(root, "src/items/proof/index.server.ts"));
+  const { default: server } = await vite.ssrLoadModule(join(root, "cmds/server.ts"));
 
   const closing = server.close();
   await expect(closing).rejects.toBe(proof.failure);
@@ -118,9 +128,9 @@ test("an app startup failure closes the entry's roots and keeps the original err
     wiring.replace('events.push("app.ready");', "throw failure;") +
       'export const failure = { kind: "proof.startup" };\n',
   );
-  const proof = await vite.ssrLoadModule(join(root, "src/wiring.server.ts"));
+  const proof = await vite.ssrLoadModule(join(root, "src/items/proof/index.server.ts"));
 
-  const started = vite.ssrLoadModule(join(root, "src/server.ts"));
+  const started = vite.ssrLoadModule(join(root, "cmds/server.ts"));
 
   await expect(started).rejects.toBe(proof.failure);
 });

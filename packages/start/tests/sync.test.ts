@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
-import { auth, database, signedIn, syncTemplate } from "#tinker/app.server";
+import { auth, database, signedIn, syncTemplate } from "#tinker/server";
 
 import { requestHeaders } from "../src/backend/headers.server";
 import { backendStop, requestStop } from "../src/backend/lifetime";

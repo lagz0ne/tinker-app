@@ -1,6 +1,6 @@
 import { resource } from "@tinker/core";
 
-import { readSnapshot } from "#tinker/app";
+import { readSnapshot } from "#tinker/router";
 
 import type { SyncPart } from "../part";
 import { checkAccount, loadSnapshot, syncStreaming } from "./events";

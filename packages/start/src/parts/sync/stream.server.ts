@@ -1,6 +1,6 @@
 import { operation, resource } from "@tinker/core";
 
-import { auth, database } from "#tinker/app.server";
+import { auth, database } from "#tinker/server";
 
 import { requestHeaders } from "../../backend/headers.server";
 import { backendStop, requestStop } from "../../backend/lifetime";

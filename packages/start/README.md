@@ -46,185 +46,55 @@ It is gitignored, and nobody edits it.
 
 ## The app server entry
 
-`src/server.ts` owns the server roots.
-It reads env once, starts telemetry first, then the app.
-It closes the app first, then telemetry, and reports errors.
-The base never creates or starts these roots.
-The app calls `createScopeClose` to close in reverse order.
+`cmds/server.ts` owns the server roots.
+The app names it in `vite.config.ts`:
+
+```ts
+tinker({ serverEntry: "cmds/server.ts" });
+```
+
+The app's tsconfig includes `cmds`.
+There is no default server entry.
+Prepare and doctor name a missing entry and show starter code.
+They never write an entry for the app.
+
+The entry reads env once, starts telemetry, then the app.
+It lists extensions and settings by hand, in the user's order.
+It imports each item's public index.
+There are no generated wiring files or role files.
+The app calls `createScopeClose` to close the app, then telemetry.
 That helper starts nothing and shares one close promise.
+A start or close error is rethrown after both roots end.
 
 The default export has three fields:
 `requestContext`, `renderObserve`, and `close`.
 Start borrows the context and observer.
-The app keeps the roots and their stop signals.
 An optional `fetch(request, next)` can wrap requests.
+The entry closes on HMR replacement and process shutdown.
 
-The item wiring is one import line from
-`@tinker/start/wiring`, which reads `.tinker/app.server.ts`.
-To use a script-owned wiring file later, replace that line:
+The scaffold's client wiring lives in `cmds/router.ts`.
+It exports router options, extensions, and the sync readers.
+No app code may import a command file.
+Commands may import app code and item public entries.
 
-```ts
-import { extensions, settings }
-  from "@/scaffold/wiring.server";
-```
+## Items
 
-No other entry code or Start code changes.
-This file needs no app helper files.
-Missing the file stops prepare, doctor, and build;
-each names the file and prints this starter code:
-
-```ts
-import * as start from "@tinker/start/server";
-import { extensions, settings } from "@tinker/start/wiring";
-
-const values = { ...process.env };
-const toolTags = [start.telemetry.settings(values), start.telemetry.tags];
-const appTags = [start.auth.settings(values), settings(values)];
-const stop = { tools: new AbortController(), app: new AbortController() };
-
-const tools = start.createScope({
-  signal: stop.tools.signal,
-  extensions: start.telemetry.extensions,
-  tags: toolTags,
-});
-
-await tools.ready;
-
-const app = start.createScope({
-  signal: stop.app.signal,
-  observe: tools.resolve(start.telemetry.observe),
-  extensions: [start.startRequests, start.auth.extensions, extensions],
-  tags: [
-    start.backendStop(stop.app.signal), appTags,
-    tools.resolve(start.telemetry.appTags),
-  ],
-});
-
-const close = start.createScopeClose([
-  { scope: tools, stop: stop.tools },
-  { scope: app, stop: stop.app },
-]);
-
-await app.ready.catch(close);
-
-const server = start.createServerEntry({
-  requestContext: app.resolve(start.startRequests),
-  renderObserve: tools.resolve(
-    start.telemetry.renderObserve,
-    { ns: start.telemetry.renderNs },
-  ),
-  close,
-});
-
-if (import.meta.hot) import.meta.hot.dispose(close);
-export default server;
-```
-
-## Item roles
-
-An item puts one default export in each role file it supplies.
-The file name is the role. Other files are the item's own code;
-prepare reads only file names and `item.json`, never role source.
-
-Use `src/items/mail/`, with a name like `[a-z][a-z0-9-]*`.
-The folder name is the module name and registry item name.
-Declare the items `mail` needs in `src/items/mail/item.json`:
+Items live in `src/items/<name>/`.
+Each item has `item.json` and a public `index.ts`.
+Server code may use `index.server.ts` too.
 
 ```json
-{ "requires": ["errors", "postgres"] }
+{ "requires": ["postgres"] }
 ```
 
-`"postgres"` in that list names the API at `@/items/postgres`.
-Old numbered role folders fail with a rename message.
-
-Dependencies run first; ready items sort by name.
-Every folder with role files or a public index needs `item.json`.
-A missing file stops prepare and doctor.
-An item with no dependencies uses:
-
-```json
-{ "requires": [] }
-```
-
-An existing empty object also means no dependencies.
-Only `requires` is allowed; no `name`, `version`, or `hash`.
-`tsc` checks that item APIs match their callers.
-Unknown keys, missing items, self-requires, and cycles fail prepare.
-The errors name paths; a missing-item error says to `shadcn add` it.
-Core runs the first extension on the outside.
-The last binding for the same tag wins.
-Your own `src/lib/tinker` seam files come last and stay yours.
-Prepare never edits them.
-
-`src/items/postgres/settings.server.ts`:
-
-```ts
-import type { Env } from "@tinker/start/server";
-
-import { databaseUrl } from "@/backend/database.server";
-
-export default function settings(env: Env.Values) {
-  return [databaseUrl(new URL(env.DATABASE_URL!))];
-}
-```
-
-`src/items/postgres/database.server.ts`:
-
-```ts
-export {
-  database as default,
-} from "@/backend/database.server";
-```
-
-Prepare writes `.tinker/app.server.ts` and `.tinker/app.ts`.
-Each role gets a default import and a type check.
-Adding or removing a role file restarts dev.
-Adding, removing, or editing `item.json` also restarts it.
-
-- Server list files: `extensions.server.ts`, `settings.server.ts`.
-  Client list file: `extensions.ts`.
-  Each item's list joins in dependency order, then your seam's list.
-- Server single files: `database.server.ts`, `auth.server.ts`,
-  `readAccount.server.ts`, `bootstrap.server.ts`.
-- Client single files: `records.ts`, `readBatch.ts`,
-  `readBootstrap.ts`, `readSnapshot.ts`, `streamMessage.ts`.
-- Your single name wins over an item's role.
-  Two items with the same single role stop prepare.
-  Doctor reports both paths once, even if your seam owns it too.
-- Two unrelated items binding the same tag fail when settings runs.
-  Both settings paths appear in the error.
-  A declared dependency, even through another item, allows a later
-  binding to win on purpose.
-  Your own settings still wins over items.
-- Public files are `index.ts` and `index.server.ts`.
-  Other code imports `@/items/mail` or
-  `@/items/mail/index.server`.
-  Doctor rejects imports of private item files at file:line.
-  Relative imports obey the same item rules as `@/items` aliases.
-  Errors show the path as written in the import.
-  Client hints name the item index; server hints also name `index.server`.
-  Tests may import private files; own-item imports stay free.
-  An item importing another item's API must list it in `requires`.
-  This dependency rule applies to tests inside an item too.
-  An indirect dependency does not grant direct imports.
-- An item with a manifest and no roles can satisfy a dependency.
-  A folder with only helper files does not join the lists.
-  It must still declare imports of other items.
-  If its manifest is missing, doctor shows the file to add
-  with the required item in its `requires` list.
-- Unreadable star exports in your seam fail prepare and doctor.
-  Use explicit named exports from packages.
-  Local star exports, including `@/` paths, still work outside items.
-  A seam star export of an item fails with the same message.
-  Use named exports there so prepare never reads item source.
-- tsc rejects wrong settings bindings and wrong single roles,
-  even when the base part is off.
-  It keeps each role's inferred sync change union.
-- With no item roles, each generated file is one seam re-export.
-  Its exports and build output stay the same.
-
-Server roles keep `.server.` so Start blocks client imports.
-Sync slices and per-item navigation are for a later card.
+Only `requires` is allowed.
+Doctor checks missing items, self-requires, and cycles.
+Imports of another item need a direct requires entry.
+Imports through another item's private files fail doctor.
+Prepare never chooses an order or reads item code.
+The entry writes the order of extensions and tag bindings.
+The last binding for a tag wins, as Core defines.
+A missing binding fails in the user's code at type check or run time.
 
 ## Lazy modules
 
@@ -274,7 +144,7 @@ export default defineConfig({
   - Route: `/api/auth/$`, GET and POST:
     the app's auth library answers.
   - Reads `auth` and `readAccount`
-    from `src/lib/tinker.server.ts`.
+    from `cmds/server.ts`.
   - Reads `PUBLIC_ORIGIN`, an http(s) URL,
     and `AUTH_SECRET`, at least 32 characters.
     Neither has a default.
@@ -282,7 +152,7 @@ export default defineConfig({
 The server seam with auth on, filled in:
 
 ```ts
-// src/lib/tinker.server.ts
+// cmds/server.ts
 export const extensions = [];
 export { auth, readAccount } from "../backend/auth";
 ```
@@ -312,12 +182,12 @@ export const auth = resource({
   - Server functions: `getBootstrap` (the seam's
     `bootstrap`) and `getAccount` (auth's `readAccount`).
   - Reads `database` and `bootstrap`
-    from `src/lib/tinker.server.ts`;
+    from `cmds/server.ts`;
     `database` is a drizzle Postgres database with `listen`
     (the `Database` type on `@tinker/start/server`).
   - Reads `records`, `readSnapshot`, `readBootstrap`,
     `readBatch`, and `streamMessage`
-    from `src/lib/tinker.ts`,
+    from `cmds/router.ts`,
     and the app's `Register` bodies.
   - Reads no env key of its own.
 
@@ -369,7 +239,7 @@ learns its account at its lease.
 The client seam with sync on, filled in:
 
 ```ts
-// src/lib/tinker.ts
+// cmds/router.ts
 export const extensions = [];
 export { records } from "../frontend/records";
 export { readSnapshot, readBootstrap } from "./sync";
@@ -458,8 +328,6 @@ and so does the head of `.tinker/parts.server.ts`.
   and `stream` (the tables the app queries),
   `requestHeaders` (auth reads the request),
   and `httpRequest` (outgoing HTTP).
-- `@tinker/start/wiring`: generated item `extensions`
-  and `settings`, with the app seam last.
 - `@tinker/start/client`: the tab's sync units:
   `syncClient`, `snapshotLoader`, `loadSnapshot`,
   `checkAccount`, `applyBootstrap`, `applyEvents`,
@@ -858,15 +726,10 @@ Generated aliases and parts use the real package folder.
 A linked workspace base has one sync Register,
 so app snapshot fields keep their types in both entries.
 
-Installed examples carry their part and seam needs in
+Installed examples record their part switches in
 `src/examples/*.tinker.json`.
-Doctor names each missing `tinker({ part: true })` switch
-and the exact export line to add to the seam file.
-An empty server extensions list must also join the demo's
-database startup extension.
-Doctor accepts its re-export, an imported startup extension,
-or a spread of the copied demo's extensions beside your own.
-Example requirements also stop a build until they are joined.
+Doctor names a missing `tinker({ part: true })` switch.
+The app wires each copied item's public API by hand.
 
 ## Built files and compression
 

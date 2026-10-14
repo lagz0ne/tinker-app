@@ -2,7 +2,6 @@ import { readdirSync } from "node:fs";
 import { join, dirname, resolve, sep, isAbsolute, posix } from "node:path";
 
 import { readItemModules } from "../item-modules.mjs";
-import { isRoleFile } from "../joins.mjs";
 import { installedBase } from "../paths.mjs";
 import { parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";
@@ -51,7 +50,6 @@ function extensionImports(sources) {
 const entries = new Set([
   "@tinker/start",
   "@tinker/start/server",
-  "@tinker/start/wiring",
   "@tinker/start/client",
   "@tinker/start/vite",
 ]);
@@ -132,9 +130,27 @@ function itemImport(name, file, line, folders) {
 
 /** Graph errors belong to named files; check 6 reports import boundaries without loading items. */
 function itemImports(root, sources) {
-  const { declared: folders } = readItemModules(root, isRoleFile);
+  const { declared: folders } = readItemModules(root);
   return sources.flatMap(({ file, imports }) =>
     imports.flatMap(({ name, line }) => itemImport(name, file, line, folders)),
+  );
+}
+
+/** Map app aliases and relative imports to the same project path. */
+function sourcePath(name, file) {
+  if (name.startsWith("@/")) return posix.normalize(`src/${name.slice(2)}`);
+  if (name.startsWith("~/")) return posix.normalize(`tinker/${name.slice(2)}`);
+  return name.startsWith(".") ? posix.join(posix.dirname(file), name) : null;
+}
+
+function isolation(sources) {
+  return sources.flatMap(({ file, imports }) =>
+    imports.flatMap(({ name, line }) => {
+      const target = sourcePath(name, file);
+      return file.startsWith("src/") && target?.startsWith("cmds/")
+        ? [`${file}:${line} "${name}" imports a command; src must not import cmds`]
+        : [];
+    }),
   );
 }
 
@@ -163,7 +179,7 @@ export function imports(root) {
       .map(({ name, at, message }) => message(at, name));
   });
   return verdict(
-    [...bad, ...extensionImports(sources), ...itemImports(root, sources)],
+    [...bad, ...extensionImports(sources), ...itemImports(root, sources), ...isolation(sources)],
     say.passed(files.length),
   );
 }

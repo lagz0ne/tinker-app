@@ -1,7 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { isRoleFile } from "./joins.mjs";
 import { appFiles, shellFile } from "./named.mjs";
 
 /** @param {string} root - From a violation hook; why: the app's generated folder. */
@@ -54,9 +53,11 @@ export function restartNote(root, path, verb) {
   const manifest = /^src\/items\/[^/]+\/item\.json$/.test(file);
   if (verb === "changed" && !manifest) return null;
 
-  const picked = [shellFile, ...appFiles.map(({ file }) => file)].map((file) => join(root, file));
-  const isItemRole = isRoleFile(file);
-  return picked.includes(path) || isItemRole || manifest
-    ? `tinker: ${file} ${verb}; restarting`
-    : null;
+  const picked = [
+    shellFile,
+    ...appFiles(root)
+      .map(({ file }) => file)
+      .filter(Boolean),
+  ].map((file) => join(root, file));
+  return picked.includes(path) || manifest ? `tinker: ${file} ${verb}; restarting` : null;
 }

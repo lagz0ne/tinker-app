@@ -2,7 +2,6 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
-import { joinProblems } from "../joins.mjs";
 import {
   baseDir,
   basePackage,
@@ -15,6 +14,7 @@ import {
 import { prepare, render } from "../prepare.mjs";
 import { isRouteFile, routeClash } from "../route-path.mjs";
 import { mayExport } from "../source.mjs";
+import { serverProblems } from "./named.mjs";
 import { fail, skip, verdict } from "./result.mjs";
 import { ownedPaths, routes } from "./routes.mjs";
 
@@ -192,11 +192,12 @@ function folderProblems(root) {
  * config, and runs only while check 7 passes (see fixTree).
  */
 export function generated(root) {
-  const joins = joinProblems(root);
-  if (joins.length > 0) return skip("fix the named files check before checking generated seams");
-
   const other = otherBase(root);
   if (other) return fail([other]);
+  if (serverProblems(root).length > 0) {
+    return skip("name and add the server entry first; see check 5");
+  }
+
   const missing = unignored(root);
   const problems = [...folderProblems(root), ...missing.map(say.ignore)];
   return verdict(problems, say.passed, () => {

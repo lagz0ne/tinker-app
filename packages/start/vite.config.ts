@@ -12,11 +12,12 @@ export default defineConfig({
       "#tinker/parts.server": fileURLToPath(
         new URL("tests/fixtures/parts.off.server.ts", import.meta.url),
       ),
-      "#tinker/app.server": fileURLToPath(new URL("tests/fixtures/app.server.ts", import.meta.url)),
-      "#tinker/app": fileURLToPath(new URL("tests/fixtures/app.ts", import.meta.url)),
+      "#tinker/server": fileURLToPath(new URL("tests/fixtures/app.server.ts", import.meta.url)),
+      "#tinker/router": fileURLToPath(new URL("tests/fixtures/app.ts", import.meta.url)),
     },
   },
   test: {
+    maxWorkers: 2,
     include: ["tests/**/*.test.{ts,mjs}"],
   },
 });

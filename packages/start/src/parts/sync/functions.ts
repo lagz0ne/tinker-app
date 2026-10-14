@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { resource } from "@tinker/core";
 
-import { bootstrap, readAccount } from "#tinker/app.server";
+import { bootstrap, readAccount } from "#tinker/server";
 
 import { readResult } from "../../backend/result.server";
 import { startRequests } from "../../start";

@@ -9,7 +9,6 @@
     "strict": true,
     "noUnusedLocals": true,
     "noEmit": true,
-
     "esModuleInterop": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
@@ -17,11 +16,9 @@
     "resolveJsonModule": true,
     "paths": {
       "#tinker/telemetry-env": ["./tests/fixtures/telemetry-env.ts"],
-      "#tinker/app": ["./tests/fixtures/app.ts"],
-      "#tinker/app.server": ["./tests/fixtures/app.server.ts"],
-      "#tinker/router": ["./src/defaults/router.ts"],
+      "#tinker/router": ["./tests/fixtures/app.ts"],
+      "#tinker/server": ["./tests/fixtures/app.server.ts"],
       "#tinker/start": ["./src/defaults/start.ts"],
-      "#tinker/server": ["./tests/fixtures/server.ts"],
       "#tinker/routes": ["../../apps/start-min/.tinker/routeTree.gen.ts"],
       "#tinker/parts": ["./tests/fixtures/parts.ts"],
       "#tinker/parts.server": ["./tests/fixtures/parts.server.ts"]

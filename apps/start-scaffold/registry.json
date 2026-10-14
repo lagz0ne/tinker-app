@@ -25,9 +25,9 @@
           "target": "~/tsconfig.json"
         },
         {
-          "path": "src/server.ts",
+          "path": "../start-min/cmds/server.ts",
           "type": "registry:file",
-          "target": "~/src/server.ts"
+          "target": "~/cmds/server.ts"
         },
         {
           "path": "../start-min/src/backend/greet.ts",
@@ -43,16 +43,6 @@
           "path": "../start-min/src/routes/index.tsx",
           "type": "registry:file",
           "target": "~/src/routes/index.tsx"
-        },
-        {
-          "path": "templates/tinker.ts.txt",
-          "type": "registry:file",
-          "target": "~/src/lib/tinker.ts"
-        },
-        {
-          "path": "templates/tinker.server.ts.txt",
-          "type": "registry:file",
-          "target": "~/src/lib/tinker.server.ts"
         },
         {
           "path": "templates/env.example",
@@ -99,51 +89,7 @@
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": ["auth", "sync"],
-        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
-        "seams": {
-          "src/lib/tinker.server.ts": {
-            "extensions": {
-              "line": "export { extensions } from \"@/examples/demo.server\";",
-              "from": "@/examples/demo.server",
-              "include": {
-                "name": "databaseSetup",
-                "from": "@/backend/index.server"
-              }
-            },
-            "settings": {
-              "line": "export { settings } from \"@/examples/demo.server\";"
-            },
-            "database": {
-              "line": "export { database } from \"@/backend/index.server\";"
-            },
-            "auth": {
-              "line": "export { auth } from \"@/backend/index.server\";"
-            },
-            "readAccount": {
-              "line": "export { readAccount } from \"@/backend/index.server\";"
-            },
-            "bootstrap": {
-              "line": "export { bootstrap } from \"@/backend/index.server\";"
-            }
-          },
-          "src/lib/tinker.ts": {
-            "records": {
-              "line": "export { records } from \"@/examples/demo\";"
-            },
-            "readSnapshot": {
-              "line": "export { readSnapshot } from \"@/examples/demo\";"
-            },
-            "readBootstrap": {
-              "line": "export { readBootstrap } from \"@/examples/demo\";"
-            },
-            "readBatch": {
-              "line": "export { readBatch } from \"@/examples/demo\";"
-            },
-            "streamMessage": {
-              "line": "export { streamMessage } from \"@/examples/demo\";"
-            }
-          }
-        }
+        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand."
       },
       "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
@@ -158,51 +104,7 @@
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": ["auth", "sync"],
-        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
-        "seams": {
-          "src/lib/tinker.server.ts": {
-            "extensions": {
-              "line": "export { extensions } from \"@/examples/demo.server\";",
-              "from": "@/examples/demo.server",
-              "include": {
-                "name": "databaseSetup",
-                "from": "@/backend/index.server"
-              }
-            },
-            "settings": {
-              "line": "export { settings } from \"@/examples/demo.server\";"
-            },
-            "database": {
-              "line": "export { database } from \"@/backend/index.server\";"
-            },
-            "auth": {
-              "line": "export { auth } from \"@/backend/index.server\";"
-            },
-            "readAccount": {
-              "line": "export { readAccount } from \"@/backend/index.server\";"
-            },
-            "bootstrap": {
-              "line": "export { bootstrap } from \"@/backend/index.server\";"
-            }
-          },
-          "src/lib/tinker.ts": {
-            "records": {
-              "line": "export { records } from \"@/examples/demo\";"
-            },
-            "readSnapshot": {
-              "line": "export { readSnapshot } from \"@/examples/demo\";"
-            },
-            "readBootstrap": {
-              "line": "export { readBootstrap } from \"@/examples/demo\";"
-            },
-            "readBatch": {
-              "line": "export { readBatch } from \"@/examples/demo\";"
-            },
-            "streamMessage": {
-              "line": "export { streamMessage } from \"@/examples/demo\";"
-            }
-          }
-        }
+        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand."
       },
       "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
@@ -217,51 +119,7 @@
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": ["auth", "sync"],
-        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
-        "seams": {
-          "src/lib/tinker.server.ts": {
-            "extensions": {
-              "line": "export { extensions } from \"@/examples/demo.server\";",
-              "from": "@/examples/demo.server",
-              "include": {
-                "name": "databaseSetup",
-                "from": "@/backend/index.server"
-              }
-            },
-            "settings": {
-              "line": "export { settings } from \"@/examples/demo.server\";"
-            },
-            "database": {
-              "line": "export { database } from \"@/backend/index.server\";"
-            },
-            "auth": {
-              "line": "export { auth } from \"@/backend/index.server\";"
-            },
-            "readAccount": {
-              "line": "export { readAccount } from \"@/backend/index.server\";"
-            },
-            "bootstrap": {
-              "line": "export { bootstrap } from \"@/backend/index.server\";"
-            }
-          },
-          "src/lib/tinker.ts": {
-            "records": {
-              "line": "export { records } from \"@/examples/demo\";"
-            },
-            "readSnapshot": {
-              "line": "export { readSnapshot } from \"@/examples/demo\";"
-            },
-            "readBootstrap": {
-              "line": "export { readBootstrap } from \"@/examples/demo\";"
-            },
-            "readBatch": {
-              "line": "export { readBatch } from \"@/examples/demo\";"
-            },
-            "streamMessage": {
-              "line": "export { streamMessage } from \"@/examples/demo\";"
-            }
-          }
-        }
+        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand."
       },
       "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
@@ -292,8 +150,7 @@
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": [],
-        "requires": "No base parts or Postgres. Fill smtpUrl and mailFrom in the server seam's settings(env); the app then needs the SMTP keys to start.",
-        "seams": {}
+        "requires": "No base parts or Postgres. Fill smtpUrl and mailFrom in the server seam's settings(env); the app then needs the SMTP keys to start."
       },
       "dependencies": ["nodemailer@10.0.13"],
       "devDependencies": ["@types/nodemailer@^7.0.11"]
@@ -309,51 +166,7 @@
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": ["auth", "sync"],
-        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
-        "seams": {
-          "src/lib/tinker.server.ts": {
-            "extensions": {
-              "line": "export { extensions } from \"@/examples/demo.server\";",
-              "from": "@/examples/demo.server",
-              "include": {
-                "name": "databaseSetup",
-                "from": "@/backend/index.server"
-              }
-            },
-            "settings": {
-              "line": "export { settings } from \"@/examples/demo.server\";"
-            },
-            "database": {
-              "line": "export { database } from \"@/backend/index.server\";"
-            },
-            "auth": {
-              "line": "export { auth } from \"@/backend/index.server\";"
-            },
-            "readAccount": {
-              "line": "export { readAccount } from \"@/backend/index.server\";"
-            },
-            "bootstrap": {
-              "line": "export { bootstrap } from \"@/backend/index.server\";"
-            }
-          },
-          "src/lib/tinker.ts": {
-            "records": {
-              "line": "export { records } from \"@/examples/demo\";"
-            },
-            "readSnapshot": {
-              "line": "export { readSnapshot } from \"@/examples/demo\";"
-            },
-            "readBootstrap": {
-              "line": "export { readBootstrap } from \"@/examples/demo\";"
-            },
-            "readBatch": {
-              "line": "export { readBatch } from \"@/examples/demo\";"
-            },
-            "streamMessage": {
-              "line": "export { streamMessage } from \"@/examples/demo\";"
-            }
-          }
-        }
+        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand."
       },
       "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
@@ -368,51 +181,7 @@
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": ["auth", "sync"],
-        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand.",
-        "seams": {
-          "src/lib/tinker.server.ts": {
-            "extensions": {
-              "line": "export { extensions } from \"@/examples/demo.server\";",
-              "from": "@/examples/demo.server",
-              "include": {
-                "name": "databaseSetup",
-                "from": "@/backend/index.server"
-              }
-            },
-            "settings": {
-              "line": "export { settings } from \"@/examples/demo.server\";"
-            },
-            "database": {
-              "line": "export { database } from \"@/backend/index.server\";"
-            },
-            "auth": {
-              "line": "export { auth } from \"@/backend/index.server\";"
-            },
-            "readAccount": {
-              "line": "export { readAccount } from \"@/backend/index.server\";"
-            },
-            "bootstrap": {
-              "line": "export { bootstrap } from \"@/backend/index.server\";"
-            }
-          },
-          "src/lib/tinker.ts": {
-            "records": {
-              "line": "export { records } from \"@/examples/demo\";"
-            },
-            "readSnapshot": {
-              "line": "export { readSnapshot } from \"@/examples/demo\";"
-            },
-            "readBootstrap": {
-              "line": "export { readBootstrap } from \"@/examples/demo\";"
-            },
-            "readBatch": {
-              "line": "export { readBatch } from \"@/examples/demo\";"
-            },
-            "streamMessage": {
-              "line": "export { streamMessage } from \"@/examples/demo\";"
-            }
-          }
-        }
+        "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand."
       },
       "registryDependencies": ["@tinker-start/postgres-auth-mail-example"]
     },
@@ -703,50 +472,6 @@
         "ownership": "userland",
         "update": "Copy into the scaffold example wiring. These files are yours; review changes before replacing them.",
         "parts": ["auth", "sync"],
-        "seams": {
-          "src/lib/tinker.server.ts": {
-            "extensions": {
-              "line": "export { extensions } from \"@/examples/demo.server\";",
-              "from": "@/examples/demo.server",
-              "include": {
-                "name": "databaseSetup",
-                "from": "@/backend/index.server"
-              }
-            },
-            "settings": {
-              "line": "export { settings } from \"@/examples/demo.server\";"
-            },
-            "database": {
-              "line": "export { database } from \"@/backend/index.server\";"
-            },
-            "auth": {
-              "line": "export { auth } from \"@/backend/index.server\";"
-            },
-            "readAccount": {
-              "line": "export { readAccount } from \"@/backend/index.server\";"
-            },
-            "bootstrap": {
-              "line": "export { bootstrap } from \"@/backend/index.server\";"
-            }
-          },
-          "src/lib/tinker.ts": {
-            "records": {
-              "line": "export { records } from \"@/examples/demo\";"
-            },
-            "readSnapshot": {
-              "line": "export { readSnapshot } from \"@/examples/demo\";"
-            },
-            "readBootstrap": {
-              "line": "export { readBootstrap } from \"@/examples/demo\";"
-            },
-            "readBatch": {
-              "line": "export { readBatch } from \"@/examples/demo\";"
-            },
-            "streamMessage": {
-              "line": "export { streamMessage } from \"@/examples/demo\";"
-            }
-          }
-        },
         "requires": "Enable the named parts and join the named seam exports by hand. Shared demo bodies stay together. Copy examples/demo.env.example to .env before doctor."
       },
       "dependencies": [
@@ -876,6 +601,21 @@
           "path": "vitest.config.ts",
           "type": "registry:file",
           "target": "~/vitest.config.ts"
+        },
+        {
+          "path": "src/items/demo/item.json",
+          "type": "registry:file",
+          "target": "~/src/items/demo/item.json"
+        },
+        {
+          "path": "src/items/demo/index.ts",
+          "type": "registry:file",
+          "target": "~/src/items/demo/index.ts"
+        },
+        {
+          "path": "src/items/demo/index.server.ts",
+          "type": "registry:file",
+          "target": "~/src/items/demo/index.server.ts"
         }
       ],
       "meta": {
@@ -883,50 +623,6 @@
         "ownership": "userland",
         "prerequisites": "Install packed Core, React, and Start releases first; nothing is published by this source registry.",
         "parts": ["auth", "sync"],
-        "seams": {
-          "src/lib/tinker.server.ts": {
-            "extensions": {
-              "line": "export { extensions } from \"@/examples/demo.server\";",
-              "from": "@/examples/demo.server",
-              "include": {
-                "name": "databaseSetup",
-                "from": "@/backend/index.server"
-              }
-            },
-            "settings": {
-              "line": "export { settings } from \"@/examples/demo.server\";"
-            },
-            "database": {
-              "line": "export { database } from \"@/backend/index.server\";"
-            },
-            "auth": {
-              "line": "export { auth } from \"@/backend/index.server\";"
-            },
-            "readAccount": {
-              "line": "export { readAccount } from \"@/backend/index.server\";"
-            },
-            "bootstrap": {
-              "line": "export { bootstrap } from \"@/backend/index.server\";"
-            }
-          },
-          "src/lib/tinker.ts": {
-            "records": {
-              "line": "export { records } from \"@/examples/demo\";"
-            },
-            "readSnapshot": {
-              "line": "export { readSnapshot } from \"@/examples/demo\";"
-            },
-            "readBootstrap": {
-              "line": "export { readBootstrap } from \"@/examples/demo\";"
-            },
-            "readBatch": {
-              "line": "export { readBatch } from \"@/examples/demo\";"
-            },
-            "streamMessage": {
-              "line": "export { streamMessage } from \"@/examples/demo\";"
-            }
-          }
-        },
         "requires": "Add to an existing app. The dependency adds the shared demo; doctor names the app wiring to add."
       },
       "devDependencies": ["@electric-sql/pglite@catalog:"]

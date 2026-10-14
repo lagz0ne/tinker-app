@@ -5,9 +5,10 @@ import { afterAll, beforeAll } from "vite-plus/test";
 
 import type { Env } from "../../src/env";
 import type { Database } from "../../src/parts/sync/database";
+import { createScope, createScopeClose, createServerEntry } from "../../src/server";
 
 /**
- * A stand-in server seam for the base's own tests and type check, as `#tinker/app.server`:
+ * A stand-in server seam for the base's own tests and type check, as `#tinker/server`:
  * the names the auth and sync parts read. Its auth library echoes each request it is handed,
  * and signs a request in by its `x-account` header, while that account is in `signedIn`.
  */
@@ -77,4 +78,13 @@ export const database = resource({
       listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
     });
   },
+});
+
+const stop = new AbortController();
+const root = createScope({ signal: stop.signal });
+
+export default createServerEntry({
+  requestContext: { scope: root },
+  renderObserve: {},
+  close: createScopeClose([{ scope: root, stop }]),
 });

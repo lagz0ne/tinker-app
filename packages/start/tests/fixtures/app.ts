@@ -11,7 +11,7 @@ import {
 import type { Sync } from "../../src/parts/sync/envelopes";
 
 /**
- * A stand-in client seam for the base's own tests and type check, as `#tinker/app`: the names
+ * A stand-in client seam for the base's own tests and type check, as `#tinker/router`: the names
  * the sync part reads. Its records keep each snapshot part and each applied change in cells.
  */
 export const extensions: Many<Scope.Extension<unknown>> = [];
@@ -57,3 +57,5 @@ export const streamMessage = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("changes"), events: z.array(eventEnvelope).max(100) }),
   z.object({ kind: z.literal("account-change") }),
 ]);
+
+export const router: import("../../src/index").RouterOptions = () => ({});

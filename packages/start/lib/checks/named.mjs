@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { joinProblems, seamExports } from "../joins.mjs";
+import { readItemModules } from "../item-modules.mjs";
 import { appFiles, ignoredFiles, serverFile } from "../named.mjs";
 import { parts, recordedParts } from "../parts.mjs";
 import { listFiles } from "../paths.mjs";
@@ -11,7 +11,9 @@ import { examples } from "./examples.mjs";
 import { fail, verdict } from "./result.mjs";
 
 export const say = {
-  noServer: () => `${serverFile.file} is missing; add this server entry:\n${serverSource}`,
+  noEntry: 'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts" })',
+  noServer: (root) =>
+    `${serverFile(root).file} is missing; add this server entry:\n${serverSource}`,
   export: (file, name) => `${file}:1 does not export ${name}; the base imports it from this file`,
   ignored: (file, hint) => `${file}:1 is a Start file the base does not read; ${hint}`,
   noSeam: (file, part, names) =>
@@ -32,12 +34,13 @@ export const say = {
  */
 function partProblems(root) {
   return recordedParts(root).flatMap((part) =>
-    Object.entries(parts[part].reads ?? {}).flatMap(([file, names]) => {
-      if (!existsSync(join(root, file)) && names.every((name) => !seamExports(root, file, name))) {
+    Object.entries(parts[part].reads ?? {}).flatMap(([alias, names]) => {
+      const file = appFiles(root).find((entry) => entry.alias === alias).file;
+      if (!existsSync(join(root, file))) {
         return [say.noSeam(file, part, names)];
       }
       return names
-        .filter((name) => !seamExports(root, file, name))
+        .filter((name) => !mayExport(join(root, file), name))
         .map((name) => say.partExport(file, name, part));
     }),
   );
@@ -55,9 +58,10 @@ function augmentProblems(root) {
     ),
   );
   if (needed.length === 0) return [];
-  const found = listFiles(join(root, "src"))
+  const found = ["src", "cmds"]
+    .flatMap((dir) => listFiles(join(root, dir)).map((file) => `${dir}/${file}`))
     .filter((file) => /\.tsx?$/.test(file))
-    .flatMap((file) => augmentations(parseSource(join(root, "src", file))));
+    .flatMap((file) => augmentations(parseSource(join(root, file))));
   return needed
     .filter(
       ({ module, name }) => !found.some((item) => item.module === module && item.name === name),
@@ -71,15 +75,18 @@ function augmentProblems(root) {
  * where the glue never reads it (ADR 0106). No fix.
  */
 export function serverProblems(root) {
-  return existsSync(join(root, serverFile.file)) ? [] : [say.noServer()];
+  if (!serverFile(root).file) return [say.noEntry];
+  return existsSync(join(root, serverFile(root).file)) ? [] : [say.noServer(root)];
 }
 
 export function named(root) {
-  const joins = joinProblems(root);
-  if (joins.length > 0) return fail(joins);
+  if (!serverFile(root).file) return fail(serverProblems(root));
+
+  const graph = readItemModules(root);
+  if (graph.problems.length > 0) return fail(graph.problems);
 
   const installed = examples(root);
-  const found = appFiles.filter(({ file, reads }) => reads && existsSync(join(root, file)));
+  const found = appFiles(root).filter(({ file, reads }) => reads && existsSync(join(root, file)));
   const missing = found.flatMap(({ file, reads }) =>
     [reads]
       .flat()

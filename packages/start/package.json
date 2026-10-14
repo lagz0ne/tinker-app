@@ -30,8 +30,7 @@
       "default": "./vite.mjs"
     },
     "./package.json": "./package.json",
-    "./testing": "./src/testing.ts",
-    "./wiring": "./src/wiring.server.ts"
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "release": "node scripts/pack.mjs",
@@ -125,7 +124,7 @@
           "/api/auth/$": "src/routes/api.auth.ts"
         },
         "reads": {
-          "src/lib/tinker.server.ts": [
+          "#tinker/server": [
             "auth",
             "readAccount"
           ]
@@ -151,11 +150,11 @@
           "/api/sync": "src/routes/api.sync.ts"
         },
         "reads": {
-          "src/lib/tinker.server.ts": [
+          "#tinker/server": [
             "database",
             "bootstrap"
           ],
-          "src/lib/tinker.ts": [
+          "#tinker/router": [
             "records",
             "readSnapshot",
             "readBootstrap",
