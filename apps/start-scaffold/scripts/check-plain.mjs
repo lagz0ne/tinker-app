@@ -18,6 +18,8 @@ const base = dirname(
   createRequire(join(root, "package.json")).resolve("@tinker/start/package.json"),
 );
 
+const { serverFile } = createRequire(join(base, "package.json"))("./lib/named.mjs");
+
 const failures = [];
 const files = [];
 
@@ -619,6 +621,8 @@ function checkScopeReference(node) {
 }
 
 function checkRoots(node) {
+  if (pathOf(node) === serverFile.file) return;
+
   checkScopeReference(node);
   if (!moduleBinding(node) || !contains(checker.getTypeAtLocation(node.name), "holder")) return;
   fail(node, "module-handle");
@@ -1004,6 +1008,7 @@ function checkHttpImport(node) {
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
+    if (pathOf(node) === serverFile.file) return;
     if (!moduleDeclarationCall(node)) fail(node, "module-effect");
     return;
   }
@@ -1090,7 +1095,7 @@ function addCaller(use, name, symbol, node, source, callers) {
 }
 
 /**
- * The base calls the server seam's `settings` once, at start (ADR 0113): env becomes the app's
+ * The app entry calls the server seam's `settings` once, at start (ADR 0113): env becomes the app's
  * settings tags there. The function the seam exports as `settings` needs no second site.
  */
 function baseCallers(node, name) {
@@ -1102,7 +1107,7 @@ function baseCallers(node, name) {
 
   const target =
     exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
-  return target === symbolOf(name) ? ["@tinker/start#serverEntry"] : [];
+  return target === symbolOf(name) ? [`${serverFile.file}#module`] : [];
 }
 
 function callSites(name, node) {
@@ -1208,7 +1213,7 @@ function checkPlainFunction(node) {
   }
 
   const base = baseCallers(node, name);
-  const callers = [...callSites(name, node), ...base];
+  const callers = [...new Set([...callSites(name, node), ...base])];
   if (callers.length < 2 && base.length === 0) fail(node, "two-sites");
 
   plain.push(

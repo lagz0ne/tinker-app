@@ -2,14 +2,16 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { joinProblems, seamExports } from "../joins.mjs";
-import { appFiles, ignoredFiles } from "../named.mjs";
+import { appFiles, ignoredFiles, serverFile } from "../named.mjs";
 import { parts, recordedParts } from "../parts.mjs";
 import { listFiles } from "../paths.mjs";
+import { serverSource } from "../server-source.mjs";
 import { augmentations, mayExport, parseSource } from "../source.mjs";
 import { examples } from "./examples.mjs";
 import { fail, verdict } from "./result.mjs";
 
 export const say = {
+  noServer: () => `${serverFile.file} is missing; add this server entry:\n${serverSource}`,
   export: (file, name) => `${file}:1 does not export ${name}; the base imports it from this file`,
   ignored: (file, hint) => `${file}:1 is a Start file the base does not read; ${hint}`,
   noSeam: (file, part, names) =>
@@ -68,6 +70,10 @@ function augmentProblems(root) {
  * part finds the seam names it reads and the app's augmentations, and no usual Start file sits
  * where the glue never reads it (ADR 0106). No fix.
  */
+export function serverProblems(root) {
+  return existsSync(join(root, serverFile.file)) ? [] : [say.noServer()];
+}
+
 export function named(root) {
   const joins = joinProblems(root);
   if (joins.length > 0) return fail(joins);
@@ -85,6 +91,7 @@ export function named(root) {
     .map(({ file, hint }) => say.ignored(file, hint));
   return verdict(
     [
+      ...serverProblems(root),
       ...missing,
       ...partProblems(root),
       ...augmentProblems(root),

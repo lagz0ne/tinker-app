@@ -1,3 +1,7 @@
+export { createScope } from "@tinker/core";
+export { auth, telemetry } from "#tinker/parts.server";
+export { abortReasons } from "./errors";
+export { startRequests } from "./start";
 export { readResult } from "./backend/result.server";
 export { backendStop, requestStop } from "./backend/lifetime";
 export type { Env } from "./env";
@@ -6,7 +10,7 @@ export type { Auth } from "./parts/auth/settings";
 export { eventHistory } from "./parts/sync/history.server";
 export { drizzleOrm } from "./modules.server";
 export type { Database } from "./parts/sync/database";
-export { createServerEntry } from "./server-entry";
+export { createServerEntry, createScopeClose } from "./server-entry";
 export type { ServerEntry } from "./server-entry";
 export { httpRequest } from "./backend/http";
 export { requestHeaders } from "./backend/headers.server";

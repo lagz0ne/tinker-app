@@ -25,6 +25,11 @@
           "target": "~/tsconfig.json"
         },
         {
+          "path": "src/server.ts",
+          "type": "registry:file",
+          "target": "~/src/server.ts"
+        },
+        {
           "path": "../start-min/src/backend/greet.ts",
           "type": "registry:file",
           "target": "~/src/backend/greet.ts"

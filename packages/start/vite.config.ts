@@ -9,6 +9,9 @@ export default defineConfig({
       "#tinker/telemetry-env": fileURLToPath(
         new URL("tests/fixtures/telemetry-env.ts", import.meta.url),
       ),
+      "#tinker/parts.server": fileURLToPath(
+        new URL("tests/fixtures/parts.off.server.ts", import.meta.url),
+      ),
       "#tinker/app.server": fileURLToPath(new URL("tests/fixtures/app.server.ts", import.meta.url)),
       "#tinker/app": fileURLToPath(new URL("tests/fixtures/app.ts", import.meta.url)),
     },

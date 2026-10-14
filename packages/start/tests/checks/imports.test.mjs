@@ -14,7 +14,7 @@ test("passes when src/ reaches the base only through its entries", () => {
   });
   expect(imports(root)).toEqual({
     status: "ok",
-    lines: ["3 files in src/ import the base only through its entries"],
+    lines: ["4 files in src/ import the base only through its entries"],
   });
 });
 

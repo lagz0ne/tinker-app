@@ -1,17 +1,10 @@
 import { createStartHandler as createStart } from "@tanstack/react-start/server";
 import { defaultStreamHandler as renderStream } from "@tanstack/react-start/server";
-import type { Observe, Scope } from "@tinker/core";
-import { createScope } from "@tinker/core";
 
-import { extensions, settings as appSettings } from "#tinker/app.server";
-import { auth, telemetry } from "#tinker/parts.server";
 import app from "#tinker/server";
 
-import { backendStop } from "../backend/lifetime";
 import { retainRender } from "../backend/render-lifetime.server";
-import type { Env } from "../env";
-import { abortReasons, raise } from "../errors";
-import { startRequests } from "../start";
+import { raise } from "../errors";
 import { devErrorPage } from "./dev-error";
 import type { getRouter } from "./router";
 
@@ -29,89 +22,23 @@ const renderRequest = createStart(async (context) => {
   }
 });
 
-/**
- * The base's server entry owns the process roots and their stop signals (ADR 0100). The
- * telemetry root observes the app root, so its own sends are never traced; it closes last.
- */
-async function start() {
-  const values = { ...process.env };
-  const readSettings: Env.Read = appSettings;
-  const toolSettings = telemetry.settings(values);
-  const appSettingTags = [auth.settings(values), readSettings(values)];
-
-  const toolStop = new AbortController();
-  const tools = createScope({
-    signal: toolStop.signal,
-    extensions: telemetry.extensions,
-    tags: [toolSettings, telemetry.tags],
-  });
-  await tools.ready;
-
-  const stop = new AbortController();
-  const app = createScope({
-    signal: stop.signal,
-    observe: tools.resolve(telemetry.observe),
-    extensions: [startRequests, auth.extensions, extensions],
-    tags: [backendStop(stop.signal), appSettingTags, tools.resolve(telemetry.appTags)],
-  });
-
-  try {
-    await app.ready;
-  } catch (error) {
-    toolStop.abort(abortReasons.closed);
-    await tools.closed;
-    throw error;
-  }
-
-  let closed: Promise<void> | undefined;
-  const close = () =>
-    (closed ??= (async () => {
-      stop.abort(abortReasons.closed);
-      const end = await app.closed;
-
-      toolStop.abort(abortReasons.closed);
-      const toolEnd = await tools.closed;
-
-      if (end.status === "failed") throw end.error;
-      if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
-      if (toolEnd.status === "failed") throw toolEnd.error;
-      if (toolEnd.teardownErrors?.length) throw toolEnd.teardownErrors.at(0);
-    })());
-  if (import.meta.hot) import.meta.hot.dispose(close);
-
-  return (entry.ready = {
-    requestContext: app.resolve(startRequests),
-    renderObserve: tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs }),
-    close,
-  });
-}
-
-const entry: {
-  owned?: ReturnType<typeof start>;
-  ready?: {
-    requestContext: { scope: Scope.Handle };
-    renderObserve: Observe.Config;
-    close(): Promise<void>;
-  };
-  fetch(request: Request): Response | Promise<Response>;
-} = {
-  /** src/server.ts runs first; its `next` reaches the base's handler. */
+const entry = {
   fetch(request: Request) {
-    return app.fetch(request, async (forwarded) => {
-      const { requestContext } = entry.ready ?? (await (entry.owned ??= start()));
-      const response = await renderRequest(forwarded, { context: requestContext });
+    const next = async (forwarded: Request) => {
+      const response = await renderRequest(forwarded, { context: app.requestContext });
       return import.meta.env.DEV ? devErrorPage(forwarded, response) : response;
-    });
+    };
+    return app.fetch ? app.fetch(request, next) : next(request);
   },
 };
 
 export default entry;
 
-export async function close() {
-  if (entry.owned) await (await entry.owned).close();
+export function close() {
+  return app.close();
 }
 
-/** Server renders borrow observation; only process close ends its telemetry root. */
-export async function getRenderObserver() {
-  return (entry.ready ?? (await (entry.owned ??= start()))).renderObserve;
+/** Server renders borrow observation; the app entry owns its telemetry root. */
+export function getRenderObserver() {
+  return app.renderObserve;
 }

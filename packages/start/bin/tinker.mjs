@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import { serve as listen } from "@hono/node-server";
 
 import { generatorBlocked, staleTree } from "../lib/checks/generated.mjs";
+import { serverProblems } from "../lib/checks/named.mjs";
 import { compressResponse } from "../lib/compression.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { loadEnv } from "../lib/env.mjs";
@@ -65,6 +66,12 @@ const flag = (name) => rest[rest.indexOf(name) + 1];
 
 const commands = {
   prepare: async () => {
+    const missing = serverProblems(root);
+    if (missing.length > 0) {
+      console.log(missing.join("\n"));
+      return prepareExitCode(missing, process.env.npm_lifecycle_event);
+    }
+
     const files = prepare(root);
     const blocked = generatorBlocked(root);
     if (blocked.length === 0) files.push(await writeRouteTree(root));

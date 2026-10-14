@@ -8,7 +8,7 @@ Tests and generated files do not count.
 - **src/backend/settings.server.ts#settings**
   - `env`: `Env.Values`. From the base's server entry; why: the keys to check and convert.
   - Callers:
-    - `@tinker/start#serverEntry`
+    - `src/server.ts#module`
 
 - **src/contracts/commands.ts#readProfileCommand**
   - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.

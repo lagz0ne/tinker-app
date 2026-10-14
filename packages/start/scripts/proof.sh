@@ -16,6 +16,7 @@
 set -uo pipefail
 repo=$(pwd)
 out=$repo/docs/roadmap/start-base/proof
+app_entry=$(node --input-type=module -e 'import {serverFile} from "./packages/start/lib/named.mjs"; process.stdout.write(serverFile.file)')
 scratch=/tmp/tinker-proof
 clean() { sed -e "s|$scratch/app/||g" -e "s|$scratch|\$S|g" -e "s|$repo/||g" -e "s|$HOME|~|g"; }
 say() { echo "\$ $*"; }
@@ -184,7 +185,7 @@ tar -xzf packages/start/packs/tinker-start-*.tgz -C "$scratch/base"
 } 2>&1 | clean > "$out/9-build-stops.txt"
 
 {
-  mistake "named files: src/router.ts, src/start.ts, src/server.ts, src/style.css"
+  mistake "named files: src/router.ts, src/start.ts, app server entry, src/style.css"
   mkdir -p src/frontend
   printf 'export const NotFound = () => <p>app 404 page</p>;\n' > src/frontend/not-found.tsx
   printf '%s\n' 'import type { RouterOptions } from "@tinker/start";' \
@@ -197,13 +198,15 @@ tar -xzf packages/start/packs/tinker-start-*.tgz -C "$scratch/base"
     '  return next();' \
     '});' \
     'export const startInstance = createStart(() => ({ requestMiddleware: [stamp] }));' > src/start.ts
-  printf '%s\n' 'import { createServerEntry } from "@tinker/start/server";' \
-    'export default createServerEntry({' \
-    '  async fetch(request, next) {' \
-    '    if (new URL(request.url).pathname === "/raw") return new Response("raw from src/server.ts");' \
-    '    return next(request);' \
-    '  },' \
-    '});' > src/server.ts
+  node --input-type=module - "$app_entry" <<'JS'
+import { readFileSync, writeFileSync } from "node:fs";
+const path = process.argv[2];
+writeFileSync(path, readFileSync(path, "utf8").replace("  close,", `  async fetch(request, next) {
+    if (new URL(request.url).pathname === "/raw") return new Response("raw from app entry");
+    return next(request);
+  },
+  close,`));
+JS
   printf 'p { color: rgb(1, 2, 3); }\n' > src/style.css
   mkdir -p public && printf 'User-agent: *\n' > public/robots.txt
   printf 'GREETING=from-dot-env\n' > .env
@@ -222,7 +225,7 @@ tar -xzf packages/start/packs/tinker-start-*.tgz -C "$scratch/base"
   serve_up
   get / '<link rel="stylesheet"[^>]*>'
   get /nope '<p>app 404 page</p>'
-  get /raw 'raw from src/server.ts'
+  get /raw 'raw from app server entry'
   say "curl -sI :PORT/ | grep x-app-middleware"
   curl -sI "http://127.0.0.1:$port/" | grep -i x-app-middleware | tr -d '\r'
   say "curl -si :PORT/robots.txt | head -1"

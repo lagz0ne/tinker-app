@@ -3,10 +3,12 @@ import { expect, test } from "vite-plus/test";
 import { named } from "../../lib/checks/named.mjs";
 import { goodApp } from "../fixture.mjs";
 
-test("passes with no named files: the base defaults are in use", () => {
+test("passes with the required app entry and no other named files", () => {
   expect(named(goodApp())).toEqual({
     status: "ok",
-    lines: ["no named or seam files; the base defaults are in use"],
+    lines: [
+      "each named or seam file exports what the base reads (src/server.ts); no Start file is ignored",
+    ],
   });
 });
 

@@ -52,6 +52,13 @@ export function buildChecks(root) {
 
 /** @param {string} text - From a check; why: keep each printed line short for a phone. */
 function wrap(text) {
+  if (text.includes("\n")) {
+    return text
+      .split("\n")
+      .map((line) => `      ${line}`)
+      .join("\n");
+  }
+
   const lines = [""];
   for (const word of text.split(" ")) {
     const last = lines.length - 1;

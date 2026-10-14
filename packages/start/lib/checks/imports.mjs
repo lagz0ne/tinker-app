@@ -51,6 +51,7 @@ function extensionImports(sources) {
 const entries = new Set([
   "@tinker/start",
   "@tinker/start/server",
+  "@tinker/start/wiring",
   "@tinker/start/client",
   "@tinker/start/vite",
 ]);

@@ -78,6 +78,7 @@ export function render(root, on = recordedParts(root)) {
       compilerOptions: { ...compilerOptions, paths },
       include: [
         "../src",
+        ...appFiles.filter((entry) => entry.required).map((entry) => `../${entry.file}`),
         "../tests",
         "../vite.config.ts",
         "../vite.config.mts",

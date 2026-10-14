@@ -38,7 +38,7 @@ test("an alias points at the app's named file, else at the base default, and kee
     }),
   ).toEqual([
     join(root, "src/start.ts"),
-    join(baseDir, "src/defaults/server.ts"),
+    join(root, "src/server.ts"),
     `${join(root, "src/style.css")}?url`,
     join(root, ".tinker/app.server.ts"),
     join(root, ".tinker/routeTree.gen.ts"),
@@ -118,7 +118,11 @@ test("Start runs the base's entries, the generated route tree, and the base's im
       behavior: "error",
       client: {
         files: [/\.server\./, /\/backend\//],
-        specifiers: ["@tanstack/react-start/server", "@tinker/start/server"],
+        specifiers: [
+          "@tanstack/react-start/server",
+          "@tinker/start/server",
+          "@tinker/start/wiring",
+        ],
       },
       server: { files: [/\.client\./] },
     },

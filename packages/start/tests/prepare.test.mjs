@@ -22,6 +22,7 @@ test("the build's tsc checks vite.config.ts too, so a tinker() option type is ch
   const { include } = JSON.parse(render(fixture({ "package.json": "{}" }))["tsconfig.json"]);
   expect(include).toEqual([
     "../src",
+    "../src/server.ts",
     "../tests",
     "../vite.config.ts",
     "../vite.config.mts",

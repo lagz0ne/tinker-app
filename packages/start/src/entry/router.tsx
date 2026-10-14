@@ -20,7 +20,7 @@ let serverTelemetryPending: Promise<NonNullable<typeof serverTelemetry>> | undef
 
 async function loadServerTelemetry() {
   const { getRenderObserver } = await import("./server");
-  return (serverTelemetry = { observe: await getRenderObserver(), close: undefined });
+  return (serverTelemetry = { observe: getRenderObserver(), close: undefined });
 }
 
 const readTelemetry = createIsomorphicFn()

@@ -170,7 +170,11 @@ const typedFiles = {
 
 /** The app's real peers let tsc check generated roles without booting a framework. */
 function typedApp(files) {
-  const root = fixture({ ...typedFiles, ...files });
+  const root = fixture({
+    ...typedFiles,
+    "src/server.ts": readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8"),
+    ...files,
+  });
   for (const name of peers) {
     const target = findPackage(baseDir, name);
     mkdirSync(dirname(join(root, "node_modules", name)), { recursive: true });

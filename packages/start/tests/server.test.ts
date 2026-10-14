@@ -4,7 +4,6 @@ import { expect, test } from "vite-plus/test";
 import { version } from "../package.json";
 import { responseBodies } from "../src/backend/body.server";
 import { health } from "../src/backend/health";
-import entry from "../src/defaults/server";
 import { devErrorPage } from "../src/entry/dev-error";
 import { readResult } from "../src/server";
 import { startRequests } from "../src/start";
@@ -102,12 +101,6 @@ test("a held response body ends the request when read to the end, or when cancel
 
   expect(ends).toEqual([true, false]);
   expect((await root.close({ graceful: true })).status).toBe("success");
-});
-
-test("with no src/server.ts, the server entry goes straight to the base", async () => {
-  const reply = new Response("from the base");
-  const response = await entry.fetch(new Request("http://app/"), async () => reply);
-  expect(response).toBe(reply);
 });
 
 test("dev turns Start's JSON 500 into a page that reloads after the fix", async () => {

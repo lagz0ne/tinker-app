@@ -1,6 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  readFileSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -38,6 +46,7 @@ export function goodApp(files = {}) {
       'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker()] };\n',
     "tsconfig.json": JSON.stringify({ extends: "./.tinker/tsconfig.json" }),
     ".gitignore": ".tinker/\n.tanstack/\n",
+    "src/server.ts": readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8"),
     "src/routes/index.tsx": 'export const Route = createFileRoute("/")({});\n',
     ...Object.fromEntries(
       Object.entries(basePackage.tinker.tested).map(([name, version]) => [

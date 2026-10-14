@@ -60,7 +60,11 @@ export function startOptions(root, on) {
       behavior: "error",
       client: {
         files: [/\.server\./, /\/backend\//],
-        specifiers: ["@tanstack/react-start/server", "@tinker/start/server"],
+        specifiers: [
+          "@tanstack/react-start/server",
+          "@tinker/start/server",
+          "@tinker/start/wiring",
+        ],
       },
       server: { files: [/\.client\./] },
     },

@@ -24,6 +24,12 @@
       "content": "{ \"extends\": \"./.tinker/tsconfig.json\" }\n"
     },
     {
+      "path": "src/server.ts",
+      "type": "registry:file",
+      "target": "~/src/server.ts",
+      "content": "import * as start from \"@tinker/start/server\";\nimport { extensions, settings } from \"@tinker/start/wiring\";\n\nconst values = { ...process.env };\nconst toolTags = [start.telemetry.settings(values), start.telemetry.tags];\nconst appTags = [start.auth.settings(values), settings(values)];\nconst stop = { tools: new AbortController(), app: new AbortController() };\n\nconst tools = start.createScope({\n  signal: stop.tools.signal,\n  extensions: start.telemetry.extensions,\n  tags: toolTags,\n});\n\nawait tools.ready;\n\nconst app = start.createScope({\n  signal: stop.app.signal,\n  observe: tools.resolve(start.telemetry.observe),\n  extensions: [start.startRequests, start.auth.extensions, extensions],\n  tags: [start.backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],\n});\n\nconst close = start.createScopeClose([\n  { scope: tools, stop: stop.tools },\n  { scope: app, stop: stop.app },\n]);\n\nawait app.ready.catch(close);\n\nconst server = start.createServerEntry({\n  requestContext: app.resolve(start.startRequests),\n  renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),\n  close,\n});\n\nif (import.meta.hot) import.meta.hot.dispose(close);\nexport default server;\n"
+    },
+    {
       "path": "../start-min/src/backend/greet.ts",
       "type": "registry:file",
       "target": "~/src/backend/greet.ts",

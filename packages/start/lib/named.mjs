@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 /**
  * App files the glue picks up, and nothing else (ADR 0106): the alias the base imports each by,
- * the exports it reads, and the base default used while the file is absent.
+ * the exports it reads, and any base default used while the file is absent.
  * Named files: router, start, server, style, and the shell (a route, so it has no alias).
  * Seam files: the two src/lib/tinker files.
  */
@@ -24,7 +24,7 @@ export const appFiles = [
     file: "src/server.ts",
     alias: "#tinker/server",
     reads: "default",
-    fallback: "src/defaults/server.ts",
+    required: true,
   },
   { file: "src/style.css", alias: "#tinker/style", fallback: "src/defaults/style.css" },
   {
@@ -41,6 +41,8 @@ export const appFiles = [
   },
 ];
 
+export const serverFile = appFiles.find((entry) => entry.alias === "#tinker/server");
+
 /** The page shell: when it exists, it replaces the base's root route. */
 export const shellFile = "src/routes/__root.tsx";
 
@@ -48,7 +50,7 @@ export const shellFile = "src/routes/__root.tsx";
 const startEntries = {
   router: "router options go in src/router.ts",
   start: "global middleware and defaultSsr go in src/start.ts",
-  server: "a custom server entry goes in src/server.ts",
+  server: `a custom server entry goes in ${serverFile.file}`,
   client: "the base owns the client entry; client extensions go in src/lib/tinker.ts",
 };
 
@@ -67,9 +69,9 @@ export const ignoredFiles = [
  * The file the base reads for one entry: the app's own when it exists, else the base default.
  * @param {string} root - From the app folder; why: look for the app's file there.
  * @param {string} base - From a caller; why: the base folder the default lives in.
- * @param {{ file: string, fallback: string }} entry - From appFiles; why: which file to pick.
+ * @param {{ file: string, fallback?: string }} entry - From appFiles; why: which file to pick.
  */
 export function pick(root, base, entry) {
   const own = join(root, entry.file);
-  return existsSync(own) ? own : join(base, entry.fallback);
+  return existsSync(own) || !entry.fallback ? own : join(base, entry.fallback);
 }

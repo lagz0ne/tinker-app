@@ -10,7 +10,8 @@ for a Tinkered app, as one package
 - An app never edits it. An upgrade replaces it whole.
 
 The smallest app is `apps/start-min` in the Tinkered repo:
-two files in `src/`, and the two glue lines below.
+a server entry, a greet operation, its server function,
+and a page, plus the two glue lines below.
 
 ## The glue
 
@@ -42,6 +43,82 @@ so a fresh clone gets `.tinker/`:
 
 `.tinker/` is the generated folder.
 It is gitignored, and nobody edits it.
+
+## The app server entry
+
+`src/server.ts` owns the server roots.
+It reads env once, starts telemetry first, then the app.
+It closes the app first, then telemetry, and reports errors.
+The base never creates or starts these roots.
+The app calls `createScopeClose` to close in reverse order.
+That helper starts nothing and shares one close promise.
+
+The default export has three fields:
+`requestContext`, `renderObserve`, and `close`.
+Start borrows the context and observer.
+The app keeps the roots and their stop signals.
+An optional `fetch(request, next)` can wrap requests.
+
+The item wiring is one import line from
+`@tinker/start/wiring`, which reads `.tinker/app.server.ts`.
+To use a script-owned wiring file later, replace that line:
+
+```ts
+import { extensions, settings }
+  from "@/scaffold/wiring.server";
+```
+
+No other entry code or Start code changes.
+This file needs no app helper files.
+Missing the file stops prepare, doctor, and build;
+each names the file and prints this starter code:
+
+```ts
+import * as start from "@tinker/start/server";
+import { extensions, settings } from "@tinker/start/wiring";
+
+const values = { ...process.env };
+const toolTags = [start.telemetry.settings(values), start.telemetry.tags];
+const appTags = [start.auth.settings(values), settings(values)];
+const stop = { tools: new AbortController(), app: new AbortController() };
+
+const tools = start.createScope({
+  signal: stop.tools.signal,
+  extensions: start.telemetry.extensions,
+  tags: toolTags,
+});
+
+await tools.ready;
+
+const app = start.createScope({
+  signal: stop.app.signal,
+  observe: tools.resolve(start.telemetry.observe),
+  extensions: [start.startRequests, start.auth.extensions, extensions],
+  tags: [
+    start.backendStop(stop.app.signal), appTags,
+    tools.resolve(start.telemetry.appTags),
+  ],
+});
+
+const close = start.createScopeClose([
+  { scope: tools, stop: stop.tools },
+  { scope: app, stop: stop.app },
+]);
+
+await app.ready.catch(close);
+
+const server = start.createServerEntry({
+  requestContext: app.resolve(start.startRequests),
+  renderObserve: tools.resolve(
+    start.telemetry.renderObserve,
+    { ns: start.telemetry.renderNs },
+  ),
+  close,
+});
+
+if (import.meta.hot) import.meta.hot.dispose(close);
+export default server;
+```
 
 ## Item roles
 
@@ -371,13 +448,18 @@ and so does the head of `.tinker/parts.server.ts`.
   a snapshot keeps the app's own fields
   beside the stream and revision.
 - `@tinker/start/server`: `readResult`, the `Env` types,
-  `createServerEntry`, `authSettings`
+  `createServerEntry`, `createScopeClose`, `createScope`,
+  and `startRequests`,
+  `auth`, `telemetry`, `abortReasons`, `backendStop`,
+  and `authSettings`
   (the auth part's origin and secret),
   and `eventHistory` with the `Database` type
   (the sync part's writes), `event`, `execution`,
   and `stream` (the tables the app queries),
   `requestHeaders` (auth reads the request),
   and `httpRequest` (outgoing HTTP).
+- `@tinker/start/wiring`: generated item `extensions`
+  and `settings`, with the app seam last.
 - `@tinker/start/client`: the tab's sync units:
   `syncClient`, `snapshotLoader`, `loadSnapshot`,
   `checkAccount`, `applyBootstrap`, `applyEvents`,
@@ -629,8 +711,12 @@ The package's `exports` refuses every other path.
     ends its subscribers, and the next subscribe
     starts a new one. A subscribe whose listener is
     replaced while it connects fails as disconnected.
-- With no `src/server.ts`, the server entry
-  goes straight to the base.
+- A missing app server entry stops prepare and doctor.
+  Both name the file and show starter code.
+- The app entry starts its roots before serving requests.
+  Close waits for the app, then telemetry, and reports
+  either root's start or teardown error.
+  HMR reuses the entry until it changes; replacement closes it.
 - In production, the error page shows no error text.
   In dev, Start's JSON 500 for a page load
   becomes a page that reloads after the fix.
