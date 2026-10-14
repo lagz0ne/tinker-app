@@ -53,10 +53,10 @@ test.each(["", "postinstall"])(
 );
 
 /** A real app file with one replaceable wiring import; no framework build is needed. */
-async function loadEntry(wiring) {
+async function loadEntry(wiring, entry = source) {
   const root = fixture({
     "package.json": '{"type":"module"}',
-    "cmds/server.ts": source
+    "cmds/server.ts": entry
       .replace(
         'import * as start from "@tinker/start/server";',
         'import * as start from "@tinker/start/server";\nimport { extensions, settings } from "~/components/proof/index.server";',
@@ -134,13 +134,21 @@ test("the app entry reports a teardown error after closing its roots", async () 
 test("an app startup failure closes the entry's roots and keeps the original error", async () => {
   const { vite, root } = await loadEntry(
     wiring.replace('events.push("app.ready");', "throw failure;") +
-      'export const failure = { kind: "proof.startup" };\n',
+      'export const failure = { kind: "proof.startup" };\nexport const toolsClosed = [];\n',
+    source
+      .replace(
+        'import * as start from "@tinker/start/server";',
+        'import * as start from "@tinker/start/server";\nimport { toolsClosed } from "~/components/proof/index.server";',
+      )
+      .replace("await tools.ready;", "await tools.ready;\ntoolsClosed.push(tools.closed);"),
   );
   const proof = await vite.ssrLoadModule(join(root, "tinker/components/proof/index.server.ts"));
 
   const started = vite.ssrLoadModule(join(root, "cmds/server.ts"));
 
   await expect(started).rejects.toBe(proof.failure);
+  expect(proof.toolsClosed).toHaveLength(1);
+  await expect(proof.toolsClosed[0]).resolves.toMatchObject({ status: "success" });
 });
 
 test("close ends every root in reverse order before reporting a teardown error", async () => {

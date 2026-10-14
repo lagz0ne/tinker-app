@@ -6,6 +6,8 @@ import { join } from "node:path";
 export async function copyProofApp(source, target) {
   for (const name of [
     "src",
+    "cmds",
+    "tinker",
     "tests",
     "drizzle",
     "package.json",

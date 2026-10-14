@@ -6,8 +6,10 @@ import { fileURLToPath } from "node:url";
 
 import { createServer } from "vite-plus";
 
-import { serverFile } from "../lib/named.mjs";
+import { appFiles, serverFile } from "../lib/named.mjs";
+import { recordedParts } from "../lib/parts.mjs";
 
+// Auth and backend settings come from the caller's test env, as in the real app entry.
 const app = resolve(process.argv[2]);
 const fixture = mkdtempSync(join(tmpdir(), "start-entry-hmr-"));
 let vite;
@@ -21,19 +23,31 @@ try {
   });
   symlinkSync(join(app, "node_modules"), join(fixture, "node_modules"), "dir");
   const entry = join(fixture, serverFile(fixture).file);
-  const source = `export const renderSpans = [];\n${readFileSync(entry, "utf8").replace(
-    "renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs })",
-    "renderObserve: { export: (span) => renderSpans.push(span) }",
-  )}`;
+  const source = `export const renderSpans = [];\n${readFileSync(entry, "utf8")
+    .replace(
+      "renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs })",
+      "renderObserve: { export: (span) => renderSpans.push(span) }",
+    )
+    .replace(
+      "await tools.ready;",
+      "await tools.ready;\nexport const toolsClosed = tools.closed;",
+    )}`;
+  const routerFile = join(
+    fixture,
+    appFiles(fixture).find((file) => file.alias === "#tinker/router").file,
+  );
+  const routerSource = readFileSync(routerFile, "utf8");
+  assert.ok(routerSource.includes("export const extensions = [];"));
   writeFileSync(
-    join(fixture, "cmds/router.ts"),
-    `import { extension, operation } from "@tinker/core";
+    routerFile,
+    `import { extension, operation } from "@tinker/core";\n${routerSource.replace(
+      "export const extensions = [];",
+      `
 const probe = operation({ label: "render-probe", run: () => 1 });
-export const router = () => ({});
 export const extensions = [extension({
   hooks: { async start({ next, scope }) { await next(); scope.run(probe); } },
-})];
-`,
+})];`,
+    )}`,
   );
   const version = (value) =>
     source.replace(
@@ -54,20 +68,23 @@ export const extensions = [extension({
   const first = firstModule.default;
   entries.push(first);
   assert.equal((await vite.environments.ssr.runner.import(entry)).default, first);
-  const routerEntry = await vite.environments.ssr.runner.import(
-    fileURLToPath(new URL("../src/entry/router.tsx", import.meta.url)),
-  );
+  const routerPath = fileURLToPath(new URL("../src/entry/router.tsx", import.meta.url));
+  const routerEntry = await vite.environments.ssr.runner.import(routerPath);
   routers.push(await routerEntry.getRouter());
   assert.ok(firstModule.renderSpans.length > 0, "the first render must use the first observer");
 
   writeFileSync(entry, version("second"));
-  const closed = await Promise.race([
-    first.requestContext.scope.closed,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("HMR did not close the old app root")), 20000),
-    ),
+  let timeout;
+  const closing = Promise.race([
+    Promise.all([first.requestContext.scope.closed, firstModule.toolsClosed]),
+    new Promise((_, reject) => {
+      timeout = setTimeout(() => reject(new Error("HMR did not close both old roots")), 20000);
+    }),
   ]);
+  const [closed, toolsClosed] = await closing.finally(() => clearTimeout(timeout));
   assert.equal(closed.status, "success");
+  assert.equal(toolsClosed.status, "success");
+
   let response;
   for (let attempt = 0; attempt < 100; attempt++) {
     response = await (await fetch(address)).text();
@@ -79,11 +96,19 @@ export const extensions = [extension({
   const second = secondModule.default;
   entries.push(second);
   assert.notEqual(second.requestContext.scope, first.requestContext.scope);
-  routers.push(await routerEntry.getRouter());
+  const nextRouterEntry = await vite.environments.ssr.runner.import(routerPath);
+  routers.push(await nextRouterEntry.getRouter());
   assert.ok(secondModule.renderSpans.length > 0, "HMR renders must use the new observer");
+  assert.equal((await fetch(new URL("/api/health", address))).status, 200);
+  if (recordedParts(fixture).includes("auth")) {
+    const auth = await fetch(new URL("/api/auth/get-session", address));
+    assert.equal(auth.status, 200);
+    assert.equal(await auth.json(), null);
+  }
   await second.close();
+  assert.equal((await secondModule.toolsClosed).status, "success");
   console.log(
-    "HMR: unchanged entry reused; old root closed; new requests and renders use the new entry; EXIT 0",
+    "HMR: unchanged entry reused; both old roots closed; new requests and renders use the new entry; EXIT 0",
   );
 } finally {
   for (const router of routers) await router.close();

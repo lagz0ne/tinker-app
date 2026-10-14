@@ -16,6 +16,20 @@
 set -uo pipefail
 repo=$(pwd)
 out=$repo/docs/roadmap/start-base/proof
+mkdir -p "$out"
+entry_log=$out/app-owns-scope-entry-proofs.txt
+if ! {
+  node packages/start/scripts/check-entry-hmr.mjs apps/start-min &&
+    node packages/start/scripts/check-command-build.mjs apps/start-min &&
+    node packages/start/scripts/check-built-entry.mjs apps/start-min &&
+    node apps/start-scaffold/maintain/check-entry.mjs
+} > "$entry_log" 2>&1; then
+  cat "$entry_log"
+  exit 1
+fi
+echo "app entry proofs: EXIT 0 ($entry_log)"
+if [[ "${1:-}" == --entry-only ]]; then exit 0; fi
+
 app_entry=$(node --input-type=module -e 'import {serverFile} from "./packages/start/lib/named.mjs"; process.stdout.write(serverFile(process.cwd() + "/apps/start-min").file)')
 scratch=/tmp/tinker-proof
 clean() { sed -e "s|$scratch/app/||g" -e "s|$scratch|\$S|g" -e "s|$repo/||g" -e "s|$HOME|~|g"; }

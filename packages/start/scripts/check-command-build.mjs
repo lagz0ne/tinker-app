@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -36,7 +37,7 @@ for (const app of process.argv.slice(2)) {
       recursive: true,
       filter: (file) => !["node_modules", "dist", ".tinker", ".tanstack"].includes(basename(file)),
     });
-    symlinkSync(join(source, "node_modules"), join(fixture, "node_modules"), "dir");
+    symlinkSync(realpathSync(join(source, "node_modules")), join(fixture, "node_modules"), "dir");
     mkdirSync(join(fixture, "tinker/components/build-proof"), { recursive: true });
     writeFileSync(
       join(fixture, "tinker/components/build-proof/component.json"),
