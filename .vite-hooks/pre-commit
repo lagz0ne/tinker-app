@@ -1,0 +1,13 @@
+# No backup stash: every worktree shares one stash list (refs/stash).
+# Without that backup, a failed task would leave a partly staged file's
+# unstaged lines only in .git/lint-staged_unstaged.patch. So refuse one.
+partly=$(git status --porcelain --untracked-files=no | grep -E '^[MARCT][MDT] ' || true)
+if [ -n "$partly" ]; then
+  echo "pre-commit: partly staged files (staged and unstaged changes):"
+  echo "$partly"
+  echo "Stage the whole file (git add <file>) or commit it by path (git commit -- <file>)."
+  exit 1
+fi
+vp staged --no-stash
+c=apps/start-scaffold/maintain/check-registry-staged.mjs
+[ ! -f "$c" ] || node "$c"

@@ -1,0 +1,38 @@
+packages:
+  - apps/*
+  - packages/*
+
+catalogMode: prefer
+
+# Only the entries Start, the scaffold, and start-min use. Keep "catalog:" first and
+# "overrides:" right after it: apps/start-scaffold/maintain/registry-source.mjs reads this block.
+catalog:
+  "@electric-sql/pglite": ^0.5.8
+  "@stryker-mutator/core": ^10.0.0
+  "@stryker-mutator/vitest-runner": ^10.0.0
+  "@types/node": ^24
+  drizzle-kit: 1.0.0-rc.4
+  drizzle-orm: 1.0.0-rc.4
+  oxc-parser: ^0.117.0
+  react: ^19.3.0
+  react-dom: ^19.3.0
+  typescript: ^7.0.2
+  vite: npm:@voidzero-dev/vite-plus-core@1.0.0
+  vite-plus: 1.0.0
+  vitest: 5.0.1
+  zod: ^4.0.0
+overrides:
+  vite@*: "catalog:"
+  vitest@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"
+allowBuilds:
+  esbuild: true
+# @tinker/react's release tarball names @tinker/core by its release URL, the same URL
+# the packages here name. pnpm 12 blocks URL specs inside dependencies unless this is off.
+blockExoticSubdeps: false
