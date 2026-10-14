@@ -259,3 +259,16 @@ for (const file of ["cmds/server.ts", "cmds/cli.ts", "cmds/worker.ts"]) {
     ]);
   });
 }
+
+test("new import directions warn in doctor without changing its exit code", () => {
+  const root = preparedApp({
+    "src/old.ts": 'import "@tinker/start";\n',
+  });
+
+  const checked = doctor(root, false);
+
+  expect(checked.code).toBe(0);
+  expect(checked.lines.join(" ").replaceAll(/\s+/g, " ")).toContain(
+    'warning: src/old.ts:1 "@tinker/start" imports the runtime package; use copied base or component entries',
+  );
+});

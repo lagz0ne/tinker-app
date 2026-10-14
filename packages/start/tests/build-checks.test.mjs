@@ -4,8 +4,11 @@ import { buildChecks } from "../lib/doctor.mjs";
 import { basePackage } from "../lib/paths.mjs";
 import { goodApp } from "./fixture.mjs";
 
-test("a good app builds with no error and no warning", () => {
-  expect(buildChecks(goodApp())).toEqual({ errors: [], warnings: [] });
+const runtimeWarning =
+  'tinker doctor, import directions: cmds/server.ts:2 "@tinker/start/server" imports the runtime package; use copied base or component entries';
+
+test("the old runtime import warns while the app still builds", () => {
+  expect(buildChecks(goodApp())).toEqual({ errors: [], warnings: [runtimeWarning] });
 });
 
 test("each silent mistake stops the build with doctor's file:line message", () => {
@@ -39,7 +42,7 @@ test("a second tinker() or tanstackStart() stops the build: Start would fail lat
       "tinker doctor, glue: vite.config.ts:2 calls tinker() 2 times; call it once: plugins: [tinker()]",
       "tinker doctor, glue: vite.config.ts:2 adds tanstackStart(); tinker() adds it already",
     ],
-    warnings: [],
+    warnings: [runtimeWarning],
   });
 });
 
@@ -55,7 +58,7 @@ test("tinker() imported under another name, and called once, builds", () => {
     "vite.config.ts":
       'import { tinker as base } from "@tinker/start/vite";\nexport default { plugins: [base({serverEntry:"cmds/server.ts"})] };\n',
   });
-  expect(buildChecks(root)).toEqual({ errors: [], warnings: [] });
+  expect(buildChecks(root)).toEqual({ errors: [], warnings: [runtimeWarning] });
 });
 
 test("a valid export * in a seam file and a route file builds", () => {
@@ -79,6 +82,7 @@ test("a glue or version problem only warns: the build itself still works", () =>
   expect(warnings).toEqual([
     `tinker doctor, base version: package.json:1 @tanstack/react-start is 0.0.1, tested with ${basePackage.tinker.tested["@tanstack/react-start"]}`,
     'tinker doctor, glue: tsconfig.json:1 does not extend "./.tinker/tsconfig.json"',
+    runtimeWarning,
   ]);
 });
 

@@ -157,6 +157,56 @@ function sourcePath(name, file, root) {
   return name.startsWith(".") ? posix.join(posix.dirname(file), name) : null;
 }
 
+/** Rules for the copied layers warn while the runtime moves out of the package. */
+export function directionImport(root, file, name, line) {
+  if (isTest(file)) return [];
+  const at = `${file}:${line} "${name}"`;
+  if (/^(src|cmds|tinker\/components)\//.test(file) && name.startsWith("@tinker/start")) {
+    return [`${at} imports the runtime package; use copied base or component entries`];
+  }
+
+  const target = sourcePath(name, file, root);
+  if (file.startsWith("tinker/base/")) return baseDirection(at, name, target);
+  if (!target) return [];
+  if (/^cmds\/[^/]+\.[cm]?[jt]sx?$/.test(file)) {
+    return /^(tinker\/(base|components)\/|src\/)/.test(target)
+      ? []
+      : [`${at} imports outside the command layers; use ~/base, ~/components, @/, or @tinker/core`];
+  }
+
+  return sourceDirection(at, file, target);
+}
+
+/** Source and components may reach only components in the copied tinker folder. */
+function sourceDirection(at, file, target) {
+  const owner = sourceOwner(file);
+  if (!owner || !target.startsWith("tinker/") || target.startsWith("tinker/components/")) return [];
+  return [`${at} imports outside components; ${owner} may import only components from tinker`];
+}
+
+/** Base uses its own files and required components; commands pass optional parts in. */
+function baseDirection(at, name, target) {
+  if (target && /^(src|cmds)\//.test(target)) {
+    return [`${at} imports app code; pass the app value into the base entry`];
+  }
+  if (name.startsWith("#tinker/") && name !== "#tinker/routes") {
+    return [`${at} reads app wiring; pass the app value into the base entry`];
+  }
+  if (target && /^tinker\/components\/(sync|telemetry)(?:\/|$)/.test(target)) {
+    return [`${at} imports an optional component; the command must pass it into base`];
+  }
+  return [];
+}
+
+/** Read source only; warnings never load app modules or change existing failures. */
+export function importDirections(root) {
+  return appSources(root).flatMap((file) =>
+    specifiers(parseSource(join(root, file))).flatMap(({ name, line }) =>
+      directionImport(root, file, name, line),
+    ),
+  );
+}
+
 /** Only src and components have one-way access to commands and copied base code. */
 function sourceOwner(file) {
   if (file.startsWith("src/")) return "src";

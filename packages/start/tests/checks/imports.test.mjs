@@ -2,7 +2,7 @@ import { join, relative } from "node:path";
 
 import { expect, test } from "vite-plus/test";
 
-import { imports } from "../../lib/checks/imports.mjs";
+import { importDirections, imports } from "../../lib/checks/imports.mjs";
 import { baseDir } from "../../lib/paths.mjs";
 import { goodApp, write } from "../fixture.mjs";
 
@@ -84,4 +84,42 @@ test("names TypeScript import endings in app source, tests, and config files", (
         `${at} "${name}" ends in a TypeScript file extension; remove .ts, .tsx, or .mts from the import`,
     ),
   });
+});
+
+test("copied layer warnings name dynamic, type, and export paths without replacing failures", () => {
+  const root = goodApp({
+    "cmds/server.ts": "export default 1;\n",
+    "cmds/job.ts": 'import "~/helpers";\n',
+    "src/old.ts": 'type T = import("@tinker/start").Errors;\n',
+    "tinker/base/entry.ts": 'import("@/feature");\nexport * from "~/components/sync";\n',
+    "tinker/components/inbox/component.json": '{"requires":[]}',
+    "tinker/components/inbox/index.ts": 'export * from "@tinker/start/client";\n',
+    "src/bad.ts": 'import "~/base/entry";\n',
+  });
+
+  expect(importDirections(root)).toEqual([
+    'cmds/job.ts:1 "~/helpers" imports outside the command layers; use ~/base, ~/components, @/, or @tinker/core',
+    'src/bad.ts:1 "~/base/entry" imports outside components; src may import only components from tinker',
+    'src/old.ts:1 "@tinker/start" imports the runtime package; use copied base or component entries',
+    'tinker/base/entry.ts:1 "@/feature" imports app code; pass the app value into the base entry',
+    'tinker/base/entry.ts:2 "~/components/sync" imports an optional component; the command must pass it into base',
+    'tinker/components/inbox/index.ts:1 "@tinker/start/client" imports the runtime package; use copied base or component entries',
+  ]);
+  expect(imports(root).status).toBe("fail");
+  expect(imports(root).lines).toContain(
+    'src/bad.ts:1 "~/base/entry" imports copied base code; src must not import tinker/base',
+  );
+});
+
+test("copied entries, component dependencies, local source, and npm imports have no direction warning", () => {
+  const root = goodApp({
+    "cmds/server.ts":
+      'import "~/base/entry"; import "~/components/mail"; import "@/feature"; import "@tinker/core"; export default 1;\n',
+    "src/feature.ts": 'import "~/components/mail"; import "./other"; import "react";\n',
+    "tinker/base/entry.ts":
+      'import "./close"; import "~/components/errors"; import "#tinker/routes";\n',
+    "tests/private.test.ts": 'import "@tinker/start/testing";\n',
+  });
+
+  expect(importDirections(root)).toEqual([]);
 });
