@@ -35,19 +35,22 @@ test("doctor names a missing app server entry and shows its starter code", () =>
   );
 });
 
-test("prepare refuses a missing app server entry with the same starter code", () => {
-  const root = goodApp();
-  rmSync(join(root, "cmds/server.ts"), { force: true });
+test.each(["", "postinstall"])(
+  "prepare refuses a missing app server entry with the same starter code (%s)",
+  (lifecycle) => {
+    const root = goodApp();
+    rmSync(join(root, "cmds/server.ts"), { force: true });
 
-  const ran = spawnSync(process.execPath, [join(baseDir, "bin/tinker.mjs"), "prepare"], {
-    cwd: root,
-    encoding: "utf8",
-    env: { ...process.env, npm_lifecycle_event: "" },
-  });
+    const ran = spawnSync(process.execPath, [join(baseDir, "bin/tinker.mjs"), "prepare"], {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, npm_lifecycle_event: lifecycle },
+    });
 
-  expect(ran.status).toBe(1);
-  expect(ran.stdout).toBe(missing + "\n");
-});
+    expect(ran.status).toBe(1);
+    expect(ran.stdout).toBe(missing + "\n");
+  },
+);
 
 /** A real app file with one replaceable wiring import; no framework build is needed. */
 async function loadEntry(wiring) {
@@ -66,14 +69,19 @@ async function loadEntry(wiring) {
     "tinker/components/proof/component.json": '{"requires":[]}',
     "tinker/components/proof/index.server.ts": wiring,
   });
-  symlinkSync(join(baseDir, "../../apps/start-min/node_modules"), join(root, "node_modules"));
+  symlinkSync(join(baseDir, "node_modules"), join(root, "node_modules"));
   prepare(root, []);
 
   const vite = await createServer({
     root,
     configFile: false,
     ssr: { noExternal: ["@tinker/start"] },
-    resolve: { alias: aliases(root) },
+    resolve: {
+      alias: [
+        { find: "@tinker/start/server", replacement: join(baseDir, "src/server.ts") },
+        ...aliases(root),
+      ],
+    },
     server: { middlewareMode: true, watch: null },
   });
   onTestFinished(() => vite.close());

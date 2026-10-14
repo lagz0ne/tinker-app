@@ -78,7 +78,7 @@ async function hashes(consumer) {
   return result;
 }
 
-async function wire(consumer, item) {
+async function wire(consumer) {
   const config = join(consumer, "vite.config.ts");
   await writeFile(
     config,

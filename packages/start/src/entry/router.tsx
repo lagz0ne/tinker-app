@@ -14,12 +14,12 @@ import { pageEvents, tabStop } from "../parts/sync/client/tab";
 import { TinkerError, TinkerNotFound } from "./fallbacks";
 
 /** Server renders borrow the process observer; each tab owns its telemetry root. */
-let serverTelemetry: { observe: Observe.Config; close: undefined } | undefined;
+let serverTelemetry: { observe: () => Observe.Config; close: undefined } | undefined;
 let serverTelemetryPending: Promise<NonNullable<typeof serverTelemetry>> | undefined;
 
 async function loadServerTelemetry() {
   const { getRenderObserver } = await import("./server");
-  return (serverTelemetry = { observe: getRenderObserver(), close: undefined });
+  return (serverTelemetry = { observe: getRenderObserver, close: undefined });
 }
 
 const readTelemetry = createIsomorphicFn()
@@ -33,7 +33,9 @@ const readTelemetry = createIsomorphicFn()
     });
     await tools.ready;
     return {
-      observe: tools.resolve(telemetry.observe),
+      observe() {
+        return tools.resolve(telemetry.observe);
+      },
       close() {
         toolStop.abort(abortReasons.closed);
         return tools.closed;
@@ -50,7 +52,7 @@ const readPage = createIsomorphicFn()
 export type RouteTree = typeof routeTree;
 
 /**
- * What src/router.ts, a named file (ADR 0106), exports as `router`: the router options the base
+ * What cmds/router.ts, a named file (ADR 0118), exports as `router`: the router options the base
  * does not own. It gets the route tree, for route masks.
  */
 export type RouterOptions = (
@@ -75,7 +77,7 @@ export async function getRouter() {
   const app = createScope({
     signal: stop.signal,
     extensions: [sync.extensions, extensions],
-    observe: tools.observe,
+    observe: tools.observe(),
     tags: [tabStop(stop.signal), pageEvents(readPage())],
   });
 

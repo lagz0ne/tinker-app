@@ -60,6 +60,7 @@ The app's tsconfig includes `cmds`.
 There is no default server entry.
 Prepare and doctor name a missing entry and show starter code.
 They never write an entry for the app.
+A missing server entry fails prepare, including postinstall.
 
 The entry reads env once, starts telemetry, then the app.
 It lists extensions and settings by hand, in the user's order.
@@ -846,3 +847,5 @@ Waiting again replaces the stream's old wait; it adds no second wait.
 Streams that share one read each get their own byte copy.
 The router part binds stdout as the sink on a server render.
 The observer takes Core's level and span history from its tags.
+The sync on part streams through the tab's owner.
+The off part adds nothing and binds nothing.

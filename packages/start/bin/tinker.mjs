@@ -69,7 +69,7 @@ const commands = {
     const missing = serverProblems(root);
     if (missing.length > 0) {
       console.log(missing.join("\n"));
-      return prepareExitCode(missing, process.env.npm_lifecycle_event);
+      return 1;
     }
 
     const files = prepare(root);

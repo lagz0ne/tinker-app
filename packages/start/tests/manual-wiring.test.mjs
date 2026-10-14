@@ -12,7 +12,7 @@ import { fixture } from "./fixture.mjs";
 
 const entry = readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8");
 
-test("prepare writes glue only and leaves item graph checks to doctor", () => {
+test("prepare writes glue only and leaves component graph checks to doctor", () => {
   const root = fixture({
     "package.json": "{}",
     "cmds/server.ts": entry,
@@ -34,7 +34,7 @@ test("prepare writes glue only and leaves item graph checks to doctor", () => {
   ]);
 });
 
-test("an item role file cannot supply a missing export in the user's entry", () => {
+test("a component role file cannot supply a missing export in the user's entry", () => {
   const root = fixture({
     "package.json": "{}",
     "cmds/server.ts": entry,
@@ -52,7 +52,7 @@ test("an item role file cannot supply a missing export in the user's entry", () 
   ]);
 });
 
-test("an item settings file is not bound unless the user calls its public API", async () => {
+test("a component settings file is not bound unless the user calls its public API", async () => {
   const root = fixture({
     "package.json": '{"type":"module"}',
     "cmds/server.ts": entry,
@@ -63,13 +63,18 @@ export const greet = operation({ depends: { recipient }, run: ({recipient}) => r
     "tinker/components/mail/settings.server.ts": `import { recipient } from "./index.server";
 export default () => [recipient("Ada")];`,
   });
-  symlinkSync(join(baseDir, "../../apps/start-min/node_modules"), join(root, "node_modules"));
+  symlinkSync(join(baseDir, "node_modules"), join(root, "node_modules"));
   prepare(root, []);
   const vite = await createServer({
     root,
     configFile: false,
     ssr: { noExternal: ["@tinker/start"] },
-    resolve: { alias: aliases(root) },
+    resolve: {
+      alias: [
+        { find: "@tinker/start/server", replacement: join(baseDir, "src/server.ts") },
+        ...aliases(root),
+      ],
+    },
     server: { middlewareMode: true, watch: null },
   });
   const { default: server } = await vite.ssrLoadModule(join(root, "cmds/server.ts"));
