@@ -1,7 +1,7 @@
 import { createScope } from "@tinker/core";
 import * as start from "@tinker/start/server";
 
-import { backendStop, createScopeClose, createServerEntry } from "~/base/server";
+import { createScopeClose, createServerEntry } from "~/base/server";
 
 const values = { ...process.env };
 const appTags = [start.auth.settings(values)];
@@ -19,7 +19,7 @@ const app = createScope({
   signal: stop.app.signal,
   observe: tools.resolve(start.telemetry.observe),
   extensions: [start.startRequests, start.auth.extensions],
-  tags: [backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],
+  tags: [start.backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],
 });
 
 const close = createScopeClose({ tools, app }, stop);

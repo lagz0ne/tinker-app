@@ -159,15 +159,14 @@ export default defineConfig({
 [cmds/server.ts](cmds/server.ts) starts and closes the roots.
 It imports the demo's public server API.
 It fills settings and lists extensions by hand.
-The file is 38 lines.
+The file is 39 lines.
 It calls the copied helpers in `tinker/base/server.ts`.
 [cmds/router.ts](cmds/router.ts) wires the browser readers.
 The component index adds its `Register` types.
 
 `@/*` names src; `~/*` names tinker.
-Both aliases are visible in the app's Vite and tsconfig files.
-Tsconfig keeps the private glue paths because its paths replace
-rather than merge the generated paths.
+Generated glue supplies both aliases and the private paths.
+The app extends that tsconfig; it does not copy paths or aliases.
 
 Doctor checks the import direction:
 cmds may import src and component public indexes.

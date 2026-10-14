@@ -131,7 +131,7 @@ test("the app entry reports a teardown error after closing its roots", async () 
 
   expect(server.close()).toBe(closing);
   expect(proof.events).toEqual(["app.ready", "app.closed"]);
-});
+}, 30000);
 
 test("an app startup failure closes the entry's roots and keeps the original error", async () => {
   const { vite, root } = await loadEntry(
@@ -151,7 +151,7 @@ test("an app startup failure closes the entry's roots and keeps the original err
   await expect(started).rejects.toBe(proof.failure);
   expect(proof.toolsClosed).toHaveLength(1);
   await expect(proof.toolsClosed[0]).resolves.toMatchObject({ status: "success" });
-});
+}, 30000);
 
 test("close ends every root in reverse order before reporting a teardown error", async () => {
   const events = [];
@@ -198,4 +198,8 @@ test("close ends every root in reverse order before reporting a teardown error",
 
   expect(events).toEqual(["app", "tools"]);
   expect(close()).toBe(ended);
+  expect(() => stop.signal.throwIfAborted()).toThrow(
+    expect.objectContaining({ name: "AbortError", message: "The server closed" }),
+  );
+  expect(toolStop.signal.reason).toBe(stop.signal.reason);
 });

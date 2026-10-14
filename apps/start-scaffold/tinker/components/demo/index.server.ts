@@ -17,10 +17,6 @@ export {
   migrate,
 } from "~/components/demo/backend/database.server";
 
-export type { Mail } from "~/components/mail/index.server";
-
-export { authMail, mail, mailFrom, sendMail, smtpUrl } from "~/components/mail/index.server";
-
 export {
   readProfile,
   saveProfile,

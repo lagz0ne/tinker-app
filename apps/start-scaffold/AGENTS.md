@@ -100,6 +100,9 @@ Import createScope from @tinker/core.
 The copied tinker/base/server.ts holds the entry and close helpers.
 Its close helper alone may borrow named roots and their stop controllers.
 Helpers keep only repeated code; the main keeps startup steps.
+Commands sit directly under cmds; nested command files fail the checks.
+Src and components never import tinker/base or cmds.
+Start owns backendStop; copied base code owns only the two helpers.
 Commands import only ~/, @/, @tinker/core, and their framework entry.
 @tinker/start is allowed until Start is decomposed into base registry components (next card).
 Fill the serverParts tag with the component exports; never re-export them from the main.

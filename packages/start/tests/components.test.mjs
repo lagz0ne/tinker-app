@@ -9,14 +9,17 @@ import { goodApp, write } from "./fixture.mjs";
 test("components keep src and commands out, through aliases and relative paths", () => {
   const root = goodApp({
     "tinker/components/mail/component.json": '{"requires":[]}',
-    "tinker/components/mail/index.ts": 'import "@/user";\nexport * from "../../../cmds/server";',
-    "src/user.ts": 'import "../cmds/server";',
+    "tinker/components/mail/index.ts":
+      'import "@/user";\nexport * from "../../../cmds/server";\nimport "../../base/server";',
+    "src/user.ts": 'import "../cmds/server";\nimport "~/base/server";',
   });
 
   expect(imports(root).lines).toEqual([
     'src/user.ts:1 "../cmds/server" imports a command; src must not import cmds',
+    'src/user.ts:2 "~/base/server" imports copied base code; src must not import tinker/base',
     'tinker/components/mail/index.ts:1 "@/user" imports user code; components must not import src',
     'tinker/components/mail/index.ts:2 "../../../cmds/server" imports a command; components must not import cmds',
+    'tinker/components/mail/index.ts:3 "../../base/server" imports copied base code; components must not import tinker/base',
   ]);
 });
 
@@ -104,4 +107,76 @@ test("every command has the same base import and component public entry checks",
     `cmds/cli.ts:1 ${commandImport("#tinker/server")}`,
     'cmds/worker.ts:1 "~/components/mail/private" is private to component mail; use "~/components/mail"',
   ]);
+});
+
+test.each([
+  ["{", "invalid JSON"],
+  ["null", "expected an object with only requires"],
+  ["[]", "expected an object with only requires"],
+  ['{"requires":null}', "requires must be an array of component names"],
+  ['{"requires":"mail"}', "requires must be an array of component names"],
+  ['{"requires":["Bad"]}', "requires must be an array of component names"],
+  ['{"requires":[1]}', "requires must be an array of component names"],
+  ['{"requires":["mail"]}', "cannot require itself (tinker/components/mail)"],
+  [
+    '{"requires":["missing"]}',
+    "requires missing component tinker/components/missing; shadcn add it",
+  ],
+])("doctor rejects manifest %s", (manifest, message) => {
+  const root = goodApp({
+    "tinker/components/mail/component.json": manifest,
+    "tinker/components/mail/index.ts": "export const value = 1;",
+  });
+
+  const checked = named(root);
+
+  expect(checked.status).toBe("fail");
+  expect(checked.lines).toEqual([`tinker/components/mail/component.json: ${message}`]);
+});
+
+test("doctor names every manifest in a requires cycle", () => {
+  const root = goodApp({
+    "tinker/components/mail/component.json": '{"requires":["store"]}',
+    "tinker/components/store/component.json": '{"requires":["mail"]}',
+  });
+
+  const checked = named(root);
+
+  expect(checked.status).toBe("fail");
+  expect(checked.lines).toEqual([
+    "component requires cycle: tinker/components/mail/component.json -> tinker/components/store/component.json -> tinker/components/mail/component.json",
+  ]);
+});
+
+test.each(["Mail", "mail_box", "2fa", "01-mail"])("doctor rejects component folder %s", (name) => {
+  const root = goodApp({ [`tinker/components/${name}/component.json`]: '{"requires":[]}' });
+
+  const checked = named(root);
+
+  expect(checked.status).toBe("fail");
+  expect(checked.lines).toEqual([
+    name === "01-mail"
+      ? "tinker/components/01-mail: rename to tinker/components/mail and declare requires in component.json"
+      : `tinker/components/${name}: component names must match [a-z][a-z0-9-]*`,
+  ]);
+});
+
+test("doctor refuses nested commands", () => {
+  const root = goodApp({ "cmds/lib/helper.ts": 'import "node:fs"; import "zod";' });
+
+  const checked = imports(root);
+
+  expect(checked.status).toBe("fail");
+  expect(checked.lines).toEqual([
+    "cmds/lib/helper.ts: commands must be files directly under cmds; move it to cmds/helper.ts",
+  ]);
+});
+
+test("an unused framework package is not a command import", () => {
+  const root = goodApp({ "cmds/probe.ts": 'import "@tanstack/react-router";' });
+
+  const checked = imports(root);
+
+  expect(checked.status).toBe("fail");
+  expect(checked.lines).toEqual([`cmds/probe.ts:1 ${commandImport("@tanstack/react-router")}`]);
 });

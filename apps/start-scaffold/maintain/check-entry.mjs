@@ -33,6 +33,7 @@ try {
 
   run("vp", ["build"]);
   run(process.execPath, [join(base, "scripts/check-built-entry.mjs"), fixture]);
+  run(process.execPath, [join(base, "scripts/check-entry-errors.mjs"), fixture]);
   console.log(
     "Scaffold entry: auth and sync on; HMR, tree shaking, build, start and close; EXIT 0",
   );

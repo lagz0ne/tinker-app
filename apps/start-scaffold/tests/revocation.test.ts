@@ -1,9 +1,9 @@
 import { createScope } from "@tinker/core";
 import { authSettings, requestStop, serverParts, startRequests } from "@tinker/start/server";
+import { backendStop } from "@tinker/start/server";
 import { openSync } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
-import { backendStop } from "~/base/server";
 import { auth } from "~/components/demo/backend/auth.server";
 import { migrate, databaseUrl } from "~/components/demo/backend/database.server";
 import { saveProfile } from "~/components/demo/backend/profile.server";

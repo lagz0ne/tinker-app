@@ -1,16 +1,19 @@
 import { expect, test } from "vite-plus/test";
 
-import { settings } from "~/components/demo/backend/settings.server";
+import { settings as databaseSettings } from "~/components/demo/index.server";
+import { settings as mailSettings } from "~/components/mail/index.server";
 
 test("env becomes the typed tags mail and the database need, with no unit running", () => {
-  const bindings = settings({
+  const keys = {
     DATABASE_URL: "postgres://app:secret@db.test:5432/app",
     SMTP_HOST: "mail.test",
     SMTP_PORT: "2525",
     SMTP_USER: "ada",
     SMTP_PASSWORD: "p@ss word",
     SMTP_FROM: "ada@example.com",
-  });
+  };
+
+  const bindings = [...databaseSettings(keys), ...mailSettings(keys)];
 
   expect(bindings.map(({ tag, value }) => [tag.label, String(value)])).toEqual([
     ["database.url", "postgres://app:secret@db.test:5432/app"],
@@ -20,10 +23,10 @@ test("env becomes the typed tags mail and the database need, with no unit runnin
 });
 
 test("a bad or missing key stops start with BadSettings naming each key", () => {
-  expect(() => settings({ DATABASE_URL: "not a url", SMTP_PORT: "many" })).toThrow(
+  expect(() => databaseSettings({ DATABASE_URL: "not a url" })).toThrow(
     expect.objectContaining({
       kind: "BadSettings",
-      payload: { part: "app", keys: ["DATABASE_URL", "SMTP_HOST", "SMTP_PORT", "SMTP_FROM"] },
+      payload: { part: "app", keys: ["DATABASE_URL"] },
     }),
   );
 });
@@ -36,11 +39,20 @@ test("an IPv6 SMTP host gets brackets, and a port or host a URL refuses names it
     SMTP_FROM: "ada@example.com",
   };
 
-  expect(String(settings(keys)[1]?.value)).toBe("smtp://[::1]:11025");
-  expect(() => settings({ ...keys, SMTP_PORT: "65536" })).toThrow(
-    expect.objectContaining({ payload: { part: "app", keys: ["SMTP_PORT"] } }),
+  expect(String(mailSettings(keys)[0]?.value)).toBe("smtp://[::1]:11025");
+  expect(() => mailSettings({ ...keys, SMTP_PORT: "65536" })).toThrow(
+    expect.objectContaining({ payload: { part: "mail", keys: ["SMTP_PORT"] } }),
   );
-  expect(() => settings({ ...keys, SMTP_HOST: "mail test" })).toThrow(
-    expect.objectContaining({ payload: { part: "app", keys: ["SMTP_HOST"] } }),
+  expect(() => mailSettings({ ...keys, SMTP_HOST: "mail test" })).toThrow(
+    expect.objectContaining({ payload: { part: "mail", keys: ["SMTP_HOST"] } }),
+  );
+});
+
+test("bad or missing SMTP keys are reported by mail settings", () => {
+  expect(() => mailSettings({ SMTP_PORT: "many" })).toThrow(
+    expect.objectContaining({
+      kind: "BadSettings",
+      payload: { part: "mail", keys: ["SMTP_HOST", "SMTP_PORT", "SMTP_FROM"] },
+    }),
   );
 });

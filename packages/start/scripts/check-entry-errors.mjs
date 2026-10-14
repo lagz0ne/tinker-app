@@ -53,7 +53,7 @@ for (const app of process.argv.slice(2)) {
         "const values =",
         'const mode = process.env.PANIC_MODE;\nconst probe = extension({ label: "proof.panic", hooks: { start(event) { if (mode === "startup") throw new Error("proof.startup"); return event.next(); } } });\nconst values =',
       )
-      .replace("start.auth.extensions]", "start.auth.extensions, probe]")
+      .replace("start.auth.extensions", "start.auth.extensions, probe")
       .replace(
         "await tools.ready;",
         'await tools.ready;\ntools.onClose(() => { console.log("tools.closed"); });',
@@ -79,7 +79,7 @@ export const Route = createFileRoute("/proof/handler")({server: {middleware: [st
       `
 import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/proof/rejection")({server: {handlers: {
-  GET: () => { Promise.reject(new Error("proof.unhandled")); return new Response("sent"); },
+  GET: () => { Promise.reject(new Error("proof.unhandled", { cause: new Error("proof.cause") })); return new Response("sent"); },
 }}});
 `,
     );
@@ -113,6 +113,14 @@ export const Route = createFileRoute("/proof/rejection")({server: {handlers: {
           ran.stderr.split("\n").includes("server: unhandled rejection Error: proof.unhandled"),
           log,
         );
+        assert.ok(
+          ran.stderr
+            .split("\n")
+            .map((line) => line.trim())
+            .includes("[cause]: Error: proof.cause"),
+          log,
+        );
+        assert.match(ran.stderr, /\n\s+at GET \(file:\/\/[^\n]+\)/);
       }
       console.log(`${app}: ${mode}; both roots closed; EXIT ${ran.status}`);
     }

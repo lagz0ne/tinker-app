@@ -2,7 +2,7 @@ export { auth, telemetry } from "#tinker/parts.server";
 export { abortReasons } from "./errors";
 export { startRequests } from "./start";
 export { readResult } from "./backend/result.server";
-export { requestStop } from "./backend/lifetime";
+export { backendStop, requestStop } from "./backend/lifetime";
 export type { Env } from "./env";
 export { authSettings } from "./parts/auth/settings";
 export type { Auth } from "./parts/auth/settings";

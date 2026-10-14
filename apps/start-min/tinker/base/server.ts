@@ -1,15 +1,12 @@
-import { tag } from "@tinker/core";
+import { inspect } from "node:util";
+
 import type { Scope } from "@tinker/core";
 import type { ServerEntry } from "@tinker/start/server";
-
-/** The main supplies its original host signal, before graceful drain joins held requests. */
-export const backendStop = tag<AbortSignal>({ label: "lifetime.backendStop" });
-const closedReason = { kind: "server.closed" };
 
 /** Unhandled process work is reported and closes the main before exit; no scope starts here. */
 export function createServerEntry(entry: ServerEntry.Handle): ServerEntry.Handle {
   const fail = async (error: unknown) => {
-    process.stderr.write(`server: unhandled rejection ${String(error)}\n`);
+    process.stderr.write(`server: unhandled rejection ${inspect(error)}\n`);
     try {
       await entry.close();
     } finally {
@@ -37,6 +34,7 @@ async function closeRoots(
   roots: Record<string, Scope.RootHandle>,
   stop: Record<string, AbortController>,
 ): Promise<void> {
+  const closedReason = new DOMException("The server closed", "AbortError");
   const results: Scope.Result[] = [];
   for (const [name, scope] of Object.entries(roots).toReversed()) {
     stop[name].abort(closedReason);

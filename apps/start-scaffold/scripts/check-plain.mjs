@@ -18,7 +18,10 @@ const base = dirname(
   createRequire(join(root, "package.json")).resolve("@tinker/start/package.json"),
 );
 
-const { commandImport } = createRequire(join(base, "package.json"))("./lib/checks/imports.mjs");
+const { commandImport, isolatedImport } = createRequire(join(base, "package.json"))(
+  "./lib/checks/imports.mjs",
+);
+
 const { appFiles } = createRequire(join(base, "package.json"))("./lib/named.mjs");
 const clientEntry = appFiles(root).find((entry) => entry.alias === "#tinker/router").file;
 
@@ -28,6 +31,11 @@ const files = [];
 async function scan(folder) {
   for (const entry of await readdir(folder, { withFileTypes: true })) {
     const path = join(folder, entry.name);
+    if (!entry.isDirectory() && /^cmds\/[^/]+\//.test(relative(root, path))) {
+      failures.push(
+        `${relative(root, path)}:1: nested-command: commands must be files directly under cmds; move it to cmds/${entry.name}`,
+      );
+    }
     if (entry.isDirectory()) await scan(path);
     else if (/\.tsx?$/.test(entry.name) && !/\.(gen|generated|d)\.tsx?$/.test(entry.name)) {
       files.push(path);
@@ -1216,7 +1224,8 @@ function checkPlainFunction(node) {
 
   const base = baseCallers(node, name);
   const callers = [...new Set([...callSites(name, node), ...base])];
-  if (callers.length < 2 && base.length === 0) fail(node, "two-sites");
+  const errorRegistry = nameOf(name) === "raise" && pathOf(node).endsWith("/errors.ts");
+  if (callers.length < 2 && base.length === 0 && !errorRegistry) fail(node, "two-sites");
 
   plain.push(
     `- **${pathOf(node)}#${nameOf(name)}**\n${params.join("\n")}\n  - Callers:\n${callers.map((caller) => `    - \`${caller}\``).join("\n")}`,
@@ -1250,8 +1259,12 @@ function entryFunction(node) {
 }
 
 function checkCommandImport(node) {
-  if (!isCommand(node) || !ts.isStringLiteral(node)) return;
-  if (!commandModulePath(node)) return;
+  if (!ts.isStringLiteral(node) || !commandModulePath(node)) return;
+
+  for (const message of isolatedImport(root, pathOf(node), node.text, 1)) {
+    fail(node, `base-import: ${message.slice(message.indexOf(" ") + 1)}`);
+  }
+  if (!isCommand(node)) return;
 
   const message = commandImport(node.text);
   if (message) fail(node, `command-import: ${message}`);
@@ -1469,6 +1482,15 @@ if (process.argv.includes("--prove")) {
 
   const cases = [
     ["command-package-import", "command-import", 'import "node:fs";', "cmds/cli-import-probe.ts"],
+    ["src-base-import", "base-import", 'import "~/base/server";', "src/base-import-probe.ts"],
+    [
+      "component-base-import",
+      "base-import",
+      'import "../../base/server";',
+      "tinker/components/base-probe/index.ts",
+    ],
+    ["nested-command", "nested-command", 'import "node:fs";', "cmds/lib/nested-probe.ts"],
+
     [
       "operation-request-input-cast",
       "operation-wire-input",
@@ -2336,6 +2358,17 @@ if (process.argv.includes("--prove")) {
 
       assert.equal(red.status, rule ? 1 : 0, name);
       if (rule) assert.ok(red.stderr.includes(rule), `${name}: must fail by ${rule}`);
+      if (name === "src-base-import" || name === "component-base-import") {
+        const owner = name === "src-base-import" ? "src" : "components";
+        const specifier = name === "src-base-import" ? "~/base/server" : "../../base/server";
+        assert.ok(
+          red.stderr
+            .split("\n")
+            .includes(
+              `${file}:1: base-import: "${specifier}" imports copied base code; ${owner} must not import tinker/base`,
+            ),
+        );
+      }
       if (name === "command-package-import") {
         assert.ok(
           red.stderr.split("\n").includes(`${file}:1: command-import: ${commandImport("node:fs")}`),

@@ -1,7 +1,8 @@
 import { createScope, operation } from "@tinker/core";
 import { httpRequest } from "@tinker/start/server";
+import { backendStop } from "@tinker/start/server";
 import { isError, raise } from "@tinker/start/testing";
-import { backendStop, http, httpBackend, requestStop, startRequests } from "@tinker/start/testing";
+import { http, httpBackend, requestStop, startRequests } from "@tinker/start/testing";
 import { expect, test } from "vite-plus/test";
 
 const post = operation({

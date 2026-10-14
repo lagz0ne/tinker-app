@@ -14,7 +14,7 @@ export const say = {
     `${at} "${name}" is not a base entry; use @tinker/start, @tinker/start/server, @tinker/start/client, or @tinker/start/vite`,
   path: (at, name) => `${at} "${name}" reaches into the base by path; use a base entry`,
   serverEntry: (at, name) =>
-    `${at} "${name}" skips the base's scope; use createServerEntry from ~/base/server`,
+    `${at} "${name}" skips the command's scope; put server setup in the configured command`,
   passed: (count) => `${count} source files import the base only through its entries`,
 };
 
@@ -60,7 +60,7 @@ export function commandImport(name) {
     name.startsWith("~/") ||
     name.startsWith("@/") ||
     name === "@tinker/core" ||
-    ["@tanstack/react-router", "@tanstack/react-start/server-entry"].includes(name) ||
+    name === "@tanstack/react-start/server-entry" ||
     ["@tinker/start", "@tinker/start/server", "@tinker/start/client"].includes(name)
   ) {
     return null;
@@ -157,16 +157,24 @@ function sourcePath(name, file, root) {
   return name.startsWith(".") ? posix.join(posix.dirname(file), name) : null;
 }
 
+/** Only src and components have one-way access to commands and copied base code. */
+function sourceOwner(file) {
+  if (file.startsWith("src/")) return "src";
+  if (file.startsWith("tinker/components/")) return "components";
+  return null;
+}
+
 /** The source folder determines which direction an import may cross. */
-function isolatedImport(root, file, name, line) {
+export function isolatedImport(root, file, name, line) {
   const target = sourcePath(name, file, root);
-  const owner = file.startsWith("src/")
-    ? "src"
-    : file.startsWith("tinker/components/")
-      ? "components"
-      : null;
+  const owner = sourceOwner(file);
   if (!owner || !target) return [];
 
+  if (target === "tinker/base" || target.startsWith("tinker/base/")) {
+    return [
+      `${file}:${line} "${name}" imports copied base code; ${owner} must not import tinker/base`,
+    ];
+  }
   if (target.startsWith("cmds/")) {
     return [`${file}:${line} "${name}" imports a command; ${owner} must not import cmds`];
   }
@@ -214,6 +222,12 @@ export function imports(root) {
   return verdict(
     [
       ...bad,
+      ...sources
+        .filter(({ file }) => /^cmds\/[^/]+\//.test(file))
+        .map(
+          ({ file }) =>
+            `${file}: commands must be files directly under cmds; move it to cmds/${file.split("/").at(-1)}`,
+        ),
       ...sources.flatMap(({ file, imports }) =>
         /^cmds\/[^/]+\.[cm]?[jt]sx?$/.test(file)
           ? imports.flatMap(({ name, line }) => {

@@ -21,13 +21,25 @@
       "path": "tinker/components/mail/index.server.ts",
       "type": "registry:file",
       "target": "~/tinker/components/mail/index.server.ts",
-      "content": "export { authMail, mail, mailFrom, sendMail, smtpUrl } from \"./mail.server\";\nexport type { Mail } from \"./mail.server\";\n"
+      "content": "export { authMail, mail, mailFrom, sendMail, smtpUrl } from \"./mail.server\";\nexport type { Mail } from \"./mail.server\";\nexport { settings } from \"./settings.server\";\n"
     },
     {
       "path": "tinker/components/mail/component.json",
       "type": "registry:file",
       "target": "~/tinker/components/mail/component.json",
       "content": "{ \"requires\": [] }\n"
+    },
+    {
+      "path": "tinker/components/mail/settings.server.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/mail/settings.server.ts",
+      "content": "import type { Env } from \"@tinker/start/server\";\nimport { z } from \"zod\";\n\nimport { raise } from \"./errors\";\nimport { mailFrom, smtpUrl } from \"./mail.server\";\n\nconst mailEnv = z.object({\n  SMTP_HOST: z.string().min(1),\n  SMTP_PORT: z.coerce.number().int().min(1).max(65535),\n  SMTP_USER: z.string().default(\"\"),\n  SMTP_PASSWORD: z.string().default(\"\"),\n  SMTP_FROM: z.email(),\n});\n\n/**\n * The main validates SMTP keys once; mail units receive typed tags (ADR 0113).\n * @param env - From the app's server entry; why: the keys to check and convert.\n */\nexport function settings(env: Env.Values) {\n  const parsed = mailEnv.safeParse(env);\n  if (!parsed.success) {\n    raise(\"BadSettings\", {\n      part: \"mail\",\n      keys: parsed.error.issues.map((issue) => issue.path.join(\".\")),\n    });\n  }\n\n  const keys = parsed.data;\n  const host = keys.SMTP_HOST.includes(\":\") ? `[${keys.SMTP_HOST}]` : keys.SMTP_HOST;\n  const address = `smtp://${host}:${keys.SMTP_PORT}`;\n  if (!URL.canParse(address)) raise(\"BadSettings\", { part: \"mail\", keys: [\"SMTP_HOST\"] });\n\n  const smtp = new URL(address);\n  smtp.username = keys.SMTP_USER;\n  smtp.password = keys.SMTP_PASSWORD;\n\n  return [smtpUrl(smtp), mailFrom(keys.SMTP_FROM)];\n}\n"
+    },
+    {
+      "path": "tinker/components/mail/errors.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/mail/errors.ts",
+      "content": "export declare namespace Errors {\n  type Payloads = { BadSettings: { part: \"mail\"; keys: string[] } };\n}\n\n/**\n * A bad SMTP setting keeps its key names at the app boundary.\n * @param kind - From the failing reader; why: choose the managed error.\n * @param payload - From the failing reader; why: keep the bad key names.\n */\nexport function raise<N extends keyof Errors.Payloads>(\n  kind: N,\n  payload: Errors.Payloads[N],\n): never {\n  throw Object.assign(new Error(kind), { kind, payload });\n}\n"
     },
     {
       "path": "src/examples/mail-example.tinker.json",
@@ -41,7 +53,7 @@
     "ownership": "userland",
     "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
     "parts": [],
-    "requires": "No base parts or Postgres. Fill smtpUrl and mailFrom in the server seam's settings(env); the app then needs the SMTP keys to start."
+    "requires": "Call mail.settings(env) in cmds/server.ts; the app then needs the SMTP keys to start."
   },
   "dependencies": ["nodemailer@10.0.13"],
   "devDependencies": ["@types/nodemailer@^7.0.11"]

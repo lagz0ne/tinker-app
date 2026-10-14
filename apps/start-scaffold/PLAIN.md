@@ -33,7 +33,7 @@ Tests and generated files do not count.
     - `src/transport/todos.functions.ts#updateTodo.callback`
 
 - **tinker/components/demo/backend/settings.server.ts#settings**
-  - `env`: `Env.Values`. From the base's server entry; why: the keys to check and convert.
+  - `env`: `Env.Values`. From the app's server entry; why: the keys to check and convert.
   - Callers:
     - `cmds/server.ts#module`
 
@@ -90,3 +90,14 @@ Tests and generated files do not count.
     - `src/frontend/error-text.ts#errorText`
     - `src/frontend/Todos.tsx#showFailure.input`
     - `src/transport/result.server.ts#readReceipt`
+
+- **tinker/components/mail/errors.ts#raise**
+  - `kind`: `N`. From the failing reader; why: choose the managed error.
+  - `payload`: `Errors.Payloads[N]`. From the failing reader; why: keep the bad key names.
+  - Callers:
+    - `tinker/components/mail/settings.server.ts#settings`
+
+- **tinker/components/mail/settings.server.ts#settings**
+  - `env`: `Env.Values`. From the app's server entry; why: the keys to check and convert.
+  - Callers:
+    - `cmds/server.ts#module`

@@ -1,18 +1,4 @@
 {
   "extends": "./.tinker/tsconfig.json",
-  "include": ["src", "cmds", "tinker", "tests", "vite.config.ts", ".tinker/routeTree.gen.ts"],
-  "compilerOptions": {
-    "paths": {
-      "@/*": ["./src/*"],
-      "~/*": ["./tinker/*"],
-      "#tinker/router": ["./cmds/router.ts"],
-      "#tinker/server": ["./cmds/server.ts"],
-      "#tinker/start": ["./node_modules/@tinker/start/src/defaults/start.ts"],
-      "#tinker/style": ["./node_modules/@tinker/start/src/defaults/style.css"],
-      "#tinker/routes": ["./.tinker/routeTree.gen.ts"],
-      "#tinker/parts": ["./.tinker/parts.ts"],
-      "#tinker/parts.server": ["./.tinker/parts.server.ts"],
-      "#tinker/telemetry-env": ["./.tinker/telemetry-env.ts"]
-    }
-  }
+  "include": ["src", "cmds", "tinker", "tests", "vite.config.ts", ".tinker/routeTree.gen.ts"]
 }

@@ -58,3 +58,12 @@ test("dev restarts when the shell, a named file, or a seam file comes or goes, a
   );
   expect(restartNote(root, "/app/src/routes/index.tsx", "added")).toBeNull();
 });
+
+test.each(["added", "removed", "changed"])("a component manifest %s restarts dev", (verb) => {
+  const root = goodApp({ "tinker/components/mail/component.json": '{"requires":[]}' });
+
+  const note = restartNote(root, join(root, "tinker/components/mail/component.json"), verb);
+
+  expect(note).toBe(`tinker: tinker/components/mail/component.json ${verb}; restarting`);
+  expect(restartNote(root, join(root, "tinker/components/mail/index.ts"), verb)).toBeNull();
+});

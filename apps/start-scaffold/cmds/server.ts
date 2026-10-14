@@ -1,13 +1,14 @@
 import { createScope } from "@tinker/core";
 import * as start from "@tinker/start/server";
 
-import { backendStop, createScopeClose, createServerEntry } from "~/base/server";
+import { createScopeClose, createServerEntry } from "~/base/server";
 import * as demo from "~/components/demo/index.server";
 import { auth, bootstrap, database, readAccount } from "~/components/demo/index.server";
+import * as mail from "~/components/mail/index.server";
 
-const parts = { auth, bootstrap, database, readAccount };
+const parts = start.serverParts({ auth, bootstrap, database, readAccount });
 const values = { ...process.env };
-const appTags = [start.auth.settings(values), demo.settings(values), start.serverParts(parts)];
+const tags = [parts, start.auth.settings(values), demo.settings(values), mail.settings(values)];
 const stop = { tools: new AbortController(), app: new AbortController() };
 
 const tools = createScope({
@@ -22,7 +23,7 @@ const app = createScope({
   signal: stop.app.signal,
   observe: tools.resolve(start.telemetry.observe),
   extensions: [start.startRequests, start.auth.extensions, demo.databaseSetup],
-  tags: [backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],
+  tags: [start.backendStop(stop.app.signal), tags, tools.resolve(start.telemetry.appTags)],
 });
 
 const close = createScopeClose({ tools, app }, stop);

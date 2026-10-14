@@ -158,6 +158,16 @@
           "path": "tinker/components/mail/component.json",
           "type": "registry:file",
           "target": "~/tinker/components/mail/component.json"
+        },
+        {
+          "path": "tinker/components/mail/settings.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mail/settings.server.ts"
+        },
+        {
+          "path": "tinker/components/mail/errors.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mail/errors.ts"
         }
       ],
       "meta": {
@@ -165,7 +175,7 @@
         "ownership": "userland",
         "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
         "parts": [],
-        "requires": "No base parts or Postgres. Fill smtpUrl and mailFrom in the server seam's settings(env); the app then needs the SMTP keys to start."
+        "requires": "Call mail.settings(env) in cmds/server.ts; the app then needs the SMTP keys to start."
       },
       "dependencies": ["nodemailer@10.0.13"],
       "devDependencies": ["@types/nodemailer@^7.0.11"]
