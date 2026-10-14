@@ -1,7 +1,8 @@
 import { operation } from "@tinker/core";
 import { z } from "zod";
 
-import { auth } from "#tinker/server";
+import { serverParts } from "../../server-parts";
+import { startRequests } from "../../start";
 
 /**
  * ADR 0103's named protocol exception: the app's auth library owns its HTTP contract, so this
@@ -10,6 +11,7 @@ import { auth } from "#tinker/server";
 export const handleAuth = operation({
   label: "handleAuth",
   input: z.instanceof(Request),
-  depends: { auth },
-  run: ({ auth }, { input }) => auth.handler(input),
+  depends: { parts: serverParts, requests: startRequests },
+  run: async ({ parts, requests }, { input }) =>
+    (await requests.scope.resolve(parts.auth)).handler(input),
 });

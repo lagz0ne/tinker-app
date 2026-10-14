@@ -1,6 +1,6 @@
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { authSettings } from "@tinker/start/server";
+import { authSettings, serverParts, startRequests } from "@tinker/start/server";
 import { sql } from "drizzle-orm";
 import { test, expect, onTestFinished } from "vite-plus/test";
 
@@ -18,6 +18,7 @@ import {
   replayPrivate,
 } from "~/components/demo/backend/sync.server";
 import { raise, isError } from "~/components/demo/errors";
+import * as demo from "~/components/demo/index.server";
 import { mail } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
 
@@ -27,6 +28,7 @@ import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const tags = [
+  serverParts(demo),
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -53,7 +55,12 @@ function headers(response: Response) {
 
 test("concurrent public writes replay in commit order and a repeated receipt changes nothing", async () => {
   const stop = new AbortController();
-  const root = createScope({ signal: stop.signal, tags, presets: [proofDatabase, proofMail] });
+  const root = createScope({
+    extensions: [startRequests],
+    signal: stop.signal,
+    tags,
+    presets: [proofDatabase, proofMail],
+  });
   await root.ready;
   try {
     await root.run(migrate);
@@ -97,7 +104,12 @@ test("concurrent public writes replay in commit order and a repeated receipt cha
 
 test("private cursors cannot read another real account's history", async () => {
   const stop = new AbortController();
-  const root = createScope({ signal: stop.signal, tags, presets: [proofDatabase, proofMail] });
+  const root = createScope({
+    extensions: [startRequests],
+    signal: stop.signal,
+    tags,
+    presets: [proofDatabase, proofMail],
+  });
   await root.ready;
   try {
     await root.run(migrate);
@@ -139,6 +151,7 @@ test("failed notification keeps the saved profile and retry replies before sendi
   const messages: Mail.Message[] = [];
 
   const root = createScope({
+    extensions: [startRequests],
     signal: stop.signal,
     tags,
     presets: [
@@ -154,6 +167,7 @@ test("failed notification keeps the saved profile and retry replies before sendi
       })),
     ],
   });
+  await root.ready;
 
   onTestFinished(async () => {
     accepted.resolve();
@@ -246,6 +260,7 @@ test("request exit cannot strand a profile that already committed", async () => 
   const accepted = Promise.withResolvers<void>();
 
   const root = createScope({
+    extensions: [startRequests],
     signal: stop.signal,
     tags,
     presets: [
@@ -313,6 +328,7 @@ test("profile replies finish while duplicate receipts share one pending notifica
   let sends = 0;
 
   const root = createScope({
+    extensions: [startRequests],
     signal: stop.signal,
     tags,
     presets: [
@@ -328,6 +344,7 @@ test("profile replies finish while duplicate receipts share one pending notifica
       })),
     ],
   });
+  await root.ready;
 
   onTestFinished(async () => {
     accepted.resolve();
@@ -364,7 +381,11 @@ test("profile replies finish while duplicate receipts share one pending notifica
 });
 
 test("a bad stored event returns a stored data failure", async () => {
-  const root = createScope({ tags, presets: [proofDatabase, proofMail] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags,
+    presets: [proofDatabase, proofMail],
+  });
   await root.ready;
   try {
     await root.run(migrate);
@@ -388,7 +409,11 @@ test("a bad stored event returns a stored data failure", async () => {
 
 // readReceipt is used for changes; this only guards that an unknown error is thrown, never shown as rejected.
 test("a bad stored event is not shown to the user as a rejected change", async () => {
-  const root = createScope({ tags, presets: [proofDatabase, proofMail] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags,
+    presets: [proofDatabase, proofMail],
+  });
   await root.ready;
   try {
     await root.run(migrate);
@@ -412,7 +437,11 @@ test("a bad stored event is not shown to the user as a rejected change", async (
 });
 
 test("a bad stored notification result has no retry available", async () => {
-  const root = createScope({ tags, presets: [proofDatabase, proofMail] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags,
+    presets: [proofDatabase, proofMail],
+  });
   await root.ready;
   try {
     await root.run(migrate);

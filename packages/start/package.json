@@ -123,12 +123,6 @@
         "routes": {
           "/api/auth/$": "src/routes/api.auth.ts"
         },
-        "reads": {
-          "#tinker/server": [
-            "auth",
-            "readAccount"
-          ]
-        },
         "env": {
           "PUBLIC_ORIGIN": {
             "rule": "http"
@@ -150,10 +144,6 @@
           "/api/sync": "src/routes/api.sync.ts"
         },
         "reads": {
-          "#tinker/server": [
-            "database",
-            "bootstrap"
-          ],
           "#tinker/router": [
             "records",
             "readSnapshot",

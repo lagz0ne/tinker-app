@@ -92,9 +92,9 @@ test("auth is off by default, and tinker({ auth: true }) turns it on", () => {
   expect(() => partsOn({ auth: "yes" })).toThrow("tinker(): auth takes true or false");
 });
 
-test("the auth part mounts /api/auth/$, reads the server seam, and two keys with no default", () => {
+test("the auth part mounts /api/auth/$, reads two keys with no default", () => {
   expect(parts.auth.routes).toEqual({ "/api/auth/$": "src/routes/api.auth.ts" });
-  expect(parts.auth.reads).toEqual({ "#tinker/server": ["auth", "readAccount"] });
+  expect(parts.auth.reads).toBeUndefined();
   expect(readPartEnv(parts.auth.env, {})).toEqual({
     values: { PUBLIC_ORIGIN: undefined, AUTH_SECRET: undefined },
     refused: ["PUBLIC_ORIGIN", "AUTH_SECRET"],
@@ -129,10 +129,9 @@ test("sync with auth: false fails the build with the two ways out", () => {
   expect(partsOn({ sync: false, auth: false })).toEqual(["telemetry"]);
 });
 
-test("the sync part mounts /api/sync, reads both seams and the Register bodies, and no env key", () => {
+test("the sync part mounts /api/sync, reads the router seam and the Register bodies, and no env key", () => {
   expect(parts.sync.routes).toEqual({ "/api/sync": "src/routes/api.sync.ts" });
   expect(parts.sync.reads).toEqual({
-    "#tinker/server": ["database", "bootstrap"],
     "#tinker/router": ["records", "readSnapshot", "readBootstrap", "readBatch", "streamMessage"],
   });
   expect(parts.sync.augments).toEqual({ "@tinker/start": ["Register"] });

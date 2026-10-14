@@ -96,7 +96,14 @@ The entry reads env once, starts telemetry, then the app.
 It lists extensions and settings by hand, in the user's order.
 It imports each component's public index.
 There are no generated wiring files or role files.
-The app calls `createScopeClose` to close the app, then telemetry.
+Import createScope from @tinker/core.
+The copied tinker/base/server.ts holds the entry and close helpers.
+Its close helper alone may borrow named roots and their stop controllers.
+Helpers keep only repeated code; the main keeps startup steps.
+Commands import only ~/, @/, @tinker/core, and their framework entry.
+@tinker/start is allowed until Start is decomposed into base registry components (next card).
+Fill the serverParts tag with the component exports; never re-export them from the main.
+The app calls createScopeClose to close the app, then telemetry.
 That helper starts nothing and shares one close promise.
 A start or close error is rethrown after both roots end.
 

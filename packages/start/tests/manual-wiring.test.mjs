@@ -16,6 +16,7 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
   const root = fixture({
     "package.json": "{}",
     "cmds/server.ts": entry,
+    "tinker/base/server.ts": readFileSync(join(baseDir, "tests/fixtures/base/server.ts"), "utf8"),
     "tinker/components/mail/component.json": '{"requires":["missing"]}',
     "tinker/components/mail/index.server.ts": "export const settings = () => [];",
   });
@@ -34,28 +35,11 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
   ]);
 });
 
-test("a component role file cannot supply a missing export in the user's entry", () => {
-  const root = fixture({
-    "package.json": "{}",
-    "cmds/server.ts": entry,
-    ".tinker/base.json": '{"parts":["auth"]}',
-    "tinker/components/auth/component.json": '{"requires":[]}',
-    "tinker/components/auth/auth.server.ts": "export default 1;",
-    "tinker/components/auth/readAccount.server.ts": "export default 2;",
-  });
-
-  const checked = named(root);
-
-  expect(checked.lines).toEqual([
-    "cmds/server.ts:1 does not export auth; the auth part reads it",
-    "cmds/server.ts:1 does not export readAccount; the auth part reads it",
-  ]);
-});
-
 test("a component settings file is not bound unless the user calls its public API", async () => {
   const root = fixture({
     "package.json": '{"type":"module"}',
     "cmds/server.ts": entry,
+    "tinker/base/server.ts": readFileSync(join(baseDir, "tests/fixtures/base/server.ts"), "utf8"),
     "tinker/components/mail/component.json": '{"requires":[]}',
     "tinker/components/mail/index.server.ts": `import { tag, operation } from "@tinker/core";
 export const recipient = tag({ label: "mail.recipient" });

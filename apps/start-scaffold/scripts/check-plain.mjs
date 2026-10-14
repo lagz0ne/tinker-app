@@ -18,6 +18,7 @@ const base = dirname(
   createRequire(join(root, "package.json")).resolve("@tinker/start/package.json"),
 );
 
+const { commandImport } = createRequire(join(base, "package.json"))("./lib/checks/imports.mjs");
 const { appFiles } = createRequire(join(base, "package.json"))("./lib/named.mjs");
 const clientEntry = appFiles(root).find((entry) => entry.alias === "#tinker/router").file;
 
@@ -1226,11 +1227,41 @@ function isClientRouter(node) {
   return pathOf(node) === clientEntry && nameOf(functionName(node)) === "router";
 }
 
+/** These copied helpers only check the hand-off and repeat reverse root cleanup. */
+function isEntryHelper(node) {
+  if (!node) return false;
+  return (
+    pathOf(node) === "tinker/base/server.ts" &&
+    ["createServerEntry", "createScopeClose", "closeRoots"].includes(nameOf(functionName(node)))
+  );
+}
+
+function commandModulePath(node) {
+  const parent = node.parent;
+  return (
+    [ts.isImportDeclaration, ts.isExportDeclaration].some((kind) => kind(parent)) ||
+    (ts.isCallExpression(parent) && parent.expression.kind === ts.SyntaxKind.ImportKeyword) ||
+    ts.isImportTypeNode(parent.parent)
+  );
+}
+
+function entryFunction(node) {
+  return isClientRouter(node) || isEntryHelper(node) || isEntryHelper(enclosingFunction(node));
+}
+
+function checkCommandImport(node) {
+  if (!isCommand(node) || !ts.isStringLiteral(node)) return;
+  if (!commandModulePath(node)) return;
+
+  const message = commandImport(node.text);
+  if (message) fail(node, `command-import: ${message}`);
+}
+
 function checkFunction(node) {
   if (!isFunction(node) || !node.body) return;
   if (ts.isClassDeclaration(node.parent) || ts.isClassExpression(node.parent)) return;
 
-  if (isClientRouter(node)) return;
+  if (entryFunction(node)) return;
 
   checkScopeReturn(node);
 
@@ -1382,6 +1413,7 @@ for (const source of sources) {
     fail(source, ts.flattenDiagnosticMessageText(error.messageText, " "));
   }
   walk(source, (node) => {
+    checkCommandImport(node);
     checkOperationWire(node);
     checkFetch(node);
     checkBrowserHttp(node);
@@ -1436,6 +1468,7 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    ["command-package-import", "command-import", 'import "node:fs";', "cmds/cli-import-probe.ts"],
     [
       "operation-request-input-cast",
       "operation-wire-input",
@@ -2303,6 +2336,11 @@ if (process.argv.includes("--prove")) {
 
       assert.equal(red.status, rule ? 1 : 0, name);
       if (rule) assert.ok(red.stderr.includes(rule), `${name}: must fail by ${rule}`);
+      if (name === "command-package-import") {
+        assert.ok(
+          red.stderr.split("\n").includes(`${file}:1: command-import: ${commandImport("node:fs")}`),
+        );
+      }
 
       if (original) await writeFile(path, original);
       else await rm(path);

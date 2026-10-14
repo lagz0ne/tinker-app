@@ -63,6 +63,11 @@
           "path": "components.json",
           "type": "registry:file",
           "target": "~/components.json"
+        },
+        {
+          "path": "tinker/base/server.ts",
+          "target": "~/tinker/base/server.ts",
+          "type": "registry:file"
         }
       ],
       "meta": {

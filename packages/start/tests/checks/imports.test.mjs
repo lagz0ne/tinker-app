@@ -14,7 +14,7 @@ test("passes when src/ reaches the base only through its entries", () => {
   });
   expect(imports(root)).toEqual({
     status: "ok",
-    lines: ["4 source files import the base only through its entries"],
+    lines: ["5 source files import the base only through its entries"],
   });
 });
 
@@ -33,7 +33,7 @@ test("names each import that goes around the base's entries, at its line", () =>
     'src/backend/peek.ts:1 "#tinker/app.server" is a base-only name; app code cannot import it',
     'src/backend/peek.ts:2 "@tinker/start/src/errors" is not a base entry; use @tinker/start, @tinker/start/server, @tinker/start/client, or @tinker/start/vite',
     'src/backend/peek.ts:3 "../../node_modules/@tinker/start/src/backend/body.server" reaches into the base by path; use a base entry',
-    'src/backend/peek.ts:4 "@tanstack/react-start/server-entry" skips the base\'s scope; use createServerEntry from @tinker/start/server',
+    'src/backend/peek.ts:4 "@tanstack/react-start/server-entry" skips the base\'s scope; use createServerEntry from ~/base/server',
     `src/backend/peek.ts:5 "${linked}" reaches into the base by path; use a base entry`,
   ]);
 });

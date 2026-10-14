@@ -2,17 +2,19 @@ import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
-import { auth } from "#tinker/server";
+import { auth, bindings } from "#tinker/server";
 
 import { handleAuth } from "../src/parts/auth/handle.server";
 import { auth as off } from "../src/parts/auth/off";
 import { auth as on } from "../src/parts/auth/on.server";
 import { authSettings, authStartup } from "../src/parts/auth/settings";
+import { startRequests } from "../src/start";
 
 const keys = authSettings({ origin: "https://shop.example", secret: "s".repeat(32) });
 
 test("handleAuth hands the whole request to the app's auth library and returns its reply", async () => {
-  const root = createScope();
+  const root = createScope({ extensions: [startRequests], tags: bindings });
+  await root.ready;
   const get = await root.settle(handleAuth, {
     input: new Request("http://app/api/auth/get-session"),
   });
@@ -30,6 +32,8 @@ test("handleAuth hands the whole request to the app's auth library and returns i
 test("handleAuth takes only a request, and a failing auth library fails the call", async () => {
   const lost = new Error("auth store lost");
   const root = createScope({
+    tags: bindings,
+    extensions: [startRequests],
     presets: [
       preset(auth, () => ({
         handler: async () => {
@@ -39,6 +43,8 @@ test("handleAuth takes only a request, and a failing auth library fails the call
       })),
     ],
   });
+  await root.ready;
+
   expect((await root.settle(handleAuth, { rawInput: "/api/auth/get-session" })).status).toBe(
     "failed",
   );
@@ -96,9 +102,28 @@ test("with auth off, the app root reads no auth key", async () => {
 });
 
 test("the auth part's work shows on the trace as handleAuth; its settings are a tag", async () => {
-  const root = createScope({ observe: { history: 20 }, extensions: [authStartup], tags: keys });
+  const root = createScope({
+    observe: { history: 20 },
+    extensions: [authStartup, startRequests],
+    tags: [bindings, keys],
+  });
   await root.ready;
   await root.settle(handleAuth, { input: new Request("http://app/api/auth/get-session") });
   expect(root.spans().map(({ name }) => name)).toEqual(["test.auth", "handleAuth"]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("missing app auth wiring reports the tag instead of importing the main", async () => {
+  const root = createScope({ extensions: [startRequests] });
+  await root.ready;
+
+  const result = await root.settle(handleAuth, {
+    input: new Request("http://app/api/auth/get-session"),
+  });
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { kind: "MissingTag", payload: { label: "start.serverParts" } },
+  });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

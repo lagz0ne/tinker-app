@@ -1,7 +1,7 @@
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { syncClient, loadSnapshot, checkAccount } from "@tinker/start/client";
-import { authSettings } from "@tinker/start/server";
+import { authSettings, serverParts, startRequests } from "@tinker/start/server";
 import {
   accountOwner,
   tabStop,
@@ -17,6 +17,7 @@ import { readAccount } from "~/components/demo/backend/auth.server";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
 import { migrate, databaseUrl } from "~/components/demo/backend/database.server";
 import { bootstrap } from "~/components/demo/backend/sync.server";
+import * as demo from "~/components/demo/index.server";
 
 import { authClient, signIn } from "@/frontend/actions";
 
@@ -24,6 +25,7 @@ import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const settings = [
+  serverParts(demo),
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -34,6 +36,7 @@ const settings = [
 test("a stream checks the session once at open, and a save does not check it again", async () => {
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests],
     signal: stop.signal,
     tags: [
       settings,
@@ -114,6 +117,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   const allowed = Promise.withResolvers<void>();
 
   const server = createScope({
+    extensions: [startRequests],
     signal: stop.signal,
     tags: settings,
     presets: [proofDatabase, proofMail],
@@ -197,6 +201,7 @@ test("a private route check clears cached records after another tab signs out", 
   let cookie = "";
 
   const server = createScope({
+    extensions: [startRequests],
     signal: stop.signal,
     tags: settings,
     presets: [proofDatabase, proofMail],

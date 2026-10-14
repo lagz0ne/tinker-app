@@ -1,7 +1,7 @@
 import { expect, test } from "vite-plus/test";
 
 import { glue } from "../lib/checks/glue.mjs";
-import { imports } from "../lib/checks/imports.mjs";
+import { imports, commandImport } from "../lib/checks/imports.mjs";
 import { named } from "../lib/checks/named.mjs";
 import { render } from "../lib/prepare.mjs";
 import { goodApp, write } from "./fixture.mjs";
@@ -101,6 +101,7 @@ test("every command has the same base import and component public entry checks",
 
   expect(imports(root).lines).toEqual([
     'cmds/cli.ts:1 "#tinker/server" is a base-only name; app code cannot import it',
+    `cmds/cli.ts:1 ${commandImport("#tinker/server")}`,
     'cmds/worker.ts:1 "~/components/mail/private" is private to component mail; use "~/components/mail"',
   ]);
 });

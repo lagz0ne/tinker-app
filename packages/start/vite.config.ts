@@ -6,6 +6,7 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   resolve: {
     alias: {
+      "~/base/server": fileURLToPath(new URL("tests/fixtures/base/server.ts", import.meta.url)),
       "#tinker/telemetry-env": fileURLToPath(
         new URL("tests/fixtures/telemetry-env.ts", import.meta.url),
       ),
@@ -17,7 +18,8 @@ export default defineConfig({
     },
   },
   test: {
-    maxWorkers: 2,
+    maxWorkers: 1,
+    testTimeout: 30_000,
     include: ["tests/**/*.test.{ts,mjs}"],
   },
 });

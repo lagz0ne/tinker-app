@@ -1,33 +1,32 @@
+import { createScope } from "@tinker/core";
 import * as start from "@tinker/start/server";
 
+import { backendStop, createScopeClose, createServerEntry } from "~/base/server";
+
 const values = { ...process.env };
-const toolTags = [start.telemetry.settings(values), start.telemetry.tags];
 const appTags = [start.auth.settings(values)];
 const stop = { tools: new AbortController(), app: new AbortController() };
 
-const tools = start.createScope({
+const tools = createScope({
   signal: stop.tools.signal,
   extensions: start.telemetry.extensions,
-  tags: toolTags,
+  tags: [start.telemetry.settings(values), start.telemetry.tags],
 });
 
 await tools.ready;
 
-const app = start.createScope({
+const app = createScope({
   signal: stop.app.signal,
   observe: tools.resolve(start.telemetry.observe),
   extensions: [start.startRequests, start.auth.extensions],
-  tags: [start.backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],
+  tags: [backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],
 });
 
-const close = start.createScopeClose([
-  { scope: tools, stop: stop.tools },
-  { scope: app, stop: stop.app },
-]);
+const close = createScopeClose({ tools, app }, stop);
 
 await app.ready.catch(close);
 
-const server = start.createServerEntry({
+const server = createServerEntry({
   requestContext: app.resolve(start.startRequests),
   renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
   close,

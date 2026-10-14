@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -51,6 +52,16 @@ for (const app of process.argv.slice(2)) {
       join(fixture, "tinker/components/build-proof/styles.ts"),
       'export const style = "z-[137]";\n',
     );
+    for (const name of readdirSync(join(fixture, "tinker/components"))) {
+      const index = join(fixture, "tinker/components", name, "index.server.ts");
+      if (existsSync(index)) {
+        writeFileSync(
+          index,
+          readFileSync(index, "utf8") +
+            `\nexport function unusedScopeProof() { return "${unused}"; }\n`,
+        );
+      }
+    }
     const entry = join(fixture, serverFile(fixture).file);
     const text = readFileSync(entry, "utf8");
     writeFileSync(
@@ -62,7 +73,11 @@ for (const app of process.argv.slice(2)) {
     assert.equal(build.status, 0, build.stdout + build.stderr);
     const server = chunks(join(fixture, "dist/server")).join("\n");
     assert.ok(server.includes(used), "the imported component export must be used");
-    assert.ok(!server.includes(unused), "the unused component export must be removed");
+    assert.ok(
+      !server.includes(unused),
+      "the unused component export must be removed\n" +
+        server.slice(server.indexOf(unused) - 500, server.indexOf(unused) + 200),
+    );
     if (app.includes("scaffold")) {
       const styles = readdirSync(join(fixture, "dist/client/assets"))
         .filter((file) => file.endsWith(".css"))

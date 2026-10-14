@@ -12,6 +12,7 @@ let app = initialApp;
 
 if (import.meta.hot) {
   import.meta.hot.accept("#tinker/server", async () => {
+    await app.close();
     app = (await import("#tinker/server")).default;
   });
   import.meta.hot.on("vite:beforeFullReload", close);

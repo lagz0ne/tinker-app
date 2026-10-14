@@ -62,7 +62,7 @@ test("a missing entry option shows the Vite config line to add", () => {
   ]);
 });
 
-test("auth reads only the exports the app writes in its command", () => {
+test("auth needs only the default command export; app wiring is checked at run time", () => {
   const root = goodApp({
     ".tinker/base.json": '{"parts":["auth"]}',
     "cmds/server.ts": "export default 1;",
@@ -70,24 +70,19 @@ test("auth reads only the exports the app writes in its command", () => {
 
   const checked = named(root);
 
-  expect(checked.lines).toEqual([
-    "cmds/server.ts:1 does not export auth; the auth part reads it",
-    "cmds/server.ts:1 does not export readAccount; the auth part reads it",
-  ]);
+  expect(checked.status).toBe("ok");
 });
 
-test("sync names missing command exports and the open type registry", () => {
+test("sync names missing client exports and the open type registry", () => {
   const root = goodApp({
     ".tinker/base.json": '{"parts":["auth","sync"]}',
-    "cmds/server.ts": "export default 1; export const auth = 1, readAccount = 2;",
+    "cmds/server.ts": "export default 1;",
     "cmds/router.ts": "export const router = () => ({}); export const extensions = [];",
   });
 
   const checked = named(root);
 
   expect(checked.lines).toEqual([
-    "cmds/server.ts:1 does not export database; the sync part reads it",
-    "cmds/server.ts:1 does not export bootstrap; the sync part reads it",
     "cmds/router.ts:1 does not export records; the sync part reads it",
     "cmds/router.ts:1 does not export readSnapshot; the sync part reads it",
     "cmds/router.ts:1 does not export readBootstrap; the sync part reads it",
@@ -97,11 +92,11 @@ test("sync names missing command exports and the open type registry", () => {
   ]);
 });
 
-test("doctor reads named command exports from an object pattern", () => {
+test("doctor reads client command exports from an object pattern", () => {
   const root = goodApp({
     ".tinker/base.json": '{"parts":["auth"]}',
-    "cmds/server.ts":
-      "export default 1; const values = {auth:1,readAccount:2}; export const {auth,readAccount} = values;",
+    "cmds/router.ts":
+      "const values = {router:() => ({}),extensions:[]}; export const {router,extensions} = values;",
   });
 
   const checked = named(root);

@@ -1,15 +1,17 @@
 import { createScope, isError as isCoreError } from "@tinker/core";
-import { authSettings } from "@tinker/start/server";
+import { authSettings, serverParts, startRequests } from "@tinker/start/server";
 import { test, expect } from "vite-plus/test";
 
 import { migrate, databaseUrl } from "~/components/demo/backend/database.server";
 import { listTodos, changeTodo } from "~/components/demo/backend/todos.server";
 import { raise, isError } from "~/components/demo/errors";
+import * as demo from "~/components/demo/index.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const tags = [
+  serverParts(demo),
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -36,7 +38,12 @@ function readHeaders(response: Response) {
 
 test("two real accounts can change only their own saved todos", async () => {
   const stop = new AbortController();
-  const root = createScope({ signal: stop.signal, tags, presets: [proofDatabase, proofMail] });
+  const root = createScope({
+    extensions: [startRequests],
+    signal: stop.signal,
+    tags,
+    presets: [proofDatabase, proofMail],
+  });
   await root.ready;
   try {
     await root.run(migrate);
@@ -126,6 +133,7 @@ test("two real accounts can change only their own saved todos", async () => {
 test("signed-out todo reads and writes are refused", async () => {
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests],
     signal: stop.signal,
     tags,
     presets: [proofDatabase, proofMail],
@@ -153,7 +161,7 @@ test("signed-out todo reads and writes are refused", async () => {
 
 test("todo changes reject empty titles, long titles, and caller-selected owners", async () => {
   const stop = new AbortController();
-  const root = createScope({ signal: stop.signal });
+  const root = createScope({ extensions: [startRequests], signal: stop.signal });
   await root.ready;
   try {
     for (const rawInput of [

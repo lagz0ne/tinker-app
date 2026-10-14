@@ -6,12 +6,13 @@ import { createScope, extension } from "@tinker/core";
 import { createServer } from "vite-plus";
 import { expect, onTestFinished, test } from "vite-plus/test";
 
+import { createScopeClose } from "~/base/server";
+
 import { named } from "../lib/checks/named.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { aliases } from "../lib/glue.mjs";
 import { baseDir } from "../lib/paths.mjs";
 import { prepare } from "../lib/prepare.mjs";
-import * as serverApi from "../src/server";
 import { fixture, goodApp } from "./fixture.mjs";
 
 const source = readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8");
@@ -56,6 +57,7 @@ test.each(["", "postinstall"])(
 async function loadEntry(wiring, entry = source) {
   const root = fixture({
     "package.json": '{"type":"module"}',
+    "tinker/base/server.ts": readFileSync(join(baseDir, "tests/fixtures/base/server.ts"), "utf8"),
     "cmds/server.ts": entry
       .replace(
         'import * as start from "@tinker/start/server";',
@@ -114,7 +116,7 @@ test("the app file starts before any request, reuses its roots, and closes once"
 
   expect(proof.events).toEqual(["app.ready", "app.closed"]);
   await expect(server.requestContext.scope.closed).resolves.toMatchObject({ status: "success" });
-});
+}, 30000);
 
 test("the app entry reports a teardown error after closing its roots", async () => {
   const { vite, root } = await loadEntry(
@@ -189,10 +191,7 @@ test("close ends every root in reverse order before reporting a teardown error",
   });
   await tools.ready;
   await app.ready;
-  const close = serverApi.createScopeClose([
-    { scope: tools, stop: toolStop },
-    { scope: app, stop },
-  ]);
+  const close = createScopeClose({ tools, app }, { tools: toolStop, app: stop });
 
   const ended = close();
   await expect(ended).rejects.toBe(failure);

@@ -159,7 +159,8 @@ export default defineConfig({
 [cmds/server.ts](cmds/server.ts) starts and closes the roots.
 It imports the demo's public server API.
 It fills settings and lists extensions by hand.
-The file is 40 lines, with no app helper beside it.
+The file is 38 lines.
+It calls the copied helpers in `tinker/base/server.ts`.
 [cmds/router.ts](cmds/router.ts) wires the browser readers.
 The component index adds its `Register` types.
 
@@ -377,9 +378,8 @@ The server imports its public API:
 import * as demo
   from "~/components/demo/index.server";
 
-export const {
-  database, auth, readAccount, bootstrap,
-} = demo;
+const parts = start.serverParts(demo);
+// Add parts to the app scope tags.
 ```
 
 Add `demo.databaseSetup` to the app scope's extensions.

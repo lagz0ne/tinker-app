@@ -68,65 +68,51 @@ It imports each component's public index.
 The scaffold entry is filled in below:
 
 ```ts
+import { createScope } from "@tinker/core";
 import * as start from "@tinker/start/server";
 
+import { backendStop, createScopeClose, createServerEntry } from "~/base/server";
 import * as demo from "~/components/demo/index.server";
+import { auth, bootstrap, database, readAccount } from "~/components/demo/index.server";
 
-export const { auth, bootstrap, database, readAccount } = demo;
+const parts = { auth, bootstrap, database, readAccount };
 const values = { ...process.env };
-const toolTags = [
-  start.telemetry.settings(values), start.telemetry.tags,
-];
-const appTags = [start.auth.settings(values), demo.settings(values)];
-const stop = {
-  tools: new AbortController(),
-  app: new AbortController(),
-};
+const appTags = [start.auth.settings(values), demo.settings(values), start.serverParts(parts)];
+const stop = { tools: new AbortController(), app: new AbortController() };
 
-const tools = start.createScope({
+const tools = createScope({
   signal: stop.tools.signal,
   extensions: start.telemetry.extensions,
-  tags: toolTags,
+  tags: [start.telemetry.settings(values), start.telemetry.tags],
 });
 
 await tools.ready;
 
-const app = start.createScope({
+const app = createScope({
   signal: stop.app.signal,
   observe: tools.resolve(start.telemetry.observe),
-  extensions: [
-    start.startRequests, start.auth.extensions,
-    demo.databaseSetup,
-  ],
-  tags: [
-    start.backendStop(stop.app.signal), appTags,
-    tools.resolve(start.telemetry.appTags),
-  ],
+  extensions: [start.startRequests, start.auth.extensions, demo.databaseSetup],
+  tags: [backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],
 });
 
-const close = start.createScopeClose([
-  { scope: tools, stop: stop.tools },
-  { scope: app, stop: stop.app },
-]);
+const close = createScopeClose({ tools, app }, stop);
 
 await app.ready.catch(close);
 
-const server = start.createServerEntry({
+if (import.meta.hot) import.meta.hot.dispose(close);
+
+export default createServerEntry({
   requestContext: app.resolve(start.startRequests),
-  renderObserve: tools.resolve(
-    start.telemetry.renderObserve,
-    { ns: start.telemetry.renderNs },
-  ),
+  renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
   close,
 });
-
-if (import.meta.hot) import.meta.hot.dispose(close);
-export default server;
 ```
 
 There are no generated wiring files or role files.
 The app calls `createScopeClose` to close the app, then telemetry.
-That helper starts nothing and shares one close promise.
+The copied `tinker/base/server.ts` holds the entry and close helpers.
+It starts nothing and shares one close promise.
+An unhandled rejection prints its cause, closes both roots, and exits with code 1.
 A start or close error is rethrown after both roots end.
 
 The default export has three fields:
@@ -138,7 +124,8 @@ The entry closes on HMR replacement and process shutdown.
 The scaffold's client wiring lives in `cmds/router.ts`.
 It exports router options, extensions, and the sync readers.
 No app code may import a command file.
-Commands may import app code and component public entries.
+Commands may import only `~/`, `@/`, `@tinker/core`, and their framework entry.
+`@tinker/start` is allowed until Start is decomposed into base registry components (next card).
 Every file directly under cmds may build its own scope.
 Src and components may not create scopes.
 Doctor checks each command with the same import rules.
@@ -213,8 +200,8 @@ export default defineConfig({
 - **auth**: off by default.
   - Route: `/api/auth/$`, GET and POST:
     the app's auth library answers.
-  - Reads `auth` and `readAccount`
-    from `cmds/server.ts`.
+  - Reads the app values from the `serverParts` tag,
+    filled by `cmds/server.ts`.
   - Reads `PUBLIC_ORIGIN`, an http(s) URL,
     and `AUTH_SECRET`, at least 32 characters.
     Neither has a default.
@@ -223,8 +210,9 @@ The server seam with auth on, filled in:
 
 ```ts
 // In cmds/server.ts, beside its scope code:
-export { auth, readAccount }
-  from "~/components/accounts/index.server";
+import * as demo from "~/components/demo/index.server";
+const parts = start.serverParts(demo);
+// Add parts to the app scope tags.
 ```
 
 ```ts
@@ -251,8 +239,7 @@ export const auth = resource({
   - Route: `GET /api/sync`, a Server-Sent Events stream.
   - Server functions: `getBootstrap` (the seam's
     `bootstrap`) and `getAccount` (auth's `readAccount`).
-  - Reads `database` and `bootstrap`
-    from `cmds/server.ts`;
+  - Reads `database` and `bootstrap` from the `serverParts` tag;
     `database` is a drizzle Postgres database with `listen`
     (the `Database` type on `@tinker/start/server`).
   - Reads `records`, `readSnapshot`, `readBootstrap`,
@@ -389,9 +376,8 @@ and so does the head of `.tinker/parts.server.ts`.
   a snapshot keeps the app's own fields
   beside the stream and revision.
 - `@tinker/start/server`: `readResult`, the `Env` types,
-  `createServerEntry`, `createScopeClose`, `createScope`,
-  and `startRequests`,
-  `auth`, `telemetry`, `abortReasons`, `backendStop`,
+  `ServerEntry` types, `serverParts`, and `startRequests`,
+  `auth`, `telemetry`, `abortReasons`,
   and `authSettings`
   (the auth part's origin and secret),
   and `eventHistory` with the `Database` type

@@ -1,11 +1,13 @@
 import type { PGliteInterface } from "@electric-sql/pglite";
-import { operation, resource, tag } from "@tinker/core";
+import { createScope, operation, resource, tag } from "@tinker/core";
 import type { Many, Scope } from "@tinker/core";
 import { afterAll, beforeAll } from "vite-plus/test";
 
+import { createScopeClose, createServerEntry } from "~/base/server";
+
 import type { Env } from "../../src/env";
 import type { Database } from "../../src/parts/sync/database";
-import { createScope, createScopeClose, createServerEntry } from "../../src/server";
+import { serverParts } from "../../src/server-parts";
 
 /**
  * A stand-in server seam for the base's own tests and type check, as `#tinker/server`:
@@ -80,10 +82,12 @@ export const database = resource({
   },
 });
 
+export const bindings = serverParts({ auth, database, bootstrap, readAccount });
+
 const stop = new AbortController();
 const root = createScope({ signal: stop.signal });
 await root.ready;
-const close = createScopeClose([{ scope: root, stop }]);
+const close = createScopeClose({ root }, { root: stop });
 afterAll(close);
 
 export default createServerEntry({

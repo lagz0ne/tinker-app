@@ -2,9 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { resource } from "@tinker/core";
 
-import { bootstrap, readAccount } from "#tinker/server";
-
 import { readResult } from "../../backend/result.server";
+import { serverParts } from "../../server-parts";
 import { startRequests } from "../../start";
 import type { Sync } from "./envelopes";
 
@@ -13,7 +12,11 @@ export const getBootstrap = createServerFn({ method: "GET" })
   .middleware([startRequests.middleware])
   .handler(async ({ context }) => {
     setResponseHeader("Cache-Control", "no-store");
-    return readResult(await context.session.settle(bootstrap, { signal: context.signal }));
+    return readResult(
+      await context.session.settle(context.session.resolve(serverParts).bootstrap, {
+        signal: context.signal,
+      }),
+    );
   });
 
 /** The account this request signs in as, or null: what a tab checks before it trusts a page. */
@@ -21,7 +24,11 @@ export const getAccount = createServerFn({ method: "GET" })
   .middleware([startRequests.middleware])
   .handler(async ({ context }) => {
     setResponseHeader("Cache-Control", "no-store");
-    return readResult(await context.session.settle(readAccount, { signal: context.signal }));
+    return readResult(
+      await context.session.settle(context.session.resolve(serverParts).readAccount, {
+        signal: context.signal,
+      }),
+    );
   });
 
 /**

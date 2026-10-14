@@ -60,7 +60,7 @@ test("tinker() imported under another name, and called once, builds", () => {
 
 test("a valid export * in a seam file and a route file builds", () => {
   const root = goodApp({
-    "cmds/server.ts": 'export default 1;\nexport * from "../backend/seam.server";\n',
+    "cmds/server.ts": 'export default 1;\nexport * from "@/backend/seam.server";\n',
     "src/backend/seam.server.ts":
       "export const extensions = [];\nexport const settings = () => [];\n",
     "src/routes/about.tsx": 'export * from "../frontend/about";\n',
@@ -82,15 +82,12 @@ test("a glue or version problem only warns: the build itself still works", () =>
   ]);
 });
 
-test("with auth on, a seam without readAccount stops the build with doctor's line", () => {
+test("with auth on, the main needs only its default export", () => {
   const root = goodApp({
     ".tinker/base.json": JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] }),
-    "cmds/server.ts":
-      "export default 1;\nexport const extensions = [];\nexport const settings = () => [];\nexport const auth = 1;\n",
+    "cmds/server.ts": "export default 1;\n",
   });
-  expect(buildChecks(root).errors).toEqual([
-    "tinker doctor, named files: cmds/server.ts:1 does not export readAccount; the auth part reads it",
-  ]);
+  expect(buildChecks(root).errors).toEqual([]);
 });
 
 test("with sync on, a client seam without streamMessage stops the build with doctor's line", () => {

@@ -1,11 +1,11 @@
 import { operation, resource } from "@tinker/core";
 
-import { auth, database } from "#tinker/server";
-
 import { requestHeaders } from "../../backend/headers.server";
 import { backendStop, requestStop } from "../../backend/lifetime";
 import { raise } from "../../errors";
 import { drizzleOrm } from "../../modules.server";
+import { serverParts } from "../../server-parts";
+import { startRequests } from "../../start";
 import { notifications } from "./notifications.server";
 import { streamCursor, streamRequest } from "./protocol";
 import type { Stream } from "./protocol";
@@ -14,10 +14,12 @@ import { event } from "./schema";
 /** Cookie caches and session refresh are off on this long-lived request. */
 const liveAccount = operation({
   label: "sync.liveAccount",
-  depends: { auth, headers: requestHeaders },
-  run: async ({ auth, headers }) =>
+  depends: { parts: serverParts, requests: startRequests, headers: requestHeaders },
+  run: async ({ parts, requests, headers }) =>
     (
-      await auth.api.getSession({
+      await (
+        await requests.scope.resolve(parts.auth)
+      ).api.getSession({
         headers,
         query: { disableCookieCache: true, disableRefresh: true },
       })
@@ -42,7 +44,8 @@ export const eventStream = resource({
   label: "sync.stream",
   target: "session",
   depends: {
-    database,
+    parts: serverParts,
+    requests: startRequests,
     notifications,
     account: liveAccount,
     backendStop,
@@ -50,9 +53,11 @@ export const eventStream = resource({
     orm: drizzleOrm,
   },
   factory: async (
-    { database, notifications, account, backendStop, requestStop, orm },
+    { parts, requests, notifications, account, backendStop, requestStop, orm },
     { signal: cleanup, defer, clock },
   ) => {
+    const database = await requests.scope.resolve(parts.database);
+
     const stop = new AbortController();
     const signal = AbortSignal.any([stop.signal, backendStop, requestStop, cleanup]);
     let subscription: Awaited<ReturnType<typeof notifications.subscribe>> | undefined;

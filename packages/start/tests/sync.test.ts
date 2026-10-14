@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
-import { auth, database, signedIn, syncTemplate } from "#tinker/server";
+import { auth, database, signedIn, syncTemplate, bindings } from "#tinker/server";
 
 import { requestHeaders } from "../src/backend/headers.server";
 import { backendStop, requestStop } from "../src/backend/lifetime";
@@ -14,6 +14,7 @@ import { accountNotice } from "../src/parts/sync/notice";
 import { notifications } from "../src/parts/sync/notifications.server";
 import { execution } from "../src/parts/sync/schema";
 import { eventStream, openSync } from "../src/parts/sync/stream.server";
+import { startRequests } from "../src/start";
 
 const ids = [
   "00000000-0000-4000-8000-000000000001",
@@ -93,7 +94,8 @@ const account = 'event: account\ndata: {"kind":"account-change"}\n\n';
 
 test("a wait holds until a wake or close, and returns at once after its revision moved", async () => {
   const { db, wake } = handWoken();
-  const root = createScope({ presets: [db] });
+  const root = createScope({ extensions: [startRequests], tags: bindings, presets: [db] });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const subscription = await feed.subscribe();
   const waiting = feed.wait(subscription, feed.revision());
@@ -113,6 +115,8 @@ test("a wait holds until a wake or close, and returns at once after its revision
 test("a wait on a broken listener returns at once", async () => {
   const failures: (() => void)[] = [];
   const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
     presets: [
       preset(database, async (_deps, { defer }) => {
         const { drizzle } = await import("drizzle-orm/pglite");
@@ -127,6 +131,7 @@ test("a wait on a broken listener returns at once", async () => {
       }),
     ],
   });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const subscription = await feed.subscribe();
 
@@ -138,7 +143,8 @@ test("a wait on a broken listener returns at once", async () => {
 });
 
 test("notifications wake after a commit, stay silent on a rollback, and a read before waiting still wakes", async () => {
-  const root = createScope();
+  const root = createScope({ extensions: [startRequests], tags: bindings });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const subscription = await feed.subscribe();
   const before = feed.revision();
@@ -159,8 +165,15 @@ test("notifications wake after a commit, stay silent on a rollback, and a read b
 test("the stream replays after its cursor in one frame, greets once, then sends each new commit", async () => {
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
   await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1, 2] } });
   const session = root.createSession();
   const body = await session.run(openSync, { input: { cursor: { public: 0, private: null } } });
@@ -190,8 +203,15 @@ test("the stream replays after its cursor in one frame, greets once, then sends 
 test("a resumed cursor skips what it has; one frame carries at most 100 events", async () => {
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
   const many = Array.from({ length: 102 }, (_, index) => index + 1);
   await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: many } });
   const session = root.createSession();
@@ -216,8 +236,15 @@ test("a resumed cursor skips what it has; one frame carries at most 100 events",
 test("an account's own private events replay beside the public ones; another account's cursor is refused", async () => {
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(new Set(["ada", "grace"]))],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      signedIn(new Set(["ada", "grace"])),
+    ],
   });
+  await root.ready;
   await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["a1"] } });
   await root.run(publish, { input: { stream: "grace", executionId: ids[1], changes: ["g1"] } });
   await root.run(publish, { input: { stream: "public", executionId: ids[2], changes: [1] } });
@@ -248,8 +275,11 @@ test("a held stream whose account signs out sends the account frame, then no sav
   const stop = new AbortController();
   const accounts = new Set(["ada"]);
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
   });
+  await root.ready;
+
   const ada = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
   const reader = (
     await ada.run(openSync, {
@@ -274,9 +304,11 @@ test("a sign-in sends no notice: an anonymous stream keeps its account to its 30
   const stop = new AbortController();
   const accounts = new Set<string>();
   const root = createScope({
+    extensions: [startRequests],
     clock,
-    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
   });
+  await root.ready;
   const tab = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
 
   const reader = (
@@ -303,9 +335,11 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
   const stop = new AbortController();
   const accounts = new Set(["ada"]);
   const root = createScope({
+    extensions: [startRequests],
     clock,
-    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
   });
+  await root.ready;
   const quiet = root.createSession({ tags: requestHeaders(new Headers()) });
 
   const reader = (
@@ -346,8 +380,10 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
 test("a stream whose request stopped while it opened is Cancelled", async () => {
   const backend = new AbortController();
   const root = createScope({
-    tags: [backendStop(backend.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(backend.signal), requestHeaders(new Headers())],
   });
+  await root.ready;
   const request = new AbortController();
   const session = root.createSession({ tags: requestStop(request.signal) });
   const opening = session.settle(openSync, { input: { cursor: { public: 0, private: null } } });
@@ -361,12 +397,15 @@ test("a stream whose request stopped while it opened is Cancelled", async () => 
 test("a backend stop ends a held stream, and the request ends clean", async () => {
   const backend = new AbortController();
   const root = createScope({
+    extensions: [startRequests],
     tags: [
+      bindings,
       backendStop(backend.signal),
       requestStop(new AbortController().signal),
       requestHeaders(new Headers()),
     ],
   });
+  await root.ready;
   const session = root.createSession();
   const reader = (
     await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
@@ -388,6 +427,8 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
   const refused = new Error("listen refused");
   const listens: { wake: (payload: string) => void; failed: () => void; stopped: boolean }[] = [];
   const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
     presets: [
       preset(database, async (_deps, { defer }) => {
         const { drizzle } = await import("drizzle-orm/pglite");
@@ -409,6 +450,7 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
       }),
     ],
   });
+  await root.ready;
 
   const feed = await root.resolve(notifications);
   await expect(feed.subscribe()).rejects.toBe(refused);
@@ -441,7 +483,8 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
 });
 
 test("a root that never listened closes clean", async () => {
-  const quiet = createScope();
+  const quiet = createScope({ extensions: [startRequests], tags: bindings });
+  await quiet.ready;
   await quiet.resolve(notifications);
   expect(await quiet.close({ graceful: true })).toMatchObject({
     status: "success",
@@ -450,7 +493,8 @@ test("a root that never listened closes clean", async () => {
 });
 
 test("closing the root wakes and disconnects each subscriber", async () => {
-  const root = createScope();
+  const root = createScope({ extensions: [startRequests], tags: bindings });
+  await root.ready;
   const feed = await root.resolve(notifications);
   let disconnected = 0;
   const subscription = await feed.subscribe(() => {
@@ -470,13 +514,17 @@ test("closing the root wakes and disconnects each subscriber", async () => {
 test("the sync route answers each request with the stream or its status", async () => {
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests],
     tags: [
+      bindings,
       backendStop(stop.signal),
       requestStop(stop.signal),
       signedIn(new Set(["ada"])),
       requestHeaders(new Headers()),
     ],
   });
+  await root.ready;
+
   const ada = encodeURIComponent('{"public":0,"private":{"accountId":"ada","revision":0}}');
   for (const row of [
     { name: "open", search: "", last: null, status: 200 },
@@ -524,7 +572,13 @@ test("a request that fails to read, or a stream that fails to open, fails the re
   const opened = new Error("stream failed");
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
     presets: [
       preset(eventStream, async () => ({
         open: async (): Promise<ReadableStream<Uint8Array>> => {
@@ -533,6 +587,7 @@ test("a request that fails to read, or a stream that fails to open, fails the re
       })),
     ],
   });
+  await root.ready;
 
   const unreadable = Object.defineProperty(new Request("http://localhost/api/sync"), "url", {
     get: () => {
@@ -550,7 +605,13 @@ test("a dep whose parse fails fails the reply, not as a 400", async () => {
   const count = tag<unknown>({ label: "test.count", parse: z.number() });
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
     presets: [
       preset(eventStream, async () => ({
         open: async (): Promise<ReadableStream<Uint8Array>> => {
@@ -560,6 +621,7 @@ test("a dep whose parse fails fails the reply, not as a 400", async () => {
       })),
     ],
   });
+  await root.ready;
 
   const failure = await root
     .resolve(syncEndpoint)
@@ -604,7 +666,8 @@ test("the event history locks a stream, appends in order, saves a result, and ke
       ),
   });
 
-  const root = createScope();
+  const root = createScope({ extensions: [startRequests], tags: bindings });
+  await root.ready;
   expect(await root.run(save)).toEqual({
     locked: [0, 2],
     found: { id: ids[0], stream: "ada", notification: null, result: { kind: "complete" } },
@@ -625,7 +688,13 @@ test("the stream reads the account with no cookie cache and no refresh", async (
   const asked: unknown[] = [];
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
     presets: [
       preset(auth, () => ({
         handler: async () => new Response(null),
@@ -638,6 +707,7 @@ test("the stream reads the account with no cookie cache and no refresh", async (
       })),
     ],
   });
+  await root.ready;
 
   const session = root.createSession();
   const reader = (
@@ -665,9 +735,16 @@ test("a body cancelled while it waits stops its wait at once", async () => {
 
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests],
     clock,
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
   const session = root.createSession();
   const reader = (
     await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
@@ -687,8 +764,15 @@ test("a body cancelled while it waits stops its wait at once", async () => {
 test("a graceful close of the request ends a held read", async () => {
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
   const session = root.createSession();
   const reader = (
     await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
@@ -704,8 +788,15 @@ test("a graceful close of the request ends a held read", async () => {
 test("a stream opened after a wake still replays; a signed-in tab with no account cursor gets the account frame at once", async () => {
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(new Set(["ada"]))],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      signedIn(new Set(["ada"])),
+    ],
   });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const subscription = await feed.subscribe();
   await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
@@ -738,7 +829,8 @@ test("a request that stops while its account is read gets a body that has alread
   const request = new AbortController();
   const backend = new AbortController();
   const root = createScope({
-    tags: [backendStop(backend.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(backend.signal), requestHeaders(new Headers())],
     presets: [
       preset(auth, () => ({
         handler: async () => new Response(null),
@@ -751,6 +843,7 @@ test("a request that stops while its account is read gets a body that has alread
       })),
     ],
   });
+  await root.ready;
 
   const session = root.createSession({ tags: requestStop(request.signal) });
   const reader = (
@@ -773,8 +866,15 @@ test("a query that fails errors the body, and the request still ends clean", asy
   });
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
   const session = root.createSession();
   const reader = (
     await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
@@ -789,9 +889,16 @@ test("a query that fails errors the body, and the request still ends clean", asy
 test("the sync part's work shows on the trace under its own names", async () => {
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests],
     observe: { history: 50 },
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
   await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
   const session = root.createSession();
   const response = await session
@@ -874,9 +981,11 @@ test("a notice checks the account before the rows read, so a sign-out whose rows
   const reads = accountReads(["ada", null]);
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [db, reads.auth],
   });
+  await root.ready;
 
   const session = root.createSession({ tags: requestHeaders(new Headers()) });
   const reader = (
@@ -901,9 +1010,11 @@ test("a save makes no account read on an open stream", async () => {
   const reads = accountReads(["ada"]);
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [db, reads.auth],
   });
+  await root.ready;
   const session = root.createSession({ tags: requestHeaders(new Headers()) });
 
   const reader = (
@@ -939,7 +1050,8 @@ test("only the check after the rows read can stop rows of an account that signed
   let reads = 0;
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [
       db,
       preset(auth, () => ({
@@ -956,6 +1068,7 @@ test("only the check after the rows read can stop rows of an account that signed
       })),
     ],
   });
+  await root.ready;
 
   const session = root.createSession({ tags: requestHeaders(new Headers()) });
   const reader = (
@@ -983,7 +1096,8 @@ test("a notice re-reads only its account's streams; the one whose own session en
   const reads: string[] = [];
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [
       db,
       preset(auth, () => ({
@@ -999,6 +1113,7 @@ test("a notice re-reads only its account's streams; the one whose own session en
       })),
     ],
   });
+  await root.ready;
 
   const tabs = [
     { id: "ada", token: "ada-one" },
@@ -1057,9 +1172,11 @@ test("a notice that keeps its account sends no frame; the next save is the strea
   const reads = accountReads(["ada", "ada"]);
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [db, reads.auth],
   });
+  await root.ready;
   const session = root.createSession({ tags: requestHeaders(new Headers()) });
 
   const reader = (
@@ -1105,7 +1222,8 @@ test("a notice takes its stream off the wheel: closing the other waiter stops th
   };
 
   const { db, notice } = handWoken();
-  const root = createScope({ clock, presets: [db] });
+  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const ada = await feed.subscribe(undefined, "ada");
   const grace = await feed.subscribe();
@@ -1142,7 +1260,8 @@ test("a saved change takes every stream off the wheel: closing one waiter stops 
   };
 
   const { db, wake } = handWoken();
-  const root = createScope({ clock, presets: [db] });
+  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const first = await feed.subscribe();
   const second = await feed.subscribe();
@@ -1178,7 +1297,8 @@ test("waiting again moves a stream's wheel slot instead of adding one", async ()
   };
 
   const { db } = handWoken();
-  const root = createScope({ clock, presets: [db] });
+  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const sub = await feed.subscribe();
 
@@ -1206,7 +1326,8 @@ test("a wait with no lease sleeps the wheel for nothing", async () => {
   };
 
   const { db } = handWoken();
-  const root = createScope({ clock, presets: [db] });
+  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const sub = await feed.subscribe();
 
@@ -1231,7 +1352,8 @@ test("the wheel sleeps until a stream's heartbeat, not for zero time", async () 
   };
 
   const { db } = handWoken();
-  const root = createScope({ clock, presets: [db] });
+  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const sub = await feed.subscribe();
 
@@ -1256,7 +1378,8 @@ test("a heartbeat takes its stream off the wheel, so the wheel sleeps no more", 
   };
 
   const { db } = handWoken();
-  const root = createScope({ clock, presets: [db] });
+  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const sub = await feed.subscribe();
 
@@ -1274,7 +1397,13 @@ test("a heartbeat takes its stream off the wheel, so the wheel sleeps no more", 
 test("closing one waiter keeps the wheel running for the other's heartbeat", async () => {
   const time = makeTestClock();
   const { db } = handWoken();
-  const root = createScope({ clock: time, presets: [db] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
+    clock: time,
+    presets: [db],
+  });
+  await root.ready;
   const feed = await root.resolve(notifications);
   const first = await feed.subscribe();
   const second = await feed.subscribe();
@@ -1297,9 +1426,16 @@ test("rows from wakes with no read pending wait for the next read, in one frame"
   const { db, wake } = handWoken();
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
     presets: [db],
   });
+  await root.ready;
   const session = root.createSession();
   const reader = (
     await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
@@ -1331,9 +1467,11 @@ test("a private stream sends each row once; a later frame carries only the new r
   const reads = accountReads(["ada"]);
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [db, reads.auth],
   });
+  await root.ready;
   const session = root.createSession({ tags: requestHeaders(new Headers()) });
 
   const reader = (
@@ -1372,9 +1510,16 @@ test("streams that share one read each get their own copy of its bytes", async (
   const { db, wake } = handWoken();
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
     presets: [db],
   });
+  await root.ready;
   const first = root.createSession();
   const second = root.createSession();
 
@@ -1411,9 +1556,11 @@ test("a sign-out frame is each stream's own copy", async () => {
   const reads = accountReads(["ada", "ada", null]);
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [db, reads.auth],
   });
+  await root.ready;
   const sessions = [
     root.createSession({ tags: requestHeaders(new Headers()) }),
     root.createSession({ tags: requestHeaders(new Headers()) }),
@@ -1450,6 +1597,8 @@ test("a sign-out frame is each stream's own copy", async () => {
 
 test("a listener that breaks while it connects fails the subscribe as disconnected", async () => {
   const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
     presets: [
       preset(database, async (_deps, { defer }) => {
         const { drizzle } = await import("drizzle-orm/pglite");
@@ -1464,6 +1613,7 @@ test("a listener that breaks while it connects fails the subscribe as disconnect
       }),
     ],
   });
+  await root.ready;
   const feed = await root.resolve(notifications);
   await expect(feed.subscribe()).rejects.toMatchObject({ kind: "StreamDisconnected" });
   expect((await root.close({ graceful: true })).status).toBe("success");
@@ -1473,6 +1623,8 @@ test("a subscribe whose listener is replaced while it connects fails as disconne
   let feed: { subscribe(): Promise<unknown> } | undefined;
   let replacing: Promise<unknown> | undefined;
   const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
     presets: [
       preset(database, async (_deps, { defer }) => {
         const { drizzle } = await import("drizzle-orm/pglite");
@@ -1490,6 +1642,7 @@ test("a subscribe whose listener is replaced while it connects fails as disconne
       }),
     ],
   });
+  await root.ready;
 
   feed = await root.resolve(notifications);
   await expect(feed.subscribe()).rejects.toMatchObject({ kind: "StreamDisconnected" });
@@ -1500,6 +1653,8 @@ test("a subscribe whose listener is replaced while it connects fails as disconne
 test("a closed subscriber is not told when the listener breaks", async () => {
   const failures: (() => void)[] = [];
   const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
     presets: [
       preset(database, async (_deps, { defer }) => {
         const { drizzle } = await import("drizzle-orm/pglite");
@@ -1514,6 +1669,7 @@ test("a closed subscriber is not told when the listener breaks", async () => {
       }),
     ],
   });
+  await root.ready;
   const feed = await root.resolve(notifications);
 
   let told = 0;
@@ -1533,10 +1689,12 @@ test("a quiet stream reads no account at its heartbeats; each notice reads it on
   const reads = accountReads(["ada", "ada", null]);
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests],
     clock,
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [db, reads.auth],
   });
+  await root.ready;
 
   const session = root.createSession({ tags: requestHeaders(new Headers()) });
   const reader = (
@@ -1570,8 +1728,15 @@ test("a quiet stream reads no account at its heartbeats; each notice reads it on
 test("a request whose stream was never opened ends clean", async () => {
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
   const session = root.createSession();
   await session.resolve(eventStream);
 
@@ -1585,8 +1750,16 @@ test("a request whose stream was never opened ends clean", async () => {
 test("a private cursor resumes past revision 0", async () => {
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), signedIn(new Set(["ada"]))],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      signedIn(new Set(["ada"])),
+    ],
   });
+  await root.ready;
+
   const ada = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
   const opened = await ada.settle(openSync, {
     input: { cursor: { public: 0, private: { accountId: "ada", revision: 5 } } },
@@ -1602,9 +1775,16 @@ test("the lease closes a client that stopped reading", async () => {
   const clock = makeTestClock();
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests],
     clock,
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
   const session = root.createSession();
   const reader = (
     await session.run(openSync, { input: { cursor: { public: 0, private: null } } })
@@ -1631,9 +1811,16 @@ test("a notice closes a stream whose client stopped reading", async () => {
   const stop = new AbortController();
   const reads = accountReads(["ada", null]);
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
     presets: [reads.auth],
   });
+  await root.ready;
   const session = root.createSession();
   const reader = (
     await session.run(openSync, {
@@ -1659,9 +1846,16 @@ test("streams at the same cursor share one read per wake and skip the empty read
   });
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
     presets: [db],
   });
+  await root.ready;
   const first = root.createSession();
   const second = root.createSession();
 
@@ -1700,7 +1894,8 @@ test("shared private rows keep accounts apart and check each session after sign-
   const live = new Set(["ada-one", "ada-two", "grace"]);
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal)],
+    extensions: [startRequests],
+    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [
       db,
       preset(auth, () => ({
@@ -1715,6 +1910,7 @@ test("shared private rows keep accounts apart and check each session after sign-
       })),
     ],
   });
+  await root.ready;
 
   const tabs = [
     { id: "ada", token: "ada-one" },
@@ -1784,8 +1980,15 @@ test("a failed shared row read can be retried by another open stream", async () 
   });
   const stop = new AbortController();
   const root = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    extensions: [startRequests],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
   const first = root.createSession();
   const second = root.createSession();
 
@@ -1813,9 +2016,16 @@ test("staggered streams keep their own heartbeat and lease times", async () => {
   const clock = makeTestClock();
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests],
     clock,
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
   clock.advance(250);
   const first = root.createSession();
 
@@ -1859,13 +2069,20 @@ test("a failed clock wait errors every stream waiting on it", async () => {
   const error = { kind: "clock-failed" };
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests],
     clock: {
       currentTimeMillis: () => time.currentTimeMillis(),
       currentTimeNanos: () => time.currentTimeNanos(),
       sleep: () => failure.promise,
     },
-    tags: [backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
+    tags: [
+      bindings,
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      requestHeaders(new Headers()),
+    ],
   });
+  await root.ready;
 
   const first = root.createSession();
   const second = root.createSession();

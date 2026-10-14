@@ -22,6 +22,7 @@ if ! {
   node packages/start/scripts/check-entry-hmr.mjs apps/start-min &&
     node packages/start/scripts/check-command-build.mjs apps/start-min &&
     node packages/start/scripts/check-built-entry.mjs apps/start-min &&
+    node packages/start/scripts/check-entry-errors.mjs apps/start-min &&
     node apps/start-scaffold/maintain/check-entry.mjs
 } > "$entry_log" 2>&1; then
   cat "$entry_log"
@@ -343,9 +344,18 @@ tab='{"traces":[],"logs":[{"time":1,"level":30,"msg":"from a tab","side":"browse
   doctor
 } 2>&1 | clean > "$out/12-telemetry-part.txt"
 
+# Each real fixture main fills its server tag; the parts never import that main.
+wireServerParts() {
+  node --input-type=module - "$app_entry" <<'JS'
+import { readFileSync, writeFileSync } from "node:fs";
+const file = process.argv[2];
+writeFileSync(file, 'import * as proof from "@/proof.server";\n' + readFileSync(file, "utf8").replace("const appTags = [", "const appTags = [start.serverParts(proof), "));
+JS
+}
+
 # The auth part's stand-in server seam: an auth library that answers with what it was sent.
 seam() {
-  printf 'export { auth, readAccount } from "@/proof.server";\n' >> "$app_entry"
+  wireServerParts
   mkdir -p src/lib
   printf '%s\n' 'import { operation, resource } from "@tinker/core";' \
     'import { authSettings } from "@tinker/start/server";' \
@@ -354,10 +364,13 @@ seam() {
     '  label: "auth",' \
     '  depends: { settings: authSettings },' \
     '  factory: ({ settings }) => ({' \
+    '    api: { getSession: async () => null },' \
     '    handler: async (request: Request) =>' \
     '      Response.json({ handled: `${request.method} ${new URL(request.url).pathname}`, origin: settings.origin }),' \
     '  }),' \
     '});' > src/proof.server.ts
+  printf '%s\n' 'export const database = resource({ label: "unused.database", factory: () => { throw new Error("auth proof has no sync database"); } });' \
+    'export const bootstrap = operation({ label: "bootstrap", run: () => ({ public: { stream: "public" as const, revision: 0 }, private: null }) });' >> src/proof.server.ts
   [[ ${1:-} == no-readAccount ]] && return
   printf '%s\n' 'export const readAccount = operation({ label: "readAccount", run: () => null });' >> src/proof.server.ts
 }
@@ -409,7 +422,7 @@ appAuthRoute() {
   build
   doctor
 
-  mistake "auth on, and no seam at all: the build stops"
+  mistake "auth on, and no wiring at all: the request fails"
   sed -i 's/tinker({ serverEntry: "cmds\/server.ts" })/tinker({ serverEntry: "cmds\/server.ts", auth: true })/' vite.config.ts
   keys
   build
@@ -426,7 +439,7 @@ appAuthRoute() {
 # The sync part's stand-in server seam: auth with no one signed in, and an in-memory PGlite
 # database with the sync tables and two public events. PGlite is linked from the base's dev tools.
 syncSeam() {
-  printf 'export { auth, readAccount, database, bootstrap } from "@/proof.server";\n' >> "$app_entry"
+  wireServerParts
   ln -sfn "$(readlink -f "$repo/packages/start/node_modules/@electric-sql/pglite")" node_modules/@electric-sql/pglite 2>/dev/null ||
     { mkdir -p node_modules/@electric-sql && ln -sfn "$(readlink -f "$repo/packages/start/node_modules/@electric-sql/pglite")" node_modules/@electric-sql/pglite; }
   ln -sfn "$(readlink -f "$repo/packages/start/node_modules/drizzle-orm")" node_modules/drizzle-orm

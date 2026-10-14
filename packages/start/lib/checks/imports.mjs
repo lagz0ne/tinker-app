@@ -14,7 +14,7 @@ export const say = {
     `${at} "${name}" is not a base entry; use @tinker/start, @tinker/start/server, @tinker/start/client, or @tinker/start/vite`,
   path: (at, name) => `${at} "${name}" reaches into the base by path; use a base entry`,
   serverEntry: (at, name) =>
-    `${at} "${name}" skips the base's scope; use createServerEntry from @tinker/start/server`,
+    `${at} "${name}" skips the base's scope; use createServerEntry from ~/base/server`,
   passed: (count) => `${count} source files import the base only through its entries`,
 };
 
@@ -53,6 +53,21 @@ const entries = new Set([
   "@tinker/start/client",
   "@tinker/start/vite",
 ]);
+
+/** Commands remain plain mains; Start stays allowed until its base registry split. */
+export function commandImport(name) {
+  if (
+    name.startsWith("~/") ||
+    name.startsWith("@/") ||
+    name === "@tinker/core" ||
+    ["@tanstack/react-router", "@tanstack/react-start/server-entry"].includes(name) ||
+    ["@tinker/start", "@tinker/start/server", "@tinker/start/client"].includes(name)
+  ) {
+    return null;
+  }
+
+  return `"${name}" is not a command import; use ~/, @/, @tinker/core, or the framework entry; @tinker/start is allowed until Start is decomposed into base registry components (next card)`;
+}
 
 /**
  * @param {string} name - From an import; why: a relative path may point into the base.
@@ -188,7 +203,10 @@ export function imports(root) {
       .map(({ name, line }) => ({
         name,
         at: `${file}:${line}`,
-        message: badImport(name, path, base),
+        message:
+          /^cmds\/[^/]+\.[cm]?[jt]sx?$/.test(file) && name === "@tanstack/react-start/server-entry"
+            ? null
+            : badImport(name, path, base),
       }))
       .filter(({ message }) => message)
       .map(({ name, at, message }) => message(at, name));
@@ -196,6 +214,14 @@ export function imports(root) {
   return verdict(
     [
       ...bad,
+      ...sources.flatMap(({ file, imports }) =>
+        /^cmds\/[^/]+\.[cm]?[jt]sx?$/.test(file)
+          ? imports.flatMap(({ name, line }) => {
+              const message = commandImport(name);
+              return message ? [`${file}:${line} ${message}`] : [];
+            })
+          : [],
+      ),
       ...extensionImports(sources),
       ...componentImports(root, sources),
       ...isolation(root, sources),

@@ -10,6 +10,7 @@ const fixture = await mkdtemp(join(tmpdir(), "start-seam-note-"));
 try {
   await mkdir(join(fixture, "cmds"), { recursive: true });
   await mkdir(join(fixture, "src/routes"), { recursive: true });
+  await cp(join(app, "tinker/base"), join(fixture, "tinker/base"), { recursive: true });
 
   for (const file of await readdir(join(app, "maintain/fixtures/note-app"))) {
     const name = file.replace(/\.txt$/, "");

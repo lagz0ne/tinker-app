@@ -1,8 +1,8 @@
 import { resource } from "@tinker/core";
 
-import { database } from "#tinker/server";
-
 import { raise } from "../../errors";
+import { serverParts } from "../../server-parts";
+import { startRequests } from "../../start";
 import { accountOfNotice } from "./notice";
 import type { Stream } from "./protocol";
 
@@ -11,8 +11,10 @@ const wheelStopped = Symbol("sync.wheelStopped");
 /** One native listener wakes all request subscribers; reconnect replaces a broken listener. */
 export const notifications = resource({
   label: "sync.notifications",
-  depends: { database },
-  factory: async ({ database }, { defer, clock }) => {
+  depends: { parts: serverParts, requests: startRequests },
+  factory: async ({ parts, requests }, { defer, clock }) => {
+    const database = await requests.scope.resolve(parts.database);
+
     let revision = 0;
     let broken = false;
     let connection:

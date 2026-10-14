@@ -1,5 +1,6 @@
 import { expect, test } from "vite-plus/test";
 
+import { imports } from "../lib/checks/imports.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { basePackage } from "../lib/paths.mjs";
 import { prepare } from "../lib/prepare.mjs";
@@ -245,3 +246,16 @@ test("item tests can use private relative paths only with a declared dependency"
 
   expect(declared.code).toBe(0);
 });
+
+for (const file of ["cmds/server.ts", "cmds/cli.ts", "cmds/worker.ts"]) {
+  test(`doctor refuses a package import in ${file}`, () => {
+    const root = preparedApp({ [file]: 'import "node:fs";\n' });
+
+    const checked = imports(root);
+
+    expect(checked.status).toBe("fail");
+    expect(checked.lines).toEqual([
+      `${file}:1 "node:fs" is not a command import; use ~/, @/, @tinker/core, or the framework entry; @tinker/start is allowed until Start is decomposed into base registry components (next card)`,
+    ]);
+  });
+}
