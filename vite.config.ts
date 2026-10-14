@@ -7,7 +7,18 @@ export default defineConfig({
   // Markdown fences keep the line breaks we wrote.
   fmt: {
     embeddedLanguageFormatting: "off",
-    sortImports: true,
+    sortImports: {
+      customGroups: [{ groupName: "base", elementNamePattern: ["~/**"] }],
+      groups: [
+        "builtin",
+        "external",
+        "base",
+        "internal",
+        ["parent", "sibling", "index"],
+        "style",
+        "unknown",
+      ],
+    },
   },
   lint: {
     plugins: ["eslint", "typescript", "unicorn", "oxc", "import"],
