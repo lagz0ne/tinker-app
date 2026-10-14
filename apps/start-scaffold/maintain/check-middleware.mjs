@@ -14,6 +14,36 @@ if (import.meta.main) {
   try {
     await copyProofApp(source, proof);
 
+    const plant = process.argv.find((arg) => arg.startsWith("--plant="))?.slice(8);
+    if (plant) {
+      assert.ok(["sync", "auth", "telemetry"].includes(plant));
+      const requests = join(proof, "tinker/components/requests");
+      const copy = (await readFile(join(requests, "start.ts"), "utf8")).replace(
+        'label: "start.requests"',
+        'label: "start.requests.second"',
+      );
+      await writeFile(join(requests, "second-start.ts"), copy);
+
+      const configFile = join(proof, "vite.config.ts");
+      const config = await readFile(configFile, "utf8");
+      assert.ok(config.includes("plugins: ["));
+      await writeFile(
+        configFile,
+        config.replace(
+          "plugins: [",
+          `plugins: [{
+        name: "proof:second-requests",
+        enforce: "pre",
+        transform(code, id) {
+          if (id.split("?")[0].endsWith("/routes/api.${plant}.ts")) {
+            return code.replace('from "~/components/requests/index"', 'from "~/components/requests/second-start"');
+          }
+        },
+      },`,
+        ),
+      );
+    }
+
     const serverFile = join(proof, "cmds/server.ts");
     const server = await readFile(serverFile, "utf8");
     assert.ok(server.includes("await app.ready.catch(close);"));
@@ -161,6 +191,26 @@ export const Route = createFileRoute("/proof/write")({server: {
       assert.equal(app.createdRequestSessions(), 2, "one request session per SSR request");
 
       const stream = await app.default.fetch(new Request("http://localhost:4318/api/sync"));
+      assert.equal(app.createdRequestSessions(), 3, "one request session for /api/sync");
+
+      const auth = await app.default.fetch(
+        new Request("http://localhost:4318/api/auth/get-session"),
+      );
+      assert.equal(app.createdRequestSessions(), 4, "one request session for /api/auth");
+      assert.equal(auth.status, 200);
+      await auth.text();
+
+      const telemetry = await app.default.fetch(
+        new Request("http://localhost:4318/api/telemetry", {
+          method: "POST",
+          headers: { Origin: "http://localhost:4318", "Content-Type": "application/json" },
+          body: "{}",
+        }),
+      );
+      assert.equal(app.createdRequestSessions(), 5, "one request session for /api/telemetry");
+      assert.equal(telemetry.status, 400);
+      await telemetry.text();
+
       assert.equal(stream.headers.get("x-proof-requests"), "1");
       assert.equal(stream.headers.get("Content-Type"), "text/event-stream; charset=utf-8");
       assert.equal(stream.headers.get("Cache-Control"), "no-store");

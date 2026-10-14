@@ -37,7 +37,6 @@ await app.ready.catch(close);
 
 const server = {
   requestContext: app.resolve(startRequests),
-  renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
   close,
 } satisfies ServerEntry.Handle;
 

@@ -1,6 +1,6 @@
 import { createScope, operation, resource } from "@tinker/core";
 import { readResult } from "@tinker/start/server";
-import { requestHeaders, requestStop, startRequests, retainRender } from "@tinker/start/testing";
+import { requestHeaders, requestStop, startRequests, renderFrames } from "@tinker/start/testing";
 import { expect, test } from "vite-plus/test";
 
 /** Runs until its session stops it by force. */
@@ -209,7 +209,7 @@ test.each(["end", "cancel", "error"])(
       context: { scope: root },
       async next(options) {
         options.context.session.resolve(recorder);
-        retainRender(request, async () => {
+        root.resolve(renderFrames).retain(request, async () => {
           await render.close({ graceful: true });
         });
         return { request, pathname: "/", context: options.context, response: source };

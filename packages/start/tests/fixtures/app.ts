@@ -58,4 +58,4 @@ export const streamMessage = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("account-change") }),
 ]);
 
-export const router: import("../../src/index").RouterOptions = () => ({});
+export const router: import("../../src/index").RouterOptions = {};

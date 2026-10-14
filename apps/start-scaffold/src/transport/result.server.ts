@@ -1,6 +1,7 @@
 import type { RunResult } from "@tinker/core";
 
 import { isError, raise } from "~/components/demo";
+import { isError as isBaseError } from "~/components/errors";
 
 /**
  * @param result - From a settled mutation; why: turn its result into a network receipt.
@@ -25,7 +26,7 @@ export function readReceipt(result: RunResult<{ executionId: string }>) {
   if (isError(error, "RetryNotAvailable")) {
     return { kind: "rejected" as const, message: "There is no failed notification to retry." };
   }
-  if (isError(error, "StreamDenied")) {
+  if (isBaseError(error, "StreamDenied")) {
     return { kind: "rejected" as const, message: "That execution is not in your stream." };
   }
 

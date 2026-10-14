@@ -89,6 +89,23 @@ for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]
     assert.equal(build.status, 0, build.stdout + build.stderr);
 
     if (composition.includes("starter")) {
+      // This composition retains app's greet route beside the starter's routes.
+      // Its reviewed list has exactly that one extra readResult caller.
+      const saved = await readFile(join(app, "PLAIN.md"), "utf8");
+      const healthCaller = "    - `src/routes/api.health.ts#Route.GET`\n";
+      assert.equal(saved.split(healthCaller).length, 2);
+      const expected = saved.replace(
+        healthCaller,
+        healthCaller + "    - `src/transport/greet.functions.ts#runGreet.callback`\n",
+      );
+      const census = spawnSync(process.execPath, ["scripts/check-plain.mjs", "--list"], {
+        cwd: consumer,
+        encoding: "utf8",
+      });
+      assert.equal(census.status, 0, census.stdout + census.stderr);
+      assert.equal(census.stdout, expected, "composition has only its known extra caller");
+      await writeFile(join(consumer, "PLAIN.md"), expected);
+
       const plain = spawnSync(process.execPath, ["scripts/check-plain.mjs"], {
         cwd: consumer,
         encoding: "utf8",

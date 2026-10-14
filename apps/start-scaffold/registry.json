@@ -195,11 +195,6 @@
           "type": "registry:file"
         },
         {
-          "path": "tinker/components/health/index.server.ts",
-          "target": "~/tinker/components/health/index.server.ts",
-          "type": "registry:file"
-        },
-        {
           "path": "tinker/components/health/index.ts",
           "target": "~/tinker/components/health/index.ts",
           "type": "registry:file"
@@ -212,6 +207,11 @@
         {
           "path": "../start-min/src/routes/tinker.tsx",
           "target": "~/src/routes/tinker.tsx",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/requests/lifetime.server.ts",
+          "target": "~/tinker/components/requests/lifetime.server.ts",
           "type": "registry:file"
         }
       ],

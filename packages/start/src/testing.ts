@@ -28,4 +28,4 @@ export {
 export { syncRouter } from "./parts/sync/client/router";
 export { sync as offSync } from "./parts/sync/off";
 export { sync as onSync } from "./parts/sync/on";
-export { retainRender } from "~/components/requests/index.server";
+export { renderFrames } from "~/components/requests/index.server";

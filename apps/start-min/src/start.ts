@@ -1,4 +1,4 @@
 import { createStart } from "@tanstack/react-start";
 
-/** The base's empty start file: an app with no src/start.ts adds no Start options. */
+/** The command reads this app-owned Start setup; keep it even when options are empty. */
 export const startInstance = createStart(() => ({}));

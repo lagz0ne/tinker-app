@@ -92,6 +92,5 @@ afterAll(close);
 
 export default {
   requestContext: { scope: root },
-  renderObserve: {},
   close,
 };

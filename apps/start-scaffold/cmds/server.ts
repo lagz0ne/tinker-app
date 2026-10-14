@@ -15,8 +15,7 @@ import {
   settings,
 } from "~/components/demo/index.server";
 import * as mail from "~/components/mail/index.server";
-import { startRequests } from "~/components/requests";
-import { backendStop } from "~/components/requests/index.server";
+import { startRequests, backendStop } from "~/components/requests";
 
 const parts = start.serverParts({ auth, bootstrap, database, readAccount });
 const values = { ...process.env };
@@ -50,7 +49,6 @@ await app.ready.catch(close);
 
 const server = {
   requestContext: app.resolve(startRequests),
-  renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
   close,
 } satisfies ServerEntry.Handle;
 

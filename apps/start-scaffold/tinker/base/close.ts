@@ -6,7 +6,9 @@ export function createScopeClose<T extends Record<string, Scope.RootHandle>>(
   stop: Record<keyof T, AbortController>,
 ): () => Promise<void> {
   let closed: Promise<void> | undefined;
-  return () => (closed ??= closeRoots(roots, stop));
+  return function close() {
+    return (closed ??= closeRoots(roots, stop));
+  };
 }
 
 async function closeRoots(

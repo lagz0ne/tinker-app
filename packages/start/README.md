@@ -71,13 +71,25 @@ The scaffold entry is filled in below:
 import { createScope } from "@tinker/core";
 import * as start from "@tinker/start/server";
 
-import { createScopeClose, createServerEntry } from "~/base/server";
-import * as demo from "~/components/demo/index.server";
-import { auth, bootstrap, database, readAccount } from "~/components/demo/index.server";
+import { createScopeClose } from "~/base/close";
+import { renderObservation } from "~/base/observe";
+import { observeServerPanics } from "~/base/panics.server";
+import { createServerHandler } from "~/base/server-entry";
+import type { ServerEntry } from "~/base/server-entry";
+import {
+  auth,
+  bootstrap,
+  database,
+  databaseSetup,
+  readAccount,
+  settings,
+} from "~/components/demo/index.server";
+import * as mail from "~/components/mail/index.server";
+import { startRequests, backendStop } from "~/components/requests";
 
-const parts = { auth, bootstrap, database, readAccount };
+const parts = start.serverParts({ auth, bootstrap, database, readAccount });
 const values = { ...process.env };
-const appTags = [start.auth.settings(values), demo.settings(values), start.serverParts(parts)];
+const appTags = [parts, start.auth.settings(values), settings(values), mail.settings(values)];
 const stop = { tools: new AbortController(), app: new AbortController() };
 
 const tools = createScope({
@@ -91,33 +103,45 @@ await tools.ready;
 const app = createScope({
   signal: stop.app.signal,
   observe: tools.resolve(start.telemetry.observe),
-  extensions: [start.startRequests, start.auth.extensions, demo.databaseSetup],
-  tags: [start.backendStop(stop.app.signal), appTags, tools.resolve(start.telemetry.appTags)],
+  extensions: [startRequests, start.auth.extensions, databaseSetup],
+  tags: [
+    backendStop(stop.app.signal),
+    renderObservation(
+      tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
+    ),
+    appTags,
+    tools.resolve(start.telemetry.appTags),
+  ],
 });
 
 const close = createScopeClose({ tools, app }, stop);
-
 await app.ready.catch(close);
 
-if (import.meta.hot) import.meta.hot.dispose(close);
-
-export default createServerEntry({
-  requestContext: app.resolve(start.startRequests),
-  renderObserve: tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
+const server = {
+  requestContext: app.resolve(startRequests),
   close,
-});
+} satisfies ServerEntry.Handle;
+
+observeServerPanics(server);
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(close);
+  import.meta.hot.on("vite:beforeFullReload", close);
+}
+
+export { close };
+export default createServerHandler(server);
 ```
 
 There are no generated wiring files or role files.
 The app calls `createScopeClose` to close the app, then telemetry.
-The copied `tinker/base/server.ts` holds the entry and close helpers.
+The copied `tinker/base/close.ts` owns close; `server-entry.ts` owns rendering.
 It starts nothing and shares one close promise.
 An unhandled rejection prints its cause, closes both roots, and exits with code 1.
 A start or close error is rethrown after both roots end.
 
-The default export has three fields:
-`requestContext`, `renderObserve`, and `close`.
-Start borrows the context and observer.
+The server handle has `requestContext` and `close`.
+Start borrows the context. The command binds the render observation tag.
 An optional `fetch(request, next)` can wrap requests.
 The entry closes on HMR replacement and process shutdown.
 
@@ -297,7 +321,7 @@ The client seam with sync on, filled in:
 
 ```ts
 // cmds/router.ts
-export const router: RouterOptions = () => ({});
+export const router: RouterOptions = {};
 export const extensions = [];
 export { records } from "../frontend/records";
 export { readSnapshot, readBootstrap } from "./sync";
@@ -376,7 +400,7 @@ and so does the head of `.tinker/parts.server.ts`.
   a snapshot keeps the app's own fields
   beside the stream and revision.
 - `@tinker/start/server`: `readResult`, the `Env` types,
-  `ServerEntry` types, `serverParts`, and `startRequests`,
+  `serverParts` and `startRequests`,
   `auth`, `telemetry`, `abortReasons`,
   and `authSettings`
   (the auth part's origin and secret),

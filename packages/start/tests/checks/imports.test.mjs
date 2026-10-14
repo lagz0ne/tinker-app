@@ -91,7 +91,8 @@ test("copied layer warnings name dynamic, type, and export paths without replaci
     "cmds/server.ts": "export default 1;\n",
     "cmds/job.ts": 'import "~/helpers";\n',
     "src/old.ts": 'type T = import("@tinker/start").Errors;\n',
-    "tinker/base/entry.ts": 'import("@/feature");\nexport * from "~/components/sync";\n',
+    "tinker/base/entry.ts":
+      'import("@/feature");\nexport * from "~/components/sync";\nexport type { RouterOptions } from "@tinker/start";\n',
     "tinker/components/inbox/component.json": '{"requires":[]}',
     "tinker/components/inbox/index.ts": 'export * from "@tinker/start/client";\n',
     "src/bad.ts": 'import "~/base/entry";\n',
@@ -103,6 +104,7 @@ test("copied layer warnings name dynamic, type, and export paths without replaci
     'src/old.ts:1 "@tinker/start" imports the runtime package; use copied base or component entries',
     'tinker/base/entry.ts:1 "@/feature" imports app code; pass the app value into the base entry',
     'tinker/base/entry.ts:2 "~/components/sync" imports an optional component; the command must pass it into base',
+    'tinker/base/entry.ts:3 "@tinker/start" imports the runtime package; use copied base or component entries',
     'tinker/components/inbox/index.ts:1 "@tinker/start/client" imports the runtime package; use copied base or component entries',
   ]);
   expect(imports(root).status).toBe("fail");

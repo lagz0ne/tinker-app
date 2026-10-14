@@ -57,3 +57,17 @@ registry item per component.
 Each step passes `vp check`, `vp run -r test`, and the scaffold proof.
 Jobs run one at a time with `VITEST_MAX_WORKERS=1` and
 `VP_RUN_CONCURRENCY_LIMIT=1`. Stop after requests and health for mid review.
+
+## Native entry exceptions
+
+The lead approved named base entry exceptions after mid review. Only the
+copied server, router, start, close, and panic entry files may have them.
+Each function is named in check-plain with a reason. Src, components, and
+commands have no function skip. Native callbacks keep their SDK contracts.
+The plain-function cap stays 17. Planted cases check both IO and handle
+patterns in src, a component, a command, and an unlisted base file. A new
+function in a listed base file must still pass the plain rule.
+
+The router command holds options as a value. Its request loader lives in
+the named base router entry. Loading the route tree at request time keeps
+the router and server from waiting on each other during startup.

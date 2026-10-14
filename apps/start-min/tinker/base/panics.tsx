@@ -1,17 +1,6 @@
 import type { ErrorComponentProps } from "@tanstack/react-router";
 
 /**
- * The error text the base's error page may show: the message in dev, and nothing in
- * production, so no server detail reaches a visitor. The server log keeps the error.
- * @param error - From TanStack's error boundary; why: the error a route threw.
- * @param dev - From import.meta.env.DEV; why: only a developer sees the text.
- */
-export function errorDetail(error: unknown, dev: boolean): string | undefined {
-  if (!dev) return undefined;
-  return error instanceof Error ? error.message : String(error);
-}
-
-/**
  * Dev only. Start answers a failed render with a bare JSON 500, and that page has no Vite
  * client, so it never sees the fix. This page keeps the body and reloads on the next update.
  * @param request - From the server entry; why: only a browser page load gets the HTML page.
@@ -49,7 +38,13 @@ export async function devErrorPage(request: Request, response: Response): Promis
  */
 export function TinkerError({ error }: ErrorComponentProps) {
   if (import.meta.env.SSR) console.error("tinker: a route failed on the server:", error);
-  const detail = errorDetail(error, import.meta.env.DEV);
+  return <ErrorDetails error={error} dev={import.meta.env.DEV} />;
+}
+
+/** Show the error text only when the entry is in dev mode. */
+export function ErrorDetails({ error, dev }: { error: unknown; dev: boolean }) {
+  const detail = dev ? (error instanceof Error ? error.message : String(error)) : undefined;
+
   return (
     <main>
       <h1>Something went wrong</h1>

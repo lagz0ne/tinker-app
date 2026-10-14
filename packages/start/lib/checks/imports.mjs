@@ -167,7 +167,7 @@ function sourcePath(name, file, root) {
 export function directionImport(root, file, name, line) {
   if (isTest(file)) return [];
   const at = `${file}:${line} "${name}"`;
-  if (/^(src|cmds|tinker\/components)\//.test(file) && name.startsWith("@tinker/start")) {
+  if (/^(src|cmds|tinker\/(?:components|base))\//.test(file) && name.startsWith("@tinker/start")) {
     return [`${at} imports the runtime package; use copied base or component entries`];
   }
 

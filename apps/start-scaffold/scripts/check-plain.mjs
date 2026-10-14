@@ -22,9 +22,6 @@ const { commandImport, isolatedImport } = createRequire(join(base, "package.json
   "./lib/checks/imports.mjs",
 );
 
-const { appFiles } = createRequire(join(base, "package.json"))("./lib/named.mjs");
-const clientEntry = appFiles(root).find((entry) => entry.alias === "#tinker/router").file;
-
 const failures = [];
 const files = [];
 
@@ -638,7 +635,7 @@ function isCommand(node) {
 
 function checkRoots(node) {
   if (isCommand(node)) return;
-  if (pathOf(node) === "tinker/base/router-entry.tsx" && entryFunction(enclosingFunction(node))) {
+  if (pathOf(node) === "tinker/base/router-entry.tsx" && graphOwner(node)) {
     return;
   }
 
@@ -1041,7 +1038,6 @@ function staticProtocolValue(node) {
   if (!ts.isNewExpression(node)) return false;
   const constructors = {
     "tinker/components/errors/errors.ts": "DOMException",
-    "tinker/components/requests/render-lifetime.server.ts": "WeakMap",
   };
   return nameOf(node.expression) === constructors[pathOf(node)];
 }
@@ -1260,26 +1256,52 @@ function checkPlainFunction(node) {
   );
 }
 
-function isClientRouter(node) {
-  return (
-    pathOf(node) === clientEntry && ["router", "getRouter"].includes(nameOf(functionName(node)))
-  );
-}
-
-/** Copied entry functions keep native framework and lifetime contracts, as the package entries did. */
+/** Only named copied base entry functions have native entry exceptions. */
 function isEntryHelper(node) {
   if (!node) return false;
   const helpers = {
-    "tinker/components/errors/errors.ts": ["raise", "fail", "isError"],
-    "tinker/components/requests/start.ts": ["finish"],
-    "tinker/components/requests/render-lifetime.server.ts": ["retainRender"],
-    "tinker/components/requests/result.server.ts": ["readResult"],
-    "tinker/base/close.ts": ["createScopeClose", "closeRoots"],
-    "tinker/base/panics.server.ts": ["observeServerPanics"],
-    "tinker/base/panics.tsx": ["devErrorPage", "errorDetail"],
-    "tinker/base/router-entry.tsx": ["createRouterEntry", "getRouter"],
-    "tinker/base/server-entry.ts": ["createServerHandler"],
-    "tinker/base/start-entry.ts": ["createStartEntry", "readOptions"],
+    "tinker/base/close.ts": [
+      // c55998e createScopeClose: share one reverse-close promise for the command's roots.
+      "createScopeClose",
+      // c55998e closeRoots: stop roots in reverse order and report the first close error.
+      "closeRoots",
+      // New: expose the shared reverse-close callback to HMR and host shutdown.
+      "close",
+    ],
+    "tinker/base/panics.server.ts": [
+      // c55998e createServerEntry: register process panic cleanup without identity wrapping.
+      "observeServerPanics",
+    ],
+    "tinker/base/panics.tsx": [
+      // c55998e entry/dev-error devErrorPage: read a failed response and build its dev page.
+      "devErrorPage",
+    ],
+    "tinker/base/router-entry.tsx": [
+      // New: bind optional parts to Start's request-time router loader.
+      "createRouterEntry",
+      // c55998e entry/router getRouter: load the route tree and own the tab scopes.
+      "getRouter",
+      // c55998e router readTelemetry.observe: read the borrowed or owned observer.
+      "observe",
+      // c55998e router readTelemetry.close: stop the browser's telemetry root.
+      "close",
+      // New: await both tab roots and report their first close failure.
+      "finishClose",
+    ],
+    "tinker/base/server-entry.ts": [
+      // New: bind Start's renderer to the command's request scope.
+      "createServerHandler",
+      // c55998e entry/server fetch: dispatch a request through Start or app fetch.
+      "fetch",
+      // c55998e entry/server next: render the request and map its dev error response.
+      "next",
+    ],
+    "tinker/base/start-entry.ts": [
+      // New: put CSRF and requests before the app's Start middleware.
+      "createStartEntry",
+      // c55998e entry/start readOptions: await and cache the app's options once.
+      "readOptions",
+    ],
   };
   return helpers[pathOf(node)]?.includes(nameOf(functionName(node))) ?? false;
 }
@@ -1295,11 +1317,7 @@ function commandModulePath(node) {
 
 function entryFunction(node) {
   if (!node) return false;
-  if (isClientRouter(node)) return true;
-  for (let parent = node; parent; parent = enclosingFunction(parent)) {
-    if (isEntryHelper(parent)) return true;
-  }
-  return false;
+  return isEntryHelper(node);
 }
 
 function checkCommandImport(node) {
@@ -1525,6 +1543,31 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    ...[
+      ["component", "tinker/components/entry-probe/index.ts"],
+      ["src", "src/entry-probe.ts"],
+      ["unnamed-base", "tinker/base/entry-probe.ts"],
+      ["cmd", "cmds/entry-probe.ts"],
+    ].flatMap(([place, file]) => [
+      [
+        `${place}-entry-await`,
+        "plain-effect",
+        "export async function createStartEntry() { await Promise.resolve(); return {}; }",
+        file,
+      ],
+      [
+        `${place}-entry-handle`,
+        "plain-param",
+        'import type { Scope } from "@tinker/core"; export function createServerHandler(scope: Scope.Handle) { return scope.resolve; }',
+        file,
+      ],
+    ]),
+    [
+      "named-base-other-function",
+      "plain-effect",
+      "export async function unrelatedFeature() { await Promise.resolve(); }",
+      "tinker/base/start-entry.ts",
+    ],
     [
       "unknown-base-root",
       "scope-entry-only",

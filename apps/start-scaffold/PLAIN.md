@@ -91,7 +91,36 @@ Tests and generated files do not count.
     - `src/frontend/Todos.tsx#showFailure.input`
     - `src/transport/result.server.ts#readReceipt`
 
+- **tinker/components/errors/errors.ts#raise**
+  - `kind`: `N`. From a failed base action; why: choose the managed error.
+  - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
+  - Callers:
+    - `tinker/base/server-entry.ts#renderRequest.callback`
+    - `tinker/components/requests/render-lifetime.server.ts#retain`
+    - `tinker/components/requests/start.ts#middleware.callback`
+
+- **tinker/components/errors/errors.ts#fail**
+  - `kind`: `N`. From a failed base action; why: choose the managed error.
+  - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
+  - Callers:
+    - `tinker/components/errors/errors.ts#raise`
+    - `tinker/components/requests/result.server.ts#readResult`
+
+- **tinker/components/errors/errors.ts#isError**
+  - `error`: `unknown`. From a caught failure; why: narrow its payload.
+  - `kind`: `N`. From the caller; why: select the expected error.
+  - Callers:
+    - `src/frontend/error-text.ts#errorText`
+    - `src/transport/result.server.ts#readReceipt`
+
 - **tinker/components/mail/settings.server.ts#settings**
   - `env`: `Env.Values`. From the app's server entry; why: the keys to check and convert.
   - Callers:
     - `cmds/server.ts#module`
+
+- **tinker/components/requests/result.server.ts#readResult**
+  - `result`: `RunResult<T>`. From a settled boundary call; why: return its value or raise its failure.
+  - Callers:
+    - `src/routes/api.health.ts#Route.GET`
+    - `src/transport/profile.functions.ts#getProfile.callback`
+    - `src/transport/todos.functions.ts#getTodos.callback`

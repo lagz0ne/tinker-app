@@ -1,4 +1,4 @@
-import type { Errors as BaseErrors } from "@tinker/start";
+import type { Errors as BaseErrors } from "~/components/errors";
 
 export declare namespace Errors {
   type Payloads = {

@@ -3,12 +3,12 @@ import { startRequests as serverRequests } from "@tinker/start/server";
 import {
   startRequests as testingRequests,
   requestHeaders as packageHeaders,
-  retainRender as packageRender,
+  renderFrames as packageRender,
 } from "@tinker/start/testing";
 import { expect, test } from "vite-plus/test";
 
 import { startRequests } from "~/components/requests";
-import { retainRender, requestHeaders } from "~/components/requests/index.server";
+import { renderFrames, requestHeaders } from "~/components/requests/index.server";
 
 test("package compatibility exports share the copied request middleware and state", () => {
   for (const requests of [packageRequests, serverRequests, testingRequests]) {
@@ -16,6 +16,6 @@ test("package compatibility exports share the copied request middleware and stat
   }
 
   expect(packageRequests.middleware).toBe(startRequests.middleware);
-  expect(packageRender).toBe(retainRender);
+  expect(packageRender).toBe(renderFrames);
   expect(packageHeaders).toBe(requestHeaders);
 });

@@ -2,10 +2,10 @@ import {
   createStartHandler as createStart,
   defaultStreamHandler as renderStream,
 } from "@tanstack/react-start/server";
-import type { Observe, Scope } from "@tinker/core";
+import type { Scope } from "@tinker/core";
 
 import { raise } from "~/components/errors";
-import { retainRender } from "~/components/requests/index.server";
+import { renderFrames } from "~/components/requests/index.server";
 
 import { devErrorPage } from "./panics";
 import type { createRouterEntry } from "./router-entry";
@@ -15,7 +15,6 @@ export declare namespace ServerEntry {
   type Next = (request: Request) => Promise<Response>;
   type Handle = {
     requestContext: { scope: Scope.Handle };
-    renderObserve: Observe.Config;
     close(): Promise<void>;
     fetch?(request: Request, next: Next): Promise<Response> | Response;
   };
@@ -25,10 +24,10 @@ export declare namespace ServerEntry {
 export function createServerHandler(app: ServerEntry.Handle) {
   const renderRequest = createStart(async (context) => {
     const router: typeof context.router & {
-      close?: Awaited<ReturnType<typeof createRouterEntry>>["close"];
+      close?: Awaited<ReturnType<ReturnType<typeof createRouterEntry>>>["close"];
     } = context.router;
     if (typeof router.close !== "function") raise("StartScopeMissing", {});
-    retainRender(context.request, router.close);
+    app.requestContext.scope.resolve(renderFrames).retain(context.request, router.close);
 
     try {
       return await renderStream(context);

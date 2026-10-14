@@ -1,5 +1,6 @@
-import type { Env } from "@tinker/start/server";
 import { z } from "zod";
+
+import type { Env } from "~/components/errors";
 
 import { mailFrom, smtpUrl } from "./mail.server";
 

@@ -7,6 +7,7 @@ import { raise } from "~/components/errors";
 import { responseBodies } from "./body.server";
 import { requestHeaders } from "./headers.server";
 import { requestStop } from "./lifetime";
+import { requestClose, requestLifetime } from "./lifetime.server";
 import { renderLifetime } from "./render-lifetime.server";
 
 /** Start merges this registry to type the context supplied by the server entry. */
@@ -22,24 +23,26 @@ const middleware = createMiddleware().server(async ({ context, request, next }) 
   if (scope === undefined) raise("StartScopeMissing", {});
 
   const session = scope.createSession({
-    tags: [requestHeaders(new Headers(request.headers)), requestStop(request.signal)],
+    tags: [
+      requestHeaders(new Headers(request.headers)),
+      requestStop(request.signal),
+      requestClose((graceful) => session.close({ graceful })),
+    ],
   });
   session.resolve(renderLifetime).open(request);
 
-  let closed: Promise<void> | undefined;
-  const finish = (graceful: boolean) =>
-    (closed ??= Promise.resolve(session.close({ graceful })).then((end) => {
-      if (end.teardownErrors?.length) throw end.teardownErrors.at(0);
-    }));
+  const lifetime = session.resolve(requestLifetime);
 
   try {
     const result = await next({ context: { session, signal: request.signal } });
     return {
       ...result,
-      response: await (await session.resolve(responseBodies)).hold(result.response, finish),
+      response: await (
+        await session.resolve(responseBodies)
+      ).hold(result.response, lifetime.finish),
     };
   } catch (error) {
-    await finish(false);
+    await lifetime.finish(false);
     throw error;
   }
 });

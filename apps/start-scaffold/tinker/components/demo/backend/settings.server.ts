@@ -1,7 +1,7 @@
-import type { Env } from "@tinker/start/server";
 import { z } from "zod";
 
 import { raise } from "~/components/demo/errors";
+import type { Env } from "~/components/errors";
 
 import { databaseUrl } from "./database.server";
 
