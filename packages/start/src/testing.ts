@@ -1,5 +1,5 @@
-export { http, httpRequest } from "./backend/http";
-export { httpBackend } from "./backend/http-backend";
+export { http, httpRequest } from "~/components/http/index.server";
+export { httpBackend } from "~/components/http";
 export { backendStop, requestStop } from "~/components/requests";
 export { requestHeaders } from "~/components/requests/index.server";
 export { handleAuth } from "./parts/auth/handle.server";

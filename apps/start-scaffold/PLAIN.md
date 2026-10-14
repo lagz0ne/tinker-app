@@ -96,6 +96,7 @@ Tests and generated files do not count.
   - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
   - Callers:
     - `tinker/base/server-entry.ts#renderRequest.callback`
+    - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
     - `tinker/components/requests/render-lifetime.server.ts#retain`
     - `tinker/components/requests/start.ts#middleware.callback`
 

@@ -1,10 +1,10 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 
-import { backendStop, requestStop } from "~/components/requests/index";
+import { abortReasons, raise } from "~/components/errors";
+import { backendStop, requestStop } from "~/components/requests";
 
-import { abortReasons, raise } from "../errors";
-import { httpBackend } from "./http-backend";
+import { httpBackend } from "./backend";
 
 const requestShape = z
   .strictObject({
@@ -18,10 +18,13 @@ const requestShape = z
   })
   .brand<"HttpRequest">();
 
-/** Caught native errors are not operation input; safeParse reads their failure fields. */
+const nameShape = z.string();
+const codeShape = z.union([z.string(), z.number()]);
+
+/** Caught native errors are not operation input; each failure field is checked on its own. */
 const failureShape = z.object({
-  name: z.string().optional().catch(undefined),
-  code: z.union([z.string(), z.number()]).optional().catch(undefined),
+  name: z.unknown().optional(),
+  code: z.unknown().optional(),
   cause: z.unknown().optional(),
 });
 
@@ -88,13 +91,15 @@ export const httpRequest = operation({
 
         const nested = failureShape.safeParse(failure.data.cause);
         const details = nested.success ? nested.data : failure.data;
+        const name = nameShape.optional().catch(undefined);
+        const code = codeShape.optional().catch(undefined);
 
         raise("HttpRequestFailed", {
           method,
           path,
           cause: {
-            name: details.name ?? failure.data.name,
-            code: details.code ?? failure.data.code,
+            name: name.parse(details.name) ?? name.parse(failure.data.name),
+            code: code.parse(details.code) ?? code.parse(failure.data.code),
           },
         });
       }

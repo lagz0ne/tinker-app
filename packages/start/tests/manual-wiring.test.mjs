@@ -25,7 +25,7 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
       ]),
     ),
     ...Object.fromEntries(
-      ["requests", "health"].flatMap((component) =>
+      ["requests", "health", "http"].flatMap((component) =>
         readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
           (file) => [
             `tinker/components/${component}/${file}`,
@@ -77,7 +77,7 @@ test("a component settings file is not bound unless the user calls its public AP
       ]),
     ),
     ...Object.fromEntries(
-      ["requests", "health"].flatMap((component) =>
+      ["requests", "health", "http"].flatMap((component) =>
         readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
           (file) => [
             `tinker/components/${component}/${file}`,

@@ -846,8 +846,26 @@ function nativeReference(node, declarations) {
   return referenceSymbol(node)?.declarations?.some((decl) => declarations.has(decl));
 }
 
+/** Only the HTTP backend tag's default supplies native fetch. */
+function backendDefault(node) {
+  if (pathOf(node) !== "tinker/components/http/backend.ts") return false;
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (!ts.isPropertyAssignment(parent) || nameOf(parent.name) !== "default") continue;
+    const call = parent.parent.parent;
+    return (
+      ts.isCallExpression(call) &&
+      coreSymbol(call.expression, "tag") &&
+      ts.isVariableDeclaration(call.parent) &&
+      nameOf(call.parent.name) === "httpBackend"
+    );
+  }
+  return false;
+}
+
 function checkFetch(node) {
-  if (typeReference(node) || !nativeReference(node, fetchDeclarations)) return;
+  if (typeReference(node) || backendDefault(node) || !nativeReference(node, fetchDeclarations)) {
+    return;
+  }
   fail(node, "http-request: use httpRequest.controller instead of built-in fetch");
 }
 
@@ -860,13 +878,27 @@ function checkBrowserHttp(node) {
 
 function checkHttpResource(node) {
   if (typeReference(node)) return;
-  if (protocolUnitReference(node, "src/backend/http.ts", "http")) {
+  if (
+    ["tinker/components/http/http.server.ts", "tinker/components/http/index.server.ts"].includes(
+      pathOf(node),
+    )
+  ) {
+    return;
+  }
+  if (protocolUnitReference(node, "tinker/components/http/http.server.ts", "http")) {
     fail(node, "http-resource: app code must depend on httpRequest.controller");
   }
 }
 
 function checkHttpBackend(node) {
-  if (protocolUnitReference(node, "src/backend/http-backend.ts", "httpBackend")) {
+  if (
+    ["backend.ts", "http.server.ts", "index.ts"].some(
+      (file) => pathOf(node) === `tinker/components/http/${file}`,
+    )
+  ) {
+    return;
+  }
+  if (protocolUnitReference(node, "tinker/components/http/backend.ts", "httpBackend")) {
     fail(node, "http-backend: app code must depend on httpRequest.controller");
   }
 }
@@ -1543,6 +1575,24 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    [
+      "http-owner-extra-fetch",
+      "http-request",
+      "export const extraFetch = fetch;",
+      "tinker/components/http/backend.ts",
+    ],
+    [
+      "http-owner-other-tag-default",
+      "http-request",
+      'const otherBackend = tag<typeof fetch>({label: "other", default: (input, init) => fetch(input, init)});',
+      "tinker/components/http/backend.ts",
+    ],
+    [
+      "http-outside-default",
+      "http-request",
+      'import {tag} from "@tinker/core"; const httpBackend = tag<typeof fetch>({label: "http.backend", default: (input, init) => fetch(input, init)});',
+      "src/other-http-default.ts",
+    ],
     ...[
       ["component", "tinker/components/entry-probe/index.ts"],
       ["src", "src/entry-probe.ts"],

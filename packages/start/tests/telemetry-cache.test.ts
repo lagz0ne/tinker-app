@@ -1,7 +1,8 @@
 import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
-import { httpBackend } from "../src/backend/http-backend";
+import { httpBackend } from "~/components/http";
+
 import { exportHealth } from "../src/parts/telemetry/health";
 import { flushTelemetry, ingestTelemetry, telemetryExport } from "../src/parts/telemetry/observer";
 import type { Telemetry } from "../src/parts/telemetry/records";

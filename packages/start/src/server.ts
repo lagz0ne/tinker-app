@@ -9,7 +9,7 @@ export type { Auth } from "./parts/auth/settings";
 export { eventHistory } from "./parts/sync/history.server";
 export { drizzleOrm } from "./modules.server";
 export type { Database } from "./parts/sync/database";
-export { httpRequest } from "./backend/http";
+export { httpRequest } from "~/components/http/index.server";
 export { requestHeaders } from "~/components/requests/index.server";
 export { event, execution, stream } from "./parts/sync/schema";
 export { accountNotice } from "./parts/sync/notice";

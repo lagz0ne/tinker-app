@@ -1,9 +1,9 @@
 import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
+import { httpBackend } from "~/components/http";
 import { backendStop, requestStop } from "~/components/requests";
 
-import { httpBackend } from "../src/backend/http-backend";
 import {
   browserTelemetry,
   receiveTelemetry,

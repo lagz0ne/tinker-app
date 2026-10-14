@@ -2,7 +2,8 @@ import { createScope } from "@tinker/core";
 import { makeTestClock } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
-import { httpBackend } from "../src/backend/http-backend";
+import { httpBackend } from "~/components/http";
+
 import { consoleOutput } from "../src/parts/telemetry/console";
 import { exportHealth } from "../src/parts/telemetry/health";
 import {

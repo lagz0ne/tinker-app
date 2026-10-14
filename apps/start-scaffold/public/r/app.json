@@ -250,6 +250,36 @@
       "target": "~/tinker/components/requests/lifetime.server.ts",
       "type": "registry:file",
       "content": "import { resource, tag } from \"@tinker/core\";\nimport type { Scope } from \"@tinker/core\";\n\n/** The native middleware lends its session close to that session. */\nexport const requestClose = tag<(graceful: boolean) => Promise<Scope.Result>>({\n  label: \"request.closeOwner\",\n});\n\n/** Share one close promise without joining the session's own teardown. */\nexport const requestLifetime = resource({\n  label: \"request.close\",\n  target: \"session\",\n  depends: { close: requestClose.required },\n  factory: ({ close }) => {\n    let closed: Promise<void> | undefined;\n\n    return {\n      finish: (graceful: boolean) => {\n        return (closed ??= Promise.resolve(close(graceful)).then((end) => {\n          if (end.teardownErrors?.length) throw end.teardownErrors.at(0);\n        }));\n      },\n    };\n  },\n});\n"
+    },
+    {
+      "path": "tinker/components/http/component.json",
+      "type": "registry:file",
+      "target": "~/tinker/components/http/component.json",
+      "content": "{ \"requires\": [\"errors\", \"requests\"] }\n"
+    },
+    {
+      "path": "tinker/components/http/backend.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/http/backend.ts",
+      "content": "import { tag } from \"@tinker/core\";\n\n/**\n * The one way out for HTTP components send themselves; tests bind a fake (ADR 0102). Its default is\n * the real `fetch`: an effect default on the seam, as ADR 0113 allows.\n */\nexport const httpBackend = tag<typeof fetch>({\n  label: \"http.backend\",\n  default: (input, init) => fetch(input, init),\n});\n"
+    },
+    {
+      "path": "tinker/components/http/http.server.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/http/http.server.ts",
+      "content": "import { operation, resource } from \"@tinker/core\";\nimport { z } from \"zod\";\n\nimport { abortReasons, raise } from \"~/components/errors\";\nimport { backendStop, requestStop } from \"~/components/requests\";\n\nimport { httpBackend } from \"./backend\";\n\nconst requestShape = z\n  .strictObject({\n    url: z.url({ protocol: /^https?$/ }),\n    method: z\n      .string()\n      .regex(/^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$/)\n      .toUpperCase(),\n    headers: z.record(z.string(), z.string()).optional(),\n    body: z.string().optional(),\n  })\n  .brand<\"HttpRequest\">();\n\nconst nameShape = z.string();\nconst codeShape = z.union([z.string(), z.number()]);\n\n/** Caught native errors are not operation input; each failure field is checked on its own. */\nconst failureShape = z.object({\n  name: z.unknown().optional(),\n  code: z.unknown().optional(),\n  cause: z.unknown().optional(),\n});\n\n/** Closing this session or an ancestor ends HTTP waits before graceful work drains.\n * Stop tags also end waits without closing a layer; caller cancellation keeps Core's result. */\nexport const http = resource({\n  label: \"http\",\n  target: \"session\",\n  depends: {\n    send: httpBackend,\n    backendStop: backendStop.optional,\n    requestStop: requestStop.optional,\n  },\n  factory: ({ send, backendStop, requestStop }, { closing, defer }) => {\n    const stop = new AbortController();\n    defer(() => stop.abort(abortReasons.closed));\n    return {\n      async send(url: string, init: RequestInit & { signal: AbortSignal }) {\n        const signal = AbortSignal.any([\n          init.signal,\n          closing,\n          stop.signal,\n          ...(backendStop.present ? [backendStop.value] : []),\n          ...(requestStop.present ? [requestStop.value] : []),\n        ]);\n        signal.throwIfAborted();\n        const response = await send(url, { ...init, signal });\n        return {\n          status: response.status,\n          headers: Object.fromEntries(\n            Array.from(response.headers, ([name, value]): [string, string[]] => [\n              name,\n              name === \"set-cookie\" ? response.headers.getSetCookie() : [value],\n            ]),\n          ),\n          body: await response.text(),\n        };\n      },\n    };\n  },\n});\n\n/** HTTP statuses are results; only sending or reading failures raise HttpRequestFailed. */\nexport const httpRequest = operation({\n  label: \"http.request\",\n  input: requestShape,\n  depends: { http },\n  run: ({ http }, { input, obs, signal }) => {\n    const { url, method, headers, body } = input;\n    const path = new URL(url).pathname;\n    return obs.child(`http ${method} ${path}`, async (span) => {\n      if (span) {\n        span.attributes[\"http.request.method\"] = method;\n        span.attributes[\"url.path\"] = path;\n      }\n      try {\n        const response = await http.send(url, { method, headers, body, signal: signal });\n        if (span) span.attributes[\"http.response.status_code\"] = response.status;\n        return response;\n      } catch (cause) {\n        signal.throwIfAborted();\n        const failure = failureShape.safeParse(cause);\n        if (!failure.success) raise(\"HttpRequestFailed\", { method, path });\n\n        const nested = failureShape.safeParse(failure.data.cause);\n        const details = nested.success ? nested.data : failure.data;\n        const name = nameShape.optional().catch(undefined);\n        const code = codeShape.optional().catch(undefined);\n\n        raise(\"HttpRequestFailed\", {\n          method,\n          path,\n          cause: {\n            name: name.parse(details.name) ?? name.parse(failure.data.name),\n            code: code.parse(details.code) ?? code.parse(failure.data.code),\n          },\n        });\n      }\n    });\n  },\n});\n"
+    },
+    {
+      "path": "tinker/components/http/index.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/http/index.ts",
+      "content": "export { httpBackend } from \"./backend\";\n"
+    },
+    {
+      "path": "tinker/components/http/index.server.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/http/index.server.ts",
+      "content": "export { http, httpRequest } from \"./http.server\";\n"
     }
   ],
   "meta": {

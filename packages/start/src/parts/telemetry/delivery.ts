@@ -1,6 +1,7 @@
 import { resource } from "@tinker/core";
 
-import { httpBackend } from "../../backend/http-backend";
+import { httpBackend } from "~/components/http/index";
+
 import type { Telemetry } from "./records";
 import { logsUrl, telemetryService, telemetrySide, tracesUrl } from "./settings";
 

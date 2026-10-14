@@ -213,6 +213,31 @@
           "path": "tinker/components/requests/lifetime.server.ts",
           "target": "~/tinker/components/requests/lifetime.server.ts",
           "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/http/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/http/component.json"
+        },
+        {
+          "path": "tinker/components/http/backend.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/http/backend.ts"
+        },
+        {
+          "path": "tinker/components/http/http.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/http/http.server.ts"
+        },
+        {
+          "path": "tinker/components/http/index.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/http/index.ts"
+        },
+        {
+          "path": "tinker/components/http/index.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/http/index.server.ts"
         }
       ],
       "meta": {
