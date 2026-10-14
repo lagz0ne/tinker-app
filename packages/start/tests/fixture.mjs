@@ -57,6 +57,15 @@ export function goodApp(files = {}) {
         ],
       ),
     ),
+    ...Object.fromEntries(
+      ["component.json", "errors.ts", "env.ts", "index.ts"].map((file) => [
+        `tinker/components/errors/${file}`,
+        readFileSync(
+          join(baseDir, "../../apps/start-scaffold/tinker/components/errors", file),
+          "utf8",
+        ),
+      ]),
+    ),
     "cmds/server.ts": readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8"),
     "src/routes/index.tsx": 'export const Route = createFileRoute("/")({});\n',
     ...Object.fromEntries(

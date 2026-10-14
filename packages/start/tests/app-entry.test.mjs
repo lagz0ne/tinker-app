@@ -65,6 +65,15 @@ async function loadEntry(wiring, entry = source) {
         ],
       ),
     ),
+    ...Object.fromEntries(
+      ["component.json", "errors.ts", "env.ts", "index.ts"].map((file) => [
+        `tinker/components/errors/${file}`,
+        readFileSync(
+          join(baseDir, "../../apps/start-scaffold/tinker/components/errors", file),
+          "utf8",
+        ),
+      ]),
+    ),
     "cmds/server.ts": entry
       .replace(
         'import * as start from "@tinker/start/server";',

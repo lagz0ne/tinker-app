@@ -4,7 +4,8 @@ import { createIsomorphicFn, getGlobalStartContext } from "@tanstack/react-start
 import { createScope } from "@tinker/core";
 import type { Many, Scope } from "@tinker/core";
 import { ScopeProvider } from "@tinker/react";
-import { abortReasons } from "@tinker/start";
+
+import { abortReasons } from "~/components/errors";
 
 import { routeTree } from "#tinker/routes";
 

@@ -1025,15 +1025,29 @@ function checkHttpImport(node) {
   }
 }
 
+/** These immutable native values keep the copied protocol's package contracts. */
+function staticProtocolValue(node) {
+  if (!ts.isNewExpression(node)) return false;
+  const constructors = {
+    "tinker/components/errors/errors.ts": "DOMException",
+    "tinker/components/requests/render-lifetime.server.ts": "WeakMap",
+  };
+  return nameOf(node.expression) === constructors[pathOf(node)];
+}
+
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
-    if (isCommand(node)) return;
-    if (!moduleDeclarationCall(node)) fail(node, "module-effect");
+    checkModuleEffect(node);
     return;
   }
   if (!serviceAllocation(node) || graphOwner(node)) return;
   fail(node, "service-owner");
+}
+
+function checkModuleEffect(node) {
+  if (isCommand(node) || staticProtocolValue(node)) return;
+  if (!moduleDeclarationCall(node)) fail(node, "module-effect");
 }
 
 function callerOf(use) {
@@ -1245,6 +1259,7 @@ function isClientRouter(node) {
 function isEntryHelper(node) {
   if (!node) return false;
   const helpers = {
+    "tinker/components/errors/errors.ts": ["raise", "fail", "isError"],
     "tinker/base/close.ts": ["createScopeClose", "closeRoots"],
     "tinker/base/panics.server.ts": ["observeServerPanics"],
     "tinker/base/panics.tsx": ["devErrorPage", "errorDetail"],

@@ -15,6 +15,15 @@ const entry = readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8");
 test("prepare writes glue only and leaves component graph checks to doctor", () => {
   const root = fixture({
     "package.json": "{}",
+    ...Object.fromEntries(
+      ["component.json", "errors.ts", "env.ts", "index.ts"].map((file) => [
+        `tinker/components/errors/${file}`,
+        readFileSync(
+          join(baseDir, "../../apps/start-scaffold/tinker/components/errors", file),
+          "utf8",
+        ),
+      ]),
+    ),
     "cmds/server.ts": entry,
     ...Object.fromEntries(
       ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(
@@ -45,6 +54,15 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
 test("a component settings file is not bound unless the user calls its public API", async () => {
   const root = fixture({
     "package.json": '{"type":"module"}',
+    ...Object.fromEntries(
+      ["component.json", "errors.ts", "env.ts", "index.ts"].map((file) => [
+        `tinker/components/errors/${file}`,
+        readFileSync(
+          join(baseDir, "../../apps/start-scaffold/tinker/components/errors", file),
+          "utf8",
+        ),
+      ]),
+    ),
     "cmds/server.ts": entry,
     ...Object.fromEntries(
       ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(

@@ -108,6 +108,26 @@
           "path": "../start-min/src/start.ts",
           "target": "~/src/start.ts",
           "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/errors/component.json",
+          "target": "~/tinker/components/errors/component.json",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/errors/env.ts",
+          "target": "~/tinker/components/errors/env.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/errors/errors.ts",
+          "target": "~/tinker/components/errors/errors.ts",
+          "type": "registry:file"
+        },
+        {
+          "path": "tinker/components/errors/index.ts",
+          "target": "~/tinker/components/errors/index.ts",
+          "type": "registry:file"
         }
       ],
       "meta": {

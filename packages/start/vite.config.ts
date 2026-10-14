@@ -6,6 +6,9 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   resolve: {
     alias: {
+      "~/components": fileURLToPath(
+        new URL("../../apps/start-scaffold/tinker/components", import.meta.url),
+      ),
       "~/base": fileURLToPath(new URL("../../apps/start-scaffold/tinker/base", import.meta.url)),
       "#tinker/routes": fileURLToPath(
         new URL("../../apps/start-min/.tinker/routeTree.gen.ts", import.meta.url),
