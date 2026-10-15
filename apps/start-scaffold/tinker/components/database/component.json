@@ -1,8 +1,1 @@
-{
-  "requires": ["errors"],
-  "env": {
-    "DATABASE_URL": {
-      "rule": "url"
-    }
-  }
-}
+{ "requires": [] }

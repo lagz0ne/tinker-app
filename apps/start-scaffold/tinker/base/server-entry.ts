@@ -21,7 +21,7 @@ export declare namespace ServerEntry {
 }
 
 /** Render over the supplied app; request bodies retain each render's close. */
-export function createServerHandler(app: ServerEntry.Handle) {
+export function createServerHandler(app: ServerEntry.Handle, { dev }: { dev: boolean }) {
   const renderRequest = createStart(async (context) => {
     const router: typeof context.router & {
       close?: Awaited<ReturnType<ReturnType<typeof createRouterEntry>>>["close"];
@@ -42,7 +42,7 @@ export function createServerHandler(app: ServerEntry.Handle) {
     fetch(request: Request) {
       const next = async (forwarded: Request) => {
         const response = await renderRequest(forwarded, { context: app.requestContext });
-        return import.meta.env.DEV ? devErrorPage(forwarded, response) : response;
+        return dev ? devErrorPage(forwarded, response) : response;
       };
       return app.fetch ? app.fetch(request, next) : next(request);
     },

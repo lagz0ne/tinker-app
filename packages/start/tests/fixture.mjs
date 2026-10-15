@@ -48,7 +48,6 @@ export function goodApp(files = {}) {
       'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({ serverEntry: "cmds/server.ts" })] };\n',
     "tsconfig.json": JSON.stringify({ extends: "./.tinker/tsconfig.json" }),
     ".gitignore": ".tinker/\n.tanstack/\n",
-    ".env": `PUBLIC_ORIGIN=http://localhost:4318\nAUTH_SECRET=${"s".repeat(32)}\nDATABASE_URL=postgresql://test:test@localhost:5432/test\n`,
     ...Object.fromEntries(
       ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(
         (file) => [
@@ -58,7 +57,7 @@ export function goodApp(files = {}) {
       ),
     ),
     ...Object.fromEntries(
-      ["component.json", "errors.ts", "env.ts", "index.ts"].map((file) => [
+      ["component.json", "errors.ts", "index.ts"].map((file) => [
         `tinker/components/errors/${file}`,
         readFileSync(
           join(baseDir, "../../apps/start-scaffold/tinker/components/errors", file),

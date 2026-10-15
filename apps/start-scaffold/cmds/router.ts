@@ -9,7 +9,7 @@ import {
   readSnapshotSlot,
   streamMessageSlot,
 } from "~/components/sync";
-import { telemetry, logConsole } from "~/components/telemetry";
+import { telemetry, logConsole, telemetryService } from "~/components/telemetry";
 
 const extensions: [] = [];
 const router: RouterOptions = {};
@@ -17,7 +17,7 @@ const router: RouterOptions = {};
 export const getRouter = createRouterEntry({
   sync,
   telemetry,
-  toolTags: [logConsole(console)],
+  toolTags: [logConsole(console), telemetryService("tinker-browser")],
   tags: [
     recordsSlot(records),
     readBatchSlot(readBatch),

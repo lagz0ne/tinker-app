@@ -16,7 +16,7 @@ if (import.meta.main) {
 
     const plant = process.argv.find((arg) => arg.startsWith("--plant="))?.slice(8);
     if (plant) {
-      assert.ok(["sync", "auth", "telemetry"].includes(plant));
+      assert.ok(["sync", "auth", "telemetry", "functions"].includes(plant));
       const requests = join(proof, "tinker/components/requests");
       const copy = (await readFile(join(requests, "start.ts"), "utf8")).replace(
         'label: "start.requests"',
@@ -24,43 +24,56 @@ if (import.meta.main) {
       );
       await writeFile(join(requests, "second-start.ts"), copy);
 
-      const configFile = join(proof, "vite.config.ts");
-      const config = await readFile(configFile, "utf8");
-      assert.ok(config.includes("plugins: ["));
+      const index = join(requests, "index.ts");
       await writeFile(
-        configFile,
-        config.replace(
-          "plugins: [",
-          `plugins: [{
-        name: "proof:second-requests",
-        enforce: "pre",
-        transform(code, id) {
-          if (["/routes/api.${plant}.ts", "/routes/api.${plant}.$.ts"].some((path) => id.split("?")[0].endsWith(path))) {
-            return code.replace('from "~/components/requests/index"', 'from "~/components/requests/second-start"').replace('from "~/components/requests"', 'from "~/components/requests/second-start"');
-          }
-        },
-      },`,
+        index,
+        (await readFile(index, "utf8")) +
+          '\nexport { startRequests as secondStartRequests } from "./second-start";\n',
+      );
+      const target = join(
+        proof,
+        plant === "functions"
+          ? "tinker/components/sync/functions.ts"
+          : `src/routes/api.${plant}${plant === "auth" ? ".$" : ""}.ts`,
+      );
+      const original = await readFile(target, "utf8");
+      assert.ok(
+        original.includes("import { startRequests }"),
+        "the plant must replace the real boundary middleware",
+      );
+      await writeFile(
+        target,
+        original.replace(
+          "import { startRequests }",
+          "import { secondStartRequests as startRequests }",
         ),
       );
     }
 
+    // Expose only the existing native function in this proof fixture to read its HTTP URL.
+    const syncIndex = join(proof, "tinker/components/sync/index.ts");
+    await writeFile(
+      syncIndex,
+      (await readFile(syncIndex, "utf8")) +
+        '\nexport { getBootstrap } from "~/components/sync/functions";\n',
+    );
+
     const serverFile = join(proof, "cmds/server.ts");
     const server = await readFile(serverFile, "utf8");
-    assert.ok(server.includes("await app.ready.catch(close);"));
+    assert.ok(server.includes("  await app.ready;"));
     await writeFile(
       serverFile,
       server.replace(
-        "await app.ready.catch(close);",
+        "  await app.ready;",
         `
-await app.ready.catch(close);
-const createRequestSession = app.createSession.bind(app);
-let requestSessionCount = 0;
-app.createSession = (...args) => {
-  requestSessionCount++;
-  return createRequestSession(...args);
-};
-export const createdRequestSessions = () => requestSessionCount;
-export const stdoutConfigured = tools.resolve(consoleOutput) === process.stdout;
+  await app.ready;
+  const createRequestSession = app.createSession.bind(app);
+  let requestSessionCount = 0;
+  app.createSession = (...args) => { requestSessionCount++; return createRequestSession(...args); };
+  Object.assign(globalThis, { __middlewareProof: {
+    count: () => requestSessionCount,
+    stdout: tools.resolve(consoleOutput) === process.stdout,
+  } });
 `,
       ),
     );
@@ -128,9 +141,10 @@ export const readProofUser = operation({
 import { createFileRoute } from "@tanstack/react-router";
 import { proofRequest } from "../proof-middleware";
 import { readProof } from "../proof-functions";
+import { getBootstrap } from "~/components/sync";
 export const Route = createFileRoute("/proof/native")({
   server: {middleware: [proofRequest]},
-  loader: async () => ({first: await readProof(), second: await readProof()}),
+  loader: async () => ({first: await readProof(), second: await readProof(), bootstrapUrl: getBootstrap.url}),
   component: () => <pre id="native-proof">{JSON.stringify(Route.useLoaderData())}</pre>,
 });
 `,
@@ -167,7 +181,9 @@ export const Route = createFileRoute("/proof/write")({server: {
     const app = await import(pathToFileURL(join(proof, "dist/server/server.js")).href);
 
     try {
-      assert.equal(app.stdoutConfigured, true, "the command binds stdout to its telemetry tools");
+      const native = globalThis.__middlewareProof;
+      let bootstrapUrl;
+      assert.equal(native.stdout, true, "the command binds stdout to its telemetry tools");
       const results = await Promise.all(
         ["Ada", "Grace"].map(async (user) => {
           const response = await app.default.fetch(
@@ -181,6 +197,9 @@ export const Route = createFileRoute("/proof/write")({server: {
           assert.ok(content, html);
 
           const data = JSON.parse(content.replaceAll("&quot;", '"'));
+          bootstrapUrl = data.bootstrapUrl;
+          assert.ok(bootstrapUrl.includes("_serverFn"), bootstrapUrl);
+          delete data.bootstrapUrl;
           assert.deepEqual(data, {
             first: { user, sameSession: true, requestRuns: 1, functionRuns: 1 },
             second: { user, sameSession: true, requestRuns: 1, functionRuns: 2 },
@@ -190,15 +209,15 @@ export const Route = createFileRoute("/proof/write")({server: {
         }),
       );
 
-      assert.equal(app.createdRequestSessions(), 2, "one request session per SSR request");
+      assert.equal(native.count(), 2, "one request session per SSR request");
 
       const stream = await app.default.fetch(new Request("http://localhost:4318/api/sync"));
-      assert.equal(app.createdRequestSessions(), 3, "one request session for /api/sync");
+      assert.equal(native.count(), 3, "one request session for /api/sync");
 
       const auth = await app.default.fetch(
         new Request("http://localhost:4318/api/auth/get-session"),
       );
-      assert.equal(app.createdRequestSessions(), 4, "one request session for /api/auth");
+      assert.equal(native.count(), 4, "one request session for /api/auth");
       assert.equal(auth.status, 200);
       await auth.text();
 
@@ -209,9 +228,26 @@ export const Route = createFileRoute("/proof/write")({server: {
           body: "{}",
         }),
       );
-      assert.equal(app.createdRequestSessions(), 5, "one request session for /api/telemetry");
+      assert.equal(native.count(), 5, "one request session for /api/telemetry");
       assert.equal(telemetry.status, 400);
       await telemetry.text();
+
+      const bootstrap = await app.default.fetch(
+        new Request(new URL(bootstrapUrl, "http://localhost:4318"), {
+          headers: { "Sec-Fetch-Site": "same-origin", "x-tsr-serverFn": "true" },
+        }),
+      );
+      assert.equal(bootstrap.status, 200, await bootstrap.clone().text());
+      const bootstrapBody = await bootstrap.text();
+      assert.ok(bootstrapBody.includes('"public"'), bootstrapBody);
+      assert.ok(!bootstrapBody.includes("StartSessionAlreadySet"), bootstrapBody);
+      console.log("PASS: HTTP getBootstrap returned its snapshot with one session.");
+      assert.equal(native.count(), 6, "one request session for HTTP getBootstrap");
+
+      const health = await app.default.fetch(new Request("http://localhost:4318/api/health"));
+      assert.equal(health.status, 200);
+      await health.text();
+      assert.equal(native.count(), 7, "one request session for /api/health");
 
       assert.equal(stream.headers.get("x-proof-requests"), "1");
       assert.equal(stream.headers.get("Content-Type"), "text/event-stream; charset=utf-8");
@@ -275,7 +311,7 @@ export const Route = createFileRoute("/proof/write")({server: {
       assert.equal((await pendingRead).done, true);
 
       const idle = reader.read();
-      await app.close();
+      await app.default.close();
       assert.equal((await idle).done, true);
 
       process.stdout.write(
@@ -285,7 +321,7 @@ export const Route = createFileRoute("/proof/write")({server: {
         `PASS: native global/route/function middleware runs once per request; direct SSR calls keep ${results.join(" and ")} apart.\n`,
       );
     } finally {
-      await app.close();
+      await app.default.close();
     }
   } finally {
     process.chdir(previousDirectory);

@@ -3,9 +3,10 @@ import { operation, resource } from "@tinker/core";
 import { database } from "~/components/database/index.server";
 import { requestHeaders } from "~/components/requests/index.server";
 
+import { authCalls } from "./calls.server";
 import { betterAuthModule, betterAuthDrizzle, betterAuthStart } from "./modules";
 import * as schema from "./schema.server";
-import { authSettings } from "./settings.server";
+import { authSettings, authStartup } from "./settings.server";
 import { sendAuthMail, sessionDeleted } from "./slots";
 
 /**
@@ -18,13 +19,15 @@ export const auth = resource({
   depends: {
     database,
     settings: authSettings,
+    calls: authCalls,
+    outside: authStartup,
     send: sendAuthMail.required,
     deleted: sessionDeleted.required,
     auth: betterAuthModule,
     adapter: betterAuthDrizzle,
     start: betterAuthStart,
   },
-  factory: async ({ database, settings, send, deleted, auth, adapter, start }) => {
+  factory: async ({ database, settings, calls, outside, send, deleted, auth, adapter, start }) => {
     const { betterAuth } = auth;
     const { drizzleAdapter } = adapter;
     const { tanstackStartCookies } = start;
@@ -35,20 +38,20 @@ export const auth = resource({
       databaseHooks: {
         session: {
           delete: {
-            after: ({ userId }) => deleted(userId),
+            after: ({ userId }) => calls.fire(deleted, userId, outside),
           },
         },
       },
       emailAndPassword: {
         enabled: true,
         sendResetPassword: async ({ user, url }) => {
-          send({ to: user.email, subject: "Reset your password", text: url });
+          calls.fire(send, { to: user.email, subject: "Reset your password", text: url }, outside);
         },
       },
       emailVerification: {
         sendOnSignUp: true,
         sendVerificationEmail: async ({ user, url }) => {
-          send({ to: user.email, subject: "Check your email", text: url });
+          calls.fire(send, { to: user.email, subject: "Check your email", text: url }, outside);
         },
       },
       plugins: [tanstackStartCookies()],

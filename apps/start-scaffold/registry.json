@@ -164,16 +164,17 @@
         "drizzle-orm@catalog:",
         "zod@catalog:"
       ],
-      "registryDependencies": [
-        "@tinker-start/errors",
-        "@tinker-start/requests",
-        "@tinker-start/database"
-      ],
+      "registryDependencies": ["@tinker-start/requests", "@tinker-start/database"],
       "files": [
         {
           "path": "tinker/components/auth/auth.server.ts",
           "type": "registry:file",
           "target": "~/tinker/components/auth/auth.server.ts"
+        },
+        {
+          "path": "tinker/components/auth/calls.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/auth/calls.server.ts"
         },
         {
           "path": "tinker/components/auth/component.json",
@@ -189,11 +190,6 @@
           "path": "tinker/components/auth/index.server.ts",
           "type": "registry:file",
           "target": "~/tinker/components/auth/index.server.ts"
-        },
-        {
-          "path": "tinker/components/auth/index.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/auth/index.ts"
         },
         {
           "path": "tinker/components/auth/modules.ts",
@@ -237,7 +233,7 @@
         "pg@8.20.0",
         "zod@catalog:"
       ],
-      "registryDependencies": ["@tinker-start/errors"],
+      "registryDependencies": [],
       "files": [
         {
           "path": "tinker/components/database/component.json",
@@ -263,11 +259,6 @@
           "path": "tinker/components/database/modules.ts",
           "type": "registry:file",
           "target": "~/tinker/components/database/modules.ts"
-        },
-        {
-          "path": "tinker/components/database/settings.server.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/database/settings.server.ts"
         },
         {
           "path": "tinker/components/database/types.ts",
@@ -413,11 +404,6 @@
           "target": "~/tinker/components/errors/component.json"
         },
         {
-          "path": "tinker/components/errors/env.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/errors/env.ts"
-        },
-        {
           "path": "tinker/components/errors/errors.ts",
           "type": "registry:file",
           "target": "~/tinker/components/errors/errors.ts"
@@ -443,7 +429,7 @@
         "@tanstack/react-router@1.170.41",
         "react@catalog:"
       ],
-      "registryDependencies": ["@tinker-start/requests"],
+      "registryDependencies": [],
       "files": [
         {
           "path": "tinker/components/health/component.json",
@@ -528,7 +514,7 @@
         "nodemailer@10.0.13",
         "zod@catalog:"
       ],
-      "registryDependencies": ["@tinker-start/errors"],
+      "registryDependencies": [],
       "files": [
         {
           "path": "tinker/components/mail/component.json",
@@ -549,11 +535,6 @@
           "path": "tinker/components/mail/modules.ts",
           "type": "registry:file",
           "target": "~/tinker/components/mail/modules.ts"
-        },
-        {
-          "path": "tinker/components/mail/settings.server.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/mail/settings.server.ts"
         }
       ],
       "meta": {
@@ -897,7 +878,7 @@
       "files": [],
       "meta": {
         "ownership": "userland",
-        "requires": "Bind mail.settings(env) by hand. Doctor checks the copied SMTP env table; a build starts no SMTP client."
+        "requires": "Bind smtpUrl and mailFrom in cmds/server.ts and list mailStartup. Missing tags reject app.ready; a build starts no SMTP client."
       },
       "registryDependencies": ["@tinker-start/mail"]
     },
@@ -1107,7 +1088,7 @@
       "meta": {
         "ownership": "userland",
         "demo": true,
-        "requires": "Bind the command slots by hand. Copy the demo root context and styles by hand from examples/demo-root.tsx and examples/demo-style.css. Set the keys in examples/demo.env.example."
+        "requires": "Bind the command slots by hand. Copy the demo root context and styles by hand from examples/demo-root.tsx and examples/demo-style.css. Read the required tags in examples/demo.env.example and bind them in cmds/server.ts."
       },
       "dependencies": [
         "@radix-ui/react-slot@1.3.3",

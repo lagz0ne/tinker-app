@@ -1,7 +1,7 @@
-import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { test, expect } from "vite-plus/test";
 
+import { authStartup } from "~/components/auth/index.server";
 import { authSettings } from "~/components/auth/index.server";
 import { auth } from "~/components/auth/index.server";
 import { migrate, databaseUrl } from "~/components/database/index.server";
@@ -89,12 +89,9 @@ const text = async (read: Promise<ReadableStreamReadResult<Uint8Array>>) => {
 async function withRoot(run: (root: ReturnType<typeof createScope>) => Promise<void>) {
   const stop = new AbortController();
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [
-      [tags, backendStop(stop.signal), requestStop(stop.signal)],
-      authBindings((): Scope.Handle => root),
-    ],
+    tags: [[tags, backendStop(stop.signal), requestStop(stop.signal)], authBindings],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;

@@ -72,6 +72,8 @@ export const proofEnv = {
   PUBLIC_ORIGIN: "http://localhost:4318",
   AUTH_SECRET: "local-proof-only-secret-with-thirty-two-letters",
   DATABASE_URL: "postgres://proof",
+  SMTP_URL: "smtp://proof:25",
+  OTEL_SERVICE_NAME: "proof",
   SMTP_HOST: "proof",
   SMTP_PORT: "25",
   SMTP_USER: "",

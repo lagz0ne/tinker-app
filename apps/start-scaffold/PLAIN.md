@@ -32,16 +32,6 @@ Tests and generated files do not count.
     - `src/transport/profile.functions.ts#updateProfile.callback`
     - `src/transport/todos.functions.ts#updateTodo.callback`
 
-- **tinker/components/auth/settings.server.ts#settings**
-  - `env`: `Env.Values`. From the command's copy of process.env; why: check auth's two keys once.
-  - Callers:
-    - `cmds/server.ts#module`
-
-- **tinker/components/database/settings.server.ts#settings**
-  - `env`: `Env.Values`. From the app's server entry; why: the keys to check and convert.
-  - Callers:
-    - `cmds/server.ts#module`
-
 - **tinker/components/demo/contracts/commands.ts#readProfileCommand**
   - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.
   - Callers:
@@ -88,8 +78,6 @@ Tests and generated files do not count.
   - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
   - Callers:
     - `tinker/base/server-entry.ts#renderRequest.callback`
-    - `tinker/components/auth/settings.server.ts#settings`
-    - `tinker/components/database/settings.server.ts#settings`
     - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
     - `tinker/components/requests/render-lifetime.server.ts#retain`
     - `tinker/components/requests/start.ts#middleware.callback`
@@ -103,7 +91,6 @@ Tests and generated files do not count.
     - `tinker/components/sync/stream.server.ts#lease.open`
     - `tinker/components/sync/stream.server.ts#lease.wait`
     - `tinker/components/telemetry/ingest.server.ts#receiveTelemetry.run`
-    - `tinker/components/telemetry/settings.ts#settings`
 
 - **tinker/components/errors/errors.ts#fail**
   - `kind`: `N`. From a failed base action; why: choose the managed error.
@@ -122,11 +109,6 @@ Tests and generated files do not count.
     - `src/frontend/error-text.ts#errorText`
     - `src/routes/api.sync.ts#Route.GET`
     - `src/transport/result.server.ts#readReceipt`
-
-- **tinker/components/mail/settings.server.ts#settings**
-  - `env`: `Env.Values`. From the app's server entry; why: the keys to check and convert.
-  - Callers:
-    - `cmds/server.ts#module`
 
 - **tinker/components/requests/result.server.ts#readResult**
   - `result`: `RunResult<T>`. From a settled boundary call; why: return its value or raise its failure.
@@ -153,8 +135,3 @@ Tests and generated files do not count.
   - Callers:
     - `tinker/components/telemetry/observer.ts#export`
     - `tinker/components/telemetry/observer.ts#log`
-
-- **tinker/components/telemetry/settings.ts#settings**
-  - `env`: `Env.Values`. From the command's copy of process.env; why: check and convert telemetry's five keys.
-  - Callers:
-    - `cmds/server.ts#module`

@@ -16,8 +16,8 @@ Public entries belong to their owner:
 
 - `~/components/requests`: startRequests, backendStop, requestStop.
 - `~/components/requests/index.server`: readResult and request protocol state.
-- `~/components/errors`: Env, managed errors, and abort reasons.
-- `~/components/database/index.server`: database, settings, and drizzleOrm.
+- `~/components/errors`: managed errors, and abort reasons.
+- `~/components/database/index.server`: database, databaseUrl, databaseSetup, and drizzleOrm.
 - `~/components/auth/index.server`: auth settings, principal, and required hooks.
 - `~/components/sync` and `~/components/sync/index.server`: sync APIs and slot tags.
 - `~/components/http/index.server`: httpRequest; tests bind httpBackend from `~/components/http`.
@@ -28,9 +28,9 @@ Components never read commands. Base receives optional parts as values.
 Commands import only ~/base, ~/components, @/, and @tinker/core.
 Src and components never import base. Components never import src or cmds.
 
-`settings(env)` turns env into the app's settings tags.
-The app server entry calls it once, at start.
-App units depend on those tags, never on `env`.
+The server command fills each typed config tag beside its scope.
+Each component checks its required tags in its one startup extension.
+Missing bindings reject ready with MissingTag and the tag name. Components never read env.
 
 Doctor checks command exports, import directions, and build import violations.
 

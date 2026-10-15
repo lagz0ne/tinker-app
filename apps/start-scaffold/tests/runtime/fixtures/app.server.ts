@@ -4,11 +4,10 @@ import type { Many, Resource, Scope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { afterAll, beforeAll } from "vite-plus/test";
 
-import { createScopeClose } from "~/base/close";
+import { once } from "~/base/close";
 import { auth as nativeAuth } from "~/components/auth/index.server";
 import { database as nativeDatabase } from "~/components/database/index.server";
 import type { Database } from "~/components/database/index.server";
-import type { Env } from "~/components/errors";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
 export type AuthPort = {
@@ -27,7 +26,6 @@ export type AuthPort = {
  * and signs a request in by its `x-account` header, while that account is in `signedIn`.
  */
 export const extensions: Many<Scope.Extension<unknown>> = [];
-export const settings: Env.Read = () => [];
 export const signedIn = tag<ReadonlySet<string>>({ label: "test.signedIn", default: new Set() });
 
 export const auth = resource({
@@ -108,7 +106,12 @@ export function proofServices(readRoot: () => Scope.Handle) {
 const stop = new AbortController();
 const root = createScope({ signal: stop.signal });
 await root.ready;
-const close = createScopeClose({ root }, { root: stop });
+
+const close = once(async () => {
+  stop.abort();
+  await root.closed;
+});
+
 afterAll(close);
 
 export default {

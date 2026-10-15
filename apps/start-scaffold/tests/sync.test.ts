@@ -1,9 +1,9 @@
-import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { sql } from "drizzle-orm";
 import { test, expect, onTestFinished } from "vite-plus/test";
 
+import { authStartup } from "~/components/auth/index.server";
 import { authSettings } from "~/components/auth/index.server";
 import { migrate, database, databaseUrl } from "~/components/database/index.server";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
@@ -60,9 +60,9 @@ function headers(response: Response) {
 test("concurrent public writes replay in commit order and a repeated receipt changes nothing", async () => {
   const stop = new AbortController();
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings((): Scope.Handle => root)],
+    tags: [tags, authBindings],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -109,9 +109,9 @@ test("concurrent public writes replay in commit order and a repeated receipt cha
 test("private cursors cannot read another real account's history", async () => {
   const stop = new AbortController();
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings((): Scope.Handle => root)],
+    tags: [tags, authBindings],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -155,9 +155,9 @@ test("failed notification keeps the saved profile and retry replies before sendi
   const messages: Mail.Message[] = [];
 
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings((): Scope.Handle => root)],
+    tags: [tags, authBindings],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -264,9 +264,9 @@ test("request exit cannot strand a profile that already committed", async () => 
   const accepted = Promise.withResolvers<void>();
 
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings((): Scope.Handle => root)],
+    tags: [tags, authBindings],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -332,9 +332,9 @@ test("profile replies finish while duplicate receipts share one pending notifica
   let sends = 0;
 
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings((): Scope.Handle => root)],
+    tags: [tags, authBindings],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -386,8 +386,8 @@ test("profile replies finish while duplicate receipts share one pending notifica
 
 test("a bad stored event returns a stored data failure", async () => {
   const root = createScope({
-    extensions: [startRequests],
-    tags: [tags, authBindings((): Scope.Handle => root)],
+    extensions: [startRequests, authStartup],
+    tags: [tags, authBindings],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -414,8 +414,8 @@ test("a bad stored event returns a stored data failure", async () => {
 // readReceipt is used for changes; this only guards that an unknown error is thrown, never shown as rejected.
 test("a bad stored event is not shown to the user as a rejected change", async () => {
   const root = createScope({
-    extensions: [startRequests],
-    tags: [tags, authBindings((): Scope.Handle => root)],
+    extensions: [startRequests, authStartup],
+    tags: [tags, authBindings],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -442,8 +442,8 @@ test("a bad stored event is not shown to the user as a rejected change", async (
 
 test("a bad stored notification result has no retry available", async () => {
   const root = createScope({
-    extensions: [startRequests],
-    tags: [tags, authBindings((): Scope.Handle => root)],
+    extensions: [startRequests, authStartup],
+    tags: [tags, authBindings],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;

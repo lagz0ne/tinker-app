@@ -9,7 +9,6 @@ import react from "@vitejs/plugin-react";
 import { clientOutput, serverOutput } from "./lib/build-output.mjs";
 import { say as routeSay } from "./lib/checks/routes.mjs";
 import { buildChecks } from "./lib/doctor.mjs";
-import { loadEnv } from "./lib/env.mjs";
 import { aliases, passThrough, startOptions } from "./lib/glue.mjs";
 import { recordViolation, restartNote, startViolations } from "./lib/hooks.mjs";
 import { prepare } from "./lib/prepare.mjs";
@@ -106,7 +105,6 @@ export function tinker(options = {}) {
   const passed = passThrough(options);
   const root = resolve(options.root ?? process.cwd());
 
-  loadEnv(root);
   if (!existsSync(join(root, "src/routes"))) throw new Error(`tinker: ${routeSay.missing}`);
   prepare(root);
 

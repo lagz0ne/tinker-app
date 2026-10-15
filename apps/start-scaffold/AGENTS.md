@@ -93,19 +93,19 @@ There is no default server entry.
 Prepare and doctor name a missing entry and show starter code.
 They never write an entry for the app.
 
-The entry reads env once, starts telemetry, then the app.
+The entry reads each input beside its tag binding, starts telemetry, then the app.
 It lists extensions and settings by hand, in the user's order.
 It imports each component's public index.
 There are no generated wiring files or role files.
 Import createScope from @tinker/core.
-The copied `tinker/base/close.ts` holds reverse root close.
+The command writes its close order; `tinker/base/close.ts` caches the callback once.
 `server-entry.ts` renders over the supplied app handle.
 `panics.server.ts` reports process failures without wrapping the handle.
 `router-entry.tsx` receives optional parts from the client command.
 `start-entry.ts` puts CSRF and requests before app middleware.
 The command binds the renderObservation tag from `base/observe.ts`.
 Each server render reads that tag from its request root.
-Its close helper alone may borrow named roots and their stop controllers.
+Only the command retains roots and stop controllers. No close helper borrows a scope.
 Helpers keep only repeated code; the main keeps startup steps.
 Commands sit directly under cmds; nested command files fail the checks.
 Src and components never import tinker/base or cmds.
@@ -113,15 +113,15 @@ The requests component owns backendStop and the request middleware.
 Copied base code owns only entry, close, panic, and observation glue.
 Commands import only ~/base, ~/components, @/, and @tinker/core.
 Bind one tag per app slot. Never re-export app wiring from a command.
-The app calls createScopeClose to close the app, then telemetry.
-That helper starts nothing and shares one close promise.
+The app writes the close order itself: app, then telemetry.
+The base once helper caches only that callback promise; it takes no scope.
 A start or close error is rethrown after both roots end.
 
-The server handle has two fields:
+The server adapter receives two fields:
 `requestContext` and `close`.
 Start borrows the context. The command binds the render observer tag.
 An optional `fetch(request, next)` can wrap requests.
-The entry closes on HMR replacement and process shutdown.
+The command closes on HMR replacement and process shutdown, then reports the first failure.
 
 The scaffold's client wiring lives in `cmds/router.ts`.
 It binds router options, extensions, and each sync reader tag.
@@ -157,9 +157,9 @@ node scripts/check-schema.mjs
 ```
 
 Run the repo's lint and strict style census when present.
-Settings come from `.env`; local services use `compose.yml`.
-The server seam's `settings(env)` checks the keys
-and fills each settings tag. The app entry calls it at start.
+Config enters through typed tags; local services use `compose.yml`.
+Only cmds/server.ts reads app inputs and fills typed tags.
+Tests bind typed tags directly, without env objects.
 
 ## TanStack setup
 

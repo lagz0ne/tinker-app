@@ -23,7 +23,7 @@
       "path": "tinker/components/http/component.json",
       "type": "registry:file",
       "target": "~/tinker/components/http/component.json",
-      "content": "{ \"requires\": [\"errors\", \"requests\"] }\n"
+      "content": "{\n  \"requires\": [\"errors\", \"requests\"]\n}\n"
     },
     {
       "path": "tinker/components/http/http.server.ts",

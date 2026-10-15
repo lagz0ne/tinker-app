@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 
+import { createScope } from "@tinker/core";
 import { createServer } from "vite-plus";
 import { expect, test } from "vite-plus/test";
 
@@ -16,7 +17,7 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
   const root = fixture({
     "package.json": "{}",
     ...Object.fromEntries(
-      ["component.json", "errors.ts", "env.ts", "index.ts"].map((file) => [
+      ["component.json", "errors.ts", "index.ts"].map((file) => [
         `tinker/components/errors/${file}`,
         readFileSync(
           join(baseDir, "../../apps/start-scaffold/tinker/components/errors", file),
@@ -47,7 +48,7 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
       ),
     ),
     "tinker/components/mail/component.json": '{"requires":["missing"]}',
-    "tinker/components/mail/index.server.ts": "export const settings = () => [];",
+    "tinker/components/mail/index.server.ts": "export const recipient = 1;",
   });
 
   const files = prepare(root, []);
@@ -58,11 +59,11 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
   ]);
 });
 
-test("a component settings file is not bound unless the user calls its public API", async () => {
+test("a copied component stays unconfigured until the app binds its required tags", async () => {
   const root = fixture({
     "package.json": '{"type":"module"}',
     ...Object.fromEntries(
-      ["component.json", "errors.ts", "env.ts", "index.ts"].map((file) => [
+      ["component.json", "errors.ts", "index.ts"].map((file) => [
         `tinker/components/errors/${file}`,
         readFileSync(
           join(baseDir, "../../apps/start-scaffold/tinker/components/errors", file),
@@ -93,14 +94,15 @@ test("a component settings file is not bound unless the user calls its public AP
       ),
     ),
     "tinker/components/mail/component.json": '{"requires":[]}',
-    "tinker/components/mail/index.server.ts": `import { tag, operation } from "@tinker/core";
+    "tinker/components/mail/index.server.ts": `import { tag, operation, extension } from "@tinker/core";
 export const recipient = tag({ label: "mail.recipient" });
-export const greet = operation({ depends: { recipient }, run: ({recipient}) => recipient });`,
-    "tinker/components/mail/settings.server.ts": `import { recipient } from "./index.server";
-export default () => [recipient("Ada")];`,
+export const greet = operation({ depends: { recipient }, run: ({recipient}) => recipient });
+export const mailStartup = extension({hooks:{start({resolve,next}){resolve(recipient);return next();}}});`,
   });
+
   symlinkSync(join(baseDir, "node_modules"), join(root, "node_modules"));
   prepare(root, []);
+
   const vite = await createServer({
     root,
     configFile: false,
@@ -110,20 +112,17 @@ export default () => [recipient("Ada")];`,
     },
     server: { middlewareMode: true, watch: null },
   });
-  const { default: server } = await vite.ssrLoadModule(join(root, "cmds/server.ts"));
-
+  const { mailStartup } = await vite.ssrLoadModule(
+    join(root, "tinker/components/mail/index.server.ts"),
+  );
+  const ownScope = createScope({ extensions: [mailStartup] });
   try {
-    const { greet } = await vite.ssrLoadModule(
-      join(root, "tinker/components/mail/index.server.ts"),
-    );
-    const result = server.requestContext.scope.settle(greet);
-
-    expect(result).toMatchObject({
-      status: "failed",
-      error: { kind: "MissingTag", payload: { label: "mail.recipient" } },
+    await expect(ownScope.ready).rejects.toMatchObject({
+      kind: "MissingTag",
+      payload: { label: "mail.recipient" },
     });
   } finally {
-    await server.close();
+    await ownScope.close({ graceful: true });
     await vite.close();
   }
 }, 30000);

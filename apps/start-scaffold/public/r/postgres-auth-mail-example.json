@@ -201,7 +201,7 @@
       "path": ".env.example",
       "target": "~/examples/demo.env.example",
       "type": "registry:file",
-      "content": "HOST=127.0.0.1\nPORT=4318\nPUBLIC_ORIGIN=http://localhost:4318\nAUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters\nPOSTGRES_USER=app\nPOSTGRES_PASSWORD=local-password\nPOSTGRES_DB=app\nPOSTGRES_PORT=15432\nDATABASE_URL=postgres://app:local-password@127.0.0.1:15432/app\nSMTP_HOST=127.0.0.1\nSMTP_PORT=11025\n# Set SMTP_USER and SMTP_PASSWORD only if SMTP needs sign-in.\nSMTP_FROM=app@example.com\nMAILPIT_PORT=18025\nVICTORIA_TRACES_PORT=11428\nVICTORIA_LOGS_PORT=19428\nVICTORIA_TRACES_URL=http://127.0.0.1:11428/insert/opentelemetry/v1/traces\nVICTORIA_LOGS_URL=http://127.0.0.1:19428/insert/jsonline\nOTEL_SERVICE_NAME=start-scaffold\n"
+      "content": "# Config is typed tags, filled by the app command. This file defines no env requirements.\n# Required tag: telemetrySide\n# Required tag: telemetryService\n# Required tag: tracesUrl\n# Required tag: logsUrl\n# Required tag: authSettings\n# Required tag: sendAuthMail\n# Required tag: sessionDeleted\n# Required tag: databaseUrl\n# Required tag: smtpUrl\n# Required tag: mailFrom\n# Safe defaults: logLevel = info; spanHistory = 80.\n# Read cmds/server.ts for the actual bindings and their inputs.\n"
     },
     {
       "path": "src/frontend/modules.ts",
@@ -213,7 +213,7 @@
   "meta": {
     "ownership": "userland",
     "demo": true,
-    "requires": "Bind the command slots by hand. Copy the demo root context and styles by hand from examples/demo-root.tsx and examples/demo-style.css. Set the keys in examples/demo.env.example."
+    "requires": "Bind the command slots by hand. Copy the demo root context and styles by hand from examples/demo-root.tsx and examples/demo-style.css. Read the required tags in examples/demo.env.example and bind them in cmds/server.ts."
   },
   "dependencies": [
     "@radix-ui/react-slot@1.3.3",

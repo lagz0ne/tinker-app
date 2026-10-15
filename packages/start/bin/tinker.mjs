@@ -10,7 +10,6 @@ import { generatorBlocked, staleTree } from "../lib/checks/generated.mjs";
 import { serverProblems } from "../lib/checks/named.mjs";
 import { compressResponse } from "../lib/compression.mjs";
 import { doctor } from "../lib/doctor.mjs";
-import { loadEnv } from "../lib/env.mjs";
 import { prepare, prepareExitCode } from "../lib/prepare.mjs";
 import { createAssets } from "../lib/serve.mjs";
 
@@ -27,11 +26,10 @@ async function writeRouteTree(root) {
 }
 
 /**
- * The Node host for a built app: `.env`, then built files, then the base's server entry (ADR 0106).
+ * The Node host imports the built default entry; the command owns app config and shutdown.
  * @param {string} root - From tinker serve; why: the built app to serve.
  */
 async function serve(root) {
-  loadEnv(root);
   const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
   const asset = await createAssets(root);
   const render = async (request) => compressResponse(request, await built.default.fetch(request));
@@ -52,7 +50,7 @@ async function serve(root) {
   await stopped.promise;
 
   await Promise.all([
-    built.close(),
+    built.default.close(),
     new Promise((done, reject) => server.close((error) => (error ? reject(error) : done()))),
   ]);
 

@@ -60,7 +60,7 @@ export const mail = resource({
 
 Whoever makes the scope fills the tags:
 
-- the server seam's `settings(env)`, at start;
+- the command, beside its createScope;
 - a test, with typed values.
 
 The copied components follow it too.
@@ -69,10 +69,12 @@ Telemetry's units need `telemetrySide`, `telemetryService`,
 `tracesUrl`, `logsUrl`, `logLevel`, and `spanHistory`,
 each only what it uses.
 
-`settings` checks and converts env keys there.
-A refused key stops start with BadSettings.
-Test that conversion alone; no provider runs.
-See `tests/settings.test.ts`.
+The command binds typed values beside each createScope.
+A required tag has no default; each component's startup extension reads it.
+A missing tag rejects ready with MissingTag naming that tag.
+Core checks tags lazily, so these startup reads are required.
+Tests fill typed tags directly; no test builds env.
+Core tag parse checks typed config values, never env keys.
 
 ## Outgoing HTTP
 

@@ -1,29 +1,7 @@
-import type { Scope } from "@tinker/core";
-
-/** The main retains named roots in start order and stop controllers with the same names; repeated close calls share one promise. */
-export function createScopeClose<T extends Record<string, Scope.RootHandle>>(
-  roots: T,
-  stop: Record<keyof T, AbortController>,
-): () => Promise<void> {
-  let closed: Promise<void> | undefined;
+/** Share a callback's promise; the caller owns its stop order and failures. */
+export function once(action: () => Promise<void>): () => Promise<void> {
+  let running: Promise<void> | undefined;
   return function close() {
-    return (closed ??= closeRoots(roots, stop));
+    return (running ??= Promise.resolve().then(action));
   };
-}
-
-async function closeRoots(
-  roots: Record<string, Scope.RootHandle>,
-  stop: Record<string, AbortController>,
-): Promise<void> {
-  const closedReason = new DOMException("The server closed", "AbortError");
-  const results: Scope.Result[] = [];
-  for (const [name, scope] of Object.entries(roots).toReversed()) {
-    stop[name].abort(closedReason);
-    results.push(await scope.closed);
-  }
-
-  for (const result of results) {
-    if (result.status === "failed") throw result.error;
-    if (result.teardownErrors?.length) throw result.teardownErrors.at(0);
-  }
 }

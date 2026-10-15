@@ -1,4 +1,4 @@
-import { operation, resource, tag } from "@tinker/core";
+import { extension, operation, resource, tag } from "@tinker/core";
 import { z } from "zod";
 
 import { smtp } from "./modules";
@@ -11,10 +11,10 @@ export declare namespace Mail {
 }
 
 /** Where the SMTP server is, with its user and password when it needs them. */
-export const smtpUrl = tag<URL>({ label: "mail.smtpUrl" });
+export const smtpUrl = tag<URL>({ label: "mail.smtpUrl", parse: z.instanceof(URL) });
 
 /** The sender address on each message. */
-export const mailFrom = tag<string>({ label: "mail.from" });
+export const mailFrom = tag<string>({ label: "mail.from", parse: z.email() });
 
 export const mail = resource({
   label: "mail.sender",
@@ -66,5 +66,17 @@ export const authMail = resource({
         running.add(completed);
       },
     };
+  },
+});
+
+/** Missing mail config fails before the first send. */
+export const mailStartup = extension({
+  label: "mail",
+  hooks: {
+    start({ resolve, next }) {
+      resolve(smtpUrl);
+      resolve(mailFrom);
+      return next();
+    },
   },
 });

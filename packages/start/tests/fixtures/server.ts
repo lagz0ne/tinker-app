@@ -1,54 +1,108 @@
-import { createScope } from "@tinker/core";
+import { createScope, LEVELS } from "@tinker/core";
 
-import { createScopeClose } from "~/base/close";
+import { once } from "~/base/close";
 import { renderObservation } from "~/base/observe";
 import { observeServerPanics } from "~/base/panics.server";
 import { createServerHandler } from "~/base/server-entry";
-import type { ServerEntry } from "~/base/server-entry";
+import { abortReasons } from "~/components/errors";
 import { startRequests, backendStop } from "~/components/requests";
 import {
-  telemetry,
+  telemetryExport,
+  telemetrySide,
+  telemetryService,
+  tracesUrl,
+  logsUrl,
+  logLevel,
+  spanHistory,
   consoleOutput,
-  settings as telemetrySettings,
+  observer,
+  renderObserve,
+  renderNs,
+  browserIngest,
+  browserTelemetry,
 } from "~/components/telemetry/index.server";
 
-const values = { ...process.env };
+try {
+  process.loadEnvFile();
+} catch (error) {
+  if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+}
+
 const stop = { tools: new AbortController(), app: new AbortController() };
 
 const tools = createScope({
   signal: stop.tools.signal,
-  extensions: telemetry.extensions,
-  tags: [telemetrySettings(values), telemetry.tags, consoleOutput(process.stdout)],
-});
-
-await tools.ready;
-
-const app = createScope({
-  signal: stop.app.signal,
-  observe: tools.resolve(telemetry.observe),
-  extensions: [startRequests],
+  extensions: [telemetryExport],
   tags: [
-    backendStop(stop.app.signal),
-    renderObservation(tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs })),
-    tools.resolve(telemetry.appTags),
+    telemetrySide("server"),
+    consoleOutput(process.stdout),
+    ...(process.env.OTEL_SERVICE_NAME === undefined
+      ? []
+      : [telemetryService(process.env.OTEL_SERVICE_NAME)]),
+    ...(process.env.VICTORIA_TRACES_URL === undefined
+      ? []
+      : [tracesUrl(new URL(process.env.VICTORIA_TRACES_URL))]),
+    ...(process.env.VICTORIA_LOGS_URL === undefined
+      ? []
+      : [logsUrl(new URL(process.env.VICTORIA_LOGS_URL))]),
+    ...(process.env.LOG_LEVEL === undefined
+      ? []
+      : [logLevel(LEVELS[process.env.LOG_LEVEL as keyof typeof LEVELS])]),
+    ...(process.env.SPAN_HISTORY === undefined
+      ? []
+      : [spanHistory(Number(process.env.SPAN_HISTORY))]),
   ],
 });
 
-const close = createScopeClose({ tools, app }, stop);
+let close = once(async () => {
+  stop.tools.abort(abortReasons.closed);
+  const result = await tools.closed;
+  if (result.status === "failed") throw result.error;
+  if (result.teardownErrors?.length) throw result.teardownErrors[0];
+});
 
-await app.ready.catch(close);
+let server;
 
-const server = {
-  requestContext: app.resolve(startRequests),
-  close,
-} satisfies ServerEntry.Handle;
+try {
+  await tools.ready;
+  const app = createScope({
+    signal: stop.app.signal,
+    observe: tools.resolve(observer),
+    extensions: [startRequests],
+    tags: [
+      backendStop(stop.app.signal),
+      renderObservation(tools.resolve(renderObserve, { ns: renderNs })),
+      browserTelemetry(tools.resolve(browserIngest).ingest),
+    ],
+  });
 
-observeServerPanics(server);
+  close = once(async () => {
+    stop.app.abort(abortReasons.closed);
+    const appEnd = await app.closed;
+    stop.tools.abort(abortReasons.closed);
+    const toolsEnd = await tools.closed;
 
-if (import.meta.hot) {
-  import.meta.hot.dispose(close);
-  import.meta.hot.on("vite:beforeFullReload", close);
+    for (const result of [appEnd, toolsEnd]) {
+      if (result.status === "failed") throw result.error;
+      if (result.teardownErrors?.length) throw result.teardownErrors[0];
+    }
+  });
+
+  await app.ready;
+  app.onClose(observeServerPanics(close));
+  if (import.meta.hot) {
+    import.meta.hot.dispose(close);
+    import.meta.hot.on("vite:beforeFullReload", close);
+  }
+  server = createServerHandler(
+    { requestContext: app.resolve(startRequests), close },
+    { dev: import.meta.env.DEV },
+  );
+} catch (error) {
+  await close().catch((cleanup) => {
+    if (cleanup !== error) process.stderr.write(`close failed: ${String(cleanup)}\n`);
+  });
+  throw error;
 }
 
-export { close };
-export default createServerHandler(server);
+export default server;

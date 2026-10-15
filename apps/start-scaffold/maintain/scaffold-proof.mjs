@@ -54,6 +54,7 @@ const env = {
   POSTGRES_DB: "app",
   POSTGRES_PORT: String(postgresPort),
   DATABASE_URL: `postgres://app:local-proof-password@127.0.0.1:${postgresPort}/app`,
+  SMTP_URL: `smtp://127.0.0.1:${smtpPort}`,
   SMTP_HOST: "127.0.0.1",
   SMTP_PORT: String(smtpPort),
   SMTP_USER: "",

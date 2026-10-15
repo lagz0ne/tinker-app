@@ -1,8 +1,8 @@
-import type { Scope } from "@tinker/core";
 import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { test, expect } from "vite-plus/test";
 
+import { authStartup } from "~/components/auth/index.server";
 import { authSettings } from "~/components/auth/index.server";
 import { database, migrate, databaseUrl } from "~/components/database/index.server";
 import { streamMessage } from "~/components/demo";
@@ -72,9 +72,9 @@ const rollBackEvent = operation({
 test("SQL notifications wake after commit, stay silent on rollback, and survive a read before waiting", async () => {
   const stop = new AbortController();
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [settings, authBindings((): Scope.Handle => root)],
+    tags: [settings, authBindings],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -103,11 +103,11 @@ test("SQL notifications wake after commit, stay silent on rollback, and survive 
 test("SSE replays the supplied cursor and a held reader receives the next committed batch", async () => {
   const stop = new AbortController();
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
     tags: [
       [settings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
-      authBindings((): Scope.Handle => root),
+      authBindings,
     ],
     presets: [proofDatabase, proofMail],
   });
@@ -152,12 +152,9 @@ test("SSE replays the supplied cursor and a held reader receives the next commit
 test("private SSE cursors are refused and a revoked held stream sends no saved private rows", async () => {
   const stop = new AbortController();
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [
-      [settings, backendStop(stop.signal), requestStop(stop.signal)],
-      authBindings((): Scope.Handle => root),
-    ],
+    tags: [[settings, backendStop(stop.signal), requestStop(stop.signal)], authBindings],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -217,12 +214,9 @@ test("reconnecting from applied cursors finishes a save whose final event commit
   const accepted = Promise.withResolvers<void>();
 
   const server = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [
-      [settings, backendStop(stop.signal), requestStop(stop.signal)],
-      authBindings((): Scope.Handle => server),
-    ],
+    tags: [[settings, backendStop(stop.signal), requestStop(stop.signal)], authBindings],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -239,7 +233,7 @@ test("reconnecting from applied cursors finishes a save whose final event commit
   const browser = createScope({
     signal: stop.signal,
     extensions: [syncRecords, startRequests, accountOwner],
-    tags: [clientBindings, tabStop(stop.signal), authBindings((): Scope.Handle => browser)],
+    tags: [clientBindings, tabStop(stop.signal), authBindings],
   });
 
   await Promise.all([server.ready, browser.ready]);
@@ -341,12 +335,9 @@ test("reconnecting from applied cursors finishes a save whose final event commit
 test("a quiet private stream closes at once on sign-out, with no heartbeat", async () => {
   const stop = new AbortController();
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [
-      [settings, backendStop(stop.signal), requestStop(stop.signal)],
-      authBindings((): Scope.Handle => root),
-    ],
+    tags: [[settings, backendStop(stop.signal), requestStop(stop.signal)], authBindings],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;

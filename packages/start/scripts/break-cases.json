@@ -60,12 +60,6 @@
     "replace": "export function style(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
   },
   {
-    "name": "check env always passes",
-    "file": "lib/checks/env.mjs",
-    "find": "export function env(root) {",
-    "replace": "export function env(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
-  },
-  {
     "name": "check boundary always passes",
     "file": "lib/checks/boundary.mjs",
     "find": "export function boundary(root) {",
@@ -366,82 +360,10 @@
     "replace": "export function checkTypes(root) {\n  return [];"
   },
   {
-    "name": ".env beats the shell",
-    "file": "lib/env.mjs",
-    "find": "if (key in process.env && !fromEnvFile.has(key)) continue;",
-    "replace": ""
-  },
-  {
-    "name": "an edited .env keeps its old value",
-    "file": "lib/env.mjs",
-    "find": "process.env[key] = value;",
-    "replace": "process.env[key] ??= value;"
-  },
-  {
-    "name": "check 9 checks no part key",
-    "file": "lib/checks/env.mjs",
-    "find": "...partProblems(root, local, keys)",
-    "replace": ""
-  },
-  {
-    "name": "check 9 blames .env for a shell value",
-    "file": "lib/checks/env.mjs",
-    "find": "process.env[key]\n        ? \"the shell\"",
-    "replace": "false\n        ? \"the shell\""
-  },
-  {
-    "name": "check 9 lets .env beat the shell",
-    "file": "lib/checks/env.mjs",
-    "find": "{ ...local, ...process.env }",
-    "replace": "{ ...process.env, ...local }"
-  },
-  {
-    "name": "an empty part key reads as set",
-    "file": "lib/part-env.mjs",
-    "find": "values[key] = env[key] || fallback;",
-    "replace": "values[key] = env[key] ?? fallback;"
-  },
-  {
-    "name": "a part rule accepts any value",
-    "file": "lib/part-env.mjs",
-    "find": "(rule && !rules[rule].accepts(values[key]))",
-    "replace": "false"
-  },
-  {
-    "name": "an ftp URL passes as http",
-    "file": "lib/part-env.mjs",
-    "find": "/^https?:$/",
-    "replace": "/^[a-z]+:$/"
-  },
-  {
     "name": "a route under a base splat is free",
     "file": "lib/route-path.mjs",
     "find": "path.endsWith(\"/$\") && routePath(file)",
     "replace": "false && routePath(file)"
-  },
-  {
-    "name": "an unset part key is not named",
-    "file": "lib/checks/env.mjs",
-    "find": "return listed.includes(key) ? [] : [say.unset(key, name)];",
-    "replace": "return [];"
-  },
-  {
-    "name": "an unset part key that .env.example lists is named twice",
-    "file": "lib/checks/env.mjs",
-    "find": "return listed.includes(key) ? [] : [say.unset(key, name)];",
-    "replace": "return [say.unset(key, name)];"
-  },
-  {
-    "name": "listed keys come in parseEnv's sorted order",
-    "file": "lib/checks/env.mjs",
-    "find": ".sort((a, b) => a.line - b.line)",
-    "replace": ""
-  },
-  {
-    "name": "a short secret passes",
-    "file": "lib/part-env.mjs",
-    "find": "value.length >= 32",
-    "replace": "value.length >= 0"
   },
   {
     "name": "an augmentation is never found",
@@ -460,11 +382,5 @@
     "file": "lib/checks/imports.mjs",
     "find": "export function commandImport(name) {",
     "replace": "export function commandImport(name) { return null;"
-  },
-  {
-    "name": "copied env tables are ignored",
-    "file": "lib/checks/env.mjs",
-    "find": "return readComponentModules(root).declared.filter((item) => item.env);",
-    "replace": "return [];"
   }
 ]

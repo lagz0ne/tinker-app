@@ -25,8 +25,7 @@ test("doctor prints a status line per check, in order, and passes with exit 0", 
     "ok    4 imports",
     "ok    5 routes",
     "ok    6 style",
-    "ok    7 env",
-    "skip  8 boundary",
+    "skip  7 boundary",
     "doctor: all checks pass",
   ]);
   expect(code).toBe(0);

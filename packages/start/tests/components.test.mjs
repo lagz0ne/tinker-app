@@ -47,7 +47,7 @@ test("doctor names component manifests and unknown keys without choosing wiring 
   });
 
   expect(named(root).lines).toEqual([
-    'tinker/components/db/component.json: unknown key "order"; only requires and env are allowed',
+    'tinker/components/db/component.json: unknown key "order"; only requires are allowed',
     'tinker/components/mail: missing component.json; add tinker/components/mail/component.json with { "requires": [] }',
   ]);
 });
@@ -112,8 +112,8 @@ test("every command has the same base import and component public entry checks",
 
 test.each([
   ["{", "invalid JSON"],
-  ["null", "expected an object with only requires and env"],
-  ["[]", "expected an object with only requires and env"],
+  ["null", "expected an object with only requires"],
+  ["[]", "expected an object with only requires"],
   ['{"requires":null}', "requires must be an array of component names"],
   ['{"requires":"mail"}', "requires must be an array of component names"],
   ['{"requires":["Bad"]}', "requires must be an array of component names"],
@@ -182,26 +182,13 @@ test("an unused framework package is not a command import", () => {
   expect(checked.lines).toEqual([`cmds/probe.ts:1 ${commandImport("@tanstack/react-router")}`]);
 });
 
-test.each([
-  [null, "env must be an object of env keys"],
-  [[], "env must be an object of env keys"],
-  [{ lower: {} }, 'invalid env key "lower"'],
-  [{ FEATURE: null }, "expected default and rule fields"],
-  [{ FEATURE: { default: 3 } }, "default must be a string"],
-  [
-    { FEATURE: { rule: [] } },
-    "rule must name url, email, port, smtpHost, http, secret, level, count",
-  ],
-  [
-    { FEATURE: { rule: "constructor" } },
-    "rule must name url, email, port, smtpHost, http, secret, level, count",
-  ],
-  [{ FEATURE: { fallback: "x" } }, 'unknown key "fallback"'],
-])("doctor rejects malformed component env %j", (table, problem) => {
+test("component manifests reject the retired env field", () => {
   const root = goodApp({
-    "tinker/components/caps/component.json": JSON.stringify({ requires: [], env: table }),
+    "tinker/components/caps/component.json": JSON.stringify({ requires: [], env: {} }),
   });
-  expect(readComponentModules(root).problems).toEqual([expect.stringContaining(problem)]);
+  expect(readComponentModules(root).problems).toEqual([
+    'tinker/components/caps/component.json: unknown key "env"; only requires are allowed',
+  ]);
 });
 
 test.each(["~/components/../../outside", "~/base/../components/../../outside", "@/../cmds/server"])(

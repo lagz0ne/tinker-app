@@ -5,7 +5,18 @@ import { httpBackend } from "~/components/http";
 import { exportHealth } from "~/components/telemetry/health";
 import { flushTelemetry, ingestTelemetry, telemetryExport } from "~/components/telemetry/observer";
 import type { Telemetry } from "~/components/telemetry/records";
-import { telemetryService, telemetrySide } from "~/components/telemetry/settings";
+import {
+  telemetryService,
+  telemetrySide,
+  tracesUrl,
+  logsUrl,
+} from "~/components/telemetry/settings";
+
+const config = [
+  telemetryService("s"),
+  tracesUrl(new URL("http://proof.test/v1/traces")),
+  logsUrl(new URL("http://proof.test/logs")),
+];
 
 const log: Telemetry.Log = {
   time: 1,
@@ -36,6 +47,7 @@ test("cached records keep exact log bytes and trace fields through a retry", asy
   const root = createScope({
     extensions: [telemetryExport],
     tags: [
+      config,
       telemetryService("s"),
       telemetrySide("ssr"),
       httpBackend(async (_input, init) => {
@@ -77,7 +89,7 @@ test("cached records keep exact log bytes and trace fields through a retry", asy
 test("a full queue drops a record without reading its message", async () => {
   const root = createScope({
     extensions: [telemetryExport],
-    tags: [telemetrySide("ssr"), httpBackend(async () => new Response(null))],
+    tags: [config, telemetrySide("ssr"), httpBackend(async () => new Response(null))],
   });
   await root.ready;
 

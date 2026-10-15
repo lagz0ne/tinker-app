@@ -38,14 +38,25 @@ Auth follows the same seam rule from ADR 0113. The lead approved two
 required tags: `sendAuthMail` and `sessionDeleted`. The command binds
 the mail queue and the sync notice operation, one plain value per tag.
 Neither tag has a default. Auth checks both at start and names a missing
-binding in `cmds/server.ts`. Auth requires only errors, requests, and
-database; it never imports mail or sync.
+binding in `cmds/server.ts`. Auth requires only requests and database; it never imports mail or sync.
 
-## D2: env rules
+## D2: config is tags (owner change)
 
-`component.json` gains `env`. Doctor reads that JSON only, as in ADR 0117.
-The command reads env once and passes typed settings to each component.
-Runtime settings code never imports the tooling package.
+Duke reversed D2 on 2026-10-15 at 07:06. A component needs typed config,
+not env. component.json declares requires only. The command reads each input
+inline beside its tag binding. Missing values leave required tags unbound.
+Tests bind tags directly; no component takes an env object or converter.
+
+Core checks missing tags lazily. Each component's one start extension
+resolves its required tags so ready fails with MissingTag and the tag name.
+Safe defaults remain only where the component can run without a choice.
+A Core-level eager check is a later card; this round does not change Core.
+
+Auth passes hooks the active run's Core Scope.ExtensionCtx. Concurrent runs
+keep separate contexts. SDK callbacks outside a live run use authStartup's
+start context, because no calling flow owns those background callbacks.
+Commands write close order in a callback; base caches only its promise.
+Start failure closes every started root and rethrows the original error.
 
 ## D3: source of copied code
 

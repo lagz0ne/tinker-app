@@ -1,11 +1,3 @@
 {
-  "requires": ["errors", "requests", "database"],
-  "env": {
-    "PUBLIC_ORIGIN": {
-      "rule": "http"
-    },
-    "AUTH_SECRET": {
-      "rule": "secret"
-    }
-  }
+  "requires": ["requests", "database"]
 }

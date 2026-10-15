@@ -1,7 +1,7 @@
-import type { Scope } from "@tinker/core";
 import { createScope, isError as isCoreError } from "@tinker/core";
 import { test, expect } from "vite-plus/test";
 
+import { authStartup } from "~/components/auth/index.server";
 import { authSettings } from "~/components/auth/index.server";
 import { migrate, databaseUrl } from "~/components/database/index.server";
 import { listTodos, changeTodo } from "~/components/demo/backend/todos.server";
@@ -43,9 +43,9 @@ function readHeaders(response: Response) {
 test("two real accounts can change only their own saved todos", async () => {
   const stop = new AbortController();
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings((): Scope.Handle => root)],
+    tags: [tags, authBindings],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -137,9 +137,9 @@ test("two real accounts can change only their own saved todos", async () => {
 test("signed-out todo reads and writes are refused", async () => {
   const stop = new AbortController();
   const root = createScope({
-    extensions: [startRequests],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings((): Scope.Handle => root)],
+    tags: [tags, authBindings],
     presets: [proofDatabase, proofMail],
     observe: { history: 80 },
   });
@@ -166,8 +166,8 @@ test("signed-out todo reads and writes are refused", async () => {
 test("todo changes reject empty titles, long titles, and caller-selected owners", async () => {
   const stop = new AbortController();
   const root = createScope({
-    tags: authBindings((): Scope.Handle => root),
-    extensions: [startRequests],
+    tags: [tags, authBindings],
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
   });
   await root.ready;

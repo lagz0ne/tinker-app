@@ -5,7 +5,14 @@ import { logConsole } from "./console";
 import { queue } from "./queue";
 import { encodeValue } from "./records";
 import type { Telemetry } from "./records";
-import { logLevel, spanHistory, telemetryService, telemetrySide } from "./settings";
+import {
+  logLevel,
+  spanHistory,
+  telemetryService,
+  telemetrySide,
+  tracesUrl,
+  logsUrl,
+} from "./settings";
 
 /**
  * Transfers trusted records to the telemetry root; callers must not edit them afterward.
@@ -29,6 +36,13 @@ export const telemetryExport = extension({
   label: "telemetry",
   hooks: {
     async start(event) {
+      const side = event.resolve(telemetrySide);
+      event.resolve(telemetryService);
+      if (side !== "browser") {
+        event.resolve(tracesUrl);
+        event.resolve(logsUrl);
+      }
+
       const owned = event.resolve(queue);
       const flush = event.controller(flushTelemetry);
       owned.start(flush.run.bind(flush));

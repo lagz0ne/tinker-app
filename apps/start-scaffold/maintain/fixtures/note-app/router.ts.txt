@@ -10,15 +10,15 @@ import {
   readSnapshotSlot,
   streamMessageSlot,
 } from "~/components/sync";
-import { telemetry, logConsole } from "~/components/telemetry";
+import { telemetry, logConsole, telemetryService } from "~/components/telemetry";
 
-export const extensions = [];
-export const router: RouterOptions = {};
+const extensions: [] = [];
+const router: RouterOptions = {};
 
 export const getRouter = createRouterEntry({
   sync,
   telemetry,
-  toolTags: [logConsole(console)],
+  toolTags: [logConsole(console), telemetryService("notes-browser")],
   tags: [
     recordsSlot(records),
     readBatchSlot(readBatch),

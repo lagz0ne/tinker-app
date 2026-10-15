@@ -1,8 +1,6 @@
 import type { Many, Observe, Resource, Scope, Tag } from "@tinker/core";
 import type { z } from "zod";
 
-import type { Env } from "~/components/errors";
-
 import type { span, logRecord, telemetryBatch } from "./records.server";
 
 export declare namespace Telemetry {
@@ -30,9 +28,7 @@ export declare namespace Telemetry {
   };
   /** What the telemetry part gives the server entry: also the app root's tags. */
   type ServerPart = Part & {
-    readonly appTags: Resource.Handle<Tag.Bindings>;
-    /** How the server entry fills the telemetry root's tags from env (ADR 0113). */
-    readonly settings: Env.Read;
+    readonly browserIngest: Resource.Handle<{ ingest(this: void, batch: Batch): void }>;
   };
 }
 

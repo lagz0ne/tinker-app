@@ -5,6 +5,7 @@ export declare namespace Errors {
       path: string;
       cause?: { name?: string; code?: string | number };
     };
+    StartSessionAlreadySet: Record<string, never>;
     StartScopeMissing: Record<string, never>;
     Cancelled: Record<string, never>;
     BadSettings: { part: string; keys: string[] };

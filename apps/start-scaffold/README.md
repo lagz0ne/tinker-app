@@ -15,8 +15,9 @@ npm run setup
 npm run dev
 ```
 
-Setup writes `.env` with a new secret, starts the local Compose services,
-and installs packages. It never writes commands or app wiring.
+Setup starts the local Compose services and installs packages.
+Fill the required tags in cmds/server.ts before starting the app.
+Setup never writes secrets, commands, or app wiring.
 Open `http://localhost:4318` when dev starts.
 
 ## Layout and rules
@@ -41,7 +42,7 @@ Choose tags for fixed inputs, data for changing records, resources for owned cli
 and operations for actions. Read [AGENTS.md](AGENTS.md) and the copied skills before editing.
 No module owns an app scope outside commands or copied entry code.
 The plain-function cap is 17. Only the named copied base entry functions have exceptions.
-No component, src, or cmd function is skipped.
+Only cmds/router.ts#getRouter has the approved cmd entry exception; no component or src function is skipped.
 
 ## Command wiring
 
@@ -51,7 +52,8 @@ Vite names the server command, with no part switches:
 tinker({ serverEntry: "cmds/server.ts" });
 ```
 
-The command reads env once and calls each component's `settings(values)`.
+Only cmds/server.ts reads app inputs. Each binding reads its own process.env key beside the scope.
+An unset required value leaves its tag unbound; startup fails with MissingTag and the tag name.
 It starts telemetry before the app, borrows its observer, and closes roots in reverse order.
 The full working pattern is in [cmds/server.ts](cmds/server.ts).
 These are the actual auth hooks and server slots inside its tags list:
@@ -59,13 +61,13 @@ These are the actual auth hooks and server slots inside its tags list:
 ```ts
 bootstrapSlot(bootstrap),
 readAccountSlot(readAccount),
-sendAuthMail((message) => app.resolve(mail.authMail).enqueue(message)),
-sessionDeleted((accountId) => app.run(publishAccountNotice, { rawInput: { accountId } })),
+sendAuthMail((message, ctx) => ctx.resolve(mail.authMail).enqueue(message)),
+sessionDeleted((accountId, ctx) => ctx.run(publishAccountNotice, { rawInput: { accountId } })),
 ```
 
 Auth's two hooks are required and have no defaults.
-A missing hook fails `root.ready` with its name and the command file to edit.
-Auth depends only on errors, requests, and database; the command joins mail and sync.
+A missing hook fails `root.ready` with its name.
+Auth depends only on requests and database; the command joins mail and sync.
 
 The browser command binds each app-owned reader and records descriptor:
 
@@ -146,10 +148,21 @@ For the untouched `app` shell, the exact edits are:
 
 Keep the shell's HTML, `<Outlet />`, and stylesheet link.
 Copy `examples/demo-style.css` into `src/style.css`, keeping your own styles.
-Set the keys from `examples/demo.env.example` in your own `.env`.
+Read the required tag list in `examples/demo.env.example`; bind each tag in cmds/server.ts.
 No installer writes `.env`, a secret, or these app edits.
 
-Doctor reads env rules from copied `component.json` files, without importing runtime code.
+Components take typed tags. They never take env objects or convert env values.
+Each component checks its required tags in its one start extension.
+
+| Component | Required tags                                                        |
+| --------- | -------------------------------------------------------------------- |
+| auth      | authSettings, sendAuthMail, sessionDeleted                           |
+| database  | databaseUrl                                                          |
+| mail      | smtpUrl, mailFrom                                                    |
+| telemetry | telemetrySide, telemetryService; tracesUrl and logsUrl on the server |
+
+Telemetry keeps safe defaults: logLevel info and spanHistory 80.
+Doctor checks component dependencies and imports from JSON; it does not read app config.
 A build starts no Postgres or SMTP client. A running demo needs both services.
 Its database startup applies the committed migrations.
 

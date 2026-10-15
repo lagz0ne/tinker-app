@@ -33,12 +33,12 @@ export const receiveTelemetry = operation({
 export const browserIngest = resource({
   label: "telemetry.browserIngest",
   depends: { ingest: ingestTelemetry.controller, service: telemetryService },
-  factory: ({ ingest, service }) => [
-    browserTelemetry((batch) => {
+  factory: ({ ingest, service }) => ({
+    ingest(this: void, batch: Telemetry.Batch) {
       for (const record of batch.logs) record.service = service;
       ingest.run({ input: batch });
-    }),
-  ],
+    },
+  }),
 });
 
 const browserBatch = telemetryBatch.refine(

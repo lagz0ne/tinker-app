@@ -445,13 +445,21 @@ function externalDeclaration(call) {
   );
 }
 
+/** The base owns this exact callback through Promise.then and caches its work. */
+function onceArgument(node, call) {
+  if (callbackIndex(call, node) !== 0) return false;
+  return symbolOf(call.expression)?.declarations?.some(
+    (declaration) =>
+      pathOf(declaration) === "tinker/base/close.ts" && nameOf(declaration.name) === "once",
+  );
+}
+
 function nativeArgument(node) {
   const call = node.parent;
   return (
     argumentOf(node, call) &&
-    externalCall(call) &&
-    externalDeclaration(call) &&
-    callbackArgument(call, node)
+    callbackArgument(call, node) &&
+    (onceArgument(node, call) || (externalCall(call) && externalDeclaration(call)))
   );
 }
 
@@ -1108,19 +1116,7 @@ function staticProtocolValue(node) {
     "tinker/components/errors/errors.ts": "DOMException",
   };
   if (nameOf(node.expression) === constructors[pathOf(node)]) return true;
-  return telemetryUrlDefault(node);
-}
-
-/** These two typed defaults construct only URL values, never a service. */
-function telemetryUrlDefault(node) {
-  if (pathOf(node) !== "tinker/components/telemetry/settings.ts") return false;
-  if (!nativeDomSymbol(symbolOf(node.expression), "URL")) return false;
-  const field = node.parent;
-  if (!ts.isPropertyAssignment(field) || nameOf(field.name) !== "default") return false;
-
-  const call = field.parent.parent;
-  if (!ts.isCallExpression(call) || !coreSymbol(call.expression, "tag")) return false;
-  return ["tracesUrl", "logsUrl"].includes(nameOf(call.parent.name));
+  return false;
 }
 
 function checkService(node) {
@@ -1214,16 +1210,6 @@ function addCaller(use, name, symbol, node, source, callers) {
   if (caller === node) return;
 
   callers.set(caller ?? source, callerLabel(use, caller));
-}
-
-/**
- * The app entry calls the server seam's `settings` once, at start (ADR 0113): env becomes the app's
- * settings tags there. The function the seam exports as `settings` needs no second site.
- */
-function baseCallers(node, name) {
-  return nameOf(name) === "settings"
-    ? callSites(name, node).filter((site) => /^cmds\/[^/]+\.tsx?#module$/.test(site))
-    : [];
 }
 
 function callSites(name, node) {
@@ -1328,9 +1314,8 @@ function checkPlainFunction(node) {
     return;
   }
 
-  const base = baseCallers(node, name);
-  const callers = [...new Set([...callSites(name, node), ...base])];
-  if (callers.length < 2 && base.length === 0) fail(node, "two-sites");
+  const callers = callSites(name, node);
+  if (callers.length < 2) fail(node, "two-sites");
 
   plain.push(
     `- **${pathOf(node)}#${nameOf(name)}**\n${params.join("\n")}\n  - Callers:\n${callers.map((caller) => `    - \`${caller}\``).join("\n")}`,
@@ -1342,11 +1327,9 @@ function isEntryHelper(node) {
   if (!node) return false;
   const helpers = {
     "tinker/base/close.ts": [
-      // c55998e createScopeClose: share one reverse-close promise for the command's roots.
-      "createScopeClose",
-      // c55998e closeRoots: stop roots in reverse order and report the first close error.
-      "closeRoots",
-      // New: expose the shared reverse-close callback to HMR and host shutdown.
+      // Replacement for the old close helpers: cache only the caller's callback promise.
+      "once",
+      // Return the callback shared by HMR, the host, and page hide.
       "close",
     ],
     "tinker/base/panics.server.ts": [

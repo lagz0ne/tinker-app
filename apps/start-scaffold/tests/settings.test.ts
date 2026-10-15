@@ -1,58 +1,62 @@
+import { createScope } from "@tinker/core";
+import type { Tag } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
-import { settings as databaseSettings } from "~/components/database/index.server";
-import { settings as mailSettings } from "~/components/mail/index.server";
+import {
+  authSettings,
+  authStartup,
+  sendAuthMail,
+  sessionDeleted,
+} from "~/components/auth/index.server";
+import { databaseSetup, databaseUrl } from "~/components/database/index.server";
+import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
+import {
+  telemetryExport,
+  telemetryService,
+  telemetrySide,
+  tracesUrl,
+  logsUrl,
+} from "~/components/telemetry/index.server";
 
-test("env becomes the typed tags mail and the database need, with no unit running", () => {
-  const keys = {
-    DATABASE_URL: "postgres://app:secret@db.test:5432/app",
-    SMTP_HOST: "mail.test",
-    SMTP_PORT: "2525",
-    SMTP_USER: "ada",
-    SMTP_PASSWORD: "p@ss word",
-    SMTP_FROM: "ada@example.com",
-  };
+const authTags = [
+  authSettings({ origin: "http://proof.test", secret: "s".repeat(32) }),
+  sendAuthMail(() => {}),
+  sessionDeleted(async () => {}),
+];
 
-  const bindings = [...databaseSettings(keys), ...mailSettings(keys)];
+const mailTags = [smtpUrl(new URL("smtp://proof.test:25")), mailFrom("proof@example.com")];
 
-  expect(bindings.map(({ tag, value }) => [tag.label, String(value)])).toEqual([
-    ["database.url", "postgres://app:secret@db.test:5432/app"],
-    ["mail.smtpUrl", "smtp://ada:p%40ss%20word@mail.test:2525"],
-    ["mail.from", "ada@example.com"],
-  ]);
-});
+const telemetryTags = [
+  telemetrySide("server"),
+  telemetryService("proof"),
+  tracesUrl(new URL("http://proof.test/traces")),
+  logsUrl(new URL("http://proof.test/logs")),
+];
 
-test("a bad or missing key stops start with BadSettings naming each key", () => {
-  expect(() => databaseSettings({ DATABASE_URL: "not a url" })).toThrow(
-    expect.objectContaining({
-      kind: "BadSettings",
-      payload: { part: "database", keys: ["DATABASE_URL"] },
-    }),
+for (const [name, startup, tags] of [
+  ["auth", authStartup, authTags],
+  ["database", databaseSetup, [databaseUrl(new URL("postgres://proof"))]],
+  ["mail", mailStartup, mailTags],
+  ["telemetry", telemetryExport, telemetryTags],
+] as const) {
+  test(`${name}: each missing required config tag rejects ready with its name`, async () => {
+    for (const missing of tags) {
+      const remaining = tags.filter((binding) => binding !== missing) as Tag.Bindings;
+      const root = createScope({ extensions: [startup], tags: remaining });
+      await expect(root.ready).rejects.toMatchObject({
+        kind: "MissingTag",
+        payload: { label: missing.tag.label },
+      });
+      expect((await root.close({ graceful: true })).status).toBe("failed");
+    }
+  });
+}
+
+test("tag contracts reject wrong typed values without an env converter", () => {
+  expect(() => databaseUrl("postgres://proof" as unknown as URL)).toThrow(
+    expect.objectContaining({ kind: "DataValidationFailed" }),
   );
-});
-
-test("an IPv6 SMTP host gets brackets, and a port or host a URL refuses names its key", () => {
-  const keys = {
-    DATABASE_URL: "postgres://proof",
-    SMTP_HOST: "::1",
-    SMTP_PORT: "11025",
-    SMTP_FROM: "ada@example.com",
-  };
-
-  expect(String(mailSettings(keys)[0]?.value)).toBe("smtp://[::1]:11025");
-  expect(() => mailSettings({ ...keys, SMTP_PORT: "65536" })).toThrow(
-    expect.objectContaining({ payload: { part: "mail", keys: ["SMTP_PORT"] } }),
-  );
-  expect(() => mailSettings({ ...keys, SMTP_HOST: "mail test" })).toThrow(
-    expect.objectContaining({ payload: { part: "mail", keys: ["SMTP_HOST"] } }),
-  );
-});
-
-test("bad or missing SMTP keys are reported by mail settings", () => {
-  expect(() => mailSettings({ SMTP_PORT: "many" })).toThrow(
-    expect.objectContaining({
-      kind: "BadSettings",
-      payload: { part: "mail", keys: ["SMTP_HOST", "SMTP_PORT", "SMTP_FROM"] },
-    }),
+  expect(() => mailFrom("not an address")).toThrow(
+    expect.objectContaining({ kind: "DataValidationFailed" }),
   );
 });

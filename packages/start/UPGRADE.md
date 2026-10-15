@@ -21,8 +21,9 @@ There are no part switches, generated wiring, or package defaults for app entrie
 7. Move `@tinker/start` to devDependencies. Keep it installed when using `tinker serve`.
    Run `tinker prepare`, then build, type checks, tests, and doctor.
 
-Each `component.json` declares direct `requires` and optional `env` data.
-Doctor reads JSON only. Runtime settings check and convert env separately.
+Each `component.json` declares direct `requires` only.
+Components take typed config tags. Their start extensions name missing required tags.
+Only cmds/server.ts reads inputs and fills those tags.
 One request uses one `startRequests` middleware from the requests component.
 Move all routes and server functions to that same copy together.
 

@@ -19,6 +19,8 @@ declare module "@tanstack/react-start" {
 
 /** This root middleware uses only fetch context, before global middleware has run. */
 const middleware = createMiddleware().server(async ({ context, request, next }) => {
+  if ("session" in context && context.session !== undefined) raise("StartSessionAlreadySet", {});
+
   const scope = context.scope;
   if (scope === undefined) raise("StartScopeMissing", {});
 

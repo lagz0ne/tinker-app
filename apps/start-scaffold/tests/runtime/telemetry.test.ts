@@ -18,7 +18,6 @@ import {
   logLevel,
   logsUrl,
   spanHistory,
-  settings as readTelemetryConfig,
   telemetryService,
   telemetrySide,
   tracesUrl,
@@ -539,7 +538,7 @@ test("a tab sends its batch to the base's ingest route: same origin, kept alive"
   const sent = storage([200, 503]);
   const tools = createScope({
     extensions: [telemetryExport],
-    tags: [telemetrySide("browser"), httpBackend(sent.backend)],
+    tags: [telemetryService("test-start"), telemetrySide("browser"), httpBackend(sent.backend)],
   });
   await tools.ready;
   const app = createScope({ observe: tools.resolve(observer) });
@@ -560,9 +559,9 @@ test("a tab sends its batch to the base's ingest route: same origin, kept alive"
     ["browser", "test.telemetry.levels"],
   ]);
   expect(batch.logs.map(({ side, service, msg }: Telemetry.Log) => [side, service, msg])).toEqual([
-    ["browser", "tinker-app", "careful"],
-    ["browser", "tinker-app", "broken"],
-    ["browser", "tinker-app", "core.span"],
+    ["browser", "test-start", "careful"],
+    ["browser", "test-start", "broken"],
+    ["browser", "test-start", "core.span"],
   ]);
 
   tools.run(ingestTelemetry, {
@@ -579,6 +578,7 @@ test("a tab whose send throws keeps its records for the next send", async () => 
   const tools = createScope({
     extensions: [telemetryExport],
     tags: [
+      telemetryService("test-start"),
       telemetrySide("browser"),
       httpBackend(async () => {
         throw new TypeError("offline");
@@ -595,32 +595,12 @@ test("a tab whose send throws keeps its records for the next send", async () => 
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
 
-test("the part turns its five keys into typed tags, with no telemetry unit running", () => {
-  const read = (env: Record<string, string>) =>
-    readTelemetryConfig(env).map(({ tag, value }) => [tag.label, String(value)]);
-
-  expect(read({})).toEqual([
-    ["telemetry.service", "tinker-app"],
-    ["telemetry.tracesUrl", "http://127.0.0.1:10428/insert/opentelemetry/v1/traces"],
-    ["telemetry.logsUrl", "http://127.0.0.1:9428/insert/jsonline"],
-    ["telemetry.logLevel", "30"],
-    ["telemetry.spanHistory", "80"],
-  ]);
-  expect(
-    read({
-      OTEL_SERVICE_NAME: "test-start",
-      VICTORIA_TRACES_URL: "http://storage.test/traces",
-      VICTORIA_LOGS_URL: "http://storage.test/logs",
-      LOG_LEVEL: "warn",
-      SPAN_HISTORY: "0",
-    }),
-  ).toEqual([
-    ["telemetry.service", "test-start"],
-    ["telemetry.tracesUrl", "http://storage.test/traces"],
-    ["telemetry.logsUrl", "http://storage.test/logs"],
-    ["telemetry.logLevel", "40"],
-    ["telemetry.spanHistory", "0"],
-  ]);
+test("telemetry config uses typed tags and keeps only safe defaults", async () => {
+  const root = createScope({ tags: storageTags });
+  expect(root.resolve(telemetryService)).toBe("test-start");
+  expect(root.resolve(logLevel)).toBe(30);
+  expect(root.resolve(spanHistory)).toBe(80);
+  await root.close({ graceful: true });
 });
 
 test("a tab shows its records only on the console its seam binds", async () => {
@@ -657,19 +637,20 @@ test("the observer takes Core's level and span history from its tags", async () 
   expect((await quiet.close({ graceful: true })).status).toBe("success");
 });
 
-test("a bad storage URL stops the server entry before the telemetry root, naming each bad key", () => {
-  expect(() =>
-    readTelemetryConfig({ VICTORIA_TRACES_URL: "not a url", VICTORIA_LOGS_URL: "ftp://logs.test" }),
-  ).toThrow(
+test("a non-URL telemetry tag value is refused at binding", () => {
+  expect(() => tracesUrl("not a URL" as unknown as URL)).toThrow(
     expect.objectContaining({
-      kind: "BadSettings",
-      payload: { part: "telemetry", keys: ["VICTORIA_TRACES_URL", "VICTORIA_LOGS_URL"] },
+      kind: "DataValidationFailed",
+      payload: expect.objectContaining({ label: "telemetry.tracesUrl" }),
     }),
   );
 });
 
 test("the server render namespace records ssr while the browser part stays browser", async () => {
-  const tools = createScope({ extensions: serverPart.extensions, tags: serverPart.tags });
+  const tools = createScope({
+    extensions: serverPart.extensions,
+    tags: [storageTags, serverPart.tags],
+  });
   await tools.ready;
   expect(tools.resolve(telemetrySide, { ns: serverPart.renderNs })).toBe("ssr");
   expect(tools.resolve(serverPart.renderObserve, { ns: serverPart.renderNs })).toMatchObject({

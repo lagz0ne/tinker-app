@@ -4,7 +4,7 @@ import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
 import { auth, handleAuth, sendAuthMail, sessionDeleted } from "~/components/auth/index.server";
-import { authSettings, authStartup, settings } from "~/components/auth/index.server";
+import { authSettings, authStartup } from "~/components/auth/index.server";
 import { startRequests } from "~/components/requests";
 
 import { bindings } from "./fixtures/app.server";
@@ -65,34 +65,27 @@ test("handleAuth takes only a request, and a failing auth library fails the call
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("the part fills its settings from its two keys at the entry", async () => {
-  const root = createScope({
-    tags: settings({ PUBLIC_ORIGIN: "https://shop.example", AUTH_SECRET: "s".repeat(32) }),
-  });
+test("auth config is a typed tag and invalid config fails at binding", async () => {
+  const root = createScope({ tags: keys });
   expect(root.resolve(authSettings)).toEqual({
     origin: "https://shop.example",
     secret: "s".repeat(32),
   });
-  expect((await root.close({ graceful: true })).status).toBe("success");
-});
-
-test("an unset, empty, or refused key is named in one BadSettings, before any scope", () => {
-  expect(() => settings({ PUBLIC_ORIGIN: "", AUTH_SECRET: undefined })).toThrow(
+  expect(() => authSettings({ origin: "ftp://shop.example", secret: "short" })).toThrow(
     expect.objectContaining({
-      kind: "BadSettings",
-      payload: { part: "auth", keys: ["PUBLIC_ORIGIN", "AUTH_SECRET"] },
+      kind: "DataValidationFailed",
+      payload: expect.objectContaining({ label: "auth.settings" }),
     }),
   );
-  expect(() =>
-    settings({ PUBLIC_ORIGIN: "ftp://shop.example", AUTH_SECRET: "s".repeat(31) }),
-  ).toThrow(
-    expect.objectContaining({ payload: { part: "auth", keys: ["PUBLIC_ORIGIN", "AUTH_SECRET"] } }),
-  );
+  await root.close({ graceful: true });
 });
 
 test("with auth on, the app root does not start without the auth settings", async () => {
   const root = createScope({ extensions: [authStartup] });
-  await expect(root.ready).rejects.toThrow();
+  await expect(root.ready).rejects.toMatchObject({
+    kind: "MissingTag",
+    payload: { label: "auth.settings" },
+  });
   expect((await root.close({ graceful: true })).status).toBe("failed");
 });
 
@@ -100,7 +93,7 @@ test("with auth on and good keys, the app root starts with them read", async () 
   const root = createScope({ extensions: [authStartup], tags: [keys, hooks] });
   await root.ready;
   expect(root.resolve(authSettings).origin).toBe("https://shop.example");
-  expect(root.resolve(authStartup)).toBeUndefined();
+  expect(root.resolve(authStartup).kind).toBe("start");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
@@ -122,9 +115,16 @@ test("the auth part's work shows on the trace as handleAuth; its settings are a 
     presets: [proofAuth],
   });
   await root.ready;
-  await root.settle(handleAuth, { input: new Request("http://app/api/auth/get-session") });
-  expect(root.spans().map(({ name }) => name)).toEqual(["auth", "handleAuth"]);
+  expect(
+    await root.settle(handleAuth, { input: new Request("http://app/api/auth/get-session") }),
+  ).toMatchObject({ status: "success" });
   expect((await root.close({ graceful: true })).status).toBe("success");
+  expect(root.spans().map(({ name }) => name)).toEqual([
+    "module:node:async_hooks",
+    "auth.calls",
+    "auth",
+    "handleAuth",
+  ]);
 });
 
 test("missing app auth wiring reports the tag instead of importing the main", async () => {
@@ -151,7 +151,6 @@ test("auth startup names each missing required hook before any auth client start
     await expect(root.ready).rejects.toMatchObject({
       kind: "MissingTag",
       payload: { label: missing },
-      message: `Auth startup needs "${missing}" in cmds/server.ts`,
     });
     expect((await root.close({ graceful: true })).status).toBe("failed");
   }

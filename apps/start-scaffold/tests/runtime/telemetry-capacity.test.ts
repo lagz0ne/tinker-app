@@ -12,7 +12,18 @@ import {
   telemetryExport,
 } from "~/components/telemetry/observer";
 import type { Telemetry } from "~/components/telemetry/records";
-import { telemetrySide } from "~/components/telemetry/settings";
+import {
+  telemetrySide,
+  telemetryService,
+  tracesUrl,
+  logsUrl,
+} from "~/components/telemetry/settings";
+
+const config = [
+  telemetryService("s"),
+  tracesUrl(new URL("http://proof.test/v1/traces")),
+  logsUrl(new URL("http://proof.test/logs")),
+];
 
 const log: Telemetry.Log = { time: 1, level: 30, service: "s", side: "server", msg: "burst" };
 
@@ -28,6 +39,7 @@ test("a 300-record burst is sent before the first tick, one batch at a time", as
     clock,
     extensions: [telemetryExport],
     tags: [
+      config,
       telemetrySide("server"),
       httpBackend(async (_input, init) => {
         active++;
@@ -85,6 +97,7 @@ test("a full batch arriving as a send ends is sent before any tick", async () =>
       clock,
       extensions: [telemetryExport],
       tags: [
+        config,
         telemetrySide("ssr"),
         httpBackend(async (_input, init) => {
           if (typeof init?.body === "string") sent += init.body.split("\n").length;
@@ -137,6 +150,7 @@ test("a slow console keeps a bounded batch and counts every dropped copy", async
   const root = createScope({
     extensions: [telemetryExport],
     tags: [
+      config,
       telemetrySide("ssr"),
       consoleOutput(sink),
       httpBackend(async (_input, init) => {
@@ -181,7 +195,11 @@ test("a slow console keeps a bounded batch and counts every dropped copy", async
 test("records refused during close are counted in the final health", async () => {
   const root = createScope({
     extensions: [telemetryExport],
-    tags: [telemetrySide("ssr"), httpBackend(async () => new Response(null, { status: 503 }))],
+    tags: [
+      config,
+      telemetrySide("ssr"),
+      httpBackend(async () => new Response(null, { status: 503 })),
+    ],
   });
   await root.ready;
   root.run(ingestTelemetry, { input: { traces: [], logs: [log] } });
@@ -196,7 +214,11 @@ test("records refused during close are counted in the final health", async () =>
 
 test("forcing close without the telemetry extension leaves no teardown error", async () => {
   const root = createScope({
-    tags: [telemetrySide("ssr"), httpBackend(async () => new Response(null, { status: 503 }))],
+    tags: [
+      config,
+      telemetrySide("ssr"),
+      httpBackend(async () => new Response(null, { status: 503 })),
+    ],
   });
   root.run(ingestTelemetry, { input: { traces: [], logs: [log] } });
   const closed = await root.close();

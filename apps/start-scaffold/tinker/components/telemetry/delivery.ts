@@ -11,15 +11,23 @@ export const delivery = resource({
   depends: {
     side: telemetrySide,
     service: telemetryService,
-    tracesUrl,
-    logsUrl,
+    tracesUrl: tracesUrl.optional,
+    logsUrl: logsUrl.optional,
     backend: httpBackend,
   },
-  factory: ({ side, service, tracesUrl, logsUrl, backend }) => {
-    const logs = new URL(logsUrl);
-    logs.searchParams.set("_time_field", "time");
-    logs.searchParams.set("_msg_field", "msg");
-    logs.searchParams.set("_stream_fields", "service,side");
+  factory: ({ side, service, tracesUrl, logsUrl, backend }, ctx) => {
+    let traces: URL | undefined;
+    let logs: URL | undefined;
+    if (side !== "browser") {
+      if (!tracesUrl.present) return ctx.raise("MissingTag", { label: "telemetry.tracesUrl" });
+      if (!logsUrl.present) return ctx.raise("MissingTag", { label: "telemetry.logsUrl" });
+
+      traces = tracesUrl.value;
+      logs = new URL(logsUrl.value);
+      logs.searchParams.set("_time_field", "time");
+      logs.searchParams.set("_msg_field", "msg");
+      logs.searchParams.set("_stream_fields", "service,side");
+    }
 
     return {
       async send(records: Telemetry.Record[], signal: AbortSignal): Promise<Telemetry.Delivery> {
@@ -61,12 +69,12 @@ export const delivery = resource({
             .map((record) => record.json);
           batches = [
             {
-              url: tracesUrl.href,
+              url: traces!.href,
               body: groups.length ? `{"resourceSpans":[${groups.join(",")}]}` : undefined,
               contentType: "application/json",
             },
             {
-              url: logs.href,
+              url: logs!.href,
               body: lines.length ? lines.join("\n") : undefined,
               contentType: "application/stream+json",
             },

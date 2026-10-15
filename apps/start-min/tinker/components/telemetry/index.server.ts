@@ -3,15 +3,14 @@ import { namespace, resource } from "@tinker/core";
 import { browserIngest } from "./ingest.server";
 import { observer, telemetryExport } from "./observer";
 import type { Telemetry } from "./records";
-import { settings, telemetrySide } from "./settings";
+import { telemetrySide } from "./settings";
 
-/** The telemetry part, on, for the server entry: server records, and the browser's by its route. */
+/** Server observation and its separate render namespace. */
 export const telemetry = {
   extensions: [telemetryExport],
   tags: [telemetrySide("server")],
   observe: observer,
-  appTags: browserIngest,
-  settings: settings,
+  browserIngest,
   /** Only the observer varies by side; the scope queue remains shared. */
   renderObserve: resource({ ...observer, target: "namespace" }),
   renderNs: namespace({ tags: [telemetrySide("ssr")] }),
@@ -34,4 +33,14 @@ export {
 
 export { exportHealth } from "./health";
 
-export { settings } from "./settings";
+export {
+  telemetrySide,
+  telemetryService,
+  tracesUrl,
+  logsUrl,
+  logLevel,
+  spanHistory,
+} from "./settings";
+
+export const renderObserve = telemetry.renderObserve;
+export const renderNs = telemetry.renderNs;

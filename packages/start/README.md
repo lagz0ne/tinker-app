@@ -40,12 +40,13 @@ Old generated parts and env modules are removed. The app owns its commands.
 A missing server command gets a clear error and a complete starter to copy by hand.
 
 Doctor checks the generated folder, Vite glue, named command exports, import directions,
-routes, styles, env values, and the last build's import boundary record.
-It reads `component.json` for dependencies and env rules. It never imports a component.
+routes, styles, and the last build's import boundary record.
+It reads `component.json` for direct component dependencies only. It never imports a component.
 `--fix` repairs build config keys and generated files; it never edits app source or secrets.
 It does not pin copied runtime bytes or choose the order of app wiring.
 
-Serve loads `.env`, serves public and built client assets, and calls the built app's handler.
+Serve imports the default entry, serves public and built client assets, and calls its handler.
+The server command owns config input and close order.
 It closes the app on SIGINT or SIGTERM. Asset paths, compression, ETags, and conditional
 requests remain covered by the tooling tests. The app must keep the host package installed
 where it runs `tinker serve`.

@@ -30,39 +30,37 @@ try {
   const entry = join(fixture, serverFile(fixture).file);
   const original = readFileSync(entry, "utf8");
   assert.ok(
-    original.includes("tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs })"),
+    original.includes("tools.resolve(renderObserve, { ns: renderNs })"),
     "plant must replace the command's render observer",
   );
-  const source = `export const renderSpans = [];\n${original
+  const source = `const probe = { renderSpans: [] }; globalThis.__entryProof = probe;\n${original
     .replaceAll(
-      "tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs })",
-      "{ export: (span) => renderSpans.push(span) }",
+      "tools.resolve(renderObserve, { ns: renderNs })",
+      "{ export: (span) => probe.renderSpans.push(span) }",
     )
-    .replace(
-      "await tools.ready;",
-      "await tools.ready;\nexport const toolsClosed = tools.closed;",
-    )}`;
+    .replace("let close = once(", "probe.toolsClosed = tools.closed;\nlet close = once(")
+    .replace("  close = once(", "  probe.appClosed = app.closed;\n  close = once(")}`;
   const routerFile = join(
     fixture,
     appFiles(fixture).find((file) => file.file === "cmds/router.ts").file,
   );
   const routerSource = readFileSync(routerFile, "utf8");
-  assert.ok(routerSource.includes("export const extensions = [];"));
+  assert.ok(routerSource.includes("const extensions: [] = [];"));
   writeFileSync(
     routerFile,
     `import { extension, operation } from "@tinker/core";\n${routerSource.replace(
-      "export const extensions = [];",
+      "const extensions: [] = [];",
       `
 const probe = operation({ label: "render-probe", run: () => 1 });
-export const extensions = [extension({
+const extensions = [extension({
   hooks: { async start({ next, scope }) { await next(); scope.run(probe); } },
 })];`,
     )}`,
   );
   const version = (value) =>
     source.replace(
-      "  close,",
-      `  fetch(request, next) {\n    return new URL(request.url).pathname === "/scope-proof" ? new Response("${value}") : next(request);\n  },\n  close,`,
+      "{ requestContext: app.resolve(startRequests), close }",
+      `{ requestContext: app.resolve(startRequests), close, fetch(request, next) { return new URL(request.url).pathname === "/scope-proof" ? new Response("${value}") : next(request); } }`,
     );
   writeFileSync(entry, version("first"));
 
@@ -76,17 +74,18 @@ export const extensions = [extension({
   assert.equal(await (await fetch(address)).text(), "first");
   const firstModule = await vite.environments.ssr.runner.import(entry);
   const first = firstModule.default;
+  const firstProof = globalThis.__entryProof;
   entries.push(first);
   assert.equal((await vite.environments.ssr.runner.import(entry)).default, first);
   const rendered = await fetch(new URL("/", address));
   assert.equal(rendered.status, 200);
   await rendered.text();
-  assert.ok(firstModule.renderSpans.length > 0, "the first render must use the first observer");
+  assert.ok(firstProof.renderSpans.length > 0, "the first render must use the first observer");
 
   writeFileSync(entry, version("second"));
   let timeout;
   const closing = Promise.race([
-    Promise.all([first.requestContext.scope.closed, firstModule.toolsClosed]),
+    Promise.all([firstProof.appClosed, firstProof.toolsClosed]),
     new Promise((_, reject) => {
       timeout = setTimeout(() => reject(new Error("HMR did not close both old roots")), 20000);
     }),
@@ -104,12 +103,13 @@ export const extensions = [extension({
   assert.equal(response, "second");
   const secondModule = await vite.environments.ssr.runner.import(entry);
   const second = secondModule.default;
+  const secondProof = globalThis.__entryProof;
   entries.push(second);
-  assert.notEqual(second.requestContext.scope, first.requestContext.scope);
+  assert.notEqual(second, first);
   const nextRendered = await fetch(new URL("/", address));
   assert.equal(nextRendered.status, 200);
   await nextRendered.text();
-  assert.ok(secondModule.renderSpans.length > 0, "HMR renders must use the new observer");
+  assert.ok(secondProof.renderSpans.length > 0, "HMR renders must use the new observer");
   assert.equal((await fetch(new URL("/api/health", address))).status, 200);
   if (existsSync(join(fixture, "tinker/components/auth/component.json"))) {
     const auth = await fetch(new URL("/api/auth/get-session", address));
@@ -117,7 +117,7 @@ export const extensions = [extension({
     assert.equal(await auth.json(), null);
   }
   await second.close();
-  assert.equal((await secondModule.toolsClosed).status, "success");
+  assert.equal((await secondProof.toolsClosed).status, "success");
   console.log(
     "HMR: unchanged entry reused; both old roots closed; new requests and renders use the new entry; EXIT 0",
   );

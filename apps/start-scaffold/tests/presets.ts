@@ -1,5 +1,4 @@
 import type { PGliteInterface } from "@electric-sql/pglite";
-import type { Scope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { afterAll, beforeAll } from "vite-plus/test";
 
@@ -54,12 +53,10 @@ export { requestHeaders } from "~/components/requests/index.server";
 export { handleAuth } from "~/components/auth/index.server";
 
 /** Test entries bind the same two hooks as the server command. */
-export function authBindings(root: () => Scope.Handle) {
-  return [
-    sendAuthMail((message) => root().resolve(authMail).enqueue(message)),
-    sessionDeleted((accountId) => root().run(publishAccountNotice, { rawInput: { accountId } })),
-  ];
-}
+export const authBindings = [
+  sendAuthMail((message, ctx) => ctx.resolve(authMail).enqueue(message)),
+  sessionDeleted((accountId, ctx) => ctx.run(publishAccountNotice, { rawInput: { accountId } })),
+];
 
 export const clientBindings = [
   recordsSlot(records),

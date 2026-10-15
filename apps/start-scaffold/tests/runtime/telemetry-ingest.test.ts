@@ -12,7 +12,7 @@ import {
 } from "~/components/telemetry/ingest.server";
 import { flushTelemetry } from "~/components/telemetry/observer";
 import type { Telemetry } from "~/components/telemetry/records";
-import { logsUrl, telemetryService } from "~/components/telemetry/settings";
+import { tracesUrl, logsUrl, telemetryService } from "~/components/telemetry/settings";
 
 import { Route } from "@/routes/api.telemetry";
 
@@ -346,6 +346,7 @@ test("on the server, a tab's batch joins the telemetry root under the server's s
     tags: [
       serverPart.tags,
       telemetryService("shop"),
+      tracesUrl(new URL("http://storage.test/traces")),
       logsUrl(new URL("http://storage.test/logs")),
       httpBackend(async (_input, init) => {
         sent.push(typeof init?.body === "string" ? init.body : "");
@@ -357,7 +358,11 @@ test("on the server, a tab's batch joins the telemetry root under the server's s
 
   const stop = new AbortController();
   const app = createScope({
-    tags: [backendStop(stop.signal), requestStop(stop.signal), tools.resolve(serverPart.appTags)],
+    tags: [
+      backendStop(stop.signal),
+      requestStop(stop.signal),
+      browserTelemetry(tools.resolve(serverPart.browserIngest).ingest),
+    ],
   });
   const batch = { traces: [], logs: [browserLog("from a tab")] };
 

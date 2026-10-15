@@ -1,10 +1,11 @@
 import { extension, operation, resource, tag } from "@tinker/core";
+import { z } from "zod";
 
 import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";
 import type { Database } from "./types";
 
 /** Where Postgres is. */
-export const databaseUrl = tag<URL>({ label: "database.url" });
+export const databaseUrl = tag<URL>({ label: "database.url", parse: z.instanceof(URL) });
 
 const migrationsFolder = "drizzle";
 
@@ -75,7 +76,8 @@ export const migrate = operation({
 export const databaseSetup = extension({
   label: "database.setup",
   hooks: {
-    async start({ next, scope }) {
+    async start({ resolve, next, scope }) {
+      resolve(databaseUrl);
       await next();
       await scope.run(migrate);
     },

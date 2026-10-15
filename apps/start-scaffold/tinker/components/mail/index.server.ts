@@ -1,3 +1,2 @@
-export { authMail, mail, mailFrom, sendMail, smtpUrl } from "./mail.server";
+export { authMail, mail, mailFrom, sendMail, smtpUrl, mailStartup } from "./mail.server";
 export type { Mail } from "./mail.server";
-export { settings } from "./settings.server";

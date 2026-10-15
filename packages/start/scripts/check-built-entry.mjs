@@ -11,8 +11,8 @@ if (process.argv[1] !== "close-only") {
   assert.equal(response.status, 200);
   assert.equal((await response.json()).ok, true);
 }
-const closing = built.close();
-assert.equal(built.close(), closing);
+const closing = built.default.close();
+assert.equal(built.default.close(), closing);
 await closing;
 console.log("built app entry: " + process.argv[1] + "; closed once; EXIT 0");
 `;

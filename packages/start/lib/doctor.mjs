@@ -1,5 +1,4 @@
 import { boundary } from "./checks/boundary.mjs";
-import { env } from "./checks/env.mjs";
 import { generated } from "./checks/generated.mjs";
 import { breaksBuild, glue } from "./checks/glue.mjs";
 import { imports } from "./checks/imports.mjs";
@@ -15,7 +14,6 @@ export const checks = [
   { label: "imports", check: imports },
   { label: "routes", check: routes },
   { label: "style", check: style },
-  { label: "env", check: env },
   { label: "boundary", check: boundary },
 ];
 
