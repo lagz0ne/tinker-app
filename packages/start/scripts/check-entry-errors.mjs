@@ -21,14 +21,14 @@ const mode = process.env.PANIC_MODE;
 const stop = new AbortController();
 const input = { env: process.env, signal: stop.signal, stdout: process.stdout, stderr: process.stderr };
 const { default: main } = await import("./dist/server/server.js");
-if (["tools-start", "app-start", "tools-start-cleanup", "app-start-cleanup", "missing-tag", "bad-log-level"].includes(mode)) {
+if (["tools-start", "app-start", "tools-start-cleanup", "app-start-cleanup", "missing-tag", "bad-log-level", "bad-app-tag"].includes(mode)) {
   await assert.rejects(main(input), (error) => {
     if (mode === "missing-tag") {
       assert.equal(error.kind, "MissingTag");
       assert.equal(error.payload.label, "mail.from");
-    } else if (mode === "bad-log-level") {
+    } else if (mode === "bad-log-level" || mode === "bad-app-tag") {
       assert.equal(error.kind, "DataValidationFailed");
-      assert.equal(error.payload.label, "telemetry.logLevel");
+      assert.equal(error.payload.label, mode === "bad-log-level" ? "telemetry.logLevel" : "mail.from");
     } else assert.equal(error.message, "proof." + mode);
     return true;
   });
@@ -77,7 +77,7 @@ for (const app of process.argv.slice(2)) {
       "extensions: [telemetryExport]",
       "extensions: [startRequests",
       "    const closed = app.closed.then",
-      "  const cancelled =",
+      "  await tools.ready;",
       "env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)",
     ]) {
       assert.ok(main.includes(marker), `plant must match ${marker}`);
@@ -93,7 +93,10 @@ for (const app of process.argv.slice(2)) {
         `
 const mode = env.PANIC_MODE;
 const toolsProbe = extension({label: "proof.tools", hooks: {start(event) {
-  if (mode?.startsWith("tools-start")) throw new Error("proof." + mode);
+  if (mode?.startsWith("tools-start")) {
+    if (mode === "tools-start-cleanup") event.defer(() => { throw new Error("proof.cleanup"); });
+    throw new Error("proof." + mode);
+  }
   return event.next();
 }}});
 const appProbe = extension({label: "proof.app", hooks: {start(event) {
@@ -107,15 +110,11 @@ const stop =`,
         "await closed.catch(",
         'await closed.finally(() => { if (mode === "app-start-cleanup") throw new Error("proof.cleanup"); }).catch(',
       )
-      .replace(
-        "ended(await tools.closed);",
-        'if (mode === "tools-start-cleanup") throw new Error("proof.cleanup"); ended(await tools.closed);',
-      )
       .replace("extensions: [telemetryExport]", "extensions: [toolsProbe, telemetryExport]")
       .replace("extensions: [startRequests", "extensions: [appProbe, startRequests")
       .replace(
-        "  const cancelled =",
-        'void tools.closed.then(() => stdout.write("tools.closed\\n"));\n  const cancelled =',
+        "  await tools.ready;",
+        'void tools.closed.then((result) => { stdout.write("tools.closed\\n"); if (mode === "tools-start-cleanup") stdout.write("tools.cleanup: " + String(result.teardownErrors?.[0]) + "\\n"); });\n  await tools.ready;',
       )
       .replace(
         "    const closed = app.closed.then",
@@ -156,6 +155,7 @@ export const Route = createFileRoute("/proof/rejection")({server: {handlers: {
       "app-start-cleanup",
       "missing-tag",
       "bad-log-level",
+      "bad-app-tag",
       "handler",
       "close-failure",
       "rejection",
@@ -167,6 +167,7 @@ export const Route = createFileRoute("/proof/rejection")({server: {handlers: {
           NODE_ENV: "production",
           PANIC_MODE: mode,
           LOG_LEVEL: mode === "bad-log-level" ? "info" : "30",
+          SMTP_FROM: mode === "bad-app-tag" ? "invalid-address" : process.env.SMTP_FROM,
         },
         encoding: "utf8",
         timeout: 15000,
@@ -181,10 +182,12 @@ export const Route = createFileRoute("/proof/rejection")({server: {handlers: {
       );
       assert.equal(
         lines.filter((line) => line === "app.closed").length,
-        ["tools-start", "tools-start-cleanup", "bad-log-level"].includes(mode) ? 0 : 1,
+        ["tools-start", "tools-start-cleanup", "bad-log-level", "bad-app-tag"].includes(mode)
+          ? 0
+          : 1,
         log,
       );
-      if (!["tools-start", "tools-start-cleanup", "bad-log-level"].includes(mode)) {
+      if (!["tools-start", "tools-start-cleanup", "bad-log-level", "bad-app-tag"].includes(mode)) {
         assert.ok(lines.indexOf("app.closed") < lines.indexOf("tools.closed"), log);
       }
 
@@ -196,11 +199,15 @@ export const Route = createFileRoute("/proof/rejection")({server: {handlers: {
           "app-start-cleanup",
           "missing-tag",
           "bad-log-level",
+          "bad-app-tag",
         ].includes(mode)
       ) {
         assert.ok(lines.includes(mode + ": original failure reported"), log);
       }
-      if (mode.endsWith("-cleanup")) {
+      if (mode === "tools-start-cleanup") {
+        assert.ok(lines.includes("tools.cleanup: Error: proof.cleanup"), log);
+      }
+      if (mode === "app-start-cleanup") {
         assert.ok(ran.stderr.includes("close failed: Error: proof.cleanup"), log);
       }
       if (mode === "handler") {

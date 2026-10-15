@@ -38,22 +38,15 @@ async function serve(root) {
     stop.signal.addEventListener("abort", done, { once: true }),
   );
 
-  // Pending startup promises own no Node handle; keep the host alive to receive signals.
-  const running = setInterval(() => {}, 2 ** 30);
   try {
     if (existsSync(join(root, ".env"))) process.loadEnvFile(join(root, ".env"));
     const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
-    const app = await built
-      .default({
-        env: process.env,
-        signal: stop.signal,
-        stdout: process.stdout,
-        stderr: process.stderr,
-      })
-      .catch((error) => {
-        if (!stop.signal.aborted) console.error(error);
-      });
-    if (!app) return stop.signal.aborted ? 0 : 1;
+    const app = await built.default({
+      env: process.env,
+      signal: stop.signal,
+      stdout: process.stdout,
+      stderr: process.stderr,
+    });
 
     try {
       const asset = await createAssets(root);
@@ -81,12 +74,17 @@ async function serve(root) {
       return 0;
     } catch (error) {
       stop.abort();
-      await app.closed.catch(() => {});
+      await app.closed.catch((cleanup) => {
+        if (cleanup !== error) console.error("close failed:", cleanup);
+      });
       console.error(error);
       return 1;
     }
+  } catch (error) {
+    if (error === stop.signal.reason) return 0;
+    console.error(error);
+    return 1;
   } finally {
-    clearInterval(running);
     process.off("SIGINT", abort);
     process.off("SIGTERM", abort);
   }

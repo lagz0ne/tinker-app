@@ -31,10 +31,10 @@ if (mode.startsWith("import")) {
   const stop = new AbortController();
   const reason = new Error("proof.already-stopped");
   stop.abort(reason);
-  await assert.rejects(main({ env: {}, signal: stop.signal,
-    stdout: { write() { assert.fail("aborted start wrote stdout"); } },
-    stderr: { write() { assert.fail("aborted start wrote stderr"); } } }), error => error === reason);
-  assert.equal(probe.created, 0, "already aborted input opens no root");
+  await assert.rejects(main({ env: process.env, signal: stop.signal,
+    stdout: { write() {} }, stderr: { write(text) { assert.fail(text); } } }), error => error === reason);
+  assert.equal(probe.created, 2, "an already stopped host still finishes startup before closing");
+  assert.deepEqual(probe.closed, [2, 1], "an already stopped host closes app then tools");
 } else {
   const stop = new AbortController();
   const output = [], errors = [];

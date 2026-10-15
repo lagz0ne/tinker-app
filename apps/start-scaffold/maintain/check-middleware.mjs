@@ -60,13 +60,12 @@ if (import.meta.main) {
 
     const serverFile = join(proof, "cmds/server.ts");
     const server = await readFile(serverFile, "utf8");
-    assert.ok(server.includes("      await Promise.race([app.ready, cancelled.promise]);"));
+    assert.ok(server.includes("    app.onClose("));
     await writeFile(
       serverFile,
       server.replace(
-        "      await Promise.race([app.ready, cancelled.promise]);",
+        "    app.onClose(",
         `
-  await Promise.race([app.ready, cancelled.promise]);
   const createRequestSession = app.createSession.bind(app);
   let requestSessionCount = 0;
   app.createSession = (...args) => { requestSessionCount++; return createRequestSession(...args); };
@@ -74,6 +73,7 @@ if (import.meta.main) {
     count: () => requestSessionCount,
     stdout: tools.resolve(consoleOutput) === stdout,
   } });
+    app.onClose(
 `,
       ),
     );

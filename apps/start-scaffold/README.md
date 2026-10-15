@@ -57,6 +57,9 @@ The host calls `main({ env, signal, stdout, stderr })` once. The streams need on
 It binds each value inline, for example `env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)`.
 Main returns `{ fetch, closed }`. Aborting the host signal closes app, then telemetry.
 The one `closed` promise reports app failure first, then the first teardown error.
+A signal during startup lets the start finish, then closes app before telemetry.
+The prod host never listens after that signal and exits 0 for that stop reason.
+Any other start failure still exits with code 1, even if the host signal was aborted.
 A start error closes what started, writes cleanup errors to stderr, and rethrows the start error.
 The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
 The dev host owns startup sharing, retry after failure, and abort on HMR replacement.

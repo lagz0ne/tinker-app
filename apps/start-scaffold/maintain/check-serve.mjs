@@ -23,7 +23,7 @@ async function fetchWhenListening(url, server) {
   }
 }
 
-/** A real host must stop a pending start, or report a failed close, after SIGTERM. */
+/** A stopped host lets startup finish, closes app before tools, and never listens. */
 async function signalCase(source, proof, extra, marker, expected, appCount) {
   const child = spawn(
     process.execPath,
@@ -83,8 +83,18 @@ async function signalCase(source, proof, extra, marker, expected, appCount) {
       );
     }
 
-    if (marker !== "tinker serve:") assert.ok(!output.includes("tinker serve:"), output);
-    console.log(`PASS: SIGTERM ${marker}; app closes before tools; EXIT ${code}.`);
+    if (marker !== "tinker serve:") {
+      const finished = marker.replace("waiting", "finished");
+      assert.ok(output.includes(finished), output);
+      assert.ok(
+        output.indexOf(finished) <
+          output.indexOf(appCount ? "proof.app.closed\n" : "proof.tools.closed\n"),
+        output,
+      );
+      assert.ok(!output.includes("tinker serve:"), output);
+    }
+    if (extra.PROOF_TOOLS_FAIL) assert.ok(output.includes("proof.tools.failure"), output);
+    console.log(`PASS: SIGTERM ${marker}; started roots close in order; EXIT ${code}.`);
   } finally {
     if (child.exitCode === null) {
       child.kill("SIGKILL");
@@ -102,16 +112,13 @@ export async function checkServe(source) {
     await copyProofApp(source, proof);
     const command = join(proof, "cmds/server.ts");
     const main = await readFile(command, "utf8");
-    assert.ok(main.includes("  signal.throwIfAborted();"));
+    assert.ok(main.includes("  const stop ="));
     const planted = main
       .replace(
         "import { createScope, type Scope }",
         "import { createScope, extension, type Scope }",
       )
-      .replace(
-        "  signal.throwIfAborted();",
-        '  signal.throwIfAborted(); stdout.write("proof.main\\n");',
-      )
+      .replace("  const appStop =", '  stdout.write("proof.main\\n"); const appStop =')
       .replace(
         "  const stop =",
         `
@@ -119,7 +126,11 @@ export async function checkServe(source) {
     ctx.defer(() => { stdout.write("proof.tools.closed\\n"); });
     if (env.PROOF_TOOLS_WAIT) {
       stdout.write("proof.tools.waiting\\n");
-      return new Promise<void>((_done, fail) => ctx.signal.addEventListener("abort", () => fail(ctx.signal.reason), { once: true }));
+      return new Promise<void>((done) => setTimeout(done, 1500)).then(() => {
+        stdout.write("proof.tools.finished\\n");
+        if (env.PROOF_TOOLS_FAIL) throw new Error("proof.tools.failure");
+        return ctx.next();
+      });
     }
     return ctx.next();
   } } });
@@ -141,10 +152,11 @@ export async function checkServe(source) {
         .replace("    database,\n    pgCore:", "    database,\n    url: databaseUrl,\n    pgCore:")
         .replace(
           "run: async ({ database, pgCore, migrator }) => {",
-          `run: async ({ database, pgCore, migrator, url }, ctx) => {
+          `run: async ({ database, pgCore, migrator, url }) => {
       if (url.hostname === "hold") {
         process.stdout.write("proof.migration.waiting\\n");
-        await new Promise<void>((_done, fail) => ctx.signal.addEventListener("abort", () => fail(ctx.signal.reason), { once: true }));
+        await new Promise<void>((done) => setTimeout(done, 1500));
+        process.stdout.write("proof.migration.finished\\n");
       }`,
         ),
     );
@@ -194,7 +206,38 @@ export const Route = createFileRoute("/proof/response")({
       await new Promise((done) => listener.close(done));
     }
 
-    await signalCase(source, proof, { PROOF_TOOLS_WAIT: "1" }, "proof.tools.waiting", 0, 0);
+    const listenFailed = spawnSync(
+      process.execPath,
+      [join(source, "node_modules/@tinker/start/bin/tinker.mjs"), "serve"],
+      {
+        cwd: proof,
+        env: { ...process.env, ...proofEnv, PORT: "-1", PROOF_CLOSE_FAIL: "1" },
+        encoding: "utf8",
+        timeout: 30000,
+      },
+    );
+    const listenLog = listenFailed.stdout + listenFailed.stderr;
+    assert.equal(listenFailed.status, 1, listenLog);
+    assert.ok(listenFailed.stderr.includes("ERR_SOCKET_BAD_PORT"), listenLog);
+    assert.ok(listenFailed.stderr.includes("close failed: Error: proof.close"), listenLog);
+    assert.ok(!listenFailed.stdout.includes("tinker serve:"), listenLog);
+    assert.ok(
+      listenLog.indexOf("proof.app.closed\n") < listenLog.indexOf("proof.tools.closed\n"),
+      listenLog,
+    );
+    console.log(
+      "PASS: listen failure reports its close failure and ends app before tools; EXIT 1.",
+    );
+
+    await signalCase(source, proof, { PROOF_TOOLS_WAIT: "1" }, "proof.tools.waiting", 0, 1);
+    await signalCase(
+      source,
+      proof,
+      { PROOF_TOOLS_WAIT: "1", PROOF_TOOLS_FAIL: "1" },
+      "proof.tools.waiting",
+      1,
+      0,
+    );
     await signalCase(
       source,
       proof,

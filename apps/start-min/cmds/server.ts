@@ -34,8 +34,8 @@ export default async function main({
   stdout: { write(chunk: string): unknown };
   stderr: { write(chunk: string): unknown };
 }) {
-  signal.throwIfAborted();
   const stop = { tools: new AbortController(), app: new AbortController() };
+  const appStop = AbortSignal.any([signal, stop.app.signal]);
   const tools = createScope({
     signal: stop.tools.signal,
     extensions: [telemetryExport],
@@ -56,24 +56,15 @@ export default async function main({
     if (result.teardownErrors?.length) throw result.teardownErrors[0];
   }
 
-  const cancelled = Promise.withResolvers<never>();
-  const abort = () => {
-    stop.app.abort(signal.reason);
-    cancelled.reject(signal.reason);
-  };
-  void cancelled.promise.catch(() => {});
-  signal.addEventListener("abort", abort, { once: true });
-  if (signal.aborted) abort();
+  await tools.ready;
 
   try {
-    await Promise.race([tools.ready, cancelled.promise]);
-    signal.throwIfAborted();
     const app = createScope({
-      signal: stop.app.signal,
+      signal: appStop,
       observe: tools.resolve(observer),
       extensions: [startRequests],
       tags: [
-        backendStop(stop.app.signal),
+        backendStop(appStop),
         renderObservation(tools.resolve(renderObserve, { ns: renderNs })),
         browserTelemetry(tools.resolve(browserIngest).ingest),
       ],
@@ -82,35 +73,30 @@ export default async function main({
     const closed = app.closed.then(async function closeRoots(appEnd) {
       stop.tools.abort(abortReasons.closed);
       const toolsEnd = await tools.closed;
-      signal.removeEventListener("abort", abort);
       ended(appEnd);
       ended(toolsEnd);
     });
     void closed.catch(() => {});
 
     try {
-      await Promise.race([app.ready, cancelled.promise]);
-      signal.throwIfAborted();
-      app.onClose(observeServerPanics(abort, closed, stderr));
-      return {
-        fetch: createServerHandler(
-          { requestContext: app.resolve(startRequests) },
-          { dev: import.meta.env.DEV },
-        ).fetch,
-        closed,
-      };
+      await app.ready;
+      signal.throwIfAborted(); // Aborted during start: app is closing, so no handler.
     } catch (error) {
-      stop.app.abort(error);
-      await app.close();
       await closed.catch((cleanup) => {
         if (cleanup !== error) stderr.write(`close failed: ${String(cleanup)}\n`);
       });
       throw error;
     }
+    app.onClose(observeServerPanics(stop.app.abort.bind(stop.app), closed, stderr));
+    return {
+      fetch: createServerHandler(
+        { requestContext: app.resolve(startRequests) },
+        { dev: import.meta.env.DEV },
+      ).fetch,
+      closed,
+    };
   } catch (error) {
     stop.tools.abort(error);
-    await tools.close();
-    signal.removeEventListener("abort", abort);
     try {
       ended(await tools.closed);
     } catch (cleanup) {

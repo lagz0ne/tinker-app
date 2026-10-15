@@ -84,15 +84,15 @@ export async function wireProofMail(consumer) {
   const path = join(consumer, "cmds/server.ts");
   const main = await readFile(path, "utf8");
   assert.ok(main.includes("extensions: [startRequests]"));
-  assert.ok(main.includes("backendStop(stop.app.signal),"));
+  assert.ok(main.includes("backendStop(appStop),"));
   await writeFile(
     path,
     'import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";\n' +
       main
         .replace("extensions: [startRequests]", "extensions: [startRequests, mailStartup]")
         .replace(
-          "backendStop(stop.app.signal),",
-          `backendStop(stop.app.signal),
+          "backendStop(appStop),",
+          `backendStop(appStop),
       env.SMTP_URL !== undefined && smtpUrl(new URL(env.SMTP_URL)),
       env.SMTP_FROM !== undefined && mailFrom(env.SMTP_FROM),`,
         ),

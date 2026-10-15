@@ -39,17 +39,14 @@ try {
     "plant must replace the command's render observer",
   );
   const source = `const probe = { renderSpans: [], starts: 0 }; globalThis.__entryProof = probe;\n${original
-    .replace(
-      "  signal.throwIfAborted();",
-      "  probe.starts++; probe.signal = signal; signal.throwIfAborted();",
-    )
+    .replace("  const stop =", "  probe.starts++; probe.signal = signal; const stop =")
     .replaceAll(
       "tools.resolve(renderObserve, { ns: renderNs })",
       "{ export: (span) => probe.renderSpans.push(span) }",
     )
     .replace(
-      "  const cancelled =",
-      "  probe.toolsClosed = tools.closed; probe.abort = () => stop.app.abort(abortReasons.closed);\n  const cancelled =",
+      "  await tools.ready;",
+      "  probe.toolsClosed = tools.closed; probe.abort = () => stop.app.abort(abortReasons.closed);\n  await tools.ready;",
     )
     .replace(
       "    const closed = app.closed.then",
