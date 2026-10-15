@@ -129,3 +129,5 @@ try {
   browser(a, "close");
   browser(b, "close");
 }
+
+execFileSync(process.execPath, ["maintain/proof-issues.mjs"], { stdio: "inherit" });

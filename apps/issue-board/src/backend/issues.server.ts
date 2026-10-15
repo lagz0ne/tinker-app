@@ -12,23 +12,6 @@ import { raise } from "@/demo/errors";
 import { issue, issueFields, team, teamMember } from "./board.schema.server";
 import { readTeam } from "./teams.server";
 
-export const listIssues = operation({
-  label: "issues.list",
-  input: teamInput,
-  depends: { database, orm: drizzleOrm, access: readTeam.controller },
-  run: async ({ database, orm, access }, { input }) => {
-    await access.run({ input });
-    const { eq, asc } = orm;
-
-    return database
-      .select(issueFields)
-      .from(issue)
-      .innerJoin(team, eq(issue.teamId, team.id))
-      .where(eq(issue.teamId, input.teamId))
-      .orderBy(asc(issue.number));
-  },
-});
-
 export const listTeamMembers = operation({
   label: "teams.members",
   input: teamInput,

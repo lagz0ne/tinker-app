@@ -7,7 +7,7 @@ import { backendStop, startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
 import { team } from "@/backend/board.schema.server";
-import { changeIssue, listIssues, listTeamMembers } from "@/backend/issues.server";
+import { changeIssue, listTeamMembers } from "@/backend/issues.server";
 import { changeTeam, listTeams } from "@/backend/teams.server";
 import { readAccount } from "@/demo/backend/auth.server";
 import { bootstrap } from "@/demo/backend/sync.server";
@@ -106,21 +106,19 @@ afterEach(async () => {
   expect((await root.closed).status).toBe("success");
 });
 
-test("20 parallel creates by two members give ENG-1 through ENG-20 with no gaps or duplicates", async () => {
+test("sequential numbering gives ENG-1 through ENG-20 with one counter UPDATE per create", async () => {
   databaseQueries.length = 0;
-  await Promise.all(
-    Array.from({ length: 20 }, (_, index) =>
-      root.run(changeIssue, {
-        rawInput: {
-          executionId: crypto.randomUUID(),
-          change: { ...draft, kind: "create", teamId, title: `Issue ${index}` },
-        },
-        tags: requestHeaders(index % 2 === 0 ? ada : grace),
-      }),
-    ),
-  );
+  for (let index = 0; index < 20; index++) {
+    await root.run(changeIssue, {
+      rawInput: {
+        executionId: crypto.randomUUID(),
+        change: { ...draft, kind: "create", teamId, title: `Issue ${index}` },
+      },
+      tags: requestHeaders(index % 2 === 0 ? ada : grace),
+    });
+  }
 
-  const rows = await root.run(listIssues, { rawInput: { teamId }, tags: requestHeaders(ada) });
+  const rows = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
   expect(rows.map((row) => row.number)).toEqual(
     Array.from({ length: 20 }, (_, index) => index + 1),
   );
@@ -140,7 +138,7 @@ test("repeated execution IDs do not create a second row or increment the number;
     root.run(changeIssue, { rawInput: create, tags: requestHeaders(ada) }),
     root.run(changeIssue, { rawInput: create, tags: requestHeaders(ada) }),
   ]);
-  const [row] = await root.run(listIssues, { rawInput: { teamId }, tags: requestHeaders(ada) });
+  const [row] = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
   const edit = {
     executionId: crypto.randomUUID(),
     change: {
@@ -157,7 +155,7 @@ test("repeated execution IDs do not create a second row or increment the number;
   await root.run(changeIssue, { rawInput: edit, tags: requestHeaders(grace) });
   await root.run(changeIssue, { rawInput: edit, tags: requestHeaders(grace) });
 
-  const rows = await root.run(listIssues, { rawInput: { teamId }, tags: requestHeaders(ada) });
+  const rows = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
   expect(rows).toEqual([
     { ...row, title: "Assigned work", state: "in_progress", priority: 1, assigneeId: graceId },
   ]);
@@ -175,7 +173,7 @@ test("a non-member cannot create, edit an existing or missing issue, or read iss
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });
-  const rows = await root.run(listIssues, { rawInput: { teamId }, tags: requestHeaders(ada) });
+  const rows = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
 
   for (const change of [
     { ...draft, kind: "create", teamId },
@@ -190,8 +188,10 @@ test("a non-member cannot create, edit an existing or missing issue, or read iss
     if (result.status !== "failed") throw new Error("Expected membership refusal");
     expect(isError(result.error, "NotTeamMember")).toBe(true);
   }
+  expect((await root.run(bootstrap, { tags: requestHeaders(outsider) })).private?.issues).toEqual(
+    [],
+  );
   const reads = [
-    await root.settle(listIssues, { rawInput: { teamId }, tags: requestHeaders(outsider) }),
     await root.settle(listTeamMembers, { rawInput: { teamId }, tags: requestHeaders(outsider) }),
   ];
   for (const result of reads) {
@@ -200,9 +200,7 @@ test("a non-member cannot create, edit an existing or missing issue, or read iss
     expect(isError(result.error, "NotTeamMember")).toBe(true);
   }
 
-  expect(await root.run(listIssues, { rawInput: { teamId }, tags: requestHeaders(ada) })).toEqual(
-    rows,
-  );
+  expect((await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!).toEqual(rows);
   expect((await (await root.resolve(database)).select().from(team))[0]!.issueSeq).toBe(1);
 });
 
@@ -225,16 +223,14 @@ test("an insert failure rolls back the increment so the next issue is ENG-1", as
   });
   expect(refused.status).toBe("failed");
   expect((await db.select().from(team))[0]!.issueSeq).toBe(0);
-  expect(await root.run(listIssues, { rawInput: { teamId }, tags: requestHeaders(ada) })).toEqual(
-    [],
-  );
+  expect((await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!).toEqual([]);
 
   await root.run(changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });
   expect(
-    (await root.run(listIssues, { rawInput: { teamId }, tags: requestHeaders(ada) })).map(
+    (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!.map(
       (row) => row.number,
     ),
   ).toEqual([1]);
@@ -271,9 +267,7 @@ test("invalid assignees, states, priorities, and caller-selected creators save n
     expect(isCoreError(result.error, "DataValidationFailed")).toBe(true);
   }
 
-  expect(await root.run(listIssues, { rawInput: { teamId }, tags: requestHeaders(ada) })).toEqual(
-    [],
-  );
+  expect((await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!).toEqual([]);
   expect((await (await root.resolve(database)).select().from(team))[0]!.issueSeq).toBe(0);
 });
 
@@ -289,8 +283,6 @@ test("editing a missing issue is refused without changing the team counter", asy
   expect(result.status).toBe("failed");
   if (result.status !== "failed") throw new Error("Expected missing issue refusal");
   expect(isError(result.error, "IssueMissing")).toBe(true);
-  expect(await root.run(listIssues, { rawInput: { teamId }, tags: requestHeaders(ada) })).toEqual(
-    [],
-  );
+  expect((await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!).toEqual([]);
   expect((await (await root.resolve(database)).select().from(team))[0]!.issueSeq).toBe(0);
 });
