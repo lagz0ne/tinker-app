@@ -3,12 +3,7 @@ import { join } from "node:path";
 
 import { parseSource } from "./source.mjs";
 
-/**
- * App files the glue picks up, and nothing else (ADR 0106): the alias the base imports each by,
- * the exports it reads, and any base default used while the file is absent.
- * Named files: router, start, server, style, and the shell (a route, so it has no alias).
- * Item wiring is plain code in the app entries (ADR 0118).
- */
+/** Required command exports read by Start; the app owns its shell and styles. */
 const namedFiles = [
   { file: "cmds/router.ts", reads: "getRouter", required: true },
   { file: "cmds/start.ts", reads: "startInstance", required: true },

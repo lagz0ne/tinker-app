@@ -63,7 +63,6 @@ test("a missing entry option shows the Vite config line to add", () => {
 
 test("auth needs only the default command export; app wiring is checked at run time", () => {
   const root = goodApp({
-    ".tinker/base.json": '{"parts":["auth"]}',
     "cmds/server.ts": "export default 1;",
   });
 
@@ -74,7 +73,6 @@ test("auth needs only the default command export; app wiring is checked at run t
 
 test("copied sync reads no client command exports or package Register", () => {
   const root = goodApp({
-    ".tinker/base.json": '{"parts":["auth","sync"]}',
     "cmds/server.ts": "export default 1;",
     "cmds/router.ts": "export const getRouter = () => ({});",
   });
@@ -88,7 +86,6 @@ test("copied sync reads no client command exports or package Register", () => {
 
 test("doctor reads client command exports from an object pattern", () => {
   const root = goodApp({
-    ".tinker/base.json": '{"parts":["auth"]}',
     "cmds/router.ts": "const values = {getRouter:() => ({})}; export const {getRouter} = values;",
   });
 

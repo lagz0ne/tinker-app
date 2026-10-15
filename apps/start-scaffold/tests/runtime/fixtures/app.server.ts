@@ -22,7 +22,7 @@ export type AuthPort = {
 };
 
 /**
- * A stand-in server seam for the base's own tests and type check, as `#tinker/server`:
+ * A stand-in server seam for the base's own tests and type check, as the server command slots:
  * the names the auth and sync parts read. Its auth library echoes each request it is handed,
  * and signs a request in by its `x-account` header, while that account is in `signedIn`.
  */

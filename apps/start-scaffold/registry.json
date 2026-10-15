@@ -142,6 +142,11 @@
           "path": "tinker/base/start-entry.ts",
           "type": "registry:file",
           "target": "~/tinker/base/start-entry.ts"
+        },
+        {
+          "path": "tinker/base/fallbacks.tsx",
+          "type": "registry:file",
+          "target": "~/tinker/base/fallbacks.tsx"
         }
       ],
       "meta": {

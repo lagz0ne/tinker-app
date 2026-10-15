@@ -7,8 +7,8 @@ import { ScopeProvider } from "@tinker/react";
 
 import { abortReasons } from "~/components/errors";
 
+import { TinkerError, TinkerNotFound } from "./fallbacks";
 import { renderObservation } from "./observe";
-import { TinkerError, TinkerNotFound } from "./panics";
 
 export type RouteTree = (typeof import("#tinker/routes"))["routeTree"];
 

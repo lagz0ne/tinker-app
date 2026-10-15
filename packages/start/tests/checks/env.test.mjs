@@ -79,7 +79,6 @@ test("a good shell value hides a bad .env one, as the part reads the shell first
 
 test("an absent component's keys are not checked", () => {
   const root = emptyFixture({
-    ".tinker/base.json": JSON.stringify({ base: "0.3.0", parts: [] }),
     ".env": "VICTORIA_TRACES_URL=not a url\n",
   });
   expect(env(root)).toEqual({ status: "ok", lines: ["no .env.example to check"] });
@@ -129,7 +128,6 @@ test("with auth off, as by default, its keys are not read", () => {
 
 test("doctor reads copied JSON env even when the old switch record is empty, without importing code", () => {
   const root = emptyFixture({
-    ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: [] }),
     ".env": "DECOMPOSE_TEST_ORIGIN=not-a-url\n",
     "tinker/components/caps/component.json": JSON.stringify({
       requires: [],

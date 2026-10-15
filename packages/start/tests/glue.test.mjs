@@ -6,6 +6,7 @@ import { expect, test } from "vite-plus/test";
 import { aliases, passThrough, startOptions } from "../lib/glue.mjs";
 import { appFiles, ignoredFiles } from "../lib/named.mjs";
 import { baseDir } from "../lib/paths.mjs";
+import { serverSource } from "../lib/server-source.mjs";
 import { fixture } from "./fixture.mjs";
 
 test("the glue picks up the app entry and the three optional named files", () => {
@@ -158,5 +159,11 @@ test("a missing server option names the exact command config before Start resolv
   const root = fixture({ "vite.config.ts": "export default {};" });
   expect(() => startOptions(root)).toThrow(
     'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts" })',
+  );
+});
+
+test("doctor starter text is the actual smallest server command", () => {
+  expect(serverSource).toBe(
+    readFileSync(join(baseDir, "../../apps/start-min/cmds/server.ts"), "utf8"),
   );
 });

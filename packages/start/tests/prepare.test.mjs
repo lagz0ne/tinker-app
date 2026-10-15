@@ -1,9 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 import { expect, test } from "vite-plus/test";
 
-import { basePackage } from "../lib/paths.mjs";
 import { prepare, prepareExitCode, render } from "../lib/prepare.mjs";
 import { fixture, goodApp } from "./fixture.mjs";
 
@@ -34,22 +33,20 @@ test("the build's tsc checks vite.config.ts too, so a tinker() option type is ch
   ]);
 });
 
-test("prepare writes build isolation and version data, never app wiring", () => {
+test("prepare writes build isolation, never app wiring", () => {
   const root = goodApp({
+    ".tinker/base.json": "old version receipt",
     ".tinker/parts.ts": "old generated runtime",
     ".tinker/parts.server.ts": "old generated runtime",
     ".tinker/telemetry-env.ts": "old generated runtime",
   });
-  expect(prepare(root)).toEqual(["tsconfig.json", "base.json"]);
+  expect(prepare(root)).toEqual(["tsconfig.json"]);
 
-  expect(JSON.parse(readFileSync(join(root, ".tinker/base.json"), "utf8"))).toEqual({
-    base: basePackage.version,
-  });
   const { paths } = JSON.parse(render(root)["tsconfig.json"]).compilerOptions;
   expect(Object.keys(paths)).toEqual(["@/*", "~/*", "#tinker/routes"]);
   expect(paths["#tinker/routes"]).toEqual([join(root, ".tinker/routeTree.gen.ts")]);
 
-  for (const file of ["parts.ts", "parts.server.ts", "telemetry-env.ts"]) {
+  for (const file of ["base.json", "parts.ts", "parts.server.ts", "telemetry-env.ts"]) {
     expect(existsSync(join(root, ".tinker", file))).toBe(false);
   }
 });
@@ -64,7 +61,7 @@ test("a failing tinker prepare fails, except as postinstall, so a broken clone s
 
 test("prepare has no package defaults or private app aliases", () => {
   const files = render(fixture({ "package.json": "{}" }));
-  expect(Object.keys(files)).toEqual(["tsconfig.json", "base.json"]);
+  expect(Object.keys(files)).toEqual(["tsconfig.json"]);
   const { paths } = JSON.parse(files["tsconfig.json"]).compilerOptions;
   expect(Object.keys(paths).filter((key) => key.startsWith("#tinker/"))).toEqual([
     "#tinker/routes",

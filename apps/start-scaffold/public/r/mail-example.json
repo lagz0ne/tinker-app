@@ -10,6 +10,6 @@
     "requires": "Bind mail.settings(env) by hand. Doctor checks the copied SMTP env table; a build starts no SMTP client."
   },
   "registryDependencies": [
-    "https://raw.githubusercontent.com/lagz0ne/tinkered/start-v0.8.0/apps/start-scaffold/public/r/mail.json"
+    "https://raw.githubusercontent.com/lagz0ne/tinkered/start-v0.9.0/apps/start-scaffold/public/r/mail.json"
   ]
 }

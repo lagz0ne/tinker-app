@@ -18,7 +18,7 @@ import {
 import type { Sync } from "~/components/sync/envelopes";
 
 /**
- * A stand-in client seam for the base's own tests and type check, as `#tinker/router`: the names
+ * A stand-in client seam for the base's own tests and type check, as the router command slots: the names
  * the sync part reads. Its records keep each snapshot part and each applied change in cells.
  */
 export const extensions: Many<Scope.Extension<unknown>> = [];

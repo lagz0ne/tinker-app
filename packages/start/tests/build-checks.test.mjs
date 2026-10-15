@@ -16,7 +16,6 @@ test("an old package runtime import stops the build", () => {
 
 test("each silent mistake stops the build with doctor's file:line message", () => {
   const root = goodApp({
-    ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: ["auth", "sync"] }),
     "src/router.tsx": "",
     "src/routes/index.tsx": 'export const route = createFileRoute("/")({});\n',
     "src/routes/api.sync/settings.tsx":
@@ -88,7 +87,6 @@ test("a glue problem warns while the build itself still works", () => {
 
 test("with auth on, the main needs only its default export", () => {
   const root = goodApp({
-    ".tinker/base.json": JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] }),
     "cmds/server.ts": "export default 1;\n",
   });
   expect(buildChecks(root).errors).toEqual([]);

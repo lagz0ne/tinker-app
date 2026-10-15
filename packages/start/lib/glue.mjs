@@ -18,9 +18,7 @@ export function aliases(root) {
 }
 
 /**
- * Start's options: commands use copied base entries; routes still point into the package, relative to
- * src/ (Start resolves no package name or absolute path there). A part's routes mount only while
- * it is on, so an off part leaves its paths to the app.
+ * Start reads the app's named command entries and physical routes, relative to src/.
  * @param {string} root - From tinker(); why: Start takes paths relative to that app's src.
  */
 export function startOptions(root) {

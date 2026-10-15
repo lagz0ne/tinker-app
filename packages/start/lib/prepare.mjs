@@ -2,7 +2,6 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { appFiles } from "./named.mjs";
-import { basePackage } from "./paths.mjs";
 
 const compilerOptions = {
   target: "esnext",
@@ -56,7 +55,6 @@ export function render(root) {
       ],
       exclude: ["../tests/runtime", "../dist", "../node_modules"],
     }),
-    "base.json": json({ base: basePackage.version }),
   };
 }
 
@@ -66,7 +64,7 @@ export function render(root) {
 export function prepare(root) {
   const dir = join(root, ".tinker");
   mkdirSync(dir, { recursive: true });
-  for (const name of ["parts.ts", "parts.server.ts", "telemetry-env.ts"]) {
+  for (const name of ["base.json", "parts.ts", "parts.server.ts", "telemetry-env.ts"]) {
     rmSync(join(dir, name), { force: true });
   }
 

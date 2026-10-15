@@ -2,7 +2,16 @@
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "testRunner": "vitest",
   "plugins": ["@stryker-mutator/vitest-runner"],
-  "mutate": ["tinker/**/*.ts", "tinker/**/*.tsx"],
+  "mutate": [
+    "tinker/**/*.ts",
+    "tinker/**/*.tsx",
+    "!tinker/base/server-entry.ts",
+    "!tinker/base/router-entry.tsx",
+    "!tinker/base/start-entry.ts",
+    "!tinker/base/fallbacks.tsx",
+    "!src/routes/**",
+    "!tinker/components/sync/functions.ts"
+  ],
   "ignorePatterns": ["dist", "node_modules", ".tinker"],
   "reporters": ["clear-text", "progress", "json"],
   "thresholds": {

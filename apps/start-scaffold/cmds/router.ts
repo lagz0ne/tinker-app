@@ -11,8 +11,8 @@ import {
 } from "~/components/sync";
 import { telemetry, logConsole } from "~/components/telemetry";
 
-export const extensions = [];
-export const router: RouterOptions = {};
+const extensions: [] = [];
+const router: RouterOptions = {};
 
 export const getRouter = createRouterEntry({
   sync,

@@ -1,5 +1,3 @@
-import type { ErrorComponentProps } from "@tanstack/react-router";
-
 /**
  * Dev only. Start answers a failed render with a bare JSON 500, and that page has no Vite
  * client, so it never sees the fix. This page keeps the body and reloads on the next update.
@@ -32,15 +30,6 @@ export async function devErrorPage(request: Request, response: Response): Promis
   );
 }
 
-/**
- * The base's error page: a production page shows no error text, and the server log gets the
- * error. It logs to the console because this POC base has no telemetry part yet.
- */
-export function TinkerError({ error }: ErrorComponentProps) {
-  if (import.meta.env.SSR) console.error("tinker: a route failed on the server:", error);
-  return <ErrorDetails error={error} dev={import.meta.env.DEV} />;
-}
-
 /** Show the error text only when the entry is in dev mode. */
 export function ErrorDetails({ error, dev }: { error: unknown; dev: boolean }) {
   const detail = dev ? (error instanceof Error ? error.message : String(error)) : undefined;
@@ -49,15 +38,6 @@ export function ErrorDetails({ error, dev }: { error: unknown; dev: boolean }) {
     <main>
       <h1>Something went wrong</h1>
       {detail !== undefined && <pre>{detail}</pre>}
-    </main>
-  );
-}
-
-/** The base's 404 page; a route's own notFoundComponent, or src/router.ts, replaces it. */
-export function TinkerNotFound() {
-  return (
-    <main>
-      <h1>Not found</h1>
     </main>
   );
 }

@@ -238,3 +238,10 @@ Replies belong to routes; operations take plain params.
 Operations never take Request or return Response.
 Native WebSocket and EventSource remain allowed.
 Their resources own and close the connection.
+
+## Deploy
+
+`npm start` uses the `tinker serve` host from the `@tinker/start` dev dependency.
+Keep dev dependencies installed on the server; an `npm install --omit=dev` install cannot start it.
+Start 0.9.0 must be published before a template or degit trial (card 7).
+Local proofs use a packed Start through `TINKER_PACKAGE_DIR`.

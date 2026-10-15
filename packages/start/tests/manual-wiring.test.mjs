@@ -52,7 +52,7 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
 
   const files = prepare(root, []);
 
-  expect(files).toEqual(["tsconfig.json", "base.json"]);
+  expect(files).toEqual(["tsconfig.json"]);
   expect(named(root).lines).toEqual([
     "tinker/components/mail/component.json: requires missing component tinker/components/missing; shadcn add it",
   ]);

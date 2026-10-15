@@ -83,7 +83,6 @@ test("a route file that re-exports Route from another file counts as a route", (
 
 test("a copied sync route is stale until it appears in the app route tree", () => {
   const root = preparedApp({
-    ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: ["auth", "sync"] }),
     "src/routes/api.sync.tsx": 'export const Route = createFileRoute("/api/sync")({});\n',
   });
   expect(generated(root).lines).toEqual([
@@ -189,7 +188,7 @@ test("--fix never runs the generator while a copied route has a wrong ID", () =>
   const root = preparedApp({
     ...fakeVite(""),
     ...later,
-    ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: ["auth", "sync"] }),
+
     "src/routes/api.sync.ts": clash,
   });
   expect(runCheck(root, generated, true)).toMatchObject({

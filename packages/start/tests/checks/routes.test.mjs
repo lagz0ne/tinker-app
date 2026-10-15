@@ -107,7 +107,6 @@ test("legacy package mount tables cannot claim the app paths", () => {
 
 test("copied sync and nested app routes need no package switch", () => {
   const root = goodApp({
-    ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: ["auth", "sync"] }),
     "src/routes/api.sync.ts": page("/api/sync"),
     "src/routes/api/sync/raw.ts": page("/api/sync/raw"),
   });
@@ -119,7 +118,6 @@ test("copied sync and nested app routes need no package switch", () => {
 
 test("with the part off, as the last tinker() call recorded, its path is the app's", () => {
   const root = goodApp({
-    ".tinker/base.json": JSON.stringify({ base: "0.3.0", parts: [] }),
     "src/routes/api.telemetry.ts": page("/api/telemetry"),
   });
   expect(routes(root)).toEqual({
@@ -150,21 +148,13 @@ test("with no base installed, no path is the base's", () => {
   });
 });
 
-test("legacy auth switch records cannot reserve physical routes", () => {
+test("installed tooling cannot reserve physical app routes", () => {
   const root = fixture({
     "src/routes/__root.tsx": "export const Route = createRootRoute({});",
     "node_modules/@tinker/start/package.json": JSON.stringify({
       ...basePackage,
-      tinker: {
-        ...basePackage.tinker,
-        parts: {
-          auth: {
-            routes: { "/api/auth/$": "src/routes/api.auth.ts" },
-          },
-        },
-      },
     }),
-    ".tinker/base.json": JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] }),
+
     "src/routes/api.auth.$.ts": page("/api/auth/$"),
     "src/routes/api/auth/login.ts": page("/api/auth/login"),
   });
@@ -181,7 +171,6 @@ test("with auth off, as by default, /api/auth/ is the app's", () => {
 
 test("an old sync record does not claim the app's copied route", () => {
   const root = goodApp({
-    ".tinker/base.json": JSON.stringify({ base: "0.5.0", parts: ["auth", "sync"] }),
     "src/routes/api.sync.ts": page("/api/sync"),
   });
   expect(routes(root)).toEqual({
@@ -193,7 +182,6 @@ test("an old sync record does not claim the app's copied route", () => {
 
 test("copied auth routes belong to the app even when the old auth switch is recorded", () => {
   const root = goodApp({
-    ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: ["auth"] }),
     "src/routes/api.auth.$.ts": page("/api/auth/$"),
   });
   expect(routes(root)).toEqual({
