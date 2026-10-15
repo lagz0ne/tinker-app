@@ -9,7 +9,7 @@ import { baseDir } from "../lib/paths.mjs";
 import { serverSource } from "../lib/server-source.mjs";
 import { fixture } from "./fixture.mjs";
 
-test("the glue picks up the app entry and the three optional named files", () => {
+test("the glue picks up the three app-named command entries", () => {
   expect(appFiles(fixture({})).map(({ file }) => file)).toEqual([
     "cmds/router.ts",
     "cmds/start.ts",
@@ -71,7 +71,7 @@ test("Start runs the app commands and discovers copied telemetry through the phy
     "utf8",
   );
   const root = fixture({ "src/routes/index.tsx": "", "src/routes/api.telemetry.ts": file });
-  const options = startOptions(root, []);
+  const options = startOptions(root);
 
   expect(resolve(root, "src", options.server.entry)).toBe(join(root, "cmds/server.ts"));
   expect(resolve(root, "src", options.router.entry)).toBe(join(root, "cmds/router.ts"));
@@ -81,18 +81,18 @@ test("Start runs the app commands and discovers copied telemetry through the phy
   expect(readFileSync(join(root, "src/routes/api.telemetry.ts"), "utf8")).toBe(file);
 });
 
-test("a part that is off mounts no route, so its path is the app's", () => {
+test("physical routes leave unclaimed paths to the app", () => {
   const root = fixture({ "src/routes/index.tsx": "" });
-  const { virtualRouteConfig: tree } = startOptions(root, []).router;
+  const { virtualRouteConfig: tree } = startOptions(root).router;
 
   expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([""]);
 });
 
-test("Start runs the base's entries, the generated route tree, and the base's import rules", () => {
+test("Start runs the configured entries, generated route tree and import rules", () => {
   const root = fixture({ "src/routes/index.tsx": "" });
   const fromSrc = (file) => relative(join(root, "src"), join(root, file));
-  const { virtualRouteConfig, ...router } = startOptions(root, []).router;
-  expect({ ...startOptions(root, []), router }).toEqual({
+  const { virtualRouteConfig, ...router } = startOptions(root).router;
+  expect({ ...startOptions(root), router }).toEqual({
     srcDirectory: "src",
     start: { entry: fromSrc("cmds/start.ts") },
     server: { entry: fromSrc("cmds/server.ts") },
@@ -114,7 +114,7 @@ test("Start runs the base's entries, the generated route tree, and the base's im
 
 test("the app's src/routes/__root.tsx replaces the base shell", () => {
   const root = fixture({ "src/routes/__root.tsx": "" });
-  expect(startOptions(root, []).router.virtualRouteConfig.file).toBe("__root.tsx");
+  expect(startOptions(root).router.virtualRouteConfig.file).toBe("__root.tsx");
 });
 
 test("Start's static output options pass on; an unknown option fails the build", () => {
@@ -124,7 +124,7 @@ test("Start's static output options pass on; an unknown option fails the build",
     prerender: { enabled: true },
   });
   expect(() => passThrough({ prerendr: {}, sap: {} })).toThrow(
-    "tinker(): unknown option prerendr, sap; known: root, serverEntry, compileHints, prerender, pages, spa, sitemap",
+    "tinker(): unknown option prerendr, sap; known: root, serverEntry, routerEntry, startEntry, compileHints, prerender, pages, spa, sitemap",
   );
   expect(passThrough({ spa: { enabled: true } })).toStrictEqual({
     spa: { enabled: true },
@@ -137,8 +137,8 @@ test("auth's copied route stays in the physical app tree with either old switch 
     "utf8",
   );
   const root = fixture({ "src/routes/index.tsx": "", "src/routes/api.auth.$.ts": file });
-  for (const on of [["auth"], []]) {
-    const { virtualRouteConfig: tree } = startOptions(root, on).router;
+  for (const _attempt of [1, 2]) {
+    const { virtualRouteConfig: tree } = startOptions(root).router;
     expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([""]);
     expect(tree.children.at(-1)).toEqual({ type: "physical", directory: ".", pathPrefix: "" });
     expect(readFileSync(join(root, "src/routes/api.auth.$.ts"), "utf8")).toBe(file);
@@ -148,7 +148,7 @@ test("auth's copied route stays in the physical app tree with either old switch 
 test("copied sync mounts physically from the app and has no plugin switch", () => {
   const file = 'export const Route = createFileRoute("/api/sync")({});\n';
   const root = fixture({ "src/routes/index.tsx": "", "src/routes/api.sync.ts": file });
-  const { virtualRouteConfig: tree } = startOptions(root, []).router;
+  const { virtualRouteConfig: tree } = startOptions(root).router;
 
   expect(tree.children).toEqual([{ type: "physical", directory: ".", pathPrefix: "" }]);
   expect(readFileSync(join(root, "src/routes/api.sync.ts"), "utf8")).toBe(file);
@@ -156,10 +156,11 @@ test("copied sync mounts physically from the app and has no plugin switch", () =
 });
 
 test("a missing server option names the exact command config before Start resolves entries", () => {
-  const root = fixture({ "vite.config.ts": "export default {};" });
-  expect(() => startOptions(root)).toThrow(
-    'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts" })',
-  );
+  const root = fixture({
+    "vite.config.ts":
+      'export default {routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts"};',
+  });
+  expect(() => startOptions(root)).toThrow("vite.config.ts: name serverEntry in tinker()");
 });
 
 test("doctor starter text is the actual smallest server command", () => {
@@ -167,3 +168,27 @@ test("doctor starter text is the actual smallest server command", () => {
     readFileSync(join(baseDir, "../../apps/start-min/cmds/server.ts"), "utf8"),
   );
 });
+
+test("all three native entry paths come from the app config, with no conventional mount", () => {
+  const root = fixture({
+    "vite.config.ts":
+      'export default { serverEntry: "cmds/http.ts", routerEntry: "cmds/browser.ts", startEntry: "cmds/middleware.ts" };',
+  });
+  const options = startOptions(root);
+  expect(options.server.entry).toBe("../cmds/http.ts");
+  expect(options.router.entry).toBe("../cmds/browser.ts");
+  expect(options.start.entry).toBe("../cmds/middleware.ts");
+});
+
+for (const option of ["routerEntry", "startEntry"]) {
+  test(`missing ${option} fails instead of mounting a fixed path`, () => {
+    const config = {
+      serverEntry: "cmds/server.ts",
+      routerEntry: "cmds/router.ts",
+      startEntry: "cmds/start.ts",
+    };
+    delete config[option];
+    const root = fixture({ "vite.config.ts": `export default ${JSON.stringify(config)};` });
+    expect(() => startOptions(root)).toThrow(`vite.config.ts: name ${option} in tinker()`);
+  });
+}

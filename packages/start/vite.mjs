@@ -99,7 +99,7 @@ async function tailwind(root) {
 
 /**
  * The glue: one call in the app's vite.config.ts joins the app to the base (ADR 0106).
- * @param {{ root?: string, serverEntry: string, compileHints?: boolean, prerender?: object, pages?: object[], spa?: object, sitemap?: object }} [options] - From vite.config.ts; why: the app folder (default cwd), the base parts to turn on or off, and Start's static output options.
+ * @param {{ root?: string, serverEntry: string, routerEntry: string, startEntry: string, compileHints?: boolean, prerender?: object, pages?: object[], spa?: object, sitemap?: object }} [options] - From vite.config.ts; why: the app folder (default cwd), the app-owned native command entries, and Start's static output options.
  */
 export function tinker(options = {}) {
   const passed = passThrough(options);

@@ -2,7 +2,7 @@ import { join, relative } from "node:path";
 
 import { physical, rootRoute } from "@tanstack/virtual-file-routes";
 
-import { serverFile } from "./named.mjs";
+import { appFiles } from "./named.mjs";
 
 /**
  * Vite aliases that join the app to the base: `@/` for the app, the copied `~/` files, and the generated route tree. A query such as `?url`
@@ -22,22 +22,20 @@ export function aliases(root) {
  * @param {string} root - From tinker(); why: Start takes paths relative to that app's src.
  */
 export function startOptions(root) {
-  const server = serverFile(root).file;
-  if (!server) {
-    throw new Error(
-      'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts" })',
-    );
-  }
+  const entries = appFiles(root);
+  const missing = entries.find((entry) => !entry.file);
+  if (missing) throw new Error(`vite.config.ts: name ${missing.option} in tinker()`);
+  const file = (option) => entries.find((entry) => entry.option === option).file;
 
   const src = join(root, "src");
   const fromSrc = (file) => relative(src, join(root, file));
 
   return {
     srcDirectory: "src",
-    start: { entry: fromSrc("cmds/start.ts") },
-    server: { entry: fromSrc(server) },
+    start: { entry: fromSrc(file("startEntry")) },
+    server: { entry: fromSrc(file("serverEntry")) },
     router: {
-      entry: fromSrc("cmds/router.ts"),
+      entry: fromSrc(file("routerEntry")),
       generatedRouteTree: "../.tinker/routeTree.gen.ts",
       virtualRouteConfig: rootRoute("__root.tsx", [physical("", ".")]),
     },
@@ -61,7 +59,7 @@ const passed = ["prerender", "pages", "spa", "sitemap"];
  * @param {Record<string, unknown>} options - From vite.config.ts; why: what the app asked for.
  */
 export function passThrough(options) {
-  const known = ["root", "serverEntry", "compileHints", ...passed];
+  const known = ["root", "serverEntry", "routerEntry", "startEntry", "compileHints", ...passed];
   const unknown = Object.keys(options).filter((key) => !known.includes(key));
   if (unknown.length > 0) {
     throw new Error(`tinker(): unknown option ${unknown.join(", ")}; known: ${known.join(", ")}`);

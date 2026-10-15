@@ -8,6 +8,8 @@ export declare function tinker(
   options: {
     /** The app-owned command file, relative to the app folder. */
     serverEntry: string;
+    routerEntry: string;
+    startEntry: string;
     root?: string;
     /** Chrome compiles the client entry eagerly; on by default. */
     compileHints?: boolean;

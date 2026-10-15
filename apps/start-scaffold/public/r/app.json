@@ -15,7 +15,7 @@
       "path": "../start-min/vite.config.ts",
       "type": "registry:file",
       "target": "~/vite.config.ts",
-      "content": "import { tinker } from \"@tinker/start/vite\";\nimport { defineConfig } from \"vite-plus\";\n\nexport default defineConfig({\n  plugins: [tinker({ serverEntry: \"cmds/server.ts\" })],\n});\n"
+      "content": "import { tinker } from \"@tinker/start/vite\";\nimport { defineConfig } from \"vite-plus\";\n\nexport default defineConfig({\n  plugins: [\n    tinker({\n      serverEntry: \"cmds/server.ts\",\n      routerEntry: \"cmds/router.ts\",\n      startEntry: \"cmds/start.ts\",\n    }),\n  ],\n});\n"
     },
     {
       "path": "../start-min/tsconfig.json",

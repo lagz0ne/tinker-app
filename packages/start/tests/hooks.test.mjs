@@ -46,15 +46,15 @@ test("tinker prepare and every tinker() load keep the last build's boundary reco
 });
 
 test("dev restarts when the shell, a named file, or a seam file comes or goes, and not otherwise", () => {
-  const root = "/app";
-  expect(restartNote(root, "/app/src/routes/__root.tsx", "added")).toBe(
+  const root = goodApp();
+  expect(restartNote(root, join(root, "src/routes/__root.tsx"), "added")).toBe(
     "tinker: src/routes/__root.tsx added; restarting",
   );
-  expect(restartNote(root, "/app/src/style.css", "removed")).toBeNull();
-  expect(restartNote(root, "/app/cmds/router.ts", "added")).toBe(
+  expect(restartNote(root, join(root, "src/style.css"), "removed")).toBeNull();
+  expect(restartNote(root, join(root, "cmds/router.ts"), "added")).toBe(
     "tinker: cmds/router.ts added; restarting",
   );
-  expect(restartNote(root, "/app/src/routes/index.tsx", "added")).toBeNull();
+  expect(restartNote(root, join(root, "src/routes/index.tsx"), "added")).toBeNull();
 });
 
 test.each(["added", "removed", "changed"])("a component manifest %s restarts dev", (verb) => {
@@ -64,4 +64,18 @@ test.each(["added", "removed", "changed"])("a component manifest %s restarts dev
 
   expect(note).toBe(`tinker: tinker/components/mail/component.json ${verb}; restarting`);
   expect(restartNote(root, join(root, "tinker/components/mail/index.ts"), verb)).toBeNull();
+});
+
+test("dev watches configured command paths without a conventional router fallback", () => {
+  const root = goodApp({
+    "vite.config.ts":
+      'export default {serverEntry: "cmds/http.ts", routerEntry: "cmds/browser.ts", startEntry: "cmds/middleware.ts"};',
+  });
+  expect(restartNote(root, join(root, "cmds/browser.ts"), "added")).toBe(
+    "tinker: cmds/browser.ts added; restarting",
+  );
+  expect(restartNote(root, join(root, "cmds/middleware.ts"), "removed")).toBe(
+    "tinker: cmds/middleware.ts removed; restarting",
+  );
+  expect(restartNote(root, join(root, "cmds/router.ts"), "added")).toBeNull();
 });

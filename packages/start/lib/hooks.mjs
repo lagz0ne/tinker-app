@@ -24,7 +24,7 @@ export function startViolations(root) {
 }
 
 /**
- * Keep one import boundary violation for doctor check 10; Start's own error stops at the first.
+ * Keep one import boundary violation for doctor's boundary check; Start's own error stops at the first.
  * @param {string} root - From tinker(); why: importer paths are relative to the app.
  * @param {Map<string, object>} found - From startViolations; why: this build's record.
  * @param {{ importer: string, importerLoc?: { line: number, column: number }, specifier: string, envType: string, pattern?: RegExp | string, type?: string }} info - From Start's onViolation; why: one violation.

@@ -46,10 +46,10 @@ Only cmds/router.ts#getRouter has the approved cmd entry exception; no component
 
 ## Command wiring
 
-Vite names the server command, with no part switches:
+Vite names all three commands, with no fixed entry mount or part switches:
 
 ```ts
-tinker({ serverEntry: "cmds/server.ts" });
+tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts" });
 ```
 
 Only cmds/server.ts reads app inputs. Each binding reads its own process.env key beside the scope.

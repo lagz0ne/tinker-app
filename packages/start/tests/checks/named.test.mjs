@@ -39,7 +39,7 @@ test("star exports do not supply the server default", () => {
 test("the entry location comes from the app's Vite config", () => {
   const root = goodApp({
     "vite.config.ts":
-      'import {tinker} from "@tinker/start/vite"; export default {plugins:[tinker({serverEntry:"cmds/shop.ts"})]};',
+      'import {tinker} from "@tinker/start/vite"; export default {plugins:[tinker({serverEntry:"cmds/shop.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts"})]};',
     "cmds/shop.ts": "export default 1;",
   });
 
@@ -57,7 +57,7 @@ test("a missing entry option shows the Vite config line to add", () => {
   const checked = named(root);
 
   expect(checked.lines).toEqual([
-    'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts" })',
+    'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts" })',
   ]);
 });
 
@@ -93,3 +93,16 @@ test("doctor reads client command exports from an object pattern", () => {
 
   expect(checked.status).toBe("ok");
 });
+
+for (const option of ["routerEntry", "startEntry"]) {
+  test(`doctor names a missing ${option} config value`, () => {
+    const config = {
+      serverEntry: "cmds/server.ts",
+      routerEntry: "cmds/router.ts",
+      startEntry: "cmds/start.ts",
+    };
+    delete config[option];
+    const root = goodApp({ "vite.config.ts": `export default ${JSON.stringify(config)};` });
+    expect(named(root).lines).toEqual([`vite.config.ts: name ${option} in tinker()`]);
+  });
+}

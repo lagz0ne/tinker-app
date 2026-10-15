@@ -23,7 +23,8 @@ export function fixture(files) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "tinker-test-")));
   onTestFinished(() => rmSync(root, { recursive: true, force: true }));
   write(root, {
-    "vite.config.ts": 'export default {serverEntry: "cmds/server.ts"};\n',
+    "vite.config.ts":
+      'export default {serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts"};\n',
     ...files,
   });
   return root;
@@ -45,7 +46,7 @@ export function goodApp(files = {}) {
   const root = fixture({
     "package.json": JSON.stringify({ scripts: { postinstall: "tinker prepare" } }),
     "vite.config.ts":
-      'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({ serverEntry: "cmds/server.ts" })] };\n',
+      'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts" })] };\n',
     "tsconfig.json": JSON.stringify({ extends: "./.tinker/tsconfig.json" }),
     ".gitignore": ".tinker/\n.tanstack/\n",
     ...Object.fromEntries(

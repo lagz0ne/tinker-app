@@ -445,7 +445,7 @@ function externalDeclaration(call) {
   );
 }
 
-/** The base owns this exact callback through Promise.then and caches its work. */
+/** The two native entry adapters invoke and cache these exact callback arguments. */
 function entryArgument(node, call) {
   if (callbackIndex(call, node) !== 0) return false;
   return symbolOf(call.expression)?.declarations?.some(

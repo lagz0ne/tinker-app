@@ -37,7 +37,7 @@ test("each silent mistake stops the build with doctor's file:line message", () =
 test("a second tinker() or tanstackStart() stops the build: Start would fail later with no cause", () => {
   const root = goodApp({
     "vite.config.ts":
-      'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({serverEntry:"cmds/server.ts"}), tinker(), tanstackStart()] };\n',
+      'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({serverEntry:"cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts"}), tinker(), tanstackStart()] };\n',
   });
   expect(buildChecks(root)).toEqual({
     errors: [
@@ -58,7 +58,7 @@ test("a components.json that does not parse stops the build with its line", () =
 test("tinker() imported under another name, and called once, builds", () => {
   const root = goodApp({
     "vite.config.ts":
-      'import { tinker as base } from "@tinker/start/vite";\nexport default { plugins: [base({serverEntry:"cmds/server.ts"})] };\n',
+      'import { tinker as base } from "@tinker/start/vite";\nexport default { plugins: [base({serverEntry:"cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts"})] };\n',
   });
   expect(buildChecks(root)).toEqual({ errors: [], warnings: [] });
 });

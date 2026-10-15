@@ -42,7 +42,7 @@ try {
     .replace("  close = once(", "  probe.appClosed = app.closed;\n  close = once(")}`;
   const routerFile = join(
     fixture,
-    appFiles(fixture).find((file) => file.file === "cmds/router.ts").file,
+    appFiles(fixture).find((file) => file.option === "routerEntry").file,
   );
   const routerSource = readFileSync(routerFile, "utf8");
   assert.ok(routerSource.includes("const extensions: [] = [];"));

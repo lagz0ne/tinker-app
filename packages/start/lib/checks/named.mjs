@@ -8,7 +8,8 @@ import { mayExport } from "../source.mjs";
 import { fail, verdict } from "./result.mjs";
 
 export const say = {
-  noEntry: 'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts" })',
+  noEntry:
+    'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts" })',
   noServer: (root) =>
     `${serverFile(root).file} is missing; add this server entry:\n${serverSource}`,
   export: (file, name) => `${file}:1 does not export ${name}; the base imports it from this file`,
@@ -16,17 +17,19 @@ export const say = {
   passed: (found) =>
     found.length > 0
       ? `each named or seam file exports what the base reads (${found.join(", ")}); no Start file is ignored`
-      : "no named or seam files; the base defaults are in use",
+      : "no configured command entries found",
 };
 
-/**
- * Check 3: each named or seam file the app has exports what the base imports from it, each on
- * part finds the seam names it reads and the app's augmentations, and no usual Start file sits
- * where the glue never reads it (ADR 0106). No fix.
- */
+/** Check each configured command export, copied dependency graph and ignored Start file. */
 export function serverProblems(root) {
   if (!serverFile(root).file) return [say.noEntry];
-  return existsSync(join(root, serverFile(root).file)) ? [] : [say.noServer(root)];
+  return appFiles(root).flatMap(({ file, option }) => {
+    if (!file) return [`vite.config.ts: name ${option} in tinker()`];
+    if (existsSync(join(root, file))) return [];
+    return option === "serverEntry"
+      ? [say.noServer(root)]
+      : [`${file} is missing; copy the app entry`];
+  });
 }
 
 export function named(root) {
@@ -35,7 +38,9 @@ export function named(root) {
   const graph = readComponentModules(root);
   if (graph.problems.length > 0) return fail(graph.problems);
 
-  const found = appFiles(root).filter(({ file, reads }) => reads && existsSync(join(root, file)));
+  const found = appFiles(root).filter(
+    ({ file, reads }) => file && reads && existsSync(join(root, file)),
+  );
   const missing = found.flatMap(({ file, reads }) =>
     [reads]
       .flat()
@@ -49,14 +54,7 @@ export function named(root) {
     )
     .map(({ file, hint }) => say.ignored(file, hint));
   return verdict(
-    [
-      ...serverProblems(root),
-      ...appFiles(root)
-        .filter(({ file, option }) => !option && !existsSync(join(root, file)))
-        .map(({ file }) => `${file} is missing; copy the app entry`),
-      ...missing,
-      ...ignored,
-    ],
+    [...serverProblems(root), ...missing, ...ignored],
     say.passed(found.map(({ file }) => file)),
   );
 }

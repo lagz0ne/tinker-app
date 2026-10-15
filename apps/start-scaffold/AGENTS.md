@@ -80,7 +80,7 @@ Keep feature units in app files.
 The app names it in `vite.config.ts`:
 
 ```ts
-tinker({ serverEntry: "cmds/server.ts" });
+tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts" });
 ```
 
 The app's tsconfig includes `cmds` and `tinker`.

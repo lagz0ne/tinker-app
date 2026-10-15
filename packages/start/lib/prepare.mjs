@@ -46,7 +46,7 @@ export function render(root) {
         "../cmds",
         "../tinker",
         ...appFiles(root)
-          .filter((entry) => entry.required)
+          .filter((entry) => entry.required && entry.file)
           .map((entry) => `../${entry.file}`),
         "../tests",
         "../vite.config.ts",
