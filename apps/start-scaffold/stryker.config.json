@@ -14,7 +14,7 @@
     "!src/routes/**",
     "!tinker/components/sync/functions.ts"
   ],
-  "ignorePatterns": ["dist", "node_modules", ".tinker"],
+  "ignorePatterns": ["tsconfig.json", "dist", "node_modules", ".tinker"],
   "reporters": ["clear-text", "progress", "json"],
   "thresholds": {
     "high": 90,
