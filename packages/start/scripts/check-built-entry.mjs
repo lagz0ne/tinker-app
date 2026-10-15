@@ -1,31 +1,85 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 const child = `
 import assert from "node:assert/strict";
-const built = await import("./dist/server/server.js");
-console.log("built app entry: loaded");
-if (process.argv[1] !== "close-only") {
-  const response = await built.default.fetch(new Request("http://localhost/api/health"));
-  assert.equal(response.status, 200);
-  assert.equal((await response.json()).ok, true);
+import { createScope } from "@tinker/core";
+const mode = process.argv[1];
+const probe = { created: 0, closed: [], env: 0, createScope(...args) {
+  const id = ++this.created;
+  const scope = createScope(...args);
+  void scope.closed.then(() => this.closed.push(id));
+  return scope;
+}};
+globalThis.__entryProof = probe;
+const loadEnvFile = process.loadEnvFile;
+process.loadEnvFile = (...args) => { probe.env++; return loadEnvFile(...args); };
+// Resolve stdio before taking the handle snapshot; the import must write nothing.
+void process.stdout;
+void process.stderr;
+const resources = process.getActiveResourcesInfo().filter((name) => !name.startsWith("FSReq")).sort();
+const { default: server } = await import(process.env.ENTRY_PROOF);
+assert.equal(probe.env, 0, "import must not read app inputs");
+assert.equal(probe.created, 0, "import must not create a scope");
+await server.close();
+assert.equal(probe.env, 0, "close before start is a no-op");
+assert.equal(probe.created, 0);
+if (mode.startsWith("import")) {
+  await new Promise(setImmediate);
+  assert.deepEqual(process.getActiveResourcesInfo().filter((name) => !name.startsWith("FSReq")).sort(), resources);
+} else {
+  if (mode === "start") {
+    const first = server.start();
+    assert.equal(server.start(), first, "concurrent start shares its promise");
+    await first;
+    assert.equal(server.start(), first, "ready start keeps its promise");
+  }
+  const replies = await Promise.all([1, 2].map(() => server.fetch(new Request("http://localhost/api/health"))));
+  for (const reply of replies) {
+    assert.equal(reply.status, 200);
+    assert.equal((await reply.json()).ok, true);
+  }
+  assert.equal(probe.env, 1, "fetch and start share one startup");
+  assert.equal(probe.created, 2, "only the two server roots start");
+  await Promise.all([server.close(), server.close()]);
+  assert.deepEqual(probe.closed, [2, 1], "close ends app then tools once");
 }
-const closing = built.default.close();
-assert.equal(built.default.close(), closing);
-await closing;
-console.log("built app entry: " + process.argv[1] + "; closed once; EXIT 0");
 `;
 
 for (const app of process.argv.slice(2)) {
-  for (const mode of ["health-200", "close-only"]) {
-    const ran = spawnSync(process.execPath, ["--input-type=module", "-e", child, mode], {
-      cwd: resolve(app),
-      env: { ...process.env, NODE_ENV: "production" },
-      encoding: "utf8",
-      timeout: 30000,
-    });
-    process.stdout.write(`${app}\n${ran.stdout}${ran.stderr}`);
-    assert.equal(ran.status, 0, `${app}: built server must start and close through its app entry`);
+  const root = resolve(app);
+  const entry = join(root, "dist/server/server.js");
+  const source = readFileSync(entry, "utf8");
+  const copy = join(root, "dist/server", `entry-proof-${randomUUID()}.mjs`);
+
+  // Count real Core calls in a throwaway copy; keep the built entry untouched.
+  assert.equal(source.match(/\bcreateScope\(/g)?.length, 2, "plant both real root calls");
+  writeFileSync(copy, source.replaceAll("createScope(", "globalThis.__entryProof.createScope("));
+  try {
+    for (const mode of ["import-original", "import-counted", "start", "fetch-first"]) {
+      const ran = spawnSync(process.execPath, ["--input-type=module", "-e", child, mode], {
+        cwd: root,
+        env: {
+          ...process.env,
+          NODE_ENV: "production",
+          ENTRY_PROOF: mode === "import-original" ? entry : copy,
+        },
+        encoding: "utf8",
+        timeout: 30000,
+      });
+      assert.equal(ran.status, 0, `${app}: ${mode}\n${ran.stdout}${ran.stderr}`);
+      if (mode.startsWith("import")) {
+        assert.equal(ran.stdout, "", "import must write no stdout");
+        assert.equal(ran.stderr, "", "import must write no stderr");
+      }
+      console.log(
+        `PASS built entry: ${mode}; no eager effects, shared startup, ordered close; EXIT 0`,
+      );
+    }
+  } finally {
+    rmSync(copy);
   }
 }

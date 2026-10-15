@@ -54,7 +54,11 @@ tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntr
 
 Only cmds/server.ts reads app inputs. Each binding reads its own process.env key beside the scope.
 An unset required value leaves its tag unbound; startup fails with MissingTag and the tag name.
-It starts telemetry before the app, borrows its observer, and closes roots in reverse order.
+Importing it starts nothing. The default export has start, fetch, and close callbacks.
+The prod host awaits start before listening; dev starts on its first fetch.
+Concurrent starts share one promise. Failed startup clears it so the next request can retry.
+Main starts telemetry before the app, borrows its observer, and closes roots in reverse order.
+Close before startup does nothing.
 The full working pattern is in [cmds/server.ts](cmds/server.ts).
 These are the actual auth hooks and server slots inside its tags list:
 

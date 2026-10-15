@@ -26,11 +26,12 @@ async function writeRouteTree(root) {
 }
 
 /**
- * The Node host imports the built default entry; the command owns app config and shutdown.
+ * The Node host starts the built entry before listening; the command owns config and shutdown.
  * @param {string} root - From tinker serve; why: the built app to serve.
  */
 async function serve(root) {
   const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
+  await built.default.start();
   const asset = await createAssets(root);
   const render = async (request) => compressResponse(request, await built.default.fetch(request));
 

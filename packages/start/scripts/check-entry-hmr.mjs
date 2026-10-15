@@ -24,7 +24,10 @@ const entries = [];
 try {
   cpSync(app, fixture, {
     recursive: true,
-    filter: (file) => !["node_modules", "dist", ".tinker", ".tanstack"].includes(basename(file)),
+    filter: (file) =>
+      !["node_modules", "dist", ".tinker", ".tanstack", ".stryker-tmp", "reports"].includes(
+        basename(file),
+      ),
   });
   symlinkSync(join(app, "node_modules"), join(fixture, "node_modules"), "dir");
   const entry = join(fixture, serverFile(fixture).file);
@@ -33,13 +36,14 @@ try {
     original.includes("tools.resolve(renderObserve, { ns: renderNs })"),
     "plant must replace the command's render observer",
   );
-  const source = `const probe = { renderSpans: [] }; globalThis.__entryProof = probe;\n${original
+  const source = `const probe = { renderSpans: [], starts: 0 }; globalThis.__entryProof = probe;\n${original
+    .replace("async function main() {", "async function main() { probe.starts++; ")
     .replaceAll(
       "tools.resolve(renderObserve, { ns: renderNs })",
       "{ export: (span) => probe.renderSpans.push(span) }",
     )
     .replace("let close = once(", "probe.toolsClosed = tools.closed;\nlet close = once(")
-    .replace("  close = once(", "  probe.appClosed = app.closed;\n  close = once(")}`;
+    .replace("    close = once(", "    probe.appClosed = app.closed;\n    close = once(")}`;
   const routerFile = join(
     fixture,
     appFiles(fixture).find((file) => file.option === "routerEntry").file,
@@ -69,7 +73,34 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
   });
   await vite.listen();
   const address = `http://127.0.0.1:${vite.httpServer.address().port}/scope-proof`;
-  assert.equal(await (await fetch(address)).text(), "first");
+  const imported = await vite.environments.ssr.runner.import(entry);
+  assert.equal(globalThis.__entryProof.starts, 0, "dev import starts nothing");
+  if (existsSync(join(fixture, "tinker/components/mail/component.json"))) {
+    const from = process.env.SMTP_FROM;
+    delete process.env.SMTP_FROM;
+    try {
+      const refused = await fetch(address);
+      assert.equal(refused.status, 500, "the first request reports startup failure");
+      assert.ok((await refused.text()).includes("MissingTag"));
+
+      const failed = globalThis.__entryProof;
+      const [appEnd, toolsEnd] = await Promise.all([failed.appClosed, failed.toolsClosed]);
+      assert.equal(appEnd.status, "failed");
+      assert.equal(toolsEnd.status, "success");
+    } finally {
+      if (from !== undefined) process.env.SMTP_FROM = from;
+    }
+
+    assert.equal((await vite.environments.ssr.runner.import(entry)).default, imported.default);
+    assert.equal(await (await fetch(address)).text(), "first", "the next request retries startup");
+    assert.equal(globalThis.__entryProof.starts, 2, "a failed startup is not cached");
+    console.log(
+      "PASS: dev import is idle; failed first request closes roots; next request retries the same module.",
+    );
+  } else {
+    assert.equal(await (await fetch(address)).text(), "first");
+    assert.equal(globalThis.__entryProof.starts, 1);
+  }
   const firstModule = await vite.environments.ssr.runner.import(entry);
   const first = firstModule.default;
   const firstProof = globalThis.__entryProof;
@@ -108,7 +139,9 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
   assert.equal(nextRendered.status, 200);
   await nextRendered.text();
   assert.ok(secondProof.renderSpans.length > 0, "HMR renders must use the new observer");
-  assert.equal((await fetch(new URL("/api/health", address))).status, 200);
+  const health = await fetch(new URL("/api/health", address));
+  assert.equal(health.status, 200);
+  await health.text();
   if (existsSync(join(fixture, "tinker/components/auth/component.json"))) {
     const auth = await fetch(new URL("/api/auth/get-session", address));
     assert.equal(auth.status, 200);
@@ -122,5 +155,6 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
 } finally {
   for (const entry of entries) await entry.close();
   await vite?.close();
+  console.log("HMR: native server and watchers closed.");
   rmSync(fixture, { recursive: true, force: true });
 }

@@ -52,7 +52,29 @@ export const Route = createFileRoute("/proof/response")({
     await once(listener, "listening");
     const address = listener.address();
     assert.ok(address && typeof address !== "string");
-    await new Promise((done) => listener.close(done));
+    try {
+      // An occupied port makes a premature listen fail with EADDRINUSE instead of MissingTag.
+      const failed = spawnSync(
+        process.execPath,
+        [join(source, "node_modules/@tinker/start/bin/tinker.mjs"), "serve"],
+        {
+          cwd: proof,
+          env: { ...process.env, ...proofEnv, SMTP_FROM: undefined, PORT: String(address.port) },
+          encoding: "utf8",
+          timeout: 30000,
+        },
+      );
+
+      assert.notEqual(failed.status, null, failed.stdout + failed.stderr);
+      assert.notEqual(failed.status, 0, failed.stdout + failed.stderr);
+      assert.ok(failed.stderr.includes("MissingTag"), failed.stderr);
+      assert.ok(failed.stderr.includes("mail.from"), failed.stderr);
+      assert.ok(!failed.stderr.includes("EADDRINUSE"), failed.stderr);
+      assert.ok(!failed.stdout.includes("tinker serve:"), failed.stdout);
+      console.log("PASS: tinker serve rejects MissingTag mail.from before attempting to listen.");
+    } finally {
+      await new Promise((done) => listener.close(done));
+    }
 
     server = spawn(
       process.execPath,

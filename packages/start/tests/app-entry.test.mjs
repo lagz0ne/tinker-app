@@ -9,6 +9,7 @@ import { once } from "../../../apps/start-scaffold/tinker/base/close";
 import { named } from "../lib/checks/named.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { baseDir } from "../lib/paths.mjs";
+import { parseSource } from "../lib/source.mjs";
 import { goodApp } from "./fixture.mjs";
 
 const source = readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8");
@@ -109,3 +110,29 @@ test("close ends every root in reverse order before reporting a teardown error",
   );
   expect(toolStop.signal.reason).toBe(stop.signal.reason);
 });
+
+for (const app of ["start-scaffold", "start-min"]) {
+  test(`${app}: the server module only declares deferred host callbacks`, () => {
+    const { program } = parseSource(join(baseDir, "../../apps", app, "cmds/server.ts"));
+    const body = program.body.filter((node) => node.type !== "ImportDeclaration");
+
+    expect(body.map((node) => node.type)).toEqual([
+      "FunctionDeclaration",
+      "VariableDeclaration",
+      "ExportDefaultDeclaration",
+    ]);
+    expect(body[0]).toMatchObject({ id: { name: "main" }, async: true });
+    expect(body[1].declarations).toHaveLength(1);
+    expect(body[1].declarations[0]).toMatchObject({ id: { name: "started" }, init: null });
+
+    expect(body[2].declaration.type).toBe("ObjectExpression");
+    expect(body[2].declaration.properties.map((property) => property.key.name)).toEqual([
+      "start",
+      "fetch",
+      "close",
+    ]);
+    for (const property of body[2].declaration.properties) {
+      expect(property.value.type).toBe("ArrowFunctionExpression");
+    }
+  });
+}

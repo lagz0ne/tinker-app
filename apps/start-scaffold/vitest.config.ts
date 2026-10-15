@@ -16,6 +16,8 @@ export default defineConfig({
     // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
     // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
     clearMocks: false,
+    // Keep committed tests separate from copies owned by a live mutation run.
+    exclude: ["**/node_modules/**", "**/.git/**", "**/.stryker-tmp/**", "**/reports/**"],
     testTimeout: 30000,
     maxWorkers: 2,
   },

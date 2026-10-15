@@ -104,3 +104,8 @@ Components, src, and commands have no function skips.
 The lander runs mutation checks. Tooling keeps its 75 floor;
 the golden copied runtime has an 85 floor in the scaffold's `stryker.config.json`.
 Local package packing and registry builds publish nothing.
+
+The server command exports start, fetch, and close callbacks without starting on import.
+`tinker serve` awaits start before listening, so bad config fails boot.
+Dev starts on its first request. Failed startup clears the cache for the next request.
+Close before start does nothing; after start it closes app, then telemetry.

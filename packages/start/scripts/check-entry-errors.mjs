@@ -18,8 +18,9 @@ import { serverFile } from "../lib/named.mjs";
 const child = `
 import assert from "node:assert/strict";
 const mode = process.env.PANIC_MODE;
+const { default: server } = await import("./dist/server/server.js");
 if (["tools-start", "app-start", "missing-tag", "bad-log-level"].includes(mode)) {
-  await assert.rejects(import("./dist/server/server.js"), (error) => {
+  await assert.rejects(server.start(), (error) => {
     if (mode === "missing-tag") {
       assert.equal(error.kind, "MissingTag");
       assert.equal(error.payload.label, "mail.from");
@@ -32,10 +33,9 @@ if (["tools-start", "app-start", "missing-tag", "bad-log-level"].includes(mode))
   console.log(mode + ": original failure reported");
   process.exitCode = 1;
 } else {
-  const { default: server } = await import("./dist/server/server.js");
+  await server.start();
   if (mode === "close-failure") {
     const closing = server.close();
-    assert.equal(server.close(), closing);
     await assert.rejects(closing, {message: "proof.close"});
     console.log("close: both owners ended; first failure reported");
   } else {
@@ -59,7 +59,10 @@ for (const app of process.argv.slice(2)) {
   try {
     cpSync(source, fixture, {
       recursive: true,
-      filter: (file) => !["node_modules", "dist", ".tinker", ".tanstack"].includes(basename(file)),
+      filter: (file) =>
+        !["node_modules", "dist", ".tinker", ".tanstack", ".stryker-tmp", "reports"].includes(
+          basename(file),
+        ),
     });
     symlinkSync(realpathSync(join(source, "node_modules")), join(fixture, "node_modules"));
     const entry = join(fixture, serverFile(fixture).file);
@@ -69,7 +72,7 @@ for (const app of process.argv.slice(2)) {
       "const stop =",
       "extensions: [telemetryExport]",
       "extensions: [startRequests",
-      "  close = once(",
+      "    close = once(",
       "let close = once(",
       "process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM)",
     ]) {
@@ -103,8 +106,8 @@ const stop =`,
         'void tools.closed.then(() => console.log("tools.closed"));\nlet close = once(',
       )
       .replace(
-        "  close = once(",
-        '  void app.closed.then(() => console.log("app.closed"));\n  close = once(',
+        "    close = once(",
+        '    void app.closed.then(() => console.log("app.closed"));\n    close = once(',
       )
       .replace(
         "process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM)",

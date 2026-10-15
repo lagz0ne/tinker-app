@@ -93,7 +93,11 @@ There is no default server entry.
 Prepare and doctor name a missing entry and show starter code.
 They never write an entry for the app.
 
-The entry reads each input beside its tag binding, starts telemetry, then the app.
+Importing the server command starts nothing. Its body has imports, the main declaration,
+an empty startup cache, and the default start/fetch/close callbacks.
+The host calls start; dev's first fetch starts lazily. Prod awaits start before listening.
+Main reads each input beside its tag binding, starts telemetry, then the app.
+A failed startup clears its cached promise so the next dev request can retry.
 It lists extensions and settings by hand, in the user's order.
 It imports each component's public index.
 There are no generated wiring files or role files.
@@ -123,7 +127,9 @@ Start borrows the context. The command binds the render observer tag.
 An optional `fetch(request, next)` can wrap requests.
 The command closes on HMR replacement and process shutdown, then reports the first failure.
 
-The browser main lives in `cmds/router.ts#getRouter`, its only approved named cmd exception.
+The server main and its direct default start/fetch/close callbacks are the only server cmd exceptions.
+The cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; it stays untested glue on purpose.
+The browser main lives in `cmds/router.ts#getRouter`, an approved named cmd exception.
 It binds router options, extensions, and each sync reader tag.
 No app code may import a command file.
 Commands may import app code and component public entries.

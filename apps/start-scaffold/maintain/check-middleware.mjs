@@ -60,11 +60,11 @@ if (import.meta.main) {
 
     const serverFile = join(proof, "cmds/server.ts");
     const server = await readFile(serverFile, "utf8");
-    assert.ok(server.includes("  await app.ready;"));
+    assert.ok(server.includes("    await app.ready;"));
     await writeFile(
       serverFile,
       server.replace(
-        "  await app.ready;",
+        "    await app.ready;",
         `
   await app.ready;
   const createRequestSession = app.createSession.bind(app);
@@ -181,6 +181,7 @@ export const Route = createFileRoute("/proof/write")({server: {
     const app = await import(pathToFileURL(join(proof, "dist/server/server.js")).href);
 
     try {
+      await app.default.start();
       const native = globalThis.__middlewareProof;
       let bootstrapUrl;
       assert.equal(native.stdout, true, "the command binds stdout to its telemetry tools");

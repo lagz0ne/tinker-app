@@ -1320,7 +1320,7 @@ function checkPlainFunction(node) {
   );
 }
 
-/** Named copied entry helpers and the one approved browser main keep native contracts. */
+/** Named copied entry helpers and the approved server and browser mains keep native contracts. */
 const entryHelpers = {
   "tinker/base/close.ts": [
     // Replacement for the old close helpers: cache only the caller's callback promise.
@@ -1335,6 +1335,16 @@ const entryHelpers = {
   "tinker/base/panics.tsx": [
     // New: copied c55998e entry/dev-error devErrorPage: read a failed response and build its dev page.
     "devErrorPage",
+  ],
+  "cmds/server.ts": [
+    // Cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; deliberately untested glue.
+    "main",
+    // Native host callback: cache startup and permit retry after a failed start.
+    "start",
+    // Native host callback: start lazily before handing the request to Start.
+    "fetch",
+    // Native host callback: close only a server that was started.
+    "close",
   ],
   "cmds/router.ts": [
     // New: only the top-level named export owns the browser roots in plain view.
@@ -1360,10 +1370,33 @@ const entryHelpers = {
   ],
 };
 
+function serverEntryFunction(node) {
+  if (nameOf(functionName(node)) === "main") {
+    return (
+      ts.isFunctionDeclaration(node) &&
+      node.parent === node.getSourceFile() &&
+      !(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export)
+    );
+  }
+  const member = node.parent;
+  if (!ts.isPropertyAssignment(member) || member.initializer !== node) return false;
+  return defaultServerObject(member.parent, node.getSourceFile());
+}
+
+function defaultServerObject(object, source) {
+  return (
+    ts.isObjectLiteralExpression(object) &&
+    ts.isExportAssignment(object.parent) &&
+    !object.parent.isExportEquals &&
+    object.parent.parent === source
+  );
+}
+
 function isEntryHelper(node) {
   if (!node) return false;
   const file = pathOf(node);
   if (!entryHelpers[file]?.includes(nameOf(functionName(node)))) return false;
+  if (file === "cmds/server.ts") return serverEntryFunction(node);
   if (file !== "cmds/router.ts") return true;
 
   return (
@@ -1712,6 +1745,38 @@ if (process.argv.includes("--prove")) {
       "export async function unrelatedFeature() { await Promise.resolve(); }",
       "tinker/base/start-entry.ts",
     ],
+    ...[
+      [
+        "server-main-other-command",
+        "cmds/other-server.ts",
+        "async function main() { await Promise.resolve(); }",
+      ],
+      [
+        "server-main-component",
+        "tinker/components/entry-probe/index.ts",
+        "async function main() { await Promise.resolve(); }",
+      ],
+      [
+        "server-main-src",
+        "src/entry-probe.ts",
+        "async function main() { await Promise.resolve(); }",
+      ],
+      [
+        "server-main-shadowed",
+        "cmds/server.ts",
+        "function anotherEntry() { return async function main() { await Promise.resolve(); }; }",
+      ],
+      [
+        "server-other-function",
+        "cmds/server.ts",
+        "async function otherFeature() { await Promise.resolve(); }",
+      ],
+      [
+        "server-nested-host-callback",
+        "cmds/server.ts",
+        "const hidden = {start: async () => { await Promise.resolve(); }};",
+      ],
+    ].map(([name, file, code]) => [name, "plain-effect", code, file]),
     [
       "router-command-other-function",
       "plain-effect",

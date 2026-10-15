@@ -36,7 +36,10 @@ for (const app of process.argv.slice(2)) {
   try {
     cpSync(source, fixture, {
       recursive: true,
-      filter: (file) => !["node_modules", "dist", ".tinker", ".tanstack"].includes(basename(file)),
+      filter: (file) =>
+        !["node_modules", "dist", ".tinker", ".tanstack", ".stryker-tmp", "reports"].includes(
+          basename(file),
+        ),
     });
     symlinkSync(realpathSync(join(source, "node_modules")), join(fixture, "node_modules"), "dir");
     mkdirSync(join(fixture, "tinker/components/build-proof"), { recursive: true });
