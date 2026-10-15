@@ -4,12 +4,13 @@ import { test, expect } from "vite-plus/test";
 import { authStartup } from "~/components/auth/index.server";
 import { authSettings } from "~/components/auth/index.server";
 import { migrate, databaseUrl } from "~/components/database/index.server";
-import { listTodos, changeTodo } from "~/components/demo/backend/todos.server";
-import { raise, isError } from "~/components/demo/errors";
-import * as demo from "~/components/demo/index.server";
 import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+
+import { listTodos, changeTodo } from "@/demo/backend/todos.server";
+import { raise, isError } from "@/demo/errors";
+import * as demo from "@/demo/index.server";
 
 import { authBindings } from "./presets";
 import { handleAuth } from "./presets";

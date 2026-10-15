@@ -5,7 +5,6 @@ import { afterAll, beforeAll } from "vite-plus/test";
 import { sendAuthMail, sessionDeleted } from "~/components/auth/index.server";
 import { database } from "~/components/database/index.server";
 import type { Database } from "~/components/database/index.server";
-import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "~/components/demo";
 import { authMail } from "~/components/mail/index.server";
 import { mail } from "~/components/mail/index.server";
 import {
@@ -17,6 +16,8 @@ import {
   streamMessageSlot,
 } from "~/components/sync";
 import { publishAccountNotice } from "~/components/sync/index.server";
+
+import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo";
 
 /** Keep migration inside each test; copy only the empty database's ready state. */
 let template: PGliteInterface;

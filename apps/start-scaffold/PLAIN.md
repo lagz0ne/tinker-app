@@ -5,6 +5,47 @@ Callers include direct calls and typed callback registrations.
 Repeated calls by one caller count once; self-calls do not count.
 Tests and generated files do not count.
 
+- **src/demo/contracts/commands.ts#readProfileCommand**
+  - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.
+  - Callers:
+    - `src/demo/backend/profile.server.ts#saveProfile.input`
+    - `src/transport/profile.functions.ts#module`
+
+- **src/demo/contracts/commands.ts#readTodoCommand**
+  - `raw`: `unknown`. From the todo request body; why: read its execution ID and todo change.
+  - Callers:
+    - `src/demo/backend/todos.server.ts#changeTodo.input`
+    - `src/transport/todos.functions.ts#module`
+
+- **src/demo/errors.ts#raise**
+  - `kind`: `N`. From the failing caller; why: choose the managed error.
+  - `payload`: `Errors.Payload<N>`. From the failing caller; why: keep facts for that error.
+  - Callers:
+    - `src/demo/backend/auth.server.ts#currentUser.factory`
+    - `src/demo/backend/counter.server.ts#incrementCounter.run.callback1`
+    - `src/demo/backend/profile.server.ts#notifyProfile.run`
+    - `src/demo/backend/profile.server.ts#retryNotification.run.callback1`
+    - `src/demo/backend/profile.server.ts#saveProfile.run.callback1`
+    - `src/demo/backend/sync.server.ts#bootstrapPrivate.run.callback1`
+    - `src/demo/backend/sync.server.ts#replayPrivate.run`
+    - `src/demo/backend/sync.server.ts#replayPublic.run`
+    - `src/demo/backend/todos.server.ts#changeTodo.run.callback1`
+    - `src/demo/contracts/profile-contract.ts#module`
+    - `src/demo/contracts/todos-contract.ts#module`
+    - `src/frontend/auth-actions.ts#signIn.input`
+    - `src/frontend/auth-actions.ts#signIn.run`
+    - `src/frontend/auth-actions.ts#signOut.run`
+    - `src/frontend/profile-actions.ts#saveName.run`
+    - `src/transport/result.server.ts#readReceipt`
+
+- **src/demo/errors.ts#isError**
+  - `error`: `unknown`. From a caught failure; why: narrow its payload.
+  - `kind`: `N`. From the caller; why: select the expected error.
+  - Callers:
+    - `src/frontend/error-text.ts#errorText`
+    - `src/frontend/Todos.tsx#showFailure.input`
+    - `src/transport/result.server.ts#readReceipt`
+
 - **src/frontend/error-text.ts#errorText**
   - `error`: `unknown`. From a form action failure; why: pick the shown message.
   - Callers:
@@ -31,47 +72,6 @@ Tests and generated files do not count.
     - `src/transport/profile.functions.ts#retryProfileNotification.callback`
     - `src/transport/profile.functions.ts#updateProfile.callback`
     - `src/transport/todos.functions.ts#updateTodo.callback`
-
-- **tinker/components/demo/contracts/commands.ts#readProfileCommand**
-  - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.
-  - Callers:
-    - `src/transport/profile.functions.ts#module`
-    - `tinker/components/demo/backend/profile.server.ts#saveProfile.input`
-
-- **tinker/components/demo/contracts/commands.ts#readTodoCommand**
-  - `raw`: `unknown`. From the todo request body; why: read its execution ID and todo change.
-  - Callers:
-    - `src/transport/todos.functions.ts#module`
-    - `tinker/components/demo/backend/todos.server.ts#changeTodo.input`
-
-- **tinker/components/demo/errors.ts#raise**
-  - `kind`: `N`. From the failing caller; why: choose the managed error.
-  - `payload`: `Errors.Payload<N>`. From the failing caller; why: keep facts for that error.
-  - Callers:
-    - `src/frontend/auth-actions.ts#signIn.input`
-    - `src/frontend/auth-actions.ts#signIn.run`
-    - `src/frontend/auth-actions.ts#signOut.run`
-    - `src/frontend/profile-actions.ts#saveName.run`
-    - `src/transport/result.server.ts#readReceipt`
-    - `tinker/components/demo/backend/auth.server.ts#currentUser.factory`
-    - `tinker/components/demo/backend/counter.server.ts#incrementCounter.run.callback1`
-    - `tinker/components/demo/backend/profile.server.ts#notifyProfile.run`
-    - `tinker/components/demo/backend/profile.server.ts#retryNotification.run.callback1`
-    - `tinker/components/demo/backend/profile.server.ts#saveProfile.run.callback1`
-    - `tinker/components/demo/backend/sync.server.ts#bootstrapPrivate.run.callback1`
-    - `tinker/components/demo/backend/sync.server.ts#replayPrivate.run`
-    - `tinker/components/demo/backend/sync.server.ts#replayPublic.run`
-    - `tinker/components/demo/backend/todos.server.ts#changeTodo.run.callback1`
-    - `tinker/components/demo/contracts/profile-contract.ts#module`
-    - `tinker/components/demo/contracts/todos-contract.ts#module`
-
-- **tinker/components/demo/errors.ts#isError**
-  - `error`: `unknown`. From a caught failure; why: narrow its payload.
-  - `kind`: `N`. From the caller; why: select the expected error.
-  - Callers:
-    - `src/frontend/error-text.ts#errorText`
-    - `src/frontend/Todos.tsx#showFailure.input`
-    - `src/transport/result.server.ts#readReceipt`
 
 - **tinker/components/errors/errors.ts#raise**
   - `kind`: `N`. From a failed base action; why: choose the managed error.

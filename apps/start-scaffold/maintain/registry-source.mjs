@@ -47,6 +47,15 @@ async function checkCopiedItems(registry) {
   }
 
   await checkCopiedItem(registry, "base", "tinker/base", ["errors", "requests"]);
+  const business = await copiedFiles("src/demo");
+  const requires = new Set();
+  for (const file of business) {
+    const source = await readFile(join(app, file), "utf8");
+    for (const match of source.matchAll(/from\s+["']~\/components\/([^/"']+)/g)) {
+      requires.add(match[1]);
+    }
+  }
+  await checkCopiedItem(registry, "demo", "src/demo", [...requires]);
 }
 
 /** Dependencies are direct requires, and source paths cover that owner exactly. */

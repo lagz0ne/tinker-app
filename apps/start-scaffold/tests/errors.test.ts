@@ -1,18 +1,11 @@
 import { expect, test } from "vite-plus/test";
 
-import { isError as packageIsError, raise as packageRaise } from "~/components/errors";
 import { fail, isError, raise } from "~/components/errors";
 
-test("copied and package errors agree while runtime parts move", () => {
-  let old: unknown;
-  try {
-    packageRaise("BadSettings", { part: "auth", keys: ["AUTH_SECRET"] });
-  } catch (error) {
-    old = error;
-  }
-
-  expect(isError(old, "BadSettings")).toBe(true);
-  expect(packageIsError(fail("Cancelled", {}), "Cancelled")).toBe(true);
+test("managed errors from another owner agree by kind without sharing constructors", () => {
+  const foreign = Object.assign(new Error("foreign failure"), { kind: "Cancelled", payload: {} });
+  expect(isError(foreign, "Cancelled")).toBe(true);
+  expect(fail("Cancelled", {}).kind).toBe("Cancelled");
   expect(() => raise("StartScopeMissing", {})).toThrow("StartScopeMissing");
 });
 

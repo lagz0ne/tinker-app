@@ -1,9 +1,9 @@
 import { operation } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
 
-import { counter } from "~/components/demo";
 import { syncClient } from "~/components/sync";
 
+import { counter } from "@/demo";
 import { updateCounter } from "@/transport/counter.functions";
 
 import { Button } from "./ui/button";

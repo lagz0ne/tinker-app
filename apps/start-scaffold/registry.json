@@ -274,9 +274,9 @@
     },
     {
       "name": "demo",
-      "type": "registry:lib",
+      "type": "registry:item",
       "title": "demo",
-      "description": "Copied demo component. You own its files.",
+      "description": "App-owned example business code in src/demo; components stay generic.",
       "dependencies": [
         "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
         "@tinker/react@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
@@ -284,108 +284,102 @@
         "zod@catalog:"
       ],
       "registryDependencies": [
-        "@tinker-start/errors",
-        "@tinker-start/mail",
-        "@tinker-start/requests",
         "@tinker-start/auth",
         "@tinker-start/database",
+        "@tinker-start/errors",
+        "@tinker-start/mail",
         "@tinker-start/sync"
       ],
       "files": [
         {
-          "path": "tinker/components/demo/backend/auth.server.ts",
+          "path": "src/demo/backend/auth.server.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/auth.server.ts"
+          "target": "~/src/demo/backend/auth.server.ts"
         },
         {
-          "path": "tinker/components/demo/backend/counter.server.ts",
+          "path": "src/demo/backend/counter.server.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/counter.server.ts"
+          "target": "~/src/demo/backend/counter.server.ts"
         },
         {
-          "path": "tinker/components/demo/backend/profile.server.ts",
+          "path": "src/demo/backend/profile.server.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/profile.server.ts"
+          "target": "~/src/demo/backend/profile.server.ts"
         },
         {
-          "path": "tinker/components/demo/backend/sync.schema.server.ts",
+          "path": "src/demo/backend/sync.schema.server.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/sync.schema.server.ts"
+          "target": "~/src/demo/backend/sync.schema.server.ts"
         },
         {
-          "path": "tinker/components/demo/backend/sync.server.ts",
+          "path": "src/demo/backend/sync.server.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/sync.server.ts"
+          "target": "~/src/demo/backend/sync.server.ts"
         },
         {
-          "path": "tinker/components/demo/backend/todos.schema.server.ts",
+          "path": "src/demo/backend/todos.schema.server.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/todos.schema.server.ts"
+          "target": "~/src/demo/backend/todos.schema.server.ts"
         },
         {
-          "path": "tinker/components/demo/backend/todos.server.ts",
+          "path": "src/demo/backend/todos.server.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/backend/todos.server.ts"
+          "target": "~/src/demo/backend/todos.server.ts"
         },
         {
-          "path": "tinker/components/demo/component.json",
+          "path": "src/demo/contracts/commands.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/component.json"
+          "target": "~/src/demo/contracts/commands.ts"
         },
         {
-          "path": "tinker/components/demo/contracts/commands.ts",
+          "path": "src/demo/contracts/credentials.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/contracts/commands.ts"
+          "target": "~/src/demo/contracts/credentials.ts"
         },
         {
-          "path": "tinker/components/demo/contracts/credentials.ts",
+          "path": "src/demo/contracts/profile-contract.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/contracts/credentials.ts"
+          "target": "~/src/demo/contracts/profile-contract.ts"
         },
         {
-          "path": "tinker/components/demo/contracts/profile-contract.ts",
+          "path": "src/demo/contracts/sync.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/contracts/profile-contract.ts"
+          "target": "~/src/demo/contracts/sync.ts"
         },
         {
-          "path": "tinker/components/demo/contracts/sync.ts",
+          "path": "src/demo/contracts/todos-contract.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/contracts/sync.ts"
+          "target": "~/src/demo/contracts/todos-contract.ts"
         },
         {
-          "path": "tinker/components/demo/contracts/todos-contract.ts",
+          "path": "src/demo/errors.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/contracts/todos-contract.ts"
+          "target": "~/src/demo/errors.ts"
         },
         {
-          "path": "tinker/components/demo/errors.ts",
+          "path": "src/demo/frontend/records.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/errors.ts"
+          "target": "~/src/demo/frontend/records.ts"
         },
         {
-          "path": "tinker/components/demo/frontend/records.ts",
+          "path": "src/demo/frontend/state.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/frontend/records.ts"
+          "target": "~/src/demo/frontend/state.ts"
         },
         {
-          "path": "tinker/components/demo/frontend/state.ts",
+          "path": "src/demo/index.server.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/frontend/state.ts"
+          "target": "~/src/demo/index.server.ts"
         },
         {
-          "path": "tinker/components/demo/index.server.ts",
+          "path": "src/demo/index.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/demo/index.server.ts"
-        },
-        {
-          "path": "tinker/components/demo/index.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/demo/index.ts"
+          "target": "~/src/demo/index.ts"
         }
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+        "update": "Demo is app-owned source under src/demo. Copy it once; review later changes and edit your own source by hand. Do not apply a component whole-folder update to this app code."
       }
     },
     {

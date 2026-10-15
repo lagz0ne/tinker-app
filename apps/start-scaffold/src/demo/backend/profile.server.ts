@@ -4,13 +4,15 @@ import { user } from "~/components/auth/index.server";
 import { principal } from "~/components/auth/index.server";
 import { drizzleOrm } from "~/components/database/index.server";
 import { database } from "~/components/database/index.server";
-import { readProfileCommand } from "~/components/demo/contracts/commands";
-import type { Profile } from "~/components/demo/contracts/profile-contract";
-import { readExecution, readRetry, readFeatureResult } from "~/components/demo/contracts/sync";
-import type { Sync } from "~/components/demo/contracts/sync";
-import { raise } from "~/components/demo/errors";
 import { sendMail } from "~/components/mail/index.server";
+import { readExecution, readRetry } from "~/components/sync";
+import type { Sync } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
+
+import { readProfileCommand } from "@/demo/contracts/commands";
+import type { Profile } from "@/demo/contracts/profile-contract";
+import { readFeatureResult } from "@/demo/contracts/sync";
+import { raise } from "@/demo/errors";
 
 import { currentUser } from "./auth.server";
 

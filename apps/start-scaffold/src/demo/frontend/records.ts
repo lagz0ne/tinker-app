@@ -1,6 +1,6 @@
 import { resource } from "@tinker/core";
 
-import type { Sync } from "~/components/demo/contracts/sync";
+import type { Sync } from "~/components/sync";
 
 import { profile, todos, counter, nameDraft, profileResult } from "./state";
 

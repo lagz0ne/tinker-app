@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { raise } from "~/components/demo/errors";
+import { raise } from "@/demo/errors";
 
 export declare namespace Todos {
   type Row = { id: number; title: string; done: boolean };

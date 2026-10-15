@@ -2420,7 +2420,7 @@ if (process.argv.includes("--prove")) {
       "component-scope",
       "scope-entry-only",
       'import { createScope } from "@tinker/core"; createScope({});',
-      "tinker/components/demo/scope-probe.ts",
+      "tinker/components/sync/scope-probe.ts",
     ],
     [
       "nested-command-scope",

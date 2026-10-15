@@ -1,7 +1,6 @@
 import { createScope, operation } from "@tinker/core";
 import { test, expect } from "vite-plus/test";
 
-import { profile, counter, nameDraft } from "~/components/demo/frontend/state";
 import {
   syncClient,
   applyBootstrap,
@@ -11,6 +10,8 @@ import {
 import { tabStop } from "~/components/sync/client/tab";
 import type { Sync } from "~/components/sync/envelopes";
 import { syncStartup } from "~/components/sync/slots";
+
+import { profile, counter, nameDraft } from "@/demo/frontend/state";
 
 import { clientBindings } from "./presets";
 

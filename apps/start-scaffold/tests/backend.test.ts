@@ -7,14 +7,15 @@ import { authStartup } from "~/components/auth/index.server";
 import { authSettings } from "~/components/auth/index.server";
 import { auth } from "~/components/auth/index.server";
 import { database, migrate, databaseUrl } from "~/components/database/index.server";
-import { readProfile, saveProfile } from "~/components/demo/backend/profile.server";
-import { raise, isError } from "~/components/demo/errors";
-import * as demo from "~/components/demo/index.server";
 import { mail, mailFrom, smtpUrl } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
 import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+
+import { readProfile, saveProfile } from "@/demo/backend/profile.server";
+import { raise, isError } from "@/demo/errors";
+import * as demo from "@/demo/index.server";
 
 import { authBindings } from "./presets";
 import { handleAuth } from "./presets";

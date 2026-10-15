@@ -22,20 +22,20 @@ Open `http://localhost:4318` when dev starts.
 
 ## Layout and rules
 
-| Path                 | Owns                                                                                   |
-| -------------------- | -------------------------------------------------------------------------------------- |
-| `cmds/server.ts`     | Server roots, settings, auth hooks, sync slots, and shutdown                           |
-| `cmds/router.ts`     | Browser roots, router options, records, and reader slots                               |
-| `cmds/start.ts`      | CSRF, requests, and app middleware in order                                            |
-| `src/`               | App routes, UI, transport, root shell, and styles                                      |
-| `tinker/base/`       | Entry, close, panics, and observer hand-off                                            |
-| `tinker/components/` | Copied errors, requests, health, http, database, auth, telemetry, sync, mail, and demo |
-| `tests/runtime/`     | Tests for the copied runtime, with strict type isolation                               |
+| Path                 | Owns                                                                             |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `cmds/server.ts`     | Server roots, settings, auth hooks, sync slots, and shutdown                     |
+| `cmds/router.ts`     | Browser roots, router options, records, and reader slots                         |
+| `cmds/start.ts`      | CSRF, requests, and app middleware in order                                      |
+| `src/`               | App business code in src/demo, routes, UI, transport, root shell, and styles     |
+| `tinker/base/`       | Entry, close, panics, and observer hand-off                                      |
+| `tinker/components/` | Copied errors, requests, health, http, database, auth, telemetry, sync, and mail |
+| `tests/runtime/`     | Tests for the copied runtime, with strict type isolation                         |
 
 Commands import only `~/base`, `~/components`, `@/`, and `@tinker/core`.
 Src imports components and npm packages, plus its own source.
 Components declare direct `requires` in `component.json`; they never import src, cmds, or base.
-Base imports requests and errors; the commands pass optional parts into it.
+Base imports requests and errors. Commands choose optional components and pass their native router options and observers.
 Imports omit TypeScript file endings. Keep blank-line steps in function bodies.
 
 Choose tags for fixed inputs, data for changing records, resources for owned clients,
@@ -96,6 +96,8 @@ vp run test:registry
 ```
 
 There is one item per component. Its `registryDependencies` equal its direct `requires`.
+`demo` ships app-owned business code in `src/demo`, with its own paths and no component manifest.
+Copy the example once; edit later app changes by hand. Never apply a whole-component update to it.
 `base` owns the copied entry helpers. `app` adds base, health, telemetry, and user files
 into an empty folder. Examples add their own files and never overwrite app files.
 The build refuses two owners for one path and any example aimed at a protected app path.
@@ -139,7 +141,7 @@ For the untouched `app` shell, the exact edits are:
 -import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 +import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 +
-+import type { Sync } from "~/components/demo";
++import type { Sync } from "~/components/sync";
 
 -export const Route = createRootRoute({
 +export const Route = createRootRouteWithContext<{

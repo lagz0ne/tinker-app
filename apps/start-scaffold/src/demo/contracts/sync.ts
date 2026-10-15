@@ -7,9 +7,6 @@ import {
   bootstrapEnvelope,
 } from "~/components/sync";
 
-export { readExecution, readCursor, readPrivateCursor, readRetry } from "~/components/sync";
-export type { Sync } from "~/components/sync";
-
 export declare namespace FeatureSync {
   type Change = z.infer<typeof change>;
   type Result = z.infer<typeof result>;

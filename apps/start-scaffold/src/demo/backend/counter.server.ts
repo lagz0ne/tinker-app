@@ -2,9 +2,10 @@ import { operation } from "@tinker/core";
 
 import { drizzleOrm } from "~/components/database/index.server";
 import { database } from "~/components/database/index.server";
-import { readExecution } from "~/components/demo/contracts/sync";
-import { raise } from "~/components/demo/errors";
+import { readExecution } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
+
+import { raise } from "@/demo/errors";
 
 import { counter } from "./sync.schema.server";
 

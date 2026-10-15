@@ -6,10 +6,6 @@ import { test, expect } from "vite-plus/test";
 import { authStartup } from "~/components/auth/index.server";
 import { authSettings } from "~/components/auth/index.server";
 import { migrate, databaseUrl } from "~/components/database/index.server";
-import { readAccount } from "~/components/demo/backend/auth.server";
-import { incrementCounter } from "~/components/demo/backend/counter.server";
-import { bootstrap } from "~/components/demo/backend/sync.server";
-import * as demo from "~/components/demo/index.server";
 import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { backendStop, requestStop } from "~/components/requests";
@@ -22,6 +18,10 @@ import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 import { syncStartup } from "~/components/sync/slots";
 import { openSync } from "~/components/sync/stream.server";
 
+import { readAccount } from "@/demo/backend/auth.server";
+import { incrementCounter } from "@/demo/backend/counter.server";
+import { bootstrap } from "@/demo/backend/sync.server";
+import * as demo from "@/demo/index.server";
 import { authClient, signIn } from "@/frontend/actions";
 
 import { clientBindings } from "./presets";

@@ -1,7 +1,8 @@
 import type { RunResult } from "@tinker/core";
 
-import { isError, raise } from "~/components/demo";
 import { isError as isBaseError } from "~/components/errors";
+
+import { isError, raise } from "@/demo";
 
 /**
  * @param result - From a settled mutation; why: turn its result into a network receipt.

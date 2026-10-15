@@ -10,13 +10,13 @@ Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
 Use todos as the worked path.
 Read these files in this order:
 
-1. `tinker/components/demo/backend/todos.schema.server.ts`: the feature table.
-2. `tinker/components/demo/contracts/todos-contract.ts`: input reader and row type.
-3. `tinker/components/demo/backend/todos.server.ts`: scoped read and write operations.
-4. `tinker/components/demo/backend/sync.server.ts`: private snapshot and saved events.
+1. `src/demo/backend/todos.schema.server.ts`: the feature table.
+2. `src/demo/contracts/todos-contract.ts`: input reader and row type.
+3. `src/demo/backend/todos.server.ts`: scoped read and write operations.
+4. `src/demo/backend/sync.server.ts`: private snapshot and saved events.
 5. `src/transport/todos.functions.ts`: Start function.
-6. `tinker/components/demo/contracts/sync.ts`: change and result bodies.
-7. `tinker/components/demo/frontend/records.ts`: apply changes to saved data.
+6. `src/demo/contracts/sync.ts`: change and result bodies.
+7. `src/demo/frontend/records.ts`: apply changes to saved data.
 8. `src/frontend/Todos.tsx`: page and action.
 9. `src/routes/todos.tsx`: account guard.
 10. `tests/todos.test.ts`: scope tests for the public promise.
@@ -34,7 +34,7 @@ Use `eventHistory` from `~/components/sync/index.server`.
 In one transaction, `lock` orders writes to the stream.
 `find` checks the execution ID before any saved effect.
 `append` stores the events with the saved change.
-See `changeTodo` in `tinker/components/demo/backend/todos.server.ts`.
+See `changeTodo` in `src/demo/backend/todos.server.ts`.
 A repeated execution ID must not repeat saved effects.
 
 For outgoing HTTP, depend on httpRequest.controller and run it.
@@ -43,9 +43,9 @@ Map the reply to a feature value or managed error (ADR 0103).
 The filled request example is in tinker-forms.
 Never call built-in fetch from feature code.
 
-Export each backend operation from `tinker/components/demo/index.server.ts`.
-Code outside the component imports it from `~/components/demo/index.server`.
-Views import state from `~/components/demo`.
+Export each backend operation from `src/demo/index.server.ts`.
+Code outside the component imports it from `@/demo/index.server`.
+Views import state from `@/demo`.
 Tests may import any module by its `@/` path.
 Tests import presets from the sibling `./presets`.
 
@@ -60,6 +60,6 @@ beforeLoad: async ({ context }) => {
 },
 ```
 
-Extend `Register` through `tinker/components/demo/index.ts`.
+Extend `Register` through `src/demo/index.ts`.
 Add data and its change reader before adding the page.
 Run the build, types, tests, and schema check.

@@ -5,6 +5,8 @@
   "mutate": [
     "tinker/**/*.ts",
     "tinker/**/*.tsx",
+    "src/demo/**/*.ts",
+    "src/demo/**/*.tsx",
     "!tinker/base/server-entry.ts",
     "!tinker/base/router-entry.tsx",
     "!tinker/base/start-entry.ts",

@@ -13,11 +13,11 @@ Choose one form for each piece of work:
 - Tag: fixed settings passed in by the entry.
   See `databaseUrl` in `tinker/components/database/database.server.ts`.
 - Data: changing records, drafts, and visible progress.
-  See `profile` and `nameDraft` in `tinker/components/demo/frontend/state.ts`.
+  See `profile` and `nameDraft` in `src/demo/frontend/state.ts`.
 - Resource: a client or work owned by the app or session.
   See `database` and `auth` in their copied components.
 - Operation: an action, including a read, write, or send.
-  See `changeTodo` in `tinker/components/demo/backend/todos.server.ts`.
+  See `changeTodo` in `src/demo/backend/todos.server.ts`.
 
 A unit body, and every helper it calls, gets an outside library
 only from a lazy module dep.

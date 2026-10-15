@@ -28,10 +28,10 @@ if (import.meta.main) {
       },
     });
     try {
-      const root = fileURLToPath(new URL("../tinker/components/demo/backend/", import.meta.url));
+      const root = fileURLToPath(new URL("../src/demo/backend/", import.meta.url));
       const features = readdirSync(root).filter((name) => name.endsWith(".server.ts"));
       for (const name of features) {
-        await vite.ssrLoadModule(`/tinker/components/demo/backend/${name}`);
+        await vite.ssrLoadModule(`/src/demo/backend/${name}`);
       }
       const backend = await vite.ssrLoadModule("/tinker/components/mail/mail.server.ts");
 

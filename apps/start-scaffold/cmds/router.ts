@@ -9,7 +9,6 @@ import {
   tabLifetime,
 } from "~/base/router-entry";
 import type { RouterOptions } from "~/base/router-entry";
-import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "~/components/demo";
 import { abortReasons } from "~/components/errors";
 import {
   syncStartup,
@@ -29,6 +28,8 @@ import {
   logConsole,
   observer,
 } from "~/components/telemetry";
+
+import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo";
 
 const extensions: [] = [];
 const router: RouterOptions = {};

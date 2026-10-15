@@ -5,8 +5,8 @@ export default defineConfig({
   schema: [
     "./tinker/components/auth/schema.server.ts",
     "./tinker/components/sync/schema.ts",
-    "./tinker/components/demo/backend/todos.schema.server.ts",
-    "./tinker/components/demo/backend/sync.schema.server.ts",
+    "./src/demo/backend/todos.schema.server.ts",
+    "./src/demo/backend/sync.schema.server.ts",
   ],
   out: "./drizzle",
 });

@@ -2,11 +2,12 @@ import { operation } from "@tinker/core";
 
 import { drizzleOrm } from "~/components/database/index.server";
 import { database } from "~/components/database/index.server";
-import { readTodoCommand } from "~/components/demo/contracts/commands";
-import type { Sync } from "~/components/demo/contracts/sync";
-import type { Todos } from "~/components/demo/contracts/todos-contract";
-import { raise } from "~/components/demo/errors";
+import type { Sync } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
+
+import { readTodoCommand } from "@/demo/contracts/commands";
+import type { Todos } from "@/demo/contracts/todos-contract";
+import { raise } from "@/demo/errors";
 
 import { currentUser } from "./auth.server";
 import { todo } from "./todos.schema.server";

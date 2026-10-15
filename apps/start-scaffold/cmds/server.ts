@@ -11,7 +11,6 @@ import {
   sessionDeleted,
 } from "~/components/auth/index.server";
 import { databaseSetup, databaseUrl } from "~/components/database/index.server";
-import { bootstrap, readAccount } from "~/components/demo/index.server";
 import { abortReasons } from "~/components/errors";
 import * as mail from "~/components/mail/index.server";
 import { startRequests, backendStop } from "~/components/requests";
@@ -37,6 +36,8 @@ import {
   browserIngest,
   browserTelemetry,
 } from "~/components/telemetry/index.server";
+
+import { bootstrap, readAccount } from "@/demo/index.server";
 
 try {
   process.loadEnvFile();

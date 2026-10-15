@@ -163,7 +163,7 @@ export const startInstance = createStart(() => ({requestMiddleware: [proofReques
       join(proof, "src/routes/proof.write.ts"),
       `
 import { createFileRoute } from "@tanstack/react-router";
-import { incrementCounter } from "~/components/demo/index.server";
+import { incrementCounter } from "@/demo/index.server";
 import { startRequests } from "~/components/requests";
 import { readResult } from "~/components/requests/index.server";
 export const Route = createFileRoute("/proof/write")({server: {

@@ -1,6 +1,6 @@
 import { createRootRouteWithContext, HeadContent, Scripts, Outlet } from "@tanstack/react-router";
 
-import type { Sync } from "~/components/demo";
+import type { Sync } from "~/components/sync";
 
 import styleUrl from "@/style.css?url";
 

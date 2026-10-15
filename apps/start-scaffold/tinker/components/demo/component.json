@@ -1,3 +1,0 @@
-{
-  "requires": ["errors", "mail", "requests", "auth", "database", "sync"]
-}

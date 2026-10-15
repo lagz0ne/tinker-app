@@ -4,10 +4,12 @@ import { user } from "~/components/auth/index.server";
 import { principal } from "~/components/auth/index.server";
 import { drizzleOrm } from "~/components/database/index.server";
 import { database } from "~/components/database/index.server";
-import { readCursor, readPrivateCursor, readFeatureEvents } from "~/components/demo/contracts/sync";
-import type { Sync } from "~/components/demo/contracts/sync";
-import { raise } from "~/components/demo/errors";
+import { readCursor, readPrivateCursor } from "~/components/sync";
+import type { Sync } from "~/components/sync";
 import { eventHistory, event } from "~/components/sync/index.server";
+
+import { readFeatureEvents } from "@/demo/contracts/sync";
+import { raise } from "@/demo/errors";
 
 import { currentUser } from "./auth.server";
 import { counter } from "./sync.schema.server";

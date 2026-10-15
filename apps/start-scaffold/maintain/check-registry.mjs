@@ -37,9 +37,9 @@ const duplicate = structuredClone(registry);
 duplicate.items
   .find((item) => item.name === "todos-example")
   .files.push({
-    path: "tinker/components/demo/errors.ts",
+    path: "src/demo/errors.ts",
     type: "registry:file",
-    target: "~/tinker/components/demo/errors.ts",
+    target: "~/src/demo/errors.ts",
   });
 
 await assert.rejects(registryItems({ registry: duplicate }), /already owned/);

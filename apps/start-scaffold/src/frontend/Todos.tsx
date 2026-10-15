@@ -3,11 +3,11 @@ import { data, operation, isError as isCoreError } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
 import { z } from "zod";
 
-import { readTodoChange } from "~/components/demo";
-import { isError } from "~/components/demo";
-import { todos, profile } from "~/components/demo";
 import { syncClient } from "~/components/sync";
 
+import { readTodoChange } from "@/demo";
+import { isError } from "@/demo";
+import { todos, profile } from "@/demo";
 import { updateTodo } from "@/transport/todos.functions";
 
 import { Button } from "./ui/button";

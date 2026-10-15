@@ -19,7 +19,7 @@ Choose one of these four forms before adding app work.
 - **Resource:** a shared client, current user, or owned queue.
   A unit body, and every helper it calls, gets an outside library
   only from a lazy module dep.
-  Declare one resource per import path in `tinker/components/demo/backend/modules.ts`.
+  Declare one resource per import path in `src/demo/backend/modules.ts`.
   Take Drizzle helpers from `drizzleOrm` in `~/components/database/index.server`.
   Import tables, schemas, and own code at the top.
   Release what it owns through `ctx.defer`.

@@ -9,7 +9,6 @@ import {
   sessionDeleted,
 } from "~/components/auth/index.server";
 import { databaseSetup, databaseUrl } from "~/components/database/index.server";
-import { bootstrap, readAccount } from "~/components/demo/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
 import { backendStop, startRequests } from "~/components/requests";
 import { syncSide, syncStartup } from "~/components/sync";
@@ -22,6 +21,8 @@ import {
   tracesUrl,
   logsUrl,
 } from "~/components/telemetry/index.server";
+
+import { bootstrap, readAccount } from "@/demo/index.server";
 
 import { clientBindings } from "./presets";
 

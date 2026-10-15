@@ -34,10 +34,10 @@ Missing bindings reject ready with MissingTag and the tag name. Components never
 
 Doctor checks command exports, import directions, and build import violations.
 
-Fill `Register` on `~/components/sync` in the component public index.
+Fill `Register` on `~/components/sync` in app source. Import sync types and readers directly from its public index; never forward them through an app barrel.
 Commands import `~/components/name`; components never import src or cmds.
 A component imports another public index only with a direct requires entry.
-See `tinker/components/demo/contracts/sync.ts` for this app's bodies.
+See `src/demo/contracts/sync.ts` for this app's bodies.
 Put raw-input readers in `src/contracts/`.
 
 Feature HTTP operations import httpRequest from

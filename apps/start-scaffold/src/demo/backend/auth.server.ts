@@ -1,7 +1,8 @@
 import { operation, resource } from "@tinker/core";
 
 import { principal } from "~/components/auth/index.server";
-import { raise } from "~/components/demo/errors";
+
+import { raise } from "@/demo/errors";
 
 export const currentUser = resource({
   label: "request.currentUser",

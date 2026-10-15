@@ -6,26 +6,22 @@ import { test, expect, onTestFinished } from "vite-plus/test";
 import { authStartup } from "~/components/auth/index.server";
 import { authSettings } from "~/components/auth/index.server";
 import { migrate, database, databaseUrl } from "~/components/database/index.server";
-import { incrementCounter } from "~/components/demo/backend/counter.server";
-import {
-  readProfile,
-  saveProfile,
-  retryNotification,
-} from "~/components/demo/backend/profile.server";
-import {
-  bootstrapPublic,
-  bootstrapPrivate,
-  replayPublic,
-  replayPrivate,
-} from "~/components/demo/backend/sync.server";
-import { raise, isError } from "~/components/demo/errors";
-import * as demo from "~/components/demo/index.server";
 import { mail } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
 import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
+import { incrementCounter } from "@/demo/backend/counter.server";
+import { readProfile, saveProfile, retryNotification } from "@/demo/backend/profile.server";
+import {
+  bootstrapPublic,
+  bootstrapPrivate,
+  replayPublic,
+  replayPrivate,
+} from "@/demo/backend/sync.server";
+import { raise, isError } from "@/demo/errors";
+import * as demo from "@/demo/index.server";
 import { readReceipt } from "@/transport/result.server";
 
 import { authBindings } from "./presets";
