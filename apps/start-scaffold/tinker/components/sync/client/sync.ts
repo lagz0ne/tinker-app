@@ -1,10 +1,10 @@
 import { operation, resource } from "@tinker/core";
+import type { Operation } from "@tinker/core";
 
-import { readBatch, readBootstrap, records } from "#tinker/router";
-
-import { fail, raise } from "../../../errors";
-import type { Sync } from "../envelopes";
-import { accountOwner } from "./owner";
+import { fail, raise } from "~/components/errors";
+import { accountOwner } from "~/components/sync/client/owner";
+import type { Sync } from "~/components/sync/envelopes";
+import { readBatchSlot, readBootstrapSlot, syncRecords } from "~/components/sync/slots";
 
 /**
  * The tab's applied state: the cursor per stream, and the account it belongs to. It keeps only
@@ -12,7 +12,7 @@ import { accountOwner } from "./owner";
  */
 export const syncClient = resource({
   label: "sync.client",
-  depends: { owner: accountOwner, records },
+  depends: { owner: accountOwner, records: syncRecords },
   factory: ({ owner, records: appRecords }, { defer, log, clock }) => {
     const records: Sync.Records = appRecords;
     let accountId: string | null = null;
@@ -157,16 +157,36 @@ export const syncClient = resource({
 
 export const applyBootstrap = operation({
   label: "sync.bootstrap",
-  input: readBootstrap,
-  depends: { sync: syncClient },
-  run: ({ sync }, { input }) => sync.bootstrap(input.snapshot, input.version),
+  depends: { sync: syncClient, read: readBootstrapSlot.required },
+  run: (
+    { sync, read },
+    { input, rawInput, label, raise }: Operation.Ctx<{ snapshot: Sync.Snapshot; version: number }>,
+  ) => {
+    let value;
+    try {
+      value = input === undefined ? read.parse(rawInput) : input;
+    } catch (cause) {
+      return raise("DataValidationFailed", { label, cause });
+    }
+    return sync.bootstrap(value.snapshot, value.version);
+  },
 });
 
 export const applyEvents = operation({
   label: "sync.apply",
-  input: readBatch,
-  depends: { sync: syncClient },
-  run: ({ sync }, { input }) => sync.apply(input.events, input.version),
+  depends: { sync: syncClient, read: readBatchSlot.required },
+  run: (
+    { sync, read },
+    { input, rawInput, label, raise }: Operation.Ctx<{ events: Sync.Event[]; version: number }>,
+  ) => {
+    let value;
+    try {
+      value = input === undefined ? read.parse(rawInput) : input;
+    } catch (cause) {
+      return raise("DataValidationFailed", { label, cause });
+    }
+    return sync.apply(value.events, value.version);
+  },
 });
 
 export const leaveAccount = operation({

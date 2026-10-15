@@ -4,9 +4,8 @@ import { resource } from "@tinker/core";
 
 import { startRequests } from "~/components/requests/index";
 import { readResult } from "~/components/requests/index.server";
-
-import { serverParts } from "../../server-parts";
-import type { Sync } from "./envelopes";
+import type { Sync } from "~/components/sync/envelopes";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/slots";
 
 /** The app's snapshot for this request's account: what a tab loads before it streams. */
 export const getBootstrap = createServerFn({ method: "GET" })
@@ -14,7 +13,7 @@ export const getBootstrap = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     setResponseHeader("Cache-Control", "no-store");
     return readResult(
-      await context.session.settle(context.session.resolve(serverParts).bootstrap, {
+      await context.session.settle(context.session.resolve(bootstrapSlot.required), {
         signal: context.signal,
       }),
     );
@@ -26,7 +25,7 @@ export const getAccount = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     setResponseHeader("Cache-Control", "no-store");
     return readResult(
-      await context.session.settle(context.session.resolve(serverParts).readAccount, {
+      await context.session.settle(context.session.resolve(readAccountSlot.required), {
         signal: context.signal,
       }),
     );

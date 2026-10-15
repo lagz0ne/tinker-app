@@ -1,9 +1,8 @@
 import { operation, resource } from "@tinker/core";
-import { drizzleOrm } from "@tinker/start/server";
-import { eventHistory, execution } from "@tinker/start/server";
 
 import { user } from "~/components/auth/index.server";
 import { principal } from "~/components/auth/index.server";
+import { drizzleOrm } from "~/components/database/index.server";
 import { database } from "~/components/database/index.server";
 import { readProfileCommand } from "~/components/demo/contracts/commands";
 import type { Profile } from "~/components/demo/contracts/profile-contract";
@@ -11,6 +10,7 @@ import { readExecution, readRetry, readFeatureResult } from "~/components/demo/c
 import type { Sync } from "~/components/demo/contracts/sync";
 import { raise } from "~/components/demo/errors";
 import { sendMail } from "~/components/mail/index.server";
+import { eventHistory, execution } from "~/components/sync/index.server";
 
 import { currentUser } from "./auth.server";
 

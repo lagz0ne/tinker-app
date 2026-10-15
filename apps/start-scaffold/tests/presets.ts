@@ -1,14 +1,22 @@
 import type { PGliteInterface } from "@electric-sql/pglite";
 import type { Scope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { publishAccountNotice } from "@tinker/start/server";
 import { afterAll, beforeAll } from "vite-plus/test";
 
 import { sendAuthMail, sessionDeleted } from "~/components/auth/index.server";
 import { database } from "~/components/database/index.server";
 import type { Database } from "~/components/database/index.server";
+import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "~/components/demo";
 import { authMail } from "~/components/mail/index.server";
 import { mail } from "~/components/mail/index.server";
+import {
+  recordsSlot,
+  readBatchSlot,
+  readBootstrapSlot,
+  readSnapshotSlot,
+  streamMessageSlot,
+} from "~/components/sync";
+import { publishAccountNotice } from "~/components/sync/index.server";
 
 /** Keep migration inside each test; copy only the empty database's ready state. */
 let template: PGliteInterface;
@@ -52,3 +60,11 @@ export function authBindings(root: () => Scope.Handle) {
     sessionDeleted((accountId) => root().run(publishAccountNotice, { rawInput: { accountId } })),
   ];
 }
+
+export const clientBindings = [
+  recordsSlot(records),
+  readBatchSlot(readBatch),
+  readBootstrapSlot(readBootstrap),
+  readSnapshotSlot(readSnapshot),
+  streamMessageSlot(streamMessage),
+];

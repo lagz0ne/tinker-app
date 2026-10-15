@@ -48,7 +48,7 @@ export {
 import type { FeatureSync } from "~/components/demo/contracts/sync";
 
 /** This app fills the base's open registry with its own bodies. */
-declare module "@tinker/start" {
+declare module "~/components/sync" {
   interface Register {
     change: FeatureSync.Change;
     result: FeatureSync.Result;

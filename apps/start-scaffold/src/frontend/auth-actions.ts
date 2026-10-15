@@ -1,10 +1,10 @@
 import { operation, resource } from "@tinker/core";
-import { syncClient, snapshotLoader } from "@tinker/start/client";
 import { z } from "zod";
 
 import { credentials } from "~/components/demo";
 import { raise } from "~/components/demo";
 import { pending, notice, authMode } from "~/components/demo";
+import { syncClient, snapshotLoader } from "~/components/sync";
 
 import { betterAuthReact } from "./modules";
 

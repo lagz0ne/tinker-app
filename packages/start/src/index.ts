@@ -10,9 +10,9 @@ export {
   readPrivateCursor,
   readRetry,
   snapshotEnvelope,
-} from "./parts/sync/envelopes";
+} from "~/components/sync/envelopes";
 
-export type { Register, Sync } from "./parts/sync/envelopes";
-export type { Errors } from "./errors";
+export type { Register, Sync } from "~/components/sync/envelopes";
+export type { Errors } from "~/components/errors";
 
-export { abortReasons, raise, fail, isError } from "./errors";
+export { abortReasons, raise, fail, isError } from "~/components/errors";

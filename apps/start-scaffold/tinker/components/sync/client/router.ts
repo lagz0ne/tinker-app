@@ -1,11 +1,9 @@
 import { resource } from "@tinker/core";
 
-import { readSnapshot } from "#tinker/router";
-
-import type { SyncPart } from "../part";
-import { checkAccount, loadSnapshot, syncStreaming } from "./events";
-import { tabLifetime } from "./owner";
-import { applyBootstrap, syncClient } from "./sync";
+import { checkAccount, loadSnapshot, syncStreaming } from "~/components/sync/client/events";
+import { applyBootstrap, syncClient } from "~/components/sync/client/sync";
+import type { SyncPart } from "~/components/sync/part";
+import { readSnapshotSlot } from "~/components/sync/slots";
 
 /**
  * The router side of sync: the server render loads the snapshot and dehydrates it; the tab
@@ -15,22 +13,22 @@ export const syncRouter = resource({
   label: "sync.router",
   depends: {
     sync: syncClient,
+    readSnapshot: readSnapshotSlot.required,
     load: loadSnapshot.controller,
     check: checkAccount.controller,
     apply: applyBootstrap.controller,
     streaming: syncStreaming,
-    lifetime: tabLifetime,
   },
-  factory: ({ sync, load, check, apply, streaming, lifetime }) => {
+  factory: ({ sync, readSnapshot, load, check, apply, streaming }) => {
     const options: SyncPart.Options = {
-      context: { bootstrap: () => load.run(), account: () => check.run() },
-      dehydrate: () => sync.snapshot(),
+      context: { bootstrap: load.run.bind(load), account: check.run.bind(check) },
+      dehydrate: sync.snapshot,
       hydrate: async (raw) => {
         const snapshot = readSnapshot.parse(raw);
         apply.run({ input: { snapshot, version: sync.version() } });
         streaming.start();
       },
     };
-    return { options, bind: lifetime.bind };
+    return options;
   },
 });

@@ -1,4 +1,5 @@
 import { createScope, operation, tag } from "@tinker/core";
+import type { Scope } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
 import { sql } from "drizzle-orm";
 import { expect, test } from "vite-plus/test";
@@ -7,15 +8,40 @@ import { z } from "zod";
 import { backendStop, requestStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { requestHeaders } from "~/components/requests/index.server";
+import { eventHistory } from "~/components/sync/history.server";
+import { accountNotice } from "~/components/sync/notice";
+import { notifications } from "~/components/sync/notifications.server";
+import { execution } from "~/components/sync/schema";
+import { eventStream, openSync } from "~/components/sync/stream.server";
 
 import { auth, database, signedIn, syncTemplate, bindings } from "#tinker/server";
 
-import { syncEndpoint } from "../src/parts/sync/endpoint.server";
-import { eventHistory } from "../src/parts/sync/history.server";
-import { accountNotice } from "../src/parts/sync/notice";
-import { notifications } from "../src/parts/sync/notifications.server";
-import { execution } from "../src/parts/sync/schema";
-import { eventStream, openSync } from "../src/parts/sync/stream.server";
+import { Route } from "../../../apps/start-scaffold/src/routes/api.sync";
+import { proofServices } from "./fixtures/app.server";
+import { handWoken } from "./fixtures/sync";
+
+/** Exercise the actual route with the test's owned session. */
+async function answer(session: Scope.Handle, request: Request) {
+  const handlers = Route.options.server!.handlers!;
+  if (typeof handlers === "function") throw new Error("expected the route's GET handler");
+
+  const handler = handlers.GET;
+  if (typeof handler !== "function") throw new Error("expected a GET function");
+
+  const response = await handler({
+    request,
+    context: { session, signal: request.signal },
+    params: {},
+    pathname: "/api/sync",
+    next: () => {
+      throw new Error("GET must answer directly");
+    },
+  });
+
+  expect(response).toBeInstanceOf(Response);
+  if (!(response instanceof Response)) throw new Error("GET must return a Response");
+  return response;
+}
 
 const ids = [
   "00000000-0000-4000-8000-000000000001",
@@ -95,7 +121,11 @@ const account = 'event: account\ndata: {"kind":"account-change"}\n\n';
 
 test("a wait holds until a wake or close, and returns at once after its revision moved", async () => {
   const { db, wake } = handWoken();
-  const root = createScope({ extensions: [startRequests], tags: bindings, presets: [db] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
+    presets: [...proofServices((): Scope.Handle => root), db],
+  });
   await root.ready;
   const feed = await root.resolve(notifications);
   const subscription = await feed.subscribe();
@@ -119,6 +149,7 @@ test("a wait on a broken listener returns at once", async () => {
     extensions: [startRequests],
     tags: bindings,
     presets: [
+      ...proofServices((): Scope.Handle => root),
       preset(database, async (_deps, { defer }) => {
         const { drizzle } = await import("drizzle-orm/pglite");
         const client = await syncTemplate.clone();
@@ -144,7 +175,11 @@ test("a wait on a broken listener returns at once", async () => {
 });
 
 test("notifications wake after a commit, stay silent on a rollback, and a read before waiting still wakes", async () => {
-  const root = createScope({ extensions: [startRequests], tags: bindings });
+  const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
+    extensions: [startRequests],
+    tags: bindings,
+  });
   await root.ready;
   const feed = await root.resolve(notifications);
   const subscription = await feed.subscribe();
@@ -166,6 +201,7 @@ test("notifications wake after a commit, stay silent on a rollback, and a read b
 test("the stream replays after its cursor in one frame, greets once, then sends each new commit", async () => {
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -204,6 +240,7 @@ test("the stream replays after its cursor in one frame, greets once, then sends 
 test("a resumed cursor skips what it has; one frame carries at most 100 events", async () => {
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -237,6 +274,7 @@ test("a resumed cursor skips what it has; one frame carries at most 100 events",
 test("an account's own private events replay beside the public ones; another account's cursor is refused", async () => {
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -276,6 +314,7 @@ test("a held stream whose account signs out sends the account frame, then no sav
   const stop = new AbortController();
   const accounts = new Set(["ada"]);
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
   });
@@ -305,6 +344,7 @@ test("a sign-in sends no notice: an anonymous stream keeps its account to its 30
   const stop = new AbortController();
   const accounts = new Set<string>();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     clock,
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
@@ -336,6 +376,7 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
   const stop = new AbortController();
   const accounts = new Set(["ada"]);
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     clock,
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
@@ -381,6 +422,7 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
 test("a stream whose request stopped while it opened is Cancelled", async () => {
   const backend = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [bindings, backendStop(backend.signal), requestHeaders(new Headers())],
   });
@@ -398,6 +440,7 @@ test("a stream whose request stopped while it opened is Cancelled", async () => 
 test("a backend stop ends a held stream, and the request ends clean", async () => {
   const backend = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -431,6 +474,7 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
     extensions: [startRequests],
     tags: bindings,
     presets: [
+      ...proofServices((): Scope.Handle => root),
       preset(database, async (_deps, { defer }) => {
         const { drizzle } = await import("drizzle-orm/pglite");
         const client = await syncTemplate.clone();
@@ -484,7 +528,11 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
 });
 
 test("a root that never listened closes clean", async () => {
-  const quiet = createScope({ extensions: [startRequests], tags: bindings });
+  const quiet = createScope({
+    presets: proofServices((): Scope.Handle => quiet),
+    extensions: [startRequests],
+    tags: bindings,
+  });
   await quiet.ready;
   await quiet.resolve(notifications);
   expect(await quiet.close({ graceful: true })).toMatchObject({
@@ -494,7 +542,11 @@ test("a root that never listened closes clean", async () => {
 });
 
 test("closing the root wakes and disconnects each subscriber", async () => {
-  const root = createScope({ extensions: [startRequests], tags: bindings });
+  const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
+    extensions: [startRequests],
+    tags: bindings,
+  });
   await root.ready;
   const feed = await root.resolve(notifications);
   let disconnected = 0;
@@ -515,6 +567,7 @@ test("closing the root wakes and disconnects each subscriber", async () => {
 test("the sync route answers each request with the stream or its status", async () => {
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -546,7 +599,7 @@ test("the sync route answers each request with the stream or its status", async 
     const request = new Request(`http://localhost/api/sync${row.search}`, {
       headers: row.last ? { "Last-Event-ID": row.last } : {},
     });
-    const response = await session.resolve(syncEndpoint).answer(request);
+    const response = await answer(session, request);
     const reader = response.body?.getReader();
     const body = reader ? await text(reader.read()) : "";
 
@@ -581,6 +634,7 @@ test("a request that fails to read, or a stream that fails to open, fails the re
       requestHeaders(new Headers()),
     ],
     presets: [
+      ...proofServices((): Scope.Handle => root),
       preset(eventStream, async () => ({
         open: async (): Promise<ReadableStream<Uint8Array>> => {
           throw opened;
@@ -595,10 +649,8 @@ test("a request that fails to read, or a stream that fails to open, fails the re
       throw torn;
     },
   });
-  await expect(root.resolve(syncEndpoint).answer(unreadable)).rejects.toBe(torn);
-  await expect(
-    root.resolve(syncEndpoint).answer(new Request("http://localhost/api/sync")),
-  ).rejects.toBe(opened);
+  await expect(answer(root, unreadable)).rejects.toBe(torn);
+  await expect(answer(root, new Request("http://localhost/api/sync"))).rejects.toBe(opened);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
@@ -614,6 +666,7 @@ test("a dep whose parse fails fails the reply, not as a 400", async () => {
       requestHeaders(new Headers()),
     ],
     presets: [
+      ...proofServices((): Scope.Handle => root),
       preset(eventStream, async () => ({
         open: async (): Promise<ReadableStream<Uint8Array>> => {
           count("not a number");
@@ -624,10 +677,9 @@ test("a dep whose parse fails fails the reply, not as a 400", async () => {
   });
   await root.ready;
 
-  const failure = await root
-    .resolve(syncEndpoint)
-    .answer(new Request("http://localhost/api/sync"))
-    .catch((error: unknown) => error);
+  const failure = await answer(root, new Request("http://localhost/api/sync")).catch(
+    (error: unknown) => error,
+  );
   expect(failure).toMatchObject({ kind: "DataValidationFailed", payload: { label: "test.count" } });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -667,7 +719,11 @@ test("the event history locks a stream, appends in order, saves a result, and ke
       ),
   });
 
-  const root = createScope({ extensions: [startRequests], tags: bindings });
+  const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
+    extensions: [startRequests],
+    tags: bindings,
+  });
   await root.ready;
   expect(await root.run(save)).toEqual({
     locked: [0, 2],
@@ -697,6 +753,7 @@ test("the stream reads the account with no cookie cache and no refresh", async (
       requestHeaders(new Headers()),
     ],
     presets: [
+      ...proofServices((): Scope.Handle => root),
       preset(auth, () => ({
         handler: async () => new Response(null),
         api: {
@@ -736,6 +793,7 @@ test("a body cancelled while it waits stops its wait at once", async () => {
 
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     clock,
     tags: [
@@ -765,6 +823,7 @@ test("a body cancelled while it waits stops its wait at once", async () => {
 test("a graceful close of the request ends a held read", async () => {
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -789,6 +848,7 @@ test("a graceful close of the request ends a held read", async () => {
 test("a stream opened after a wake still replays; a signed-in tab with no account cursor gets the account frame at once", async () => {
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -833,6 +893,7 @@ test("a request that stops while its account is read gets a body that has alread
     extensions: [startRequests],
     tags: [bindings, backendStop(backend.signal), requestHeaders(new Headers())],
     presets: [
+      ...proofServices((): Scope.Handle => root),
       preset(auth, () => ({
         handler: async () => new Response(null),
         api: {
@@ -867,6 +928,7 @@ test("a query that fails errors the body, and the request still ends clean", asy
   });
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -890,6 +952,7 @@ test("a query that fails errors the body, and the request still ends clean", asy
 test("the sync part's work shows on the trace under its own names", async () => {
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     observe: { history: 50 },
     tags: [
@@ -902,9 +965,7 @@ test("the sync part's work shows on the trace under its own names", async () => 
   await root.ready;
   await root.run(publish, { input: { stream: "public", executionId: ids[0], changes: [1] } });
   const session = root.createSession();
-  const response = await session
-    .resolve(syncEndpoint)
-    .answer(new Request("http://localhost/api/sync"));
+  const response = await answer(session, new Request("http://localhost/api/sync"));
 
   const reader = response.body?.getReader();
   await reader?.read();
@@ -913,7 +974,17 @@ test("the sync part's work shows on the trace under its own names", async () => 
   expect((await session.close({ graceful: true })).status).toBe("success");
 
   const names = new Set(root.spans().map(({ name }) => name));
-  const parts = ["history", "endpoint", "open", "stream", "notifications", "liveAccount"];
+  const parts = [
+    "history",
+    "open",
+    "stream",
+    "streamLease",
+    "streamReader",
+    "frame",
+    "notifications",
+    "notificationWheel",
+    "liveAccount",
+  ];
   expect(parts.filter((part) => !names.has(`sync.${part}`))).toEqual([]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -922,26 +993,6 @@ test("the sync part's work shows on the trace under its own names", async () => 
  * The fixture database without its native listener: the test wakes streams by hand, so a commit
  * wakes none by itself.
  */
-function handWoken(logQuery?: (query: string) => void) {
-  const wakes: ((payload: string) => void)[] = [];
-  const db = preset(database, async (_deps, { defer }) => {
-    const { drizzle } = await import("drizzle-orm/pglite");
-    const client = await syncTemplate.clone();
-    defer(() => client.close());
-    return Object.assign(drizzle({ client, logger: logQuery ? { logQuery } : undefined }), {
-      listen: async (wake: (payload: string) => void) => {
-        wakes.push(wake);
-        return () => undefined;
-      },
-    });
-  });
-  return {
-    db,
-    wake: () => wakes.forEach((wake) => wake("sync_event")),
-    /** The notice an auth path sends on the sync channel, for one account. */
-    notice: (accountId: string) => wakes.forEach((wake) => wake(accountNotice(accountId))),
-  };
-}
 
 /**
  * An auth library whose account reads answer in turn; the last answer repeats. `during` runs
@@ -984,7 +1035,7 @@ test("a notice checks the account before the rows read, so a sign-out whose rows
   const root = createScope({
     extensions: [startRequests],
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
-    presets: [db, reads.auth],
+    presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
 
@@ -1013,7 +1064,7 @@ test("a save makes no account read on an open stream", async () => {
   const root = createScope({
     extensions: [startRequests],
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
-    presets: [db, reads.auth],
+    presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
   const session = root.createSession({ tags: requestHeaders(new Headers()) });
@@ -1054,6 +1105,7 @@ test("only the check after the rows read can stop rows of an account that signed
     extensions: [startRequests],
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [
+      ...proofServices((): Scope.Handle => root),
       db,
       preset(auth, () => ({
         handler: async () => new Response(null),
@@ -1100,6 +1152,7 @@ test("a notice re-reads only its account's streams; the one whose own session en
     extensions: [startRequests],
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [
+      ...proofServices((): Scope.Handle => root),
       db,
       preset(auth, () => ({
         handler: async () => new Response(null),
@@ -1175,7 +1228,7 @@ test("a notice that keeps its account sends no frame; the next save is the strea
   const root = createScope({
     extensions: [startRequests],
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
-    presets: [db, reads.auth],
+    presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
   const session = root.createSession({ tags: requestHeaders(new Headers()) });
@@ -1223,7 +1276,12 @@ test("a notice takes its stream off the wheel: closing the other waiter stops th
   };
 
   const { db, notice } = handWoken();
-  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
+    clock,
+    presets: [...proofServices((): Scope.Handle => root), db],
+  });
   await root.ready;
   const feed = await root.resolve(notifications);
   const ada = await feed.subscribe(undefined, "ada");
@@ -1261,7 +1319,12 @@ test("a saved change takes every stream off the wheel: closing one waiter stops 
   };
 
   const { db, wake } = handWoken();
-  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
+    clock,
+    presets: [...proofServices((): Scope.Handle => root), db],
+  });
   await root.ready;
   const feed = await root.resolve(notifications);
   const first = await feed.subscribe();
@@ -1298,7 +1361,12 @@ test("waiting again moves a stream's wheel slot instead of adding one", async ()
   };
 
   const { db } = handWoken();
-  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
+    clock,
+    presets: [...proofServices((): Scope.Handle => root), db],
+  });
   await root.ready;
   const feed = await root.resolve(notifications);
   const sub = await feed.subscribe();
@@ -1327,7 +1395,12 @@ test("a wait with no lease sleeps the wheel for nothing", async () => {
   };
 
   const { db } = handWoken();
-  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
+    clock,
+    presets: [...proofServices((): Scope.Handle => root), db],
+  });
   await root.ready;
   const feed = await root.resolve(notifications);
   const sub = await feed.subscribe();
@@ -1353,7 +1426,12 @@ test("the wheel sleeps until a stream's heartbeat, not for zero time", async () 
   };
 
   const { db } = handWoken();
-  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
+    clock,
+    presets: [...proofServices((): Scope.Handle => root), db],
+  });
   await root.ready;
   const feed = await root.resolve(notifications);
   const sub = await feed.subscribe();
@@ -1379,7 +1457,12 @@ test("a heartbeat takes its stream off the wheel, so the wheel sleeps no more", 
   };
 
   const { db } = handWoken();
-  const root = createScope({ extensions: [startRequests], tags: bindings, clock, presets: [db] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: bindings,
+    clock,
+    presets: [...proofServices((): Scope.Handle => root), db],
+  });
   await root.ready;
   const feed = await root.resolve(notifications);
   const sub = await feed.subscribe();
@@ -1402,7 +1485,7 @@ test("closing one waiter keeps the wheel running for the other's heartbeat", asy
     extensions: [startRequests],
     tags: bindings,
     clock: time,
-    presets: [db],
+    presets: [...proofServices((): Scope.Handle => root), db],
   });
   await root.ready;
   const feed = await root.resolve(notifications);
@@ -1434,7 +1517,7 @@ test("rows from wakes with no read pending wait for the next read, in one frame"
       requestStop(stop.signal),
       requestHeaders(new Headers()),
     ],
-    presets: [db],
+    presets: [...proofServices((): Scope.Handle => root), db],
   });
   await root.ready;
   const session = root.createSession();
@@ -1470,7 +1553,7 @@ test("a private stream sends each row once; a later frame carries only the new r
   const root = createScope({
     extensions: [startRequests],
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
-    presets: [db, reads.auth],
+    presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
   const session = root.createSession({ tags: requestHeaders(new Headers()) });
@@ -1518,7 +1601,7 @@ test("streams that share one read each get their own copy of its bytes", async (
       requestStop(stop.signal),
       requestHeaders(new Headers()),
     ],
-    presets: [db],
+    presets: [...proofServices((): Scope.Handle => root), db],
   });
   await root.ready;
   const first = root.createSession();
@@ -1559,7 +1642,7 @@ test("a sign-out frame is each stream's own copy", async () => {
   const root = createScope({
     extensions: [startRequests],
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
-    presets: [db, reads.auth],
+    presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
   const sessions = [
@@ -1601,6 +1684,7 @@ test("a listener that breaks while it connects fails the subscribe as disconnect
     extensions: [startRequests],
     tags: bindings,
     presets: [
+      ...proofServices((): Scope.Handle => root),
       preset(database, async (_deps, { defer }) => {
         const { drizzle } = await import("drizzle-orm/pglite");
         const client = await syncTemplate.clone();
@@ -1627,6 +1711,7 @@ test("a subscribe whose listener is replaced while it connects fails as disconne
     extensions: [startRequests],
     tags: bindings,
     presets: [
+      ...proofServices((): Scope.Handle => root),
       preset(database, async (_deps, { defer }) => {
         const { drizzle } = await import("drizzle-orm/pglite");
         const client = await syncTemplate.clone();
@@ -1657,6 +1742,7 @@ test("a closed subscriber is not told when the listener breaks", async () => {
     extensions: [startRequests],
     tags: bindings,
     presets: [
+      ...proofServices((): Scope.Handle => root),
       preset(database, async (_deps, { defer }) => {
         const { drizzle } = await import("drizzle-orm/pglite");
         const client = await syncTemplate.clone();
@@ -1693,7 +1779,7 @@ test("a quiet stream reads no account at its heartbeats; each notice reads it on
     extensions: [startRequests],
     clock,
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
-    presets: [db, reads.auth],
+    presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
 
@@ -1729,6 +1815,7 @@ test("a quiet stream reads no account at its heartbeats; each notice reads it on
 test("a request whose stream was never opened ends clean", async () => {
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -1751,6 +1838,7 @@ test("a request whose stream was never opened ends clean", async () => {
 test("a private cursor resumes past revision 0", async () => {
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -1776,6 +1864,7 @@ test("the lease closes a client that stopped reading", async () => {
   const clock = makeTestClock();
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     clock,
     tags: [
@@ -1819,7 +1908,7 @@ test("a notice closes a stream whose client stopped reading", async () => {
       requestStop(stop.signal),
       requestHeaders(new Headers()),
     ],
-    presets: [reads.auth],
+    presets: [...proofServices((): Scope.Handle => root), reads.auth],
   });
   await root.ready;
   const session = root.createSession();
@@ -1854,7 +1943,7 @@ test("streams at the same cursor share one read per wake and skip the empty read
       requestStop(stop.signal),
       requestHeaders(new Headers()),
     ],
-    presets: [db],
+    presets: [...proofServices((): Scope.Handle => root), db],
   });
   await root.ready;
   const first = root.createSession();
@@ -1898,6 +1987,7 @@ test("shared private rows keep accounts apart and check each session after sign-
     extensions: [startRequests],
     tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
     presets: [
+      ...proofServices((): Scope.Handle => root),
       db,
       preset(auth, () => ({
         handler: async () => new Response(null),
@@ -1981,6 +2071,7 @@ test("a failed shared row read can be retried by another open stream", async () 
   });
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
       bindings,
@@ -2017,6 +2108,7 @@ test("staggered streams keep their own heartbeat and lease times", async () => {
   const clock = makeTestClock();
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     clock,
     tags: [
@@ -2070,6 +2162,7 @@ test("a failed clock wait errors every stream waiting on it", async () => {
   const error = { kind: "clock-failed" };
   const stop = new AbortController();
   const root = createScope({
+    presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     clock: {
       currentTimeMillis: () => time.currentTimeMillis(),
@@ -2105,5 +2198,24 @@ test("a failed clock wait errors every stream waiting on it", async () => {
   ]);
   expect((await first.close({ graceful: true })).status).toBe("success");
   expect((await second.close({ graceful: true })).status).toBe("success");
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a new wait starts a clock when the last expired waiter resumes", async () => {
+  const clock = makeTestClock();
+  const { db } = handWoken();
+  const root = createScope({ presets: [...proofServices((): Scope.Handle => root), db], clock });
+  const feed = await root.resolve(notifications);
+  const subscriber = await feed.subscribe();
+
+  const first = feed.wait(subscriber, feed.revision(), 30_000);
+  clock.advance(10_000);
+  expect(await first).toBe(true);
+
+  const next = feed.wait(subscriber, feed.revision(), 30_000);
+  clock.advance(10_000);
+  expect(await next).toBe(true);
+
+  feed.close(subscriber);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

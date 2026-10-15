@@ -1,9 +1,38 @@
+import { createRouterEntry } from "~/base/router-entry";
+import type { RouterOptions } from "~/base/router-entry";
+import { records } from "@/records";
+import { readBatch, readBootstrap, readSnapshot, streamMessage } from "@/contracts";
+import {
+  sync,
+  recordsSlot,
+  readBatchSlot,
+  readBootstrapSlot,
+  readSnapshotSlot,
+  streamMessageSlot,
+} from "~/components/sync";
+import { telemetry, logConsole } from "~/components/telemetry";
+
 export const extensions = [];
-export { records } from "@/records";
-export { readSnapshot, readBootstrap, readBatch, streamMessage } from "@/contracts";
+export const router: RouterOptions = {};
+
+export const getRouter = createRouterEntry({
+  sync,
+  telemetry,
+  toolTags: [logConsole(console)],
+  tags: [
+    recordsSlot(records),
+    readBatchSlot(readBatch),
+    readBootstrapSlot(readBootstrap),
+    readSnapshotSlot(readSnapshot),
+    streamMessageSlot(streamMessage),
+  ],
+  extensions,
+  router,
+});
+
 import type { Notes } from "@/contracts";
-/** This different app merges the registry without the example's feature types. */
-declare module "@tinker/start" {
+/** This app supplies only note bodies to the copied sync component. */
+declare module "~/components/sync" {
   interface Register {
     change: Notes.Change;
     result: Notes.Result;
@@ -11,5 +40,3 @@ declare module "@tinker/start" {
     private: Notes.Private;
   }
 }
-
-export const router: import("@tinker/start").RouterOptions = {};

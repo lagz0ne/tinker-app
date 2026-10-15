@@ -73,23 +73,18 @@ test("auth needs only the default command export; app wiring is checked at run t
   expect(checked.status).toBe("ok");
 });
 
-test("sync names missing client exports and the open type registry", () => {
+test("copied sync reads no client command exports or package Register", () => {
   const root = goodApp({
     ".tinker/base.json": '{"parts":["auth","sync"]}',
     "cmds/server.ts": "export default 1;",
-    "cmds/router.ts": "export const router = () => ({}); export const extensions = [];",
+    "cmds/router.ts": "export const router = {}; export const extensions = [];",
   });
-
-  const checked = named(root);
-
-  expect(checked.lines).toEqual([
-    "cmds/router.ts:1 does not export records; the sync part reads it",
-    "cmds/router.ts:1 does not export readSnapshot; the sync part reads it",
-    "cmds/router.ts:1 does not export readBootstrap; the sync part reads it",
-    "cmds/router.ts:1 does not export readBatch; the sync part reads it",
-    "cmds/router.ts:1 does not export streamMessage; the sync part reads it",
-    'src/ adds no Register bodies to "@tinker/start"; the sync part reads them: declare module "@tinker/start" { interface Register { … } }',
-  ]);
+  expect(named(root)).toEqual({
+    status: "ok",
+    lines: [
+      "each named or seam file exports what the base reads (cmds/router.ts, cmds/server.ts); no Start file is ignored",
+    ],
+  });
 });
 
 test("doctor reads client command exports from an object pattern", () => {

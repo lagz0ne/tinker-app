@@ -1,21 +1,20 @@
 import type { Scope } from "@tinker/core";
 import { createScope, isError as isCoreError } from "@tinker/core";
-import { authSettings, serverParts, startRequests } from "@tinker/start/server";
+import { authSettings, startRequests } from "@tinker/start/server";
 import { test, expect } from "vite-plus/test";
 
-import { auth } from "~/components/auth/index.server";
-import { database } from "~/components/database/index.server";
 import { migrate, databaseUrl } from "~/components/database/index.server";
 import { listTodos, changeTodo } from "~/components/demo/backend/todos.server";
 import { raise, isError } from "~/components/demo/errors";
 import * as demo from "~/components/demo/index.server";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
 import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const tags = [
-  serverParts({ auth, database, bootstrap: demo.bootstrap, readAccount: demo.readAccount }),
+  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",

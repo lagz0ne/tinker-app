@@ -1,8 +1,14 @@
-import { eventEnvelope, snapshotEnvelope, batchEnvelope, bootstrapEnvelope } from "@tinker/start";
 import { z } from "zod";
 
-export { readExecution, readCursor, readPrivateCursor, readRetry } from "@tinker/start";
-export type { Sync } from "@tinker/start";
+import {
+  eventEnvelope,
+  snapshotEnvelope,
+  batchEnvelope,
+  bootstrapEnvelope,
+} from "~/components/sync";
+
+export { readExecution, readCursor, readPrivateCursor, readRetry } from "~/components/sync";
+export type { Sync } from "~/components/sync";
 
 export declare namespace FeatureSync {
   type Change = z.infer<typeof change>;

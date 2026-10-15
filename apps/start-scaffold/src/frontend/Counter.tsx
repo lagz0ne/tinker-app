@@ -1,8 +1,8 @@
 import { operation } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
-import { syncClient } from "@tinker/start/client";
 
 import { counter } from "~/components/demo";
+import { syncClient } from "~/components/sync";
 
 import { updateCounter } from "@/transport/counter.functions";
 

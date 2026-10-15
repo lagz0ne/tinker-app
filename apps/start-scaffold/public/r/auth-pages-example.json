@@ -9,14 +9,14 @@
       "path": "src/examples/auth-pages-example.tinker.json",
       "target": "~/src/examples/auth-pages-example.tinker.json",
       "type": "registry:file",
-      "content": "{\n  \"name\": \"auth-pages-example\",\n  \"parts\": [\n    \"auth\",\n    \"sync\"\n  ]\n}\n"
+      "content": "{\n  \"name\": \"auth-pages-example\",\n  \"parts\": [\n    \"auth\"\n  ]\n}\n"
     }
   ],
   "meta": {
     "version": "0.6.0",
     "ownership": "userland",
     "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
-    "parts": ["auth", "sync"],
+    "parts": ["auth"],
     "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand."
   },
   "registryDependencies": [

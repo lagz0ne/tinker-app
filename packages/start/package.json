@@ -27,8 +27,7 @@
       "default": "./vite.mjs"
     },
     "./package.json": "./package.json",
-    "./testing": "./src/testing.ts",
-    "./router": "./src/router.ts"
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "release": "node scripts/pack.mjs",
@@ -93,33 +92,6 @@
             "rule": "secret"
           }
         }
-      },
-      "sync": {
-        "on": false,
-        "needs": [
-          "auth"
-        ],
-        "entries": {
-          "router": "on.ts"
-        },
-        "routes": {
-          "/api/sync": "src/routes/api.sync.ts"
-        },
-        "reads": {
-          "#tinker/router": [
-            "records",
-            "readSnapshot",
-            "readBootstrap",
-            "readBatch",
-            "streamMessage"
-          ]
-        },
-        "augments": {
-          "@tinker/start": [
-            "Register"
-          ]
-        },
-        "env": {}
       }
     }
   }

@@ -1,32 +1,6 @@
-import { operation, resource, tag } from "@tinker/core";
-import type { Database } from "@tinker/start/server";
-import type { BetterAuthPlugin } from "better-auth";
-import type { Sync } from "@tinker/start";
-export const databaseSettings = tag<{ url: string; migrations: string }>({ label: "note.database.settings" });
-export const database = resource({
-  label: "note.database",
-  factory: async (_deps, { defer }): Promise<Database.Handle> => {
-    const [{ PGlite }, { drizzle }] = await Promise.all([import("@electric-sql/pglite"), import("drizzle-orm/pglite")]);
-    const client = await PGlite.create();
-    defer(() => client.close());
-    return Object.assign(drizzle({ client }), { listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake) });
-  },
-});
-export const authSettings = tag<{
-  origin: string | { allowedHosts: string[]; fallback: string };
-  secret: string;
-  plugins: BetterAuthPlugin[];
-}>({ label: "note.auth.settings" });
-export const auth = resource({
-  label: "note.auth",
-  depends: { settings: authSettings },
-  factory: async ({ settings }) => {
-    const { betterAuth } = await import("better-auth");
-    return betterAuth({ baseURL: settings.origin, secret: settings.secret, plugins: settings.plugins });
-  },
-});
-export const mailSettings = tag<{ host: string; port: number; user: string; password: string; from: string }>({ label: "note.mail.settings" });
-export const migrate = operation({ label: "note.migrate", run: () => undefined });
+import { operation } from "@tinker/core";
+import type { Sync } from "~/components/sync";
+
 export const readAccount = operation({ label: "note.account", run: (): string | null => null });
 export const bootstrap = operation({
   label: "note.bootstrap",

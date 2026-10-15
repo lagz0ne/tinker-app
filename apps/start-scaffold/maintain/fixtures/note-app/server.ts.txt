@@ -1,38 +1,63 @@
-import { startRequests } from "~/components/requests";
-import { backendStop } from "~/components/requests/index.server";
+import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
-import * as start from "@tinker/start/server";
 
 import { createScopeClose } from "~/base/close";
 import { renderObservation } from "~/base/observe";
 import { observeServerPanics } from "~/base/panics.server";
 import { createServerHandler } from "~/base/server-entry";
 import type { ServerEntry } from "~/base/server-entry";
-
-import { auth, bootstrap, database, readAccount } from "@/notes.server";
+import {
+  authStartup,
+  sendAuthMail,
+  sessionDeleted,
+  settings as authSettingsFromEnv,
+} from "~/components/auth/index.server";
+import { databaseSetup, settings as databaseSettings } from "~/components/database/index.server";
+import { bootstrap, readAccount } from "@/notes.server";
+import * as mail from "~/components/mail/index.server";
+import { startRequests, backendStop } from "~/components/requests";
+import {
+  bootstrapSlot,
+  readAccountSlot,
+  publishAccountNotice,
+} from "~/components/sync/index.server";
+import {
+  telemetry,
+  consoleOutput,
+  settings as telemetrySettings,
+} from "~/components/telemetry/index.server";
 
 const values = { ...process.env };
-const parts = { auth, bootstrap, database, readAccount };
-const appTags = [start.auth.settings(values), start.serverParts(parts)];
+
+const appTags = [authSettingsFromEnv(values), databaseSettings(values), mail.settings(values)];
+
 const stop = { tools: new AbortController(), app: new AbortController() };
 
 const tools = createScope({
   signal: stop.tools.signal,
-  extensions: start.telemetry.extensions,
-  tags: [start.telemetry.settings(values), start.telemetry.tags],
+  extensions: telemetry.extensions,
+  tags: [telemetrySettings(values), telemetry.tags, consoleOutput(process.stdout)],
 });
 
 await tools.ready;
 
-const app = createScope({
+const app: Scope.RootHandle = createScope({
   signal: stop.app.signal,
-  observe: tools.resolve(start.telemetry.observe),
-  extensions: [startRequests, start.auth.extensions],
-  tags: [backendStop(stop.app.signal), renderObservation(tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs })), appTags, tools.resolve(start.telemetry.appTags)],
+  observe: tools.resolve(telemetry.observe),
+  extensions: [startRequests, authStartup, databaseSetup],
+  tags: [
+    bootstrapSlot(bootstrap),
+    readAccountSlot(readAccount),
+    sendAuthMail((message) => app.resolve(mail.authMail).enqueue(message)),
+    sessionDeleted((accountId) => app.run(publishAccountNotice, { rawInput: { accountId } })),
+    backendStop(stop.app.signal),
+    renderObservation(tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs })),
+    appTags,
+    tools.resolve(telemetry.appTags),
+  ],
 });
 
 const close = createScopeClose({ tools, app }, stop);
-
 await app.ready.catch(close);
 
 const server = {
@@ -46,5 +71,6 @@ if (import.meta.hot) {
   import.meta.hot.dispose(close);
   import.meta.hot.on("vite:beforeFullReload", close);
 }
+
 export { close };
 export default createServerHandler(server);

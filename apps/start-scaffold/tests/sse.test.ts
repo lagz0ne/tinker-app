@@ -2,12 +2,11 @@ import type { Scope } from "@tinker/core";
 import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { syncClient, applyBootstrap } from "@tinker/start/client";
-import { authSettings, serverParts, startRequests } from "@tinker/start/server";
+import { authSettings, startRequests } from "@tinker/start/server";
 import { accountOwner, tabStop, receiveMessage } from "@tinker/start/testing";
 import { openSync, notifications, backendStop, requestStop } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
-import { auth } from "~/components/auth/index.server";
 import { database, migrate, databaseUrl } from "~/components/database/index.server";
 import { streamMessage } from "~/components/demo";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
@@ -17,13 +16,16 @@ import { isError, raise } from "~/components/demo/errors";
 import * as demo from "~/components/demo/index.server";
 import { mail } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+import { syncRecords } from "~/components/sync/slots";
 
+import { clientBindings } from "./presets";
 import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const settings = [
-  serverParts({ auth, database, bootstrap: demo.bootstrap, readAccount: demo.readAccount }),
+  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -231,8 +233,8 @@ test("reconnecting from applied cursors finishes a save whose final event commit
 
   const browser = createScope({
     signal: stop.signal,
-    extensions: [startRequests, accountOwner],
-    tags: [tabStop(stop.signal), authBindings((): Scope.Handle => browser)],
+    extensions: [syncRecords, startRequests, accountOwner],
+    tags: [clientBindings, tabStop(stop.signal), authBindings((): Scope.Handle => browser)],
   });
 
   await Promise.all([server.ready, browser.ready]);

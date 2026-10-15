@@ -5,4 +5,4 @@ export const counter = pgTable("public_counter", {
   value: integer().notNull().default(0),
 });
 
-export { event, execution, stream } from "@tinker/start/server";
+export { event, execution, stream } from "~/components/sync/index.server";

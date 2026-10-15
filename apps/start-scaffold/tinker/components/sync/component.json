@@ -1,0 +1,3 @@
+{
+  "requires": ["errors", "requests", "auth", "database"]
+}

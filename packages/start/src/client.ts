@@ -1,2 +1,8 @@
-export { syncClient, applyBootstrap, applyEvents, leaveAccount } from "./parts/sync/client/sync";
-export { snapshotLoader, loadSnapshot, checkAccount } from "./parts/sync/client/events";
+export {
+  syncClient,
+  applyBootstrap,
+  applyEvents,
+  leaveAccount,
+} from "~/components/sync/client/sync";
+
+export { snapshotLoader, loadSnapshot, checkAccount } from "~/components/sync/client/events";

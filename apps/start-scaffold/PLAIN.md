@@ -93,6 +93,15 @@ Tests and generated files do not count.
     - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
     - `tinker/components/requests/render-lifetime.server.ts#retain`
     - `tinker/components/requests/start.ts#middleware.callback`
+    - `tinker/components/sync/client/sync.ts#client.execute`
+    - `tinker/components/sync/client/sync.ts#client.wait`
+    - `tinker/components/sync/history.server.ts#append`
+    - `tinker/components/sync/history.server.ts#find`
+    - `tinker/components/sync/history.server.ts#lock`
+    - `tinker/components/sync/notifications.server.ts#subscribe`
+    - `tinker/components/sync/stream.server.ts#lease.check`
+    - `tinker/components/sync/stream.server.ts#lease.open`
+    - `tinker/components/sync/stream.server.ts#lease.wait`
     - `tinker/components/telemetry/ingest.server.ts#receiveTelemetry.run`
     - `tinker/components/telemetry/settings.ts#settings`
 
@@ -102,12 +111,16 @@ Tests and generated files do not count.
   - Callers:
     - `tinker/components/errors/errors.ts#raise`
     - `tinker/components/requests/result.server.ts#readResult`
+    - `tinker/components/sync/client/sync.ts#client.leave`
+    - `tinker/components/sync/client/sync.ts#stop.stop`
+    - `tinker/components/sync/client/sync.ts#syncClient.factory.callback1`
 
 - **tinker/components/errors/errors.ts#isError**
   - `error`: `unknown`. From a caught failure; why: narrow its payload.
   - `kind`: `N`. From the caller; why: select the expected error.
   - Callers:
     - `src/frontend/error-text.ts#errorText`
+    - `src/routes/api.sync.ts#Route.GET`
     - `src/transport/result.server.ts#readReceipt`
 
 - **tinker/components/mail/settings.server.ts#settings**
@@ -121,9 +134,19 @@ Tests and generated files do not count.
     - `src/routes/api.auth.$.ts#Route.GET`
     - `src/routes/api.auth.$.ts#Route.POST`
     - `src/routes/api.health.ts#Route.GET`
+    - `src/routes/api.sync.ts#Route.GET`
     - `src/routes/api.telemetry.ts#Route.POST`
     - `src/transport/profile.functions.ts#getProfile.callback`
     - `src/transport/todos.functions.ts#getTodos.callback`
+    - `tinker/components/sync/functions.ts#getAccount.callback`
+    - `tinker/components/sync/functions.ts#getBootstrap.callback`
+    - `tinker/components/sync/notifications.server.ts#share`
+
+- **tinker/components/sync/notice.ts#accountNotice**
+  - `accountId`: `string`. From the auth path; why: the account whose streams must re-read.
+  - Callers:
+    - `tinker/components/sync/notifications.server.ts#notifications.factory`
+    - `tinker/components/sync/publish.server.ts#publishAccountNotice.run`
 
 - **tinker/components/telemetry/records.ts#encodeValue**
   - `value`: `unknown`. From a span or log attribute; why: bound and safely encode its wire value.

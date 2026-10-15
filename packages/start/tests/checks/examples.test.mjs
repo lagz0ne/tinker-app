@@ -16,10 +16,10 @@ test("an installed example names each missing part switch", () => {
   ]);
 });
 
-test("with its parts on, the app owns the example's wiring", () => {
+test("with its remaining package part on, the app owns the example's wiring", () => {
   const root = goodApp({
     ".tinker/base.json": '{"parts":["auth","sync"]}',
-    "src/examples/demo.tinker.json": JSON.stringify({ name: "demo", parts: ["auth", "sync"] }),
+    "src/examples/demo.tinker.json": JSON.stringify({ name: "demo", parts: ["auth"] }),
   });
 
   const checked = examples(root);

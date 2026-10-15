@@ -1,26 +1,7 @@
-import { extension, resource } from "@tinker/core";
+import { extension } from "@tinker/core";
 
-import { abortReasons } from "../../../errors";
-import { pageEvents, tabStop } from "./tab";
-
-/** Listens while the factory runs; `bind` only names what to close on a real page hide. */
-export const tabLifetime = resource({
-  label: "router.tabLifetime",
-  depends: { target: pageEvents },
-  factory: ({ target }, { defer }) => {
-    let close: (() => Promise<void>) | undefined;
-    const leave = (event: Event) => {
-      if (!("persisted" in event) || !event.persisted) return close?.();
-    };
-    target?.addEventListener("pagehide", leave);
-    defer(() => target?.removeEventListener("pagehide", leave));
-    return {
-      bind: (next: () => Promise<void>) => {
-        close = next;
-      },
-    };
-  },
-});
+import { abortReasons } from "~/components/errors";
+import { tabStop } from "~/components/sync/client/tab";
 
 /**
  * Who the tab's work belongs to: a version that changes on each account exit, and a signal that

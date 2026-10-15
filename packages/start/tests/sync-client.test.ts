@@ -5,7 +5,11 @@ import { applyBootstrap, applyEvents, leaveAccount, syncClient } from "@tinker/s
 import { accountOwner, tabLifetime, pageEvents, tabStop } from "@tinker/start/testing";
 import { expect, test } from "vite-plus/test";
 
+import { syncRecords } from "~/components/sync/slots";
+
 import { applied, savedPrivate, savedPublic } from "#tinker/router";
+
+import { clientBindings } from "./fixtures/app";
 
 /** A page hide event; `persisted` true means the tab went into the back-forward cache. */
 const hide = (persisted: boolean) => Object.assign(new Event("pagehide"), { persisted });
@@ -37,7 +41,7 @@ const result = (stream: string, revision: number, executionId: string): Sync.Eve
 
 test("binding after the factory ends closes the tab once on a real page hide", async () => {
   const page = new EventTarget();
-  const root = createScope({ tags: pageEvents(page) });
+  const root = createScope({ tags: [clientBindings, pageEvents(page)] });
   let closes = 0;
   root.resolve(tabLifetime).bind(async () => {
     closes += 1;
@@ -63,7 +67,10 @@ test("the server side has no page and binds without listening", async () => {
 
 test("the account owner versions each account and stops its work; the tab stop stops it too", async () => {
   const tab = new AbortController();
-  const root = createScope({ extensions: [accountOwner], tags: tabStop(tab.signal) });
+  const root = createScope({
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(tab.signal)],
+  });
   await root.ready;
   const owner = root.resolve(accountOwner);
   const first = owner.capture();
@@ -83,8 +90,8 @@ test("the account owner versions each account and stops its work; the tab stop s
 
 test("closing the root stops the account's work", async () => {
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   const { signal } = root.resolve(accountOwner).capture();
@@ -94,8 +101,8 @@ test("closing the root stops the account's work", async () => {
 
 test("a snapshot sets the records and cursors once; a stale version or an older snapshot is ignored", async () => {
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   const client = root.resolve(syncClient);
@@ -129,8 +136,8 @@ test("a snapshot sets the records and cursors once; a stale version or an older 
 
 test("events apply in order: a repeat is skipped, a gap stops the batch, an unknown stream is skipped", async () => {
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
@@ -179,8 +186,8 @@ test("an event before its receipt finishes the write only after the receipt, wit
   });
 
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
@@ -216,8 +223,8 @@ test("a receipt before its event waits for the result event", async () => {
       ),
   });
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
 
   await root.ready;
@@ -258,8 +265,8 @@ test("a rejected write fails with its message; a send that throws is retried aft
   const logs: string[] = [];
   const root = createScope({
     clock,
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
     observe: { log: ({ message }) => logs.push(message) },
   });
   await root.ready;
@@ -302,8 +309,8 @@ test("an account exit stops local waits and ignores the old account's late event
       ),
   });
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
 
   await root.ready;
@@ -350,8 +357,8 @@ test("a snapshot for another account while a write is pending leaves the account
   });
 
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
@@ -391,7 +398,10 @@ test("closing the root cancels a write that waits for its result", async () => {
   });
 
   const tab = new AbortController();
-  const root = createScope({ extensions: [accountOwner], tags: tabStop(tab.signal) });
+  const root = createScope({
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(tab.signal)],
+  });
   await root.ready;
   root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
   const writing = root.settle(send);
@@ -442,8 +452,8 @@ function heldWrite(executionId: string, call: AbortSignal) {
 
 test("an anonymous snapshot keeps the tab anonymous on the public stream", async () => {
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   const client = root.resolve(syncClient);
@@ -460,8 +470,8 @@ test("an anonymous snapshot keeps the tab anonymous on the public stream", async
 
 test("an account that leaves and joins again takes its snapshot afresh", async () => {
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   const client = root.resolve(syncClient);
@@ -481,8 +491,8 @@ test("an account that leaves and joins again takes its snapshot afresh", async (
 
 test("a wait for an old account version, or with a stopped signal, fails at once", async () => {
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   const client = root.resolve(syncClient);
@@ -502,8 +512,8 @@ test("a wait for an old account version, or with a stopped signal, fails at once
 
 test("closing the root fails a wait that no signal stops", async () => {
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   const client = root.resolve(syncClient);
@@ -515,8 +525,8 @@ test("closing the root fails a wait that no signal stops", async () => {
 
 test("an account exit fails a wait that no signal stops", async () => {
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   const client = root.resolve(syncClient);
@@ -531,8 +541,8 @@ test("a result for a write this tab did not send is not kept for a later write o
   const call = new AbortController();
   const { write, sent, reply } = heldWrite(ids[2], call.signal);
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
@@ -563,8 +573,8 @@ test("a result for a write this tab did not send is not kept for a later write o
 
 test("a finished write forgets its id: a repeat waits for its own result", async () => {
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
@@ -618,8 +628,8 @@ test("a call stopped before it sends fails at once, and sends nothing", async ()
   const { write } = heldWrite(ids[1], call.signal);
   let sends = 0;
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
 
   await root.ready;
@@ -674,8 +684,8 @@ test("a send that fails because its call stopped fails with its own error, and i
   });
 
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
     observe: { log: ({ message }) => logs.push(message) },
   });
   await root.ready;
@@ -689,8 +699,8 @@ test("a result that lands as its call stops fails the call", async () => {
   const call = new AbortController();
   const { write, sent, reply } = heldWrite(ids[1], call.signal);
   const root = createScope({
-    extensions: [accountOwner],
-    tags: tabStop(new AbortController().signal),
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(new AbortController().signal)],
   });
   await root.ready;
   root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
@@ -711,8 +721,8 @@ test("a result that lands as its call stops fails the call", async () => {
 test("the sync client's work shows on the trace under its own names", async () => {
   const root = createScope({
     observe: { history: 30 },
-    extensions: [accountOwner],
-    tags: [tabStop(new AbortController().signal), pageEvents(new EventTarget())],
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, [tabStop(new AbortController().signal), pageEvents(new EventTarget())]],
   });
   await root.ready;
   root.run(applyBootstrap, { input: { snapshot: ada, version: 0 } });
@@ -734,14 +744,14 @@ test("the sync client's work shows on the trace under its own names", async () =
 });
 
 test("the account owner needs the tab's stop signal bound", async () => {
-  const root = createScope({ extensions: [accountOwner] });
+  const root = createScope({ tags: clientBindings, extensions: [syncRecords, accountOwner] });
   await expect(root.ready).rejects.toMatchObject({ payload: { label: "sync.tabStop" } });
   await root.close();
 });
 
 test("a page hide before anything is bound closes nothing; a root with no page ends clean", async () => {
   const page = new EventTarget();
-  const root = createScope({ tags: pageEvents(page) });
+  const root = createScope({ tags: [clientBindings, pageEvents(page)] });
   root.resolve(tabLifetime);
 
   expect(() => page.dispatchEvent(hide(false))).not.toThrow();

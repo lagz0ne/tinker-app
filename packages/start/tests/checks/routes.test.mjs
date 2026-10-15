@@ -111,16 +111,16 @@ test("names each of the six ways a route takes a legacy package path", () => {
   ]);
 });
 
-test("a route on an on part's path names the switch that frees it", () => {
+test("copied sync and nested app routes need no package switch", () => {
   const root = goodApp({
     ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: ["auth", "sync"] }),
     "src/routes/api.sync.ts": page("/api/sync"),
     "src/routes/api/sync/raw.ts": page("/api/sync/raw"),
   });
-  expect(routes(root).lines.sort()).toEqual([
-    "src/routes/api.sync.ts:2 takes /api/sync, a base route; tinker({ sync: false }) frees it",
-    "src/routes/api/sync/raw.ts:2 nests under /api/sync, a base route with no outlet; the base page renders; tinker({ sync: false }) frees it",
-  ]);
+  expect(routes(root)).toEqual({
+    status: "ok",
+    lines: ["route files export Route; none takes a base path ()"],
+  });
 });
 
 test("with the part off, as the last tinker() call recorded, its path is the app's", () => {
@@ -188,14 +188,15 @@ test("with auth off, as by default, /api/auth/ is the app's", () => {
   expect(routes(root).status).toBe("ok");
 });
 
-test("with sync on, a route at /api/sync names the switch that frees it", () => {
+test("an old sync record does not claim the app's copied route", () => {
   const root = goodApp({
     ".tinker/base.json": JSON.stringify({ base: "0.5.0", parts: ["auth", "sync"] }),
     "src/routes/api.sync.ts": page("/api/sync"),
   });
-  expect(routes(root).lines).toEqual([
-    "src/routes/api.sync.ts:2 takes /api/sync, a base route; tinker({ sync: false }) frees it",
-  ]);
+  expect(routes(root)).toEqual({
+    status: "ok",
+    lines: ["route files export Route; none takes a base path ()"],
+  });
   expect(routes(goodApp({ "src/routes/api.sync.ts": page("/api/sync") })).status).toBe("ok");
 });
 

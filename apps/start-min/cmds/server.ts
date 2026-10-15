@@ -1,5 +1,4 @@
 import { createScope } from "@tinker/core";
-import * as start from "@tinker/start/server";
 
 import { createScopeClose } from "~/base/close";
 import { renderObservation } from "~/base/observe";
@@ -14,7 +13,6 @@ import {
 } from "~/components/telemetry/index.server";
 
 const values = { ...process.env };
-const appTags = [start.auth.settings(values)];
 const stop = { tools: new AbortController(), app: new AbortController() };
 
 const tools = createScope({
@@ -28,11 +26,10 @@ await tools.ready;
 const app = createScope({
   signal: stop.app.signal,
   observe: tools.resolve(telemetry.observe),
-  extensions: [startRequests, start.auth.extensions],
+  extensions: [startRequests],
   tags: [
     backendStop(stop.app.signal),
     renderObservation(tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs })),
-    appTags,
     tools.resolve(telemetry.appTags),
   ],
 });

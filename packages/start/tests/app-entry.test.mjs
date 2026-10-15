@@ -89,14 +89,14 @@ async function loadEntry(wiring, entry = source) {
     ),
     "cmds/server.ts": entry
       .replace(
-        'import * as start from "@tinker/start/server";',
-        'import * as start from "@tinker/start/server";\nimport { extensions, settings } from "~/components/proof/index.server";',
+        "const values =",
+        'import { extensions, settings } from "~/components/proof/index.server";\nconst values =',
       )
+      .replace("extensions: [startRequests]", "extensions: [startRequests, extensions]")
       .replace(
-        "const appTags = [start.auth.settings(values)];",
-        "const appTags = [start.auth.settings(values), settings(values)];",
-      )
-      .replace("start.auth.extensions]", "start.auth.extensions, extensions]"),
+        "backendStop(stop.app.signal),",
+        "settings(values),\n    backendStop(stop.app.signal),",
+      ),
     "tinker/components/proof/component.json": '{"requires":[]}',
     "tinker/components/proof/index.server.ts": wiring,
   });
@@ -167,12 +167,10 @@ test("an app startup failure closes the entry's roots and keeps the original err
   const { vite, root } = await loadEntry(
     wiring.replace('events.push("app.ready");', "throw failure;") +
       'export const failure = { kind: "proof.startup" };\nexport const toolsClosed = [];\n',
-    source
-      .replace(
-        'import * as start from "@tinker/start/server";',
-        'import * as start from "@tinker/start/server";\nimport { toolsClosed } from "~/components/proof/index.server";',
-      )
-      .replace("await tools.ready;", "await tools.ready;\ntoolsClosed.push(tools.closed);"),
+    source.replace(
+      "await tools.ready;",
+      'await tools.ready;\nconst { toolsClosed } = await import("~/components/proof/index.server");\ntoolsClosed.push(tools.closed);',
+    ),
   );
   const proof = await vite.ssrLoadModule(join(root, "tinker/components/proof/index.server.ts"));
 

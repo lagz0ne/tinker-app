@@ -1,4 +1,4 @@
-export { auth, principal } from "./auth.server";
+export { auth, principal, liveAccount } from "./auth.server";
 export { handleAuth } from "./handle.server";
 export { authSettings, authStartup, settings } from "./settings.server";
 export type { Auth } from "./settings.server";

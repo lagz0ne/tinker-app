@@ -3,12 +3,19 @@ import type { Many, Scope } from "@tinker/core";
 import { z } from "zod";
 
 import {
+  recordsSlot,
+  readBatchSlot,
+  readBootstrapSlot,
+  readSnapshotSlot,
+  streamMessageSlot,
+} from "~/components/sync";
+import {
   batchEnvelope,
   bootstrapEnvelope,
   eventEnvelope,
   snapshotEnvelope,
-} from "../../src/parts/sync/envelopes";
-import type { Sync } from "../../src/parts/sync/envelopes";
+} from "~/components/sync/envelopes";
+import type { Sync } from "~/components/sync/envelopes";
 
 /**
  * A stand-in client seam for the base's own tests and type check, as `#tinker/router`: the names
@@ -59,3 +66,11 @@ export const streamMessage = z.discriminatedUnion("kind", [
 ]);
 
 export const router: import("../../src/index").RouterOptions = {};
+
+export const clientBindings = [
+  recordsSlot(records),
+  readBatchSlot(readBatch),
+  readBootstrapSlot(readBootstrap),
+  readSnapshotSlot(readSnapshot),
+  streamMessageSlot(streamMessage),
+];

@@ -91,7 +91,7 @@ test("a recorded part this base does not have is left out", () => {
     ".tinker/base.json": JSON.stringify({ base: "9.0.0", parts: ["telemetry", "later"] }),
   });
   expect(recordedParts(root)).toEqual([]);
-  expect(Object.keys(basePackage.tinker.parts)).toEqual(["auth", "sync"]);
+  expect(Object.keys(basePackage.tinker.parts)).toEqual(["auth"]);
 });
 
 test("auth is off by default, and tinker({ auth: true }) turns it on", () => {
@@ -123,26 +123,25 @@ test("a secret takes at least 32 characters", () => {
   expect(rules.secret.accepts("s".repeat(32))).toBe(true);
 });
 
-test("sync is off by default; on, it turns auth on, and says so", () => {
+test("copied sync has no switch or generated activation note", () => {
   expect(partsOn({})).toEqual([]);
-  expect(partsOn({ sync: true })).toEqual(["auth", "sync"]);
-  expect(partsOn({ sync: true, auth: true, telemetry: false })).toEqual(["auth", "sync"]);
-  expect(partNotes(["auth", "sync"])).toEqual(["sync turns auth on"]);
+  expect(() => passThrough({ sync: true })).toThrow("tinker(): unknown option sync");
   expect(partNotes(["auth"])).toEqual([]);
 });
 
-test("sync with auth: false fails the build with the two ways out", () => {
-  expect(() => partsOn({ sync: true, auth: false })).toThrow(
-    "tinker(): sync needs auth, but auth is false; drop auth: false, or set sync: false",
-  );
-  expect(partsOn({ sync: false, auth: false })).toEqual([]);
+test("sync cannot be toggled off or paired with an auth switch", () => {
+  for (const sync of [false, true]) {
+    expect(() => passThrough({ sync, auth: false })).toThrow("tinker(): unknown option sync");
+  }
 });
 
-test("the sync part mounts /api/sync, reads the router seam and the Register bodies, and no env key", () => {
-  expect(parts.sync.routes).toEqual({ "/api/sync": "src/routes/api.sync.ts" });
-  expect(parts.sync.reads).toEqual({
-    "#tinker/router": ["records", "readSnapshot", "readBootstrap", "readBatch", "streamMessage"],
-  });
-  expect(parts.sync.augments).toEqual({ "@tinker/start": ["Register"] });
-  expect(readPartEnv(parts.sync.env, {})).toEqual({ values: {}, refused: [] });
+test("copied sync declares its direct dependencies and owns no env table", () => {
+  const manifest = JSON.parse(
+    readFileSync(
+      join(baseDir, "../../apps/start-scaffold/tinker/components/sync/component.json"),
+      "utf8",
+    ),
+  );
+  expect(parts.sync).toBeUndefined();
+  expect(manifest).toEqual({ requires: ["errors", "requests", "auth", "database"] });
 });

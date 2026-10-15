@@ -19,6 +19,8 @@ try {
     "database",
     "auth",
     "telemetry",
+    "sync",
+    "mail",
   ]) {
     await cp(
       join(app, "tinker/components", component),

@@ -2,7 +2,7 @@ import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { syncClient, loadSnapshot, checkAccount } from "@tinker/start/client";
-import { authSettings, serverParts, startRequests } from "@tinker/start/server";
+import { authSettings, startRequests } from "@tinker/start/server";
 import {
   accountOwner,
   tabStop,
@@ -14,22 +14,23 @@ import { openSync, backendStop, requestStop } from "@tinker/start/testing";
 import { createAuthClient } from "better-auth/react";
 import { test, expect } from "vite-plus/test";
 
-import { auth } from "~/components/auth/index.server";
-import { database } from "~/components/database/index.server";
 import { migrate, databaseUrl } from "~/components/database/index.server";
 import { readAccount } from "~/components/demo/backend/auth.server";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
 import { bootstrap } from "~/components/demo/backend/sync.server";
 import * as demo from "~/components/demo/index.server";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+import { syncRecords } from "~/components/sync/slots";
 
 import { authClient, signIn } from "@/frontend/actions";
 
+import { clientBindings } from "./presets";
 import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const settings = [
-  serverParts({ auth, database, bootstrap: demo.bootstrap, readAccount: demo.readAccount }),
+  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -87,14 +88,14 @@ test("a signed-out private redirect loads one snapshot across separate renders",
 
   const page = createScope({
     signal: stop.signal,
-    extensions: [accountOwner],
-    tags: [tabStop(stop.signal), authBindings((): Scope.Handle => page)],
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(stop.signal), authBindings((): Scope.Handle => page)],
     presets: [source],
   });
   const redirected = createScope({
     signal: stop.signal,
-    extensions: [accountOwner],
-    tags: [tabStop(stop.signal), authBindings((): Scope.Handle => redirected)],
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(stop.signal), authBindings((): Scope.Handle => redirected)],
     presets: [source],
   });
 
@@ -129,8 +130,8 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
 
   const browser = createScope({
     signal: stop.signal,
-    extensions: [accountOwner],
-    tags: [tabStop(stop.signal), authBindings((): Scope.Handle => browser)],
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(stop.signal), authBindings((): Scope.Handle => browser)],
     presets: [
       preset(authClient, async () =>
         createAuthClient({
@@ -211,8 +212,8 @@ test("a private route check clears cached records after another tab signs out", 
 
   const browser = createScope({
     signal: stop.signal,
-    extensions: [accountOwner],
-    tags: [tabStop(stop.signal), authBindings((): Scope.Handle => browser)],
+    extensions: [syncRecords, accountOwner],
+    tags: [clientBindings, tabStop(stop.signal), authBindings((): Scope.Handle => browser)],
     presets: [
       preset(snapshotSource, () => ({
         async load() {

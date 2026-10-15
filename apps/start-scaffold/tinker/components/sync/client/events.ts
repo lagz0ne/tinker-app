@@ -1,48 +1,51 @@
 import { extension, operation, resource, tag } from "@tinker/core";
 import type { Operation } from "@tinker/core";
 
-import { streamMessage } from "#tinker/router";
+import { applyBootstrap, syncClient } from "~/components/sync/client/sync";
+import { tabStop } from "~/components/sync/client/tab";
+import type { Sync } from "~/components/sync/envelopes";
+import { snapshotSource } from "~/components/sync/functions";
+import type { Stream } from "~/components/sync/protocol";
+import { streamMessageSlot } from "~/components/sync/slots";
 
-import type { Sync } from "../envelopes";
-import { snapshotSource } from "../functions";
-import type { Stream } from "../protocol";
-import { applyBootstrap, syncClient } from "./sync";
-import { tabStop } from "./tab";
-
-/**
- * One tab shares a load per account version; a sign-in holds loads and reconnects until its new
- * snapshot is applied.
- */
-export const snapshotLoader = resource({
-  label: "sync.snapshotLoader",
+/** One account version owns one in-flight network load and its applied snapshot. */
+const snapshotCache = resource({
+  label: "sync.snapshotCache",
   depends: { sync: syncClient, apply: applyBootstrap, source: snapshotSource },
   factory: ({ sync, apply, source }) => {
     let loadedVersion = -1;
     let loading: { version: number; promise: Promise<Sync.Snapshot> } | undefined;
-    let changing: ReturnType<typeof Promise.withResolvers<void>> | undefined;
-    /** The snapshot for the current version: applied, in flight, or loaded now. */
-    const fetchSnapshot = async (signal: AbortSignal) => {
-      const token = sync.capture();
-      if (loadedVersion === token.version) return sync.snapshot();
-      if (loading?.version === token.version) return loading.promise;
+    return {
+      async read(signal: AbortSignal) {
+        const token = sync.capture();
+        if (loadedVersion === token.version) return sync.snapshot();
+        if (loading?.version === token.version) return loading.promise;
 
-      const request = {
-        version: token.version,
-        promise: (async () => {
-          const snapshot = await source.load({ signal });
-          const version = apply.run({ rawInput: { snapshot, version: token.version } });
-          if (version !== undefined) loadedVersion = version;
-          return sync.snapshot();
-        })(),
-      };
-      loading = request;
-
-      try {
-        return await request.promise;
-      } finally {
-        if (loading === request) loading = undefined;
-      }
+        const request = {
+          version: token.version,
+          promise: source.load({ signal }).then((snapshot) => {
+            const version = apply.run({ rawInput: { snapshot, version: token.version } });
+            if (version !== undefined) loadedVersion = version;
+            return sync.snapshot();
+          }),
+        };
+        loading = request;
+        try {
+          return await request.promise;
+        } finally {
+          if (loading === request) loading = undefined;
+        }
+      },
     };
+  },
+});
+
+/** An account change holds ordinary loads until its own snapshot has applied. */
+export const snapshotLoader = resource({
+  label: "sync.snapshotLoader",
+  depends: { sync: syncClient, source: snapshotSource, cache: snapshotCache },
+  factory: ({ sync, source, cache }) => {
+    let changing: ReturnType<typeof Promise.withResolvers<void>> | undefined;
     return {
       beginAccountChange() {
         changing = Promise.withResolvers<void>();
@@ -57,7 +60,7 @@ export const snapshotLoader = resource({
         change: ReturnType<typeof Promise.withResolvers<void>>,
       ) {
         try {
-          return await fetchSnapshot(signal);
+          return await cache.read(signal);
         } finally {
           if (changing === change) changing = undefined;
           change.resolve();
@@ -74,7 +77,7 @@ export const snapshotLoader = resource({
       },
       async load(signal: AbortSignal) {
         if (changing) await changing.promise;
-        return fetchSnapshot(signal);
+        return cache.read(signal);
       },
     };
   },
@@ -101,7 +104,6 @@ type Source = {
 /** How a tab opens its stream: the native EventSource. Scope tests bind a fake. */
 export const eventSourceBackend = tag<(url: string) => Source>({
   label: "sync.eventSourceBackend",
-  default: (url) => new EventSource(url),
 });
 
 /**
@@ -110,7 +112,7 @@ export const eventSourceBackend = tag<(url: string) => Source>({
  */
 export const eventSource = resource({
   label: "sync.eventSource",
-  depends: { open: eventSourceBackend },
+  depends: { open: eventSourceBackend.optional },
   factory: ({ open }, { defer }) => {
     let close: (() => void) | undefined;
     defer(() => close?.());
@@ -122,7 +124,8 @@ export const eventSource = resource({
     return {
       connect(cursor: Stream.Cursor, signal: AbortSignal) {
         close?.();
-        const connection = open(`/api/sync?cursor=${encodeURIComponent(JSON.stringify(cursor))}`);
+        const url = `/api/sync?cursor=${encodeURIComponent(JSON.stringify(cursor))}`;
+        const connection = open.present ? open.value(url) : new EventSource(url);
         ended = false;
 
         const closeConnection = () => {
@@ -174,7 +177,12 @@ export const receiveMessage = operation({
   depends: { sync: syncClient },
   run: (
     { sync },
-    { input }: Operation.Ctx<{ version: number; message: ReturnType<typeof streamMessage.parse> }>,
+    {
+      input,
+    }: Operation.Ctx<{
+      version: number;
+      message: { kind: "changes"; events: Sync.Event[] } | { kind: "account-change" };
+    }>,
   ) => {
     if (input.version !== sync.version()) return false;
     if (input.message.kind === "changes") {
@@ -194,8 +202,9 @@ export const consumeConnection = operation({
     source: eventSource,
     receive: receiveMessage,
     snapshots: snapshotLoader,
+    streamMessage: streamMessageSlot.required,
   },
-  run: async ({ sync, source, receive, snapshots }, { signal }) => {
+  run: async ({ sync, source, receive, snapshots, streamMessage }, { signal }) => {
     await snapshots.ready();
     const token = sync.capture();
     const cursors = sync.cursors();
@@ -214,7 +223,7 @@ export const consumeConnection = operation({
         const data = await source.next();
         if (data === undefined) return false;
 
-        let message: ReturnType<typeof streamMessage.parse>;
+        let message: { kind: "changes"; events: Sync.Event[] } | { kind: "account-change" };
         try {
           message = streamMessage.parse(JSON.parse(data));
         } catch {

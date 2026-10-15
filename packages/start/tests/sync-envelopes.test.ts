@@ -25,14 +25,34 @@ const snapshot = { public: { stream: "public", revision: 0, value: 1 }, private:
 
 test("the sync readers take an app's wire values, and refuse each broken one", () => {
   const cases: [string, (raw: unknown) => unknown, unknown, boolean][] = [
-    ["an execution", readExecution, { executionId: id }, true],
-    ["an execution id that is no UUID", readExecution, { executionId: "1" }, false],
-    ["an execution with more keys", readExecution, { executionId: id, extra: 1 }, false],
-    ["a retry", readRetry, { executionId: id, previousExecutionId: other }, true],
-    ["a retry with no UUID", readRetry, { executionId: id, previousExecutionId: "1" }, false],
+    ["an execution", (raw) => readExecution.parse(raw), { executionId: id }, true],
+    [
+      "an execution id that is no UUID",
+      (raw) => readExecution.parse(raw),
+      { executionId: "1" },
+      false,
+    ],
+    [
+      "an execution with more keys",
+      (raw) => readExecution.parse(raw),
+      { executionId: id, extra: 1 },
+      false,
+    ],
+    [
+      "a retry",
+      (raw) => readRetry.parse(raw),
+      { executionId: id, previousExecutionId: other },
+      true,
+    ],
+    [
+      "a retry with no UUID",
+      (raw) => readRetry.parse(raw),
+      { executionId: id, previousExecutionId: "1" },
+      false,
+    ],
     [
       "a retry with more keys",
-      readRetry,
+      (raw) => readRetry.parse(raw),
       { executionId: id, previousExecutionId: other, x: 1 },
       false,
     ],

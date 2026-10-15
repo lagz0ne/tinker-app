@@ -60,13 +60,7 @@ test("each parts file exports the parts its entry reads, from the on or the off 
   const module = (part, file) => JSON.stringify(join(baseDir, "src/parts", part, file));
 
   const on = render(root, ["auth"]);
-  expect(on["parts.ts"]).toBe(
-    [
-      "// Written by tinker(); parts on: auth.",
-      `export { sync } from ${module("sync", "off")};`,
-      "",
-    ].join("\n"),
-  );
+  expect(on["parts.ts"]).toBe("// Written by tinker(); parts on: auth.\n\n");
   expect(on["parts.server.ts"]).toBe(
     [
       "// Written by tinker(); parts on: auth.",
@@ -76,16 +70,7 @@ test("each parts file exports the parts its entry reads, from the on or the off 
   );
 
   const off = render(root, []);
-  expect(off["parts.ts"]).toBe(
-    [
-      "// Written by tinker(); parts on: none.",
-      `export { sync } from ${module("sync", "off")};`,
-      "",
-    ].join("\n"),
-  );
-  expect(render(root, ["auth", "sync"])["parts.ts"]).toContain(
-    `export { sync } from ${module("sync", "on")};`,
-  );
+  expect(off["parts.ts"]).toBe("// Written by tinker(); parts on: none.\n\n");
   expect(off["parts.server.ts"]).toBe(
     [
       "// Written by tinker(); parts on: none.",
@@ -100,7 +85,9 @@ test("tinker prepare with no options keeps the parts the last tinker() call reco
   prepare(root, []);
   expect(prepare(root)).toContain("parts.ts");
   expect(JSON.parse(readFileSync(join(root, ".tinker/base.json"), "utf8")).parts).toEqual([]);
-  expect(readFileSync(join(root, ".tinker/parts.ts"), "utf8")).toContain('/off";');
+  expect(readFileSync(join(root, ".tinker/parts.ts"), "utf8")).toBe(
+    "// Written by tinker(); parts on: none.\n\n",
+  );
 });
 
 test("the generated tsconfig maps both parts files", () => {
@@ -118,19 +105,18 @@ test("a failing tinker prepare fails, except as postinstall, so a broken clone s
   expect(prepareExitCode([], undefined)).toBe(0);
 });
 
-test("with sync on, the parts file records that sync turned auth on", () => {
+test("copied sync has no generated module or activation note", () => {
   const root = fixture({ "package.json": "{}" });
-  const file = render(root, ["auth", "sync"])["parts.server.ts"];
-  expect(file.split("\n")[0]).toBe(
-    "// Written by tinker(); parts on: auth, sync; sync turns auth on.",
-  );
-  expect(file).not.toContain("parts/sync");
+  const files = render(root, ["auth"]);
+  expect(files["parts.ts"]).toBe("// Written by tinker(); parts on: auth.\n\n");
+  expect(files["parts.server.ts"].split("\n")[0]).toBe("// Written by tinker(); parts on: auth.");
+  expect(files["parts.server.ts"]).not.toContain("parts/sync");
 });
 
-test("linked parts use the real base path so sync has one Register", () => {
+test("the remaining linked auth part uses the real package path", () => {
   const root = goodApp();
-  expect(render(root, ["sync"])["parts.ts"]).toContain(
-    `export { sync } from ${JSON.stringify(join(baseDir, "src/parts/sync/on"))};`,
+  expect(render(root, ["auth"])["parts.server.ts"]).toContain(
+    `export { auth } from ${JSON.stringify(join(baseDir, "src/parts/auth/on.server"))};`,
   );
 });
 

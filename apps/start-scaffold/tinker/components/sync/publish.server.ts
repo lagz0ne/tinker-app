@@ -2,8 +2,7 @@ import { operation } from "@tinker/core";
 import { z } from "zod";
 
 import { database, drizzleOrm } from "~/components/database/index.server";
-
-import { accountNotice } from "./notice";
+import { accountNotice } from "~/components/sync/notice";
 
 /** Auth invokes this only after the session delete commits. */
 export const publishAccountNotice = operation({

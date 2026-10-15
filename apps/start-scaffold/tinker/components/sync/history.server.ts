@@ -1,10 +1,10 @@
 import { resource } from "@tinker/core";
 
-import { raise } from "../../errors";
-import { drizzleOrm } from "../../modules.server";
-import type { Database } from "./database";
-import type { Sync } from "./envelopes";
-import { stream, event, execution } from "./schema";
+import { drizzleOrm } from "~/components/database/index.server";
+import type { Database } from "~/components/database/index.server";
+import { raise } from "~/components/errors";
+import type { Sync } from "~/components/sync/envelopes";
+import { stream, event, execution } from "~/components/sync/schema";
 
 /**
  * The app's writes to a sync stream. A stream row stays locked until its records and events

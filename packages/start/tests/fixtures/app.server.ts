@@ -1,13 +1,17 @@
 import type { PGliteInterface } from "@electric-sql/pglite";
 import { createScope, operation, resource, tag } from "@tinker/core";
-import type { Many, Scope } from "@tinker/core";
+import type { Many, Resource, Scope } from "@tinker/core";
+import { preset } from "@tinker/core/testing";
 import { afterAll, beforeAll } from "vite-plus/test";
 
 import { createScopeClose } from "~/base/close";
+import { auth as nativeAuth } from "~/components/auth/index.server";
+import { database as nativeDatabase } from "~/components/database/index.server";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
 import type { Env } from "../../src/env";
 import type { Database } from "../../src/parts/sync/database";
-import { serverParts } from "../../src/server-parts";
+import type { ServerParts } from "../../src/server-parts";
 
 /**
  * A stand-in server seam for the base's own tests and type check, as `#tinker/server`:
@@ -61,7 +65,7 @@ beforeAll(async () => {
     import("@electric-sql/pglite"),
     import("drizzle-orm"),
     import("drizzle-orm/pglite"),
-    import("../../src/parts/sync/schema"),
+    import("~/components/sync/schema"),
   ]);
   syncTemplate = await PGlite.create();
   await syncTemplate.exec(syncTables);
@@ -82,7 +86,16 @@ export const database = resource({
   },
 });
 
-export const bindings = serverParts({ auth, database, bootstrap, readAccount });
+export const bindings = [bootstrapSlot(bootstrap), readAccountSlot(readAccount)];
+
+/** Presets keep each small test root in charge of its own auth and database fakes. */
+export function proofServices(readRoot: () => Scope.Handle) {
+  const port: Resource.Handle<ServerParts.Auth | Promise<ServerParts.Auth>> = nativeAuth;
+  return [
+    preset(port, () => readRoot().resolve(auth)),
+    preset(nativeDatabase, () => readRoot().resolve(database)),
+  ];
+}
 
 const stop = new AbortController();
 const root = createScope({ signal: stop.signal });

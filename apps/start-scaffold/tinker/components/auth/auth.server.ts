@@ -1,4 +1,4 @@
-import { resource } from "@tinker/core";
+import { operation, resource } from "@tinker/core";
 
 import { database } from "~/components/database/index.server";
 import { requestHeaders } from "~/components/requests/index.server";
@@ -61,4 +61,17 @@ export const principal = resource({
   target: "session",
   depends: { auth, headers: requestHeaders },
   factory: async ({ auth, headers }) => (await auth.api.getSession({ headers }))?.user ?? null,
+});
+
+/** A long stream rechecks the live cookie without using caches or refreshing the session. */
+export const liveAccount = operation({
+  label: "sync.liveAccount",
+  depends: { auth, headers: requestHeaders },
+  run: async ({ auth, headers }) =>
+    (
+      await auth.api.getSession({
+        headers,
+        query: { disableCookieCache: true, disableRefresh: true },
+      })
+    )?.user.id ?? null,
 });

@@ -1,8 +1,8 @@
 import type { Data, Many, Operation, Resource, Scope, Tag } from "@tinker/core";
 
+import type { Database as Store } from "../../../apps/start-scaffold/tinker/components/database/types";
+import type { Sync } from "../../../apps/start-scaffold/tinker/components/sync/envelopes";
 import type { Env as Environment } from "../src/env";
-import type { Database as Store } from "../src/parts/sync/database";
-import type { Sync } from "../src/parts/sync/envelopes";
 
 /** The generated seam checks these roles without widening their inferred types. */
 export declare namespace App {

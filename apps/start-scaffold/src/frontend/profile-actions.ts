@@ -1,10 +1,10 @@
 import { operation } from "@tinker/core";
-import { syncClient } from "@tinker/start/client";
 import { z } from "zod";
 
 import { readProfileInput } from "~/components/demo";
 import { raise } from "~/components/demo";
 import { nameDraft, pending, notice, profileResult } from "~/components/demo";
+import { syncClient } from "~/components/sync";
 
 import { updateProfile, retryProfileNotification } from "@/transport/profile.functions";
 

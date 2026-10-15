@@ -1,6 +1,6 @@
 import { integer, jsonb, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
 
-import type { Sync } from "./envelopes";
+import type { Sync } from "~/components/sync/envelopes";
 
 /**
  * The sync part's three tables. The app's migrations create them, and a `start_sync` trigger on

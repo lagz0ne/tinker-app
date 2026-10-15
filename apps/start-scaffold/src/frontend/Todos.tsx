@@ -1,12 +1,12 @@
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import { data, operation, isError as isCoreError } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
-import { syncClient } from "@tinker/start/client";
 import { z } from "zod";
 
 import { readTodoChange } from "~/components/demo";
 import { isError } from "~/components/demo";
 import { todos, profile } from "~/components/demo";
+import { syncClient } from "~/components/sync";
 
 import { updateTodo } from "@/transport/todos.functions";
 

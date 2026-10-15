@@ -1,8 +1,9 @@
 import { tag } from "@tinker/core";
 import type { Operation, Resource } from "@tinker/core";
 
+import type { Sync } from "~/components/sync/envelopes";
+
 import type { Database } from "./parts/sync/database";
-import type { Sync } from "./parts/sync/envelopes";
 
 /** The main supplies descriptors; each request resolves them in its own scope. */
 export declare namespace ServerParts {

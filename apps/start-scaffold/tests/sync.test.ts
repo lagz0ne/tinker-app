@@ -1,11 +1,10 @@
 import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { authSettings, serverParts, startRequests } from "@tinker/start/server";
+import { authSettings, startRequests } from "@tinker/start/server";
 import { sql } from "drizzle-orm";
 import { test, expect, onTestFinished } from "vite-plus/test";
 
-import { auth } from "~/components/auth/index.server";
 import { migrate, database, databaseUrl } from "~/components/database/index.server";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
 import {
@@ -23,6 +22,7 @@ import { raise, isError } from "~/components/demo/errors";
 import * as demo from "~/components/demo/index.server";
 import { mail } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
 import { readReceipt } from "@/transport/result.server";
 
@@ -31,7 +31,7 @@ import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
 const tags = [
-  serverParts({ auth, database, bootstrap: demo.bootstrap, readAccount: demo.readAccount }),
+  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",

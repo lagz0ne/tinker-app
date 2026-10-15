@@ -33,22 +33,16 @@ export declare namespace Sync {
   };
 }
 
-const executionInput = z.object({ executionId: z.uuid() }).strict();
-/**
- * @param raw - From a mutation request; why: validate its execution ID.
- */
-export const readExecution = (raw: unknown) => executionInput.parse(raw);
+export const readExecution = z.object({ executionId: z.uuid() }).strict();
 export const readCursor = z.object({ after: z.number().int().min(0) }).strict();
 
 export const readPrivateCursor = z
   .object({ accountId: z.string().min(1), after: z.number().int().min(0) })
   .strict();
 
-const retryInput = z.object({ executionId: z.uuid(), previousExecutionId: z.uuid() }).strict();
-/**
- * @param raw - From a retry request; why: validate both execution IDs.
- */
-export const readRetry = (raw: unknown) => retryInput.parse(raw);
+export const readRetry = z
+  .object({ executionId: z.uuid(), previousExecutionId: z.uuid() })
+  .strict();
 
 /** Bodies are opaque here; the app's network readers validate them. */
 export const eventEnvelope = z.object({

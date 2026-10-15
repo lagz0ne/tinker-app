@@ -91,6 +91,7 @@ test("Start runs the app commands and discovers copied telemetry through the phy
 test("a part that is off mounts no route, so its path is the app's", () => {
   const root = fixture({ "src/routes/index.tsx": "" });
   const { virtualRouteConfig: tree } = startOptions(root, []).router;
+
   expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([""]);
 });
 
@@ -130,7 +131,7 @@ test("Start's static output options pass on; an unknown option fails the build",
     prerender: { enabled: true },
   });
   expect(() => passThrough({ prerendr: {}, sap: {} })).toThrow(
-    "tinker(): unknown option prerendr, sap; known: root, serverEntry, compileHints, prerender, pages, spa, sitemap, auth, sync",
+    "tinker(): unknown option prerendr, sap; known: root, serverEntry, compileHints, prerender, pages, spa, sitemap, auth",
   );
   expect(passThrough({ auth: true, spa: { enabled: true } })).toStrictEqual({
     spa: { enabled: true },
@@ -151,11 +152,12 @@ test("auth's copied route stays in the physical app tree with either old switch 
   }
 });
 
-test("with sync on, its route mounts at /api/sync from the base", () => {
-  const root = fixture({ "src/routes/index.tsx": "" });
-  const { virtualRouteConfig: tree } = startOptions(root, ["auth", "sync"]).router;
-  expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual(["/api/sync", ""]);
-  expect(resolve(root, "src/routes", tree.children[0].file)).toBe(
-    join(baseDir, "src/routes/api.sync.ts"),
-  );
+test("copied sync mounts physically from the app and has no plugin switch", () => {
+  const file = 'export const Route = createFileRoute("/api/sync")({});\n';
+  const root = fixture({ "src/routes/index.tsx": "", "src/routes/api.sync.ts": file });
+  const { virtualRouteConfig: tree } = startOptions(root, []).router;
+
+  expect(tree.children).toEqual([{ type: "physical", directory: ".", pathPrefix: "" }]);
+  expect(readFileSync(join(root, "src/routes/api.sync.ts"), "utf8")).toBe(file);
+  expect(() => passThrough({ sync: true })).toThrow("tinker(): unknown option sync");
 });

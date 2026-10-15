@@ -36,7 +36,7 @@ if (import.meta.main) {
         enforce: "pre",
         transform(code, id) {
           if (["/routes/api.${plant}.ts", "/routes/api.${plant}.$.ts"].some((path) => id.split("?")[0].endsWith(path))) {
-            return code.replace('from "~/components/requests/index"', 'from "~/components/requests/second-start"');
+            return code.replace('from "~/components/requests/index"', 'from "~/components/requests/second-start"').replace('from "~/components/requests"', 'from "~/components/requests/second-start"');
           }
         },
       },`,

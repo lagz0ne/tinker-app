@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 import { createServer } from "vite-plus";
 
 import { appFiles, serverFile } from "../lib/named.mjs";
-import { recordedParts } from "../lib/parts.mjs";
 
 // Auth and backend settings come from the caller's test env, as in the real app entry.
 const app = resolve(process.argv[2]);
@@ -21,9 +28,14 @@ try {
   });
   symlinkSync(join(app, "node_modules"), join(fixture, "node_modules"), "dir");
   const entry = join(fixture, serverFile(fixture).file);
-  const source = `export const renderSpans = [];\n${readFileSync(entry, "utf8")
+  const original = readFileSync(entry, "utf8");
+  assert.ok(
+    original.includes("tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs })"),
+    "plant must replace the command's render observer",
+  );
+  const source = `export const renderSpans = [];\n${original
     .replaceAll(
-      "tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs })",
+      "tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs })",
       "{ export: (span) => renderSpans.push(span) }",
     )
     .replace(
@@ -99,7 +111,7 @@ export const extensions = [extension({
   await nextRendered.text();
   assert.ok(secondModule.renderSpans.length > 0, "HMR renders must use the new observer");
   assert.equal((await fetch(new URL("/api/health", address))).status, 200);
-  if (recordedParts(fixture).includes("auth")) {
+  if (existsSync(join(fixture, "tinker/components/auth/component.json"))) {
     const auth = await fetch(new URL("/api/auth/get-session", address));
     assert.equal(auth.status, 200);
     assert.equal(await auth.json(), null);

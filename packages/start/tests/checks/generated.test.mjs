@@ -81,12 +81,14 @@ test("a route file that re-exports Route from another file counts as a route", (
   ]);
 });
 
-test("leaves a route that clashes with the base to check 7, not to tinker prepare", () => {
+test("a copied sync route is stale until it appears in the app route tree", () => {
   const root = preparedApp({
     ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: ["auth", "sync"] }),
     "src/routes/api.sync.tsx": 'export const Route = createFileRoute("/api/sync")({});\n',
   });
-  expect(generated(root).status).toBe("ok");
+  expect(generated(root).lines).toEqual([
+    ".tinker/routeTree.gen.ts misses src/routes/api.sync.tsx; run tinker prepare",
+  ]);
 });
 
 test("when the generator ran and the tree is still stale, tinker prepare says so", () => {
@@ -182,8 +184,8 @@ const fakeVite = (onResolve) => ({
   "node_modules/vite/index.js": `import { writeFileSync } from "node:fs";\nexport async function resolveConfig({ root }) {\n  writeFileSync(root + "/.generator-ran", "1");\n  ${onResolve}\n}\n`,
 });
 
-test("--fix never runs the generator while a route clashes: check 3's lines come back", () => {
-  const clash = 'export const Route = createFileRoute("/api/sync")({});\n';
+test("--fix never runs the generator while a copied route has a wrong ID", () => {
+  const clash = 'export const Route = createFileRoute("/wrong")({});\n';
   const root = preparedApp({
     ...fakeVite(""),
     ...later,
@@ -193,6 +195,7 @@ test("--fix never runs the generator while a route clashes: check 3's lines come
   expect(runCheck(root, generated, true)).toMatchObject({
     status: "fail",
     lines: [
+      ".tinker/routeTree.gen.ts misses src/routes/api.sync.ts; fix check 7 first, then run tinker prepare",
       ".tinker/routeTree.gen.ts misses src/routes/later.tsx; fix check 7 first, then run tinker prepare",
     ],
   });

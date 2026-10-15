@@ -47,13 +47,18 @@ for (const app of process.argv.slice(2)) {
     });
     symlinkSync(realpathSync(join(source, "node_modules")), join(fixture, "node_modules"));
     const entry = join(fixture, serverFile(fixture).file);
-    const main = readFileSync(entry, "utf8")
+    const original = readFileSync(entry, "utf8");
+    assert.ok(
+      original.includes("extensions: [startRequests"),
+      "startup plant must join the app extensions",
+    );
+    const main = original
       .replace("import { createScope }", "import { createScope, extension }")
       .replace(
         "const values =",
         'const mode = process.env.PANIC_MODE;\nconst probe = extension({ label: "proof.panic", hooks: { start(event) { if (mode === "startup") throw new Error("proof.startup"); return event.next(); } } });\nconst values =',
       )
-      .replace("start.auth.extensions", "start.auth.extensions, probe")
+      .replace("extensions: [startRequests", "extensions: [probe, startRequests")
       .replace(
         "await tools.ready;",
         'await tools.ready;\ntools.onClose(() => { console.log("tools.closed"); });',
@@ -68,7 +73,7 @@ for (const app of process.argv.slice(2)) {
       join(fixture, "src/routes/proof/handler.ts"),
       `
 import { createFileRoute } from "@tanstack/react-router";
-import { startRequests } from "@tinker/start/server";
+import { startRequests } from "~/components/requests";
 export const Route = createFileRoute("/proof/handler")({server: {middleware: [startRequests.middleware], handlers: {
   GET: ({context}) => { context.session.onClose(() => { process.stdout.write("request.closed\\n"); }); throw new Error("proof.handler"); },
 }}});
