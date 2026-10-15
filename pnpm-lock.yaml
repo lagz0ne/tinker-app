@@ -203,6 +203,9 @@ catalogs:
     drizzle-orm:
       specifier: 1.0.0-rc.4
       version: 1.0.0-rc.4
+    fractional-indexing:
+      specifier: ^4.0.0
+      version: 4.0.0
     nodemailer:
       specifier: 10.0.13
       version: 10.0.13
@@ -284,6 +287,9 @@ importers:
       drizzle-orm:
         specifier: 'catalog:'
         version: 1.0.0-rc.4(@electric-sql/pglite@0.5.9)(@types/pg@8.23.1)(pg@8.20.0)(zod@4.6.7)
+      fractional-indexing:
+        specifier: 'catalog:'
+        version: 4.0.0
       nodemailer:
         specifier: 'catalog:'
         version: 10.0.13
@@ -2945,6 +2951,10 @@ packages:
   flru@1.0.2:
     resolution: {integrity: sha512-kWyh8ADvHBFz6ua5xYOPnUroZTT/bwWfrCeL0Wj1dzG4/YOmOcfJ99W8dOVyyynJN35rZ9aCOtHChqQovV7yog==}
     engines: {node: '>=6'}
+
+  fractional-indexing@4.0.0:
+    resolution: {integrity: sha512-Nr2P1Yyaj2sy1Qdt/wI3GcByxrUdbSKg5+cGvw8f18hT2SkQt6V72iOjBpk7IO3UkzBsdlGRs2a4z6dLrJprgw==}
+    engines: {node: ^14.13.1 || >=16.0.0}
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -5759,6 +5769,8 @@ snapshots:
   flatted@3.4.4: {}
 
   flru@1.0.2: {}
+
+  fractional-indexing@4.0.0: {}
 
   fsevents@2.3.3:
     optional: true

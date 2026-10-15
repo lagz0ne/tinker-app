@@ -43,7 +43,8 @@ const result = z.union([
 ]);
 
 const change = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("issues"), rows: z.array(issueRecord) }),
+  z.object({ kind: z.literal("issue.upsert"), issue: issueRecord }),
+  z.object({ kind: z.literal("issue.remove"), id: z.uuid() }),
   z.object({ kind: z.literal("teams"), rows: z.array(teamRecord) }),
   z.object({ kind: z.literal("counter"), value: z.number() }),
   z.object({ kind: z.literal("profile"), profile: profileRecord }),

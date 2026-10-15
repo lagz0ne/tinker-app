@@ -57,6 +57,7 @@ export const issue = pgTable(
       .notNull()
       .references(() => user.id),
     rank: text().notNull(),
+    version: integer().notNull().default(1),
     externalId: text("external_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -84,4 +85,5 @@ export const issueFields = {
   assigneeId: issue.assigneeId,
   creatorId: issue.creatorId,
   rank: issue.rank,
+  version: issue.version,
 };

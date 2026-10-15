@@ -24,6 +24,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "drizzle-orm": "catalog:",
+    "fractional-indexing": "catalog:",
     "nodemailer": "catalog:",
     "pg": "catalog:",
     "react": "^19.3.0",

@@ -3,6 +3,9 @@ import type { RunResult } from "@tinker/core";
 import { isError, raise } from "@/demo/client";
 
 const rejections = [
+  ["TeamChanged", "Team membership changed. Try again."],
+  ["IssueConflict", "This issue changed. Close this edit and open it again."],
+  ["InvalidPosition", "That position changed. Try the move again."],
   ["IssueMissing", "That issue is not in this team."],
   ["InvalidAssignee", "Choose a member of this team."],
   ["SignInRequired", "Sign in to change private records."],

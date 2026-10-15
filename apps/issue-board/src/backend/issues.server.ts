@@ -10,6 +10,7 @@ import { currentUser } from "@/demo/backend/auth.server";
 import { raise } from "@/demo/errors";
 
 import { issue, issueFields, team, teamMember } from "./board.schema.server";
+import { fractionalIndex } from "./modules";
 import { readTeam } from "./teams.server";
 
 export const listTeamMembers = operation({
@@ -32,78 +33,171 @@ export const listTeamMembers = operation({
 export const changeIssue = operation({
   label: "issues.change",
   input: issueCommand,
-  depends: { database, orm: drizzleOrm, currentUser, history: eventHistory },
-  run: async ({ database, orm, currentUser, history }, { input, random, clock }) => {
-    const { eq, and, asc, sql } = orm;
+  depends: { database, orm: drizzleOrm, currentUser, history: eventHistory, fractionalIndex },
+  run: async (
+    { database, orm, currentUser, history, fractionalIndex },
+    { input, random, clock },
+  ) => {
+    const { eq, and, asc, sql, ne } = orm;
+    const { generateKeyBetween } = fractionalIndex;
     const change = input.change;
 
     await database.transaction(async (tx) => {
-      const member = (
+      const members = await tx
+        .select({ id: teamMember.userId })
+        .from(teamMember)
+        .where(eq(teamMember.teamId, change.teamId))
+        .orderBy(sql`${teamMember.userId} collate "C"`)
+        .then(async (members) => {
+          if (!members.some((member) => member.id === currentUser.id)) raise("NotTeamMember", {});
+          for (const member of members) await history.lock(tx, member.id);
+
+          if ((change.kind === "create" || change.kind === "edit") && change.assigneeId !== null) {
+            if (!members.some((member) => member.id === change.assigneeId)) {
+              raise("InvalidAssignee", {});
+            }
+          }
+          return members;
+        });
+      if (await history.find(tx, input.executionId, currentUser.id)) return;
+      const currentMembers = await tx
+        .select({ id: teamMember.userId })
+        .from(teamMember)
+        .where(eq(teamMember.teamId, change.teamId));
+      if (currentMembers.some((member) => !members.some((locked) => locked.id === member.id))) {
+        raise("TeamChanged", {});
+      }
+      await tx.select().from(team).where(eq(team.id, change.teamId)).for("update");
+
+      if (change.kind !== "create") {
         await tx
           .select()
-          .from(teamMember)
-          .where(and(eq(teamMember.teamId, change.teamId), eq(teamMember.userId, currentUser.id)))
-      ).at(0);
-      if (!member) raise("NotTeamMember", {});
-
-      await history.lock(tx, currentUser.id);
-      if (await history.find(tx, input.executionId, currentUser.id)) return;
-
-      if (change.assigneeId !== null) {
-        const assignee = (
-          await tx
-            .select()
-            .from(teamMember)
-            .where(
-              and(eq(teamMember.teamId, change.teamId), eq(teamMember.userId, change.assigneeId)),
-            )
-        ).at(0);
-        if (!assignee) raise("InvalidAssignee", {});
-      }
-
-      const values = {
-        title: change.title,
-        description: change.description,
-        state: change.state,
-        priority: change.priority,
-        assigneeId: change.assigneeId,
-        updatedAt: new Date(clock.currentTimeMillis()),
-      };
-      if (change.kind === "create") {
-        const [counter] = await tx
-          .update(team)
-          .set({ issueSeq: sql`${team.issueSeq} + 1` })
-          .where(eq(team.id, change.teamId))
-          .returning({ number: team.issueSeq });
-        await tx.insert(issue).values({
-          ...values,
-          id: random.uuid(),
-          teamId: change.teamId,
-          number: counter!.number,
-          creatorId: currentUser.id,
-          rank: String(counter!.number).padStart(12, "0"),
-        });
-      } else {
-        const saved = await tx
-          .update(issue)
-          .set(values)
+          .from(issue)
           .where(and(eq(issue.id, change.id), eq(issue.teamId, change.teamId)))
-          .returning({ id: issue.id });
-        if (saved.length === 0) raise("IssueMissing", {});
+          .then(([current]) => {
+            if (!current) raise("IssueMissing", {});
+            if (current.version !== change.version) raise("IssueConflict", {});
+          });
       }
 
-      const rows = await tx
+      let savedId: string;
+      if (change.kind === "remove") {
+        const removed = await tx
+          .delete(issue)
+          .where(
+            and(
+              eq(issue.id, change.id),
+              eq(issue.teamId, change.teamId),
+              eq(issue.version, change.version),
+            ),
+          )
+          .returning({ id: issue.id });
+        if (!removed.length) raise("IssueConflict", {});
+        savedId = change.id;
+      } else {
+        savedId = await tx
+          .select({ id: issue.id, rank: issue.rank })
+          .from(issue)
+          .where(
+            and(
+              eq(issue.teamId, change.teamId),
+              eq(issue.state, change.state),
+              change.kind !== "create" ? ne(issue.id, change.id) : undefined,
+            ),
+          )
+          .orderBy(sql`${issue.rank} collate "C"`, asc(issue.id))
+          .then((stateRows) => {
+            const position =
+              change.kind === "move" && change.beforeId !== null
+                ? stateRows.findIndex((row) => row.id === change.beforeId)
+                : stateRows.length;
+            if (position < 0) raise("InvalidPosition", {});
+            const lower = stateRows[position - 1] ?? { rank: null };
+            const upper = stateRows[position] ?? { rank: null };
+            return generateKeyBetween(lower.rank, upper.rank);
+          })
+          .then(async (rank) => {
+            const updatedAt = new Date(clock.currentTimeMillis());
+
+            if (change.kind === "create") {
+              const [counter] = await tx
+                .update(team)
+                .set({ issueSeq: sql`${team.issueSeq} + 1` })
+                .where(eq(team.id, change.teamId))
+                .returning({ number: team.issueSeq });
+              const id = random.uuid();
+              await tx.insert(issue).values({
+                id,
+                teamId: change.teamId,
+                number: counter!.number,
+                title: change.title,
+                description: change.description,
+                state: change.state,
+                priority: change.priority,
+                assigneeId: change.assigneeId,
+                creatorId: currentUser.id,
+                rank,
+                updatedAt,
+              });
+              return id;
+            } else {
+              const values =
+                change.kind === "move"
+                  ? { state: change.state, rank, updatedAt, version: sql`${issue.version} + 1` }
+                  : {
+                      title: change.title,
+                      description: change.description,
+                      state: change.state,
+                      priority: change.priority,
+                      assigneeId: change.assigneeId,
+                      updatedAt,
+                      version: sql`${issue.version} + 1`,
+                    };
+              const saved = await tx
+                .update(issue)
+                .set(values)
+                .where(
+                  and(
+                    eq(issue.id, change.id),
+                    eq(issue.teamId, change.teamId),
+                    eq(issue.version, change.version),
+                  ),
+                )
+                .returning({ id: issue.id });
+              if (!saved.length) raise("IssueConflict", {});
+              return change.id;
+            }
+          });
+      }
+
+      const delta = await tx
         .select(issueFields)
         .from(issue)
         .innerJoin(team, eq(issue.teamId, team.id))
-        .innerJoin(teamMember, eq(teamMember.teamId, team.id))
-        .where(eq(teamMember.userId, currentUser.id))
-        .orderBy(asc(team.key), asc(issue.number));
+        .where(eq(issue.id, savedId))
+        .then(([saved]) =>
+          change.kind === "remove"
+            ? { kind: "issue.remove" as const, id: savedId }
+            : { kind: "issue.upsert" as const, issue: saved! },
+        );
       await tx.insert(execution).values({ id: input.executionId, stream: currentUser.id });
-      await history.append(tx, currentUser.id, input.executionId, [
-        { kind: "change", change: { kind: "issues", rows } },
-        { kind: "result", result: { kind: "complete", action: "issue" } },
-      ]);
+      const deliveries = members.map((member) => ({
+        member,
+        payloads: [
+          { kind: "change" as const, change: delta },
+          ...(member.id === currentUser.id
+            ? [
+                {
+                  kind: "result" as const,
+                  result: { kind: "complete" as const, action: "issue" as const },
+                },
+              ]
+            : []),
+        ],
+      }));
+      for (const { member, payloads } of deliveries) {
+        await history.append(tx, member.id, input.executionId, payloads);
+      }
     });
 
     return { executionId: input.executionId };

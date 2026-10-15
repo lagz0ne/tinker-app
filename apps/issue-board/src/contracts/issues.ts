@@ -24,6 +24,7 @@ export const issueRecord = z.object({
   assigneeId: z.string().nullable(),
   creatorId: z.string(),
   rank: z.string(),
+  version: z.number().int().positive(),
 });
 
 export type Issue = z.infer<typeof issueRecord>;
@@ -39,7 +40,27 @@ const issueDraft = z.object({
 
 export const issueChange = z.discriminatedUnion("kind", [
   issueDraft.extend({ kind: z.literal("create") }).strict(),
-  issueDraft.extend({ kind: z.literal("edit"), id: z.uuid() }).strict(),
+  issueDraft
+    .extend({ kind: z.literal("edit"), id: z.uuid(), version: z.number().int().positive() })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("move"),
+      teamId: z.uuid(),
+      id: z.uuid(),
+      version: z.number().int().positive(),
+      state: z.enum(issueStates),
+      beforeId: z.uuid().nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("remove"),
+      teamId: z.uuid(),
+      id: z.uuid(),
+      version: z.number().int().positive(),
+    })
+    .strict(),
 ]);
 
 export const issueCommand = z.object({ executionId: z.uuid(), change: issueChange }).strict();

@@ -38,8 +38,11 @@ export const records = resource({
     },
     change(change: Sync.Change) {
       switch (change.kind) {
-        case "issues":
-          issues.set(change.rows);
+        case "issue.upsert":
+          issues.set([...issues.get().filter((row) => row.id !== change.issue.id), change.issue]);
+          break;
+        case "issue.remove":
+          issues.set(issues.get().filter((row) => row.id !== change.id));
           break;
         case "teams":
           teams.set(change.rows);

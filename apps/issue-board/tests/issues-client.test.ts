@@ -49,19 +49,62 @@ test("saved issue events beat older snapshots and account exit clears the issues
       priority: 1,
       assigneeId: "ada",
       creatorId: "ada",
-      rank: "000000000001",
+      rank: "a0",
+      version: 1,
     };
     const saved: Sync.Event = {
       stream: "ada",
       revision: 1,
       executionId: crypto.randomUUID(),
-      payload: { kind: "change", change: { kind: "issues", rows: [issue] } },
+      payload: { kind: "change", change: { kind: "issue.upsert", issue } },
     };
     root.run(applyEvents, { input: { events: [saved], version } });
     expect(root.resolve(issues)).toEqual([issue]);
 
     root.run(applyBootstrap, { input: { snapshot, version } });
     expect(root.resolve(issues)).toEqual([issue]);
+    const second = { ...issue, id: crypto.randomUUID(), number: 2, rank: "a1" };
+    root.run(applyEvents, {
+      input: {
+        version,
+        events: [
+          {
+            ...saved,
+            revision: 2,
+            payload: { kind: "change", change: { kind: "issue.upsert", issue: second } },
+          },
+        ],
+      },
+    });
+    root.run(applyEvents, {
+      input: {
+        version,
+        events: [
+          {
+            ...saved,
+            revision: 3,
+            payload: {
+              kind: "change",
+              change: { kind: "issue.upsert", issue: { ...issue, version: 2, state: "done" } },
+            },
+          },
+        ],
+      },
+    });
+    expect(root.resolve(issues)).toEqual([second, { ...issue, version: 2, state: "done" }]);
+    root.run(applyEvents, {
+      input: {
+        version,
+        events: [
+          {
+            ...saved,
+            revision: 4,
+            payload: { kind: "change", change: { kind: "issue.remove", id: issue.id } },
+          },
+        ],
+      },
+    });
+    expect(root.resolve(issues)).toEqual([second]);
     root.run(leaveAccount);
     expect(root.resolve(issues)).toEqual([]);
   } finally {

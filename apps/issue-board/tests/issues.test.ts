@@ -5,6 +5,7 @@ import { authStartup, authSettings } from "~/components/auth/index.server";
 import { database, drizzleOrm, migrate, databaseUrl } from "~/components/database/index.server";
 import { backendStop, startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+import { event } from "~/components/sync/index.server";
 
 import { team } from "@/backend/board.schema.server";
 import { changeIssue, listTeamMembers } from "@/backend/issues.server";
@@ -146,6 +147,7 @@ test("repeated execution IDs do not create a second row or increment the number;
       kind: "edit",
       teamId,
       id: row!.id,
+      version: row!.version,
       title: "Assigned work",
       state: "in_progress",
       priority: 1,
@@ -157,7 +159,14 @@ test("repeated execution IDs do not create a second row or increment the number;
 
   const rows = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
   expect(rows).toEqual([
-    { ...row, title: "Assigned work", state: "in_progress", priority: 1, assigneeId: graceId },
+    {
+      ...row,
+      title: "Assigned work",
+      state: "in_progress",
+      priority: 1,
+      assigneeId: graceId,
+      version: 2,
+    },
   ]);
   expect((await (await root.resolve(database)).select().from(team))[0]!.issueSeq).toBe(1);
   expect((await root.run(bootstrap, { tags: requestHeaders(grace) })).private?.issues).toEqual(
@@ -177,8 +186,17 @@ test("a non-member cannot create, edit an existing or missing issue, or read iss
 
   for (const change of [
     { ...draft, kind: "create", teamId },
-    { ...draft, kind: "edit", teamId, id: rows[0]!.id },
-    { ...draft, kind: "edit", teamId, id: crypto.randomUUID() },
+    { ...draft, kind: "edit", teamId, id: rows[0]!.id, version: rows[0]!.version },
+    {
+      kind: "move",
+      teamId,
+      id: rows[0]!.id,
+      version: rows[0]!.version,
+      state: "done",
+      beforeId: null,
+    },
+    { kind: "remove", teamId, id: rows[0]!.id, version: rows[0]!.version },
+    { ...draft, kind: "edit", teamId, id: crypto.randomUUID(), version: 1 },
   ]) {
     const result = await root.settle(changeIssue, {
       rawInput: { executionId: crypto.randomUUID(), change },
@@ -275,7 +293,7 @@ test("editing a missing issue is refused without changing the team counter", asy
   const result = await root.settle(changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
-      change: { ...draft, kind: "edit", teamId, id: crypto.randomUUID() },
+      change: { ...draft, kind: "edit", teamId, id: crypto.randomUUID(), version: 1 },
     },
     tags: requestHeaders(ada),
   });
@@ -285,4 +303,93 @@ test("editing a missing issue is refused without changing the team counter", asy
   expect(isError(result.error, "IssueMissing")).toBe(true);
   expect((await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!).toEqual([]);
   expect((await (await root.resolve(database)).select().from(team))[0]!.issueSeq).toBe(0);
+});
+
+test("row changes fan out to both members, results only to the actor, and nothing to a non-member", async () => {
+  const executionId = crypto.randomUUID();
+  await root.run(changeIssue, {
+    rawInput: { executionId, change: { ...draft, kind: "create", teamId } },
+    tags: requestHeaders(ada),
+  });
+  const db = await root.resolve(database);
+  const { eq } = await root.resolve(drizzleOrm);
+  const events = await db.select().from(event).where(eq(event.executionId, executionId));
+  const adaId = (await root.run(readAccount, { tags: requestHeaders(ada) }))!;
+  expect(events.filter((row) => row.stream === outsiderId)).toEqual([]);
+  expect(events.filter((row) => row.payload.kind === "result").map((row) => row.stream)).toEqual([
+    adaId,
+  ]);
+  const changes = events.filter((row) => row.payload.kind === "change");
+  expect(changes.map((row) => row.stream).sort()).toEqual([adaId, graceId].sort());
+  expect(changes[0]!.payload).toEqual(changes[1]!.payload);
+  expect(changes[0]!.payload).toMatchObject({
+    kind: "change",
+    change: { kind: "issue.upsert", issue: { number: 1, version: 1 } },
+  });
+  expect(JSON.stringify(changes)).not.toContain('"rows"');
+
+  const [row] = (await root.run(bootstrap, { tags: requestHeaders(grace) })).private!.issues!;
+  const removeId = crypto.randomUUID();
+  await root.run(changeIssue, {
+    rawInput: {
+      executionId: removeId,
+      change: { kind: "remove", id: row!.id, version: row!.version, teamId },
+    },
+    tags: requestHeaders(grace),
+  });
+  const removed = await db.select().from(event).where(eq(event.executionId, removeId));
+  expect(removed.filter((row) => row.payload.kind === "change").map((row) => row.payload)).toEqual([
+    { kind: "change", change: { kind: "issue.remove", id: row!.id } },
+    { kind: "change", change: { kind: "issue.remove", id: row!.id } },
+  ]);
+  expect((await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues).toEqual([]);
+});
+
+test("a move between two fractional keys sorts between them; stale saves cannot undo it", async () => {
+  for (let index = 0; index < 3; index++) {
+    await root.run(changeIssue, {
+      rawInput: {
+        executionId: crypto.randomUUID(),
+        change: { ...draft, kind: "create", teamId, title: `Card ${index}` },
+      },
+      tags: requestHeaders(ada),
+    });
+  }
+  const [first, second, third] = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!
+    .issues!;
+  await root.run(changeIssue, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: {
+        kind: "move",
+        teamId,
+        id: third!.id,
+        version: third!.version,
+        state: "backlog",
+        beforeId: second!.id,
+      },
+    },
+    tags: requestHeaders(grace),
+  });
+  const rows = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
+  expect(rows.map((row) => row.id)).toEqual([first!.id, third!.id, second!.id]);
+  expect(rows[1]!.rank > first!.rank && rows[1]!.rank < second!.rank).toBe(true);
+  expect(rows[1]!.version).toBe(2);
+
+  for (const change of [
+    { ...draft, kind: "edit", teamId, id: third!.id, version: third!.version },
+    { kind: "move", teamId, id: third!.id, version: third!.version, state: "done", beforeId: null },
+    { kind: "remove", teamId, id: third!.id, version: third!.version },
+  ]) {
+    const refused = await root.settle(changeIssue, {
+      rawInput: { executionId: crypto.randomUUID(), change },
+      tags: requestHeaders(ada),
+    });
+    expect(refused.status).toBe("failed");
+    if (refused.status !== "failed") throw new Error("Expected stale version refusal");
+    expect(isError(refused.error, "IssueConflict")).toBe(true);
+  }
+  expect((await root.run(bootstrap, { tags: requestHeaders(grace) })).private!.issues).toEqual(
+    rows,
+  );
 });

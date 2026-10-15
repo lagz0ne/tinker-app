@@ -35,7 +35,7 @@ export const bootstrapPrivate = operation({
   label: "bootstrapPrivate",
   depends: { orm: drizzleOrm, currentUser, database, history: eventHistory },
   run: ({ orm, currentUser, database, history }) => {
-    const { asc, eq } = orm;
+    const { asc, eq, sql } = orm;
     return database.transaction(async (tx) => {
       const revision = await history.lock(tx, currentUser.id);
       const profile = (
@@ -68,7 +68,7 @@ export const bootstrapPrivate = operation({
         .innerJoin(team, eq(issue.teamId, team.id))
         .innerJoin(teamMember, eq(teamMember.teamId, team.id))
         .where(eq(teamMember.userId, currentUser.id))
-        .orderBy(asc(team.key), asc(issue.number));
+        .orderBy(asc(team.key), sql`${issue.rank} collate "C"`, asc(issue.id));
 
       return { stream: currentUser.id, revision, profile, todos, teams, issues };
     });

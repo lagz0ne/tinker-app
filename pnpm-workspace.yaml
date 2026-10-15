@@ -24,6 +24,7 @@ catalog:
   clsx: 2.1.1
   drizzle-kit: 1.0.0-rc.4
   drizzle-orm: 1.0.0-rc.4
+  fractional-indexing: ^4.0.0
   nodemailer: 10.0.13
   oxc-parser: ^0.117.0
   pg: 8.20.0
