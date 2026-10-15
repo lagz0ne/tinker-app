@@ -6,7 +6,7 @@ import { raise } from "~/components/errors";
 
 import { responseBodies } from "./body.server";
 import { requestHeaders } from "./headers.server";
-import { requestStop } from "./lifetime";
+import { backendStop, requestStop } from "./lifetime";
 import { requestClose, requestLifetime } from "./lifetime.server";
 import { renderLifetime } from "./render-lifetime.server";
 
@@ -55,6 +55,7 @@ export const startRequests = Object.assign(
     label: "start.requests",
     hooks: {
       async start(event) {
+        event.resolve(backendStop);
         await event.next();
         return { scope: event.scope };
       },

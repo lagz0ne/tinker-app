@@ -9,7 +9,12 @@ import {
   sessionDeleted,
 } from "~/components/auth/index.server";
 import { databaseSetup, databaseUrl } from "~/components/database/index.server";
+import { bootstrap, readAccount } from "~/components/demo/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
+import { backendStop, startRequests } from "~/components/requests";
+import { syncSide, syncStartup } from "~/components/sync";
+import { tabStop } from "~/components/sync";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 import {
   telemetryExport,
   telemetryService,
@@ -17,6 +22,8 @@ import {
   tracesUrl,
   logsUrl,
 } from "~/components/telemetry/index.server";
+
+import { clientBindings } from "./presets";
 
 const authTags = [
   authSettings({ origin: "http://proof.test", secret: "s".repeat(32) }),
@@ -34,6 +41,13 @@ const telemetryTags = [
 ];
 
 for (const [name, startup, tags] of [
+  ["requests", startRequests, [backendStop(new AbortController().signal)]],
+  [
+    "sync server",
+    syncStartup,
+    [syncSide("server"), bootstrapSlot(bootstrap), readAccountSlot(readAccount)],
+  ],
+  ["sync tab", syncStartup, [...clientBindings, tabStop(new AbortController().signal)]],
   ["auth", authStartup, authTags],
   ["database", databaseSetup, [databaseUrl(new URL("postgres://proof"))]],
   ["mail", mailStartup, mailTags],

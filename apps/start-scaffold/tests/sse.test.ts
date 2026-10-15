@@ -13,21 +13,23 @@ import { isError, raise } from "~/components/demo/errors";
 import * as demo from "~/components/demo/index.server";
 import { mail } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
+import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { backendStop, requestStop } from "~/components/requests";
 import { receiveMessage } from "~/components/sync/client/events";
-import { accountOwner } from "~/components/sync/client/owner";
 import { syncClient, applyBootstrap } from "~/components/sync/client/sync";
 import { tabStop } from "~/components/sync/client/tab";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 import { notifications } from "~/components/sync/notifications.server";
-import { syncRecords } from "~/components/sync/slots";
+import { syncStartup } from "~/components/sync/slots";
 import { openSync } from "~/components/sync/stream.server";
 
 import { clientBindings } from "./presets";
 import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+
+const requestBindings = requestHostStop(new AbortController().signal);
 
 const settings = [
   [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
@@ -74,7 +76,7 @@ test("SQL notifications wake after commit, stay silent on rollback, and survive 
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [settings, authBindings],
+    tags: [requestBindings, [settings, authBindings]],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -106,8 +108,16 @@ test("SSE replays the supplied cursor and a held reader receives the next commit
     extensions: [startRequests, authStartup],
     signal: stop.signal,
     tags: [
-      [settings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
-      authBindings,
+      requestBindings,
+      [
+        [
+          settings,
+          backendStop(stop.signal),
+          requestStop(stop.signal),
+          requestHeaders(new Headers()),
+        ],
+        authBindings,
+      ],
     ],
     presets: [proofDatabase, proofMail],
   });
@@ -154,7 +164,10 @@ test("private SSE cursors are refused and a revoked held stream sends no saved p
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [[settings, backendStop(stop.signal), requestStop(stop.signal)], authBindings],
+    tags: [
+      requestBindings,
+      [[settings, backendStop(stop.signal), requestStop(stop.signal)], authBindings],
+    ],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -216,7 +229,10 @@ test("reconnecting from applied cursors finishes a save whose final event commit
   const server = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [[settings, backendStop(stop.signal), requestStop(stop.signal)], authBindings],
+    tags: [
+      requestBindings,
+      [[settings, backendStop(stop.signal), requestStop(stop.signal)], authBindings],
+    ],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -232,8 +248,8 @@ test("reconnecting from applied cursors finishes a save whose final event commit
 
   const browser = createScope({
     signal: stop.signal,
-    extensions: [syncRecords, startRequests, accountOwner],
-    tags: [clientBindings, tabStop(stop.signal), authBindings],
+    extensions: [syncStartup, startRequests],
+    tags: [requestBindings, [clientBindings, tabStop(stop.signal), authBindings]],
   });
 
   await Promise.all([server.ready, browser.ready]);
@@ -337,7 +353,10 @@ test("a quiet private stream closes at once on sign-out, with no heartbeat", asy
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [[settings, backendStop(stop.signal), requestStop(stop.signal)], authBindings],
+    tags: [
+      requestBindings,
+      [[settings, backendStop(stop.signal), requestStop(stop.signal)], authBindings],
+    ],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;

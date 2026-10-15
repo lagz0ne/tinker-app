@@ -83,6 +83,7 @@ Tests and generated files do not count.
     - `tinker/components/requests/start.ts#middleware.callback`
     - `tinker/components/sync/client/sync.ts#client.execute`
     - `tinker/components/sync/client/sync.ts#client.wait`
+    - `tinker/components/sync/client/sync.ts#syncClient.factory`
     - `tinker/components/sync/history.server.ts#append`
     - `tinker/components/sync/history.server.ts#find`
     - `tinker/components/sync/history.server.ts#lock`

@@ -7,7 +7,7 @@ import { tabStop } from "~/components/sync/client/tab";
 
 test("closing the tab owner uses the shared abort reason", async () => {
   const root = createScope({
-    extensions: [accountOwner],
+    extensions: [],
     tags: tabStop(new AbortController().signal),
   });
   await root.ready;
@@ -18,7 +18,7 @@ test("closing the tab owner uses the shared abort reason", async () => {
 
 test("account changes reuse one AbortError reason", async () => {
   const root = createScope({
-    extensions: [accountOwner],
+    extensions: [],
     tags: tabStop(new AbortController().signal),
   });
   await root.ready;

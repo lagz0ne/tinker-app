@@ -1,4 +1,4 @@
-import { extension, operation, resource, tag } from "@tinker/core";
+import { operation, resource, tag } from "@tinker/core";
 import type { Operation } from "@tinker/core";
 
 import { applyBootstrap, syncClient } from "~/components/sync/client/sync";
@@ -282,23 +282,19 @@ export const streamChanges = operation({
 });
 
 /** The tab's stream: `start` runs it once, until the tab stops. */
-export const syncStreaming = extension({
+export const syncStreaming = resource({
   label: "sync.streaming",
-  hooks: {
-    async start({ next, scope, defer }) {
-      await next();
-      let started = false;
-      return {
-        start() {
-          if (started) return;
-          started = true;
-          const running = scope.settle(streamChanges, { signal: scope.resolve(tabStop) });
-          defer(async () => {
-            const result = await running;
-            if (result.status === "failed") throw result.error;
-          });
-        },
-      };
-    },
+  depends: { listen: streamChanges.controller, stop: tabStop },
+  factory: ({ listen, stop }, { defer }) => {
+    let running: ReturnType<typeof listen.settle> | undefined;
+    defer(async () => {
+      const result = await running;
+      if (result?.status === "failed") throw result.error;
+    });
+    return {
+      start() {
+        running ??= Promise.resolve(listen.settle({ signal: stop }));
+      },
+    };
   },
 });

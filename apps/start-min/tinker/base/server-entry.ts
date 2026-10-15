@@ -24,7 +24,7 @@ export declare namespace ServerEntry {
 export function createServerHandler(app: ServerEntry.Handle, { dev }: { dev: boolean }) {
   const renderRequest = createStart(async (context) => {
     const router: typeof context.router & {
-      close?: Awaited<ReturnType<ReturnType<typeof createRouterEntry>>>["close"];
+      close?: Awaited<ReturnType<typeof createRouterEntry>>["close"];
     } = context.router;
     if (typeof router.close !== "function") raise("StartScopeMissing", {});
     app.requestContext.scope.resolve(renderFrames).retain(context.request, router.close);

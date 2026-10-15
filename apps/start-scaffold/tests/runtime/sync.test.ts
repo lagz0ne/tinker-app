@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
+import { backendStop as requestHostStop } from "~/components/requests";
 import { backendStop, requestStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { requestHeaders } from "~/components/requests/index.server";
@@ -42,6 +43,8 @@ async function answer(session: Scope.Handle, request: Request) {
   if (!(response instanceof Response)) throw new Error("GET must return a Response");
   return response;
 }
+
+const requestBindings = requestHostStop(new AbortController().signal);
 
 const ids = [
   "00000000-0000-4000-8000-000000000001",
@@ -123,7 +126,7 @@ test("a wait holds until a wake or close, and returns at once after its revision
   const { db, wake } = handWoken();
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     presets: [...proofServices((): Scope.Handle => root), db],
   });
   await root.ready;
@@ -147,7 +150,7 @@ test("a wait on a broken listener returns at once", async () => {
   const failures: (() => void)[] = [];
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     presets: [
       ...proofServices((): Scope.Handle => root),
       preset(database, async (_deps, { defer }) => {
@@ -178,7 +181,7 @@ test("notifications wake after a commit, stay silent on a rollback, and a read b
   const root = createScope({
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
   });
   await root.ready;
   const feed = await root.resolve(notifications);
@@ -204,10 +207,8 @@ test("the stream replays after its cursor in one frame, greets once, then sends 
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;
@@ -243,10 +244,8 @@ test("a resumed cursor skips what it has; one frame carries at most 100 events",
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;
@@ -277,10 +276,13 @@ test("an account's own private events replay beside the public ones; another acc
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      signedIn(new Set(["ada", "grace"])),
+      requestBindings,
+      [
+        bindings,
+        backendStop(stop.signal),
+        requestStop(stop.signal),
+        signedIn(new Set(["ada", "grace"])),
+      ],
     ],
   });
   await root.ready;
@@ -316,7 +318,10 @@ test("a held stream whose account signs out sends the account frame, then no sav
   const root = createScope({
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+    tags: [
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+    ],
   });
   await root.ready;
 
@@ -347,7 +352,10 @@ test("a sign-in sends no notice: an anonymous stream keeps its account to its 30
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     clock,
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+    tags: [
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+    ],
   });
   await root.ready;
   const tab = root.createSession({ tags: requestHeaders(new Headers({ "x-account": "ada" })) });
@@ -379,7 +387,10 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     clock,
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+    tags: [
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(accounts)],
+    ],
   });
   await root.ready;
   const quiet = root.createSession({ tags: requestHeaders(new Headers()) });
@@ -424,7 +435,7 @@ test("a stream whose request stopped while it opened is Cancelled", async () => 
   const root = createScope({
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
-    tags: [bindings, backendStop(backend.signal), requestHeaders(new Headers())],
+    tags: [requestBindings, [bindings, backendStop(backend.signal), requestHeaders(new Headers())]],
   });
   await root.ready;
   const request = new AbortController();
@@ -443,10 +454,13 @@ test("a backend stop ends a held stream, and the request ends clean", async () =
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(backend.signal),
-      requestStop(new AbortController().signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [
+        bindings,
+        backendStop(backend.signal),
+        requestStop(new AbortController().signal),
+        requestHeaders(new Headers()),
+      ],
     ],
   });
   await root.ready;
@@ -472,7 +486,7 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
   const listens: { wake: (payload: string) => void; failed: () => void; stopped: boolean }[] = [];
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     presets: [
       ...proofServices((): Scope.Handle => root),
       preset(database, async (_deps, { defer }) => {
@@ -531,7 +545,7 @@ test("a root that never listened closes clean", async () => {
   const quiet = createScope({
     presets: proofServices((): Scope.Handle => quiet),
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
   });
   await quiet.ready;
   await quiet.resolve(notifications);
@@ -545,7 +559,7 @@ test("closing the root wakes and disconnects each subscriber", async () => {
   const root = createScope({
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
   });
   await root.ready;
   const feed = await root.resolve(notifications);
@@ -570,11 +584,14 @@ test("the sync route answers each request with the stream or its status", async 
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      signedIn(new Set(["ada"])),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [
+        bindings,
+        backendStop(stop.signal),
+        requestStop(stop.signal),
+        signedIn(new Set(["ada"])),
+        requestHeaders(new Headers()),
+      ],
     ],
   });
   await root.ready;
@@ -628,10 +645,8 @@ test("a request that fails to read, or a stream that fails to open, fails the re
   const root = createScope({
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
     presets: [
       ...proofServices((): Scope.Handle => root),
@@ -660,10 +675,8 @@ test("a dep whose parse fails fails the reply, not as a 400", async () => {
   const root = createScope({
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
     presets: [
       ...proofServices((): Scope.Handle => root),
@@ -722,7 +735,7 @@ test("the event history locks a stream, appends in order, saves a result, and ke
   const root = createScope({
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
   });
   await root.ready;
   expect(await root.run(save)).toEqual({
@@ -747,10 +760,8 @@ test("the stream reads the account with no cookie cache and no refresh", async (
   const root = createScope({
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
     presets: [
       ...proofServices((): Scope.Handle => root),
@@ -797,10 +808,8 @@ test("a body cancelled while it waits stops its wait at once", async () => {
     extensions: [startRequests],
     clock,
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;
@@ -826,10 +835,8 @@ test("a graceful close of the request ends a held read", async () => {
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;
@@ -851,10 +858,8 @@ test("a stream opened after a wake still replays; a signed-in tab with no accoun
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      signedIn(new Set(["ada"])),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(new Set(["ada"]))],
     ],
   });
   await root.ready;
@@ -891,7 +896,7 @@ test("a request that stops while its account is read gets a body that has alread
   const backend = new AbortController();
   const root = createScope({
     extensions: [startRequests],
-    tags: [bindings, backendStop(backend.signal), requestHeaders(new Headers())],
+    tags: [requestBindings, [bindings, backendStop(backend.signal), requestHeaders(new Headers())]],
     presets: [
       ...proofServices((): Scope.Handle => root),
       preset(auth, () => ({
@@ -931,10 +936,8 @@ test("a query that fails errors the body, and the request still ends clean", asy
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;
@@ -956,10 +959,8 @@ test("the sync part's work shows on the trace under its own names", async () => 
     extensions: [startRequests],
     observe: { history: 50 },
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;
@@ -1034,7 +1035,7 @@ test("a notice checks the account before the rows read, so a sign-out whose rows
   const stop = new AbortController();
   const root = createScope({
     extensions: [startRequests],
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [requestBindings, [bindings, backendStop(stop.signal), requestStop(stop.signal)]],
     presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
@@ -1063,7 +1064,7 @@ test("a save makes no account read on an open stream", async () => {
   const stop = new AbortController();
   const root = createScope({
     extensions: [startRequests],
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [requestBindings, [bindings, backendStop(stop.signal), requestStop(stop.signal)]],
     presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
@@ -1103,7 +1104,7 @@ test("only the check after the rows read can stop rows of an account that signed
   const stop = new AbortController();
   const root = createScope({
     extensions: [startRequests],
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [requestBindings, [bindings, backendStop(stop.signal), requestStop(stop.signal)]],
     presets: [
       ...proofServices((): Scope.Handle => root),
       db,
@@ -1150,7 +1151,7 @@ test("a notice re-reads only its account's streams; the one whose own session en
   const stop = new AbortController();
   const root = createScope({
     extensions: [startRequests],
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [requestBindings, [bindings, backendStop(stop.signal), requestStop(stop.signal)]],
     presets: [
       ...proofServices((): Scope.Handle => root),
       db,
@@ -1227,7 +1228,7 @@ test("a notice that keeps its account sends no frame; the next save is the strea
   const stop = new AbortController();
   const root = createScope({
     extensions: [startRequests],
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [requestBindings, [bindings, backendStop(stop.signal), requestStop(stop.signal)]],
     presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
@@ -1278,7 +1279,7 @@ test("a notice takes its stream off the wheel: closing the other waiter stops th
   const { db, notice } = handWoken();
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     clock,
     presets: [...proofServices((): Scope.Handle => root), db],
   });
@@ -1321,7 +1322,7 @@ test("a saved change takes every stream off the wheel: closing one waiter stops 
   const { db, wake } = handWoken();
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     clock,
     presets: [...proofServices((): Scope.Handle => root), db],
   });
@@ -1363,7 +1364,7 @@ test("waiting again moves a stream's wheel slot instead of adding one", async ()
   const { db } = handWoken();
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     clock,
     presets: [...proofServices((): Scope.Handle => root), db],
   });
@@ -1397,7 +1398,7 @@ test("a wait with no lease sleeps the wheel for nothing", async () => {
   const { db } = handWoken();
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     clock,
     presets: [...proofServices((): Scope.Handle => root), db],
   });
@@ -1428,7 +1429,7 @@ test("the wheel sleeps until a stream's heartbeat, not for zero time", async () 
   const { db } = handWoken();
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     clock,
     presets: [...proofServices((): Scope.Handle => root), db],
   });
@@ -1459,7 +1460,7 @@ test("a heartbeat takes its stream off the wheel, so the wheel sleeps no more", 
   const { db } = handWoken();
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     clock,
     presets: [...proofServices((): Scope.Handle => root), db],
   });
@@ -1483,7 +1484,7 @@ test("closing one waiter keeps the wheel running for the other's heartbeat", asy
   const { db } = handWoken();
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     clock: time,
     presets: [...proofServices((): Scope.Handle => root), db],
   });
@@ -1512,10 +1513,8 @@ test("rows from wakes with no read pending wait for the next read, in one frame"
   const root = createScope({
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
     presets: [...proofServices((): Scope.Handle => root), db],
   });
@@ -1552,7 +1551,7 @@ test("a private stream sends each row once; a later frame carries only the new r
   const stop = new AbortController();
   const root = createScope({
     extensions: [startRequests],
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [requestBindings, [bindings, backendStop(stop.signal), requestStop(stop.signal)]],
     presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
@@ -1596,10 +1595,8 @@ test("streams that share one read each get their own copy of its bytes", async (
   const root = createScope({
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
     presets: [...proofServices((): Scope.Handle => root), db],
   });
@@ -1641,7 +1638,7 @@ test("a sign-out frame is each stream's own copy", async () => {
   const stop = new AbortController();
   const root = createScope({
     extensions: [startRequests],
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [requestBindings, [bindings, backendStop(stop.signal), requestStop(stop.signal)]],
     presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
@@ -1682,7 +1679,7 @@ test("a sign-out frame is each stream's own copy", async () => {
 test("a listener that breaks while it connects fails the subscribe as disconnected", async () => {
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     presets: [
       ...proofServices((): Scope.Handle => root),
       preset(database, async (_deps, { defer }) => {
@@ -1709,7 +1706,7 @@ test("a subscribe whose listener is replaced while it connects fails as disconne
   let replacing: Promise<unknown> | undefined;
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     presets: [
       ...proofServices((): Scope.Handle => root),
       preset(database, async (_deps, { defer }) => {
@@ -1740,7 +1737,7 @@ test("a closed subscriber is not told when the listener breaks", async () => {
   const failures: (() => void)[] = [];
   const root = createScope({
     extensions: [startRequests],
-    tags: bindings,
+    tags: [requestBindings, bindings],
     presets: [
       ...proofServices((): Scope.Handle => root),
       preset(database, async (_deps, { defer }) => {
@@ -1778,7 +1775,7 @@ test("a quiet stream reads no account at its heartbeats; each notice reads it on
   const root = createScope({
     extensions: [startRequests],
     clock,
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [requestBindings, [bindings, backendStop(stop.signal), requestStop(stop.signal)]],
     presets: [...proofServices((): Scope.Handle => root), db, reads.auth],
   });
   await root.ready;
@@ -1818,10 +1815,8 @@ test("a request whose stream was never opened ends clean", async () => {
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;
@@ -1841,10 +1836,8 @@ test("a private cursor resumes past revision 0", async () => {
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      signedIn(new Set(["ada"])),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), signedIn(new Set(["ada"]))],
     ],
   });
   await root.ready;
@@ -1868,10 +1861,8 @@ test("the lease closes a client that stopped reading", async () => {
     extensions: [startRequests],
     clock,
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;
@@ -1903,10 +1894,8 @@ test("a notice closes a stream whose client stopped reading", async () => {
   const root = createScope({
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
     presets: [...proofServices((): Scope.Handle => root), reads.auth],
   });
@@ -1938,10 +1927,8 @@ test("streams at the same cursor share one read per wake and skip the empty read
   const root = createScope({
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
     presets: [...proofServices((): Scope.Handle => root), db],
   });
@@ -1985,7 +1972,7 @@ test("shared private rows keep accounts apart and check each session after sign-
   const stop = new AbortController();
   const root = createScope({
     extensions: [startRequests],
-    tags: [bindings, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [requestBindings, [bindings, backendStop(stop.signal), requestStop(stop.signal)]],
     presets: [
       ...proofServices((): Scope.Handle => root),
       db,
@@ -2074,10 +2061,8 @@ test("a failed shared row read can be retried by another open stream", async () 
     presets: proofServices((): Scope.Handle => root),
     extensions: [startRequests],
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;
@@ -2112,10 +2097,8 @@ test("staggered streams keep their own heartbeat and lease times", async () => {
     extensions: [startRequests],
     clock,
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;
@@ -2170,10 +2153,8 @@ test("a failed clock wait errors every stream waiting on it", async () => {
       sleep: () => failure.promise,
     },
     tags: [
-      bindings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [bindings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
     ],
   });
   await root.ready;

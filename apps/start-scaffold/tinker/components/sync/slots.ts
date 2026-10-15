@@ -1,6 +1,8 @@
 import { extension, tag } from "@tinker/core";
 import type { Operation, Resource } from "@tinker/core";
+import { z } from "zod";
 
+import { tabStop } from "~/components/sync/client/tab";
 import type { Sync } from "~/components/sync/envelopes";
 
 /** Each command supplies exactly one app value per slot. */
@@ -32,13 +34,30 @@ export const streamMessageSlot = tag<{
   parse(raw: unknown): { kind: "changes"; events: Sync.Event[] } | { kind: "account-change" };
 }>({ label: "sync.streamMessage" });
 
-/** Resolve the app's record resource on its own root before client work starts. */
-export const syncRecords = extension({
-  label: "sync.records",
+/** The command names the component's host; there is no implicit role or config. */
+export const syncSide = tag<"server" | "tab">({
+  label: "sync.side",
+  parse: z.enum(["server", "tab"]),
+});
+
+/** Check each host's required slots and load tab records before app.ready succeeds. */
+export const syncStartup = extension({
+  label: "sync.startup",
   hooks: {
     async start({ resolve, next }) {
-      const source = resolve(recordsSlot);
-      const records = await resolve(source);
+      if (resolve(syncSide) === "server") {
+        resolve(bootstrapSlot);
+        resolve(readAccountSlot);
+        await next();
+        return;
+      }
+      resolve(tabStop);
+      resolve(readBatchSlot);
+      resolve(readBootstrapSlot);
+      resolve(readSnapshotSlot);
+      resolve(streamMessageSlot);
+
+      const records = await resolve(resolve(recordsSlot));
       await next();
       return records;
     },

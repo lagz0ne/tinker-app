@@ -3,6 +3,7 @@ import type { Many, Scope } from "@tinker/core";
 import { z } from "zod";
 
 import {
+  syncSide,
   recordsSlot,
   readBatchSlot,
   readBootstrapSlot,
@@ -68,6 +69,7 @@ export const streamMessage = z.discriminatedUnion("kind", [
 export const router: import("~/base/router-entry").RouterOptions = {};
 
 export const clientBindings = [
+  syncSide("tab"),
   recordsSlot(records),
   readBatchSlot(readBatch),
   readBootstrapSlot(readBootstrap),

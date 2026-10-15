@@ -5,3 +5,5 @@ export { event, execution, stream } from "~/components/sync/schema";
 export { accountNotice } from "~/components/sync/notice";
 export { publishAccountNotice } from "~/components/sync/publish.server";
 export { openSync } from "~/components/sync/stream.server";
+
+export { syncStartup, syncSide } from "~/components/sync/slots";

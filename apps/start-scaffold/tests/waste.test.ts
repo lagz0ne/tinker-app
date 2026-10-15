@@ -10,16 +10,16 @@ import { readAccount } from "~/components/demo/backend/auth.server";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
 import { bootstrap } from "~/components/demo/backend/sync.server";
 import * as demo from "~/components/demo/index.server";
+import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { backendStop, requestStop } from "~/components/requests";
 import { loadSnapshot, checkAccount } from "~/components/sync/client/events";
 import { refreshAccount, receiveMessage } from "~/components/sync/client/events";
-import { accountOwner } from "~/components/sync/client/owner";
 import { syncClient } from "~/components/sync/client/sync";
 import { tabStop } from "~/components/sync/client/tab";
 import { snapshotSource } from "~/components/sync/functions";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
-import { syncRecords } from "~/components/sync/slots";
+import { syncStartup } from "~/components/sync/slots";
 import { openSync } from "~/components/sync/stream.server";
 
 import { authClient, signIn } from "@/frontend/actions";
@@ -28,6 +28,8 @@ import { clientBindings } from "./presets";
 import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+
+const requestBindings = requestHostStop(new AbortController().signal);
 
 const settings = [
   [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
@@ -44,8 +46,16 @@ test("a stream checks the session once at open, and a save does not check it aga
     extensions: [startRequests, authStartup],
     signal: stop.signal,
     tags: [
-      [settings, backendStop(stop.signal), requestStop(stop.signal), requestHeaders(new Headers())],
-      authBindings,
+      requestBindings,
+      [
+        [
+          settings,
+          backendStop(stop.signal),
+          requestStop(stop.signal),
+          requestHeaders(new Headers()),
+        ],
+        authBindings,
+      ],
     ],
     presets: [proofDatabase, proofMail],
     observe: { history: 100 },
@@ -88,13 +98,13 @@ test("a signed-out private redirect loads one snapshot across separate renders",
 
   const page = createScope({
     signal: stop.signal,
-    extensions: [syncRecords, accountOwner],
+    extensions: [syncStartup],
     tags: [clientBindings, tabStop(stop.signal), authBindings],
     presets: [source],
   });
   const redirected = createScope({
     signal: stop.signal,
-    extensions: [syncRecords, accountOwner],
+    extensions: [syncStartup],
     tags: [clientBindings, tabStop(stop.signal), authBindings],
     presets: [source],
   });
@@ -122,7 +132,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   const server = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [settings, authBindings],
+    tags: [requestBindings, [settings, authBindings]],
     presets: [proofDatabase, proofMail],
   });
   await server.ready;
@@ -130,7 +140,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
 
   const browser = createScope({
     signal: stop.signal,
-    extensions: [syncRecords, accountOwner],
+    extensions: [syncStartup],
     tags: [clientBindings, tabStop(stop.signal), authBindings],
     presets: [
       preset(authClient, async () =>
@@ -206,13 +216,13 @@ test("a private route check clears cached records after another tab signs out", 
   const server = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [settings, authBindings],
+    tags: [requestBindings, [settings, authBindings]],
     presets: [proofDatabase, proofMail],
   });
 
   const browser = createScope({
     signal: stop.signal,
-    extensions: [syncRecords, accountOwner],
+    extensions: [syncStartup],
     tags: [clientBindings, tabStop(stop.signal), authBindings],
     presets: [
       preset(snapshotSource, () => ({

@@ -5,8 +5,11 @@ import { isError, raise } from "~/components/errors";
 import { httpBackend } from "~/components/http";
 import { httpRequest } from "~/components/http/index.server";
 import { http } from "~/components/http/index.server";
+import { backendStop as requestHostStop } from "~/components/requests";
 import { backendStop } from "~/components/requests";
 import { requestStop, startRequests } from "~/components/requests";
+
+const requestBindings = requestHostStop(new AbortController().signal);
 
 const post = operation({
   label: "test.post",
@@ -422,7 +425,7 @@ test("backend stop settles a server function's signalled HTTP call", async () =>
   const scope = createScope({
     signal: stop.signal,
     extensions: [startRequests],
-    tags: [backend.binding, backendStop(stop.signal)],
+    tags: [requestBindings, [backend.binding, backendStop(stop.signal)]],
   });
   await scope.ready;
 
@@ -568,7 +571,7 @@ test("forced root and session closes still cancel a never-answering HTTP request
     const scope = createScope({
       signal: stop.signal,
       extensions: [startRequests],
-      tags: [backend.binding],
+      tags: [requestBindings, [backend.binding]],
     });
     await scope.ready;
     const target = where === "root" ? scope : scope.createSession();

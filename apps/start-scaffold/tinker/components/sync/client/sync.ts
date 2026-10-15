@@ -4,7 +4,7 @@ import type { Operation } from "@tinker/core";
 import { fail, raise } from "~/components/errors";
 import { accountOwner } from "~/components/sync/client/owner";
 import type { Sync } from "~/components/sync/envelopes";
-import { readBatchSlot, readBootstrapSlot, syncRecords } from "~/components/sync/slots";
+import { readBatchSlot, readBootstrapSlot, syncStartup } from "~/components/sync/slots";
 
 /**
  * The tab's applied state: the cursor per stream, and the account it belongs to. It keeps only
@@ -12,8 +12,9 @@ import { readBatchSlot, readBootstrapSlot, syncRecords } from "~/components/sync
  */
 export const syncClient = resource({
   label: "sync.client",
-  depends: { owner: accountOwner, records: syncRecords },
+  depends: { owner: accountOwner, records: syncStartup },
   factory: ({ owner, records: appRecords }, { defer, log, clock }) => {
+    if (appRecords === undefined) raise("StreamMissing", {});
     const records: Sync.Records = appRecords;
     let accountId: string | null = null;
     const cursors = new Map<string, number>();

@@ -9,6 +9,7 @@ import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "
 import { authMail } from "~/components/mail/index.server";
 import { mail } from "~/components/mail/index.server";
 import {
+  syncSide,
   recordsSlot,
   readBatchSlot,
   readBootstrapSlot,
@@ -59,6 +60,7 @@ export const authBindings = [
 ];
 
 export const clientBindings = [
+  syncSide("tab"),
   recordsSlot(records),
   readBatchSlot(readBatch),
   readBootstrapSlot(readBootstrap),

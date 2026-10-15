@@ -446,11 +446,13 @@ function externalDeclaration(call) {
 }
 
 /** The base owns this exact callback through Promise.then and caches its work. */
-function onceArgument(node, call) {
+function entryArgument(node, call) {
   if (callbackIndex(call, node) !== 0) return false;
   return symbolOf(call.expression)?.declarations?.some(
     (declaration) =>
-      pathOf(declaration) === "tinker/base/close.ts" && nameOf(declaration.name) === "once",
+      (pathOf(declaration) === "tinker/base/close.ts" && nameOf(declaration.name) === "once") ||
+      (pathOf(declaration) === "tinker/base/start-entry.ts" &&
+        nameOf(declaration.name) === "createStartEntry"),
   );
 }
 
@@ -459,7 +461,7 @@ function nativeArgument(node) {
   return (
     argumentOf(node, call) &&
     callbackArgument(call, node) &&
-    (onceArgument(node, call) || (externalCall(call) && externalDeclaration(call)))
+    (entryArgument(node, call) || (externalCall(call) && externalDeclaration(call)))
   );
 }
 
@@ -664,10 +666,6 @@ function isCommand(node) {
 
 function checkRoots(node) {
   if (isCommand(node)) return;
-  if (pathOf(node) === "tinker/base/router-entry.tsx" && graphOwner(node)) {
-    return;
-  }
-
   checkScopeReference(node);
   if (!moduleBinding(node) || !contains(checker.getTypeAtLocation(node.name), "holder")) return;
   fail(node, "module-handle");
@@ -1322,7 +1320,7 @@ function checkPlainFunction(node) {
   );
 }
 
-/** Only named copied base entry functions have native entry exceptions. */
+/** Named copied entry helpers and the approved browser main keep native contracts. */
 function isEntryHelper(node) {
   if (!node) return false;
   const helpers = {
@@ -1340,17 +1338,15 @@ function isEntryHelper(node) {
       // New: copied c55998e entry/dev-error devErrorPage: read a failed response and build its dev page.
       "devErrorPage",
     ],
-    "tinker/base/router-entry.tsx": [
-      // New: bind optional parts to Start's request-time router loader.
-      "createRouterEntry",
-      // New: copied c55998e entry/router getRouter: load the route tree and own the tab scopes.
+    "cmds/router.ts": [
+      // New: the browser main opens and closes the telemetry and tab roots in plain view.
       "getRouter",
-      // New: copied c55998e router readTelemetry.observe: read the borrowed or owned observer.
-      "observe",
-      // New: copied c55998e router readTelemetry.close: stop the browser's telemetry root.
-      "close",
-      // New: await both tab roots and report their first close failure.
-      "finishClose",
+    ],
+    "tinker/base/router-entry.tsx": [
+      // Replacement for the copied observer callback: borrow the current render observer.
+      "readRenderObservation",
+      // Load the native route tree and bind its fallback views and React provider.
+      "createRouterEntry",
     ],
     "tinker/base/server-entry.ts": [
       // New: bind Start's renderer to the command's request scope.
@@ -1361,10 +1357,8 @@ function isEntryHelper(node) {
       "next",
     ],
     "tinker/base/start-entry.ts": [
-      // New: put CSRF and requests before the app's Start middleware.
+      // Configure Start's CSRF guard and cache the command's async options once.
       "createStartEntry",
-      // New: copied c55998e entry/start readOptions: await and cache the app's options once.
-      "readOptions",
     ],
   };
   return helpers[pathOf(node)]?.includes(nameOf(functionName(node))) ?? false;
@@ -1707,6 +1701,36 @@ if (process.argv.includes("--prove")) {
       "plain-effect",
       "export async function unrelatedFeature() { await Promise.resolve(); }",
       "tinker/base/start-entry.ts",
+    ],
+    [
+      "router-command-other-function",
+      "plain-effect",
+      "export async function unrelatedFeature() { await Promise.resolve(); }",
+      "cmds/router.ts",
+    ],
+    [
+      "router-name-other-command",
+      "plain-effect",
+      "export async function getRouter() { await Promise.resolve(); }",
+      "cmds/other-router.ts",
+    ],
+    [
+      "copied-router-cannot-open-root",
+      "scope-entry-only",
+      'import { createScope } from "@tinker/core"; export const hidden = resource({ factory: () => createScope() });',
+      "tinker/base/router-entry.tsx",
+    ],
+    [
+      "fake-start-entry-callback",
+      "plain-effect",
+      "function createStartEntry(read: () => Promise<void>) { return read; } export const hidden = createStartEntry(async () => { await Promise.resolve(); });",
+      "cmds/start-probe.ts",
+    ],
+    [
+      "fake-once-callback",
+      "plain-effect",
+      "function once(action: () => Promise<void>) { return action; } export const hidden = once(async () => { await Promise.resolve(); });",
+      "cmds/once-probe.ts",
     ],
     [
       "unknown-base-root",

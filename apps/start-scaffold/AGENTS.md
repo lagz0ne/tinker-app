@@ -58,7 +58,7 @@ Their helpers still follow the strict rule.
 A service must never exist outside the graph of primitives.
 Resources own long-lived clients, connections, clocks, timers, and queues.
 Every file directly under `cmds/` may create and own roots.
-The base client entry and scope tests own their roots too.
+Scope tests own their roots too.
 The entry owns each root and its stop signal.
 No helper module keeps a scope singleton or exports a scope getter.
 Outside an entry, no module-level let or const holds a live handle,
@@ -101,8 +101,8 @@ Import createScope from @tinker/core.
 The command writes its close order; `tinker/base/close.ts` caches the callback once.
 `server-entry.ts` renders over the supplied app handle.
 `panics.server.ts` reports process failures without wrapping the handle.
-`router-entry.tsx` receives optional parts from the client command.
-`start-entry.ts` puts CSRF and requests before app middleware.
+`router-entry.tsx` loads the route tree and binds native views; the browser command owns both roots.
+`cmds/start.ts` lists CSRF, requests, then app middleware. The base caches its native Start options.
 The command binds the renderObservation tag from `base/observe.ts`.
 Each server render reads that tag from its request root.
 Only the command retains roots and stop controllers. No close helper borrows a scope.
@@ -123,7 +123,7 @@ Start borrows the context. The command binds the render observer tag.
 An optional `fetch(request, next)` can wrap requests.
 The command closes on HMR replacement and process shutdown, then reports the first failure.
 
-The scaffold's client wiring lives in `cmds/router.ts`.
+The browser main lives in `cmds/router.ts#getRouter`, its only approved named cmd exception.
 It binds router options, extensions, and each sync reader tag.
 No app code may import a command file.
 Commands may import app code and component public entries.

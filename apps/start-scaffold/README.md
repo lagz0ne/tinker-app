@@ -26,7 +26,7 @@ Open `http://localhost:4318` when dev starts.
 | -------------------- | -------------------------------------------------------------------------------------- |
 | `cmds/server.ts`     | Server roots, settings, auth hooks, sync slots, and shutdown                           |
 | `cmds/router.ts`     | Browser roots, router options, records, and reader slots                               |
-| `cmds/start.ts`      | The Start middleware hand-off                                                          |
+| `cmds/start.ts`      | CSRF, requests, and app middleware in order                                            |
 | `src/`               | App routes, UI, transport, root shell, and styles                                      |
 | `tinker/base/`       | Entry, close, panics, and observer hand-off                                            |
 | `tinker/components/` | Copied errors, requests, health, http, database, auth, telemetry, sync, mail, and demo |
@@ -41,7 +41,7 @@ Imports omit TypeScript file endings. Keep blank-line steps in function bodies.
 Choose tags for fixed inputs, data for changing records, resources for owned clients,
 and operations for actions. Read [AGENTS.md](AGENTS.md) and the copied skills before editing.
 No module owns an app scope outside commands or copied entry code.
-The plain-function cap is 17. Only the named copied base entry functions have exceptions.
+The plain-function cap is 17. Only named entry functions have exceptions.
 Only cmds/router.ts#getRouter has the approved cmd entry exception; no component or src function is skipped.
 
 ## Command wiring
@@ -69,7 +69,9 @@ Auth's two hooks are required and have no defaults.
 A missing hook fails `root.ready` with its name.
 Auth depends only on requests and database; the command joins mail and sync.
 
-The browser command binds each app-owned reader and records descriptor:
+The browser command opens telemetry, then its app root, and writes their close order.
+It lists syncStartup by name and binds syncSide("tab") and tabStop.
+It binds each app-owned reader and records descriptor:
 
 ```ts
 recordsSlot(records),

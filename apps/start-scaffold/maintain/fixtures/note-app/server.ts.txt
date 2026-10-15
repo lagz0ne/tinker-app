@@ -16,6 +16,8 @@ import { abortReasons } from "~/components/errors";
 import * as mail from "~/components/mail/index.server";
 import { startRequests, backendStop } from "~/components/requests";
 import {
+  syncStartup,
+  syncSide,
   bootstrapSlot,
   readAccountSlot,
   publishAccountNotice,
@@ -82,11 +84,12 @@ try {
   const app = createScope({
     signal: stop.app.signal,
     observe: tools.resolve(observer),
-    extensions: [startRequests, authStartup, databaseSetup, mail.mailStartup],
+    extensions: [startRequests, authStartup, databaseSetup, mail.mailStartup, syncStartup],
     tags: [
       backendStop(stop.app.signal),
       renderObservation(tools.resolve(renderObserve, { ns: renderNs })),
       browserTelemetry(tools.resolve(browserIngest).ingest),
+      syncSide("server"),
       bootstrapSlot(bootstrap),
       readAccountSlot(readAccount),
       sendAuthMail((message, ctx) => ctx.resolve(mail.authMail).enqueue(message)),

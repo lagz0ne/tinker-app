@@ -3,9 +3,12 @@ import { expect, test } from "vite-plus/test";
 
 import { devErrorPage } from "~/base/panics";
 import { health } from "~/components/health";
+import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { responseBodies } from "~/components/requests/index.server";
 import { readResult } from "~/components/requests/index.server";
+
+const requestBindings = requestHostStop(new AbortController().signal);
 
 const greetingName = tag<string>({ label: "test.greetingName", default: "nobody" });
 
@@ -48,7 +51,7 @@ test("the base's health operation reports the base version", async () => {
 });
 
 test("the start extension hands each request its root scope", async () => {
-  const root = createScope({ extensions: [startRequests] });
+  const root = createScope({ tags: requestBindings, extensions: [startRequests] });
   await root.ready;
   expect(root.resolve(startRequests).scope).toBe(root);
   expect((await root.close({ graceful: true })).status).toBe("success");

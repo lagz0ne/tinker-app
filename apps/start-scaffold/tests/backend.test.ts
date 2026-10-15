@@ -12,12 +12,15 @@ import { raise, isError } from "~/components/demo/errors";
 import * as demo from "~/components/demo/index.server";
 import { mail, mailFrom, smtpUrl } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
+import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
 import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+
+const requestBindings = requestHostStop(new AbortController().signal);
 
 const tags = [
   [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
@@ -65,7 +68,7 @@ test("a real account can sign up, save its name, sign out and sign in", async ()
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -138,7 +141,7 @@ test("a refused save leaves the root usable", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
     presets: [proofDatabase, proofMail],
     observe: { history: 80 },
   });
@@ -166,7 +169,7 @@ test("a later action failure cannot undo a committed profile save", async () => 
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -201,7 +204,7 @@ test("a native commit failure never returns a saved profile", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -252,7 +255,7 @@ test("email check and reset callbacks use the declared mail action", async () =>
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -311,7 +314,7 @@ test("email check and reset callbacks use the declared mail action", async () =>
 test("two requests share the auth instance", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -339,7 +342,7 @@ test("sign-up replies before held mail and logs its failure", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
     observe: {
       log: (entry) => {
         if (entry.message === "mail.failed" && entry.level === 50) failed.resolve();
@@ -386,7 +389,7 @@ test("sign-up replies before held mail and logs its failure", async () => {
 test("releasing mail makes a fresh sender", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
   });
   await root.ready;
   try {
@@ -401,7 +404,7 @@ test("releasing mail makes a fresh sender", async () => {
 test("releasing database makes a fresh handle", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
   });
   await root.ready;
   try {

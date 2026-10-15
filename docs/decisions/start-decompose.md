@@ -81,11 +81,13 @@ Jobs run one at a time with `VITEST_MAX_WORKERS=1` and
 The lead approved named base entry exceptions after mid review. Only the
 copied server, router, start, close, and panic entry files may have them.
 Each function is named in check-plain with a reason. Src, components, and
-commands have no function skip. Native callbacks keep their SDK contracts.
+commands have no function skip except cmds/router.ts#getRouter, approved by the lead for the browser main. Native callbacks keep their SDK contracts.
 The plain-function cap stays 17. Planted cases check both IO and handle
 patterns in src, a component, a command, and an unlisted base file. A new
 function in a listed base file must still pass the plain rule.
 
-The router command holds options as a value. Its request loader lives in
-the named base router entry. Loading the route tree at request time keeps
-the router and server from waiting on each other during startup.
+The router command opens its telemetry and app roots in plain view.
+Base loads the native route tree at request time and binds fallback views,
+the React provider and page-hide cleanup. No base helper takes a scope.
+The Start command lists CSRF, requests and app middleware in order;
+base configures the CSRF guard and caches the command's async options.

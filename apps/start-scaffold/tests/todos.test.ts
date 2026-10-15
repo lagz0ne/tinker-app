@@ -7,12 +7,15 @@ import { migrate, databaseUrl } from "~/components/database/index.server";
 import { listTodos, changeTodo } from "~/components/demo/backend/todos.server";
 import { raise, isError } from "~/components/demo/errors";
 import * as demo from "~/components/demo/index.server";
+import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
 import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+
+const requestBindings = requestHostStop(new AbortController().signal);
 
 const tags = [
   [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
@@ -45,7 +48,7 @@ test("two real accounts can change only their own saved todos", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -139,7 +142,7 @@ test("signed-out todo reads and writes are refused", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
     presets: [proofDatabase, proofMail],
     observe: { history: 80 },
   });
@@ -166,7 +169,7 @@ test("signed-out todo reads and writes are refused", async () => {
 test("todo changes reject empty titles, long titles, and caller-selected owners", async () => {
   const stop = new AbortController();
   const root = createScope({
-    tags: [tags, authBindings],
+    tags: [requestBindings, [tags, authBindings]],
     extensions: [startRequests, authStartup],
     signal: stop.signal,
   });

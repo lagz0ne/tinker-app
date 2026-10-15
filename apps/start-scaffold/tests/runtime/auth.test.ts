@@ -5,10 +5,13 @@ import { expect, test } from "vite-plus/test";
 
 import { auth, handleAuth, sendAuthMail, sessionDeleted } from "~/components/auth/index.server";
 import { authSettings, authStartup } from "~/components/auth/index.server";
+import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 
 import { bindings } from "./fixtures/app.server";
 import type { AuthPort } from "./fixtures/app.server";
+
+const requestBindings = requestHostStop(new AbortController().signal);
 
 const hooks = [sendAuthMail(() => {}), sessionDeleted(async () => {})];
 
@@ -24,7 +27,11 @@ const proofAuth = preset(authPort, async () => ({
 const keys = authSettings({ origin: "https://shop.example", secret: "s".repeat(32) });
 
 test("handleAuth hands the whole request to the auth library and returns its reply", async () => {
-  const root = createScope({ extensions: [startRequests], tags: bindings, presets: [proofAuth] });
+  const root = createScope({
+    extensions: [startRequests],
+    tags: [requestBindings, bindings],
+    presets: [proofAuth],
+  });
   await root.ready;
   const get = await root.settle(handleAuth, {
     input: new Request("http://app/api/auth/get-session"),
@@ -43,7 +50,7 @@ test("handleAuth hands the whole request to the auth library and returns its rep
 test("handleAuth takes only a request, and a failing auth library fails the call", async () => {
   const lost = new Error("auth store lost");
   const root = createScope({
-    tags: bindings,
+    tags: [requestBindings, bindings],
     extensions: [startRequests],
     presets: [
       preset(authPort, async () => ({
@@ -111,7 +118,7 @@ test("the auth part's work shows on the trace as handleAuth; its settings are a 
   const root = createScope({
     observe: { history: 20 },
     extensions: [authStartup, startRequests],
-    tags: [bindings, keys, hooks],
+    tags: [requestBindings, [bindings, keys, hooks]],
     presets: [proofAuth],
   });
   await root.ready;
@@ -128,7 +135,7 @@ test("the auth part's work shows on the trace as handleAuth; its settings are a 
 });
 
 test("missing app auth wiring reports the tag instead of importing the main", async () => {
-  const root = createScope({ extensions: [startRequests] });
+  const root = createScope({ tags: requestBindings, extensions: [startRequests] });
   await root.ready;
 
   const result = await root.settle(handleAuth, {

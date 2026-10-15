@@ -2,7 +2,6 @@ import { createScope, operation } from "@tinker/core";
 import { test, expect } from "vite-plus/test";
 
 import { profile, counter, nameDraft } from "~/components/demo/frontend/state";
-import { accountOwner } from "~/components/sync/client/owner";
 import {
   syncClient,
   applyBootstrap,
@@ -11,7 +10,7 @@ import {
 } from "~/components/sync/client/sync";
 import { tabStop } from "~/components/sync/client/tab";
 import type { Sync } from "~/components/sync/envelopes";
-import { syncRecords } from "~/components/sync/slots";
+import { syncStartup } from "~/components/sync/slots";
 
 import { clientBindings } from "./presets";
 
@@ -53,7 +52,7 @@ test("an event before its receipt finishes only after saved records are applied"
 
   const root = createScope({
     signal: stop.signal,
-    extensions: [syncRecords, accountOwner],
+    extensions: [syncStartup],
     tags: [clientBindings, tabStop(stop.signal)],
   });
   await root.ready;
@@ -98,7 +97,7 @@ test("replayed events and older snapshots leave newer records and dirty drafts a
   const stop = new AbortController();
   const root = createScope({
     signal: stop.signal,
-    extensions: [syncRecords, accountOwner],
+    extensions: [syncStartup],
     tags: [clientBindings, tabStop(stop.signal)],
   });
   await root.ready;
@@ -164,7 +163,7 @@ test("account exit stops local waits and ignores an old account's late response"
 
   const root = createScope({
     signal: stop.signal,
-    extensions: [syncRecords, accountOwner],
+    extensions: [syncStartup],
     tags: [clientBindings, tabStop(stop.signal)],
   });
   await root.ready;
