@@ -1,6 +1,5 @@
 import { createScope, type Scope } from "@tinker/core";
 
-import { once } from "~/base/close";
 import { renderObservation } from "~/base/observe";
 import { observeServerPanics } from "~/base/panics.server";
 import { createServerHandler } from "~/base/server-entry";
@@ -41,30 +40,30 @@ import { bootstrap, readAccount } from "@/demo/index.server";
 
 /** The host starts the server; importing this command opens nothing. */
 // oxlint-disable-next-line complexity -- Cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; deliberately untested glue.
-export default async function main() {
-  // Vite dev already loaded .env; this covers npm start.
-  try {
-    process.loadEnvFile();
-  } catch (error) {
-    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
-  }
-
+export default async function main({
+  env,
+  signal,
+  stdout,
+  stderr,
+}: {
+  env: Readonly<Record<string, string | undefined>>;
+  signal: AbortSignal;
+  stdout: { write(chunk: string): unknown };
+  stderr: { write(chunk: string): unknown };
+}) {
+  signal.throwIfAborted();
   const stop = { tools: new AbortController(), app: new AbortController() };
-
   const tools = createScope({
     signal: stop.tools.signal,
     extensions: [telemetryExport],
     tags: [
       telemetrySide("server"),
-      consoleOutput(process.stdout),
-      process.env.OTEL_SERVICE_NAME !== undefined &&
-        telemetryService(process.env.OTEL_SERVICE_NAME),
-      process.env.VICTORIA_TRACES_URL !== undefined &&
-        tracesUrl(new URL(process.env.VICTORIA_TRACES_URL)),
-      process.env.VICTORIA_LOGS_URL !== undefined &&
-        logsUrl(new URL(process.env.VICTORIA_LOGS_URL)),
-      process.env.LOG_LEVEL !== undefined && logLevel(Number(process.env.LOG_LEVEL)),
-      process.env.SPAN_HISTORY !== undefined && spanHistory(Number(process.env.SPAN_HISTORY)),
+      consoleOutput(stdout),
+      env.OTEL_SERVICE_NAME !== undefined && telemetryService(env.OTEL_SERVICE_NAME),
+      env.VICTORIA_TRACES_URL !== undefined && tracesUrl(new URL(env.VICTORIA_TRACES_URL)),
+      env.VICTORIA_LOGS_URL !== undefined && logsUrl(new URL(env.VICTORIA_LOGS_URL)),
+      env.LOG_LEVEL !== undefined && logLevel(Number(env.LOG_LEVEL)),
+      env.SPAN_HISTORY !== undefined && spanHistory(Number(env.SPAN_HISTORY)),
     ],
   });
 
@@ -74,13 +73,18 @@ export default async function main() {
     if (result.teardownErrors?.length) throw result.teardownErrors[0];
   }
 
-  const closeTools = once(async () => {
-    stop.tools.abort(abortReasons.closed);
-    ended(await tools.closed);
-  });
+  const cancelled = Promise.withResolvers<never>();
+  const abort = () => {
+    stop.app.abort(signal.reason);
+    cancelled.reject(signal.reason);
+  };
+  void cancelled.promise.catch(() => {});
+  signal.addEventListener("abort", abort, { once: true });
+  if (signal.aborted) abort();
 
   try {
-    await tools.ready;
+    await Promise.race([tools.ready, cancelled.promise]);
+    signal.throwIfAborted();
     const app = createScope({
       signal: stop.app.signal,
       observe: tools.resolve(observer),
@@ -96,43 +100,52 @@ export default async function main() {
         sessionDeleted((accountId, ctx) =>
           ctx.run(publishAccountNotice, { rawInput: { accountId } }),
         ),
-        process.env.PUBLIC_ORIGIN !== undefined &&
-          process.env.AUTH_SECRET !== undefined &&
-          authSettings({ origin: process.env.PUBLIC_ORIGIN, secret: process.env.AUTH_SECRET }),
-        process.env.DATABASE_URL !== undefined && databaseUrl(new URL(process.env.DATABASE_URL)),
-        process.env.SMTP_URL !== undefined && mail.smtpUrl(new URL(process.env.SMTP_URL)),
-        process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM),
+        env.PUBLIC_ORIGIN !== undefined &&
+          env.AUTH_SECRET !== undefined &&
+          authSettings({ origin: env.PUBLIC_ORIGIN, secret: env.AUTH_SECRET }),
+        env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
+        env.SMTP_URL !== undefined && mail.smtpUrl(new URL(env.SMTP_URL)),
+        env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM),
       ],
     });
 
-    const close = once(async () => {
-      stop.app.abort(abortReasons.closed);
-      const appEnd = await app.closed;
-      try {
-        await closeTools();
-      } finally {
-        ended(appEnd);
-      }
+    const closed = app.closed.then(async function closeRoots(appEnd) {
+      stop.tools.abort(abortReasons.closed);
+      const toolsEnd = await tools.closed;
+      signal.removeEventListener("abort", abort);
+      ended(appEnd);
+      ended(toolsEnd);
     });
+    void closed.catch(() => {});
 
     try {
-      await app.ready;
+      await Promise.race([app.ready, cancelled.promise]);
+      signal.throwIfAborted();
+      app.onClose(observeServerPanics(abort, closed, stderr));
+      return {
+        fetch: createServerHandler(
+          { requestContext: app.resolve(startRequests) },
+          { dev: import.meta.env.DEV },
+        ).fetch,
+        closed,
+      };
     } catch (error) {
-      await close().catch((cleanup) => {
-        if (cleanup !== error) process.stderr.write(`close failed: ${String(cleanup)}\n`);
+      stop.app.abort(error);
+      await app.close();
+      await closed.catch((cleanup) => {
+        if (cleanup !== error) stderr.write(`close failed: ${String(cleanup)}\n`);
       });
       throw error;
     }
-
-    app.onClose(observeServerPanics(close));
-    return createServerHandler(
-      { requestContext: app.resolve(startRequests), close },
-      { dev: import.meta.env.DEV },
-    );
   } catch (error) {
-    await closeTools().catch((cleanup) => {
-      if (cleanup !== error) process.stderr.write(`close failed: ${String(cleanup)}\n`);
-    });
+    stop.tools.abort(error);
+    await tools.close();
+    signal.removeEventListener("abort", abort);
+    try {
+      ended(await tools.closed);
+    } catch (cleanup) {
+      if (cleanup !== error) stderr.write(`close failed: ${String(cleanup)}\n`);
+    }
     throw error;
   }
 }

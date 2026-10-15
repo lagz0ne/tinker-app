@@ -60,19 +60,19 @@ if (import.meta.main) {
 
     const serverFile = join(proof, "cmds/server.ts");
     const server = await readFile(serverFile, "utf8");
-    assert.ok(server.includes("    await app.ready;"));
+    assert.ok(server.includes("      await Promise.race([app.ready, cancelled.promise]);"));
     await writeFile(
       serverFile,
       server.replace(
-        "    await app.ready;",
+        "      await Promise.race([app.ready, cancelled.promise]);",
         `
-  await app.ready;
+  await Promise.race([app.ready, cancelled.promise]);
   const createRequestSession = app.createSession.bind(app);
   let requestSessionCount = 0;
   app.createSession = (...args) => { requestSessionCount++; return createRequestSession(...args); };
   Object.assign(globalThis, { __middlewareProof: {
     count: () => requestSessionCount,
-    stdout: tools.resolve(consoleOutput) === process.stdout,
+    stdout: tools.resolve(consoleOutput) === stdout,
   } });
 `,
       ),
@@ -180,7 +180,13 @@ export const Route = createFileRoute("/proof/write")({server: {
     Object.assign(process.env, proofEnv);
     const built = await import(pathToFileURL(join(proof, "dist/server/server.js")).href);
 
-    const app = await built.default();
+    const stop = new AbortController();
+    const app = await built.default({
+      env: process.env,
+      signal: stop.signal,
+      stdout: process.stdout,
+      stderr: process.stderr,
+    });
     try {
       const native = globalThis.__middlewareProof;
       let bootstrapUrl;
@@ -310,7 +316,8 @@ export const Route = createFileRoute("/proof/write")({server: {
       assert.equal((await pendingRead).done, true);
 
       const idle = reader.read();
-      await app.close();
+      stop.abort();
+      await app.closed;
       assert.equal((await idle).done, true);
 
       process.stdout.write(
@@ -320,7 +327,8 @@ export const Route = createFileRoute("/proof/write")({server: {
         `PASS: native global/route/function middleware runs once per request; direct SSR calls keep ${results.join(" and ")} apart.\n`,
       );
     } finally {
-      await app.close();
+      stop.abort();
+      await app.closed;
     }
   } finally {
     process.chdir(previousDirectory);

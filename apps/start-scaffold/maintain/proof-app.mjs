@@ -67,7 +67,7 @@ export async function copyProofApp(source, target) {
   );
 }
 
-/** Child-process inputs read only by the command; component tests bind tags directly. */
+/** Child-process inputs supplied by the host to the command; component tests bind tags directly. */
 export const proofEnv = {
   PUBLIC_ORIGIN: "http://localhost:4318",
   AUTH_SECRET: "local-proof-only-secret-with-thirty-two-letters",
@@ -93,8 +93,8 @@ export async function wireProofMail(consumer) {
         .replace(
           "backendStop(stop.app.signal),",
           `backendStop(stop.app.signal),
-      process.env.SMTP_URL !== undefined && smtpUrl(new URL(process.env.SMTP_URL)),
-      process.env.SMTP_FROM !== undefined && mailFrom(process.env.SMTP_FROM),`,
+      env.SMTP_URL !== undefined && smtpUrl(new URL(env.SMTP_URL)),
+      env.SMTP_FROM !== undefined && mailFrom(env.SMTP_FROM),`,
         ),
   );
 }
@@ -103,7 +103,8 @@ export async function wireProofMail(consumer) {
 export const missingMailChild = `
 import assert from "node:assert/strict";
 const { default: main } = await import("./dist/server/server.js");
-await assert.rejects(main(), (error) => {
+const stop = new AbortController();
+await assert.rejects(main({ env: process.env, signal: stop.signal, stdout: process.stdout, stderr: process.stderr }), (error) => {
   assert.equal(error.kind, "MissingTag");
   assert.equal(error.payload.label, "mail.from");
   return true;

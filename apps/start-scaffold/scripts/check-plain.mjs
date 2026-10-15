@@ -445,14 +445,13 @@ function externalDeclaration(call) {
   );
 }
 
-/** The two native entry adapters invoke and cache these exact callback arguments. */
+/** The native Start entry invokes and caches this exact callback argument. */
 function entryArgument(node, call) {
   if (callbackIndex(call, node) !== 0) return false;
   return symbolOf(call.expression)?.declarations?.some(
     (declaration) =>
-      (pathOf(declaration) === "tinker/base/close.ts" && nameOf(declaration.name) === "once") ||
-      (pathOf(declaration) === "tinker/base/start-entry.ts" &&
-        nameOf(declaration.name) === "createStartEntry"),
+      pathOf(declaration) === "tinker/base/start-entry.ts" &&
+      nameOf(declaration.name) === "createStartEntry",
   );
 }
 
@@ -1322,12 +1321,6 @@ function checkPlainFunction(node) {
 
 /** Named copied entry helpers and the approved server and browser mains keep native contracts. */
 const entryHelpers = {
-  "tinker/base/close.ts": [
-    // Replacement for the old close helpers: cache only the caller's callback promise.
-    "once",
-    // Return the callback shared by HMR, the host, and page hide.
-    "close",
-  ],
   "tinker/base/panics.server.ts": [
     // c55998e createServerEntry: register process panic cleanup without identity wrapping.
     "observeServerPanics",

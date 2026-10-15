@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 const app = resolve(import.meta.dirname, "..");
 
 for (const task of [
+  "check:commands",
   "check:plain",
   "test:schema",
   "test:imports",

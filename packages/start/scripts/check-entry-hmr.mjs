@@ -39,23 +39,23 @@ try {
     "plant must replace the command's render observer",
   );
   const source = `const probe = { renderSpans: [], starts: 0 }; globalThis.__entryProof = probe;\n${original
-    .replace("async function main() {", "async function main() { probe.starts++; ")
+    .replace(
+      "  signal.throwIfAborted();",
+      "  probe.starts++; probe.signal = signal; signal.throwIfAborted();",
+    )
     .replaceAll(
       "tools.resolve(renderObserve, { ns: renderNs })",
       "{ export: (span) => probe.renderSpans.push(span) }",
     )
     .replace(
-      "const closeTools = once(",
-      "probe.toolsClosed = tools.closed;\nconst closeTools = once(",
+      "  const cancelled =",
+      "  probe.toolsClosed = tools.closed; probe.abort = () => stop.app.abort(abortReasons.closed);\n  const cancelled =",
     )
     .replace(
-      "    const close = once(",
-      "    probe.appClosed = app.closed;\n    const close = once(",
+      "    const closed = app.closed.then",
+      "    probe.appClosed = app.closed;\n    const closed = app.closed.then",
     )
-    .replace(
-      "    return createServerHandler(",
-      "    probe.close = close;\n    return createServerHandler(",
-    )}`;
+    .replace("    void closed.catch", "    probe.closed = closed;\n    void closed.catch")}`;
   const routerFile = join(
     fixture,
     appFiles(fixture).find((file) => file.option === "routerEntry").file,
@@ -73,8 +73,8 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
   );
   const version = (value) =>
     source.replace(
-      "{ requestContext: app.resolve(startRequests), close }",
-      `{ requestContext: app.resolve(startRequests), close, fetch(request, next) { return new URL(request.url).pathname === "/scope-proof" ? new Response("${value}") : next(request); } }`,
+      "{ requestContext: app.resolve(startRequests) }",
+      `{ requestContext: app.resolve(startRequests), fetch(request, next) { return new URL(request.url).pathname === "/scope-proof" ? new Response("${value}") : next(request); } }`,
     );
   writeFileSync(entry, version("first"));
 
@@ -133,6 +133,7 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
     }),
   ]);
   const [closed, toolsClosed] = await closing.finally(() => clearTimeout(timeout));
+  assert.equal(firstProof.signal.aborted, true, "HMR aborts the host signal");
   assert.equal(closed.status, "success");
   assert.equal(toolsClosed.status, "success");
 
@@ -160,13 +161,17 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
     assert.equal(auth.status, 200);
     assert.equal(await auth.json(), null);
   }
-  await secondProof.close();
+  secondProof.abort();
+  await secondProof.closed;
   assert.equal((await secondProof.toolsClosed).status, "success");
   console.log(
     "HMR: unchanged entry reused; both old roots closed; new requests and renders use the new entry; EXIT 0",
   );
 } finally {
-  for (const entry of entries) await entry.close();
+  for (const entry of entries) {
+    entry.abort();
+    await entry.closed;
+  }
   await vite?.close();
   console.log("HMR: native server and watchers closed.");
   rmSync(fixture, { recursive: true, force: true });

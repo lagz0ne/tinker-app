@@ -27,16 +27,30 @@ assert.equal(probe.created, 0, "import must not create a scope");
 if (mode.startsWith("import")) {
   await new Promise(setImmediate);
   assert.deepEqual(process.getActiveResourcesInfo().filter((name) => !name.startsWith("FSReq")).sort(), resources);
+} else if (mode === "aborted") {
+  const stop = new AbortController();
+  const reason = new Error("proof.already-stopped");
+  stop.abort(reason);
+  await assert.rejects(main({ env: {}, signal: stop.signal,
+    stdout: { write() { assert.fail("aborted start wrote stdout"); } },
+    stderr: { write() { assert.fail("aborted start wrote stderr"); } } }), error => error === reason);
+  assert.equal(probe.created, 0, "already aborted input opens no root");
 } else {
-  const server = await main();
+  const stop = new AbortController();
+  const output = [], errors = [];
+  const server = await main({ env: process.env, signal: stop.signal,
+    stdout: { write: text => output.push(text) }, stderr: { write: text => errors.push(text) } });
+  assert.deepEqual(Object.keys(server).sort(), ["closed", "fetch"]);
   const replies = await Promise.all([1, 2].map(() => server.fetch(new Request("http://localhost/api/health"))));
   for (const reply of replies) {
     assert.equal(reply.status, 200);
     assert.equal((await reply.json()).ok, true);
   }
-  assert.equal(probe.env, 1, "main reads inputs once");
+  assert.equal(probe.env, 0, "only the host may load env files");
   assert.equal(probe.created, 2, "only the two server roots start");
-  await Promise.all([server.close(), server.close()]);
+  stop.abort();
+  await Promise.all([server.closed, server.closed]);
+  assert.deepEqual(errors, []);
   assert.deepEqual(probe.closed, [2, 1], "close ends app then tools once");
 }
 `;
@@ -51,7 +65,7 @@ for (const app of process.argv.slice(2)) {
   assert.equal(source.match(/\bcreateScope\(/g)?.length, 2, "plant both real root calls");
   writeFileSync(copy, source.replaceAll("createScope(", "globalThis.__entryProof.createScope("));
   try {
-    for (const mode of ["import-original", "import-counted", "main"]) {
+    for (const mode of ["import-original", "import-counted", "aborted", "main"]) {
       const ran = spawnSync(process.execPath, ["--input-type=module", "-e", child, mode], {
         cwd: root,
         env: {

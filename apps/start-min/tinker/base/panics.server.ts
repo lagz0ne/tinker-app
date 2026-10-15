@@ -1,11 +1,16 @@
 import { inspect } from "node:util";
 
 /** Report unhandled work, close through the caller, then leave with failure. */
-export function observeServerPanics(close: () => Promise<void>): () => void {
+export function observeServerPanics(
+  abort: () => void,
+  closed: Promise<void>,
+  stderr: { write(chunk: string): unknown },
+): () => void {
   const fail = async (error: unknown) => {
-    process.stderr.write(`server: unhandled rejection ${inspect(error)}\n`);
+    stderr.write(`server: unhandled rejection ${inspect(error)}\n`);
     try {
-      await close();
+      abort();
+      await closed;
     } finally {
       process.exit(1);
     }

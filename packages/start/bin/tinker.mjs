@@ -30,32 +30,66 @@ async function writeRouteTree(root) {
  * @param {string} root - From tinker serve; why: the built app to serve.
  */
 async function serve(root) {
-  const { default: main } = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
-  const app = await main();
-  const asset = await createAssets(root);
-  const render = async (request) => compressResponse(request, await app.fetch(request));
-
-  const server = listen(
-    {
-      overrideGlobalObjects: false,
-      hostname: process.env.HOST ?? "127.0.0.1",
-      port: Number(process.env.PORT ?? 4318),
-      fetch: (request) => asset(request) ?? render(request),
-    },
-    (info) => console.log(`tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${info.port}`),
+  const stop = new AbortController();
+  const abort = () => stop.abort();
+  process.once("SIGINT", abort);
+  process.once("SIGTERM", abort);
+  const stopped = new Promise((done) =>
+    stop.signal.addEventListener("abort", done, { once: true }),
   );
 
-  const stopped = Promise.withResolvers();
-  process.once("SIGINT", () => stopped.resolve());
-  process.once("SIGTERM", () => stopped.resolve());
-  await stopped.promise;
+  // Pending startup promises own no Node handle; keep the host alive to receive signals.
+  const running = setInterval(() => {}, 2 ** 30);
+  try {
+    if (existsSync(join(root, ".env"))) process.loadEnvFile(join(root, ".env"));
+    const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
+    const app = await built
+      .default({
+        env: process.env,
+        signal: stop.signal,
+        stdout: process.stdout,
+        stderr: process.stderr,
+      })
+      .catch((error) => {
+        if (!stop.signal.aborted) console.error(error);
+      });
+    if (!app) return stop.signal.aborted ? 0 : 1;
 
-  await Promise.all([
-    app.close(),
-    new Promise((done, reject) => server.close((error) => (error ? reject(error) : done()))),
-  ]);
+    try {
+      const asset = await createAssets(root);
+      if (stop.signal.aborted) {
+        await app.closed;
+        return 0;
+      }
+      const render = async (request) => compressResponse(request, await app.fetch(request));
+      const server = listen(
+        {
+          overrideGlobalObjects: false,
+          hostname: process.env.HOST ?? "127.0.0.1",
+          port: Number(process.env.PORT ?? 4318),
+          fetch: (request) => asset(request) ?? render(request),
+        },
+        (info) =>
+          console.log(`tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${info.port}`),
+      );
 
-  return 0;
+      await stopped;
+      await new Promise((done, reject) =>
+        server.close((error) => (error ? reject(error) : done())),
+      );
+      await app.closed;
+      return 0;
+    } catch (error) {
+      stop.abort();
+      await app.closed.catch(() => {});
+      console.error(error);
+      return 1;
+    }
+  } finally {
+    clearInterval(running);
+    process.off("SIGINT", abort);
+    process.off("SIGTERM", abort);
+  }
 }
 
 const [command, ...rest] = process.argv.slice(2);

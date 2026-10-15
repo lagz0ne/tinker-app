@@ -52,7 +52,14 @@ Vite names all three commands, with no fixed entry mount or part switches:
 tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts" });
 ```
 
-Only cmds/server.ts reads app inputs. Each binding reads its own process.env key beside the scope.
+The host calls `main({ env, signal, stdout, stderr })` once. The streams need only
+`write(chunk: string): unknown`. The command reads no process globals and loads no env file.
+It binds each value inline, for example `env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)`.
+Main returns `{ fetch, closed }`. Aborting the host signal closes app, then telemetry.
+The one `closed` promise reports app failure first, then the first teardown error.
+A start error closes what started, writes cleanup errors to stderr, and rethrows the start error.
+The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
+The dev host owns startup sharing, retry after failure, and abort on HMR replacement.
 An unset required value leaves its tag unbound; startup fails with MissingTag and the tag name.
 Importing it starts nothing. Its sole default export is async main.
 The prod host calls and awaits main once before listening; the dev host starts on its first fetch.

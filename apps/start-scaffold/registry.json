@@ -109,11 +109,6 @@
       "registryDependencies": ["@tinker-start/errors", "@tinker-start/requests"],
       "files": [
         {
-          "path": "tinker/base/close.ts",
-          "type": "registry:file",
-          "target": "~/tinker/base/close.ts"
-        },
-        {
           "path": "tinker/base/observe.ts",
           "type": "registry:file",
           "target": "~/tinker/base/observe.ts"

@@ -50,12 +50,10 @@ export function goodApp(files = {}) {
     "tsconfig.json": JSON.stringify({ extends: "./.tinker/tsconfig.json" }),
     ".gitignore": ".tinker/\n.tanstack/\n",
     ...Object.fromEntries(
-      ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(
-        (file) => [
-          `tinker/base/${file}`,
-          readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
-        ],
-      ),
+      ["panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map((file) => [
+        `tinker/base/${file}`,
+        readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
+      ]),
     ),
     ...Object.fromEntries(
       ["component.json", "errors.ts", "index.ts"].map((file) => [

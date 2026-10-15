@@ -69,7 +69,7 @@ for (const app of process.argv.slice(2)) {
     const text = readFileSync(entry, "utf8");
     writeFileSync(
       entry,
-      `import { used } from "~/components/build-proof/index.server";\n${text.replace("{ requestContext: app.resolve(startRequests), close }", `{ requestContext: app.resolve(startRequests), close, fetch(request, next) { return new URL(request.url).pathname === "/scope-proof" ? new Response(used) : next(request); } }`)}`,
+      `import { used } from "~/components/build-proof/index.server";\n${text.replace("{ requestContext: app.resolve(startRequests) }", `{ requestContext: app.resolve(startRequests), fetch(request, next) { return new URL(request.url).pathname === "/scope-proof" ? new Response(used) : next(request); } }`)}`,
     );
 
     const build = spawnSync("vp", ["build"], { cwd: fixture, encoding: "utf8", timeout: 120000 });

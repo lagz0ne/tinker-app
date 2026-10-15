@@ -1,6 +1,5 @@
 import { createScope } from "@tinker/core";
 
-import { once } from "~/base/close";
 import {
   createRouterEntry,
   pageEvents,
@@ -40,12 +39,6 @@ export async function getRouter() {
         extensions: [telemetryExport],
         tags: [telemetrySide("browser"), telemetryService("tinker-browser"), logConsole(console)],
       });
-  let close = once(async () => {
-    stop.tools.abort(abortReasons.closed);
-    const result = await tools?.closed;
-    if (result?.status === "failed") throw result.error;
-    if (result?.teardownErrors?.length) throw result.teardownErrors[0];
-  });
 
   try {
     await tools?.ready;
@@ -64,9 +57,7 @@ export async function getRouter() {
         streamMessageSlot(streamMessage),
       ],
     });
-    close = once(async () => {
-      stop.app.abort(abortReasons.closed);
-      const appEnd = await app.closed;
+    const closed = app.closed.then(async (appEnd) => {
       stop.tools.abort(abortReasons.closed);
       const toolsEnd = await tools?.closed;
 
@@ -75,21 +66,33 @@ export async function getRouter() {
         if (result?.teardownErrors?.length) throw result.teardownErrors[0];
       }
     });
+    void closed.catch(() => {});
+    const close = () => {
+      stop.app.abort(abortReasons.closed);
+      return closed;
+    };
 
-    await app.ready;
-    app.resolve(tabLifetime).bind(close);
-    if (import.meta.hot) import.meta.hot.dispose(close);
-    return await createRouterEntry({
-      options: app.resolve(syncRouter),
-      Wrap: app.resolve(routerScope),
-      close,
-      dev: import.meta.env.DEV,
-      server: import.meta.env.SSR,
-    });
+    return await app.ready
+      .then(async () => {
+        app.resolve(tabLifetime).bind(close);
+        if (import.meta.hot) import.meta.hot.dispose(close);
+        return createRouterEntry({
+          options: app.resolve(syncRouter),
+          Wrap: app.resolve(routerScope),
+          close,
+          dev: import.meta.env.DEV,
+          server: import.meta.env.SSR,
+        });
+      })
+      .catch(async (error) => {
+        await close().catch((cleanup) => {
+          if (cleanup !== error) console.error(cleanup);
+        });
+        throw error;
+      });
   } catch (error) {
-    await close().catch((cleanup) => {
-      if (cleanup !== error) console.error(cleanup);
-    });
+    stop.tools.abort(abortReasons.closed);
+    await tools?.closed;
     throw error;
   }
 }

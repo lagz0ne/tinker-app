@@ -176,7 +176,7 @@ export async function registryItems(options = {}) {
   const tasks = Object.keys(full.scripts).filter(
     (name) => name.startsWith("test:") && name !== "test:schema",
   );
-  for (const name of ["registry:build", ...tasks]) delete full.scripts[name];
+  for (const name of ["registry:build", "check:commands", ...tasks]) delete full.scripts[name];
   full.scripts.check =
     "vp check && vp run typecheck && vp run test && vp run check:plain && vp run test:schema && vp run doctor";
 

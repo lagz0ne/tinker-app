@@ -46,8 +46,8 @@ It reads `component.json` for direct component dependencies only. It never impor
 It does not pin copied runtime bytes or choose the order of app wiring.
 
 Serve imports the default entry, serves public and built client assets, and calls its handler.
-The server command owns config input and close order.
-It closes the app on SIGINT or SIGTERM. Asset paths, compression, ETags, and conditional
+The host supplies env, signal, stdout, and stderr; the command owns the close order.
+The host aborts its signal on SIGINT or SIGTERM and waits for closed. Asset paths, compression, ETags, and conditional
 requests remain covered by the tooling tests. The app must keep the host package installed
 where it runs `tinker serve`.
 
@@ -108,4 +108,11 @@ Local package packing and registry builds publish nothing.
 The server command exports only async main, with no saved state or startup on import.
 `tinker serve` calls and awaits main once before listening, so bad config fails boot.
 The dev host starts on its first request, shares one startup promise, and retries a failed start.
-The returned handler closes app, then telemetry. The dev host closes it on HMR reload.
+The host calls `main({ env, signal, stdout, stderr })` once. The streams need only
+`write(chunk: string): unknown`. The command reads no process globals and loads no env file.
+It binds each value inline, for example `env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)`.
+Main returns `{ fetch, closed }`. Aborting the host signal closes app, then telemetry.
+The one `closed` promise reports app failure first, then the first teardown error.
+A start error closes what started, writes cleanup errors to stderr, and rethrows the start error.
+The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
+The dev host owns startup sharing, retry after failure, and abort on HMR replacement.

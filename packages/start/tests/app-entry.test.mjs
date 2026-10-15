@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { createScope, extension } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
-import { once } from "../../../apps/start-scaffold/tinker/base/close";
 import { named } from "../lib/checks/named.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { baseDir } from "../lib/paths.mjs";
@@ -89,9 +88,7 @@ test("close ends every root in reverse order before reporting a teardown error",
   await tools.ready;
   await app.ready;
   const reason = new DOMException("The server closed", "AbortError");
-  const close = once(async () => {
-    stop.abort(reason);
-    const appEnd = await app.closed;
+  const closed = app.closed.then(async (appEnd) => {
     toolStop.abort(reason);
     const toolsEnd = await tools.closed;
     for (const result of [appEnd, toolsEnd]) {
@@ -100,11 +97,12 @@ test("close ends every root in reverse order before reporting a teardown error",
     }
   });
 
-  const ended = close();
-  await expect(ended).rejects.toBe(failure);
+  stop.abort(reason);
+  await expect(closed).rejects.toBe(failure);
 
   expect(events).toEqual(["app", "tools"]);
-  expect(close()).toBe(ended);
+  stop.abort(reason);
+  expect(events).toEqual(["app", "tools"]);
   expect(() => stop.signal.throwIfAborted()).toThrow(
     expect.objectContaining({ name: "AbortError", message: "The server closed" }),
   );
@@ -125,5 +123,6 @@ for (const app of ["start-scaffold", "start-min"]) {
     });
     expect(readFileSync(file, "utf8")).not.toContain("import.meta.hot");
     expect(readFileSync(file, "utf8")).not.toMatch(/\blet\b/);
+    expect(readFileSync(file, "utf8")).not.toMatch(/process\.|loadEnvFile|\bonce\s*\(/);
   });
 }

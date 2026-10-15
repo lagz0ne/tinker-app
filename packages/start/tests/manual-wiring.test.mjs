@@ -40,12 +40,10 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
     ),
     "cmds/server.ts": entry,
     ...Object.fromEntries(
-      ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(
-        (file) => [
-          `tinker/base/${file}`,
-          readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
-        ],
-      ),
+      ["panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map((file) => [
+        `tinker/base/${file}`,
+        readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
+      ]),
     ),
     "tinker/components/mail/component.json": '{"requires":["missing"]}',
     "tinker/components/mail/index.server.ts": "export const recipient = 1;",
@@ -86,12 +84,10 @@ test("a copied component stays unconfigured until the app binds its required tag
     ),
     "cmds/server.ts": entry,
     ...Object.fromEntries(
-      ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(
-        (file) => [
-          `tinker/base/${file}`,
-          readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
-        ],
-      ),
+      ["panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map((file) => [
+        `tinker/base/${file}`,
+        readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
+      ]),
     ),
     "tinker/components/mail/component.json": '{"requires":[]}',
     "tinker/components/mail/index.server.ts": `import { tag, operation, extension } from "@tinker/core";

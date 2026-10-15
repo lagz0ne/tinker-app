@@ -95,14 +95,20 @@ They never write an entry for the app.
 
 Importing the server command starts nothing. Its body has imports and one default async main.
 The prod host calls main once before listening. The dev host starts on its first fetch.
-Main reads each input beside its tag binding, starts telemetry, then the app.
+The host calls `main({ env, signal, stdout, stderr })` once. The streams need only
+`write(chunk: string): unknown`. The command reads no process globals and loads no env file.
+It binds each value inline, for example `env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)`.
+Main returns `{ fetch, closed }`. Aborting the host signal closes app, then telemetry.
+The one `closed` promise reports app failure first, then the first teardown error.
+A start error closes what started, writes cleanup errors to stderr, and rethrows the start error.
+The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
+The dev host owns startup sharing, retry after failure, and abort on HMR replacement.
 The dev host shares one startup promise and clears it on failure so the next request can retry.
 It lists extensions and settings by hand, in the user's order.
 It imports each component's public index.
 There are no generated wiring files or role files.
 Import createScope from @tinker/core.
-Main uses fixed closeTools and close callbacks, with no let. A local ended checks close results.
-The command writes its close order; `tinker/base/close.ts` caches the callback once.
+Main has no let, once helper, or close callback. A local ended checks close results.
 `server-entry.ts` renders over the supplied app handle.
 `panics.server.ts` reports process failures without wrapping the handle.
 `router-entry.tsx` loads the route tree and binds native views; the browser command owns both roots.
@@ -118,11 +124,9 @@ Copied base code owns only entry, close, panic, and observation glue.
 Commands import only ~/base, ~/components, @/, and @tinker/core.
 Bind one tag per app slot. Never re-export app wiring from a command.
 The app writes the close order itself: app, then telemetry.
-The base once helper caches only that callback promise; it takes no scope.
 A start or close error is rethrown after both roots end.
 
-The server adapter receives two fields:
-`requestContext` and `close`.
+The server adapter receives `requestContext`.
 Start borrows the context. The command binds the render observer tag.
 An optional `fetch(request, next)` can wrap requests.
 The dev host closes on HMR replacement. The prod host closes on process shutdown.

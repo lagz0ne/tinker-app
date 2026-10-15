@@ -56,8 +56,16 @@ A Core-level eager check is a later card; this round does not change Core.
 Auth passes hooks the active run's Core Scope.ExtensionCtx. Concurrent runs
 keep separate contexts. SDK callbacks outside a live run use authStartup's
 start context, because no calling flow owns those background callbacks.
-Commands write close order in a callback; base caches only its promise.
-Start failure closes every started root and rethrows the original error.
+Owner change, 2026-10-15 16:30: main gets env and signal; it returns closed.
+The lead also approved stdout and stderr as structural write streams.
+The host calls `main({ env, signal, stdout, stderr })` once. The streams need only
+`write(chunk: string): unknown`. The command reads no process globals and loads no env file.
+It binds each value inline, for example `env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)`.
+Main returns `{ fetch, closed }`. Aborting the host signal closes app, then telemetry.
+The one `closed` promise reports app failure first, then the first teardown error.
+A start error closes what started, writes cleanup errors to stderr, and rethrows the start error.
+The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
+The dev host owns startup sharing, retry after failure, and abort on HMR replacement.
 
 ## D3: source of copied code
 

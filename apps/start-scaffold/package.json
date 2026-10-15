@@ -25,7 +25,8 @@
     "test:compose": "node maintain/check-compose.mjs",
     "check": "node maintain/check-app.mjs",
     "mutate": "stryker run",
-    "test:template": "node maintain/check-template.mjs"
+    "test:template": "node maintain/check-template.mjs",
+    "check:commands": "node maintain/check-commands.mjs"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",

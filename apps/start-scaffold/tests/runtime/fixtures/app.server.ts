@@ -4,7 +4,6 @@ import type { Resource, Scope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { afterAll, beforeAll } from "vite-plus/test";
 
-import { once } from "~/base/close";
 import { auth as nativeAuth } from "~/components/auth/index.server";
 import { database as nativeDatabase } from "~/components/database/index.server";
 import type { Database } from "~/components/database/index.server";
@@ -106,10 +105,10 @@ const stop = new AbortController();
 const root = createScope({ signal: stop.signal });
 await root.ready;
 
-const close = once(async () => {
+const close = () => {
   stop.abort();
-  await root.closed;
-});
+  return root.closed;
+};
 
 afterAll(close);
 

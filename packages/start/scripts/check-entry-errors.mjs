@@ -18,9 +18,11 @@ import { serverFile } from "../lib/named.mjs";
 const child = `
 import assert from "node:assert/strict";
 const mode = process.env.PANIC_MODE;
+const stop = new AbortController();
+const input = { env: process.env, signal: stop.signal, stdout: process.stdout, stderr: process.stderr };
 const { default: main } = await import("./dist/server/server.js");
 if (["tools-start", "app-start", "tools-start-cleanup", "app-start-cleanup", "missing-tag", "bad-log-level"].includes(mode)) {
-  await assert.rejects(main(), (error) => {
+  await assert.rejects(main(input), (error) => {
     if (mode === "missing-tag") {
       assert.equal(error.kind, "MissingTag");
       assert.equal(error.payload.label, "mail.from");
@@ -33,9 +35,10 @@ if (["tools-start", "app-start", "tools-start-cleanup", "app-start-cleanup", "mi
   console.log(mode + ": original failure reported");
   process.exitCode = 1;
 } else {
-  const server = await main();
+  const server = await main(input);
   if (mode === "close-failure") {
-    const closing = server.close();
+    stop.abort();
+    const closing = server.closed;
     await assert.rejects(closing, {message: "proof.close"});
     console.log("close: both owners ended; first failure reported");
   } else {
@@ -47,7 +50,8 @@ if (["tools-start", "app-start", "tools-start-cleanup", "app-start-cleanup", "mi
       assert.equal(response.status, 500);
       assert.equal((await server.fetch(new Request("http://localhost/api/health"))).status, 200);
       console.log("handler: 500; next request: 200");
-      await server.close();
+      stop.abort();
+      await server.closed;
     }
   }
 }
@@ -72,9 +76,9 @@ for (const app of process.argv.slice(2)) {
       "const stop =",
       "extensions: [telemetryExport]",
       "extensions: [startRequests",
-      "    const close = once(",
-      "const closeTools = once(",
-      "process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM)",
+      "    const closed = app.closed.then",
+      "  const cancelled =",
+      "env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)",
     ]) {
       assert.ok(main.includes(marker), `plant must match ${marker}`);
     }
@@ -87,7 +91,7 @@ for (const app of process.argv.slice(2)) {
       .replace(
         "const stop =",
         `
-const mode = process.env.PANIC_MODE;
+const mode = env.PANIC_MODE;
 const toolsProbe = extension({label: "proof.tools", hooks: {start(event) {
   if (mode?.startsWith("tools-start")) throw new Error("proof." + mode);
   return event.next();
@@ -100,26 +104,26 @@ const appProbe = extension({label: "proof.app", hooks: {start(event) {
 const stop =`,
       )
       .replace(
-        "await close().catch(",
-        'await close().finally(() => { if (mode === "app-start-cleanup") throw new Error("proof.cleanup"); }).catch(',
+        "await closed.catch(",
+        'await closed.finally(() => { if (mode === "app-start-cleanup") throw new Error("proof.cleanup"); }).catch(',
       )
       .replace(
-        "await closeTools().catch(",
-        'await closeTools().finally(() => { if (mode === "tools-start-cleanup") throw new Error("proof.cleanup"); }).catch(',
+        "ended(await tools.closed);",
+        'if (mode === "tools-start-cleanup") throw new Error("proof.cleanup"); ended(await tools.closed);',
       )
       .replace("extensions: [telemetryExport]", "extensions: [toolsProbe, telemetryExport]")
       .replace("extensions: [startRequests", "extensions: [appProbe, startRequests")
       .replace(
-        "const closeTools = once(",
-        'void tools.closed.then(() => console.log("tools.closed"));\nconst closeTools = once(',
+        "  const cancelled =",
+        'void tools.closed.then(() => stdout.write("tools.closed\\n"));\n  const cancelled =',
       )
       .replace(
-        "    const close = once(",
-        '    void app.closed.then(() => console.log("app.closed"));\n    const close = once(',
+        "    const closed = app.closed.then",
+        '    void app.closed.then(() => stdout.write("app.closed\\n"));\n    const closed = app.closed.then',
       )
       .replace(
-        "process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM)",
-        'mode !== "missing-tag" && process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM)',
+        "env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)",
+        'mode !== "missing-tag" && env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)',
       );
     writeFileSync(entry, main);
     mkdirSync(join(fixture, "src/routes/proof"), { recursive: true });

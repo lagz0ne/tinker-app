@@ -31,6 +31,14 @@ Src and components never import base. Components never import src or cmds.
 The server command exports only async main and has no import-time startup or saved state.
 Prod calls main once before listening. The dev host starts on its first fetch, shares one
 startup promise, clears it on failure, and closes on HMR replacement.
+The host calls `main({ env, signal, stdout, stderr })` once. The streams need only
+`write(chunk: string): unknown`. The command reads no process globals and loads no env file.
+It binds each value inline, for example `env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)`.
+Main returns `{ fetch, closed }`. Aborting the host signal closes app, then telemetry.
+The one `closed` promise reports app failure first, then the first teardown error.
+A start error closes what started, writes cleanup errors to stderr, and rethrows the start error.
+The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
+The dev host owns startup sharing, retry after failure, and abort on HMR replacement.
 Inside main, the server command fills each typed config tag beside its scope.
 Each component checks its required tags in its one startup extension.
 Missing bindings reject ready with MissingTag and the tag name. Components never read env.

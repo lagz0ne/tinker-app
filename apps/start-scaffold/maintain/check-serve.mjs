@@ -23,6 +23,76 @@ async function fetchWhenListening(url, server) {
   }
 }
 
+/** A real host must stop a pending start, or report a failed close, after SIGTERM. */
+async function signalCase(source, proof, extra, marker, expected, appCount) {
+  const child = spawn(
+    process.execPath,
+    [join(source, "node_modules/@tinker/start/bin/tinker.mjs"), "serve"],
+    {
+      cwd: proof,
+      env: { ...process.env, ...proofEnv, ...extra },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const ended = once(child, "close");
+  let output = "";
+
+  child.stdout.on("data", (bytes) => {
+    output += bytes;
+  });
+  child.stderr.on("data", (bytes) => {
+    output += bytes;
+  });
+
+  try {
+    await new Promise((done, fail) => {
+      const timeout = AbortSignal.timeout(30000);
+      timeout.addEventListener(
+        "abort",
+        () => fail(new Error(output || "Host never reached the marker")),
+        { once: true },
+      );
+      child.stdout.on("data", () => {
+        if (output.includes(marker)) done();
+      });
+      child.once("error", fail);
+      child.once("exit", () => fail(new Error(output)));
+    });
+
+    child.kill("SIGTERM");
+    const [code, signal] = await Promise.race([
+      ended,
+      new Promise((_done, fail) => {
+        AbortSignal.timeout(30000).addEventListener(
+          "abort",
+          () => fail(new Error(output || "Host did not stop")),
+          { once: true },
+        );
+      }),
+    ]);
+
+    assert.equal(signal, null, output);
+    assert.equal(code, expected, output);
+    assert.equal(output.split("proof.app.closed\n").length - 1, appCount, output);
+    assert.equal(output.split("proof.tools.closed\n").length - 1, 1, output);
+
+    if (appCount) {
+      assert.ok(
+        output.indexOf("proof.app.closed\n") < output.indexOf("proof.tools.closed\n"),
+        output,
+      );
+    }
+
+    if (marker !== "tinker serve:") assert.ok(!output.includes("tinker serve:"), output);
+    console.log(`PASS: SIGTERM ${marker}; app closes before tools; EXIT ${code}.`);
+  } finally {
+    if (child.exitCode === null) {
+      child.kill("SIGKILL");
+      await ended;
+    }
+  }
+}
+
 /** Exercise the installed serve script and Start route with the shipped database and mail presets. */
 export async function checkServe(source) {
   const proof = await mkdtemp(join(tmpdir(), "start-native-response-"));
@@ -32,13 +102,51 @@ export async function checkServe(source) {
     await copyProofApp(source, proof);
     const command = join(proof, "cmds/server.ts");
     const main = await readFile(command, "utf8");
-    assert.ok(main.includes("export default async function main() {"));
+    assert.ok(main.includes("  signal.throwIfAborted();"));
+    const planted = main
+      .replace(
+        "import { createScope, type Scope }",
+        "import { createScope, extension, type Scope }",
+      )
+      .replace(
+        "  signal.throwIfAborted();",
+        '  signal.throwIfAborted(); stdout.write("proof.main\\n");',
+      )
+      .replace(
+        "  const stop =",
+        `
+  const toolsProbe = extension({ label: "proof.tools", hooks: { start(ctx) {
+    ctx.defer(() => { stdout.write("proof.tools.closed\\n"); });
+    if (env.PROOF_TOOLS_WAIT) {
+      stdout.write("proof.tools.waiting\\n");
+      return new Promise<void>((_done, fail) => ctx.signal.addEventListener("abort", () => fail(ctx.signal.reason), { once: true }));
+    }
+    return ctx.next();
+  } } });
+  const appProbe = extension({ label: "proof.app", hooks: { start(ctx) {
+    ctx.defer(() => { stdout.write("proof.app.closed\\n"); if (env.PROOF_CLOSE_FAIL) throw new Error("proof.close"); });
+    return ctx.next();
+  } } });
+  const stop =`,
+      )
+      .replace("extensions: [telemetryExport]", "extensions: [toolsProbe, telemetryExport]")
+      .replace("extensions: [startRequests", "extensions: [appProbe, startRequests");
+    await writeFile(command, planted);
+    const migrationFile = join(proof, "tinker/components/database/database.server.ts");
+    const migration = await readFile(migrationFile, "utf8");
+    assert.ok(migration.includes("run: async ({ database, pgCore, migrator }) => {"));
     await writeFile(
-      command,
-      main.replace(
-        "export default async function main() {",
-        'export default async function main() { process.stdout.write("proof.main\\n");',
-      ),
+      migrationFile,
+      migration
+        .replace("    database,\n    pgCore:", "    database,\n    url: databaseUrl,\n    pgCore:")
+        .replace(
+          "run: async ({ database, pgCore, migrator }) => {",
+          `run: async ({ database, pgCore, migrator, url }, ctx) => {
+      if (url.hostname === "hold") {
+        process.stdout.write("proof.migration.waiting\\n");
+        await new Promise<void>((_done, fail) => ctx.signal.addEventListener("abort", () => fail(ctx.signal.reason), { once: true }));
+      }`,
+        ),
     );
 
     await writeFile(
@@ -76,7 +184,7 @@ export const Route = createFileRoute("/proof/response")({
       );
 
       assert.notEqual(failed.status, null, failed.stdout + failed.stderr);
-      assert.notEqual(failed.status, 0, failed.stdout + failed.stderr);
+      assert.equal(failed.status, 1, failed.stdout + failed.stderr);
       assert.ok(failed.stderr.includes("MissingTag"), failed.stderr);
       assert.ok(failed.stderr.includes("mail.from"), failed.stderr);
       assert.ok(!failed.stderr.includes("EADDRINUSE"), failed.stderr);
@@ -85,6 +193,24 @@ export const Route = createFileRoute("/proof/response")({
     } finally {
       await new Promise((done) => listener.close(done));
     }
+
+    await signalCase(source, proof, { PROOF_TOOLS_WAIT: "1" }, "proof.tools.waiting", 0, 0);
+    await signalCase(
+      source,
+      proof,
+      { DATABASE_URL: "postgres://hold" },
+      "proof.migration.waiting",
+      0,
+      1,
+    );
+    await signalCase(
+      source,
+      proof,
+      { PROOF_CLOSE_FAIL: "1", PORT: String(address.port) },
+      "tinker serve:",
+      1,
+      1,
+    );
 
     server = spawn(
       process.execPath,
@@ -118,7 +244,20 @@ export const Route = createFileRoute("/proof/response")({
     );
     for (const reply of replies) assert.equal((await reply.json()).ok, true);
     assert.equal(output.split("proof.main\n").length - 1, 1, "the prod host calls main once");
-    console.log("PASS built starter serves native Response.json; prod calls main once");
+    const ended = once(server, "close");
+    server.kill("SIGTERM");
+    const [code, signal] = await ended;
+    assert.equal(code, 0, output);
+    assert.equal(signal, null, output);
+    assert.ok(
+      output.indexOf("proof.app.closed\n") < output.indexOf("proof.tools.closed\n"),
+      output,
+    );
+    assert.equal(output.split("proof.app.closed\n").length - 1, 1, output);
+    assert.equal(output.split("proof.tools.closed\n").length - 1, 1, output);
+    console.log(
+      "PASS built starter serves native Response.json; prod calls main once; SIGTERM closes app then tools with EXIT 0",
+    );
   } finally {
     if (server && server.exitCode === null) {
       const ended = once(server, "close");

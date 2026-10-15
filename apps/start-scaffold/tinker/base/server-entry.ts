@@ -15,7 +15,6 @@ export declare namespace ServerEntry {
   type Next = (request: Request) => Promise<Response>;
   type Handle = {
     requestContext: { scope: Scope.Handle };
-    close(): Promise<void>;
     fetch?(request: Request, next: Next): Promise<Response> | Response;
   };
 }
@@ -38,8 +37,7 @@ export function createServerHandler(app: ServerEntry.Handle, { dev }: { dev: boo
   });
 
   return {
-    ...app,
-    fetch(request: Request) {
+    fetch(this: void, request: Request) {
       const next = async (forwarded: Request) => {
         const response = await renderRequest(forwarded, { context: app.requestContext });
         return dev ? devErrorPage(forwarded, response) : response;
