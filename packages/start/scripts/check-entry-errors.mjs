@@ -18,11 +18,14 @@ import { serverFile } from "../lib/named.mjs";
 const child = `
 import assert from "node:assert/strict";
 const mode = process.env.PANIC_MODE;
-if (["tools-start", "app-start", "missing-tag"].includes(mode)) {
+if (["tools-start", "app-start", "missing-tag", "bad-log-level"].includes(mode)) {
   await assert.rejects(import("./dist/server/server.js"), (error) => {
     if (mode === "missing-tag") {
       assert.equal(error.kind, "MissingTag");
       assert.equal(error.payload.label, "mail.from");
+    } else if (mode === "bad-log-level") {
+      assert.equal(error.kind, "DataValidationFailed");
+      assert.equal(error.payload.label, "telemetry.logLevel");
     } else assert.equal(error.message, "proof." + mode);
     return true;
   });
@@ -62,19 +65,22 @@ for (const app of process.argv.slice(2)) {
     const entry = join(fixture, serverFile(fixture).file);
     let main = readFileSync(entry, "utf8");
     for (const marker of [
-      "createScope, LEVELS",
+      'import { createScope } from "@tinker/core";',
       "const stop =",
       "extensions: [telemetryExport]",
       "extensions: [startRequests",
       "  close = once(",
       "let close = once(",
-      "[mail.mailFrom(process.env.SMTP_FROM)]",
+      "process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM)",
     ]) {
       assert.ok(main.includes(marker), `plant must match ${marker}`);
     }
 
     main = main
-      .replace("createScope, LEVELS", "createScope, LEVELS, extension")
+      .replace(
+        'import { createScope } from "@tinker/core";',
+        'import { createScope, extension } from "@tinker/core";',
+      )
       .replace(
         "const stop =",
         `
@@ -101,8 +107,8 @@ const stop =`,
         '  void app.closed.then(() => console.log("app.closed"));\n  close = once(',
       )
       .replace(
-        "[mail.mailFrom(process.env.SMTP_FROM)]",
-        '(mode === "missing-tag" ? [] : [mail.mailFrom(process.env.SMTP_FROM)])',
+        "process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM)",
+        'mode !== "missing-tag" && process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM)',
       );
     writeFileSync(entry, main);
     mkdirSync(join(fixture, "src/routes/proof"), { recursive: true });
@@ -132,30 +138,40 @@ export const Route = createFileRoute("/proof/rejection")({server: {handlers: {
       "tools-start",
       "app-start",
       "missing-tag",
+      "bad-log-level",
       "handler",
       "close-failure",
       "rejection",
     ]) {
       const ran = spawnSync(process.execPath, ["--input-type=module", "-e", child], {
         cwd: fixture,
-        env: { ...process.env, NODE_ENV: "production", PANIC_MODE: mode },
+        env: {
+          ...process.env,
+          NODE_ENV: "production",
+          PANIC_MODE: mode,
+          LOG_LEVEL: mode === "bad-log-level" ? "info" : "30",
+        },
         encoding: "utf8",
         timeout: 15000,
       });
       const log = ran.stdout + ran.stderr;
       assert.equal(ran.status, ["handler", "close-failure"].includes(mode) ? 0 : 1, log);
       const lines = ran.stdout.split("\n");
-      assert.equal(lines.filter((line) => line === "tools.closed").length, 1, log);
       assert.equal(
-        lines.filter((line) => line === "app.closed").length,
-        mode === "tools-start" ? 0 : 1,
+        lines.filter((line) => line === "tools.closed").length,
+        mode === "bad-log-level" ? 0 : 1,
         log,
       );
-      if (mode !== "tools-start") {
+      assert.equal(
+        lines.filter((line) => line === "app.closed").length,
+        ["tools-start", "bad-log-level"].includes(mode) ? 0 : 1,
+        log,
+      );
+      if (!["tools-start", "bad-log-level"].includes(mode)) {
         assert.ok(lines.indexOf("app.closed") < lines.indexOf("tools.closed"), log);
       }
 
-      if (["tools-start", "app-start", "missing-tag"].includes(mode)) {
+      if (["tools-start", "app-start", "missing-tag", "bad-log-level"].includes(mode)) {
         assert.ok(lines.includes(mode + ": original failure reported"), log);
       }
       if (mode === "handler") {

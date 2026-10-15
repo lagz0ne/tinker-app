@@ -93,8 +93,8 @@ export async function wireProofMail(consumer) {
         .replace(
           "backendStop(stop.app.signal),",
           `backendStop(stop.app.signal),
-      ...(process.env.SMTP_URL === undefined ? [] : [smtpUrl(new URL(process.env.SMTP_URL))]),
-      ...(process.env.SMTP_FROM === undefined ? [] : [mailFrom(process.env.SMTP_FROM)]),`,
+      process.env.SMTP_URL !== undefined && smtpUrl(new URL(process.env.SMTP_URL)),
+      process.env.SMTP_FROM !== undefined && mailFrom(process.env.SMTP_FROM),`,
         ),
   );
 }

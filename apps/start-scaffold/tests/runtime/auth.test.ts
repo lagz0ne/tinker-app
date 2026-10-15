@@ -114,7 +114,7 @@ test("without auth startup, the app root reads no auth key or hook", async () =>
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("the auth part's work shows on the trace as handleAuth; its settings are a tag", async () => {
+test("auth work shows on the trace as handleAuth; its settings are a tag", async () => {
   const root = createScope({
     observe: { history: 20 },
     extensions: [authStartup, startRequests],

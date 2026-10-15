@@ -1,4 +1,4 @@
-import { createScope, LEVELS } from "@tinker/core";
+import { createScope } from "@tinker/core";
 
 import { once } from "~/base/close";
 import { renderObservation } from "~/base/observe";
@@ -39,6 +39,7 @@ import {
 
 import { bootstrap, readAccount } from "@/demo/index.server";
 
+// Vite dev already loaded .env; this covers npm start.
 try {
   process.loadEnvFile();
 } catch (error) {
@@ -53,21 +54,12 @@ const tools = createScope({
   tags: [
     telemetrySide("server"),
     consoleOutput(process.stdout),
-    ...(process.env.OTEL_SERVICE_NAME === undefined
-      ? []
-      : [telemetryService(process.env.OTEL_SERVICE_NAME)]),
-    ...(process.env.VICTORIA_TRACES_URL === undefined
-      ? []
-      : [tracesUrl(new URL(process.env.VICTORIA_TRACES_URL))]),
-    ...(process.env.VICTORIA_LOGS_URL === undefined
-      ? []
-      : [logsUrl(new URL(process.env.VICTORIA_LOGS_URL))]),
-    ...(process.env.LOG_LEVEL === undefined
-      ? []
-      : [logLevel(LEVELS[process.env.LOG_LEVEL as keyof typeof LEVELS])]),
-    ...(process.env.SPAN_HISTORY === undefined
-      ? []
-      : [spanHistory(Number(process.env.SPAN_HISTORY))]),
+    process.env.OTEL_SERVICE_NAME !== undefined && telemetryService(process.env.OTEL_SERVICE_NAME),
+    process.env.VICTORIA_TRACES_URL !== undefined &&
+      tracesUrl(new URL(process.env.VICTORIA_TRACES_URL)),
+    process.env.VICTORIA_LOGS_URL !== undefined && logsUrl(new URL(process.env.VICTORIA_LOGS_URL)),
+    process.env.LOG_LEVEL !== undefined && logLevel(Number(process.env.LOG_LEVEL)),
+    process.env.SPAN_HISTORY !== undefined && spanHistory(Number(process.env.SPAN_HISTORY)),
   ],
 });
 
@@ -97,14 +89,12 @@ try {
       sessionDeleted((accountId, ctx) =>
         ctx.run(publishAccountNotice, { rawInput: { accountId } }),
       ),
-      ...(process.env.PUBLIC_ORIGIN === undefined || process.env.AUTH_SECRET === undefined
-        ? []
-        : [authSettings({ origin: process.env.PUBLIC_ORIGIN, secret: process.env.AUTH_SECRET })]),
-      ...(process.env.DATABASE_URL === undefined
-        ? []
-        : [databaseUrl(new URL(process.env.DATABASE_URL))]),
-      ...(process.env.SMTP_URL === undefined ? [] : [mail.smtpUrl(new URL(process.env.SMTP_URL))]),
-      ...(process.env.SMTP_FROM === undefined ? [] : [mail.mailFrom(process.env.SMTP_FROM)]),
+      process.env.PUBLIC_ORIGIN !== undefined &&
+        process.env.AUTH_SECRET !== undefined &&
+        authSettings({ origin: process.env.PUBLIC_ORIGIN, secret: process.env.AUTH_SECRET }),
+      process.env.DATABASE_URL !== undefined && databaseUrl(new URL(process.env.DATABASE_URL)),
+      process.env.SMTP_URL !== undefined && mail.smtpUrl(new URL(process.env.SMTP_URL)),
+      process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM),
     ],
   });
 

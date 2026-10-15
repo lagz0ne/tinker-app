@@ -8,7 +8,6 @@ import {
   routerScope,
   tabLifetime,
 } from "~/base/router-entry";
-import type { RouterOptions } from "~/base/router-entry";
 import { abortReasons } from "~/components/errors";
 import {
   syncStartup,
@@ -31,9 +30,6 @@ import {
 
 import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo/client";
 
-const extensions: [] = [];
-const router: RouterOptions = {};
-
 /** Start asks for a fresh render root; the browser keeps its root until page hide. */
 export async function getRouter() {
   const stop = { tools: new AbortController(), app: new AbortController() };
@@ -55,7 +51,7 @@ export async function getRouter() {
     await tools?.ready;
     const app = createScope({
       signal: stop.app.signal,
-      extensions: [routerScope, syncStartup, extensions],
+      extensions: [routerScope, syncStartup],
       observe: tools ? tools.resolve(observer) : readRenderObservation(),
       tags: [
         pageEvents(import.meta.env.SSR ? undefined : window),
@@ -84,7 +80,7 @@ export async function getRouter() {
     app.resolve(tabLifetime).bind(close);
     if (import.meta.hot) import.meta.hot.dispose(close);
     return await createRouterEntry({
-      options: { ...router, ...app.resolve(syncRouter) },
+      options: app.resolve(syncRouter),
       Wrap: app.resolve(routerScope),
       close,
       dev: import.meta.env.DEV,

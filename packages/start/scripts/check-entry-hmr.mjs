@@ -45,17 +45,15 @@ try {
     appFiles(fixture).find((file) => file.option === "routerEntry").file,
   );
   const routerSource = readFileSync(routerFile, "utf8");
-  assert.ok(routerSource.includes("const extensions: [] = [];"));
+  assert.ok(routerSource.includes("extensions: [routerScope"));
   writeFileSync(
     routerFile,
-    `import { extension, operation } from "@tinker/core";\n${routerSource.replace(
-      "const extensions: [] = [];",
-      `
+    `import { extension, operation } from "@tinker/core";
 const probe = operation({ label: "render-probe", run: () => 1 });
-const extensions = [extension({
+const renderProbe = extension({
   hooks: { async start({ next, scope }) { await next(); scope.run(probe); } },
-})];`,
-    )}`,
+});
+${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, renderProbe")}`,
   );
   const version = (value) =>
     source.replace(

@@ -1,4 +1,4 @@
-import { createScope, tag } from "@tinker/core";
+import { createScope, operation, tag } from "@tinker/core";
 import type { Resource } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
@@ -106,5 +106,24 @@ test("auth hooks use their live request context, isolate concurrent calls, and u
     expect(await app.resolve(auth)).toBeDefined();
   } finally {
     await app.close({ graceful: true });
+  }
+});
+
+test("authStartup makes app-root runs async", async () => {
+  const app = createScope({
+    extensions: [authStartup],
+    tags: [
+      authSettings({ origin: "http://proof.test", secret: "s".repeat(32) }),
+      sendAuthMail(() => {}),
+      sessionDeleted(async () => {}),
+    ],
+  });
+  await app.ready;
+  try {
+    const result = app.run(operation({ label: "proof.sync", run: () => 1 }));
+    expect(result).toBeInstanceOf(Promise);
+    await expect(result).resolves.toBe(1);
+  } finally {
+    expect((await app.close({ graceful: true })).status).toBe("success");
   }
 });
