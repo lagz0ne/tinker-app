@@ -1320,48 +1320,58 @@ function checkPlainFunction(node) {
   );
 }
 
-/** Named copied entry helpers and the approved browser main keep native contracts. */
+/** Named copied entry helpers and the one approved browser main keep native contracts. */
+const entryHelpers = {
+  "tinker/base/close.ts": [
+    // Replacement for the old close helpers: cache only the caller's callback promise.
+    "once",
+    // Return the callback shared by HMR, the host, and page hide.
+    "close",
+  ],
+  "tinker/base/panics.server.ts": [
+    // c55998e createServerEntry: register process panic cleanup without identity wrapping.
+    "observeServerPanics",
+  ],
+  "tinker/base/panics.tsx": [
+    // New: copied c55998e entry/dev-error devErrorPage: read a failed response and build its dev page.
+    "devErrorPage",
+  ],
+  "cmds/router.ts": [
+    // New: only the top-level named export owns the browser roots in plain view.
+    "getRouter",
+  ],
+  "tinker/base/router-entry.tsx": [
+    // Replacement for the copied observer callback: borrow the current render observer.
+    "readRenderObservation",
+    // Load the native route tree and bind its fallback views and React provider.
+    "createRouterEntry",
+  ],
+  "tinker/base/server-entry.ts": [
+    // New: bind Start's renderer to the command's request scope.
+    "createServerHandler",
+    // New: copied c55998e entry/server fetch: dispatch a request through Start or app fetch.
+    "fetch",
+    // New: copied c55998e entry/server next: render the request and map its dev error response.
+    "next",
+  ],
+  "tinker/base/start-entry.ts": [
+    // Configure Start's CSRF guard and cache the command's async options once.
+    "createStartEntry",
+  ],
+};
+
 function isEntryHelper(node) {
   if (!node) return false;
-  const helpers = {
-    "tinker/base/close.ts": [
-      // Replacement for the old close helpers: cache only the caller's callback promise.
-      "once",
-      // Return the callback shared by HMR, the host, and page hide.
-      "close",
-    ],
-    "tinker/base/panics.server.ts": [
-      // c55998e createServerEntry: register process panic cleanup without identity wrapping.
-      "observeServerPanics",
-    ],
-    "tinker/base/panics.tsx": [
-      // New: copied c55998e entry/dev-error devErrorPage: read a failed response and build its dev page.
-      "devErrorPage",
-    ],
-    "cmds/router.ts": [
-      // New: the browser main opens and closes the telemetry and tab roots in plain view.
-      "getRouter",
-    ],
-    "tinker/base/router-entry.tsx": [
-      // Replacement for the copied observer callback: borrow the current render observer.
-      "readRenderObservation",
-      // Load the native route tree and bind its fallback views and React provider.
-      "createRouterEntry",
-    ],
-    "tinker/base/server-entry.ts": [
-      // New: bind Start's renderer to the command's request scope.
-      "createServerHandler",
-      // New: copied c55998e entry/server fetch: dispatch a request through Start or app fetch.
-      "fetch",
-      // New: copied c55998e entry/server next: render the request and map its dev error response.
-      "next",
-    ],
-    "tinker/base/start-entry.ts": [
-      // Configure Start's CSRF guard and cache the command's async options once.
-      "createStartEntry",
-    ],
-  };
-  return helpers[pathOf(node)]?.includes(nameOf(functionName(node))) ?? false;
+  const file = pathOf(node);
+  if (!entryHelpers[file]?.includes(nameOf(functionName(node)))) return false;
+  if (file !== "cmds/router.ts") return true;
+
+  return (
+    ts.isFunctionDeclaration(node) &&
+    node.parent === node.getSourceFile() &&
+    (ts.getCombinedModifierFlags(node) & (ts.ModifierFlags.Export | ts.ModifierFlags.Default)) ===
+      ts.ModifierFlags.Export
+  );
 }
 
 function commandModulePath(node) {
@@ -1706,6 +1716,12 @@ if (process.argv.includes("--prove")) {
       "router-command-other-function",
       "plain-effect",
       "export async function unrelatedFeature() { await Promise.resolve(); }",
+      "cmds/router.ts",
+    ],
+    [
+      "router-command-shadowed-getRouter",
+      "plain-effect",
+      "function anotherEntry() { return async function getRouter() { await Promise.resolve(); }; }",
       "cmds/router.ts",
     ],
     [

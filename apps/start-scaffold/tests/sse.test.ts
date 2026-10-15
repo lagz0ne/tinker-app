@@ -18,10 +18,10 @@ import { notifications } from "~/components/sync/notifications.server";
 import { syncStartup } from "~/components/sync/slots";
 import { openSync } from "~/components/sync/stream.server";
 
-import { streamMessage } from "@/demo";
 import { incrementCounter } from "@/demo/backend/counter.server";
 import { saveProfile } from "@/demo/backend/profile.server";
 import { bootstrapPrivate } from "@/demo/backend/sync.server";
+import { streamMessage } from "@/demo/client";
 import { isError, raise } from "@/demo/errors";
 import * as demo from "@/demo/index.server";
 

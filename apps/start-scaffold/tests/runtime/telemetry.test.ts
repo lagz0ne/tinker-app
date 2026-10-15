@@ -5,8 +5,7 @@ import { expect, test } from "vite-plus/test";
 import { httpBackend } from "~/components/http";
 import { consoleOutput, logConsole } from "~/components/telemetry/console";
 import { exportHealth } from "~/components/telemetry/health";
-import { telemetry as routerPart } from "~/components/telemetry/index";
-import { telemetry as serverPart, browserTelemetry } from "~/components/telemetry/index.server";
+import { renderObserve, renderNs, browserTelemetry } from "~/components/telemetry/index.server";
 import {
   flushTelemetry,
   ingestTelemetry,
@@ -623,7 +622,7 @@ test("a tab shows its records only on the console its seam binds", async () => {
 });
 
 test("the component leaves console sinks for the command to bind", async () => {
-  const tools = createScope({ tags: [routerPart.tags] });
+  const tools = createScope({ tags: [telemetrySide("browser")] });
   expect(tools.resolve(consoleOutput)).toBeNull();
   expect(tools.resolve(logConsole)).toBeNull();
   expect((await tools.close({ graceful: true })).status).toBe("success");
@@ -646,20 +645,20 @@ test("a non-URL telemetry tag value is refused at binding", () => {
   );
 });
 
-test("the server render namespace records ssr while the browser part stays browser", async () => {
+test("the server render namespace records ssr while the browser tag stays browser", async () => {
   const tools = createScope({
-    extensions: serverPart.extensions,
-    tags: [storageTags, serverPart.tags],
+    extensions: [telemetryExport],
+    tags: [storageTags, telemetrySide("server")],
   });
   await tools.ready;
-  expect(tools.resolve(telemetrySide, { ns: serverPart.renderNs })).toBe("ssr");
-  expect(tools.resolve(serverPart.renderObserve, { ns: serverPart.renderNs })).toMatchObject({
+  expect(tools.resolve(telemetrySide, { ns: renderNs })).toBe("ssr");
+  expect(tools.resolve(renderObserve, { ns: renderNs })).toMatchObject({
     history: 80,
     level: 30,
   });
   expect((await tools.close({ graceful: true })).status).toBe("success");
 
-  const tab = createScope({ tags: routerPart.tags });
+  const tab = createScope({ tags: telemetrySide("browser") });
   expect(tab.resolve(telemetrySide)).toBe("browser");
   expect((await tab.close({ graceful: true })).status).toBe("success");
 });

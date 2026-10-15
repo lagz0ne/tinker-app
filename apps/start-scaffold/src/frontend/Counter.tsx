@@ -3,7 +3,7 @@ import { useData, useRun } from "@tinker/react";
 
 import { syncClient } from "~/components/sync";
 
-import { counter } from "@/demo";
+import { counter } from "@/demo/client";
 import { updateCounter } from "@/transport/counter.functions";
 
 import { Button } from "./ui/button";

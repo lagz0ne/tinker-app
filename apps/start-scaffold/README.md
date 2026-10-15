@@ -97,6 +97,7 @@ vp run test:registry
 
 There is one item per component. Its `registryDependencies` equal its direct `requires`.
 `demo` ships app-owned business code in `src/demo`, with its own paths and no component manifest.
+The browser entry is `@/demo/client`; this keeps the CLI from confusing it with the `/demo` route.
 Copy the example once; edit later app changes by hand. Never apply a whole-component update to it.
 `base` owns the copied entry helpers. `app` adds base, health, telemetry, and user files
 into an empty folder. Examples add their own files and never overwrite app files.
@@ -158,12 +159,15 @@ No installer writes `.env`, a secret, or these app edits.
 Components take typed tags. They never take env objects or convert env values.
 Each component checks its required tags in its one start extension.
 
-| Component | Required tags                                                        |
-| --------- | -------------------------------------------------------------------- |
-| auth      | authSettings, sendAuthMail, sessionDeleted                           |
-| database  | databaseUrl                                                          |
-| mail      | smtpUrl, mailFrom                                                    |
-| telemetry | telemetrySide, telemetryService; tracesUrl and logsUrl on the server |
+| Component   | Required tags                                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------ |
+| auth        | authSettings, sendAuthMail, sessionDeleted                                                                   |
+| database    | databaseUrl                                                                                                  |
+| mail        | smtpUrl, mailFrom                                                                                            |
+| telemetry   | telemetrySide, telemetryService; tracesUrl and logsUrl on the server                                         |
+| requests    | backendStop                                                                                                  |
+| sync server | syncSide("server"), bootstrapSlot, readAccountSlot                                                           |
+| sync tab    | syncSide("tab"), tabStop, recordsSlot, readBatchSlot, readBootstrapSlot, readSnapshotSlot, streamMessageSlot |
 
 Telemetry keeps safe defaults: logLevel info and spanHistory 80.
 Doctor checks component dependencies and imports from JSON; it does not read app config.

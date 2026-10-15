@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
+import { proofEnv, wireProofMail, missingMailChild } from "./proof-app.mjs";
 import { app, root } from "./registry-source.mjs";
 
 /** Real shadcn, packed releases, and HTTP; this proof stays outside scope tests. */
@@ -15,11 +16,18 @@ const registry = join(scratch, "r");
 const consumer = join(scratch, "app");
 await Promise.all([packs, registry, consumer].map((dir) => mkdir(dir)));
 console.log(`Proof folder: ${scratch}`);
-const env = { ...process.env, CI: "true", npm_config_audit: "false", npm_config_fund: "false" };
+
+const env = {
+  ...process.env,
+  ...proofEnv,
+  CI: "true",
+  npm_config_audit: "false",
+  npm_config_fund: "false",
+};
+
 const servers = [];
 const mailTarget = "tinker/components/mail/mail.server.ts";
 const original = await readFile(join(app, mailTarget), "utf8");
-const mailEnv = { SMTP_HOST: "127.0.0.1", SMTP_PORT: "1025", SMTP_FROM: "proof@example.com" };
 
 function run(command, args, cwd = consumer, extra = {}) {
   console.log(`\n$ ${command} ${args.join(" ")} (cwd ${cwd})`);
@@ -151,10 +159,14 @@ try {
   await stop(host);
 
   run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/mail-example.json`, "--yes"]);
+  await wireProofMail(consumer);
   run("vp", ["build"]);
-  run(tinker, ["doctor"], consumer, mailEnv);
+  run(tinker, ["doctor"]);
+  run(process.execPath, ["--input-type=module", "-e", missingMailChild], consumer, {
+    SMTP_FROM: undefined,
+  });
   console.log(
-    "PASS: standalone mail builds and passes doctor with typed settings and no running Postgres or SMTP.",
+    "PASS: standalone mail builds, passes doctor and rejects a missing startup tag and no running Postgres or SMTP.",
   );
 
   const baseBefore = await hashes(join(consumer, "node_modules/@tinker/start"));
@@ -223,7 +235,6 @@ try {
   for (const name of ["server.ts", "router.ts"]) {
     await cp(join(app, "cmds", name), join(consumer, "cmds", name));
   }
-  await cp(join(consumer, "examples/demo.env.example"), join(consumer, ".env"));
   await cp(join(consumer, "examples/demo-root.tsx"), join(consumer, "src/routes/__root.tsx"));
   await cp(join(consumer, "examples/demo-style.css"), join(consumer, "src/style.css"));
 

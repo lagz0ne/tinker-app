@@ -372,9 +372,9 @@
           "target": "~/src/demo/index.server.ts"
         },
         {
-          "path": "src/demo/index.ts",
+          "path": "src/demo/client.ts",
           "type": "registry:file",
-          "target": "~/src/demo/index.ts"
+          "target": "~/src/demo/client.ts"
         }
       ],
       "meta": {

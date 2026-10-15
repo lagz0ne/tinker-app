@@ -24,8 +24,9 @@ The writer does not run mutation checks; the lander runs them.
 - Base never wraps a component just to forward its exports or calls.
   A command shows its startup pattern in one file.
 
-Base always needs requests and errors. Commands pass optional sync and
-telemetry parts into base. Base never imports those optional components.
+Base always needs requests and errors. Commands own sync and telemetry
+wiring and pass native router options, observers and close callbacks.
+Base never imports those optional components.
 Config serves only builds and import isolation. No wiring is generated.
 
 ## D1: app slots

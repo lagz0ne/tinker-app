@@ -12,7 +12,7 @@ export const say = {
 };
 
 /**
- * Check 8: every import boundary violation the last build or dev run kept in
+ * Check 7: every import boundary violation the last build or dev run kept in
  * `.tinker/violations.json`; Start's own error stops at the first one. No fix.
  */
 export function boundary(root) {

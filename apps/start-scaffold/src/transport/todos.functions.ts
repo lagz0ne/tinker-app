@@ -4,7 +4,7 @@ import { setResponseHeader } from "@tanstack/react-start/server";
 import { startRequests } from "~/components/requests";
 import { readResult } from "~/components/requests/index.server";
 
-import { readTodoCommand } from "@/demo";
+import { readTodoCommand } from "@/demo/client";
 import { listTodos, changeTodo } from "@/demo/index.server";
 
 import { readReceipt } from "./result.server";

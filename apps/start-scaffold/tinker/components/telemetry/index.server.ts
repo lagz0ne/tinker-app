@@ -1,23 +1,11 @@
 import { namespace, resource } from "@tinker/core";
 
-import { browserIngest } from "./ingest.server";
-import { observer, telemetryExport } from "./observer";
-import type { Telemetry } from "./records";
+import { observer } from "./observer";
 import { telemetrySide } from "./settings";
 
-/** Server observation and its separate render namespace. */
-export const telemetry = {
-  extensions: [telemetryExport],
-  tags: [telemetrySide("server")],
-  observe: observer,
-  browserIngest,
-  /** Only the observer varies by side; the scope queue remains shared. */
-  renderObserve: resource({ ...observer, target: "namespace" }),
-  renderNs: namespace({ tags: [telemetrySide("ssr")] }),
-} satisfies Telemetry.ServerPart & {
-  renderObserve: typeof observer;
-  renderNs: ReturnType<typeof namespace>;
-};
+/** Each render has its own observer namespace; the tools queue remains shared. */
+export const renderObserve = resource({ ...observer, target: "namespace" });
+export const renderNs = namespace({ tags: [telemetrySide("ssr")] });
 
 export type { Telemetry } from "./records";
 export { observer, telemetryExport, ingestTelemetry, flushTelemetry } from "./observer";
@@ -41,6 +29,3 @@ export {
   logLevel,
   spanHistory,
 } from "./settings";
-
-export const renderObserve = telemetry.renderObserve;
-export const renderNs = telemetry.renderNs;

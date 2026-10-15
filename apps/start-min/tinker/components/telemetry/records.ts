@@ -1,4 +1,3 @@
-import type { Many, Observe, Resource, Scope, Tag } from "@tinker/core";
 import type { z } from "zod";
 
 import type { span, logRecord, telemetryBatch } from "./records.server";
@@ -16,20 +15,6 @@ export declare namespace Telemetry {
   /** Retained JSON is owned by the queue until storage accepts it. */
   type Record = { kind: "trace" | "log"; side: Side; json: string; bytes: number };
   type Delivery = { traces: boolean; logs: boolean };
-  /**
-   * What the telemetry part gives the router entry (ADR 0106). The entry makes a telemetry root
-   * from `extensions` and `tags`, so the app root's own work is never observed there.
-   */
-  type Part = {
-    readonly extensions: Many<Scope.Extension<unknown>>;
-    readonly tags: Tag.Bindings;
-    /** The app root's `observe` option, read from the telemetry root. */
-    readonly observe: Resource.Handle<Observe.Config | undefined>;
-  };
-  /** What the telemetry part gives the server entry: also the app root's tags. */
-  type ServerPart = Part & {
-    readonly browserIngest: Resource.Handle<{ ingest(this: void, batch: Batch): void }>;
-  };
 }
 
 /** Core attributes may contain bigint or cycles; one bad field must not lose its record.

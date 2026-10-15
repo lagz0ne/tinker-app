@@ -60,6 +60,6 @@ beforeLoad: async ({ context }) => {
 },
 ```
 
-Extend `Register` through `src/demo/index.ts`.
+Extend `Register` through `src/demo/client.ts`.
 Add data and its change reader before adding the page.
 Run the build, types, tests, and schema check.

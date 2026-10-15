@@ -115,9 +115,9 @@
       "content": "export { incrementCounter } from \"@/demo/backend/counter.server\";\n\nexport { readProfile, saveProfile, retryNotification } from \"@/demo/backend/profile.server\";\n\nexport { currentUser, readAccount } from \"./backend/auth.server\";\n\nexport {\n  bootstrap,\n  bootstrapPublic,\n  bootstrapPrivate,\n  replayPublic,\n  replayPrivate,\n} from \"@/demo/backend/sync.server\";\n\nexport { listTodos, changeTodo } from \"@/demo/backend/todos.server\";\n"
     },
     {
-      "path": "src/demo/index.ts",
+      "path": "src/demo/client.ts",
       "type": "registry:file",
-      "target": "~/src/demo/index.ts",
+      "target": "~/src/demo/client.ts",
       "content": "export { readProfileCommand, readTodoCommand } from \"@/demo/contracts/commands\";\n\nexport { credentials } from \"@/demo/contracts/credentials\";\n\nexport { readProfileInput } from \"@/demo/contracts/profile-contract\";\n\nexport type { Profile } from \"@/demo/contracts/profile-contract\";\n\nexport { readTodoChange } from \"@/demo/contracts/todos-contract\";\n\nexport type { Todos } from \"@/demo/contracts/todos-contract\";\n\nexport { readFeatureEvents, readFeatureResult } from \"@/demo/contracts/sync\";\n\nexport type { FeatureSync } from \"@/demo/contracts/sync\";\n\nexport {\n  profile,\n  nameDraft,\n  pending,\n  notice,\n  authMode,\n  todos,\n  counter,\n  profileResult,\n} from \"@/demo/frontend/state\";\n\nexport { isError, raise } from \"./errors\";\n\nexport type { Errors } from \"./errors\";\n\nexport { records } from \"@/demo/frontend/records\";\n\nexport { readBatch, readBootstrap, readSnapshot, streamMessage } from \"@/demo/contracts/sync\";\n\nimport type { FeatureSync } from \"@/demo/contracts/sync\";\n\n/** This app fills the base's open registry with its own bodies. */\ndeclare module \"~/components/sync\" {\n  interface Register {\n    change: FeatureSync.Change;\n    result: FeatureSync.Result;\n    public: FeatureSync.Public;\n    private: FeatureSync.Private;\n  }\n}\n"
     }
   ],

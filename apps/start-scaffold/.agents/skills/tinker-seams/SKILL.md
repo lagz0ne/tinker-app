@@ -24,7 +24,7 @@ Public entries belong to their owner:
 - `@tinker/start/vite`: the build plugin, used only in Vite config.
 
 Commands bind app values through each required tag.
-Components never read commands. Base receives optional parts as values.
+Components never read commands. Commands own roots; base receives native router options, observers and close callbacks.
 Commands import only ~/base, ~/components, @/, and @tinker/core.
 Src and components never import base. Components never import src or cmds.
 

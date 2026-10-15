@@ -67,18 +67,45 @@ export async function copyProofApp(source, target) {
   );
 }
 
-/** Local-only settings for the proof data sources and the base's enabled parts. */
+/** Child-process inputs read only by the command; component tests bind tags directly. */
 export const proofEnv = {
   PUBLIC_ORIGIN: "http://localhost:4318",
   AUTH_SECRET: "local-proof-only-secret-with-thirty-two-letters",
   DATABASE_URL: "postgres://proof",
   SMTP_URL: "smtp://proof:25",
   OTEL_SERVICE_NAME: "proof",
-  SMTP_HOST: "proof",
-  SMTP_PORT: "25",
-  SMTP_USER: "",
-  SMTP_PASSWORD: "",
   SMTP_FROM: "proof@example.com",
   VICTORIA_TRACES_URL: "http://127.0.0.1:1/insert/opentelemetry/v1/traces",
   VICTORIA_LOGS_URL: "http://127.0.0.1:1/insert/jsonline",
 };
+
+/** The proof makes the same explicit standalone mail edit the user writes by hand. */
+export async function wireProofMail(consumer) {
+  const path = join(consumer, "cmds/server.ts");
+  const main = await readFile(path, "utf8");
+  assert.ok(main.includes("extensions: [startRequests]"));
+  assert.ok(main.includes("backendStop(stop.app.signal),"));
+  await writeFile(
+    path,
+    'import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";\n' +
+      main
+        .replace("extensions: [startRequests]", "extensions: [startRequests, mailStartup]")
+        .replace(
+          "backendStop(stop.app.signal),",
+          `backendStop(stop.app.signal),
+      ...(process.env.SMTP_URL === undefined ? [] : [smtpUrl(new URL(process.env.SMTP_URL))]),
+      ...(process.env.SMTP_FROM === undefined ? [] : [mailFrom(process.env.SMTP_FROM)]),`,
+        ),
+  );
+}
+
+/** A built command must reject before serving when its required binding is omitted. */
+export const missingMailChild = `
+import assert from "node:assert/strict";
+await assert.rejects(import("./dist/server/server.js"), (error) => {
+  assert.equal(error.kind, "MissingTag");
+  assert.equal(error.payload.label, "mail.from");
+  return true;
+});
+console.log("PASS: command startup rejects MissingTag mail.from before serving.");
+`;

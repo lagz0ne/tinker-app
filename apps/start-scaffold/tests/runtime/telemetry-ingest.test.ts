@@ -4,7 +4,7 @@ import { expect, test } from "vite-plus/test";
 
 import { httpBackend } from "~/components/http";
 import { backendStop, requestStop } from "~/components/requests";
-import { telemetry as serverPart } from "~/components/telemetry/index.server";
+import { browserIngest, telemetryExport, telemetrySide } from "~/components/telemetry/index.server";
 import {
   browserTelemetry,
   receiveTelemetry,
@@ -342,9 +342,9 @@ test("an ingest that fails, not by a stop, fails the reply", async () => {
 test("on the server, a tab's batch joins the telemetry root under the server's service", async () => {
   const sent: string[] = [];
   const tools = createScope({
-    extensions: serverPart.extensions,
+    extensions: [telemetryExport],
     tags: [
-      serverPart.tags,
+      telemetrySide("server"),
       telemetryService("shop"),
       tracesUrl(new URL("http://storage.test/traces")),
       logsUrl(new URL("http://storage.test/logs")),
@@ -361,7 +361,7 @@ test("on the server, a tab's batch joins the telemetry root under the server's s
     tags: [
       backendStop(stop.signal),
       requestStop(stop.signal),
-      browserTelemetry(tools.resolve(serverPart.browserIngest).ingest),
+      browserTelemetry(tools.resolve(browserIngest).ingest),
     ],
   });
   const batch = { traces: [], logs: [browserLog("from a tab")] };

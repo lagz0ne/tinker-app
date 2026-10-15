@@ -17,7 +17,7 @@ import {
 } from "~/components/sync";
 import { publishAccountNotice } from "~/components/sync/index.server";
 
-import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo";
+import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo/client";
 
 /** Keep migration inside each test; copy only the empty database's ready state. */
 let template: PGliteInterface;

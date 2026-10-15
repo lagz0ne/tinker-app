@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { syncClient, snapshotLoader } from "~/components/sync";
 
-import { credentials } from "@/demo";
-import { raise } from "@/demo";
-import { pending, notice, authMode } from "@/demo";
+import { credentials } from "@/demo/client";
+import { raise } from "@/demo/client";
+import { pending, notice, authMode } from "@/demo/client";
 
 import { betterAuthReact } from "./modules";
 

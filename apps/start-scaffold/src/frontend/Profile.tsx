@@ -1,8 +1,8 @@
 import { Link, Navigate } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
 
-import type { Profile } from "@/demo";
-import { profile, nameDraft, pending, notice, profileResult } from "@/demo";
+import type { Profile } from "@/demo/client";
+import { profile, nameDraft, pending, notice, profileResult } from "@/demo/client";
 
 import { signOut } from "./auth-actions";
 import { errorText } from "./error-text";

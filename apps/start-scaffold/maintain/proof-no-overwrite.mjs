@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { proofEnv, wireProofMail, missingMailChild } from "./proof-app.mjs";
 import { app, root } from "./registry-source.mjs";
 
 /** Real CLI adds, hashes, doctor, builds, and local HTTP; never run inside scope tests. */
@@ -94,7 +95,6 @@ async function wire(consumer) {
     for (const line of keep) assert.ok((await readFile(path, "utf8")).includes(line));
   }
 
-  await cp(join(consumer, "examples/demo.env.example"), join(consumer, ".env"));
   await cp(join(consumer, "examples/demo-root.tsx"), join(consumer, "src/routes/__root.tsx"));
   await cp(join(consumer, "examples/demo-style.css"), join(consumer, "src/style.css"));
   assert.ok((await readFile(join(consumer, "vite.config.ts"), "utf8")).includes("__USER_KEEP__"));
@@ -265,8 +265,11 @@ try {
   const serviceEnv = {
     DATABASE_URL: `postgres://app:local-proof-password@127.0.0.1:${postgresPort}/app`,
     AUTH_SECRET: "registry-local-proof-secret-at-least-32-characters",
-    SMTP_HOST: "127.0.0.1",
-    SMTP_PORT: String(smtpPort),
+    SMTP_URL: `smtp://127.0.0.1:${smtpPort}`,
+    SMTP_FROM: "proof@example.com",
+    OTEL_SERVICE_NAME: "registry-proof",
+    VICTORIA_TRACES_URL: "http://127.0.0.1:1/v1/traces",
+    VICTORIA_LOGS_URL: "http://127.0.0.1:1/logs",
   };
   const index = JSON.parse(await readFile(join(registry, "registry.json"), "utf8"));
   for (const item of index.items.filter((item) => item.meta.demo || item.name === "mail-example")) {
@@ -317,29 +320,16 @@ try {
 
     const tinker = join(consumer, "node_modules/.bin/tinker");
     const full = item.meta.demo === true;
-    if (full) {
-      const empty = {
-        PUBLIC_ORIGIN: "",
-        AUTH_SECRET: "",
-        DATABASE_URL: "",
-        SMTP_HOST: "",
-        SMTP_PORT: "",
-        SMTP_FROM: "",
-      };
-      const report = run(tinker, ["doctor"], consumer, empty, 1);
-      for (const key of Object.keys(empty)) {
-        assert.ok(report.includes(key), `missing key must be named: ${key}`);
-      }
-      await wire(consumer);
-    }
+    if (full) await wire(consumer);
+    else await wireProofMail(consumer);
 
     run("vp", ["build"], consumer);
-    run(
-      tinker,
-      ["doctor"],
-      consumer,
-      full ? {} : { SMTP_HOST: "127.0.0.1", SMTP_PORT: "1025", SMTP_FROM: "proof@example.com" },
-    );
+    run(tinker, ["doctor"], consumer);
+    run(process.execPath, ["--input-type=module", "-e", missingMailChild], consumer, {
+      ...proofEnv,
+      ...serviceEnv,
+      SMTP_FROM: undefined,
+    });
     await serve(consumer, full, serviceEnv);
     console.log(`PASS: ${item.name}: build, doctor, serve EXIT 0.`);
   }

@@ -29,7 +29,7 @@ import {
   observer,
 } from "~/components/telemetry";
 
-import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo";
+import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo/client";
 
 const extensions: [] = [];
 const router: RouterOptions = {};
