@@ -21,28 +21,20 @@ process.loadEnvFile = (...args) => { probe.env++; return loadEnvFile(...args); }
 void process.stdout;
 void process.stderr;
 const resources = process.getActiveResourcesInfo().filter((name) => !name.startsWith("FSReq")).sort();
-const { default: server } = await import(process.env.ENTRY_PROOF);
+const { default: main } = await import(process.env.ENTRY_PROOF);
 assert.equal(probe.env, 0, "import must not read app inputs");
 assert.equal(probe.created, 0, "import must not create a scope");
-await server.close();
-assert.equal(probe.env, 0, "close before start is a no-op");
-assert.equal(probe.created, 0);
 if (mode.startsWith("import")) {
   await new Promise(setImmediate);
   assert.deepEqual(process.getActiveResourcesInfo().filter((name) => !name.startsWith("FSReq")).sort(), resources);
 } else {
-  if (mode === "start") {
-    const first = server.start();
-    assert.equal(server.start(), first, "concurrent start shares its promise");
-    await first;
-    assert.equal(server.start(), first, "ready start keeps its promise");
-  }
+  const server = await main();
   const replies = await Promise.all([1, 2].map(() => server.fetch(new Request("http://localhost/api/health"))));
   for (const reply of replies) {
     assert.equal(reply.status, 200);
     assert.equal((await reply.json()).ok, true);
   }
-  assert.equal(probe.env, 1, "fetch and start share one startup");
+  assert.equal(probe.env, 1, "main reads inputs once");
   assert.equal(probe.created, 2, "only the two server roots start");
   await Promise.all([server.close(), server.close()]);
   assert.deepEqual(probe.closed, [2, 1], "close ends app then tools once");
@@ -59,7 +51,7 @@ for (const app of process.argv.slice(2)) {
   assert.equal(source.match(/\bcreateScope\(/g)?.length, 2, "plant both real root calls");
   writeFileSync(copy, source.replaceAll("createScope(", "globalThis.__entryProof.createScope("));
   try {
-    for (const mode of ["import-original", "import-counted", "start", "fetch-first"]) {
+    for (const mode of ["import-original", "import-counted", "main"]) {
       const ran = spawnSync(process.execPath, ["--input-type=module", "-e", child, mode], {
         cwd: root,
         env: {
@@ -76,7 +68,7 @@ for (const app of process.argv.slice(2)) {
         assert.equal(ran.stderr, "", "import must write no stderr");
       }
       console.log(
-        `PASS built entry: ${mode}; no eager effects, shared startup, ordered close; EXIT 0`,
+        `PASS built entry: ${mode}; no eager effects, explicit main, ordered close; EXIT 0`,
       );
     }
   } finally {

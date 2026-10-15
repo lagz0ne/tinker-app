@@ -99,13 +99,13 @@ VITEST_MAX_WORKERS=1 VP_RUN_CONCURRENCY_LIMIT=1 vp run -r test
 Tooling tests stay here. Runtime tests live in `apps/start-scaffold/tests/runtime/`.
 That folder has a strict type project so the demo's sync bodies do not leak into generic tests.
 The app's `PLAIN.md` has a cap of 17. Only named copied base entry functions have exceptions.
-Components, src, and commands have no function skips.
+Components and src have no function skips. Commands allow only the named server and browser mains.
 
 The lander runs mutation checks. Tooling keeps its 75 floor;
 the golden copied runtime has an 85 floor in the scaffold's `stryker.config.json`.
 Local package packing and registry builds publish nothing.
 
-The server command exports start, fetch, and close callbacks without starting on import.
-`tinker serve` awaits start before listening, so bad config fails boot.
-Dev starts on its first request. Failed startup clears the cache for the next request.
-Close before start does nothing; after start it closes app, then telemetry.
+The server command exports only async main, with no saved state or startup on import.
+`tinker serve` calls and awaits main once before listening, so bad config fails boot.
+The dev host starts on its first request, shares one startup promise, and retries a failed start.
+The returned handler closes app, then telemetry. The dev host closes it on HMR reload.

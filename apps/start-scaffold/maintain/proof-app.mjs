@@ -102,8 +102,8 @@ export async function wireProofMail(consumer) {
 /** A built command must reject before serving when its required binding is omitted. */
 export const missingMailChild = `
 import assert from "node:assert/strict";
-const { default: server } = await import("./dist/server/server.js");
-await assert.rejects(server.start(), (error) => {
+const { default: main } = await import("./dist/server/server.js");
+await assert.rejects(main(), (error) => {
   assert.equal(error.kind, "MissingTag");
   assert.equal(error.payload.label, "mail.from");
   return true;

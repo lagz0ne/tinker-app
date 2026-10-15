@@ -127,6 +127,7 @@ try {
   run("vp", ["build"]);
   const tinker = join(consumer, "node_modules/.bin/tinker");
   run(tinker, ["doctor"]);
+  run(process.execPath, [join(root, "packages/start/scripts/check-entry-hmr.mjs"), consumer]);
 
   const probe = createServer();
   await new Promise((done) => probe.listen(0, "127.0.0.1", done));

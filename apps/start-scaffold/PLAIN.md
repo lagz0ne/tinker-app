@@ -5,6 +5,12 @@ Callers include direct calls and typed callback registrations.
 Repeated calls by one caller count once; self-calls do not count.
 Tests and generated files do not count.
 
+- **cmds/server.ts#ended**
+  - `result`: `Scope.Result`. From a root's closed promise; why: report its first failure after cleanup.
+  - Callers:
+    - `cmds/server.ts#close.callback`
+    - `cmds/server.ts#closeTools.callback`
+
 - **src/demo/contracts/commands.ts#readProfileCommand**
   - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.
   - Callers:

@@ -1339,12 +1339,6 @@ const entryHelpers = {
   "cmds/server.ts": [
     // Cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; deliberately untested glue.
     "main",
-    // Native host callback: cache startup and permit retry after a failed start.
-    "start",
-    // Native host callback: start lazily before handing the request to Start.
-    "fetch",
-    // Native host callback: close only a server that was started.
-    "close",
   ],
   "cmds/router.ts": [
     // New: only the top-level named export owns the browser roots in plain view.
@@ -1371,24 +1365,11 @@ const entryHelpers = {
 };
 
 function serverEntryFunction(node) {
-  if (nameOf(functionName(node)) === "main") {
-    return (
-      ts.isFunctionDeclaration(node) &&
-      node.parent === node.getSourceFile() &&
-      !(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export)
-    );
-  }
-  const member = node.parent;
-  if (!ts.isPropertyAssignment(member) || member.initializer !== node) return false;
-  return defaultServerObject(member.parent, node.getSourceFile());
-}
-
-function defaultServerObject(object, source) {
   return (
-    ts.isObjectLiteralExpression(object) &&
-    ts.isExportAssignment(object.parent) &&
-    !object.parent.isExportEquals &&
-    object.parent.parent === source
+    ts.isFunctionDeclaration(node) &&
+    node.parent === node.getSourceFile() &&
+    (ts.getCombinedModifierFlags(node) & (ts.ModifierFlags.Export | ts.ModifierFlags.Default)) ===
+      (ts.ModifierFlags.Export | ts.ModifierFlags.Default)
   );
 }
 
@@ -1749,17 +1730,17 @@ if (process.argv.includes("--prove")) {
       [
         "server-main-other-command",
         "cmds/other-server.ts",
-        "async function main() { await Promise.resolve(); }",
+        "export default async function main() { await Promise.resolve(); }",
       ],
       [
         "server-main-component",
         "tinker/components/entry-probe/index.ts",
-        "async function main() { await Promise.resolve(); }",
+        "export default async function main() { await Promise.resolve(); }",
       ],
       [
         "server-main-src",
         "src/entry-probe.ts",
-        "async function main() { await Promise.resolve(); }",
+        "export default async function main() { await Promise.resolve(); }",
       ],
       [
         "server-main-shadowed",
@@ -1776,6 +1757,21 @@ if (process.argv.includes("--prove")) {
         "cmds/server.ts",
         "const hidden = {start: async () => { await Promise.resolve(); }};",
       ],
+      [
+        "server-private-main",
+        "cmds/server.ts",
+        "async function main() { await Promise.resolve(); }",
+      ],
+      [
+        "server-named-main",
+        "cmds/server.ts",
+        "export async function main() { await Promise.resolve(); }",
+      ],
+      ...["start", "fetch", "close"].map((name) => [
+        `server-removed-${name}`,
+        "cmds/server.ts",
+        `async function ${name}() { await Promise.resolve(); }`,
+      ]),
     ].map(([name, file, code]) => [name, "plain-effect", code, file]),
     [
       "router-command-other-function",

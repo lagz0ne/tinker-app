@@ -178,16 +178,16 @@ export const Route = createFileRoute("/proof/write")({server: {
     assert.equal(build.status, 0, build.stdout + build.stderr);
     process.chdir(proof);
     Object.assign(process.env, proofEnv);
-    const app = await import(pathToFileURL(join(proof, "dist/server/server.js")).href);
+    const built = await import(pathToFileURL(join(proof, "dist/server/server.js")).href);
 
+    const app = await built.default();
     try {
-      await app.default.start();
       const native = globalThis.__middlewareProof;
       let bootstrapUrl;
       assert.equal(native.stdout, true, "the command binds stdout to its telemetry tools");
       const results = await Promise.all(
         ["Ada", "Grace"].map(async (user) => {
-          const response = await app.default.fetch(
+          const response = await app.fetch(
             new Request("http://localhost:4318/proof/native", {
               headers: { "x-proof-user": user },
             }),
@@ -212,17 +212,15 @@ export const Route = createFileRoute("/proof/write")({server: {
 
       assert.equal(native.count(), 2, "one request session per SSR request");
 
-      const stream = await app.default.fetch(new Request("http://localhost:4318/api/sync"));
+      const stream = await app.fetch(new Request("http://localhost:4318/api/sync"));
       assert.equal(native.count(), 3, "one request session for /api/sync");
 
-      const auth = await app.default.fetch(
-        new Request("http://localhost:4318/api/auth/get-session"),
-      );
+      const auth = await app.fetch(new Request("http://localhost:4318/api/auth/get-session"));
       assert.equal(native.count(), 4, "one request session for /api/auth");
       assert.equal(auth.status, 200);
       await auth.text();
 
-      const telemetry = await app.default.fetch(
+      const telemetry = await app.fetch(
         new Request("http://localhost:4318/api/telemetry", {
           method: "POST",
           headers: { Origin: "http://localhost:4318", "Content-Type": "application/json" },
@@ -233,7 +231,7 @@ export const Route = createFileRoute("/proof/write")({server: {
       assert.equal(telemetry.status, 400);
       await telemetry.text();
 
-      const bootstrap = await app.default.fetch(
+      const bootstrap = await app.fetch(
         new Request(new URL(bootstrapUrl, "http://localhost:4318"), {
           headers: { "Sec-Fetch-Site": "same-origin", "x-tsr-serverFn": "true" },
         }),
@@ -245,7 +243,7 @@ export const Route = createFileRoute("/proof/write")({server: {
       console.log("PASS: HTTP getBootstrap returned its snapshot with one session.");
       assert.equal(native.count(), 6, "one request session for HTTP getBootstrap");
 
-      const health = await app.default.fetch(new Request("http://localhost:4318/api/health"));
+      const health = await app.fetch(new Request("http://localhost:4318/api/health"));
       assert.equal(health.status, 200);
       await health.text();
       assert.equal(native.count(), 7, "one request session for /api/health");
@@ -257,7 +255,7 @@ export const Route = createFileRoute("/proof/write")({server: {
       const reader = stream.body.getReader();
       assert.equal(new TextDecoder().decode((await reader.read()).value), ": connected\n\n");
 
-      const written = await app.default.fetch(
+      const written = await app.fetch(
         new Request("http://localhost:4318/proof/write", { method: "POST" }),
       );
       assert.equal(written.status, 200);
@@ -270,7 +268,7 @@ export const Route = createFileRoute("/proof/write")({server: {
       assert.equal(data.kind, "changes");
       assert.equal(data.events.at(0).payload.change.value, 1);
 
-      const replay = await app.default.fetch(
+      const replay = await app.fetch(
         new Request(
           "http://localhost:4318/api/sync?cursor=" +
             encodeURIComponent('{"public":2,"private":null}'),
@@ -281,7 +279,7 @@ export const Route = createFileRoute("/proof/write")({server: {
       assert.equal(new TextDecoder().decode((await repeated.read()).value), frame);
       await repeated.cancel();
 
-      const refused = await app.default.fetch(
+      const refused = await app.fetch(
         new Request("http://localhost:4318/api/sync", {
           headers: {
             "Last-Event-ID": '{"public":0,"private":{"accountId":"not-signed-in","revision":0}}',
@@ -291,14 +289,14 @@ export const Route = createFileRoute("/proof/write")({server: {
       assert.equal(refused.status, 403);
       await refused.text();
 
-      const bad = await app.default.fetch(
+      const bad = await app.fetch(
         new Request("http://localhost:4318/api/sync", { headers: { "Last-Event-ID": "not-json" } }),
       );
       assert.equal(bad.status, 400);
       await bad.text();
 
       const requestStop = new AbortController();
-      const abortedStream = await app.default.fetch(
+      const abortedStream = await app.fetch(
         new Request(
           "http://localhost:4318/api/sync?cursor=" +
             encodeURIComponent('{"public":2,"private":null}'),
@@ -312,7 +310,7 @@ export const Route = createFileRoute("/proof/write")({server: {
       assert.equal((await pendingRead).done, true);
 
       const idle = reader.read();
-      await app.default.close();
+      await app.close();
       assert.equal((await idle).done, true);
 
       process.stdout.write(
@@ -322,7 +320,7 @@ export const Route = createFileRoute("/proof/write")({server: {
         `PASS: native global/route/function middleware runs once per request; direct SSR calls keep ${results.join(" and ")} apart.\n`,
       );
     } finally {
-      await app.default.close();
+      await app.close();
     }
   } finally {
     process.chdir(previousDirectory);

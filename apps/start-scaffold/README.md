@@ -42,7 +42,7 @@ Choose tags for fixed inputs, data for changing records, resources for owned cli
 and operations for actions. Read [AGENTS.md](AGENTS.md) and the copied skills before editing.
 No module owns an app scope outside commands or copied entry code.
 The plain-function cap is 17. Only named entry functions have exceptions.
-Only cmds/router.ts#getRouter has the approved cmd entry exception; no component or src function is skipped.
+Only cmds/router.ts#getRouter and cmds/server.ts#main have approved cmd entry exceptions; no component or src function is skipped.
 
 ## Command wiring
 
@@ -54,11 +54,10 @@ tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntr
 
 Only cmds/server.ts reads app inputs. Each binding reads its own process.env key beside the scope.
 An unset required value leaves its tag unbound; startup fails with MissingTag and the tag name.
-Importing it starts nothing. The default export has start, fetch, and close callbacks.
-The prod host awaits start before listening; dev starts on its first fetch.
-Concurrent starts share one promise. Failed startup clears it so the next request can retry.
+Importing it starts nothing. Its sole default export is async main.
+The prod host calls and awaits main once before listening; the dev host starts on its first fetch.
+Concurrent dev requests share one startup promise in the host. Failed startup clears it for retry.
 Main starts telemetry before the app, borrows its observer, and closes roots in reverse order.
-Close before startup does nothing.
 The full working pattern is in [cmds/server.ts](cmds/server.ts).
 These are the actual auth hooks and server slots inside its tags list:
 

@@ -30,19 +30,19 @@ async function writeRouteTree(root) {
  * @param {string} root - From tinker serve; why: the built app to serve.
  */
 async function serve(root) {
-  const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
-  await built.default.start();
+  const { default: main } = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
+  const app = await main();
   const asset = await createAssets(root);
-  const render = async (request) => compressResponse(request, await built.default.fetch(request));
+  const render = async (request) => compressResponse(request, await app.fetch(request));
 
-  const server = listen({
-    overrideGlobalObjects: false,
-    hostname: process.env.HOST ?? "127.0.0.1",
-    port: Number(process.env.PORT ?? 4318),
-    fetch: (request) => asset(request) ?? render(request),
-  });
-  console.log(
-    `tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${process.env.PORT ?? 4318}`,
+  const server = listen(
+    {
+      overrideGlobalObjects: false,
+      hostname: process.env.HOST ?? "127.0.0.1",
+      port: Number(process.env.PORT ?? 4318),
+      fetch: (request) => asset(request) ?? render(request),
+    },
+    (info) => console.log(`tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${info.port}`),
   );
 
   const stopped = Promise.withResolvers();
@@ -51,7 +51,7 @@ async function serve(root) {
   await stopped.promise;
 
   await Promise.all([
-    built.default.close(),
+    app.close(),
     new Promise((done, reject) => server.close((error) => (error ? reject(error) : done()))),
   ]);
 

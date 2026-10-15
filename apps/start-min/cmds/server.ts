@@ -1,4 +1,4 @@
-import { createScope } from "@tinker/core";
+import { createScope, type Scope } from "@tinker/core";
 
 import { once } from "~/base/close";
 import { renderObservation } from "~/base/observe";
@@ -24,7 +24,7 @@ import {
 
 /** The host starts the server; importing this command opens nothing. */
 // oxlint-disable-next-line complexity -- Cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; deliberately untested glue.
-async function main() {
+export default async function main() {
   // Vite dev already loaded .env; this covers npm start.
   try {
     process.loadEnvFile();
@@ -51,11 +51,15 @@ async function main() {
     ],
   });
 
-  let close = once(async () => {
-    stop.tools.abort(abortReasons.closed);
-    const result = await tools.closed;
+  /** @param result - From a root's closed promise; why: report its first failure after cleanup. */
+  function ended(result: Scope.Result) {
     if (result.status === "failed") throw result.error;
     if (result.teardownErrors?.length) throw result.teardownErrors[0];
+  }
+
+  const closeTools = once(async () => {
+    stop.tools.abort(abortReasons.closed);
+    ended(await tools.closed);
   });
 
   try {
@@ -71,52 +75,34 @@ async function main() {
       ],
     });
 
-    close = once(async () => {
+    const close = once(async () => {
       stop.app.abort(abortReasons.closed);
       const appEnd = await app.closed;
-      stop.tools.abort(abortReasons.closed);
-      const toolsEnd = await tools.closed;
-
-      for (const result of [appEnd, toolsEnd]) {
-        if (result.status === "failed") throw result.error;
-        if (result.teardownErrors?.length) throw result.teardownErrors[0];
+      try {
+        await closeTools();
+      } finally {
+        ended(appEnd);
       }
     });
 
-    await app.ready;
-    app.onClose(observeServerPanics(close));
-    if (import.meta.hot) {
-      import.meta.hot.dispose(close);
-      import.meta.hot.on("vite:beforeFullReload", close);
+    try {
+      await app.ready;
+    } catch (error) {
+      await close().catch((cleanup) => {
+        if (cleanup !== error) process.stderr.write(`close failed: ${String(cleanup)}\n`);
+      });
+      throw error;
     }
+
+    app.onClose(observeServerPanics(close));
     return createServerHandler(
       { requestContext: app.resolve(startRequests), close },
       { dev: import.meta.env.DEV },
     );
   } catch (error) {
-    await close().catch((cleanup) => {
+    await closeTools().catch((cleanup) => {
       if (cleanup !== error) process.stderr.write(`close failed: ${String(cleanup)}\n`);
     });
     throw error;
   }
 }
-
-let started: ReturnType<typeof main> | undefined;
-
-export default {
-  start: () =>
-    (started ??= main().catch((error) => {
-      started = undefined;
-      throw error;
-    })),
-  fetch: async (request: Request) =>
-    (
-      await (started ??= main().catch((error) => {
-        started = undefined;
-        throw error;
-      }))
-    ).fetch(request),
-  close: async () => {
-    if (started) await (await started).close();
-  },
-};

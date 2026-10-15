@@ -28,9 +28,9 @@ Components never read commands. Commands own roots; base receives native router 
 Commands import only ~/base, ~/components, @/, and @tinker/core.
 Src and components never import base. Components never import src or cmds.
 
-The server command has no import-time startup. Its default start/fetch/close callbacks
-own one cached main promise. Prod calls start before listening; dev's first fetch starts it.
-A failed startup clears the cache. Close before start does nothing.
+The server command exports only async main and has no import-time startup or saved state.
+Prod calls main once before listening. The dev host starts on its first fetch, shares one
+startup promise, clears it on failure, and closes on HMR replacement.
 Inside main, the server command fills each typed config tag beside its scope.
 Each component checks its required tags in its one startup extension.
 Missing bindings reject ready with MissingTag and the tag name. Components never read env.

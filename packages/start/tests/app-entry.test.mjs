@@ -112,27 +112,18 @@ test("close ends every root in reverse order before reporting a teardown error",
 });
 
 for (const app of ["start-scaffold", "start-min"]) {
-  test(`${app}: the server module only declares deferred host callbacks`, () => {
-    const { program } = parseSource(join(baseDir, "../../apps", app, "cmds/server.ts"));
+  test(`${app}: the server module only exports its main function`, () => {
+    const file = join(baseDir, "../../apps", app, "cmds/server.ts");
+    const { program } = parseSource(file);
     const body = program.body.filter((node) => node.type !== "ImportDeclaration");
 
-    expect(body.map((node) => node.type)).toEqual([
-      "FunctionDeclaration",
-      "VariableDeclaration",
-      "ExportDefaultDeclaration",
-    ]);
-    expect(body[0]).toMatchObject({ id: { name: "main" }, async: true });
-    expect(body[1].declarations).toHaveLength(1);
-    expect(body[1].declarations[0]).toMatchObject({ id: { name: "started" }, init: null });
-
-    expect(body[2].declaration.type).toBe("ObjectExpression");
-    expect(body[2].declaration.properties.map((property) => property.key.name)).toEqual([
-      "start",
-      "fetch",
-      "close",
-    ]);
-    for (const property of body[2].declaration.properties) {
-      expect(property.value.type).toBe("ArrowFunctionExpression");
-    }
+    expect(body.map((node) => node.type)).toEqual(["ExportDefaultDeclaration"]);
+    expect(body[0].declaration).toMatchObject({
+      type: "FunctionDeclaration",
+      id: { name: "main" },
+      async: true,
+    });
+    expect(readFileSync(file, "utf8")).not.toContain("import.meta.hot");
+    expect(readFileSync(file, "utf8")).not.toMatch(/\blet\b/);
   });
 }

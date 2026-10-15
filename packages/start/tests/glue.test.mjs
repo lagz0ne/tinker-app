@@ -24,10 +24,15 @@ test("aliases keep app paths and the route tree, without runtime seams", () => {
     const alias = table.find(({ find }) => find.test(name));
     return alias ? name.replace(alias.find, alias.replacement) : name;
   };
-  expect(["@/style.css?url", "~/components/errors", "#tinker/routes"].map(rewrite)).toEqual([
+  expect(
+    ["@/style.css?url", "~/components/errors", "#tinker/routes", "#tinker/server-main"].map(
+      rewrite,
+    ),
+  ).toEqual([
     `${root}/src/style.css?url`,
     `${root}/tinker/components/errors`,
     `${root}/.tinker/routeTree.gen.ts`,
+    `${root}/cmds/server.ts`,
   ]);
   for (const name of [
     "#tinker/server",
@@ -192,3 +197,13 @@ for (const option of ["routerEntry", "startEntry"]) {
     expect(() => startOptions(root)).toThrow(`vite.config.ts: name ${option} in tinker()`);
   });
 }
+
+test("the dev host alias follows the configured command and matches its whole name", () => {
+  const root = fixture({
+    "vite.config.ts":
+      'export default { serverEntry: "cmds/http.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts" };',
+  });
+  const alias = aliases(root).find(({ find }) => find.test("#tinker/server-main"));
+  expect(alias.replacement).toBe(join(root, "cmds/http.ts"));
+  expect(alias.find.test("#tinker/server-main.ts")).toBe(false);
+});

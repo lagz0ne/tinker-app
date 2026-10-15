@@ -93,15 +93,15 @@ There is no default server entry.
 Prepare and doctor name a missing entry and show starter code.
 They never write an entry for the app.
 
-Importing the server command starts nothing. Its body has imports, the main declaration,
-an empty startup cache, and the default start/fetch/close callbacks.
-The host calls start; dev's first fetch starts lazily. Prod awaits start before listening.
+Importing the server command starts nothing. Its body has imports and one default async main.
+The prod host calls main once before listening. The dev host starts on its first fetch.
 Main reads each input beside its tag binding, starts telemetry, then the app.
-A failed startup clears its cached promise so the next dev request can retry.
+The dev host shares one startup promise and clears it on failure so the next request can retry.
 It lists extensions and settings by hand, in the user's order.
 It imports each component's public index.
 There are no generated wiring files or role files.
 Import createScope from @tinker/core.
+Main uses fixed closeTools and close callbacks, with no let. A local ended checks close results.
 The command writes its close order; `tinker/base/close.ts` caches the callback once.
 `server-entry.ts` renders over the supplied app handle.
 `panics.server.ts` reports process failures without wrapping the handle.
@@ -125,9 +125,9 @@ The server adapter receives two fields:
 `requestContext` and `close`.
 Start borrows the context. The command binds the render observer tag.
 An optional `fetch(request, next)` can wrap requests.
-The command closes on HMR replacement and process shutdown, then reports the first failure.
+The dev host closes on HMR replacement. The prod host closes on process shutdown.
 
-The server main and its direct default start/fetch/close callbacks are the only server cmd exceptions.
+The default server main is the only server cmd exception.
 The cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; it stays untested glue on purpose.
 The browser main lives in `cmds/router.ts#getRouter`, an approved named cmd exception.
 It binds router options, extensions, and each sync reader tag.

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
@@ -11,6 +11,7 @@ import { say as routeSay } from "./lib/checks/routes.mjs";
 import { buildChecks } from "./lib/doctor.mjs";
 import { aliases, passThrough, startOptions } from "./lib/glue.mjs";
 import { recordViolation, restartNote, startViolations } from "./lib/hooks.mjs";
+import { baseDir } from "./lib/paths.mjs";
 import { prepare } from "./lib/prepare.mjs";
 import { checkTypes } from "./lib/typecheck.mjs";
 
@@ -108,12 +109,19 @@ export function tinker(options = {}) {
   if (!existsSync(join(root, "src/routes"))) throw new Error(`tinker: ${routeSay.missing}`);
   prepare(root);
 
+  const own = startOptions(root);
+  const serverEntry = own.server.entry;
   const glue = {
     name: "tinker:glue",
-    config: () => glueConfig(root),
+    enforce: "pre",
+    config(_config, { command }) {
+      own.server.entry =
+        command === "serve"
+          ? relative(join(root, "src"), join(baseDir, "lib/dev-server.mjs"))
+          : serverEntry;
+      return glueConfig(root);
+    },
   };
-
-  const own = startOptions(root);
   const record = {};
   /** Returns nothing: Start drops a violation whose hook returns false. */
   const onViolation = (info) => {

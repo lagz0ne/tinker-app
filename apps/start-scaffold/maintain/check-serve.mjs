@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -30,6 +30,16 @@ export async function checkServe(source) {
   let output = "";
   try {
     await copyProofApp(source, proof);
+    const command = join(proof, "cmds/server.ts");
+    const main = await readFile(command, "utf8");
+    assert.ok(main.includes("export default async function main() {"));
+    await writeFile(
+      command,
+      main.replace(
+        "export default async function main() {",
+        'export default async function main() { process.stdout.write("proof.main\\n");',
+      ),
+    );
 
     await writeFile(
       join(proof, "src/routes/proof.response.ts"),
@@ -103,7 +113,12 @@ export const Route = createFileRoute("/proof/response")({
 
     assert.equal(response.status, 200, output + body);
     assert.deepEqual(JSON.parse(body), { ok: true });
-    console.log("PASS built starter serves native Response.json");
+    const replies = await Promise.all(
+      [1, 2].map(() => fetch(`http://127.0.0.1:${address.port}/proof/response`)),
+    );
+    for (const reply of replies) assert.equal((await reply.json()).ok, true);
+    assert.equal(output.split("proof.main\n").length - 1, 1, "the prod host calls main once");
+    console.log("PASS built starter serves native Response.json; prod calls main once");
   } finally {
     if (server && server.exitCode === null) {
       const ended = once(server, "close");

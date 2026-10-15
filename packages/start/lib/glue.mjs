@@ -14,6 +14,10 @@ export function aliases(root) {
     { find: /^~\//, replacement: `${join(root, "tinker")}/` },
     { find: /^@\//, replacement: `${join(root, "src")}/` },
     { find: /^#tinker\/routes$/, replacement: join(root, ".tinker/routeTree.gen.ts") },
+    {
+      find: /^#tinker\/server-main$/,
+      replacement: join(root, appFiles(root).find((entry) => entry.option === "serverEntry").file),
+    },
   ];
 }
 

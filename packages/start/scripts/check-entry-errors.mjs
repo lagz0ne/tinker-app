@@ -18,9 +18,9 @@ import { serverFile } from "../lib/named.mjs";
 const child = `
 import assert from "node:assert/strict";
 const mode = process.env.PANIC_MODE;
-const { default: server } = await import("./dist/server/server.js");
-if (["tools-start", "app-start", "missing-tag", "bad-log-level"].includes(mode)) {
-  await assert.rejects(server.start(), (error) => {
+const { default: main } = await import("./dist/server/server.js");
+if (["tools-start", "app-start", "tools-start-cleanup", "app-start-cleanup", "missing-tag", "bad-log-level"].includes(mode)) {
+  await assert.rejects(main(), (error) => {
     if (mode === "missing-tag") {
       assert.equal(error.kind, "MissingTag");
       assert.equal(error.payload.label, "mail.from");
@@ -33,7 +33,7 @@ if (["tools-start", "app-start", "missing-tag", "bad-log-level"].includes(mode))
   console.log(mode + ": original failure reported");
   process.exitCode = 1;
 } else {
-  await server.start();
+  const server = await main();
   if (mode === "close-failure") {
     const closing = server.close();
     await assert.rejects(closing, {message: "proof.close"});
@@ -68,12 +68,12 @@ for (const app of process.argv.slice(2)) {
     const entry = join(fixture, serverFile(fixture).file);
     let main = readFileSync(entry, "utf8");
     for (const marker of [
-      'import { createScope } from "@tinker/core";',
+      'import { createScope, type Scope } from "@tinker/core";',
       "const stop =",
       "extensions: [telemetryExport]",
       "extensions: [startRequests",
-      "    close = once(",
-      "let close = once(",
+      "    const close = once(",
+      "const closeTools = once(",
       "process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM)",
     ]) {
       assert.ok(main.includes(marker), `plant must match ${marker}`);
@@ -81,33 +81,41 @@ for (const app of process.argv.slice(2)) {
 
     main = main
       .replace(
-        'import { createScope } from "@tinker/core";',
-        'import { createScope, extension } from "@tinker/core";',
+        'import { createScope, type Scope } from "@tinker/core";',
+        'import { createScope, extension, type Scope } from "@tinker/core";',
       )
       .replace(
         "const stop =",
         `
 const mode = process.env.PANIC_MODE;
 const toolsProbe = extension({label: "proof.tools", hooks: {start(event) {
-  if (mode === "tools-start") throw new Error("proof.tools-start");
+  if (mode?.startsWith("tools-start")) throw new Error("proof." + mode);
   return event.next();
 }}});
 const appProbe = extension({label: "proof.app", hooks: {start(event) {
-  if (mode === "app-start") throw new Error("proof.app-start");
+  if (mode?.startsWith("app-start")) throw new Error("proof." + mode);
   event.defer(() => { if (mode === "close-failure") throw new Error("proof.close"); });
   return event.next();
 }}});
 const stop =`,
       )
+      .replace(
+        "await close().catch(",
+        'await close().finally(() => { if (mode === "app-start-cleanup") throw new Error("proof.cleanup"); }).catch(',
+      )
+      .replace(
+        "await closeTools().catch(",
+        'await closeTools().finally(() => { if (mode === "tools-start-cleanup") throw new Error("proof.cleanup"); }).catch(',
+      )
       .replace("extensions: [telemetryExport]", "extensions: [toolsProbe, telemetryExport]")
       .replace("extensions: [startRequests", "extensions: [appProbe, startRequests")
       .replace(
-        "let close = once(",
-        'void tools.closed.then(() => console.log("tools.closed"));\nlet close = once(',
+        "const closeTools = once(",
+        'void tools.closed.then(() => console.log("tools.closed"));\nconst closeTools = once(',
       )
       .replace(
-        "    close = once(",
-        '    void app.closed.then(() => console.log("app.closed"));\n    close = once(',
+        "    const close = once(",
+        '    void app.closed.then(() => console.log("app.closed"));\n    const close = once(',
       )
       .replace(
         "process.env.SMTP_FROM !== undefined && mail.mailFrom(process.env.SMTP_FROM)",
@@ -140,6 +148,8 @@ export const Route = createFileRoute("/proof/rejection")({server: {handlers: {
     for (const mode of [
       "tools-start",
       "app-start",
+      "tools-start-cleanup",
+      "app-start-cleanup",
       "missing-tag",
       "bad-log-level",
       "handler",
@@ -167,15 +177,27 @@ export const Route = createFileRoute("/proof/rejection")({server: {handlers: {
       );
       assert.equal(
         lines.filter((line) => line === "app.closed").length,
-        ["tools-start", "bad-log-level"].includes(mode) ? 0 : 1,
+        ["tools-start", "tools-start-cleanup", "bad-log-level"].includes(mode) ? 0 : 1,
         log,
       );
-      if (!["tools-start", "bad-log-level"].includes(mode)) {
+      if (!["tools-start", "tools-start-cleanup", "bad-log-level"].includes(mode)) {
         assert.ok(lines.indexOf("app.closed") < lines.indexOf("tools.closed"), log);
       }
 
-      if (["tools-start", "app-start", "missing-tag", "bad-log-level"].includes(mode)) {
+      if (
+        [
+          "tools-start",
+          "app-start",
+          "tools-start-cleanup",
+          "app-start-cleanup",
+          "missing-tag",
+          "bad-log-level",
+        ].includes(mode)
+      ) {
         assert.ok(lines.includes(mode + ": original failure reported"), log);
+      }
+      if (mode.endsWith("-cleanup")) {
+        assert.ok(ran.stderr.includes("close failed: Error: proof.cleanup"), log);
       }
       if (mode === "handler") {
         assert.ok(lines.includes("handler: 500; next request: 200"), log);

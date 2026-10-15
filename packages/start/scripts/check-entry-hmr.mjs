@@ -8,15 +8,17 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-
-import { createServer } from "vite-plus";
+import { pathToFileURL } from "node:url";
 
 import { appFiles, serverFile } from "../lib/named.mjs";
 
 // Auth and backend settings come from the caller's test env, as in the real app entry.
 const app = resolve(process.argv[2]);
+const appVite = createRequire(join(app, "package.json")).resolve("vite");
+const { createServer } = await import(pathToFileURL(appVite).href);
 const fixture = mkdtempSync(join(tmpdir(), "start-entry-hmr-"));
 let vite;
 const entries = [];
@@ -42,8 +44,18 @@ try {
       "tools.resolve(renderObserve, { ns: renderNs })",
       "{ export: (span) => probe.renderSpans.push(span) }",
     )
-    .replace("let close = once(", "probe.toolsClosed = tools.closed;\nlet close = once(")
-    .replace("    close = once(", "    probe.appClosed = app.closed;\n    close = once(")}`;
+    .replace(
+      "const closeTools = once(",
+      "probe.toolsClosed = tools.closed;\nconst closeTools = once(",
+    )
+    .replace(
+      "    const close = once(",
+      "    probe.appClosed = app.closed;\n    const close = once(",
+    )
+    .replace(
+      "    return createServerHandler(",
+      "    probe.close = close;\n    return createServerHandler(",
+    )}`;
   const routerFile = join(
     fixture,
     appFiles(fixture).find((file) => file.option === "routerEntry").file,
@@ -92,10 +104,11 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
     }
 
     assert.equal((await vite.environments.ssr.runner.import(entry)).default, imported.default);
-    assert.equal(await (await fetch(address)).text(), "first", "the next request retries startup");
+    const replies = await Promise.all([1, 2, 3].map(() => fetch(address)));
+    for (const reply of replies) assert.equal(await reply.text(), "first");
     assert.equal(globalThis.__entryProof.starts, 2, "a failed startup is not cached");
     console.log(
-      "PASS: dev import is idle; failed first request closes roots; next request retries the same module.",
+      "PASS: dev import is idle; failed first request closes roots; concurrent next requests share one retry in the same module.",
     );
   } else {
     assert.equal(await (await fetch(address)).text(), "first");
@@ -104,7 +117,7 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
   const firstModule = await vite.environments.ssr.runner.import(entry);
   const first = firstModule.default;
   const firstProof = globalThis.__entryProof;
-  entries.push(first);
+  entries.push(firstProof);
   assert.equal((await vite.environments.ssr.runner.import(entry)).default, first);
   const rendered = await fetch(new URL("/", address));
   assert.equal(rendered.status, 200);
@@ -133,7 +146,7 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
   const secondModule = await vite.environments.ssr.runner.import(entry);
   const second = secondModule.default;
   const secondProof = globalThis.__entryProof;
-  entries.push(second);
+  entries.push(secondProof);
   assert.notEqual(second, first);
   const nextRendered = await fetch(new URL("/", address));
   assert.equal(nextRendered.status, 200);
@@ -147,7 +160,7 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
     assert.equal(auth.status, 200);
     assert.equal(await auth.json(), null);
   }
-  await second.close();
+  await secondProof.close();
   assert.equal((await secondProof.toolsClosed).status, "success");
   console.log(
     "HMR: unchanged entry reused; both old roots closed; new requests and renders use the new entry; EXIT 0",
