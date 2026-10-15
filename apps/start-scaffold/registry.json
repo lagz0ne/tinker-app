@@ -1344,6 +1344,36 @@
           "path": "stryker.config.json",
           "type": "registry:file",
           "target": "~/stryker.config.json"
+        },
+        {
+          "path": "tests/database-adapter.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/database-adapter.test.ts"
+        },
+        {
+          "path": "tests/profile-behavior.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/profile-behavior.test.ts"
+        },
+        {
+          "path": "tests/runtime/mail-adapter.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/runtime/mail-adapter.test.ts"
+        },
+        {
+          "path": "tests/runtime/notifications-behavior.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/runtime/notifications-behavior.test.ts"
+        },
+        {
+          "path": "tests/runtime/queue-behavior.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/runtime/queue-behavior.test.ts"
+        },
+        {
+          "path": "tests/runtime/stream-behavior.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/runtime/stream-behavior.test.ts"
         }
       ],
       "meta": {

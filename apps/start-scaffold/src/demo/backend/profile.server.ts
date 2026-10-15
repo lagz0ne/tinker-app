@@ -49,7 +49,7 @@ const notifyProfile = operation({
       await database.select().from(execution).where(eq(execution.id, input.executionId))
     ).at(0);
     if (!stored?.notification) raise("RetryNotAvailable", {});
-    if (stored.result) return { executionId: input.executionId };
+    if (stored.result) return;
 
     const sent = await send.settle({ rawInput: stored.notification });
     const result: Sync.Result =
@@ -71,8 +71,6 @@ const notifyProfile = operation({
       if (latest?.result) return;
       await history.append(tx, stored.stream, input.executionId, [{ kind: "result", result }]);
     });
-
-    return { executionId: input.executionId };
   },
 });
 

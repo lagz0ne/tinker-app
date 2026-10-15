@@ -209,7 +209,10 @@ test("failed notification keeps the saved profile and retry replies before sendi
             kind: "partial",
             action: "profile",
             profileId: initial.profile.id,
-            notification: { kind: "failed" },
+            notification: {
+              kind: "failed",
+              message: "Name saved; notification failed. You can retry the notification.",
+            },
           },
         },
       ]);
