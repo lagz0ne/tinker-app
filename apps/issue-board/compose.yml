@@ -1,0 +1,44 @@
+name: tinker-start
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    ports:
+      - "127.0.0.1:${SMTP_PORT}:1025"
+      - "127.0.0.1:${MAILPIT_PORT}:8025"
+  traces:
+    image: victoriametrics/victoria-traces:v0.12.0
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod=7d
+    ports:
+      - "127.0.0.1:${VICTORIA_TRACES_PORT}:10428"
+    volumes:
+      - traces:/storage
+  logs:
+    image: victoriametrics/victoria-logs:v1.53.0
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod=7d
+    ports:
+      - "127.0.0.1:${VICTORIA_LOGS_PORT}:9428"
+    volumes:
+      - logs:/storage
+volumes:
+  postgres:
+  traces:
+  logs:

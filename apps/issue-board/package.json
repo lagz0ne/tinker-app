@@ -1,0 +1,56 @@
+{
+  "name": "issue-board",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "start": "tinker serve",
+    "doctor": "tinker doctor",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "tinker prepare",
+    "test": "vp test --maxWorkers=1 --no-file-parallelism",
+    "check:plain": "node scripts/check-plain.mjs",
+    "test:schema": "node scripts/check-schema.mjs"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "catalog:",
+    "@tanstack/react-router": "catalog:",
+    "@tanstack/react-start": "catalog:",
+    "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+    "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
+    "better-auth": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "drizzle-orm": "catalog:",
+    "nodemailer": "catalog:",
+    "pg": "catalog:",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwind-merge": "catalog:",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.9",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
+    "@tailwindcss/vite": "catalog:",
+    "@tinker/start": "file:vendor/tinker-start-0.9.0.tgz",
+    "@types/node": "^24",
+    "@types/nodemailer": "^7.0.12",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "catalog:",
+    "playwright": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "^7.0.2",
+    "typescript-api": "npm:typescript@5.9.3",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
+    "vite-plus": "1.0.0"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0"
+  }
+}

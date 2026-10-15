@@ -1,0 +1,418 @@
+import { createScope, operation } from "@tinker/core";
+import { preset } from "@tinker/core/testing";
+import { sql } from "drizzle-orm";
+import { test, expect, onTestFinished } from "vite-plus/test";
+
+import { authStartup } from "~/components/auth/index.server";
+import { authSettings } from "~/components/auth/index.server";
+import { auth } from "~/components/auth/index.server";
+import { database, migrate, databaseUrl } from "~/components/database/index.server";
+import { mail, mailFrom, smtpUrl } from "~/components/mail/index.server";
+import type { Mail } from "~/components/mail/index.server";
+import { backendStop as requestHostStop } from "~/components/requests";
+import { startRequests } from "~/components/requests";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+
+import { readProfile, saveProfile } from "@/demo/backend/profile.server";
+import { raise, isError } from "@/demo/errors";
+import * as demo from "@/demo/index.server";
+
+import { authBindings } from "./presets";
+import { handleAuth } from "./presets";
+import { proofDatabase, proofMail, requestHeaders } from "./presets";
+
+const requestBindings = requestHostStop(new AbortController().signal);
+
+const tags = [
+  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
+  databaseUrl(new URL("postgres://proof")),
+  smtpUrl(new URL("smtp://proof:proof@proof:25")),
+  mailFrom("proof@example.com"),
+  authSettings({
+    origin: "http://localhost:4318",
+    secret: "test-secret-with-at-least-thirty-two-letters",
+  }),
+];
+
+function authRequest(path: string, body: object, cookie = "") {
+  return new Request(`http://localhost:4318/api/auth/${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "http://localhost:4318", cookie },
+    body: JSON.stringify(body),
+  });
+}
+
+function readCookie(response: Response) {
+  return response.headers
+    .getSetCookie()
+    .map((cookie) => cookie.split(";").at(0))
+    .join("; ");
+}
+
+const failAfterSave = operation({
+  label: "test.failAfterSave",
+  depends: { save: saveProfile },
+  run: async ({ save }) => {
+    await save.run({
+      input: {
+        executionId: "10000000-0000-4000-8000-000000000001",
+        profile: { name: "Discard me" },
+      },
+    });
+    raise("BadInput", { reason: "stop after write" });
+  },
+});
+
+test("a real account can sign up, save its name, sign out and sign in", async () => {
+  const messages: Mail.Message[] = [];
+  const stop = new AbortController();
+  const root = createScope({
+    extensions: [startRequests, authStartup],
+    signal: stop.signal,
+    tags: [requestBindings, [tags, authBindings]],
+    presets: [
+      proofDatabase,
+      preset(mail, async () => ({
+        send: async (message: Mail.Message) => {
+          messages.push(message);
+        },
+      })),
+    ],
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+
+    const signup = await root.run(handleAuth, {
+      input: authRequest("sign-up/email", {
+        name: "Ada",
+        email: "ada@example.com",
+        password: "safe-password-42",
+      }),
+      tags: requestHeaders(new Headers()),
+    });
+    expect(signup.status).toBe(200);
+    const cookie = readCookie(signup);
+
+    await expect.poll(() => messages.at(0)?.subject).toBe("Check your email");
+
+    const saved = await root.run(saveProfile, {
+      input: {
+        executionId: "10000000-0000-4000-8000-000000000002",
+        profile: { name: "Ada Lovelace" },
+      },
+      tags: requestHeaders(new Headers({ cookie })),
+    });
+    expect(saved.executionId).toBe("10000000-0000-4000-8000-000000000002");
+
+    expect(
+      await root.run(readProfile, { tags: requestHeaders(new Headers({ cookie })) }),
+    ).toMatchObject({ name: "Ada Lovelace", email: "ada@example.com" });
+
+    const signout = await root.run(handleAuth, {
+      input: authRequest("sign-out", {}, cookie),
+      tags: requestHeaders(new Headers({ cookie })),
+    });
+    expect(signout.status).toBe(200);
+
+    expect(
+      await root.run(readProfile, { tags: requestHeaders(new Headers({ cookie })) }),
+    ).toBeNull();
+
+    const signin = await root.run(handleAuth, {
+      input: authRequest("sign-in/email", {
+        email: "ada@example.com",
+        password: "safe-password-42",
+      }),
+      tags: requestHeaders(new Headers()),
+    });
+    expect(
+      await root.run(readProfile, {
+        tags: requestHeaders(new Headers({ cookie: readCookie(signin) })),
+      }),
+    ).toMatchObject({ name: "Ada Lovelace" });
+  } finally {
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
+  }
+});
+
+test("a refused save leaves the root usable", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    extensions: [startRequests, authStartup],
+    signal: stop.signal,
+    tags: [requestBindings, [tags, authBindings]],
+    presets: [proofDatabase, proofMail],
+    observe: { history: 80 },
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+    const result = await root.settle(saveProfile, {
+      input: {
+        executionId: "10000000-0000-4000-8000-000000000003",
+        profile: { name: "No account" },
+      },
+      tags: requestHeaders(new Headers()),
+    });
+    if (result.status !== "failed") raise("BadInput", { reason: "expected refusal" });
+    if (!isError(result.error, "SignInRequired")) throw result.error;
+    expect(await root.run(readProfile, { tags: requestHeaders(new Headers()) })).toBeNull();
+  } finally {
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
+  }
+});
+
+test("a later action failure cannot undo a committed profile save", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    extensions: [startRequests, authStartup],
+    signal: stop.signal,
+    tags: [requestBindings, [tags, authBindings]],
+    presets: [proofDatabase, proofMail],
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+
+    const signup = await root.run(handleAuth, {
+      input: authRequest("sign-up/email", {
+        name: "Ada",
+        email: "ada@example.com",
+        password: "safe-password-42",
+      }),
+      tags: requestHeaders(new Headers()),
+    });
+    const headers = new Headers({ cookie: readCookie(signup) });
+
+    const result = await root.settle(failAfterSave, { tags: requestHeaders(headers) });
+    if (result.status !== "failed") raise("BadInput", { reason: "expected failed action" });
+    if (!isError(result.error, "BadInput")) throw result.error;
+
+    expect(await root.run(readProfile, { tags: requestHeaders(headers) })).toMatchObject({
+      name: "Discard me",
+    });
+  } finally {
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
+  }
+});
+
+test("a native commit failure never returns a saved profile", async () => {
+  const stop = new AbortController();
+  const root = createScope({
+    extensions: [startRequests, authStartup],
+    signal: stop.signal,
+    tags: [requestBindings, [tags, authBindings]],
+    presets: [proofDatabase, proofMail],
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+
+    await root.run(handleAuth, {
+      input: authRequest("sign-up/email", {
+        name: "Grace",
+        email: "grace@example.com",
+        password: "safe-password-42",
+      }),
+      tags: requestHeaders(new Headers()),
+    });
+
+    const signup = await root.run(handleAuth, {
+      input: authRequest("sign-up/email", {
+        name: "Ada",
+        email: "ada@example.com",
+        password: "safe-password-42",
+      }),
+      tags: requestHeaders(new Headers()),
+    });
+    const headers = new Headers({ cookie: readCookie(signup) });
+
+    const db = await root.resolve(database);
+    await db.execute(
+      sql`ALTER TABLE "user" ADD CONSTRAINT proof_name_unique UNIQUE (name) DEFERRABLE INITIALLY DEFERRED`,
+    );
+
+    const result = await root.settle(saveProfile, {
+      input: { executionId: "10000000-0000-4000-8000-000000000004", profile: { name: "Grace" } },
+      tags: requestHeaders(headers),
+    });
+    expect(result.status).toBe("failed");
+    expect(await root.run(readProfile, { tags: requestHeaders(headers) })).toMatchObject({
+      name: "Ada",
+    });
+  } finally {
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
+  }
+});
+
+test("email check and reset callbacks use the declared mail action", async () => {
+  const messages: Mail.Message[] = [];
+  const stop = new AbortController();
+  const root = createScope({
+    extensions: [startRequests, authStartup],
+    signal: stop.signal,
+    tags: [requestBindings, [tags, authBindings]],
+    presets: [
+      proofDatabase,
+      preset(mail, async () => ({
+        send: async (message: Mail.Message) => {
+          messages.push(message);
+        },
+      })),
+    ],
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+
+    await root.run(handleAuth, {
+      input: authRequest("sign-up/email", {
+        name: "Ada",
+        email: "ada@example.com",
+        password: "safe-password-42",
+      }),
+      tags: requestHeaders(new Headers()),
+    });
+
+    await expect
+      .poll(() => messages.some((message) => message.subject === "Check your email"))
+      .toBe(true);
+
+    const check = messages.find((message) => message.subject === "Check your email");
+    if (!check) raise("BadInput", { reason: "missing check link" });
+    const checked = await root.run(handleAuth, {
+      input: new Request(check.text),
+      tags: requestHeaders(new Headers()),
+    });
+    expect(checked.status).toBe(302);
+
+    await root.run(handleAuth, {
+      input: authRequest("request-password-reset", {
+        email: "ada@example.com",
+        redirectTo: "http://localhost:4318/",
+      }),
+      tags: requestHeaders(new Headers()),
+    });
+
+    await expect
+      .poll(() => messages.some((message) => message.subject === "Reset your password"))
+      .toBe(true);
+
+    const reset = messages.find((message) => message.subject === "Reset your password");
+    if (!reset) raise("BadInput", { reason: "missing reset link" });
+    expect(new URL(reset.text).pathname).toContain("/reset-password/");
+  } finally {
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
+  }
+});
+
+test("two requests share the auth instance", async () => {
+  const root = createScope({
+    extensions: [startRequests, authStartup],
+    tags: [requestBindings, [tags, authBindings]],
+    presets: [proofDatabase, proofMail],
+  });
+  await root.ready;
+  try {
+    const first = await root.session(
+      { tags: requestHeaders(new Headers({ cookie: "first" })) },
+      (session) => session.resolve(auth),
+    );
+    const second = await root.session(
+      { tags: requestHeaders(new Headers({ cookie: "second" })) },
+      (session) => session.resolve(auth),
+    );
+    expect(first).toBe(second);
+  } finally {
+    expect((await root.close({ graceful: true })).status).toBe("success");
+  }
+});
+
+test("sign-up replies before held mail and logs its failure", async () => {
+  const accepted = Promise.withResolvers<void>();
+  const sending = Promise.withResolvers<void>();
+  const failed = Promise.withResolvers<void>();
+  const stop = new AbortController();
+
+  const root = createScope({
+    extensions: [startRequests, authStartup],
+    signal: stop.signal,
+    tags: [requestBindings, [tags, authBindings]],
+    observe: {
+      log: (entry) => {
+        if (entry.message === "mail.failed" && entry.level === 50) failed.resolve();
+      },
+    },
+    presets: [
+      proofDatabase,
+      preset(mail, async () => ({
+        send: async () => {
+          sending.resolve();
+          await accepted.promise;
+          raise("NotificationFailed", {});
+        },
+      })),
+    ],
+  });
+  await root.ready;
+
+  onTestFinished(async () => {
+    accepted.resolve();
+    stop.abort();
+    expect((await root.closed).status).toBe("success");
+  });
+
+  await root.ready;
+  await root.run(migrate);
+
+  const reply = root.run(handleAuth, {
+    input: authRequest("sign-up/email", {
+      name: "Ada",
+      email: "ada@example.com",
+      password: "safe-password-42",
+    }),
+    tags: requestHeaders(new Headers()),
+  });
+
+  await sending.promise;
+  expect((await reply).status).toBe(200);
+
+  accepted.resolve();
+  await failed.promise;
+});
+
+test("releasing mail makes a fresh sender", async () => {
+  const root = createScope({
+    extensions: [startRequests, authStartup],
+    tags: [requestBindings, [tags, authBindings]],
+  });
+  await root.ready;
+  try {
+    const first = await root.resolve(mail);
+    root.release(mail);
+    expect(await root.resolve(mail)).not.toBe(first);
+  } finally {
+    expect((await root.close({ graceful: true })).status).toBe("success");
+  }
+});
+
+test("releasing database makes a fresh handle", async () => {
+  const root = createScope({
+    extensions: [startRequests, authStartup],
+    tags: [requestBindings, [tags, authBindings]],
+  });
+  await root.ready;
+  try {
+    const first = await root.resolve(database);
+    root.release(database);
+    expect(await root.resolve(database)).not.toBe(first);
+  } finally {
+    expect((await root.close({ graceful: true })).status).toBe("success");
+  }
+});
