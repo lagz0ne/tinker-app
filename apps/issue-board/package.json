@@ -43,7 +43,6 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "catalog:",
-    "playwright": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "^7.0.2",
     "typescript-api": "npm:typescript@5.9.3",

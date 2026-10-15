@@ -27,7 +27,6 @@ import {
   observer,
 } from "~/components/telemetry";
 
-import type {} from "@/demo/client";
 import { readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo/contracts/sync";
 import { records } from "@/demo/frontend/records";
 

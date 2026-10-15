@@ -21,7 +21,9 @@ export const teamChange = z.discriminatedUnion("kind", [
       name: z.string().trim().min(1).max(100),
     })
     .strict(),
-  z.object({ kind: z.literal("addMember"), teamId: z.uuid(), email: z.email().trim() }).strict(),
+  z
+    .object({ kind: z.literal("addMember"), teamId: z.uuid(), email: z.string().trim().email() })
+    .strict(),
 ]);
 
 export const teamCommand = z.object({ executionId: z.uuid(), change: teamChange }).strict();

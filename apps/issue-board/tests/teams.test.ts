@@ -1,8 +1,9 @@
 import { createScope, type Scope } from "@tinker/core";
+import { preset } from "@tinker/core/testing";
 import { beforeEach, afterEach, test, expect } from "vite-plus/test";
 
 import { authStartup, authSettings } from "~/components/auth/index.server";
-import { migrate, databaseUrl } from "~/components/database/index.server";
+import { migrate, databaseUrl, database, type Database } from "~/components/database/index.server";
 import { startRequests, backendStop } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
@@ -11,19 +12,42 @@ import { readAccount } from "@/demo/backend/auth.server";
 import { bootstrap } from "@/demo/backend/sync.server";
 import { isError } from "@/demo/errors";
 
-import { authBindings, handleAuth, proofDatabase, proofMail, requestHeaders } from "./presets";
+import { authBindings, handleAuth, proofMail, requestHeaders } from "./presets";
 
 let stop: AbortController;
 let root: Scope.RootHandle;
 let ada: Headers;
 let grace: Headers;
+const queries: string[] = [];
 
 beforeEach(async () => {
   stop = new AbortController();
   root = createScope({
     signal: stop.signal,
     extensions: [startRequests, authStartup],
-    presets: [proofDatabase, proofMail],
+    presets: [
+      proofMail,
+      preset(database, async (_deps, { defer }): Promise<Database.Handle> => {
+        const { PGlite } = await import("@electric-sql/pglite");
+        const { drizzle } = await import("drizzle-orm/pglite");
+        const client = await PGlite.create();
+        defer(() => client.close());
+
+        return Object.assign(
+          drizzle({
+            client,
+            logger: {
+              logQuery(query) {
+                queries.push(query);
+              },
+            },
+          }),
+          {
+            listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
+          },
+        );
+      }),
+    ],
     tags: [
       backendStop(stop.signal),
       authBindings,
@@ -108,7 +132,7 @@ test("a team key clash is rejected and leaves one team", async () => {
   expect(await root.run(listTeams, { tags: requestHeaders(grace) })).toEqual([]);
 });
 
-test("an admin adds an existing user; retries keep one membership and members cannot add people", async () => {
+test("an admin adds a user with a padded mixed-case email; retries keep one membership", async () => {
   const create = {
     executionId: crypto.randomUUID(),
     change: { kind: "create", key: "ENG", name: "Engineering" },
@@ -118,7 +142,7 @@ test("an admin adds an existing user; retries keep one membership and members ca
   const [team] = await root.run(listTeams, { tags: requestHeaders(ada) });
   const add = {
     executionId: crypto.randomUUID(),
-    change: { kind: "addMember", teamId: team!.id, email: "GRACE@example.com" },
+    change: { kind: "addMember", teamId: team!.id, email: " GRACE@example.com " },
   };
   await root.run(changeTeam, { rawInput: add, tags: requestHeaders(ada) });
   await root.run(changeTeam, { rawInput: add, tags: requestHeaders(ada) });
@@ -129,17 +153,6 @@ test("an admin adds an existing user; retries keep one membership and members ca
   expect(await root.run(listTeams, { tags: requestHeaders(grace) })).toHaveLength(1);
   const state = await root.run(bootstrap, { tags: requestHeaders(grace) });
   expect(state.private?.teams).toEqual([{ ...team, role: "member" }]);
-
-  const refused = await root.settle(changeTeam, {
-    rawInput: {
-      executionId: crypto.randomUUID(),
-      change: { kind: "addMember", teamId: team!.id, email: "ada@example.com" },
-    },
-    tags: requestHeaders(grace),
-  });
-  expect(refused.status).toBe("failed");
-  if (refused.status !== "failed") throw new Error("Expected admin check");
-  expect(isError(refused.error, "TeamAdminRequired")).toBe(true);
 });
 
 test("adding an unknown email is rejected without a change", async () => {
@@ -152,6 +165,8 @@ test("adding an unknown email is rejected without a change", async () => {
   });
   const [team] = await root.run(listTeams, { tags: requestHeaders(ada) });
 
+  queries.length = 0;
+
   const result = await root.settle(changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
@@ -162,4 +177,81 @@ test("adding an unknown email is rejected without a change", async () => {
   expect(result.status).toBe("failed");
   if (result.status !== "failed") throw new Error("Expected existing account check");
   expect(isError(result.error, "UserNotFound")).toBe(true);
+  expect(
+    queries.some((query) => query.includes('from "user"') && query.includes('"user"."email" =')),
+  ).toBe(true);
+  expect(await root.run(listTeams, { tags: requestHeaders(ada) })).toEqual([team]);
+  const { teamMember } = await import("@/backend/board.schema.server");
+  expect(await (await root.resolve(database)).select().from(teamMember)).toEqual([
+    {
+      teamId: team!.id,
+      userId: (await root.run(readAccount, { tags: requestHeaders(ada) }))!,
+      role: "admin",
+    },
+  ]);
+});
+
+test("a non-admin member is refused before any email lookup", async () => {
+  await root.run(changeTeam, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: { kind: "create", key: "ENG", name: "Engineering" },
+    },
+    tags: requestHeaders(ada),
+  });
+  const [team] = await root.run(listTeams, { tags: requestHeaders(ada) });
+  await root.run(changeTeam, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: { kind: "addMember", teamId: team!.id, email: "grace@example.com" },
+    },
+    tags: requestHeaders(ada),
+  });
+  queries.length = 0;
+
+  for (const email of ["ada@example.com", "missing@example.com"]) {
+    const result = await root.settle(changeTeam, {
+      rawInput: {
+        executionId: crypto.randomUUID(),
+        change: { kind: "addMember", teamId: team!.id, email },
+      },
+      tags: requestHeaders(grace),
+    });
+    expect(result.status).toBe("failed");
+    if (result.status !== "failed") throw new Error("Expected admin check");
+    expect(isError(result.error, "TeamAdminRequired")).toBe(true);
+  }
+
+  expect(
+    queries.filter((query) => query.includes('from "user"') && query.includes('"user"."email" =')),
+  ).toEqual([]);
+});
+
+test("a non-member add gets NotTeamMember before any email lookup", async () => {
+  await root.run(changeTeam, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: { kind: "create", key: "ENG", name: "Engineering" },
+    },
+    tags: requestHeaders(ada),
+  });
+  const [team] = await root.run(listTeams, { tags: requestHeaders(ada) });
+  queries.length = 0;
+
+  for (const email of ["ada@example.com", "missing@example.com"]) {
+    const result = await root.settle(changeTeam, {
+      rawInput: {
+        executionId: crypto.randomUUID(),
+        change: { kind: "addMember", teamId: team!.id, email },
+      },
+      tags: requestHeaders(grace),
+    });
+    expect(result.status).toBe("failed");
+    if (result.status !== "failed") throw new Error("Expected membership check");
+    expect(isError(result.error, "NotTeamMember")).toBe(true);
+  }
+
+  expect(
+    queries.filter((query) => query.includes('from "user"') && query.includes('"user"."email" =')),
+  ).toEqual([]);
 });

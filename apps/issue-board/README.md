@@ -37,7 +37,7 @@ pnpm exec tinker doctor
 node scripts/check-schema.mjs
 ```
 
-The plain check rejects Drizzle UUID and check declarations in the team schema.
+The plain check rejects Drizzle UUID declarations in the team schema.
 The trial keeps the schema and logs this Start limit. It does not patch the check.
 
 ## Two-user demo
@@ -45,14 +45,15 @@ The trial keeps the schema and logs this Start limit. It does not patch the chec
 With `vp dev` running and a fresh database:
 
 ```bash
-pnpm exec playwright install chromium
 node maintain/demo.mjs
 ```
 
-The script opens two fresh browser accounts at phone width.
+The script uses `agent-browser` with two fresh Lightpanda sessions.
 A signs up and makes ENG. B signs up. A adds B by email.
 B sees ENG through sync, then reloads and still sees it.
-The script fails on page errors or sideways scroll.
+The script checks the POST form method and fails on page errors.
+`/home/paseo/.codex/AGENTS.md`, under “Browsers,” requires `agent-browser`
+and forbids Playwright for page actions.
 Use a fresh database before running it again: ENG must be free.
 
 The full spec and limits log live at `/home/paseo/plans/issue-board-spec.md`

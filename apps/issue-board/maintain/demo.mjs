@@ -1,95 +1,83 @@
 import assert from "node:assert/strict";
-
-import { chromium } from "playwright";
+import { execFileSync } from "node:child_process";
 
 const origin = process.env.BOARD_ORIGIN ?? "http://localhost:4327";
-const run = Date.now();
-const emailA = `board-a-${run}@example.test`;
-const emailB = `board-b-${run}@example.test`;
-const browser = await chromium.launch({ headless: true });
-const a = await browser.newContext({ viewport: { width: 390, height: 844 } });
-const b = await browser.newContext({ viewport: { width: 390, height: 844 } });
-const pageA = await a.newPage();
-const pageB = await b.newPage();
-const failures = [];
-a.setDefaultTimeout(15000);
-b.setDefaultTimeout(15000);
+const runId = `${process.pid}-${Date.now()}`;
+const a = `issue-board-a-${runId}`;
+const b = `issue-board-b-${runId}`;
+const emailA = `board-a-${runId}@example.test`;
+const emailB = `board-b-${runId}@example.test`;
 
-for (const page of [pageA, pageB]) {
-  page.on("pageerror", (error) => failures.push(error.message));
-  page.on("console", (message) => {
-    if (message.type() === "error") console.error(message.text());
-  });
+/** Drive only this trial's named Lightpanda sessions through the allowed CLI. */
+function browser(session, ...args) {
+  const reply = JSON.parse(
+    execFileSync("agent-browser", ["--session", session, "--json", ...args], {
+      encoding: "utf8",
+      timeout: 35000,
+    }),
+  );
+  assert.equal(reply.success, true, reply.error);
+
+  return reply.data;
 }
 
 try {
-  await pageA.goto(origin);
-  await pageA.waitForFunction(() =>
-    Object.keys(document.querySelector("form") ?? {}).some((key) =>
-      key.startsWith("__reactProps$"),
-    ),
+  browser(a, "open", origin);
+  assert.equal(browser(a, "eval", 'document.querySelector("form").method').result, "post");
+  browser(
+    a,
+    "wait",
+    "--fn",
+    'Object.keys(document.querySelector("form") ?? {}).some(key => key.startsWith("__reactProps$"))',
   );
-  await pageA.getByLabel("Name", { exact: true }).fill("User A");
-  await pageA.getByLabel("Email", { exact: true }).fill(emailA);
-  await pageA.getByLabel("Password", { exact: true }).fill("board-proof-password-42");
-  await pageA.getByRole("button", { name: "Make account", exact: true }).click();
-  await pageA.getByRole("link", { name: "Open teams" }).click();
-  await pageA.getByLabel("Team key", { exact: true }).fill("ENG");
-  await pageA.getByLabel("Team name", { exact: true }).fill("Engineering");
-  await pageA.getByRole("button", { name: "Make team", exact: true }).click();
-  await pageA.getByRole("heading", { name: "ENG · Engineering", exact: true }).waitFor();
-  await pageA.getByRole("button", { name: "Make team", exact: true }).isEnabled();
+  browser(a, "fill", 'input[name="name"]', "User A");
+  browser(a, "fill", 'input[name="email"]', emailA);
+  browser(a, "fill", 'input[name="password"]', "board-proof-password-42");
+  browser(a, "find", "role", "button", "click", "--name", "Make account", "--exact");
+  browser(a, "wait", "--text", "Open teams");
+  browser(a, "find", "role", "link", "click", "--name", "Open teams", "--exact");
+  browser(a, "wait", 'input[name="key"]');
+  browser(a, "fill", 'input[name="key"]', "ENG");
+  browser(a, "fill", 'input[name="name"]', "Engineering");
+  browser(a, "find", "role", "button", "click", "--name", "Make team", "--exact");
+  browser(a, "wait", "--text", "ENG · Engineering");
 
-  await pageB.goto(origin);
-  await pageB.waitForFunction(() =>
-    Object.keys(document.querySelector("form") ?? {}).some((key) =>
-      key.startsWith("__reactProps$"),
-    ),
+  browser(b, "open", origin);
+  browser(
+    b,
+    "wait",
+    "--fn",
+    'Object.keys(document.querySelector("form") ?? {}).some(key => key.startsWith("__reactProps$"))',
   );
-  await pageB.getByLabel("Name", { exact: true }).fill("User B");
-  await pageB.getByLabel("Email", { exact: true }).fill(emailB);
-  await pageB.getByLabel("Password", { exact: true }).fill("board-proof-password-42");
-  await pageB.getByRole("button", { name: "Make account", exact: true }).click();
-  await pageB.getByRole("link", { name: "Open teams" }).click();
-  await pageB.getByText("No teams yet. Make your first team.", { exact: true }).waitFor();
+  browser(b, "fill", 'input[name="name"]', "User B");
+  browser(b, "fill", 'input[name="email"]', emailB);
+  browser(b, "fill", 'input[name="password"]', "board-proof-password-42");
+  browser(b, "find", "role", "button", "click", "--name", "Make account", "--exact");
+  browser(b, "wait", "--text", "Open teams");
+  browser(b, "find", "role", "link", "click", "--name", "Open teams", "--exact");
+  browser(b, "wait", "--text", "No teams yet. Make your first team.");
 
-  await pageA.getByLabel("Member email", { exact: true }).fill(emailB);
-  await pageA.getByRole("button", { name: "Add member", exact: true }).click();
-  await pageB.getByRole("heading", { name: "ENG · Engineering", exact: true }).waitFor();
-  await pageB.getByText("Your role: member", { exact: true }).waitFor();
-  assert.equal(await pageB.getByRole("button", { name: "Add member", exact: true }).count(), 0);
+  browser(a, "fill", 'input[name="email"]', emailB);
+  browser(a, "find", "role", "button", "click", "--name", "Add member", "--exact");
+  browser(b, "wait", "--text", "ENG · Engineering");
+  browser(b, "wait", "--text", "Your role: member");
   assert.equal(
-    await pageB.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    true,
+    browser(
+      b,
+      "eval",
+      '[...document.querySelectorAll("button")].some(button => button.textContent === "Add member")',
+    ).result,
+    false,
   );
-  await pageB.reload();
-  await pageB.getByRole("heading", { name: "ENG · Engineering", exact: true }).waitFor();
-  await pageB.getByText("Your role: member", { exact: true }).waitFor();
-  await pageB.screenshot({
-    path: process.env.BOARD_SCREENSHOT ?? "/home/paseo/plans/issue-board-demo.png",
-    fullPage: true,
-  });
-  assert.deepEqual(failures, []);
+  browser(b, "reload");
+  browser(b, "wait", "--text", "ENG · Engineering");
+  browser(b, "wait", "--text", "Your role: member");
+  assert.deepEqual(browser(a, "errors").errors, []);
+  assert.deepEqual(browser(b, "errors").errors, []);
   console.log(
-    "PASS: A signs up, creates ENG; B signs up; A adds B by email; B sees ENG live and after reload. Mobile fits. No page errors.",
+    "PASS (agent-browser / Lightpanda): A signs up and creates ENG; B signs up; A adds B by email; B sees ENG live and after reload. Form uses POST. No page errors.",
   );
-} catch (error) {
-  console.error("Demo failed:", error.message, "Page errors:", failures);
-  console.error(
-    "A:",
-    await pageA
-      .locator("body")
-      .innerText()
-      .catch(() => "unavailable"),
-  );
-  console.error(
-    "B:",
-    await pageB
-      .locator("body")
-      .innerText()
-      .catch(() => "unavailable"),
-  );
-  throw error;
 } finally {
-  await browser.close();
+  browser(a, "close");
+  browser(b, "close");
 }

@@ -19,7 +19,6 @@ export default defineConfig({
     // Keep committed tests separate from copies owned by a live mutation run.
     exclude: ["**/node_modules/**", "**/.git/**", "**/.stryker-tmp/**", "**/reports/**"],
     testTimeout: 30000,
-    maxWorkers: 1,
-    fileParallelism: false,
+    maxWorkers: 2,
   },
 });

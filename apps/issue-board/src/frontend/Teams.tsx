@@ -6,8 +6,7 @@ import { syncClient } from "~/components/sync";
 
 import { teamChange } from "@/contracts/board";
 import { raise } from "@/demo/errors";
-import { profile } from "@/demo/frontend/state";
-import { teams } from "@/demo/frontend/state";
+import { profile, teams } from "@/demo/frontend/state";
 import { updateTeam } from "@/transport/teams.functions";
 
 import { signOut } from "./auth-actions";

@@ -27,7 +27,6 @@ catalog:
   nodemailer: 10.0.13
   oxc-parser: ^0.117.0
   pg: 8.20.0
-  playwright: 1.55.0
   react: ^19.3.0
   react-dom: ^19.3.0
   tailwind-merge: 3.7.0

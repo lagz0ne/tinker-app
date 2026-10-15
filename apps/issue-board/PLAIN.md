@@ -133,7 +133,6 @@ Tests and generated files do not count.
     - `src/routes/api.telemetry.ts#Route.POST`
     - `src/transport/greet.functions.ts#runGreet.callback`
     - `src/transport/profile.functions.ts#getProfile.callback`
-    - `src/transport/teams.functions.ts#getTeam.callback`
     - `src/transport/todos.functions.ts#getTodos.callback`
     - `tinker/components/sync/functions.ts#getAccount.callback`
     - `tinker/components/sync/functions.ts#getBootstrap.callback`

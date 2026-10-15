@@ -32,6 +32,7 @@ export const readTeam = operation({
   depends: { database, orm: drizzleOrm, currentUser },
   run: async ({ database, orm, currentUser }, { input }) => {
     const { eq, and } = orm;
+
     const row = (
       await database
         .select({ id: team.id, key: team.key, name: team.name, role: teamMember.role })
@@ -81,6 +82,15 @@ export const changeTeam = operation({
       });
     } else {
       await database.transaction(async (tx) => {
+        const member = (
+          await tx
+            .select()
+            .from(teamMember)
+            .where(and(eq(teamMember.teamId, change.teamId), eq(teamMember.userId, currentUser.id)))
+        ).at(0);
+        if (!member) raise("NotTeamMember", {});
+        if (member.role !== "admin") raise("TeamAdminRequired", {});
+
         const target = (
           await tx
             .select({ id: user.id })
@@ -92,15 +102,6 @@ export const changeTeam = operation({
         const streams = [...new Set([currentUser.id, target.id])].sort();
         for (const stream of streams) await history.lock(tx, stream);
         if (await history.find(tx, input.executionId, currentUser.id)) return;
-
-        const member = (
-          await tx
-            .select()
-            .from(teamMember)
-            .where(and(eq(teamMember.teamId, change.teamId), eq(teamMember.userId, currentUser.id)))
-        ).at(0);
-        if (!member) raise("NotTeamMember", {});
-        if (member.role !== "admin") raise("TeamAdminRequired", {});
 
         await tx
           .insert(teamMember)
