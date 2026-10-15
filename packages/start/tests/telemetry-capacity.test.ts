@@ -3,17 +3,16 @@ import { makeTestClock } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
 import { httpBackend } from "~/components/http";
-
-import { consoleOutput } from "../src/parts/telemetry/console";
-import { exportHealth } from "../src/parts/telemetry/health";
+import { consoleOutput } from "~/components/telemetry/console";
+import { exportHealth } from "~/components/telemetry/health";
 import {
   observer,
   flushTelemetry,
   ingestTelemetry,
   telemetryExport,
-} from "../src/parts/telemetry/observer";
-import type { Telemetry } from "../src/parts/telemetry/records";
-import { telemetrySide } from "../src/parts/telemetry/settings";
+} from "~/components/telemetry/observer";
+import type { Telemetry } from "~/components/telemetry/records";
+import { telemetrySide } from "~/components/telemetry/settings";
 
 const log: Telemetry.Log = { time: 1, level: 30, service: "s", side: "server", msg: "burst" };
 

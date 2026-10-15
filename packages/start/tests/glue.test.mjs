@@ -72,21 +72,20 @@ test("Start's usual files the glue does not read are listed, and the read ones a
   expect(files).not.toContain("cmds/server.ts");
 });
 
-test("Start runs the app commands and mounts remaining package routes", () => {
-  const root = fixture({ "src/routes/index.tsx": "" });
-  const options = startOptions(root, ["telemetry"]);
+test("Start runs the app commands and discovers copied telemetry through the physical tree", () => {
+  const file = readFileSync(
+    join(baseDir, "../../apps/start-scaffold/src/routes/api.telemetry.ts"),
+    "utf8",
+  );
+  const root = fixture({ "src/routes/index.tsx": "", "src/routes/api.telemetry.ts": file });
+  const options = startOptions(root, []);
+
   expect(resolve(root, "src", options.server.entry)).toBe(join(root, "cmds/server.ts"));
   expect(resolve(root, "src", options.router.entry)).toBe(join(root, "cmds/router.ts"));
-
-  const { virtualRouteConfig: tree } = options.router;
-  expect(resolve(root, "src/routes", tree.file)).toBe(join(baseDir, "src/routes/root.tsx"));
-  expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([
-    "/api/telemetry",
-    "",
+  expect(options.router.virtualRouteConfig.children).toEqual([
+    { type: "physical", directory: ".", pathPrefix: "" },
   ]);
-  expect(resolve(root, "src/routes", tree.children[0].file)).toBe(
-    join(baseDir, "src/routes/api.telemetry.ts"),
-  );
+  expect(readFileSync(join(root, "src/routes/api.telemetry.ts"), "utf8")).toBe(file);
 });
 
 test("a part that is off mounts no route, so its path is the app's", () => {
@@ -131,9 +130,9 @@ test("Start's static output options pass on; an unknown option fails the build",
     prerender: { enabled: true },
   });
   expect(() => passThrough({ prerendr: {}, sap: {} })).toThrow(
-    "tinker(): unknown option prerendr, sap; known: root, serverEntry, compileHints, prerender, pages, spa, sitemap, telemetry, auth, sync",
+    "tinker(): unknown option prerendr, sap; known: root, serverEntry, compileHints, prerender, pages, spa, sitemap, auth, sync",
   );
-  expect(passThrough({ telemetry: false, auth: true, spa: { enabled: true } })).toStrictEqual({
+  expect(passThrough({ auth: true, spa: { enabled: true } })).toStrictEqual({
     spa: { enabled: true },
   });
 });
@@ -144,12 +143,9 @@ test("auth's copied route stays in the physical app tree with either old switch 
     "utf8",
   );
   const root = fixture({ "src/routes/index.tsx": "", "src/routes/api.auth.$.ts": file });
-  for (const on of [["telemetry", "auth"], ["telemetry"]]) {
+  for (const on of [["auth"], []]) {
     const { virtualRouteConfig: tree } = startOptions(root, on).router;
-    expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([
-      "/api/telemetry",
-      "",
-    ]);
+    expect(tree.children.map((child) => child.path ?? child.pathPrefix)).toEqual([""]);
     expect(tree.children.at(-1)).toEqual({ type: "physical", directory: ".", pathPrefix: "" });
     expect(readFileSync(join(root, "src/routes/api.auth.$.ts"), "utf8")).toBe(file);
   }

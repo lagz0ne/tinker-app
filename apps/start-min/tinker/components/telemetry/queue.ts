@@ -1,14 +1,12 @@
 import { resource } from "@tinker/core";
 
-import { abortReasons } from "../../errors";
+import { abortReasons } from "~/components/errors";
+
 import { consoleOutput } from "./console";
 import { delivery } from "./delivery";
 import { exportHealth } from "./health";
 import type { Telemetry } from "./records";
 import { telemetrySide } from "./settings";
-
-/** One encoder for every record size; sizes are taken once, at ingest. */
-const encoder = new TextEncoder();
 
 /** Retains failed records within count and byte bounds; this resource owns every promise. */
 export const queue = resource({
@@ -21,6 +19,7 @@ export const queue = resource({
     console: consoleOutput,
   },
   factory: ({ side, health, delivery, console }, ctx) => {
+    const encoder = new TextEncoder();
     let records: Telemetry.Record[] = [];
     const browser = side === "browser";
     const batchLimit = browser ? 32_000 : 48_000;

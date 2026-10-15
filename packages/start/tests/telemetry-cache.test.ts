@@ -2,11 +2,10 @@ import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { httpBackend } from "~/components/http";
-
-import { exportHealth } from "../src/parts/telemetry/health";
-import { flushTelemetry, ingestTelemetry, telemetryExport } from "../src/parts/telemetry/observer";
-import type { Telemetry } from "../src/parts/telemetry/records";
-import { telemetryService, telemetrySide } from "../src/parts/telemetry/settings";
+import { exportHealth } from "~/components/telemetry/health";
+import { flushTelemetry, ingestTelemetry, telemetryExport } from "~/components/telemetry/observer";
+import type { Telemetry } from "~/components/telemetry/records";
+import { telemetryService, telemetrySide } from "~/components/telemetry/settings";
 
 const log: Telemetry.Log = {
   time: 1,

@@ -60,6 +60,7 @@ app.createSession = (...args) => {
   return createRequestSession(...args);
 };
 export const createdRequestSessions = () => requestSessionCount;
+export const stdoutConfigured = tools.resolve(consoleOutput) === process.stdout;
 `,
       ),
     );
@@ -166,6 +167,7 @@ export const Route = createFileRoute("/proof/write")({server: {
     const app = await import(pathToFileURL(join(proof, "dist/server/server.js")).href);
 
     try {
+      assert.equal(app.stdoutConfigured, true, "the command binds stdout to its telemetry tools");
       const results = await Promise.all(
         ["Ada", "Grace"].map(async (user) => {
           const response = await app.default.fetch(

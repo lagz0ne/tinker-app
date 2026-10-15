@@ -1,0 +1,24 @@
+{
+  "requires": ["errors", "requests", "http"],
+  "env": {
+    "VICTORIA_TRACES_URL": {
+      "default": "http://127.0.0.1:10428/insert/opentelemetry/v1/traces",
+      "rule": "http"
+    },
+    "VICTORIA_LOGS_URL": {
+      "default": "http://127.0.0.1:9428/insert/jsonline",
+      "rule": "http"
+    },
+    "OTEL_SERVICE_NAME": {
+      "default": "tinker-app"
+    },
+    "LOG_LEVEL": {
+      "default": "info",
+      "rule": "level"
+    },
+    "SPAN_HISTORY": {
+      "default": "80",
+      "rule": "count"
+    }
+  }
+}

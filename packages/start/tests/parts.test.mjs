@@ -1,25 +1,36 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
 
+import { passThrough } from "../lib/glue.mjs";
 import { readPartEnv, rules } from "../lib/part-env.mjs";
 import { partNotes, parts, partsOn, recordedParts } from "../lib/parts.mjs";
-import { basePackage } from "../lib/paths.mjs";
+import { baseDir, basePackage } from "../lib/paths.mjs";
 import { fixture } from "./fixture.mjs";
 
-test("telemetry is on by default, and tinker({ telemetry: false }) turns it off", () => {
-  expect(partsOn({})).toEqual(["telemetry"]);
-  expect(partsOn({ telemetry: undefined })).toEqual(["telemetry"]);
-  expect(partsOn({ telemetry: true, spa: { enabled: true } })).toEqual(["telemetry"]);
-  expect(partsOn({ telemetry: false })).toEqual([]);
+const telemetryEnv = JSON.parse(
+  readFileSync(
+    join(baseDir, "../../apps/start-scaffold/tinker/components/telemetry/component.json"),
+    "utf8",
+  ),
+).env;
+
+test("telemetry is copied and no longer has a plugin switch", () => {
+  expect(partsOn({})).toEqual([]);
+  for (const value of [true, false, "off", 0]) {
+    expect(() => passThrough({ telemetry: value })).toThrow("tinker(): unknown option telemetry");
+  }
 });
 
-test("a part switch that is not true or false fails the build", () => {
-  expect(() => partsOn({ telemetry: "off" })).toThrow("tinker(): telemetry takes true or false");
-  expect(() => partsOn({ telemetry: 0 })).toThrow("tinker(): telemetry takes true or false");
+test("a remaining part switch that is not boolean still fails", () => {
+  expect(() => partsOn({ auth: "off" })).toThrow("tinker(): auth takes true or false");
+  expect(() => partsOn({ auth: 0 })).toThrow("tinker(): auth takes true or false");
 });
 
-test("the telemetry part mounts /api/telemetry and reads five keys, each with a default", () => {
-  expect(parts.telemetry.routes).toEqual({ "/api/telemetry": "src/routes/api.telemetry.ts" });
-  expect(readPartEnv(parts.telemetry.env, {})).toEqual({
+test("the copied telemetry env table reads five keys with their same defaults", () => {
+  expect(parts.telemetry).toBeUndefined();
+  expect(readPartEnv(telemetryEnv, {})).toEqual({
     values: {
       VICTORIA_TRACES_URL: "http://127.0.0.1:10428/insert/opentelemetry/v1/traces",
       VICTORIA_LOGS_URL: "http://127.0.0.1:9428/insert/jsonline",
@@ -32,7 +43,7 @@ test("the telemetry part mounts /api/telemetry and reads five keys, each with a 
 });
 
 test("a set key wins over its default; an empty one reads as unset", () => {
-  const { values } = readPartEnv(parts.telemetry.env, {
+  const { values } = readPartEnv(telemetryEnv, {
     VICTORIA_LOGS_URL: "https://logs.example/insert",
     OTEL_SERVICE_NAME: "",
   });
@@ -44,7 +55,7 @@ test("a set key wins over its default; an empty one reads as unset", () => {
 
 test("a value that breaks its key's rule is refused, every such key at once", () => {
   expect(
-    readPartEnv(parts.telemetry.env, {
+    readPartEnv(telemetryEnv, {
       VICTORIA_TRACES_URL: "not a url",
       VICTORIA_LOGS_URL: "ftp://logs.example/insert",
       OTEL_SERVICE_NAME: "any text",
@@ -70,24 +81,22 @@ test("the record of the last tinker() call names the parts that are on", () => {
 });
 
 test("no record, an unreadable one, or one from before parts reads as the defaults", () => {
-  expect(recordedParts(fixture({}))).toEqual(["telemetry"]);
-  expect(recordedParts(fixture({ ".tinker/base.json": "{" }))).toEqual(["telemetry"]);
-  expect(recordedParts(fixture({ ".tinker/base.json": '{ "base": "0.2.0" }' }))).toEqual([
-    "telemetry",
-  ]);
+  expect(recordedParts(fixture({}))).toEqual([]);
+  expect(recordedParts(fixture({ ".tinker/base.json": "{" }))).toEqual([]);
+  expect(recordedParts(fixture({ ".tinker/base.json": '{ "base": "0.2.0" }' }))).toEqual([]);
 });
 
 test("a recorded part this base does not have is left out", () => {
   const root = fixture({
     ".tinker/base.json": JSON.stringify({ base: "9.0.0", parts: ["telemetry", "later"] }),
   });
-  expect(recordedParts(root)).toEqual(["telemetry"]);
-  expect(Object.keys(basePackage.tinker.parts)).toEqual(["telemetry", "auth", "sync"]);
+  expect(recordedParts(root)).toEqual([]);
+  expect(Object.keys(basePackage.tinker.parts)).toEqual(["auth", "sync"]);
 });
 
 test("auth is off by default, and tinker({ auth: true }) turns it on", () => {
   expect(partsOn({ telemetry: false })).toEqual([]);
-  expect(partsOn({ auth: true })).toEqual(["telemetry", "auth"]);
+  expect(partsOn({ auth: true })).toEqual(["auth"]);
   expect(partsOn({ telemetry: false, auth: true })).toEqual(["auth"]);
   expect(() => partsOn({ auth: "yes" })).toThrow("tinker(): auth takes true or false");
 });
@@ -115,18 +124,18 @@ test("a secret takes at least 32 characters", () => {
 });
 
 test("sync is off by default; on, it turns auth on, and says so", () => {
-  expect(partsOn({})).toEqual(["telemetry"]);
-  expect(partsOn({ sync: true })).toEqual(["telemetry", "auth", "sync"]);
+  expect(partsOn({})).toEqual([]);
+  expect(partsOn({ sync: true })).toEqual(["auth", "sync"]);
   expect(partsOn({ sync: true, auth: true, telemetry: false })).toEqual(["auth", "sync"]);
-  expect(partNotes(["telemetry", "auth", "sync"])).toEqual(["sync turns auth on"]);
-  expect(partNotes(["telemetry", "auth"])).toEqual([]);
+  expect(partNotes(["auth", "sync"])).toEqual(["sync turns auth on"]);
+  expect(partNotes(["auth"])).toEqual([]);
 });
 
 test("sync with auth: false fails the build with the two ways out", () => {
   expect(() => partsOn({ sync: true, auth: false })).toThrow(
     "tinker(): sync needs auth, but auth is false; drop auth: false, or set sync: false",
   );
-  expect(partsOn({ sync: false, auth: false })).toEqual(["telemetry"]);
+  expect(partsOn({ sync: false, auth: false })).toEqual([]);
 });
 
 test("the sync part mounts /api/sync, reads the router seam and the Register bodies, and no env key", () => {

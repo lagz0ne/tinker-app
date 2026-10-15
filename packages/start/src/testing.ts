@@ -11,10 +11,9 @@ export { receiveMessage, refreshAccount } from "./parts/sync/client/events";
 export { snapshotSource } from "./parts/sync/functions";
 export { startRequests } from "~/components/requests";
 export { isError, raise } from "./errors";
-export { exportHealth } from "./parts/telemetry/health";
-export { flushTelemetry } from "./parts/telemetry/observer";
-export { telemetry as serverTelemetry } from "./parts/telemetry/on.server";
-export { telemetry as offTelemetry } from "./parts/telemetry/off";
+export { exportHealth } from "~/components/telemetry/health";
+export { flushTelemetry } from "~/components/telemetry/observer";
+export { telemetry as serverTelemetry } from "~/components/telemetry/index.server";
 
 export { abortReasons } from "./errors";
 

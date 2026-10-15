@@ -13,19 +13,22 @@ test("the old runtime import warns while the app still builds", () => {
 
 test("each silent mistake stops the build with doctor's file:line message", () => {
   const root = goodApp({
+    ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: ["auth", "sync"] }),
     "src/router.tsx": "",
     "src/routes/index.tsx": 'export const route = createFileRoute("/")({});\n',
-    "src/routes/api.telemetry/settings.tsx":
-      'export const Route = createFileRoute("/api/telemetry/settings")({});\n',
+    "src/routes/api.sync/settings.tsx":
+      'export const Route = createFileRoute("/api/sync/settings")({});\n',
     "src/routes/__root.tsx":
       "export const Route = createRootRoute({ component: () => <main /> });\n",
     "src/backend/peek.ts": 'import x from "#tinker/routes";\n',
     "src/styles.css": "",
   });
   expect(buildChecks(root).errors).toEqual([
+    "tinker doctor, named files: cmds/router.ts is missing; the sync part reads records and readSnapshot and readBootstrap and readBatch and streamMessage from it",
+    'tinker doctor, named files: src/ adds no Register bodies to "@tinker/start"; the sync part reads them: declare module "@tinker/start" { interface Register { … } }',
     "tinker doctor, named files: src/router.tsx:1 is a Start file the base does not read; router options and client wiring go in cmds/router.ts",
     'tinker doctor, imports: src/backend/peek.ts:1 "#tinker/routes" is a base-only name; app code cannot import it',
-    "tinker doctor, routes: src/routes/api.telemetry/settings.tsx:1 nests under /api/telemetry, a base route with no outlet; the base page renders; tinker({ telemetry: false }) frees it",
+    "tinker doctor, routes: src/routes/api.sync/settings.tsx:1 nests under /api/sync, a base route with no outlet; the base page renders; tinker({ sync: false }) frees it",
     "tinker doctor, routes: src/routes/index.tsx:1 does not export Route; TanStack skips the file, so / is a 404",
     "tinker doctor, routes: src/routes/__root.tsx:1 sets component without <Outlet />; no page renders inside the shell",
     "tinker doctor, style: src/styles.css:1 is never linked: nothing imports it, and the shell links only src/style.css",

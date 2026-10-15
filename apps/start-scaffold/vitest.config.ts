@@ -11,9 +11,6 @@ export default defineConfig({
       "#tinker/router": fileURLToPath(new URL("./cmds/router.ts", import.meta.url)),
       "#tinker/parts": fileURLToPath(new URL("./.tinker/parts.ts", import.meta.url)),
       "#tinker/parts.server": fileURLToPath(new URL("./.tinker/parts.server.ts", import.meta.url)),
-      "#tinker/telemetry-env": fileURLToPath(
-        new URL("./.tinker/telemetry-env.ts", import.meta.url),
-      ),
       "#tinker/server": fileURLToPath(
         new URL("./tinker/components/demo/index.server.ts", import.meta.url),
       ),

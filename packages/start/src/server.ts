@@ -1,4 +1,5 @@
-export { auth, telemetry } from "#tinker/parts.server";
+export { auth } from "#tinker/parts.server";
+export { telemetry } from "~/components/telemetry/index.server";
 export { abortReasons } from "./errors";
 export { startRequests } from "~/components/requests";
 export { readResult } from "~/components/requests/index.server";

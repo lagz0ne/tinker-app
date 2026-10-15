@@ -288,6 +288,71 @@
           "path": "tinker/components/auth/slots.ts",
           "type": "registry:file",
           "target": "~/tinker/components/auth/slots.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/component.json"
+        },
+        {
+          "path": "tinker/components/telemetry/console.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/console.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/delivery.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/delivery.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/health.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/health.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/index.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/index.server.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/index.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/index.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/ingest.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/ingest.server.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/observer.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/observer.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/queue.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/queue.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/records.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/records.server.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/records.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/records.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/settings.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/settings.ts"
+        },
+        {
+          "path": "src/routes/api.telemetry.ts",
+          "type": "registry:file",
+          "target": "~/src/routes/api.telemetry.ts"
         }
       ],
       "meta": {

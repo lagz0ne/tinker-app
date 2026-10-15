@@ -26,10 +26,6 @@ if (import.meta.main) {
             find: /^#tinker\/parts\.server$/,
             replacement: fileURLToPath(new URL("../.tinker/parts.server.ts", import.meta.url)),
           },
-          {
-            find: /^#tinker\/telemetry-env$/,
-            replacement: fileURLToPath(new URL("../.tinker/telemetry-env.ts", import.meta.url)),
-          },
           { find: /^@\//, replacement: fileURLToPath(new URL("../src/", import.meta.url)) },
           { find: /^~\//, replacement: fileURLToPath(new URL("../tinker/", import.meta.url)) },
         ],

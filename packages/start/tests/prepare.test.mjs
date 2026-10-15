@@ -47,16 +47,10 @@ test("a named file the app has wins; a missing one maps to the base default", ()
 
 test("prepare writes the tsconfig, the parts files, and the base version into .tinker/", () => {
   const root = fixture({ "package.json": "{}" });
-  expect(prepare(root)).toEqual([
-    "tsconfig.json",
-    "base.json",
-    "parts.ts",
-    "parts.server.ts",
-    "telemetry-env.ts",
-  ]);
+  expect(prepare(root)).toEqual(["tsconfig.json", "base.json", "parts.ts", "parts.server.ts"]);
   expect(JSON.parse(readFileSync(join(root, ".tinker/base.json"), "utf8"))).toEqual({
     base: basePackage.version,
-    parts: ["telemetry"],
+    parts: [],
   });
   expect(existsSync(join(root, ".tinker/tsconfig.json"))).toBe(true);
 });
@@ -65,19 +59,17 @@ test("each parts file exports the parts its entry reads, from the on or the off 
   const root = fixture({ "package.json": "{}" });
   const module = (part, file) => JSON.stringify(join(baseDir, "src/parts", part, file));
 
-  const on = render(root, ["telemetry", "auth"]);
+  const on = render(root, ["auth"]);
   expect(on["parts.ts"]).toBe(
     [
-      "// Written by tinker(); parts on: telemetry, auth.",
-      `export { telemetry } from ${module("telemetry", "on")};`,
+      "// Written by tinker(); parts on: auth.",
       `export { sync } from ${module("sync", "off")};`,
       "",
     ].join("\n"),
   );
   expect(on["parts.server.ts"]).toBe(
     [
-      "// Written by tinker(); parts on: telemetry, auth.",
-      `export { telemetry } from ${module("telemetry", "on.server")};`,
+      "// Written by tinker(); parts on: auth.",
       `export { auth } from ${module("auth", "on.server")};`,
       "",
     ].join("\n"),
@@ -87,7 +79,6 @@ test("each parts file exports the parts its entry reads, from the on or the off 
   expect(off["parts.ts"]).toBe(
     [
       "// Written by tinker(); parts on: none.",
-      `export { telemetry } from ${module("telemetry", "off")};`,
       `export { sync } from ${module("sync", "off")};`,
       "",
     ].join("\n"),
@@ -98,7 +89,6 @@ test("each parts file exports the parts its entry reads, from the on or the off 
   expect(off["parts.server.ts"]).toBe(
     [
       "// Written by tinker(); parts on: none.",
-      `export { telemetry } from ${module("telemetry", "off")};`,
       `export { auth } from ${module("auth", "off")};`,
       "",
     ].join("\n"),
@@ -130,9 +120,9 @@ test("a failing tinker prepare fails, except as postinstall, so a broken clone s
 
 test("with sync on, the parts file records that sync turned auth on", () => {
   const root = fixture({ "package.json": "{}" });
-  const file = render(root, ["telemetry", "auth", "sync"])["parts.server.ts"];
+  const file = render(root, ["auth", "sync"])["parts.server.ts"];
   expect(file.split("\n")[0]).toBe(
-    "// Written by tinker(); parts on: telemetry, auth, sync; sync turns auth on.",
+    "// Written by tinker(); parts on: auth, sync; sync turns auth on.",
   );
   expect(file).not.toContain("parts/sync");
 });
@@ -144,10 +134,10 @@ test("linked parts use the real base path so sync has one Register", () => {
   );
 });
 
-test("generated telemetry settings contain only that part's env table", () => {
+test("telemetry settings are not generated and have no private alias", () => {
   const files = render(fixture({ "package.json": "{}" }));
-  const table = files["telemetry-env.ts"];
-  expect(table).toBe(
-    `export const telemetryEnv = ${JSON.stringify(basePackage.tinker.parts.telemetry.env)};\n`,
+  expect(files).not.toHaveProperty("telemetry-env.ts");
+  expect(JSON.parse(files["tsconfig.json"]).compilerOptions.paths).not.toHaveProperty(
+    "#tinker/telemetry-env",
   );
 });

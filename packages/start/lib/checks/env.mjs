@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { parseEnv } from "node:util";
 
+import { readComponentModules } from "../component-modules.mjs";
 import { readEnvFile } from "../env.mjs";
 import { readPartEnv, rules } from "../part-env.mjs";
 import { parts, recordedParts } from "../parts.mjs";
@@ -16,6 +17,17 @@ export const say = {
   parts: (on) => `part keys read well: ${on.join(", ")}`,
 };
 
+/** Copied tables precede the remaining legacy part tables; both are JSON only. */
+function envTables(root) {
+  const copied = readComponentModules(root).declared.filter((item) => item.env);
+  return [
+    ...copied,
+    ...recordedParts(root)
+      .filter((name) => !copied.some((item) => item.name === name))
+      .map((name) => ({ name, env: parts[name].env })),
+  ];
+}
+
 /**
  * Each on part's keys, as the part reads them: the shell, then `.env`, then its default.
  * A value the part refuses is named at its `.env` line, or as the shell's. A key with no
@@ -26,8 +38,7 @@ export const say = {
  */
 function partProblems(root, local, listed) {
   const text = readText(join(root, ".env"));
-  return recordedParts(root).flatMap((name) => {
-    const keys = parts[name].env;
+  return envTables(root).flatMap(({ name, env: keys }) => {
     return readPartEnv(keys, { ...local, ...process.env }).refused.flatMap((key) => {
       if (!process.env[key] && !local[key]) {
         return listed.includes(key) ? [] : [say.unset(key, name)];
@@ -56,7 +67,7 @@ export function env(root) {
     .sort((a, b) => a.line - b.line)
     .map(({ key, line }) => say.missing(line, key));
 
-  const on = recordedParts(root);
+  const on = envTables(root).map(({ name }) => name);
   const passed = [example ? say.passed(keys.length) : say.none];
   if (on.length > 0) passed.push(say.parts(on));
 

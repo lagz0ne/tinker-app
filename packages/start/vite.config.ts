@@ -14,9 +14,6 @@ export default defineConfig({
         new URL("../../apps/start-min/.tinker/routeTree.gen.ts", import.meta.url),
       ),
       "#tinker/parts": fileURLToPath(new URL("tests/fixtures/parts.ts", import.meta.url)),
-      "#tinker/telemetry-env": fileURLToPath(
-        new URL("tests/fixtures/telemetry-env.ts", import.meta.url),
-      ),
       "#tinker/parts.server": fileURLToPath(
         new URL("tests/fixtures/parts.off.server.ts", import.meta.url),
       ),

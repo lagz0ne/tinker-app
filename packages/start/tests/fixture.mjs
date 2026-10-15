@@ -68,7 +68,7 @@ export function goodApp(files = {}) {
       ]),
     ),
     ...Object.fromEntries(
-      ["requests", "health", "http", "database", "auth"].flatMap((component) =>
+      ["requests", "health", "http", "database", "auth", "telemetry"].flatMap((component) =>
         readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
           (file) => [
             `tinker/components/${component}/${file}`,

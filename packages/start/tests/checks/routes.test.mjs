@@ -10,7 +10,7 @@ const page = (path) =>
 test("passes when every route exports Route and none takes a base path", () => {
   expect(routes(goodApp())).toEqual({
     status: "ok",
-    lines: ["route files export Route; none takes a base path (/api/telemetry)"],
+    lines: ["route files export Route; none takes a base path ()"],
   });
 });
 
@@ -113,12 +113,13 @@ test("names each of the six ways a route takes a legacy package path", () => {
 
 test("a route on an on part's path names the switch that frees it", () => {
   const root = goodApp({
-    "src/routes/api.telemetry.ts": page("/api/telemetry"),
-    "src/routes/api/telemetry/raw.ts": page("/api/telemetry/raw"),
+    ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: ["auth", "sync"] }),
+    "src/routes/api.sync.ts": page("/api/sync"),
+    "src/routes/api/sync/raw.ts": page("/api/sync/raw"),
   });
   expect(routes(root).lines.sort()).toEqual([
-    "src/routes/api.telemetry.ts:2 takes /api/telemetry, a base route; tinker({ telemetry: false }) frees it",
-    "src/routes/api/telemetry/raw.ts:2 nests under /api/telemetry, a base route with no outlet; the base page renders; tinker({ telemetry: false }) frees it",
+    "src/routes/api.sync.ts:2 takes /api/sync, a base route; tinker({ sync: false }) frees it",
+    "src/routes/api/sync/raw.ts:2 nests under /api/sync, a base route with no outlet; the base page renders; tinker({ sync: false }) frees it",
   ]);
 });
 

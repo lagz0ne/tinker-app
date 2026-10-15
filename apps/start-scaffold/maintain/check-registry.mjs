@@ -92,11 +92,11 @@ for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]
       // This composition retains app's greet route beside the starter's routes.
       // Its reviewed list has exactly that one extra readResult caller.
       const saved = await readFile(join(app, "PLAIN.md"), "utf8");
-      const healthCaller = "    - `src/routes/api.health.ts#Route.GET`\n";
-      assert.equal(saved.split(healthCaller).length, 2);
+      const lastRouteCaller = "    - `src/routes/api.telemetry.ts#Route.POST`\n";
+      assert.equal(saved.split(lastRouteCaller).length, 2);
       const expected = saved.replace(
-        healthCaller,
-        healthCaller + "    - `src/transport/greet.functions.ts#runGreet.callback`\n",
+        lastRouteCaller,
+        lastRouteCaller + "    - `src/transport/greet.functions.ts#runGreet.callback`\n",
       );
       const census = spawnSync(process.execPath, ["scripts/check-plain.mjs", "--list"], {
         cwd: consumer,

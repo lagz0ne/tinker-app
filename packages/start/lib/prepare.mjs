@@ -65,7 +65,6 @@ export function render(root, on = recordedParts(root)) {
     "#tinker/routes": [join(root, ".tinker/routeTree.gen.ts")],
     "#tinker/parts": [join(root, ".tinker/parts.ts")],
     "#tinker/parts.server": [join(root, ".tinker/parts.server.ts")],
-    "#tinker/telemetry-env": [join(root, ".tinker/telemetry-env.ts")],
   };
   return {
     "tsconfig.json": json({
@@ -87,7 +86,6 @@ export function render(root, on = recordedParts(root)) {
     "base.json": json({ base: basePackage.version, parts: on }),
     "parts.ts": partsFile(base, on, "router"),
     "parts.server.ts": partsFile(base, on, "server"),
-    "telemetry-env.ts": `export const telemetryEnv = ${JSON.stringify(basePackage.tinker.parts.telemetry.env)};\n`,
   };
 }
 

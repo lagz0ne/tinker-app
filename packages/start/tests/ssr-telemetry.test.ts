@@ -1,25 +1,14 @@
 import { createScope, namespace, operation } from "@tinker/core";
 import { makeTestClock } from "@tinker/core/testing";
-import {
-  exportHealth,
-  flushTelemetry,
-  httpBackend,
-  offTelemetry,
-  serverTelemetry,
-} from "@tinker/start/testing";
+import { exportHealth, flushTelemetry, httpBackend, serverTelemetry } from "@tinker/start/testing";
 import { expect, test } from "vite-plus/test";
 
-import { logsUrl, telemetryService, tracesUrl } from "../src/parts/telemetry/settings";
+import { logsUrl, telemetryService, tracesUrl } from "~/components/telemetry/settings";
 
 /** Main's server part has only `observe`; these defaults keep the regression runnable there. */
 const telemetry = Object.assign(
   { renderObserve: serverTelemetry.observe, renderNs: namespace() },
   serverTelemetry,
-);
-
-const off = Object.assign(
-  { renderObserve: offTelemetry.observe, renderNs: namespace() },
-  offTelemetry,
 );
 
 const storageTags = [
@@ -100,12 +89,10 @@ test("process close sends two renders from one queue with side ssr", async () =>
   expect(JSON.parse(requests.at(0) ?? "{}").resourceSpans[0].scopeSpans[0].spans).toHaveLength(2);
 });
 
-test("renders with telemetry off need no storage settings", async () => {
-  const tools = createScope({ extensions: off.extensions, tags: off.tags });
-  await tools.ready;
-  const app = createScope({ observe: tools.resolve(off.renderObserve, { ns: off.renderNs }) });
-
+test("renders without copied telemetry need no tools root or storage settings", async () => {
+  const app = createScope();
+  await app.ready;
   expect(app.run(render)).toBe("page");
+  expect(app.spans()).toEqual([]);
   expect((await app.close({ graceful: true })).status).toBe("success");
-  expect((await tools.close({ graceful: true })).status).toBe("success");
 });

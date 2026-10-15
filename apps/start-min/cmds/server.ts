@@ -7,6 +7,11 @@ import { observeServerPanics } from "~/base/panics.server";
 import { createServerHandler } from "~/base/server-entry";
 import type { ServerEntry } from "~/base/server-entry";
 import { startRequests, backendStop } from "~/components/requests";
+import {
+  telemetry,
+  consoleOutput,
+  settings as telemetrySettings,
+} from "~/components/telemetry/index.server";
 
 const values = { ...process.env };
 const appTags = [start.auth.settings(values)];
@@ -14,23 +19,21 @@ const stop = { tools: new AbortController(), app: new AbortController() };
 
 const tools = createScope({
   signal: stop.tools.signal,
-  extensions: start.telemetry.extensions,
-  tags: [start.telemetry.settings(values), start.telemetry.tags],
+  extensions: telemetry.extensions,
+  tags: [telemetrySettings(values), telemetry.tags, consoleOutput(process.stdout)],
 });
 
 await tools.ready;
 
 const app = createScope({
   signal: stop.app.signal,
-  observe: tools.resolve(start.telemetry.observe),
+  observe: tools.resolve(telemetry.observe),
   extensions: [startRequests, start.auth.extensions],
   tags: [
     backendStop(stop.app.signal),
-    renderObservation(
-      tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
-    ),
+    renderObservation(tools.resolve(telemetry.renderObserve, { ns: telemetry.renderNs })),
     appTags,
-    tools.resolve(start.telemetry.appTags),
+    tools.resolve(telemetry.appTags),
   ],
 });
 

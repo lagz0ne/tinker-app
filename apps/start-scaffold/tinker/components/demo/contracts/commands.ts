@@ -11,7 +11,7 @@ const todoCommand = z.object({ executionId: z.uuid(), change: z.unknown() }).str
  */
 export function readProfileCommand(raw: unknown) {
   const command = profileCommand.parse(raw);
-  return { executionId: command.executionId, profile: readProfileInput(command.profile) };
+  return { executionId: command.executionId, profile: readProfileInput.parse(command.profile) };
 }
 
 /**
@@ -19,5 +19,5 @@ export function readProfileCommand(raw: unknown) {
  */
 export function readTodoCommand(raw: unknown) {
   const command = todoCommand.parse(raw);
-  return { executionId: command.executionId, change: readTodoChange(command.change) };
+  return { executionId: command.executionId, change: readTodoChange.parse(command.change) };
 }

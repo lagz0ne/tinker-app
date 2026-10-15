@@ -11,7 +11,15 @@ try {
   await mkdir(join(fixture, "cmds"), { recursive: true });
   await mkdir(join(fixture, "src/routes"), { recursive: true });
   await cp(join(app, "tinker/base"), join(fixture, "tinker/base"), { recursive: true });
-  for (const component of ["errors", "requests", "health", "http", "database", "auth"]) {
+  for (const component of [
+    "errors",
+    "requests",
+    "health",
+    "http",
+    "database",
+    "auth",
+    "telemetry",
+  ]) {
     await cp(
       join(app, "tinker/components", component),
       join(fixture, "tinker/components", component),

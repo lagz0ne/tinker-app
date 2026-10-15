@@ -1,7 +1,8 @@
 import type { Many, Observe, Resource, Scope, Tag } from "@tinker/core";
 import type { z } from "zod";
 
-import type { Env } from "../../env";
+import type { Env } from "~/components/errors";
+
 import type { span, logRecord, telemetryBatch } from "./records.server";
 
 export declare namespace Telemetry {
@@ -35,9 +36,6 @@ export declare namespace Telemetry {
   };
 }
 
-const replaceBigint = (_key: string, entry: unknown) =>
-  typeof entry === "bigint" ? entry.toString() : entry;
-
 /** Core attributes may contain bigint or cycles; one bad field must not lose its record.
  * @param value - From a span or log attribute; why: bound and safely encode its wire value.
  */
@@ -53,7 +51,11 @@ export function encodeValue(value: unknown): string {
       return "undefined";
   }
   try {
-    return (JSON.stringify(value, replaceBigint) ?? "undefined").slice(0, 2048);
+    return (
+      JSON.stringify(value, (_key, entry) =>
+        typeof entry === "bigint" ? entry.toString() : entry,
+      ) ?? "undefined"
+    ).slice(0, 2048);
   } catch {
     return "[Unserializable]";
   }

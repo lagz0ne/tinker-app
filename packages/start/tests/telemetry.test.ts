@@ -3,27 +3,26 @@ import { makeTestClock } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
 import { httpBackend } from "~/components/http";
-
-import { consoleOutput, logConsole } from "../src/parts/telemetry/console";
-import { exportHealth } from "../src/parts/telemetry/health";
+import { consoleOutput, logConsole } from "~/components/telemetry/console";
+import { exportHealth } from "~/components/telemetry/health";
+import { telemetry as routerPart } from "~/components/telemetry/index";
+import { telemetry as serverPart, browserTelemetry } from "~/components/telemetry/index.server";
 import {
   flushTelemetry,
   ingestTelemetry,
   observer,
   telemetryExport,
-} from "../src/parts/telemetry/observer";
-import { telemetry as off } from "../src/parts/telemetry/off";
-import { telemetry as routerPart } from "../src/parts/telemetry/on";
-import type { Telemetry } from "../src/parts/telemetry/records";
+} from "~/components/telemetry/observer";
+import type { Telemetry } from "~/components/telemetry/records";
 import {
   logLevel,
   logsUrl,
   spanHistory,
-  readTelemetryConfig,
+  settings as readTelemetryConfig,
   telemetryService,
   telemetrySide,
   tracesUrl,
-} from "../src/parts/telemetry/settings";
+} from "~/components/telemetry/settings";
 
 /** Storage tags for a test: each send lands in the fake bound as httpBackend. */
 const storageTags = [
@@ -643,9 +642,10 @@ test("a tab shows its records only on the console its seam binds", async () => {
   expect((await tab.close({ graceful: true })).status).toBe("success");
 });
 
-test("the router part binds stdout as the sink on a server render", async () => {
+test("the component leaves console sinks for the command to bind", async () => {
   const tools = createScope({ tags: [routerPart.tags] });
-  expect(tools.resolve(consoleOutput)).toBe(process.stdout);
+  expect(tools.resolve(consoleOutput)).toBeNull();
+  expect(tools.resolve(logConsole)).toBeNull();
   expect((await tools.close({ graceful: true })).status).toBe("success");
 });
 
@@ -668,23 +668,30 @@ test("a bad storage URL stops the server entry before the telemetry root, naming
   );
 });
 
-test("the router's part records a server render as ssr", async () => {
-  const tools = createScope({
-    extensions: routerPart.extensions,
-    tags: [routerPart.tags],
-  });
+test("the server render namespace records ssr while the browser part stays browser", async () => {
+  const tools = createScope({ extensions: serverPart.extensions, tags: serverPart.tags });
   await tools.ready;
-  expect(tools.resolve(telemetrySide)).toBe("ssr");
-  expect(tools.resolve(routerPart.observe)).toMatchObject({ history: 80, level: 30 });
+  expect(tools.resolve(telemetrySide, { ns: serverPart.renderNs })).toBe("ssr");
+  expect(tools.resolve(serverPart.renderObserve, { ns: serverPart.renderNs })).toMatchObject({
+    history: 80,
+    level: 30,
+  });
   expect((await tools.close({ graceful: true })).status).toBe("success");
+
+  const tab = createScope({ tags: routerPart.tags });
+  expect(tab.resolve(telemetrySide)).toBe("browser");
+  expect((await tab.close({ graceful: true })).status).toBe("success");
 });
 
-test("the off part leaves the telemetry root empty and the app root unobserved", async () => {
-  const tools = createScope({ extensions: off.extensions, tags: off.tags });
-  await tools.ready;
-  expect(tools.resolve(off.observe)).toBeUndefined();
-  expect(tools.resolve(off.appTags)).toEqual([]);
-  expect((await tools.close({ graceful: true })).status).toBe("success");
+test("without copied telemetry extensions and bindings, a root stays unobserved", async () => {
+  const app = createScope();
+  await app.ready;
+  app.run(child);
+
+  expect(app.spans()).toEqual([]);
+  expect(app.resolve(browserTelemetry.optional)).toMatchObject({ present: false });
+
+  expect((await app.close({ graceful: true })).status).toBe("success");
 });
 
 test("a record of exactly 48,000 bytes is kept; one byte more is dropped", async () => {

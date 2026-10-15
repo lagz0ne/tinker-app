@@ -2,7 +2,7 @@ import { createRouter } from "@tanstack/react-router";
 import type { RouterConstructorOptions, RouterHistory } from "@tanstack/react-router";
 import { createIsomorphicFn, getGlobalStartContext } from "@tanstack/react-start";
 import { createScope } from "@tinker/core";
-import type { Many, Scope } from "@tinker/core";
+import type { Many, Scope, Tag } from "@tinker/core";
 import { ScopeProvider } from "@tinker/react";
 
 import { abortReasons } from "~/components/errors";
@@ -27,10 +27,12 @@ type Parts = Pick<
 /** Bind optional parts now; load the route tree only when Start requests a router. */
 export function createRouterEntry({
   parts,
+  toolTags = [],
   extensions,
   router,
 }: {
   parts: Parts | (() => Promise<Parts>);
+  toolTags?: Tag.Bindings;
   extensions: Many<Scope.Extension<unknown>>;
   router: RouterOptions;
 }) {
@@ -49,7 +51,7 @@ export function createRouterEntry({
         const tools = createScope({
           signal: toolStop.signal,
           extensions: telemetry.extensions,
-          tags: telemetry.tags,
+          tags: [telemetry.tags, toolTags],
         });
         await tools.ready;
         return {

@@ -54,18 +54,6 @@ Tests and generated files do not count.
     - `src/transport/todos.functions.ts#module`
     - `tinker/components/demo/backend/todos.server.ts#changeTodo.input`
 
-- **tinker/components/demo/contracts/profile-contract.ts#readProfileInput**
-  - `raw`: `unknown`. From the profile command or draft; why: validate only the saved name.
-  - Callers:
-    - `src/frontend/profile-actions.ts#saveName.input`
-    - `tinker/components/demo/contracts/commands.ts#readProfileCommand`
-
-- **tinker/components/demo/contracts/todos-contract.ts#readTodoChange**
-  - `raw`: `unknown`. From the todo command or form; why: validate one todo change.
-  - Callers:
-    - `src/frontend/Todos.tsx#saveTodo.input`
-    - `tinker/components/demo/contracts/commands.ts#readTodoCommand`
-
 - **tinker/components/demo/errors.ts#raise**
   - `kind`: `N`. From the failing caller; why: choose the managed error.
   - `payload`: `Errors.Payload<N>`. From the failing caller; why: keep facts for that error.
@@ -84,8 +72,8 @@ Tests and generated files do not count.
     - `tinker/components/demo/backend/sync.server.ts#replayPrivate.run`
     - `tinker/components/demo/backend/sync.server.ts#replayPublic.run`
     - `tinker/components/demo/backend/todos.server.ts#changeTodo.run.callback1`
-    - `tinker/components/demo/contracts/profile-contract.ts#readProfileInput`
-    - `tinker/components/demo/contracts/todos-contract.ts#readTodoChange`
+    - `tinker/components/demo/contracts/profile-contract.ts#module`
+    - `tinker/components/demo/contracts/todos-contract.ts#module`
 
 - **tinker/components/demo/errors.ts#isError**
   - `error`: `unknown`. From a caught failure; why: narrow its payload.
@@ -105,6 +93,8 @@ Tests and generated files do not count.
     - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
     - `tinker/components/requests/render-lifetime.server.ts#retain`
     - `tinker/components/requests/start.ts#middleware.callback`
+    - `tinker/components/telemetry/ingest.server.ts#receiveTelemetry.run`
+    - `tinker/components/telemetry/settings.ts#settings`
 
 - **tinker/components/errors/errors.ts#fail**
   - `kind`: `N`. From a failed base action; why: choose the managed error.
@@ -131,5 +121,17 @@ Tests and generated files do not count.
     - `src/routes/api.auth.$.ts#Route.GET`
     - `src/routes/api.auth.$.ts#Route.POST`
     - `src/routes/api.health.ts#Route.GET`
+    - `src/routes/api.telemetry.ts#Route.POST`
     - `src/transport/profile.functions.ts#getProfile.callback`
     - `src/transport/todos.functions.ts#getTodos.callback`
+
+- **tinker/components/telemetry/records.ts#encodeValue**
+  - `value`: `unknown`. From a span or log attribute; why: bound and safely encode its wire value.
+  - Callers:
+    - `tinker/components/telemetry/observer.ts#export`
+    - `tinker/components/telemetry/observer.ts#log`
+
+- **tinker/components/telemetry/settings.ts#settings**
+  - `env`: `Env.Values`. From the command's copy of process.env; why: check and convert telemetry's five keys.
+  - Callers:
+    - `cmds/server.ts#module`

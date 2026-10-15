@@ -1,7 +1,28 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
 
 import { env } from "../../lib/checks/env.mjs";
-import { fixture } from "../fixture.mjs";
+import { baseDir } from "../../lib/paths.mjs";
+import { fixture as emptyFixture } from "../fixture.mjs";
+
+const telemetryEnv = JSON.parse(
+  readFileSync(
+    join(baseDir, "../../apps/start-scaffold/tinker/components/telemetry/component.json"),
+    "utf8",
+  ),
+).env;
+
+function fixture(files) {
+  return emptyFixture({
+    "tinker/components/telemetry/component.json": JSON.stringify({
+      requires: [],
+      env: telemetryEnv,
+    }),
+    ...files,
+  });
+}
 
 test("passes with no .env.example", () => {
   expect(env(fixture({}))).toEqual({
@@ -56,8 +77,8 @@ test("a good shell value hides a bad .env one, as the part reads the shell first
   delete process.env.VICTORIA_TRACES_URL;
 });
 
-test("an off part's keys are not checked", () => {
-  const root = fixture({
+test("an absent component's keys are not checked", () => {
+  const root = emptyFixture({
     ".tinker/base.json": JSON.stringify({ base: "0.3.0", parts: [] }),
     ".env": "VICTORIA_TRACES_URL=not a url\n",
   });
@@ -101,4 +122,21 @@ test("with auth on and good keys, check 9 passes for both parts", () => {
 
 test("with auth off, as by default, its keys are not read", () => {
   expect(env(fixture({ ".env": "AUTH_SECRET=short\n" })).status).toBe("ok");
+});
+
+test("doctor reads copied JSON env even when the old switch record is empty, without importing code", () => {
+  const root = emptyFixture({
+    ".tinker/base.json": JSON.stringify({ base: "0.8.0", parts: [] }),
+    ".env": "DECOMPOSE_TEST_ORIGIN=not-a-url\n",
+    "tinker/components/caps/component.json": JSON.stringify({
+      requires: [],
+      env: { DECOMPOSE_TEST_ORIGIN: { rule: "http" } },
+    }),
+    "tinker/components/caps/index.server.ts":
+      'throw new Error("component runtime must not execute");',
+  });
+  expect(env(root)).toEqual({
+    status: "fail",
+    lines: [".env:1 sets DECOMPOSE_TEST_ORIGIN; the caps part needs an http(s) URL"],
+  });
 });

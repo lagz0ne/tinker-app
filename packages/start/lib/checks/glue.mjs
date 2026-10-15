@@ -166,7 +166,6 @@ function completePaths(root, paths) {
     "#tinker/routes",
     "#tinker/parts",
     "#tinker/parts.server",
-    "#tinker/telemetry-env",
   ];
   return keys.every((key) => Array.isArray(paths[key]) && paths[key].length > 0);
 }

@@ -365,6 +365,26 @@ function callbackType(signature, param, index, arg) {
   return type.flags & ts.TypeFlags.TypeParameter ? checker.getBaseConstraintOfType(type) : type;
 }
 
+/** A function has a name field, so Zod can select its data overload for {name: string}.
+ * It still invokes a callable fallback; check the actual callback overload too.
+ */
+function zodCatchCallback(call, arg) {
+  const signature = checker.getResolvedSignature(call);
+  const file = signature?.declaration?.getSourceFile().fileName ?? "";
+  if (!/\/zod\//.test(file) || declarationName(call) !== "catch") return false;
+
+  const argument = checker.getTypeAtLocation(arg);
+  return checker
+    .getTypeAtLocation(call.expression)
+    .getCallSignatures()
+    .some((candidate) => {
+      const parameter = candidate.parameters[0];
+      if (!parameter) return false;
+      const type = checker.getTypeOfSymbolAtLocation(parameter, arg);
+      return callable(type) && checker.isTypeAssignableTo(argument, type);
+    });
+}
+
 function callbackSlot(call, index) {
   const signature = checker.getResolvedSignature(call);
   const declaration = signature?.declaration ?? resolvedMethod(call);
@@ -377,7 +397,7 @@ function callbackIndex(call, arg) {
 }
 
 function callbackArgument(call, arg) {
-  if (tagArgument(call)) return true;
+  if (tagArgument(call) || zodCatchCallback(call, arg)) return true;
 
   const index = callbackIndex(call, arg);
   const { signature, param } = callbackSlot(call, index);
@@ -448,6 +468,7 @@ function nativeOption(node) {
   }
 
   const call = object.parent;
+  if (coreSymbol(call.expression, "namespace")) return false;
   return argumentOf(object, call) && externalCall(call) && externalDeclaration(call);
 }
 
@@ -687,6 +708,7 @@ function zodDeclaration(node, file) {
       "default",
       "or",
       "refine",
+      "catch",
     ].includes(declarationName(node))
   );
 }
@@ -771,8 +793,13 @@ function declarationFile(node) {
   return checker.getResolvedSignature(node)?.declaration?.getSourceFile().fileName ?? "";
 }
 
+/** Namespace and tag bindings are Core config; they grant no callback ownership. */
+function coreDeclaration(node) {
+  return coreCall(node) || coreSymbol(node.expression, "namespace") || tagArgument(node);
+}
+
 function moduleDeclarationCall(node) {
-  if (coreCall(node) || clientDeclaration(node)) return true;
+  if (coreDeclaration(node) || clientDeclaration(node)) return true;
   const file = declarationFile(node);
   return (
     zodDeclaration(node, file) ||
@@ -891,6 +918,7 @@ function checkHttpResource(node) {
 }
 
 function checkHttpBackend(node) {
+  if (pathOf(node) === "tinker/components/telemetry/delivery.ts") return;
   if (
     ["backend.ts", "http.server.ts", "index.ts"].some(
       (file) => pathOf(node) === `tinker/components/http/${file}`,
@@ -1079,7 +1107,20 @@ function staticProtocolValue(node) {
   const constructors = {
     "tinker/components/errors/errors.ts": "DOMException",
   };
-  return nameOf(node.expression) === constructors[pathOf(node)];
+  if (nameOf(node.expression) === constructors[pathOf(node)]) return true;
+  return telemetryUrlDefault(node);
+}
+
+/** These two typed defaults construct only URL values, never a service. */
+function telemetryUrlDefault(node) {
+  if (pathOf(node) !== "tinker/components/telemetry/settings.ts") return false;
+  if (!nativeDomSymbol(symbolOf(node.expression), "URL")) return false;
+  const field = node.parent;
+  if (!ts.isPropertyAssignment(field) || nameOf(field.name) !== "default") return false;
+
+  const call = field.parent.parent;
+  if (!ts.isCallExpression(call) || !coreSymbol(call.expression, "tag")) return false;
+  return ["tracesUrl", "logsUrl"].includes(nameOf(call.parent.name));
 }
 
 function checkService(node) {
@@ -1592,6 +1633,49 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    [
+      "zod-catch-name-callback-allowed",
+      null,
+      'import {z} from "zod"; export const probe = z.object({name: z.string()}).catch(() => ({name: "fallback"}));',
+    ],
+    [
+      "foreign-catch-builder",
+      "module-effect",
+      "export const probe = Promise.resolve(1).catch(() => 2);",
+    ],
+    [
+      "telemetry-extra-url",
+      "module-effect",
+      'const probe = new URL("https://extra.example");',
+      "tinker/components/telemetry/settings.ts",
+    ],
+    [
+      "src-url-default",
+      "module-effect",
+      'import {tag} from "@tinker/core"; const tracesUrl = tag<URL>({label: "probe", default: new URL("https://extra.example")});',
+    ],
+    [
+      "telemetry-raw-backend-foreign",
+      "http-backend",
+      'import {httpBackend} from "~/components/http"; export const probe = httpBackend;',
+      "tinker/components/telemetry/backend-probe.ts",
+    ],
+    [
+      "core-config-declarations-allowed",
+      null,
+      'import {namespace, tag} from "@tinker/core"; const setting = tag<number>({label: "probe"}); export const probe = namespace({tags: [setting(3)]});',
+    ],
+    [
+      "fake-tag-binding-module",
+      "module-effect",
+      "const tag = (value: number) => value; export const probe = tag(3);",
+    ],
+    [
+      "namespace-options-no-callback",
+      "plain-effect",
+      'import {namespace} from "@tinker/core"; export const probe = namespace({factory: async () => {await Promise.resolve(); return 1;}});',
+    ],
+
     [
       "auth-mount-other-operation",
       "operation-wire-input",

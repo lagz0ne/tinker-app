@@ -11,8 +11,6 @@ export declare function tinker(
     root?: string;
     /** Chrome compiles the client entry eagerly; on by default. */
     compileHints?: boolean;
-    /** The telemetry part: on by default; off frees `/api/telemetry` for the app. */
-    telemetry?: boolean;
     /** The auth part: off by default; on mounts `/api/auth/$` and reads the server seam. */
     auth?: boolean;
     /** The sync part: off by default; on mounts `/api/sync`, and turns auth on. */

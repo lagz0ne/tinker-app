@@ -21,13 +21,7 @@ const todoChange = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-/**
- * @param raw - From the todo command or form; why: validate one todo change.
- */
-export function readTodoChange(raw: unknown): Todos.Change {
-  const result = todoChange.safeParse(raw);
-  if (!result.success) {
-    raise("BadInput", { reason: "Use a title with 1 to 200 characters and a valid todo change." });
-  }
-  return result.data;
-}
+/** The schema keeps the same managed refusal at each input door. */
+export const readTodoChange = todoChange.catch(() =>
+  raise("BadInput", { reason: "Use a title with 1 to 200 characters and a valid todo change." }),
+);

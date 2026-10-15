@@ -1,19 +1,43 @@
 import { createScope } from "@tinker/core";
+import type { Scope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { httpBackend } from "~/components/http";
 import { backendStop, requestStop } from "~/components/requests";
-
+import { telemetry as serverPart } from "~/components/telemetry/index.server";
 import {
   browserTelemetry,
   receiveTelemetry,
-  telemetryEndpoint,
   telemetryOrigin,
-} from "../src/parts/telemetry/ingest.server";
-import { flushTelemetry } from "../src/parts/telemetry/observer";
-import { telemetry as serverPart } from "../src/parts/telemetry/on.server";
-import type { Telemetry } from "../src/parts/telemetry/records";
-import { logsUrl, telemetryService } from "../src/parts/telemetry/settings";
+} from "~/components/telemetry/ingest.server";
+import { flushTelemetry } from "~/components/telemetry/observer";
+import type { Telemetry } from "~/components/telemetry/records";
+import { logsUrl, telemetryService } from "~/components/telemetry/settings";
+
+import { Route } from "../../../apps/start-scaffold/src/routes/api.telemetry";
+
+/** Exercise the actual route with the test's owned session. */
+async function answer(session: Scope.Handle, request: Request) {
+  const handlers = Route.options.server!.handlers!;
+  if (typeof handlers === "function") throw new Error("expected the route's POST handler");
+
+  const handler = handlers.POST;
+  if (typeof handler !== "function") throw new Error("expected a POST function");
+
+  const response = await handler({
+    request,
+    context: { session, signal: request.signal },
+    params: {},
+    pathname: "/api/telemetry",
+    next: () => {
+      throw new Error("POST must answer directly");
+    },
+  });
+
+  expect(response).toBeInstanceOf(Response);
+  if (!(response instanceof Response)) throw new Error("POST must return a Response");
+  return response;
+}
 
 const empty: Telemetry.Batch = { traces: [], logs: [] };
 
@@ -164,7 +188,7 @@ test("the ingest route answers each case with its status, and only a good batch 
   for (const row of cases) {
     if (row.closed) stop.abort();
     const session = root.createSession();
-    const response = await session.resolve(telemetryEndpoint).answer(post(row));
+    const response = await answer(session, post(row));
     expect(
       { status: response.status, headers: [...response.headers], body: await response.text() },
       row.name,
@@ -202,7 +226,7 @@ test("with no origin bound, the route expects the request's own; a preview host'
   const statuses = [];
   for (const row of replies) {
     const session = root.createSession();
-    statuses.push((await session.resolve(telemetryEndpoint).answer(post(row))).status);
+    statuses.push((await answer(session, post(row))).status);
     expect((await session.close({ graceful: true })).status).toBe("success");
   }
 
@@ -221,10 +245,9 @@ test("a bound public origin is the one the route expects", async () => {
     ],
   });
   const session = root.createSession();
-  const endpoint = session.resolve(telemetryEndpoint);
 
-  expect((await endpoint.answer(post({ origin: "https://shop.example" }))).status).toBe(202);
-  expect((await endpoint.answer(post({ origin: "http://localhost" }))).status).toBe(403);
+  expect((await answer(session, post({ origin: "https://shop.example" }))).status).toBe(202);
+  expect((await answer(session, post({ origin: "http://localhost" }))).status).toBe(403);
   expect((await session.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -264,7 +287,7 @@ test("closing the scope cancels an unfinished request body, and the route answer
       browserTelemetry(() => expect.unreachable("a cut body must not ingest")),
     ],
   });
-  const work = root.resolve(telemetryEndpoint).answer(request);
+  const work = answer(root, request);
   await entered.promise;
 
   stop.abort();
@@ -296,7 +319,7 @@ test("a body that fails to read fails the reply, as the route's own error", asyn
     tags: [backendStop(stop.signal), requestStop(stop.signal), browserTelemetry(() => {})],
   });
 
-  await expect(root.resolve(telemetryEndpoint).answer(request)).rejects.toBe(torn);
+  await expect(answer(root, request)).rejects.toBe(torn);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
@@ -312,7 +335,7 @@ test("an ingest that fails, not by a stop, fails the reply", async () => {
       }),
     ],
   });
-  await expect(root.resolve(telemetryEndpoint).answer(post({}))).rejects.toBe(lost);
+  await expect(answer(root, post({}))).rejects.toBe(lost);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
@@ -360,7 +383,7 @@ test("the route lets go of the body it read, and the request ends clean", async 
   const session = root.createSession();
   const request = post({});
 
-  expect((await session.resolve(telemetryEndpoint).answer(request)).status).toBe(202);
+  expect((await answer(session, request)).status).toBe(202);
   expect(request.body?.locked).toBe(false);
   expect(await session.close({ graceful: true })).toMatchObject({
     status: "success",
@@ -377,7 +400,7 @@ test("a refused request never opens its body, and its session ends clean", async
   const session = root.createSession();
   const request = post({ origin: "http://other.test" });
 
-  expect((await session.resolve(telemetryEndpoint).answer(request)).status).toBe(403);
+  expect((await answer(session, request)).status).toBe(403);
   expect(request.body?.locked).toBe(false);
   expect(await session.close({ graceful: true })).toMatchObject({
     status: "success",
@@ -425,7 +448,7 @@ test("a body that comes while the backend stops is cancelled unread, and answere
     ],
   });
 
-  expect((await root.resolve(telemetryEndpoint).answer(request)).status).toBe(503);
+  expect((await answer(root, request)).status).toBe(503);
   expect([pulled, cancelled]).toEqual([0, true]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
@@ -465,7 +488,7 @@ test("a browser batch split inside UTF-8 text is read from its byte views", asyn
     ),
   );
 
-  expect((await root.resolve(telemetryEndpoint).answer(request)).status).toBe(202);
+  expect((await answer(root, request)).status).toBe(202);
   expect(accepted).toEqual([batch]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

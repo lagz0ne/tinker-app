@@ -25,7 +25,7 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
       ]),
     ),
     ...Object.fromEntries(
-      ["requests", "health", "http", "database", "auth"].flatMap((component) =>
+      ["requests", "health", "http", "database", "auth", "telemetry"].flatMap((component) =>
         readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
           (file) => [
             `tinker/components/${component}/${file}`,
@@ -52,13 +52,7 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
 
   const files = prepare(root, []);
 
-  expect(files).toEqual([
-    "tsconfig.json",
-    "base.json",
-    "parts.ts",
-    "parts.server.ts",
-    "telemetry-env.ts",
-  ]);
+  expect(files).toEqual(["tsconfig.json", "base.json", "parts.ts", "parts.server.ts"]);
   expect(named(root).lines).toEqual([
     "tinker/components/mail/component.json: requires missing component tinker/components/missing; shadcn add it",
   ]);
@@ -77,7 +71,7 @@ test("a component settings file is not bound unless the user calls its public AP
       ]),
     ),
     ...Object.fromEntries(
-      ["requests", "health", "http", "database", "auth"].flatMap((component) =>
+      ["requests", "health", "http", "database", "auth", "telemetry"].flatMap((component) =>
         readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
           (file) => [
             `tinker/components/${component}/${file}`,
