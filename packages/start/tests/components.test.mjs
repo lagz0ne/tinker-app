@@ -188,8 +188,14 @@ test.each([
   [{ lower: {} }, 'invalid env key "lower"'],
   [{ FEATURE: null }, "expected default and rule fields"],
   [{ FEATURE: { default: 3 } }, "default must be a string"],
-  [{ FEATURE: { rule: [] } }, "rule must name http, secret, level, or count"],
-  [{ FEATURE: { rule: "constructor" } }, "rule must name http, secret, level, or count"],
+  [
+    { FEATURE: { rule: [] } },
+    "rule must name url, email, port, smtpHost, http, secret, level, count",
+  ],
+  [
+    { FEATURE: { rule: "constructor" } },
+    "rule must name url, email, port, smtpHost, http, secret, level, count",
+  ],
   [{ FEATURE: { fallback: "x" } }, 'unknown key "fallback"'],
 ])("doctor rejects malformed component env %j", (table, problem) => {
   const root = goodApp({

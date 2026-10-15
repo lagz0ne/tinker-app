@@ -4,7 +4,6 @@ import { parseEnv } from "node:util";
 import { readComponentModules } from "../component-modules.mjs";
 import { readEnvFile } from "../env.mjs";
 import { readPartEnv, rules } from "../part-env.mjs";
-import { parts, recordedParts } from "../parts.mjs";
 import { lineAt, readText } from "../paths.mjs";
 import { verdict } from "./result.mjs";
 
@@ -17,15 +16,12 @@ export const say = {
   parts: (on) => `part keys read well: ${on.join(", ")}`,
 };
 
-/** Copied tables precede the remaining legacy part tables; both are JSON only. */
+/**
+ * Env tables come only from copied component JSON.
+ * @returns {{name: string, env: Record<string, {default?: string, rule?: string}>}[]}
+ */
 function envTables(root) {
-  const copied = readComponentModules(root).declared.filter((item) => item.env);
-  return [
-    ...copied,
-    ...recordedParts(root)
-      .filter((name) => !copied.some((item) => item.name === name))
-      .map((name) => ({ name, env: parts[name].env })),
-  ];
+  return readComponentModules(root).declared.filter((item) => item.env);
 }
 
 /**
@@ -61,8 +57,15 @@ export function env(root) {
   const local = readEnvFile(root);
   const keys = Object.keys(parseEnv(example));
 
+  const defaults = new Set(
+    envTables(root).flatMap(({ env }) =>
+      Object.entries(env)
+        .filter(([, row]) => Object.hasOwn(row, "default"))
+        .map(([key]) => key),
+    ),
+  );
   const missing = keys
-    .filter((key) => !local[key] && !process.env[key])
+    .filter((key) => !local[key] && !process.env[key] && !defaults.has(key))
     .map((key) => ({ key, line: lineAt(example, example.search(new RegExp(`^${key}=`, "m"))) }))
     .sort((a, b) => a.line - b.line)
     .map(({ key, line }) => say.missing(line, key));

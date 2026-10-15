@@ -50,8 +50,8 @@ export const proofMail = preset(mail, async (_deps, { log }) => ({
   },
 }));
 
-export { requestHeaders } from "@tinker/start/testing";
-export { handleAuth } from "@tinker/start/testing";
+export { requestHeaders } from "~/components/requests/index.server";
+export { handleAuth } from "~/components/auth/index.server";
 
 /** Test entries bind the same two hooks as the server command. */
 export function authBindings(root: () => Scope.Handle) {

@@ -12,11 +12,11 @@ import {
   readText,
 } from "../paths.mjs";
 import { prepare, render } from "../prepare.mjs";
-import { isRouteFile, routeClash } from "../route-path.mjs";
+import { isRouteFile } from "../route-path.mjs";
 import { mayExport } from "../source.mjs";
 import { serverProblems } from "./named.mjs";
 import { fail, skip, verdict } from "./result.mjs";
-import { ownedPaths, routes } from "./routes.mjs";
+import { routes } from "./routes.mjs";
 
 export const say = {
   otherBase: (running, resolved) =>
@@ -90,8 +90,7 @@ function treeGaps(root) {
  */
 function treeProblems(root) {
   const next = routes(root).status === "fail" ? say.check7Next : say.prepareNext;
-  const owned = ownedPaths(root);
-  return treeLines(treeGaps(root), next, (file) => !routeClash(file, owned));
+  return treeLines(treeGaps(root), next);
 }
 
 /**

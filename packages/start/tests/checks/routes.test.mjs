@@ -10,7 +10,7 @@ const page = (path) =>
 test("passes when every route exports Route and none takes a base path", () => {
   expect(routes(goodApp())).toEqual({
     status: "ok",
-    lines: ["route files export Route; none takes a base path ()"],
+    lines: ["route files export Route; the app owns every path"],
   });
 });
 
@@ -84,8 +84,9 @@ test("a local value named Outlet is not TanStack's outlet", () => {
   ]);
 });
 
-test("names each of the six ways a route takes a legacy package path", () => {
+test("legacy package mount tables cannot claim the app paths", () => {
   const root = fixture({
+    "src/routes/__root.tsx": "export const Route = createRootRoute({});",
     "node_modules/@tinker/start/package.json": JSON.stringify({
       ...basePackage,
       tinker: {
@@ -101,14 +102,7 @@ test("names each of the six ways a route takes a legacy package path", () => {
     "src/routes/tinker/settings.tsx": page("/tinker/settings"),
     "src/routes/tinker_.own.tsx": page("/tinker_/own"),
   });
-  expect(routes(root).lines.sort()).toEqual([
-    "src/routes/(extra)/tinker.tsx:2 takes /tinker, a base route",
-    "src/routes/_wrap/tinker.tsx:2 takes /tinker, a base route",
-    "src/routes/api.health.ts:2 takes /api/health, a base route",
-    "src/routes/tinker.tsx:2 takes /tinker, a base route",
-    "src/routes/tinker/index.tsx:2 takes /tinker, a base route",
-    "src/routes/tinker/settings.tsx:2 nests under /tinker, a base route with no outlet; the base page renders",
-  ]);
+  expect(routes(root).status).toBe("ok");
 });
 
 test("copied sync and nested app routes need no package switch", () => {
@@ -119,7 +113,7 @@ test("copied sync and nested app routes need no package switch", () => {
   });
   expect(routes(root)).toEqual({
     status: "ok",
-    lines: ["route files export Route; none takes a base path ()"],
+    lines: ["route files export Route; the app owns every path"],
   });
 });
 
@@ -130,12 +124,13 @@ test("with the part off, as the last tinker() call recorded, its path is the app
   });
   expect(routes(root)).toEqual({
     status: "ok",
-    lines: ["route files export Route; none takes a base path ()"],
+    lines: ["route files export Route; the app owns every path"],
   });
 });
 
-test("an installed base from before parts mounts its own routes only", () => {
+test("legacy package routes do not affect physical routes", () => {
   const root = fixture({
+    "src/routes/__root.tsx": "export const Route = createRootRoute({});",
     "src/routes/api.telemetry.ts": page("/api/telemetry"),
     "node_modules/@tinker/start/package.json": JSON.stringify({
       tinker: { routes: { "/tinker": "src/routes/tinker.tsx" } },
@@ -143,28 +138,27 @@ test("an installed base from before parts mounts its own routes only", () => {
   });
   expect(routes(root)).toEqual({
     status: "ok",
-    lines: ["route files export Route; none takes a base path (/tinker)"],
+    lines: ["route files export Route; the app owns every path"],
   });
 });
 
 test("with no base installed, no path is the base's", () => {
-  const root = fixture({ "src/routes/tinker.tsx": page("/tinker") });
+  const root = goodApp({ "src/routes/tinker.tsx": page("/tinker") });
   expect(routes(root)).toEqual({
     status: "ok",
-    lines: ["route files export Route; none takes a base path ()"],
+    lines: ["route files export Route; the app owns every path"],
   });
 });
 
-test("a legacy installed package still reserves its mounted auth route", () => {
+test("legacy auth switch records cannot reserve physical routes", () => {
   const root = fixture({
+    "src/routes/__root.tsx": "export const Route = createRootRoute({});",
     "node_modules/@tinker/start/package.json": JSON.stringify({
       ...basePackage,
       tinker: {
         ...basePackage.tinker,
         parts: {
-          ...basePackage.tinker.parts,
           auth: {
-            ...basePackage.tinker.parts.auth,
             routes: { "/api/auth/$": "src/routes/api.auth.ts" },
           },
         },
@@ -174,10 +168,7 @@ test("a legacy installed package still reserves its mounted auth route", () => {
     "src/routes/api.auth.$.ts": page("/api/auth/$"),
     "src/routes/api/auth/login.ts": page("/api/auth/login"),
   });
-  expect(routes(root).lines.sort()).toEqual([
-    "src/routes/api.auth.$.ts:2 takes /api/auth/$, a base route; tinker({ auth: false }) frees it",
-    "src/routes/api/auth/login.ts:2 takes /api/auth/login from /api/auth/$, a base route that answers every path under it; tinker({ auth: false }) frees it",
-  ]);
+  expect(routes(root).status).toBe("ok");
 });
 
 test("with auth off, as by default, /api/auth/ is the app's", () => {
@@ -195,7 +186,7 @@ test("an old sync record does not claim the app's copied route", () => {
   });
   expect(routes(root)).toEqual({
     status: "ok",
-    lines: ["route files export Route; none takes a base path ()"],
+    lines: ["route files export Route; the app owns every path"],
   });
   expect(routes(goodApp({ "src/routes/api.sync.ts": page("/api/sync") })).status).toBe("ok");
 });
@@ -207,6 +198,6 @@ test("copied auth routes belong to the app even when the old auth switch is reco
   });
   expect(routes(root)).toEqual({
     status: "ok",
-    lines: ["route files export Route; none takes a base path ()"],
+    lines: ["route files export Route; the app owns every path"],
   });
 });

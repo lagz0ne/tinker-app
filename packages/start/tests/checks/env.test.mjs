@@ -85,11 +85,14 @@ test("an absent component's keys are not checked", () => {
   expect(env(root)).toEqual({ status: "ok", lines: ["no .env.example to check"] });
 });
 
-const authOn = JSON.stringify({ base: "0.4.0", parts: ["telemetry", "auth"] });
+const authManifest = readFileSync(
+  join(baseDir, "../../apps/start-scaffold/tinker/components/auth/component.json"),
+  "utf8",
+).replace('"database"', '"telemetry"');
 
 test("with auth on, a short secret is named at its .env line, and an unset origin as unset", () => {
   const root = fixture({
-    ".tinker/base.json": authOn,
+    "tinker/components/auth/component.json": authManifest,
     ".env": "# auth\nAUTH_SECRET=short\n",
   });
   expect(env(root).lines).toEqual([
@@ -100,7 +103,7 @@ test("with auth on, a short secret is named at its .env line, and an unset origi
 
 test("an unset auth key that .env.example lists is named once, by .env.example", () => {
   const root = fixture({
-    ".tinker/base.json": authOn,
+    "tinker/components/auth/component.json": authManifest,
     ".env.example": "PUBLIC_ORIGIN=\nAUTH_SECRET=\n",
   });
   expect(env(root).lines).toEqual([
@@ -111,12 +114,12 @@ test("an unset auth key that .env.example lists is named once, by .env.example",
 
 test("with auth on and good keys, check 9 passes for both parts", () => {
   const root = fixture({
-    ".tinker/base.json": authOn,
+    "tinker/components/auth/component.json": authManifest,
     ".env": `PUBLIC_ORIGIN=http://localhost:4318\nAUTH_SECRET=${"s".repeat(32)}\n`,
   });
   expect(env(root)).toEqual({
     status: "ok",
-    lines: ["no .env.example to check; part keys read well: telemetry, auth"],
+    lines: ["no .env.example to check; part keys read well: auth, telemetry"],
   });
 });
 

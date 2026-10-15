@@ -1,3 +1,20 @@
 {
-  "requires": ["errors"]
+  "requires": ["errors"],
+  "env": {
+    "SMTP_HOST": {
+      "rule": "smtpHost"
+    },
+    "SMTP_PORT": {
+      "rule": "port"
+    },
+    "SMTP_USER": {
+      "default": ""
+    },
+    "SMTP_PASSWORD": {
+      "default": ""
+    },
+    "SMTP_FROM": {
+      "rule": "email"
+    }
+  }
 }

@@ -1,15 +1,16 @@
 import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
-import { authSettings, requestStop, startRequests } from "@tinker/start/server";
-import { backendStop } from "@tinker/start/server";
-import { openSync } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
+import { authSettings } from "~/components/auth/index.server";
 import { auth } from "~/components/auth/index.server";
 import { migrate, databaseUrl } from "~/components/database/index.server";
 import { saveProfile } from "~/components/demo/backend/profile.server";
 import * as demo from "~/components/demo/index.server";
+import { requestStop, startRequests } from "~/components/requests";
+import { backendStop } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+import { openSync } from "~/components/sync/stream.server";
 
 import { authBindings } from "./presets";
 import { handleAuth } from "./presets";

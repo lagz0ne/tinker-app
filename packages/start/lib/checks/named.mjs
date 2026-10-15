@@ -3,10 +3,8 @@ import { join } from "node:path";
 
 import { readComponentModules } from "../component-modules.mjs";
 import { appFiles, ignoredFiles, serverFile } from "../named.mjs";
-import { parts, recordedParts } from "../parts.mjs";
-import { listFiles } from "../paths.mjs";
 import { serverSource } from "../server-source.mjs";
-import { augmentations, mayExport, parseSource } from "../source.mjs";
+import { mayExport } from "../source.mjs";
 import { examples } from "./examples.mjs";
 import { fail, verdict } from "./result.mjs";
 
@@ -26,48 +24,6 @@ export const say = {
       ? `each named or seam file exports what the base reads (${found.join(", ")}); no Start file is ignored`
       : "no named or seam files; the base defaults are in use",
 };
-
-/**
- * What each on part reads from a seam file: a missing file is named once per part, else each
- * name the file does not export. Unreadable seam exports fail the named check first.
- * @param {string} root - From the named check; why: the app and its recorded parts.
- */
-function partProblems(root) {
-  return recordedParts(root).flatMap((part) =>
-    Object.entries(parts[part].reads ?? {}).flatMap(([alias, names]) => {
-      const file = appFiles(root).find((entry) => entry.alias === alias).file;
-      if (!existsSync(join(root, file))) {
-        return [say.noSeam(file, part, names)];
-      }
-      return names
-        .filter((name) => !mayExport(join(root, file), name))
-        .map((name) => say.partExport(file, name, part));
-    }),
-  );
-}
-
-/**
- * The interfaces each on part needs the app to augment (sync reads the `Register` bodies), as
- * any file under src/ declares them.
- * @param {string} root - From the named check; why: the app and its recorded parts.
- */
-function augmentProblems(root) {
-  const needed = recordedParts(root).flatMap((part) =>
-    Object.entries(parts[part].augments ?? {}).flatMap(([module, names]) =>
-      names.map((name) => ({ part, module, name })),
-    ),
-  );
-  if (needed.length === 0) return [];
-  const found = ["src", "cmds", "tinker"]
-    .flatMap((dir) => listFiles(join(root, dir)).map((file) => `${dir}/${file}`))
-    .filter((file) => /\.tsx?$/.test(file))
-    .flatMap((file) => augmentations(parseSource(join(root, file))));
-  return needed
-    .filter(
-      ({ module, name }) => !found.some((item) => item.module === module && item.name === name),
-    )
-    .map(({ part, module, name }) => say.augment(module, name, part));
-}
 
 /**
  * Check 5: each named or seam file the app has exports what the base imports from it, each on
@@ -102,9 +58,10 @@ export function named(root) {
   return verdict(
     [
       ...serverProblems(root),
+      ...appFiles(root)
+        .filter(({ file, option }) => !option && !existsSync(join(root, file)))
+        .map(({ file }) => `${file} is missing; copy the app entry`),
       ...missing,
-      ...partProblems(root),
-      ...augmentProblems(root),
       ...ignored,
       ...(installed.status === "fail" ? installed.lines : []),
     ],

@@ -11,40 +11,32 @@ import { fixture } from "./fixture.mjs";
 test("the glue picks up the app entry and the three optional named files", () => {
   expect(appFiles(fixture({})).map(({ file }) => file)).toEqual([
     "cmds/router.ts",
-    "src/start.ts",
+    "cmds/start.ts",
     expect.stringContaining("cmds/server.ts"),
-    "src/style.css",
   ]);
 });
 
-test("an alias points at the app's named file, else at the base default, and keeps ?url", () => {
-  const root = fixture({ "src/start.ts": "", "src/style.css": "" });
+test("aliases keep app paths and the route tree, without runtime seams", () => {
+  const root = fixture({});
   const table = aliases(root);
-  const imports = [
-    "#tinker/start",
+  const rewrite = (name) => {
+    const alias = table.find(({ find }) => find.test(name));
+    return alias ? name.replace(alias.find, alias.replacement) : name;
+  };
+  expect(["@/style.css?url", "~/components/errors", "#tinker/routes"].map(rewrite)).toEqual([
+    `${root}/src/style.css?url`,
+    `${root}/tinker/components/errors`,
+    `${root}/.tinker/routeTree.gen.ts`,
+  ]);
+  for (const name of [
     "#tinker/server",
-    "#tinker/style?url",
     "#tinker/router",
-    "#tinker/routes",
+    "#tinker/start",
     "#tinker/parts",
     "#tinker/parts.server",
-    "@/backend/greet.ts",
-  ];
-  expect(
-    imports.map((name) => {
-      const alias = table.find(({ find }) => find.test(name));
-      return name.replace(alias.find, alias.replacement);
-    }),
-  ).toEqual([
-    join(root, "src/start.ts"),
-    join(root, "cmds/server.ts"),
-    `${join(root, "src/style.css")}?url`,
-    join(baseDir, "src/defaults/router.ts"),
-    join(root, ".tinker/routeTree.gen.ts"),
-    join(root, ".tinker/parts.ts"),
-    join(root, ".tinker/parts.server.ts"),
-    join(root, "src/backend/greet.ts"),
-  ]);
+  ]) {
+    expect(rewrite(name)).toBe(name);
+  }
 });
 
 test("an alias matches its whole name only", () => {
@@ -111,7 +103,7 @@ test("Start runs the base's entries, the generated route tree, and the base's im
       behavior: "error",
       client: {
         files: [/\.server\./, /\/backend\//],
-        specifiers: ["@tanstack/react-start/server", "@tinker/start/server"],
+        specifiers: ["@tanstack/react-start/server"],
       },
       server: { files: [/\.client\./] },
     },
@@ -131,9 +123,9 @@ test("Start's static output options pass on; an unknown option fails the build",
     prerender: { enabled: true },
   });
   expect(() => passThrough({ prerendr: {}, sap: {} })).toThrow(
-    "tinker(): unknown option prerendr, sap; known: root, serverEntry, compileHints, prerender, pages, spa, sitemap, auth",
+    "tinker(): unknown option prerendr, sap; known: root, serverEntry, compileHints, prerender, pages, spa, sitemap",
   );
-  expect(passThrough({ auth: true, spa: { enabled: true } })).toStrictEqual({
+  expect(passThrough({ spa: { enabled: true } })).toStrictEqual({
     spa: { enabled: true },
   });
 });

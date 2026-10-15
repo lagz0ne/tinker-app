@@ -1,10 +1,10 @@
 import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { authSettings, startRequests } from "@tinker/start/server";
 import { sql } from "drizzle-orm";
 import { test, expect, onTestFinished } from "vite-plus/test";
 
+import { authSettings } from "~/components/auth/index.server";
 import { migrate, database, databaseUrl } from "~/components/database/index.server";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
 import {
@@ -22,6 +22,7 @@ import { raise, isError } from "~/components/demo/errors";
 import * as demo from "~/components/demo/index.server";
 import { mail } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
+import { startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
 import { readReceipt } from "@/transport/result.server";

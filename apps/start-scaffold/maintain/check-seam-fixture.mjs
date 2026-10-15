@@ -31,11 +31,14 @@ try {
 
   for (const file of await readdir(join(app, "maintain/fixtures/note-app"))) {
     const name = file.replace(/\.txt$/, "");
-    const target = ["server.ts", "router.ts"].includes(name)
-      ? `cmds/${name}`
-      : name === "index.tsx"
-        ? "src/routes/index.tsx"
-        : `src/${name}`;
+    const target =
+      name === "start-entry.ts"
+        ? "cmds/start.ts"
+        : ["server.ts", "router.ts"].includes(name)
+          ? `cmds/${name}`
+          : ["index.tsx", "__root.tsx"].includes(name)
+            ? `src/routes/${name}`
+            : `src/${name}`;
     await writeFile(
       join(fixture, target),
       await readFile(join(app, "maintain/fixtures/note-app", file)),
@@ -58,6 +61,8 @@ try {
     "notes.server.ts",
     "records.ts",
     "routes",
+    "start.ts",
+    "style.css",
   ]);
 
   const result = spawnSync(join(app, "node_modules/.bin/tsc"), ["--noEmit"], {

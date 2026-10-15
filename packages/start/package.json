@@ -2,14 +2,13 @@
   "name": "@tinker/start",
   "version": "0.8.0",
   "private": true,
-  "description": "The Tinkered Start base: entries, routes, tinker(), and the tinker command (ADR 0106).",
+  "description": "Build glue, checks, and the tinker command for copied Start components.",
   "bin": {
     "tinker": "./bin/tinker.mjs"
   },
   "files": [
     "bin",
     "lib",
-    "src",
     "vite.mjs",
     "vite.d.mts",
     "files.json",
@@ -19,15 +18,11 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts",
-    "./server": "./src/server.ts",
-    "./client": "./src/client.ts",
     "./vite": {
       "types": "./vite.d.mts",
       "default": "./vite.mjs"
     },
-    "./package.json": "./package.json",
-    "./testing": "./src/testing.ts"
+    "./package.json": "./package.json"
   },
   "scripts": {
     "release": "node scripts/pack.mjs",
@@ -39,7 +34,6 @@
     "@hono/node-server": "1.19.17",
     "@tanstack/virtual-file-routes": "1.162.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "drizzle-orm": "catalog:",
     "jsonc-parser": "^3.3.1",
     "oxc-parser": "^0.117.0",
     "zod": "catalog:"
@@ -75,24 +69,6 @@
       "@tanstack/react-start": "1.168.60",
       "@tinker/core": "0.8.0",
       "@tinker/react": "0.8.0"
-    },
-    "routes": {},
-    "parts": {
-      "auth": {
-        "on": false,
-        "entries": {
-          "server": "on.server.ts"
-        },
-        "routes": {},
-        "env": {
-          "PUBLIC_ORIGIN": {
-            "rule": "http"
-          },
-          "AUTH_SECRET": {
-            "rule": "secret"
-          }
-        }
-      }
     }
   }
 }

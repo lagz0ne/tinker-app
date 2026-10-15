@@ -3,7 +3,7 @@ export { records } from "~/components/demo";
 export { readBatch, readBootstrap, readSnapshot, streamMessage } from "~/components/demo";
 import type { FeatureSync } from "~/components/demo";
 /** This app fills the base's open registry with its own bodies. */
-declare module "@tinker/start" {
+declare module "~/components/sync" {
   interface Register {
     change: FeatureSync.Change;
     result: FeatureSync.Result;

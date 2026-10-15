@@ -1,12 +1,13 @@
 import type { Scope } from "@tinker/core";
 import { createScope, isError as isCoreError } from "@tinker/core";
-import { authSettings, startRequests } from "@tinker/start/server";
 import { test, expect } from "vite-plus/test";
 
+import { authSettings } from "~/components/auth/index.server";
 import { migrate, databaseUrl } from "~/components/database/index.server";
 import { listTodos, changeTodo } from "~/components/demo/backend/todos.server";
 import { raise, isError } from "~/components/demo/errors";
 import * as demo from "~/components/demo/index.server";
+import { startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
 import { authBindings } from "./presets";

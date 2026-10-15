@@ -44,7 +44,7 @@ try {
     )}`;
   const routerFile = join(
     fixture,
-    appFiles(fixture).find((file) => file.alias === "#tinker/router").file,
+    appFiles(fixture).find((file) => file.file === "cmds/router.ts").file,
   );
   const routerSource = readFileSync(routerFile, "utf8");
   assert.ok(routerSource.includes("export const extensions = [];"));

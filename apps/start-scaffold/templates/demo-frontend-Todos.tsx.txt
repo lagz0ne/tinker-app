@@ -5,7 +5,7 @@ import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import { updateTodo } from "@/transport/todos.functions";
 import { readTodoChange } from "~/components/demo";
 import { todos, profile } from "~/components/demo";
-import { syncClient } from "@tinker/start/client";
+import { syncClient } from "~/components/sync";
 import { isError } from "~/components/demo";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";

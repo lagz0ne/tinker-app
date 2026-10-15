@@ -6,8 +6,7 @@ import { createScope, extension } from "@tinker/core";
 import { createServer } from "vite-plus";
 import { expect, onTestFinished, test } from "vite-plus/test";
 
-import { createScopeClose } from "~/base/close";
-
+import { createScopeClose } from "../../../apps/start-scaffold/tinker/base/close";
 import { named } from "../lib/checks/named.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { aliases } from "../lib/glue.mjs";
@@ -108,11 +107,7 @@ async function loadEntry(wiring, entry = source) {
     configFile: false,
     ssr: { noExternal: ["@tinker/start"] },
     resolve: {
-      alias: [
-        { find: "@tinker/start/server", replacement: join(baseDir, "src/server.ts") },
-        { find: /^@tinker\/start$/, replacement: join(baseDir, "src/index.ts") },
-        ...aliases(root),
-      ],
+      alias: [...aliases(root)],
     },
     server: { middlewareMode: true, watch: null },
   });

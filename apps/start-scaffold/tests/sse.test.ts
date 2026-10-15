@@ -1,12 +1,9 @@
 import type { Scope } from "@tinker/core";
 import { createScope, operation } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { syncClient, applyBootstrap } from "@tinker/start/client";
-import { authSettings, startRequests } from "@tinker/start/server";
-import { accountOwner, tabStop, receiveMessage } from "@tinker/start/testing";
-import { openSync, notifications, backendStop, requestStop } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
+import { authSettings } from "~/components/auth/index.server";
 import { database, migrate, databaseUrl } from "~/components/database/index.server";
 import { streamMessage } from "~/components/demo";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
@@ -16,8 +13,16 @@ import { isError, raise } from "~/components/demo/errors";
 import * as demo from "~/components/demo/index.server";
 import { mail } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
+import { startRequests } from "~/components/requests";
+import { backendStop, requestStop } from "~/components/requests";
+import { receiveMessage } from "~/components/sync/client/events";
+import { accountOwner } from "~/components/sync/client/owner";
+import { syncClient, applyBootstrap } from "~/components/sync/client/sync";
+import { tabStop } from "~/components/sync/client/tab";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+import { notifications } from "~/components/sync/notifications.server";
 import { syncRecords } from "~/components/sync/slots";
+import { openSync } from "~/components/sync/stream.server";
 
 import { clientBindings } from "./presets";
 import { authBindings } from "./presets";

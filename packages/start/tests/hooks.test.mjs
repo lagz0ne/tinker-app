@@ -50,9 +50,7 @@ test("dev restarts when the shell, a named file, or a seam file comes or goes, a
   expect(restartNote(root, "/app/src/routes/__root.tsx", "added")).toBe(
     "tinker: src/routes/__root.tsx added; restarting",
   );
-  expect(restartNote(root, "/app/src/style.css", "removed")).toBe(
-    "tinker: src/style.css removed; restarting",
-  );
+  expect(restartNote(root, "/app/src/style.css", "removed")).toBeNull();
   expect(restartNote(root, "/app/cmds/router.ts", "added")).toBe(
     "tinker: cmds/router.ts added; restarting",
   );

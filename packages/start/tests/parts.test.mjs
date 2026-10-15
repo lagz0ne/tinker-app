@@ -5,9 +5,7 @@ import { expect, test } from "vite-plus/test";
 
 import { passThrough } from "../lib/glue.mjs";
 import { readPartEnv, rules } from "../lib/part-env.mjs";
-import { partNotes, parts, partsOn, recordedParts } from "../lib/parts.mjs";
 import { baseDir, basePackage } from "../lib/paths.mjs";
-import { fixture } from "./fixture.mjs";
 
 const telemetryEnv = JSON.parse(
   readFileSync(
@@ -17,19 +15,12 @@ const telemetryEnv = JSON.parse(
 ).env;
 
 test("telemetry is copied and no longer has a plugin switch", () => {
-  expect(partsOn({})).toEqual([]);
   for (const value of [true, false, "off", 0]) {
     expect(() => passThrough({ telemetry: value })).toThrow("tinker(): unknown option telemetry");
   }
 });
 
-test("a remaining part switch that is not boolean still fails", () => {
-  expect(() => partsOn({ auth: "off" })).toThrow("tinker(): auth takes true or false");
-  expect(() => partsOn({ auth: 0 })).toThrow("tinker(): auth takes true or false");
-});
-
 test("the copied telemetry env table reads five keys with their same defaults", () => {
-  expect(parts.telemetry).toBeUndefined();
   expect(readPartEnv(telemetryEnv, {})).toEqual({
     values: {
       VICTORIA_TRACES_URL: "http://127.0.0.1:10428/insert/opentelemetry/v1/traces",
@@ -75,46 +66,32 @@ test("a value that breaks its key's rule is refused, every such key at once", ()
   expect(rules.http.accepts("https://a.example")).toBe(true);
 });
 
-test("the record of the last tinker() call names the parts that are on", () => {
-  const root = fixture({ ".tinker/base.json": JSON.stringify({ base: "0.3.0", parts: [] }) });
-  expect(recordedParts(root)).toEqual([]);
-});
+test.each(["auth", "sync", "telemetry"])(
+  "%s has no plugin switch or package runtime export",
+  (name) => {
+    for (const value of [true, false, "off", 0]) {
+      expect(() => passThrough({ [name]: value })).toThrow(`tinker(): unknown option ${name}`);
+    }
+    expect(Object.keys(basePackage.exports)).toEqual(["./vite", "./package.json"]);
+    expect(basePackage.files).not.toContain("src");
+  },
+);
 
-test("no record, an unreadable one, or one from before parts reads as the defaults", () => {
-  expect(recordedParts(fixture({}))).toEqual([]);
-  expect(recordedParts(fixture({ ".tinker/base.json": "{" }))).toEqual([]);
-  expect(recordedParts(fixture({ ".tinker/base.json": '{ "base": "0.2.0" }' }))).toEqual([]);
-});
-
-test("a recorded part this base does not have is left out", () => {
-  const root = fixture({
-    ".tinker/base.json": JSON.stringify({ base: "9.0.0", parts: ["telemetry", "later"] }),
-  });
-  expect(recordedParts(root)).toEqual([]);
-  expect(Object.keys(basePackage.tinker.parts)).toEqual(["auth"]);
-});
-
-test("auth is off by default, and tinker({ auth: true }) turns it on", () => {
-  expect(partsOn({ telemetry: false })).toEqual([]);
-  expect(partsOn({ auth: true })).toEqual(["auth"]);
-  expect(partsOn({ telemetry: false, auth: true })).toEqual(["auth"]);
-  expect(() => partsOn({ auth: "yes" })).toThrow("tinker(): auth takes true or false");
-});
-
-test("the legacy auth switch mounts no route and still checks its two keys", () => {
-  expect(parts.auth.routes).toEqual({});
-  expect(parts.auth.reads).toBeUndefined();
-  expect(readPartEnv(parts.auth.env, {})).toEqual({
+test("copied auth checks its two required env keys from JSON", () => {
+  const env = JSON.parse(
+    readFileSync(
+      join(baseDir, "../../apps/start-scaffold/tinker/components/auth/component.json"),
+      "utf8",
+    ),
+  ).env;
+  expect(readPartEnv(env, {})).toEqual({
     values: { PUBLIC_ORIGIN: undefined, AUTH_SECRET: undefined },
     refused: ["PUBLIC_ORIGIN", "AUTH_SECRET"],
   });
-  const secret = "s".repeat(32);
   expect(
-    readPartEnv(parts.auth.env, { PUBLIC_ORIGIN: "http://localhost:4318", AUTH_SECRET: secret }),
-  ).toEqual({
-    values: { PUBLIC_ORIGIN: "http://localhost:4318", AUTH_SECRET: secret },
-    refused: [],
-  });
+    readPartEnv(env, { PUBLIC_ORIGIN: "http://localhost:4318", AUTH_SECRET: "s".repeat(32) })
+      .refused,
+  ).toEqual([]);
 });
 
 test("a secret takes at least 32 characters", () => {
@@ -124,9 +101,7 @@ test("a secret takes at least 32 characters", () => {
 });
 
 test("copied sync has no switch or generated activation note", () => {
-  expect(partsOn({})).toEqual([]);
   expect(() => passThrough({ sync: true })).toThrow("tinker(): unknown option sync");
-  expect(partNotes(["auth"])).toEqual([]);
 });
 
 test("sync cannot be toggled off or paired with an auth switch", () => {
@@ -142,6 +117,6 @@ test("copied sync declares its direct dependencies and owns no env table", () =>
       "utf8",
     ),
   );
-  expect(parts.sync).toBeUndefined();
+  expect(basePackage.tinker).not.toHaveProperty("parts");
   expect(manifest).toEqual({ requires: ["errors", "requests", "auth", "database"] });
 });

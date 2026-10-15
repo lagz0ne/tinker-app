@@ -2,7 +2,6 @@ import { existsSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
 import { byteOrderMark, lineOfKey, prependExtends, readJsonc, writeKey } from "../jsonc.mjs";
-import { appFiles } from "../named.mjs";
 import { callsOf, importsFrom, parseSource, specifiers } from "../source.mjs";
 import { verdict } from "./result.mjs";
 
@@ -161,12 +160,7 @@ function winner(files, key) {
 
 /** Public aliases may be user-owned; TypeScript still needs the private glue aliases. */
 function completePaths(root, paths) {
-  const keys = [
-    ...appFiles(root).map((entry) => entry.alias),
-    "#tinker/routes",
-    "#tinker/parts",
-    "#tinker/parts.server",
-  ];
+  const keys = ["#tinker/routes"];
   return keys.every((key) => Array.isArray(paths[key]) && paths[key].length > 0);
 }
 

@@ -1,27 +1,4 @@
-import { fileURLToPath } from "node:url";
-
 import { defineConfig } from "vite-plus";
 
-/** The base's own unit tests. Apps never load this file; they call tinker(). */
-export default defineConfig({
-  resolve: {
-    alias: {
-      "~/components": fileURLToPath(
-        new URL("../../apps/start-scaffold/tinker/components", import.meta.url),
-      ),
-      "~/base": fileURLToPath(new URL("../../apps/start-scaffold/tinker/base", import.meta.url)),
-      "#tinker/routes": fileURLToPath(
-        new URL("../../apps/start-min/.tinker/routeTree.gen.ts", import.meta.url),
-      ),
-      "#tinker/parts": fileURLToPath(new URL("tests/fixtures/parts.ts", import.meta.url)),
-      "#tinker/parts.server": fileURLToPath(
-        new URL("tests/fixtures/parts.off.server.ts", import.meta.url),
-      ),
-      "#tinker/server": fileURLToPath(new URL("tests/fixtures/app.server.ts", import.meta.url)),
-      "#tinker/router": fileURLToPath(new URL("tests/fixtures/app.ts", import.meta.url)),
-    },
-  },
-  test: {
-    include: ["tests/**/*.test.{ts,mjs}"],
-  },
-});
+/** Tooling tests run without an app runtime. */
+export default defineConfig({ test: { include: ["tests/**/*.test.mjs"] } });

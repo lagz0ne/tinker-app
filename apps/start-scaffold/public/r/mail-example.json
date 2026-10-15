@@ -27,7 +27,7 @@
       "path": "tinker/components/mail/component.json",
       "type": "registry:file",
       "target": "~/tinker/components/mail/component.json",
-      "content": "{\n  \"requires\": [\"errors\"]\n}\n"
+      "content": "{\n  \"requires\": [\"errors\"],\n  \"env\": {\n    \"SMTP_HOST\": {\n      \"rule\": \"smtpHost\"\n    },\n    \"SMTP_PORT\": {\n      \"rule\": \"port\"\n    },\n    \"SMTP_USER\": {\n      \"default\": \"\"\n    },\n    \"SMTP_PASSWORD\": {\n      \"default\": \"\"\n    },\n    \"SMTP_FROM\": {\n      \"rule\": \"email\"\n    }\n  }\n}\n"
     },
     {
       "path": "tinker/components/mail/settings.server.ts",

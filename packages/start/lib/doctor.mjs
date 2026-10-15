@@ -3,7 +3,7 @@ import { bytes } from "./checks/bytes.mjs";
 import { env } from "./checks/env.mjs";
 import { generated } from "./checks/generated.mjs";
 import { breaksBuild, glue } from "./checks/glue.mjs";
-import { importDirections, imports } from "./checks/imports.mjs";
+import { imports } from "./checks/imports.mjs";
 import { named } from "./checks/named.mjs";
 import { routes } from "./checks/routes.mjs";
 import { style } from "./checks/style.mjs";
@@ -46,10 +46,7 @@ export function buildChecks(root) {
     });
   return {
     errors: lines.filter(({ stops }) => stops).map(({ text }) => text),
-    warnings: [
-      ...lines.filter(({ stops }) => !stops).map(({ text }) => text),
-      ...importDirections(root).map((line) => `tinker doctor, import directions: ${line}`),
-    ],
+    warnings: lines.filter(({ stops }) => !stops).map(({ text }) => text),
   };
 }
 
@@ -98,9 +95,6 @@ export function doctor(root, fix) {
     const result = runCheck(root, check, fix);
     if (result.status === "fail") failed += 1;
     lines.push(`${result.status.padEnd(5)} ${index + 1} ${label}`, ...result.lines.map(wrap));
-    if (label === "imports") {
-      lines.push(...importDirections(root).map((line) => wrap(`warning: ${line}`)));
-    }
   });
   lines.push(failed === 0 ? "doctor: all checks pass" : `doctor: ${failed} check(s) fail`);
   return { lines, code: failed === 0 ? 0 : 1 };

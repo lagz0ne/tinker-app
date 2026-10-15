@@ -10,10 +10,7 @@ test("an installed example names each missing part switch", () => {
 
   const checked = examples(root);
 
-  expect(checked.lines).toEqual([
-    "demo: needs the auth part; set tinker({ auth: true }) in vite.config.ts",
-    "demo: needs the sync part; set tinker({ sync: true }) in vite.config.ts",
-  ]);
+  expect(checked.lines).toEqual(["demo: needs component sync; shadcn add it"]);
 });
 
 test("with its remaining package part on, the app owns the example's wiring", () => {

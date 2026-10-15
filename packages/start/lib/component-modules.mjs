@@ -82,7 +82,7 @@ function envDefaults(row, at, problems) {
   }
   if (Object.hasOwn(row, "rule")) {
     if (typeof row.rule !== "string" || !Object.hasOwn(rules, row.rule)) {
-      problems.push(`${at}: rule must name http, secret, level, or count`);
+      problems.push(`${at}: rule must name ${Object.keys(rules).join(", ")}`);
     }
   }
 }

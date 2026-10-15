@@ -1,0 +1,512 @@
+[
+  {
+    "name": "TypeScript import endings are missed",
+    "file": "lib/checks/imports.mjs",
+    "find": "...extensionImports(sources)",
+    "replace": "...[]"
+  },
+  {
+    "name": "example missing parts are missed",
+    "file": "lib/checks/examples.mjs",
+    "find": "!on.includes(part)",
+    "replace": "false"
+  },
+  {
+    "name": "example requirements are not checked by doctor",
+    "file": "lib/checks/named.mjs",
+    "find": "...(installed.status === \"fail\" ? installed.lines : [])",
+    "replace": "...[]"
+  },
+  {
+    "name": "seam module declarations are missed",
+    "file": "lib/source.mjs",
+    "find": "node.id.value",
+    "replace": "undefined"
+  },
+  {
+    "name": "seam import equals is missed",
+    "file": "lib/source.mjs",
+    "find": "node.expression.value",
+    "replace": "undefined"
+  },
+  {
+    "name": "seam absolute base paths are missed",
+    "file": "lib/checks/imports.mjs",
+    "find": " || isAbsolute(name)",
+    "replace": ""
+  },
+  {
+    "name": "check version always passes",
+    "file": "lib/checks/version.mjs",
+    "find": "export function version(root) {",
+    "replace": "export function version(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
+  },
+  {
+    "name": "check bytes always passes",
+    "file": "lib/checks/bytes.mjs",
+    "find": "export function bytes(root) {",
+    "replace": "export function bytes(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
+  },
+  {
+    "name": "check generated always passes",
+    "file": "lib/checks/generated.mjs",
+    "find": "export function generated(root) {",
+    "replace": "export function generated(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
+  },
+  {
+    "name": "check glue always passes",
+    "file": "lib/checks/glue.mjs",
+    "find": "export function glue(root) {",
+    "replace": "export function glue(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
+  },
+  {
+    "name": "check named always passes",
+    "file": "lib/checks/named.mjs",
+    "find": "export function named(root) {",
+    "replace": "export function named(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
+  },
+  {
+    "name": "check imports always passes",
+    "file": "lib/checks/imports.mjs",
+    "find": "export function imports(root) {",
+    "replace": "export function imports(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
+  },
+  {
+    "name": "check routes always passes",
+    "file": "lib/checks/routes.mjs",
+    "find": "export function routes(root) {",
+    "replace": "export function routes(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
+  },
+  {
+    "name": "check style always passes",
+    "file": "lib/checks/style.mjs",
+    "find": "export function style(root) {",
+    "replace": "export function style(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
+  },
+  {
+    "name": "check env always passes",
+    "file": "lib/checks/env.mjs",
+    "find": "export function env(root) {",
+    "replace": "export function env(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
+  },
+  {
+    "name": "check boundary always passes",
+    "file": "lib/checks/boundary.mjs",
+    "find": "export function boundary(root) {",
+    "replace": "export function boundary(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
+  },
+  {
+    "name": "bytes --fix restores nothing",
+    "file": "lib/checks/bytes.mjs",
+    "find": "else writeFileSync(",
+    "replace": "else if (false) writeFileSync("
+  },
+  {
+    "name": "generated --fix adds no ignore line",
+    "file": "lib/checks/generated.mjs",
+    "find": "if (entries.length === 0) return;",
+    "replace": "return;"
+  },
+  {
+    "name": "glue --fix writes no extends",
+    "file": "lib/checks/glue.mjs",
+    "find": "prependExtends(join(root, \"tsconfig.json\"), read.tsconfig, tinkerConfig);",
+    "replace": ""
+  },
+  {
+    "name": "build start stops nothing",
+    "file": "lib/doctor.mjs",
+    "find": "errors: lines.filter(({ stops }) => stops).map(({ text }) => text),",
+    "replace": "errors: [],"
+  },
+  {
+    "name": "a fix that fails reads as fixed",
+    "file": "lib/doctor.mjs",
+    "find": "again.status === \"ok\" ?",
+    "replace": "true ?"
+  },
+  {
+    "name": "an unknown tinker() option is dropped",
+    "file": "lib/glue.mjs",
+    "find": "if (unknown.length > 0)",
+    "replace": "if (false)"
+  },
+  {
+    "name": "src/router.tsx is not listed",
+    "file": "lib/named.mjs",
+    "find": "[\".ts\", \".tsx\", \".js\", \".jsx\"]",
+    "replace": "[\".ts\", \".js\", \".jsx\"]"
+  },
+  {
+    "name": "tsconfig @/* goes back to ../src/*",
+    "file": "lib/prepare.mjs",
+    "find": "\"@/*\": [`${join(root, \"src\")}/*`]",
+    "replace": "\"@/*\": [\"../src/*\"]"
+  },
+  {
+    "name": "route groups count as a segment",
+    "file": "lib/route-path.mjs",
+    "find": "!/^\\(.+\\)$/.test(part) && ",
+    "replace": ""
+  },
+  {
+    "name": "nesting under a base route is missed",
+    "file": "lib/route-path.mjs",
+    "find": ".startsWith(`${path}/`)",
+    "replace": ".endsWith(`${path}/`)"
+  },
+  {
+    "name": "a - folder counts as a route",
+    "file": "lib/route-path.mjs",
+    "find": "!parts.some((part) => part.startsWith(\"-\")) && ",
+    "replace": ""
+  },
+  {
+    "name": "tsc errors read as none",
+    "file": "lib/typecheck.mjs",
+    "find": ".filter(Boolean)",
+    "replace": ".filter(() => false)"
+  },
+  {
+    "name": "a second tinker() only warns",
+    "file": "lib/doctor.mjs",
+    "find": "stops: stopping.has(label) || breaksBuild(line),",
+    "replace": "stops: stopping.has(label),"
+  },
+  {
+    "name": "tinker prepare hides a stale tree",
+    "file": "lib/checks/generated.mjs",
+    "find": "if (lines.length === 0) return [];",
+    "replace": "return [];"
+  },
+  {
+    "name": "shadcn needs Tailwind before any UI file",
+    "file": "lib/checks/style.mjs",
+    "find": "if (!ui || listFiles(ui).length === 0) return [];",
+    "replace": "if (!ui) return [];"
+  },
+  {
+    "name": "vite.config.ts is not type-checked",
+    "file": "lib/prepare.mjs",
+    "find": "\"../vite.config.ts\",",
+    "replace": ""
+  },
+  {
+    "name": "a tsconfig that does not parse reads as empty",
+    "file": "lib/jsonc.mjs",
+    "find": "if (!text || errors.length === 0) return { value: value ?? {} };",
+    "replace": "return { value: value ?? {} };"
+  },
+  {
+    "name": "--fix drops the comments of tsconfig.json",
+    "file": "lib/jsonc.mjs",
+    "find": "writeBack(path, read, applyEdits(text, edits));",
+    "replace": "writeBack(path, read, JSON.stringify(parse(applyEdits(text, edits)), null, 2) + \"\\n\");"
+  },
+  {
+    "name": "--fix writes a tsconfig that does not parse",
+    "file": "lib/checks/glue.mjs",
+    "find": "if (tsconfig.error) return [parseProblem(\"tsconfig.json\", tsconfig.error)];",
+    "replace": "if (tsconfig.error) return [parseProblem(\"tsconfig.json\", tsconfig.error), say.extends];"
+  },
+  {
+    "name": "a renamed tinker import counts no call",
+    "file": "lib/checks/glue.mjs",
+    "find": "callsOf(source, glue.local)",
+    "replace": "callsOf(source, \"tinker\")"
+  },
+  {
+    "name": "a config with no tinker() call stops the build",
+    "file": "lib/checks/glue.mjs",
+    "find": "calls.length > 1 && say.calls(",
+    "replace": "calls.length !== 1 && say.calls("
+  },
+  {
+    "name": "tinker prepare runs the generator while check 7 fails",
+    "file": "lib/checks/generated.mjs",
+    "find": "return checked.status === \"fail\" ? [say.notRun, ...checked.lines] : [];",
+    "replace": "return [];"
+  },
+  {
+    "name": ".gitignore gets no newline before the append",
+    "file": "lib/checks/generated.mjs",
+    "find": "const lead = text && !text.endsWith(\"\\n\") ? \"\\n\" : \"\";",
+    "replace": "const lead = \"\";"
+  },
+  {
+    "name": "export * is never followed",
+    "file": "lib/source.mjs",
+    "find": "const target = localModule(from, node.source.value);",
+    "replace": "const target = null;"
+  },
+  {
+    "name": "an export * from a package fails the check",
+    "file": "lib/source.mjs",
+    "find": "if (!target) return { names: new Map(), open: true };",
+    "replace": "if (!target) return { names: new Map(), open: false };"
+  },
+  {
+    "name": "the shell link is a text match again",
+    "file": "lib/checks/style.mjs",
+    "find": "!linksStyle(root)",
+    "replace": "!/style\\.css\\?url/.test(readText(join(root, shellFile)))"
+  },
+  {
+    "name": "a bad components.json throws",
+    "file": "lib/checks/style.mjs",
+    "find": "if (components.error) return [say.parse(components.error)];",
+    "replace": ""
+  },
+  {
+    "name": "a wrong createFileRoute path is not named",
+    "file": "lib/checks/routes.mjs",
+    "find": "call.value !== id",
+    "replace": "false"
+  },
+  {
+    "name": "a stale pin is not named",
+    "file": "lib/checks/version.mjs",
+    "find": ".filter(([, spec]) => exact.test(spec))",
+    "replace": ".filter(() => false)"
+  },
+  {
+    "name": "tinker prepare wipes the boundary record",
+    "file": "lib/prepare.mjs",
+    "find": "  return Object.keys(files);\n}",
+    "replace": "  writeFileSync(join(dir, \"violations.json\"), \"[]\\n\");\n  return Object.keys(files);\n}"
+  },
+  {
+    "name": "dev restarts on any file",
+    "file": "lib/hooks.mjs",
+    "find": "return picked.includes(path) || manifest ?",
+    "replace": "return true ?"
+  },
+  {
+    "name": "components.json is read leniently",
+    "file": "lib/checks/style.mjs",
+    "find": "readJsonc(join(root, \"components.json\"), { strict: true })",
+    "replace": "readJsonc(join(root, \"components.json\"))"
+  },
+  {
+    "name": "package.json is read leniently",
+    "file": "lib/checks/glue.mjs",
+    "find": "readJsonc(join(root, \"package.json\"), { strict: true })",
+    "replace": "readJsonc(join(root, \"package.json\"))"
+  },
+  {
+    "name": "a postinstall prepare blocks the install",
+    "file": "lib/prepare.mjs",
+    "find": "lifecycle !== \"postinstall\"",
+    "replace": "true"
+  },
+  {
+    "name": "check 3 says run tinker prepare while check 7 fails",
+    "file": "lib/checks/generated.mjs",
+    "find": "routes(root).status === \"fail\" ? say.check7Next : say.prepareNext",
+    "replace": "say.prepareNext"
+  },
+  {
+    "name": "any value named Outlet counts as the outlet",
+    "file": "lib/checks/routes.mjs",
+    "find": "(outlet && usesOf(source, outlet.local).length > 0)",
+    "replace": "usesOf(source, \"Outlet\").length > 0"
+  },
+  {
+    "name": "a byte order mark breaks the parse",
+    "file": "lib/jsonc.mjs",
+    "find": "const marked = raw.startsWith(bom);",
+    "replace": "const marked = false;"
+  },
+  {
+    "name": "--fix drops the byte order mark",
+    "file": "lib/jsonc.mjs",
+    "find": "${read.marked ? bom : \"\"}",
+    "replace": ""
+  },
+  {
+    "name": "--fix always indents with two spaces",
+    "file": "lib/jsonc.mjs",
+    "find": "insertSpaces: !tabs,",
+    "replace": "insertSpaces: true,"
+  },
+  {
+    "name": "an extends array never counts",
+    "file": "lib/checks/glue.mjs",
+    "find": "![parent].flat().includes(tinkerConfig)",
+    "replace": "parent !== tinkerConfig"
+  },
+  {
+    "name": "a file extended after .tinker is never read",
+    "file": "lib/checks/glue.mjs",
+    "find": "list.slice(list.indexOf(join(root, tinkerConfig)) + 1).reverse()",
+    "replace": "[]"
+  },
+  {
+    "name": "a file extended before .tinker counts too",
+    "file": "lib/checks/glue.mjs",
+    "find": "list.slice(list.indexOf(join(root, tinkerConfig)) + 1).reverse()",
+    "replace": "list.reverse()"
+  },
+  {
+    "name": "the first extended file wins, not the last",
+    "file": "lib/checks/glue.mjs",
+    "find": "list.slice(list.indexOf(join(root, tinkerConfig)) + 1).reverse()",
+    "replace": "list.slice(list.indexOf(join(root, tinkerConfig)) + 1)"
+  },
+  {
+    "name": "an extends name with no .json is not found",
+    "file": "lib/checks/glue.mjs",
+    "find": "    ? path\n    : `${path}.json`;",
+    "replace": "    ? path\n    : path;"
+  },
+  {
+    "name": "an extended file's own extends is not followed",
+    "file": "lib/checks/glue.mjs",
+    "find": "...extendedChain(root, file, parent, seen)",
+    "replace": "...[]"
+  },
+  {
+    "name": "a byte order mark passes strict JSON",
+    "file": "lib/jsonc.mjs",
+    "find": "if (strict && marked) return",
+    "replace": "if (false) return"
+  },
+  {
+    "name": "a byte order mark in package.json reads as a parse code",
+    "file": "lib/checks/glue.mjs",
+    "find": "error.code === byteOrderMark ? say.mark(file) : ",
+    "replace": ""
+  },
+  {
+    "name": "--fix replaces the extends key",
+    "file": "lib/jsonc.mjs",
+    "find": "  if (!node) return writeKey(path, read, [\"extends\"], entry);",
+    "replace": "  return writeKey(path, read, [\"extends\"], entry);"
+  },
+  {
+    "name": "lazy routes read as missed",
+    "file": "lib/checks/generated.mjs",
+    "find": "(?:from |import\\()'",
+    "replace": "from '"
+  },
+  {
+    "name": "an extends array breaks shadcn's alias read",
+    "file": "lib/checks/style.mjs",
+    "find": "[own.value.extends ?? []]\n    .flat()",
+    "replace": "[own.value.extends ?? []]"
+  },
+  {
+    "name": "the type check never runs",
+    "file": "lib/typecheck.mjs",
+    "find": "export function checkTypes(root) {",
+    "replace": "export function checkTypes(root) {\n  return [];"
+  },
+  {
+    "name": ".env beats the shell",
+    "file": "lib/env.mjs",
+    "find": "if (key in process.env && !fromEnvFile.has(key)) continue;",
+    "replace": ""
+  },
+  {
+    "name": "an edited .env keeps its old value",
+    "file": "lib/env.mjs",
+    "find": "process.env[key] = value;",
+    "replace": "process.env[key] ??= value;"
+  },
+  {
+    "name": "upgrade breaks a tarball peer",
+    "file": "lib/upgrade.mjs",
+    "find": "if (installed(name) === version) continue;",
+    "replace": ""
+  },
+  {
+    "name": "check 9 checks no part key",
+    "file": "lib/checks/env.mjs",
+    "find": "...partProblems(root, local, keys)",
+    "replace": ""
+  },
+  {
+    "name": "check 9 blames .env for a shell value",
+    "file": "lib/checks/env.mjs",
+    "find": "process.env[key]\n        ? \"the shell\"",
+    "replace": "false\n        ? \"the shell\""
+  },
+  {
+    "name": "check 9 lets .env beat the shell",
+    "file": "lib/checks/env.mjs",
+    "find": "{ ...local, ...process.env }",
+    "replace": "{ ...process.env, ...local }"
+  },
+  {
+    "name": "an empty part key reads as set",
+    "file": "lib/part-env.mjs",
+    "find": "values[key] = env[key] || fallback;",
+    "replace": "values[key] = env[key] ?? fallback;"
+  },
+  {
+    "name": "a part rule accepts any value",
+    "file": "lib/part-env.mjs",
+    "find": "(rule && !rules[rule].accepts(values[key]))",
+    "replace": "false"
+  },
+  {
+    "name": "an ftp URL passes as http",
+    "file": "lib/part-env.mjs",
+    "find": "/^https?:$/",
+    "replace": "/^[a-z]+:$/"
+  },
+  {
+    "name": "a route under a base splat is free",
+    "file": "lib/route-path.mjs",
+    "find": "path.endsWith(\"/$\") && routePath(file)",
+    "replace": "false && routePath(file)"
+  },
+  {
+    "name": "an unset part key is not named",
+    "file": "lib/checks/env.mjs",
+    "find": "return listed.includes(key) ? [] : [say.unset(key, name)];",
+    "replace": "return [];"
+  },
+  {
+    "name": "an unset part key that .env.example lists is named twice",
+    "file": "lib/checks/env.mjs",
+    "find": "return listed.includes(key) ? [] : [say.unset(key, name)];",
+    "replace": "return [say.unset(key, name)];"
+  },
+  {
+    "name": "listed keys come in parseEnv's sorted order",
+    "file": "lib/checks/env.mjs",
+    "find": ".sort((a, b) => a.line - b.line)",
+    "replace": ""
+  },
+  {
+    "name": "a short secret passes",
+    "file": "lib/part-env.mjs",
+    "find": "value.length >= 32",
+    "replace": "value.length >= 0"
+  },
+  {
+    "name": "an augmentation is never found",
+    "file": "lib/source.mjs",
+    "find": "found.push({ module: node.id.value, name: item.id.name });",
+    "replace": ";"
+  },
+  {
+    "name": "component dependency checks are ignored",
+    "file": "lib/component-modules.mjs",
+    "find": "      } else if (!names.has(dependency)) {",
+    "replace": "      } else if (false) {"
+  },
+  {
+    "name": "command imports allow any package",
+    "file": "lib/checks/imports.mjs",
+    "find": "export function commandImport(name) {",
+    "replace": "export function commandImport(name) { return null;"
+  },
+  {
+    "name": "copied env tables are ignored",
+    "file": "lib/checks/env.mjs",
+    "find": "return readComponentModules(root).declared.filter((item) => item.env);",
+    "replace": "return [];"
+  }
+]

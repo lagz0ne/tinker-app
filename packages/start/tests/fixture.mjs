@@ -50,6 +50,7 @@ export function goodApp(files = {}) {
       'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({ serverEntry: "cmds/server.ts" })] };\n',
     "tsconfig.json": JSON.stringify({ extends: "./.tinker/tsconfig.json" }),
     ".gitignore": ".tinker/\n.tanstack/\n",
+    ".env": `PUBLIC_ORIGIN=http://localhost:4318\nAUTH_SECRET=${"s".repeat(32)}\nDATABASE_URL=postgresql://test:test@localhost:5432/test\n`,
     ...Object.fromEntries(
       ["close.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map(
         (file) => [
@@ -81,6 +82,10 @@ export function goodApp(files = {}) {
       ),
     ),
     "cmds/server.ts": readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8"),
+    "cmds/router.ts": "export const getRouter = () => ({});\n",
+    "cmds/start.ts": "export const startInstance = {};\n",
+    "src/routes/__root.tsx":
+      'import style from "@/style.css?url"; export const Route = createRootRoute({head:()=>({links:[{rel:"stylesheet",href:style}]})});\n',
     "src/routes/index.tsx": 'export const Route = createFileRoute("/")({});\n',
     ...Object.fromEntries(
       Object.entries(basePackage.tinker.tested).map(([name, version]) => [

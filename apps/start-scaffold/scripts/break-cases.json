@@ -1,0 +1,122 @@
+[
+  {
+    "name": "readResult hides a failure",
+    "file": "tinker/components/requests/result.server.ts",
+    "find": "if (result.status === \"failed\") throw result.error;",
+    "replace": ""
+  },
+  {
+    "name": "the dev error page never shows",
+    "file": "tinker/base/panics.tsx",
+    "find": "if (response.status !== 500 || !page || !json) return response;",
+    "replace": "return response;"
+  },
+  {
+    "name": "a read body ends the request as cancelled",
+    "file": "tinker/components/requests/body.server.ts",
+    "find": "await finish(!owned.cancelled);",
+    "replace": "await finish(false);"
+  },
+  {
+    "name": "a tab's batch keeps the tab's service",
+    "file": "tinker/components/telemetry/ingest.server.ts",
+    "find": "record.service = service;",
+    "replace": "record.service = record.service;"
+  },
+  {
+    "name": "handleAuth hands the library another request",
+    "file": "tinker/components/auth/handle.server.ts",
+    "find": "auth.handler(input)",
+    "replace": "auth.handler(new Request(\"http://app/\"))"
+  },
+  {
+    "name": "one frame carries any number of events",
+    "file": "tinker/components/sync/stream.server.ts",
+    "find": ".limit(100)",
+    "replace": ".limit(1000)"
+  },
+  {
+    "name": "the stream never greets",
+    "file": "tinker/components/sync/stream.server.ts",
+    "find": "controller.enqueue(encoder.encode(\": connected\\n\\n\"));",
+    "replace": "controller.enqueue(encoder.encode(\": hello\\n\\n\"));"
+  },
+  {
+    "name": "the event history appends at the wrong revision",
+    "file": "tinker/components/sync/history.server.ts",
+    "find": "row.revision - payloads.length + offset + 1",
+    "replace": "row.revision + offset"
+  },
+  {
+    "name": "a broken listener leaves its subscribers waiting",
+    "file": "tinker/components/sync/notifications.server.ts",
+    "find": "if (broken || subscriber.opened !== connection) subscriber.disconnected?.();",
+    "replace": ""
+  },
+  {
+    "name": "an event past a gap applies",
+    "file": "tinker/components/sync/client/sync.ts",
+    "find": "if (event.revision !== previous + 1) break;",
+    "replace": ""
+  },
+  {
+    "name": "a rejected write succeeds",
+    "file": "tinker/components/sync/client/sync.ts",
+    "find": "if (reply.kind === \"rejected\") raise(\"WriteRejected\", { message: reply.message });",
+    "replace": ""
+  },
+  {
+    "name": "the tab stop leaves account work running",
+    "file": "tinker/components/sync/client/owner.ts",
+    "find": "signal.addEventListener(\"abort\", cancel, { once: true });",
+    "replace": ""
+  },
+  {
+    "name": "a tab queues any number of unread frames",
+    "file": "tinker/components/sync/client/events.ts",
+    "find": "if (queue.length >= 8) {",
+    "replace": "if (false) {"
+  },
+  {
+    "name": "a connection starts the public stream over",
+    "file": "tinker/components/sync/client/events.ts",
+    "find": "public: Math.max(0, cursors.publicRevision),",
+    "replace": "public: 0,"
+  },
+  {
+    "name": "an account frame keeps the account",
+    "file": "tinker/components/sync/client/events.ts",
+    "find": "    sync.leave();\n    return true;",
+    "replace": "    return true;"
+  },
+  {
+    "name": "a refresh keeps a changed account",
+    "file": "tinker/components/sync/client/events.ts",
+    "find": "      sync.leave();\n      await load.run();",
+    "replace": ""
+  },
+  {
+    "name": "reconnects wait less than 500 ms",
+    "file": "tinker/components/sync/client/events.ts",
+    "find": "await clock.sleep(500, signal);",
+    "replace": "await clock.sleep(400, signal);"
+  },
+  {
+    "name": "a hydrated tab does not stream",
+    "file": "tinker/components/sync/client/router.ts",
+    "find": "        streaming.start();\n",
+    "replace": ""
+  },
+  {
+    "name": "timer finalizer strands a resumed last waiter",
+    "file": "tinker/components/sync/notifications.server.ts",
+    "find": "                  timer = undefined;\n                  ticking = undefined;",
+    "replace": ""
+  },
+  {
+    "name": "a shared read belongs to its first request",
+    "file": "tinker/components/sync/stream.server.ts",
+    "find": "factory: async ({ lease, notifications, requests }) => {\n    const frame = requests.scope.controller(readFrame);",
+    "replace": "factory: async ({ lease, notifications }, { scope }) => {\n    const frame = scope.controller(readFrame);"
+  }
+]

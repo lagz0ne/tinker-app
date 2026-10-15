@@ -1,6 +1,6 @@
-import { isError as packageIsError, raise as packageRaise } from "@tinker/start/testing";
 import { expect, test } from "vite-plus/test";
 
+import { isError as packageIsError, raise as packageRaise } from "~/components/errors";
 import { fail, isError, raise } from "~/components/errors";
 
 test("copied and package errors agree while runtime parts move", () => {

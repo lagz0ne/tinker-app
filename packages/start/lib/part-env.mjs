@@ -1,5 +1,18 @@
+import { z } from "zod";
+
 /** What a part's env rule accepts, and how doctor names it. A key with no rule takes any text. */
 export const rules = {
+  url: { wants: "a URL", accepts: (value) => z.url().safeParse(value).success },
+  email: { wants: "an email address", accepts: (value) => z.email().safeParse(value).success },
+  port: {
+    wants: "a whole port number, 1 to 65535",
+    accepts: (value) => z.coerce.number().int().min(1).max(65535).safeParse(value).success,
+  },
+  smtpHost: {
+    wants: "an SMTP host",
+    accepts: (value) =>
+      value.length > 0 && URL.canParse(`smtp://${value.includes(":") ? `[${value}]` : value}:25`),
+  },
   http: {
     wants: "an http(s) URL",
     accepts: (value) => URL.canParse(value) && /^https?:$/.test(new URL(value).protocol),

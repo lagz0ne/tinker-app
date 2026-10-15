@@ -394,6 +394,31 @@ Start generates no wiring and checks no shared tag override.
 Missing wiring fails in your code at type check or run time.
 The full server file is [cmds/server.ts](cmds/server.ts).
 
+The app owns `src/routes/__root.tsx` and `src/style.css`.
+The installer never replaces them.
+The demo ships the actual scaffold shape as `examples/demo-root.tsx`
+and `examples/demo-style.css`.
+Read both, then copy their shape by hand beside your command wiring.
+For the untouched `app` shell, the exact edits are:
+
+```diff
+-import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
++import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
++
++import type { Sync } from "~/components/demo";
+
+-export const Route = createRootRoute({
++export const Route = createRootRouteWithContext<{
++  bootstrap: () => Promise<Sync.Snapshot>;
++  account: () => Promise<string | null>;
++}>()({
+```
+
+Keep the shell's HTML, `<Outlet />`, and stylesheet link.
+Copy `examples/demo-style.css` into `src/style.css`, keeping any of your own styles.
+These are user edits. A component update replaces its own files whole;
+it does not merge changes into `src/`.
+
 The browser command imports the copied readers:
 
 ```ts

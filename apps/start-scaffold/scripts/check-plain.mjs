@@ -1800,13 +1800,13 @@ if (process.argv.includes("--prove")) {
     [
       "request-headers-constant-key",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import * as t from "@tinker/start/testing"; const key = "requestHeaders" as const; const probe = operation({depends: {headers: t[key]}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import * as t from "~/components/requests/index.server"; const key = "requestHeaders" as const; const probe = operation({depends: {headers: t[key]}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
     [
       "http-backend-constant-key",
       "http-backend",
-      'import {operation} from "@tinker/core"; import * as t from "@tinker/start/testing"; const key = "httpBackend" as const; const probe = operation({depends: {send: t[key]}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import * as t from "~/components/http"; const key = "httpBackend" as const; const probe = operation({depends: {send: t[key]}, run: () => 1});',
     ],
     [
       "operation-request-custom-reader",
@@ -1817,51 +1817,51 @@ if (process.argv.includes("--prove")) {
     [
       "mounted-auth-bracket",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import * as protocol from "@tinker/start/testing"; const probe = operation({depends: {mounted: protocol["handleAuth"].controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import * as protocol from "~/components/auth/index.server"; const probe = operation({depends: {mounted: protocol["handleAuth"].controller}, run: () => 1});',
       "src/backend/plain-probe.ts",
     ],
     [
       "request-headers-bracket",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import * as protocol from "@tinker/start/testing"; const probe = operation({depends: {headers: protocol["requestHeaders"]}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import * as protocol from "~/components/requests/index.server"; const probe = operation({depends: {headers: protocol["requestHeaders"]}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
 
     [
       "mounted-auth-testing",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker/start/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import {handleAuth} from "~/components/auth/index.server"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
       "src/backend/plain-probe.ts",
     ],
     [
       "mounted-auth-direct",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker/start/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import {handleAuth} from "~/components/auth/index.server"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
       "src/backend/plain-probe.ts",
     ],
     [
       "mounted-auth-userland",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker/start/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import {handleAuth} from "~/components/auth/index.server"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
       "src/plain-probe.ts",
     ],
 
     [
       "request-headers-testing",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker/start/testing"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "~/components/requests/index.server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
     [
       "request-headers-direct",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker/start/server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "~/components/requests/index.server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
     [
       "request-headers-userland",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker/start/server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "~/components/requests/index.server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
       "src/plain-probe.ts",
     ],
 
@@ -2156,14 +2156,18 @@ if (process.argv.includes("--prove")) {
     [
       "http-backend-dependency",
       "http-backend",
-      'import {operation} from "@tinker/core"; import {httpBackend as backend} from "@tinker/start/testing"; const probe = operation({depends: {send: backend}, run: ({send}) => send("https://example.test/x")});',
+      'import {operation} from "@tinker/core"; import {httpBackend as backend} from "~/components/http"; const probe = operation({depends: {send: backend}, run: ({send}) => send("https://example.test/x")});',
     ],
     [
       "http-resource-dependency",
       "http-resource",
-      'import {operation} from "@tinker/core"; import {http as client} from "@tinker/start/testing"; const probe = operation({depends: {client}, run: ({client}) => client.send("https://example.test/x", {method: "GET", signal: new AbortController().signal})});',
+      'import {operation} from "@tinker/core"; import {http as client} from "~/components/http/index.server"; const probe = operation({depends: {client}, run: ({client}) => client.send("https://example.test/x", {method: "GET", signal: new AbortController().signal})});',
     ],
-    ["http-resource-export", "http-resource", 'export {http} from "@tinker/start/testing";'],
+    [
+      "http-resource-export",
+      "http-resource",
+      'export {http} from "~/components/http/index.server";',
+    ],
     [
       "fetch-tag-value",
       "http-request",

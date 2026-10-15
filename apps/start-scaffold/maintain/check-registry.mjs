@@ -69,7 +69,12 @@ for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]
         .find((item) => item.name === "app")
         .files.find((file) => file.target === "~/package.json").content,
     );
-    assert.equal(installed.dependencies["@tinker/start"], template.dependencies["@tinker/start"]);
+    assert.ok(installed.devDependencies["@tinker/start"]);
+    assert.equal(
+      installed.devDependencies["@tinker/start"],
+      template.devDependencies["@tinker/start"],
+    );
+    assert.equal(installed.dependencies["@tinker/start"], undefined);
     assert.ok(!/workspace:|catalog:/.test(JSON.stringify(installed)));
 
     await symlink(join(app, "node_modules"), join(consumer, "node_modules"), "dir");
@@ -82,6 +87,16 @@ for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]
       await mkdir(join(consumer, "cmds"), { recursive: true });
       for (const entry of ["server.ts", "router.ts"]) {
         await writeFile(join(consumer, "cmds", entry), await readFile(join(app, "cmds", entry)));
+      }
+      // The user copies the demo shell/style shape beside their command wiring.
+      for (const [example, target] of [
+        ["demo-root.tsx", "src/routes/__root.tsx"],
+        ["demo-style.css", "src/style.css"],
+      ]) {
+        await writeFile(
+          join(consumer, target),
+          await readFile(join(consumer, "examples", example)),
+        );
       }
     }
 

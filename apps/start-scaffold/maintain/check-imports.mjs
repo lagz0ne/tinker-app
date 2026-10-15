@@ -22,10 +22,6 @@ if (import.meta.main) {
       appType: "custom",
       resolve: {
         alias: [
-          {
-            find: /^#tinker\/parts\.server$/,
-            replacement: fileURLToPath(new URL("../.tinker/parts.server.ts", import.meta.url)),
-          },
           { find: /^@\//, replacement: fileURLToPath(new URL("../src/", import.meta.url)) },
           { find: /^~\//, replacement: fileURLToPath(new URL("../tinker/", import.meta.url)) },
         ],

@@ -11,7 +11,7 @@ export const say = {
     `${at} "${name}" ends in a TypeScript file extension; remove .ts, .tsx, or .mts from the import`,
   seam: (at, name) => `${at} "${name}" is a base-only name; app code cannot import it`,
   entry: (at, name) =>
-    `${at} "${name}" is not a base entry; use @tinker/start, @tinker/start/server, @tinker/start/client, or @tinker/start/vite`,
+    `${at} "${name}" is not a base entry; use @tinker/start/vite for build config; runtime code lives in copied components`,
   path: (at, name) => `${at} "${name}" reaches into the base by path; use a base entry`,
   serverEntry: (at, name) =>
     `${at} "${name}" skips the command's scope; put server setup in the configured command`,
@@ -47,32 +47,18 @@ function extensionImports(sources) {
   );
 }
 
-const entries = new Set([
-  "@tinker/start",
-  "@tinker/start/server",
-  "@tinker/start/client",
-  "@tinker/start/router",
-  "@tinker/start/vite",
-]);
+const entries = new Set(["@tinker/start/vite"]);
 
-/** Commands remain plain mains; Start stays allowed until its base registry split. */
+/** A command imports only its copied entry helpers, components, app code, and Core. */
 export function commandImport(name) {
   if (
-    name.startsWith("~/") ||
+    /^~\/(base|components)(?:\/|$)/.test(name) ||
     name.startsWith("@/") ||
-    name === "@tinker/core" ||
-    name === "@tanstack/react-start/server-entry" ||
-    [
-      "@tinker/start",
-      "@tinker/start/server",
-      "@tinker/start/client",
-      "@tinker/start/router",
-    ].includes(name)
+    name === "@tinker/core"
   ) {
     return null;
   }
-
-  return `"${name}" is not a command import; use ~/, @/, @tinker/core, or the framework entry; @tinker/start is allowed until Start is decomposed into base registry components (next card)`;
+  return `"${name}" is not a command import; use ~/base, ~/components, @/, or @tinker/core`;
 }
 
 /**
@@ -297,6 +283,20 @@ export function imports(root) {
       ...extensionImports(sources),
       ...componentImports(root, sources),
       ...isolation(root, sources),
+      ...sources.flatMap(({ file, imports }) =>
+        imports.flatMap(({ name, line }) => {
+          if (file.startsWith("cmds/") || isolatedImport(root, file, name, line).length > 0) {
+            return [];
+          }
+          if (
+            !(file === "tinker/base/router-entry.tsx" && name === "#tinker/routes") &&
+            badImport(name, join(root, file), base)
+          ) {
+            return [];
+          }
+          return directionImport(root, file, name, line);
+        }),
+      ),
     ],
     say.passed(files.length),
   );

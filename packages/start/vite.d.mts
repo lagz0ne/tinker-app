@@ -11,7 +11,5 @@ export declare function tinker(
     root?: string;
     /** Chrome compiles the client entry eagerly; on by default. */
     compileHints?: boolean;
-    /** The auth part: off by default; on mounts `/api/auth/$` and reads the server seam. */
-    auth?: boolean;
   } & Pick<StartOptions, "prerender" | "pages" | "spa" | "sitemap">,
 ): PluginOption[];

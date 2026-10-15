@@ -1,10 +1,16 @@
 import { createScope, operation } from "@tinker/core";
-import type { Sync } from "@tinker/start";
-import { syncClient, applyBootstrap, applyEvents, leaveAccount } from "@tinker/start/client";
-import { accountOwner, tabStop } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
 import { profile, counter, nameDraft } from "~/components/demo/frontend/state";
+import { accountOwner } from "~/components/sync/client/owner";
+import {
+  syncClient,
+  applyBootstrap,
+  applyEvents,
+  leaveAccount,
+} from "~/components/sync/client/sync";
+import { tabStop } from "~/components/sync/client/tab";
+import type { Sync } from "~/components/sync/envelopes";
 import { syncRecords } from "~/components/sync/slots";
 
 import { clientBindings } from "./presets";

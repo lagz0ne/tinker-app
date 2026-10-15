@@ -4,17 +4,15 @@ import { buildChecks } from "../lib/doctor.mjs";
 import { basePackage } from "../lib/paths.mjs";
 import { goodApp } from "./fixture.mjs";
 
-const runtimeWarning =
-  'tinker doctor, import directions: cmds/server.ts:1 "@tinker/start/server" imports the runtime package; use copied base or component entries';
-
-test("the old runtime import warns while the app still builds", () => {
-  expect(
-    buildChecks(
-      goodApp({
-        "cmds/server.ts": 'import * as start from "@tinker/start/server";\nexport default 1;',
-      }),
-    ),
-  ).toEqual({ errors: [], warnings: [runtimeWarning] });
+test("an old package runtime import stops the build", () => {
+  const checked = buildChecks(
+    goodApp({ "cmds/server.ts": 'import "@tinker/start/server"; export default 1;' }),
+  );
+  expect(checked.warnings).toEqual([]);
+  expect(checked.errors).toEqual([
+    'tinker doctor, imports: cmds/server.ts:1 "@tinker/start/server" is not a base entry; use @tinker/start/vite for build config; runtime code lives in copied components',
+    'tinker doctor, imports: cmds/server.ts:1 "@tinker/start/server" is not a command import; use ~/base, ~/components, @/, or @tinker/core',
+  ]);
 });
 
 test("each silent mistake stops the build with doctor's file:line message", () => {

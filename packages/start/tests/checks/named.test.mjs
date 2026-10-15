@@ -10,16 +10,15 @@ test("passes with only the app's named server entry", () => {
 test("names each entry export the base reads", () => {
   const root = goodApp({
     "cmds/router.ts": "export const options = {};",
-    "src/start.ts": "export const start = 1;",
+    "cmds/start.ts": "export const start = 1;",
     "cmds/server.ts": "export const fetch = 1;",
   });
 
   const checked = named(root);
 
   expect(checked.lines).toEqual([
-    "cmds/router.ts:1 does not export router; the base imports it from this file",
-    "cmds/router.ts:1 does not export extensions; the base imports it from this file",
-    "src/start.ts:1 does not export startInstance; the base imports it from this file",
+    "cmds/router.ts:1 does not export getRouter; the base imports it from this file",
+    "cmds/start.ts:1 does not export startInstance; the base imports it from this file",
     "cmds/server.ts:1 does not export default; the base imports it from this file",
   ]);
 });
@@ -77,12 +76,12 @@ test("copied sync reads no client command exports or package Register", () => {
   const root = goodApp({
     ".tinker/base.json": '{"parts":["auth","sync"]}',
     "cmds/server.ts": "export default 1;",
-    "cmds/router.ts": "export const router = {}; export const extensions = [];",
+    "cmds/router.ts": "export const getRouter = () => ({});",
   });
   expect(named(root)).toEqual({
     status: "ok",
     lines: [
-      "each named or seam file exports what the base reads (cmds/router.ts, cmds/server.ts); no Start file is ignored",
+      "each named or seam file exports what the base reads (cmds/router.ts, cmds/start.ts, cmds/server.ts); no Start file is ignored",
     ],
   });
 });
@@ -90,8 +89,7 @@ test("copied sync reads no client command exports or package Register", () => {
 test("doctor reads client command exports from an object pattern", () => {
   const root = goodApp({
     ".tinker/base.json": '{"parts":["auth"]}',
-    "cmds/router.ts":
-      "const values = {router:() => ({}),extensions:[]}; export const {router,extensions} = values;",
+    "cmds/router.ts": "const values = {getRouter:() => ({})}; export const {getRouter} = values;",
   });
 
   const checked = named(root);

@@ -10,25 +10,9 @@ import { parseSource } from "./source.mjs";
  * Item wiring is plain code in the app entries (ADR 0118).
  */
 const namedFiles = [
-  {
-    file: "cmds/router.ts",
-    alias: "#tinker/router",
-    reads: ["router", "extensions"],
-    fallback: "src/defaults/router.ts",
-  },
-  {
-    file: "src/start.ts",
-    alias: "#tinker/start",
-    reads: "startInstance",
-    fallback: "src/defaults/start.ts",
-  },
-  {
-    option: "serverEntry",
-    alias: "#tinker/server",
-    reads: "default",
-    required: true,
-  },
-  { file: "src/style.css", alias: "#tinker/style", fallback: "src/defaults/style.css" },
+  { file: "cmds/router.ts", reads: "getRouter", required: true },
+  { file: "cmds/start.ts", reads: "startInstance", required: true },
+  { option: "serverEntry", reads: "default", required: true },
 ];
 
 /** The app names its server entry in its own Vite config. */
@@ -37,7 +21,7 @@ export function serverFile(root) {
     (file) => existsSync(join(root, file)),
   );
   const file = config && entryPath(parseSource(join(root, config)).program);
-  return { ...namedFiles.find((entry) => entry.alias === "#tinker/server"), file };
+  return { ...namedFiles.find((entry) => entry.option === "serverEntry"), file };
 }
 
 function entryPath(node) {
@@ -52,7 +36,7 @@ function entryPath(node) {
 }
 
 export function appFiles(root) {
-  return namedFiles.map((entry) => (entry.alias === "#tinker/server" ? serverFile(root) : entry));
+  return namedFiles.map((entry) => (entry.option === "serverEntry" ? serverFile(root) : entry));
 }
 
 /** The page shell: when it exists, it replaces the base's root route. */
@@ -75,20 +59,4 @@ export const ignoredFiles = [
     file: "src/routeTree.gen.ts",
     hint: "the route tree is .tinker/routeTree.gen.ts; delete this file",
   },
-].filter(({ file }) => !namedFiles.some((named) => named.file === file));
-
-/**
- * The file the base reads for one entry: the app's own when it exists, else the base default.
- * @param {string} root - From the app folder; why: look for the app's file there.
- * @param {string} base - From a caller; why: the base folder the default lives in.
- * @param {{ file: string, fallback?: string }} entry - From appFiles; why: which file to pick.
- */
-export function pick(root, base, entry) {
-  if (!entry.file) {
-    throw new Error(
-      'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts" })',
-    );
-  }
-  const own = join(root, entry.file);
-  return existsSync(own) || !entry.fallback ? own : join(base, entry.fallback);
-}
+].filter(({ file }) => file !== "src/start.ts" && !namedFiles.some((named) => named.file === file));

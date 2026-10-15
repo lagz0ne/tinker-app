@@ -1,26 +1,26 @@
 import type { Scope } from "@tinker/core";
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { syncClient, loadSnapshot, checkAccount } from "@tinker/start/client";
-import { authSettings, startRequests } from "@tinker/start/server";
-import {
-  accountOwner,
-  tabStop,
-  refreshAccount,
-  receiveMessage,
-  snapshotSource,
-} from "@tinker/start/testing";
-import { openSync, backendStop, requestStop } from "@tinker/start/testing";
 import { createAuthClient } from "better-auth/react";
 import { test, expect } from "vite-plus/test";
 
+import { authSettings } from "~/components/auth/index.server";
 import { migrate, databaseUrl } from "~/components/database/index.server";
 import { readAccount } from "~/components/demo/backend/auth.server";
 import { incrementCounter } from "~/components/demo/backend/counter.server";
 import { bootstrap } from "~/components/demo/backend/sync.server";
 import * as demo from "~/components/demo/index.server";
+import { startRequests } from "~/components/requests";
+import { backendStop, requestStop } from "~/components/requests";
+import { loadSnapshot, checkAccount } from "~/components/sync/client/events";
+import { refreshAccount, receiveMessage } from "~/components/sync/client/events";
+import { accountOwner } from "~/components/sync/client/owner";
+import { syncClient } from "~/components/sync/client/sync";
+import { tabStop } from "~/components/sync/client/tab";
+import { snapshotSource } from "~/components/sync/functions";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 import { syncRecords } from "~/components/sync/slots";
+import { openSync } from "~/components/sync/stream.server";
 
 import { authClient, signIn } from "@/frontend/actions";
 

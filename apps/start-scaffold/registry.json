@@ -303,6 +303,16 @@
           "path": "src/routes/api.telemetry.ts",
           "type": "registry:file",
           "target": "~/src/routes/api.telemetry.ts"
+        },
+        {
+          "path": "../start-min/src/routes/__root.tsx",
+          "target": "~/src/routes/__root.tsx",
+          "type": "registry:file"
+        },
+        {
+          "path": "../start-min/src/style.css",
+          "target": "~/src/style.css",
+          "type": "registry:file"
         }
       ],
       "meta": {
@@ -659,12 +669,12 @@
         {
           "path": "src/routes/__root.tsx",
           "type": "registry:file",
-          "target": "~/src/routes/__root.tsx"
+          "target": "~/examples/demo-root.tsx"
         },
         {
           "path": "src/style.css",
           "type": "registry:file",
-          "target": "~/src/style.css"
+          "target": "~/examples/demo-style.css"
         },
         {
           "path": "src/transport/result.server.ts",

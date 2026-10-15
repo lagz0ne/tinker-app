@@ -52,7 +52,7 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
 
   const files = prepare(root, []);
 
-  expect(files).toEqual(["tsconfig.json", "base.json", "parts.ts", "parts.server.ts"]);
+  expect(files).toEqual(["tsconfig.json", "base.json"]);
   expect(named(root).lines).toEqual([
     "tinker/components/mail/component.json: requires missing component tinker/components/missing; shadcn add it",
   ]);
@@ -106,11 +106,7 @@ export default () => [recipient("Ada")];`,
     configFile: false,
     ssr: { noExternal: ["@tinker/start"] },
     resolve: {
-      alias: [
-        { find: "@tinker/start/server", replacement: join(baseDir, "src/server.ts") },
-        { find: /^@tinker\/start$/, replacement: join(baseDir, "src/index.ts") },
-        ...aliases(root),
-      ],
+      alias: [...aliases(root)],
     },
     server: { middlewareMode: true, watch: null },
   });

@@ -9,12 +9,12 @@ import { goodApp, write } from "../fixture.mjs";
 test("passes when src/ reaches the base only through its entries", () => {
   const root = goodApp({
     "src/backend/greet.ts":
-      'import { readResult } from "@tinker/start/server";\nimport { x } from "./x";\n',
-    "src/frontend/tab.ts": 'import { syncClient } from "@tinker/start/client";\n',
+      'import { readResult } from "~/components/requests/index.server";\nimport { x } from "./x";\n',
+    "src/frontend/tab.ts": 'import { syncClient } from "~/components/sync";\n',
   });
   expect(imports(root)).toEqual({
     status: "ok",
-    lines: ["54 source files import the base only through its entries"],
+    lines: ["57 source files import the base only through its entries"],
   });
 });
 
@@ -31,7 +31,7 @@ test("names each import that goes around the base's entries, at its line", () =>
   write(root, { "src/backend/peek.ts": `${peek.join("\n")}\n` });
   expect(imports(root).lines).toEqual([
     'src/backend/peek.ts:1 "#tinker/app.server" is a base-only name; app code cannot import it',
-    'src/backend/peek.ts:2 "@tinker/start/src/errors" is not a base entry; use @tinker/start, @tinker/start/server, @tinker/start/client, or @tinker/start/vite',
+    'src/backend/peek.ts:2 "@tinker/start/src/errors" is not a base entry; use @tinker/start/vite for build config; runtime code lives in copied components',
     'src/backend/peek.ts:3 "../../node_modules/@tinker/start/src/backend/body.server" reaches into the base by path; use a base entry',
     'src/backend/peek.ts:4 "@tanstack/react-start/server-entry" skips the command\'s scope; put server setup in the configured command',
     `src/backend/peek.ts:5 "${linked}" reaches into the base by path; use a base entry`,
@@ -45,7 +45,7 @@ test("names module declarations and import-equals that bypass the base entries",
   });
   expect(imports(root).lines).toEqual([
     'src/peek.ts:1 "#tinker/app" is a base-only name; app code cannot import it',
-    'src/peek.ts:2 "@tinker/start/src/index" is not a base entry; use @tinker/start, @tinker/start/server, @tinker/start/client, or @tinker/start/vite',
+    'src/peek.ts:2 "@tinker/start/src/index" is not a base entry; use @tinker/start/vite for build config; runtime code lives in copied components',
   ]);
 });
 

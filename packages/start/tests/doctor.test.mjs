@@ -255,20 +255,20 @@ for (const file of ["cmds/server.ts", "cmds/cli.ts", "cmds/worker.ts"]) {
 
     expect(checked.status).toBe("fail");
     expect(checked.lines).toEqual([
-      `${file}:1 "node:fs" is not a command import; use ~/, @/, @tinker/core, or the framework entry; @tinker/start is allowed until Start is decomposed into base registry components (next card)`,
+      `${file}:1 "node:fs" is not a command import; use ~/base, ~/components, @/, or @tinker/core`,
     ]);
   });
 }
 
-test("new import directions warn in doctor without changing its exit code", () => {
+test("old runtime package imports fail doctor", () => {
   const root = preparedApp({
     "src/old.ts": 'import "@tinker/start";\n',
   });
 
   const checked = doctor(root, false);
 
-  expect(checked.code).toBe(0);
+  expect(checked.code).toBe(1);
   expect(checked.lines.join(" ").replaceAll(/\s+/g, " ")).toContain(
-    'warning: src/old.ts:1 "@tinker/start" imports the runtime package; use copied base or component entries',
+    'src/old.ts:1 "@tinker/start" is not a base entry',
   );
 });

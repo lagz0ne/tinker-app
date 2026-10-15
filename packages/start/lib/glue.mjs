@@ -1,15 +1,11 @@
-import { existsSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { physical, rootRoute, route } from "@tanstack/virtual-file-routes";
+import { physical, rootRoute } from "@tanstack/virtual-file-routes";
 
-import { appFiles, pick, serverFile, shellFile } from "./named.mjs";
-import { parts } from "./parts.mjs";
-import { baseDir, basePackage } from "./paths.mjs";
+import { serverFile } from "./named.mjs";
 
 /**
- * Vite aliases that join the app to the base: `@/` for the app, one `#tinker/*` name per
- * named or seam file, and the generated route tree and parts files. A query such as `?url`
+ * Vite aliases that join the app to the base: `@/` for the app, the copied `~/` files, and the generated route tree. A query such as `?url`
  * stays on the replaced path.
  * @param {string} root - From tinker(); why: the base reads app paths from there.
  */
@@ -17,13 +13,7 @@ export function aliases(root) {
   return [
     { find: /^~\//, replacement: `${join(root, "tinker")}/` },
     { find: /^@\//, replacement: `${join(root, "src")}/` },
-    ...appFiles(root).map((entry) => ({
-      find: new RegExp(`^${entry.alias.replaceAll(".", "\\.")}(\\?.*)?$`),
-      replacement: `${pick(root, baseDir, entry)}$1`,
-    })),
     { find: /^#tinker\/routes$/, replacement: join(root, ".tinker/routeTree.gen.ts") },
-    { find: /^#tinker\/parts$/, replacement: join(root, ".tinker/parts.ts") },
-    { find: /^#tinker\/parts\.server$/, replacement: join(root, ".tinker/parts.server.ts") },
   ];
 }
 
@@ -32,20 +22,10 @@ export function aliases(root) {
  * src/ (Start resolves no package name or absolute path there). A part's routes mount only while
  * it is on, so an off part leaves its paths to the app.
  * @param {string} root - From tinker(); why: Start takes paths relative to that app's src.
- * @param {string[]} on - From partsOn; why: the parts whose routes to mount.
  */
-export function startOptions(root, on) {
+export function startOptions(root) {
   const src = join(root, "src");
-  const routes = join(src, "routes");
   const fromSrc = (file) => relative(src, join(root, file));
-  const fromRoutes = (file) => relative(routes, join(baseDir, file));
-
-  const shell = existsSync(join(root, shellFile))
-    ? "__root.tsx"
-    : fromRoutes("src/routes/root.tsx");
-  const mounted = [basePackage.tinker.routes, ...on.map((name) => parts[name].routes)].flatMap(
-    (routes) => Object.entries(routes).map(([path, file]) => route(path, fromRoutes(file))),
-  );
 
   return {
     srcDirectory: "src",
@@ -54,13 +34,13 @@ export function startOptions(root, on) {
     router: {
       entry: fromSrc("cmds/router.ts"),
       generatedRouteTree: "../.tinker/routeTree.gen.ts",
-      virtualRouteConfig: rootRoute(shell, [...mounted, physical("", ".")]),
+      virtualRouteConfig: rootRoute("__root.tsx", [physical("", ".")]),
     },
     importProtection: {
       behavior: "error",
       client: {
         files: [/\.server\./, /\/backend\//],
-        specifiers: ["@tanstack/react-start/server", "@tinker/start/server"],
+        specifiers: ["@tanstack/react-start/server"],
       },
       server: { files: [/\.client\./] },
     },
@@ -72,11 +52,11 @@ const passed = ["prerender", "pages", "spa", "sitemap"];
 
 /**
  * The Start options tinker() passes on. An unknown key fails the build, so no option is dropped
- * in silence; a part's switch is known too (see partsOn).
+ * in silence.
  * @param {Record<string, unknown>} options - From vite.config.ts; why: what the app asked for.
  */
 export function passThrough(options) {
-  const known = ["root", "serverEntry", "compileHints", ...passed, ...Object.keys(parts)];
+  const known = ["root", "serverEntry", "compileHints", ...passed];
   const unknown = Object.keys(options).filter((key) => !known.includes(key));
   if (unknown.length > 0) {
     throw new Error(`tinker(): unknown option ${unknown.join(", ")}; known: ${known.join(", ")}`);
