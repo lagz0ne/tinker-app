@@ -8,14 +8,6 @@ import { join, relative } from "node:path";
 
 import { app, root } from "./registry-source.mjs";
 
-/** The packed version, and a local next patch to upgrade to; follows every bump. */
-const current = JSON.parse(
-  await readFile(join(root, "packages/start/package.json"), "utf8"),
-).version;
-
-const [major, minor, patch] = current.split(".").map(Number);
-const nextVersion = `${major}.${minor}.${patch + 1}`;
-
 /** Real shadcn, packed releases, and HTTP; this proof stays outside scope tests. */
 const scratch = await mkdtemp(join(tmpdir(), "start-shadcn-proof-"));
 const packs = join(scratch, "packs");
@@ -25,8 +17,9 @@ await Promise.all([packs, registry, consumer].map((dir) => mkdir(dir)));
 console.log(`Proof folder: ${scratch}`);
 const env = { ...process.env, CI: "true", npm_config_audit: "false", npm_config_fund: "false" };
 const servers = [];
-const mailSource = join(app, "tinker/components/mail/mail.server.ts");
-const original = await readFile(mailSource, "utf8");
+const mailTarget = "tinker/components/mail/mail.server.ts";
+const original = await readFile(join(app, mailTarget), "utf8");
+const mailEnv = { SMTP_HOST: "127.0.0.1", SMTP_PORT: "1025", SMTP_FROM: "proof@example.com" };
 
 function run(command, args, cwd = consumer, extra = {}) {
   console.log(`\n$ ${command} ${args.join(" ")} (cwd ${cwd})`);
@@ -71,24 +64,7 @@ async function stop(child) {
 }
 
 try {
-  for (const name of ["core", "react"]) {
-    run("vp", ["pm", "pack", "--pack-destination", packs], join(root, "packages", name));
-  }
   run(process.execPath, [join(root, "packages/start/scripts/pack.mjs"), packs], root);
-
-  const release = join(scratch, "new-base");
-  await mkdir(release);
-  run("tar", ["-xzf", join(packs, `tinker-start-${current}.tgz`), "-C", release], root);
-
-  const releaseRoot = join(release, "package");
-  const next = JSON.parse(await readFile(join(releaseRoot, "package.json"), "utf8"));
-  next.version = nextVersion;
-  await writeFile(join(releaseRoot, "package.json"), JSON.stringify(next, null, 2) + "\n");
-  run("vp", ["pm", "pack", "--pack-destination", packs], releaseRoot);
-
-  console.log(
-    `Assumption: ${nextVersion} is a local version-bump fixture, not a published release.`,
-  );
 
   const staticServer = spawn(
     process.execPath,
@@ -130,7 +106,13 @@ try {
   buildRegistry();
 
   assert.deepEqual(await readdir(consumer), []);
-  run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/app.json`, "--yes"]);
+  run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/app.json`, "--yes", "--overwrite"]);
+  const installed = JSON.parse(await readFile(join(consumer, "package.json"), "utf8"));
+  assert.ok(
+    installed.devDependencies?.["@tinker/start"],
+    "app package file must replace only the CLI-created dependency stub",
+  );
+  await readFile(join(consumer, "vite.config.ts"));
   console.log("PASS: one shadcn add wrote the empty app.");
 
   run("npm", ["install"]);
@@ -170,21 +152,39 @@ try {
 
   run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/mail-example.json`, "--yes"]);
   run("vp", ["build"]);
-  run(tinker, ["doctor"]);
-  console.log("PASS: standalone mail builds and passes doctor without Postgres or SMTP.");
+  run(tinker, ["doctor"], consumer, mailEnv);
+  console.log(
+    "PASS: standalone mail builds and passes doctor with typed settings and no running Postgres or SMTP.",
+  );
 
   const baseBefore = await hashes(join(consumer, "node_modules/@tinker/start"));
   const userBefore = await hashes(join(consumer, "src"));
   const packageBefore = await readFile(join(consumer, "package.json"), "utf8");
 
-  await writeFile(mailSource, original.replace('"mail.completed"', '"mail.completed.changed"'));
-  buildRegistry();
+  // A candidate release changes only the served scratch payload; golden source stays intact.
+  const candidatePath = join(registry, "mail.json");
+  const candidate = JSON.parse(await readFile(candidatePath, "utf8"));
+  const mailFile = candidate.files.find((file) => file.target === `~/${mailTarget}`);
+  assert.ok(mailFile.content.includes('"mail.completed"'));
+  mailFile.content = mailFile.content.replace('"mail.completed"', '"mail.completed.changed"');
+  await writeFile(candidatePath, JSON.stringify(candidate, null, 2) + "\n");
+  const configBefore = {};
+  for (const name of [
+    "vite.config.ts",
+    "tsconfig.json",
+    "components.json",
+    ".env.example",
+    ".gitignore",
+  ]) {
+    configBefore[name] = await readFile(join(consumer, name), "utf8");
+  }
+  const cmdsBefore = await hashes(join(consumer, "cmds"));
 
   const diff = run("npx", [
     "--yes",
     "shadcn@4.21.0",
     "add",
-    `${url}/mail-example.json`,
+    `${url}/mail.json`,
     "--diff",
     "tinker/components/mail/mail.server.ts",
   ]);
@@ -196,44 +196,36 @@ try {
     "PASS: source change appears in --diff; user files, package.json, and every base byte stay unchanged.",
   );
 
-  await writeFile(mailSource, original);
-  buildRegistry();
-
-  const configBefore = {};
-  for (const name of [
-    "vite.config.ts",
-    "tsconfig.json",
-    "components.json",
-    ".env.example",
-    ".gitignore",
-  ]) {
-    configBefore[name] = await readFile(join(consumer, name), "utf8");
-  }
-
-  run(tinker, ["upgrade", nextVersion, "--from", packs]);
-
-  assert.deepEqual(await hashes(join(consumer, "src")), userBefore);
+  assert.deepEqual(await hashes(join(consumer, "cmds")), cmdsBefore);
   for (const [name, content] of Object.entries(configBefore)) {
     assert.equal(await readFile(join(consumer, name), "utf8"), content);
   }
+  await writeFile(
+    join(consumer, mailTarget),
+    (await readFile(join(consumer, mailTarget), "utf8")) + "\n// local-edit-to-replace\n",
+  );
+  run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/mail.json`, "--yes", "--overwrite"]);
+  const updated = await readFile(join(consumer, mailTarget), "utf8");
+  assert.ok(
+    updated.includes("mail.completed.changed") && !updated.includes("local-edit-to-replace"),
+  );
+  assert.deepEqual(await hashes(join(consumer, "src")), userBefore);
+  assert.deepEqual(await hashes(join(consumer, "cmds")), cmdsBefore);
+  for (const [name, content] of Object.entries(configBefore)) {
+    assert.equal(await readFile(join(consumer, name), "utf8"), content);
+  }
+  assert.equal(await readFile(join(app, mailTarget), "utf8"), original);
   console.log(
-    `PASS: upgrade ${current} -> ${nextVersion} changed no user source or config; package.json and install files changed as expected.`,
+    "PASS: component update replaces its file whole; app source, commands, config, and golden source stay intact.",
   );
 
   run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/todos-example.json`, "--yes"]);
-  const configPath = join(consumer, "vite.config.ts");
-  await writeFile(
-    configPath,
-    (await readFile(configPath, "utf8")).replace(
-      'serverEntry: "cmds/server.ts"',
-      'serverEntry: "cmds/server.ts", auth: true, sync: true',
-    ),
-  );
-
   for (const name of ["server.ts", "router.ts"]) {
     await cp(join(app, "cmds", name), join(consumer, "cmds", name));
   }
   await cp(join(consumer, "examples/demo.env.example"), join(consumer, ".env"));
+  await cp(join(consumer, "examples/demo-root.tsx"), join(consumer, "src/routes/__root.tsx"));
+  await cp(join(consumer, "examples/demo-style.css"), join(consumer, "src/style.css"));
 
   run("vp", ["build"]);
   run(tinker, ["doctor"]);
@@ -255,13 +247,12 @@ try {
   );
 
   console.log(
-    "These demo items need the auth + sync switches and Postgres + SMTP for live use. Their shared dependency copies all demo bodies.",
+    "These demo items need hand-written command bindings and Postgres + SMTP for live use. Their shared dependency copies all demo bodies.",
   );
   console.log(
     "NOT PROVEN: live copied demo auth/sync/mail, public registry hosting, or published private packages.",
   );
 } finally {
-  await writeFile(mailSource, original);
   for (const child of servers.reverse()) await stop(child);
 }
 

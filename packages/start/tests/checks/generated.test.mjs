@@ -61,13 +61,13 @@ test("names a route file the tree misses", () => {
   ]);
 });
 
-test("while check 7 fails, a missed route says to fix check 7 first; a file with no Route is check 7's", () => {
+test("while check 5 fails, a missed route says to fix check 5 first; a file with no Route is check 5's", () => {
   const root = preparedApp({
     "src/routes/later.tsx": 'export const Route = createFileRoute("/later")({});\n',
     "src/routes/broken.tsx": "export const route = 1;\n",
   });
   expect(generated(root).lines).toEqual([
-    ".tinker/routeTree.gen.ts misses src/routes/later.tsx; fix check 7 first, then run tinker prepare",
+    ".tinker/routeTree.gen.ts misses src/routes/later.tsx; fix check 5 first, then run tinker prepare",
   ]);
 });
 
@@ -100,20 +100,20 @@ test("when the generator ran and the tree is still stale, tinker prepare says so
   expect(staleTree(preparedApp())).toEqual([]);
 });
 
-test("while check 7 fails, every route tree line says to fix check 7 first", () => {
+test("while check 5 fails, every route tree line says to fix check 5 first", () => {
   const root = goodApp({ "src/routes/broken.tsx": "export const route = 1;\n" });
   prepare(root);
   expect(generated(root).lines).toEqual([
-    ".tinker/routeTree.gen.ts is missing; fix check 7 first, then run tinker prepare",
+    ".tinker/routeTree.gen.ts is missing; fix check 5 first, then run tinker prepare",
   ]);
 });
 
-test("tinker prepare skips the generator while check 7 fails, and says why", () => {
+test("tinker prepare skips the generator while check 5 fails, and says why", () => {
   const root = preparedApp({
     "src/routes/about.tsx": 'export const Route = createFileRoute("/abuot")({});\n',
   });
   expect(generatorBlocked(root)).toEqual([
-    "tinker prepare: check 7 fails, so the route generator did not run (it would stop, or write src/); fix the lines below:",
+    "tinker prepare: check 5 fails, so the route generator did not run (it would stop, or write src/); fix the lines below:",
     'src/routes/about.tsx:1 createFileRoute("/abuot") does not match its file; set it to "/about", or TanStack\'s generator rewrites it in src/',
   ]);
   expect(generatorBlocked(preparedApp())).toEqual([]);
@@ -195,15 +195,15 @@ test("--fix never runs the generator while a copied route has a wrong ID", () =>
   expect(runCheck(root, generated, true)).toMatchObject({
     status: "fail",
     lines: [
-      ".tinker/routeTree.gen.ts misses src/routes/api.sync.ts; fix check 7 first, then run tinker prepare",
-      ".tinker/routeTree.gen.ts misses src/routes/later.tsx; fix check 7 first, then run tinker prepare",
+      ".tinker/routeTree.gen.ts misses src/routes/api.sync.ts; fix check 5 first, then run tinker prepare",
+      ".tinker/routeTree.gen.ts misses src/routes/later.tsx; fix check 5 first, then run tinker prepare",
     ],
   });
   expect(existsSync(join(root, ".generator-ran"))).toBe(false);
   expect(readFileSync(join(root, "src/routes/api.sync.ts"), "utf8")).toBe(clash);
 });
 
-test("--fix runs the generator when check 7 passes; a prepare that fails leaves check 3's lines, not a crash", () => {
+test("--fix runs the generator when check 5 passes; a prepare that fails leaves check 1's lines, not a crash", () => {
   const root = preparedApp({ ...fakeVite('throw new Error("generator failed");'), ...later });
   expect(runCheck(root, generated, true)).toMatchObject({
     status: "fail",

@@ -1,861 +1,105 @@
 # @tinker/start
 
-The Start base: the fixed TanStack Start setup
-for a Tinkered app, as one package
-([ADR 0106](https://github.com/lagz0ne/tinkered/blob/main/docs/decisions/0106-the-start-base-is-a-package-glued-by-one-plugin.md)).
+Build tooling for an app that owns its runtime source.
+Install this package as a dev dependency. It exports `@tinker/start/vite`
+and the `tinker` command. It has no runtime, server, client, or testing export.
+Core and React stay packages. Start's runtime lives in the app's copied files.
 
-- It holds the entries, the base routes,
-  the `tinker()` Vite plugin, and the `tinker` command.
-- It ships TypeScript source, readable in `node_modules`.
-- An app never edits it. An upgrade replaces it whole.
-
-The smallest app is `apps/start-min` in the Tinkered repo:
-a server entry, a greet operation, its server function,
-and a page, plus the config below.
-
-## The glue
-
-The app owns its entry path. Generated glue supplies its aliases.
-
-`vite.config.ts`:
+## Build glue
 
 ```ts
-import { defineConfig } from "vite-plus";
 import { tinker } from "@tinker/start/vite";
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   plugins: [tinker({ serverEntry: "cmds/server.ts" })],
 });
 ```
 
-`tsconfig.json`:
+The plugin points Start at `cmds/start.ts`, `cmds/router.ts`, and the named server command.
+It uses the app's physical `src/routes` tree and its own `src/routes/__root.tsx` shell.
+There are no auth, sync, or telemetry switches. Copy the component and wire it by hand.
 
-```json
-{
-  "extends": "./.tinker/tsconfig.json",
-  "include": ["src", "cmds", "tinker", "tests"]
-}
-```
+The app may also pass `root`, `compileHints`, `prerender`, `pages`, `spa`, and `sitemap`.
+Unknown options fail. The plugin keeps Start's import protection:
+`.server.` and `/backend/` stay out of browser code, and `.client.` stays out of server code.
+It checks app types before a build can ship a broken route link.
 
-Add one script to `package.json`,
-so a fresh clone gets `.tinker/`:
-
-```json
-"postinstall": "tinker prepare"
-```
-
-`.tinker/` is the generated folder.
-It is gitignored, and nobody edits it.
-
-## The app server entry
-
-`cmds/server.ts` owns the server roots.
-The app names it in `vite.config.ts`:
-
-```ts
-tinker({ serverEntry: "cmds/server.ts" });
-```
-
-The app's tsconfig includes `cmds`.
-There is no default server entry.
-Prepare and doctor name a missing entry and show starter code.
-They never write an entry for the app.
-A missing server entry fails prepare, including postinstall.
-
-The entry reads env once, starts telemetry, then the app.
-It lists extensions and settings by hand, in the user's order.
-It imports each component's public index.
-The scaffold entry is filled in below:
-
-```ts
-import { createScope } from "@tinker/core";
-import * as start from "@tinker/start/server";
-
-import { createScopeClose } from "~/base/close";
-import { renderObservation } from "~/base/observe";
-import { observeServerPanics } from "~/base/panics.server";
-import { createServerHandler } from "~/base/server-entry";
-import type { ServerEntry } from "~/base/server-entry";
-import {
-  auth,
-  bootstrap,
-  database,
-  databaseSetup,
-  readAccount,
-  settings,
-} from "~/components/demo/index.server";
-import * as mail from "~/components/mail/index.server";
-import { startRequests, backendStop } from "~/components/requests";
-
-const parts = start.serverParts({ auth, bootstrap, database, readAccount });
-const values = { ...process.env };
-const appTags = [parts, start.auth.settings(values), settings(values), mail.settings(values)];
-const stop = { tools: new AbortController(), app: new AbortController() };
-
-const tools = createScope({
-  signal: stop.tools.signal,
-  extensions: start.telemetry.extensions,
-  tags: [start.telemetry.settings(values), start.telemetry.tags],
-});
-
-await tools.ready;
-
-const app = createScope({
-  signal: stop.app.signal,
-  observe: tools.resolve(start.telemetry.observe),
-  extensions: [startRequests, start.auth.extensions, databaseSetup],
-  tags: [
-    backendStop(stop.app.signal),
-    renderObservation(
-      tools.resolve(start.telemetry.renderObserve, { ns: start.telemetry.renderNs }),
-    ),
-    appTags,
-    tools.resolve(start.telemetry.appTags),
-  ],
-});
-
-const close = createScopeClose({ tools, app }, stop);
-await app.ready.catch(close);
-
-const server = {
-  requestContext: app.resolve(startRequests),
-  close,
-} satisfies ServerEntry.Handle;
-
-observeServerPanics(server);
-
-if (import.meta.hot) {
-  import.meta.hot.dispose(close);
-  import.meta.hot.on("vite:beforeFullReload", close);
-}
-
-export { close };
-export default createServerHandler(server);
-```
-
-There are no generated wiring files or role files.
-The app calls `createScopeClose` to close the app, then telemetry.
-The copied `tinker/base/close.ts` owns close; `server-entry.ts` owns rendering.
-It starts nothing and shares one close promise.
-An unhandled rejection prints its cause, closes both roots, and exits with code 1.
-A start or close error is rethrown after both roots end.
-
-The server handle has `requestContext` and `close`.
-Start borrows the context. The command binds the render observation tag.
-An optional `fetch(request, next)` can wrap requests.
-The entry closes on HMR replacement and process shutdown.
-
-The scaffold's client wiring lives in `cmds/router.ts`.
-It exports router options, extensions, and the sync readers.
-No app code may import a command file.
-Commands may import only `~/`, `@/`, `@tinker/core`, and their framework entry.
-`@tinker/start` is allowed until Start is decomposed into base registry components (next card).
-Every file directly under cmds may build its own scope.
-Src and components may not create scopes.
-Doctor checks each command with the same import rules.
-Start builds only the named server entry; other builds come later.
-
-## Components
-
-Components live in `tinker/components/<name>/`.
-Each item has `component.json` and a public `index.ts`.
-Server code may use `index.server.ts` too.
-
-```json
-{ "requires": ["postgres"] }
-```
-
-Only `requires` is allowed.
-Doctor checks missing components, self-requires, and cycles.
-Imports of another item need a direct requires entry.
-Imports through another component's private files fail doctor.
-Prepare never chooses an order or reads item code.
-The entry writes the order of extensions and tag bindings.
-The last binding for a tag wins, as Core defines.
-A missing binding fails in the user's code at type check or run time.
-
-## Lazy modules
-
-`drizzleOrm` on `@tinker/start/server` gives a body
-the Drizzle module namespace through its deps.
-It has one `module:drizzle-orm` load span per scope,
-shared across that scope's sessions.
-
-```ts
-import { operation } from "@tinker/core";
-import { drizzleOrm } from "@tinker/start/server";
-
-export const query = operation({
-  label: "query",
-  depends: { orm: drizzleOrm },
-  run: async ({ orm }) => orm.sql`select 1`,
-});
-```
-
-## Parts
-
-A base part is an opt-in slice of the base,
-set in `tinker({ ... })`.
-Turning a part off frees its route path for the app.
-
-```ts
-export default defineConfig({
-  plugins: [tinker({
-    serverEntry: "cmds/server.ts",
-    telemetry: false, auth: true,
-  })],
-});
-```
-
-- **telemetry**: on by default.
-  - Route: `POST /api/telemetry`, a tab's records.
-  - Reads `VICTORIA_TRACES_URL`,
-    default `http://127.0.0.1:10428/insert/opentelemetry/v1/traces`.
-  - Reads `VICTORIA_LOGS_URL`,
-    default `http://127.0.0.1:9428/insert/jsonline`.
-  - Reads `OTEL_SERVICE_NAME`, default `tinker-app`.
-  - Reads `LOG_LEVEL`, default `info`:
-    `debug`, `info`, `warn`, or `error`.
-    Core drops log lines below it.
-  - Reads `SPAN_HISTORY`, default `80`:
-    how many finished spans a root keeps.
-  - Both URLs must be http(s).
-    An empty value reads as unset.
-- **auth**: off by default.
-  - Route: `/api/auth/$`, GET and POST:
-    the app's auth library answers.
-  - Reads the app values from the `serverParts` tag,
-    filled by `cmds/server.ts`.
-  - Reads `PUBLIC_ORIGIN`, an http(s) URL,
-    and `AUTH_SECRET`, at least 32 characters.
-    Neither has a default.
-
-The server seam with auth on, filled in:
-
-```ts
-// In cmds/server.ts, beside its scope code:
-import * as demo from "~/components/demo/index.server";
-const parts = start.serverParts(demo);
-// Add parts to the app scope tags.
-```
-
-```ts
-// tinker/components/accounts/index.server.ts
-import { resource } from "@tinker/core";
-import { authSettings } from "@tinker/start/server";
-
-export const auth = resource({
-  label: "auth",
-  depends: { settings: authSettings },
-  factory: async ({ settings }) => {
-    const { betterAuth } = await import("better-auth");
-    return betterAuth({
-      baseURL: settings.origin,
-      secret: settings.secret,
-    });
-  },
-});
-```
-
-- **sync**: off by default.
-  - It turns auth on.
-    `sync: true` with `auth: false` fails the build.
-  - Route: `GET /api/sync`, a Server-Sent Events stream.
-  - Server functions: `getBootstrap` (the seam's
-    `bootstrap`) and `getAccount` (auth's `readAccount`).
-  - Reads `database` and `bootstrap` from the `serverParts` tag;
-    `database` is a drizzle Postgres database with `listen`
-    (the `Database` type on `@tinker/start/server`).
-  - Reads `records`, `readSnapshot`, `readBootstrap`,
-    `readBatch`, and `streamMessage`
-    from `cmds/router.ts`,
-    and the app's `Register` bodies.
-  - Reads no env key of its own.
-
-With sync on, the app's migrations create
-the sync tables (`src/parts/sync/schema.ts`)
-and this trigger, which wakes the streams:
-
-```sql
-CREATE FUNCTION start_sync_wake()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  PERFORM pg_notify('start_sync', TG_TABLE_NAME);
-  RETURN NULL;
-END; $$;
-CREATE TRIGGER sync_event_committed
-AFTER INSERT ON sync_event
-FOR EACH STATEMENT
-EXECUTE FUNCTION start_sync_wake();
-```
-
-A saved change wakes every stream. A wake reads no account.
-A stream sends each row once, then only the rows after it.
-
-A notice names one account on the same channel.
-Only that account's streams re-read it.
-A stream closes only if its own session ended.
-A notice closes a stream even when its client
-has stopped reading.
-Each notice path sends one notice after its commit:
-
-- Sign-out.
-- A session revoked or deleted.
-- A user deleted.
-- A user banned or a role changed: no path yet.
-  The scaffold has no ban or role field.
-
-The app sends a notice with `accountNotice(userId)`
-from `@tinker/start/server`:
-
-```sql
-select pg_notify('start_sync', 'account:<id>');
-```
-
-A new path that ends a session must send a notice.
-Without one, a stream closes at its 30 s lease.
-A sign-in sends no notice, so an anonymous tab
-learns its account at its lease.
-
-The client seam with sync on, filled in:
-
-```ts
-// cmds/router.ts
-export const router: RouterOptions = {};
-export const extensions = [];
-export { records } from "../frontend/records";
-export { readSnapshot, readBootstrap } from "./sync";
-export { readBatch, streamMessage } from "./sync";
-```
-
-```ts
-// src/lib/sync.ts, the Register bodies
-declare module "@tinker/start" {
-  interface Register {
-    change: { count: number };
-    result: { kind: "done" };
-    public: { count: number };
-    private: { name: string };
-  }
-}
-```
-
-`records` keeps the tab's saved state.
-It is a `Sync.Records`. Type its factory with it,
-so a wrong method fails in the app's own file.
-A revision of -1 means none yet.
-
-```ts
-// src/frontend/records.ts
-export const records = resource({
-  label: "records",
-  depends: { count: count.controller },
-  factory: ({ count }): Sync.Records => ({
-    resetPrivate: () => {},
-    bootstrapPublic: (saved, after) => {
-      if (saved.revision >= after) count.set(saved.count);
-    },
-    bootstrapPrivate: () => {},
-    change: (change) => count.set(change.count),
-    snapshot: (revision) => ({
-      public: {
-        stream: "public",
-        revision: Math.max(0, revision),
-        count: count.get(),
-      },
-      private: null,
-    }),
-  }),
-});
-```
-
-A route reads the router context sync adds,
-`Sync.RouterContext` (`bootstrap` and `account`),
-from a shell that declares it:
-
-```tsx
-// src/routes/__root.tsx
-type Context = Sync.RouterContext;
-const root = createRootRouteWithContext<Context>();
-export const Route = root({
-  component: () => <Outlet />,
-});
-```
-
-A part switch takes `true` or `false`;
-any other value fails the build.
-`.tinker/base.json` records which parts are on,
-so `tinker prepare` and doctor read the same switches.
-When one part turns another on, the build says so
-(`tinker: sync turns auth on`),
-and so does the head of `.tinker/parts.server.ts`.
-
-## Entries
-
-- `@tinker/start`: shared units, such as
-  `startRequests` and `RouterOptions`,
-  and the sync part's `Register`, `Sync` types,
-  envelopes, and readers. The readers take an app's
-  wire values and refuse each broken one;
-  a snapshot keeps the app's own fields
-  beside the stream and revision.
-- `@tinker/start/server`: `readResult`, the `Env` types,
-  `serverParts` and `startRequests`,
-  `auth`, `telemetry`, `abortReasons`,
-  and `authSettings`
-  (the auth part's origin and secret),
-  and `eventHistory` with the `Database` type
-  (the sync part's writes), `event`, `execution`,
-  and `stream` (the tables the app queries),
-  `requestHeaders` (auth reads the request),
-  and `httpRequest` (outgoing HTTP).
-- `@tinker/start/client`: the tab's sync units:
-  `syncClient`, `snapshotLoader`, `loadSnapshot`,
-  `checkAccount`, `applyBootstrap`, `applyEvents`,
-  `leaveAccount`.
-- `@tinker/start/testing`: test bindings and units,
-  including `httpBackend`, `http`, `handleAuth`,
-  `requestHeaders`, `openSync`, `notifications`,
-  the tab owner and stop tag, and the snapshot source.
-  App code never imports this test entry.
-- `@tinker/start/vite`: `tinker()`,
-  with the part switches and Start's
-  `prerender`, `pages`, `spa`, `sitemap`.
-
-`@tinker/start/package.json` is exported too.
-The package's `exports` refuses every other path.
-
-## At run time
-
-- Each request runs in its own session of the root
-  scope, with its headers and its stop signal.
-  A request with no root scope fails before any work.
-- The session ends when the response body is read
-  to the end: a graceful close.
-  A body that is cancelled or fails to read,
-  or a request that throws, closes it by force.
-  A response with no body ends it at once.
-- A held body keeps its status and headers.
-- Closing the root scope cancels each open body.
-  A request that cannot end fails the body's cancel,
-  and the scope's close.
-- `readResult` returns a settled value.
-  It throws a failure as is,
-  and a cancelled call as the base's `Cancelled` error.
-- `/api/health` answers `{"ok":true,"base":"<version>"}`.
-  The health operation reports the installed base version.
-- The server owns one telemetry root per process.
-  Server renders borrow its observer and queue.
-  Their records keep side `ssr`.
-  Render close finishes while a storage send is held.
-  Process close sends records from all renders.
-  Each browser tab owns its telemetry root,
-  which closes after the tab's app root.
-  Telemetry sends are not traced.
-  With telemetry off, it is empty,
-  and nothing is observed.
-  - Each finished span and log line at info or above
-    becomes a record, and a line on the local console:
-    JSON on the server, an object in a tab.
-    Lines below info are dropped;
-    warn and error keep their level.
-  - A record names its side: `server`,
-    `ssr` (a server render), or `browser` (a tab).
-  - A span with no end is sent with its start as its end.
-    Names and keys are cut to 256 characters,
-    values to 2048; a span keeps 31 attributes
-    and 32 events.
-    A bigint, `undefined`, or a cycle still
-    encodes as text.
-  - A server sends its spans grouped by side:
-    server, then browser, then ssr.
-    Finished spans reach storage as OTLP JSON
-    (the OpenTelemetry data format).
-  - The server and a tab send on their own
-    once a second has passed;
-    render close never waits for a telemetry send.
-    One send waits at most 750 ms,
-    Server records carry at most 48,000 bytes per send.
-    A tab sends at most 32,000 UTF-8 bytes,
-    including JSON framing, even when it closes.
-  - A tab trusts the records it made itself.
-    With sync off and no app import of zod,
-    the built client chunk contains no zod.
-  - A tab posts to `/api/telemetry`.
-    The route answers each post with a status:
-    `202` for a same-origin JSON post
-    of at most 64 KiB, with tab records only;
-    else `403`, `415`, `413`, `400`,
-    or `503` while the server stops.
-    A refused post's body is never opened;
-    a read body is let go, and the request ends clean.
-  - A batch is taken only when every record keeps
-    the wire rules: ids in hex of the right length,
-    times in digits, at most 64 records,
-    and no keys beyond the record's own.
-  - The route expects the request's own origin;
-    behind a `*.preview.tini.works` proxy,
-    its `https` one.
-  - The route hands each good batch
-    to the telemetry root, as a plain batch.
-    Taking a batch is sync: it returns a plain result.
-    A body split inside UTF-8 text still reads as one batch.
-    A tab's record takes the server's service name.
-  - A full queue drops what comes past 512 records,
-    and counts the drops; each send stays within 64 KiB.
-  - The queue holds 512 records and 1 MiB;
-    one server record is at most 48,000 bytes,
-    and one tab record at most 31,976 bytes,
-    and one send at most 64 records.
-    Each record is encoded and sized once when the queue takes it.
-    Cached records keep exact log bytes and trace fields through a retry.
-    A full batch starts at once; each batch waits for the last.
-    A full batch arriving as a send ends is sent before any tick.
-    A burst drains without waiting for the next timer tick.
-    Local server console lines wait in a bounded batch,
-    at most 512 lines and 48,000 bytes.
-    A slow pipe keeps that batch bounded;
-    each dropped storage or console copy is counted.
-    Final health counts records dropped at close.
-    Sent records free their room.
-    A send that storage refuses, or that throws,
-    in a tab or on the server,
-    keeps its records for the next send.
-    Each kind leaves on its own: when the trace send
-    fails, the traces stay and the logs sent beside them leave.
-    Drops are counted.
-  - Closing sends what is left, for at most 1.5 s;
-    then the owned clock aborts a stuck storage request.
-    Then closing gives up on storage,
-    and what is left is dropped.
-  - The telemetry part's `settings(env)` fills
-    `telemetryService`, `tracesUrl`, `logsUrl`,
-    `logLevel`, and `spanHistory` (ADR 0113).
-    Each unit needs only its own tags:
-    the queue needs the side;
-    the observer, the side, service, level, and history;
-    delivery, the side, service, and both URLs.
-    A bad storage URL stops start
-    with `BadSettings`, naming each key.
-- With auth on, `/api/auth/$` hands the whole
-  request to the app's `auth` library,
-  and returns its reply as is.
-  It takes only a request;
-  a failing library fails the call.
-- The auth part's `settings(env)` reads its two keys
-  once and fills the `authSettings` tag (ADR 0113).
-  With auth on, start stops at once
-  while a key is unset or refused.
-  With auth off, the app root reads no auth key.
-  The auth part's work shows on the trace
-  as `handleAuth`.
-- With sync on, a tab keeps its sync state
-  in its app root:
-  - A server render loads the snapshot with
-    `getBootstrap` and dehydrates it; the tab
-    hydrates it, then opens `/api/sync`
-    from its applied cursors.
-  - A snapshot sets the records and cursors once
-    per account version: a stale version or an older
-    snapshot changes nothing. An anonymous snapshot
-    keeps the tab anonymous on the public stream.
-    A snapshot for another account leaves the account,
-    even while a write is pending; one for the same
-    account waits for the pending write.
-  - A tab loads its snapshot once per account,
-    and shares a load in flight. A sign-in holds
-    loads and account checks until it completes.
-    A tab whose snapshot came another way still loads
-    its own at the next version. A load that cannot
-    apply yet (a write is pending) is tried again,
-    and a newer load is not dropped when an older one ends.
-  - An account check keeps the same account,
-    and leaves a changed one.
-  - A received frame settles in place after the tab is ready.
-  - Changes apply in order: a repeat is skipped,
-    and a gap stops the batch.
-    An account frame leaves the account and reloads.
-  - Eight unread frames wait; a ninth closes the
-    connection, so the tab replays instead of lagging.
-    A connection that ends re-checks the account.
-    The tab reconnects 500 ms after each end.
-    Frames from an old connection after a reconnect are dropped.
-  - A write waits for its result event.
-    A send that throws is retried after 500 ms;
-    a rejected reply fails the write;
-    an account exit or its call's stop cancels it.
-    A send that fails because its call stopped fails
-    with its own error, and is not retried.
-    A wait for an old account version, or with a
-    stopped signal, fails at once. An account exit
-    or a root close fails a wait that no signal stops. A result for a write
-    this tab did not send is not kept for a later write
-    of that id.
-  - A connection that applies changes, then errors,
-    ends false. Before any connection, closing does
-    nothing, and reading the next frame ends at once.
-  - The tab logs `sync.reconnecting` only after
-    a failure, and checks nothing more once it stops.
-    A stream loop that fails surfaces its error
-    when the tab closes; one that ends clean
-    closes with no error.
-  - The server side has no page:
-    the tab lifetime binds without listening.
-  - A real page hide closes the tab's app root;
-    a back-forward cache hide does not.
-  - Closing the tab owner uses one shared AbortError reason.
-    Account changes reuse their own AbortError reason.
-    Both keep the name AbortError and code 20.
-- With sync on, `GET /api/sync` streams events:
-  - The cursor comes from `Last-Event-ID`,
-    else `?cursor=`, else the start.
-    A cursor that does not read is a `400`;
-    another account's is a `403`.
-  - A dep whose parse fails fails the reply, not as a `400`.
-  - It replays the events after the cursor,
-    public and the account's own: each stream
-    resumes past its own revision,
-    at most 100 to a frame,
-    each frame with its resume cursor as its `id`.
-    If the clock wait fails, each waiting stream fails.
-  - A stream opened after a wake still replays.
-    A signed-in tab with no account cursor gets
-    the account frame at once.
-  - Then it greets once (`: connected`),
-    and sends each commit as it lands.
-  - A quiet stream sends `: heartbeat` each 10 s,
-    and closes at its 30 s lease, even if the client stops reading.
-    Heartbeat account checks run even for a stalled client.
-    Heartbeats wait for a client read; they do not build a queue.
-    Each heartbeat
-    re-reads the account first; a sign-out found
-    then sends the account frame instead.
-  - The stream reads the account fresh each time:
-    no cookie cache, and no session refresh.
-  - Each wake re-reads the account before it reads
-    rows, so a sign-out ends the stream even when its
-    rows cannot be read. It re-reads it again after the
-    read, so rows read for an account that signed out
-    during the read are not sent.
-    A held stream whose account signs out,
-    or an anonymous stream that signs in,
-    is an account change: it sends `event: account`
-    and closes, with no saved rows after it.
-  - A request or backend stop ends it.
-    A body cancelled while it waits stops its wait at once.
-  - `eventHistory` locks a stream, appends events
-    at the next revisions, saves a result,
-    and refuses another owner's execution.
-  - Notifications wake after a commit
-    and stay silent on a rollback;
-    a read made before waiting still wakes.
-  - Streams at the same cursor share one row read per wake.
-    A short page skips the empty read after it.
-    Private rows stay apart by account; each session checks sign-out.
-  - One listener wakes every stream.
-    A root that never listened closes clean.
-    A closed subscriber is not told when it breaks.
-    A listener that cannot start fails the subscribe,
-    so the stream's open fails; a listener that breaks
-    ends its subscribers, and the next subscribe
-    starts a new one. A subscribe whose listener is
-    replaced while it connects fails as disconnected.
-- A missing app server entry stops prepare and doctor.
-  Both name the file and show starter code.
-- The app entry starts its roots before serving requests.
-  Close waits for the app, then telemetry, and reports
-  either root's start or teardown error.
-  HMR reuses the entry until it changes; replacement closes it.
-- In production, the error page shows no error text.
-  In dev, Start's JSON 500 for a page load
-  becomes a page that reloads after the fix.
-  Every other response passes through.
-
-## Doctor
+## Commands
 
 ```bash
+tinker prepare
 tinker doctor
 tinker doctor --fix
+tinker serve
 ```
 
-- It prints one line per check:
-  `ok`, `skip`, `fail`, or `fixed`.
-- Each finding names a file and a line.
-- It exits 1 on any `fail`.
-- `--fix` writes only base-owned and generated things:
-  `.tinker/`, the `.gitignore` lines,
-  the tsconfig `extends` key, and the `postinstall` script.
-- It never edits `src/`, the Vite config, or `.env`.
-- Check 5 (named files) also names each seam
-  name an on part reads and the seam lacks,
-  and a missing seam file. The build stops on it.
-- Check 5 also names, while sync is on,
-  a server seam without `database` or `bootstrap`,
-  a client seam without one of its five names,
-  and an app with no `Register` bodies.
-- Check 6 reads literal module paths in imports, exports,
-  dynamic imports, import types, module declarations,
-  and import-equals statements.
-  It also names `.ts`, `.tsx`, and `.mts` import endings
-  in app code, tests, and config files, with file and line.
-  Remove those endings; keep `.mjs`, `.js`, `.json`,
-  `.css`, assets, and `?url` queries.
-  A private alias or a relative or absolute path
-  into the installed base fails with its file and line.
-- Check 7 (routes) counts an on part's routes as base routes,
-  and names the switch that frees one.
-  A route under a base splat, such as
-  `/api/auth/login` under `/api/auth/$`, counts too:
-  TanStack would serve the app's file there.
-- Check 9 (env) also reads each on part's keys,
-  as the part does: the shell, then `.env`, then the default.
-  A refused value is named at its `.env` line;
-  an unset key with no default, as `.env`'s,
-  unless `.env.example` lists it already.
+Prepare writes build paths and version data under `.tinker/`, then asks TanStack
+for `.tinker/routeTree.gen.ts`. It never writes app code or wiring.
+Old generated parts and env modules are removed. The app owns its commands.
+A missing server command gets a clear error and a complete starter to copy by hand.
 
-`vp build` runs the same checks for named files,
-imports, routes, and style before TanStack's route
-generator, then the app's own `tsc`.
-A fail stops the build with doctor's line.
+Doctor checks the generated folder, Vite glue, named command exports, import directions,
+routes, styles, env values, and the last build's import boundary record.
+It reads `component.json` for dependencies and env rules. It never imports a component.
+`--fix` repairs build config keys and generated files; it never edits app source or secrets.
+It does not pin copied runtime bytes or choose the order of app wiring.
 
-## Packages from GitHub
+Serve loads `.env`, serves public and built client assets, and calls the built app's handler.
+It closes the app on SIGINT or SIGTERM. Asset paths, compression, ETags, and conditional
+requests remain covered by the tooling tests. The app must keep the host package installed
+where it runs `tinker serve`.
 
-Core, React, and Start ship together on `lagz0ne/tinkered`.
-Each app pins three tarball URLs under one `start-v<version>` tag.
-The lockfile pins their bytes.
-A version bump that lands on main publishes its set.
-Read [the release steps](../../docs/roadmap/start-base/RELEASE.md).
+## Copied code
 
-## Upgrade
+```text
+cmds/*.ts  -> ~/base, ~/components, @/, @tinker/core
+src/       -> ~/components and npm packages, plus its own source
+base/      -> entry, close, panics, and observer hand-off
+components -> declared components; never base, cmds, or src
+```
+
+The last two folders live under `tinker/`. Base uses requests and errors.
+Commands pass optional telemetry and sync values into base. Base has no pass-through exports.
+A component declares direct dependencies in `component.json` and exposes public indexes.
+Tests may use its private files. Imports omit `.ts`, `.tsx`, and `.mts` endings.
+
+The golden source is `apps/start-scaffold/tinker/`. Registry items copy those actual files.
+Each component has one item; its `registryDependencies` equal its direct `requires`.
+Copied route files target `src/routes/`. App source remains user code.
+
+## Updates
+
+Review a component before copying a new version:
 
 ```bash
-tinker upgrade 0.8.0
-tinker upgrade 0.8.0 --from ../packs
+npx shadcn@4.21.0 add \
+  http://127.0.0.1:4870/r/mail.json \
+  --diff tinker/components/mail/mail.server.ts
 ```
 
-1. It stops when a base file in `node_modules`
-   was edited (doctor check 2). `--force` goes on.
-2. `package.json` gets three GitHub tarball URLs:
-   Core, React, and Start from tag `start-v0.8.0`.
-   All three share one version because they ship together.
-   Other peers move to the versions the new base tested.
-   With `--from`, only Start uses a local packed file;
-   this mode is for local proofs.
-3. Install, `tinker prepare`, then `tinker doctor`.
-4. It prints the `UPGRADE.md` notes between versions.
+An accepted component update replaces its files whole. It does not merge user edits.
+There is no `tinker upgrade`, byte pin check, or runtime package version check.
+Use the package manager to update this dev tool. Review copied code separately.
 
-It never writes `src/`.
-Undo is git: restore `package.json` and the
-lockfile, then install again.
+Read the scaffold's [commands and component guide](../../apps/start-scaffold/README.md)
+for the actual auth hooks, sync slots, and manual demo shell edits.
 
-## Work on the base
+## Checks
+
+From the worktree root:
 
 ```bash
-vp run @tinker/start#test
-vp run @tinker/start#mutate
-node packages/start/scripts/break-each-check.mjs
-packages/start/scripts/proof.sh
+VITEST_MAX_WORKERS=1 VP_RUN_CONCURRENCY_LIMIT=1 vp run -r build
+VITEST_MAX_WORKERS=1 VP_RUN_CONCURRENCY_LIMIT=1 vp check
+VITEST_MAX_WORKERS=1 VP_RUN_CONCURRENCY_LIMIT=1 vp run -r test
 ```
 
-- The tests call the glue as plain functions,
-  and base behavior through a scope.
-  None runs a build, a server, TanStack, or a browser.
-- `break-each-check.mjs` breaks each check and each
-  doctor message, one at a time; a test must fail.
-- `proof.sh` builds and serves `apps/start-min`.
-  Its logs land in `docs/roadmap/start-base/proof/`.
-  [The proof](https://github.com/lagz0ne/tinkered/blob/main/docs/roadmap/start-base/PROOF.md).
+Tooling tests stay here. Runtime tests live in `apps/start-scaffold/tests/runtime/`.
+That folder has a strict type project so the demo's sync bodies do not leak into generic tests.
+The app's `PLAIN.md` has a cap of 17. Only named copied base entry functions have exceptions.
+Components, src, and commands have no function skips.
 
-## Outgoing HTTP
-
-`httpRequest` depends on a session's HTTP resource.
-Each call makes an `http.request` operation span
-and its `http <METHOD> <path>` wire span (ADR 0102).
-The wire span keeps method, path, and status;
-the path has no query string.
-
-Bind `httpBackend` in scope tests to send without network.
-The request returns status, headers, and body text.
-Each set-cookie stays separate; other headers stay joined.
-The method accepts HTTP token characters and becomes upper-case.
-A non-2xx status is a result.
-A send or body read failure raises `HttpRequestFailed`:
-method, path, and only the cause's name and code.
-An inner socket cause wins for each readable field;
-an unreadable inner field keeps its readable outer field.
-A string cause is dropped.
-The code can be a number or string; private text is dropped.
-An abort failure keeps its numeric code without its message.
-
-Caller cancellation keeps Core's cancelled result.
-Cancelling a response body stops its active request work.
-Forced close cancels in-flight sends and body reads.
-A graceful close ends HTTP waits before other work drains.
-The caller's signal stays open on graceful close.
-The backend and request stop tags end HTTP waits
-without closing the scope; sibling requests stay open.
-An already stopped call sends nothing.
-Releasing the HTTP resource aborts its own pending sends.
-Other running work still finishes on graceful close.
-When the backend answers during graceful close,
-the caller's completed work stays completed.
-
-Only the check after the rows read can stop rows
-of an account that signed out during it.
-
-Generated aliases and parts use the real package folder.
-A linked workspace base has one sync Register,
-so app snapshot fields keep their types in both entries.
-
-Installed examples record their part switches in
-`src/examples/*.tinker.json`.
-Doctor names a missing `tinker({ part: true })` switch.
-The app wires each copied component's public API by hand.
-
-## Built files and compression
-
-- `tinker serve` reads the built file list once at start.
-  A new build needs a host restart.
-- The build writes `.br` and `.gz` copies of JS, CSS,
-  and HTML files that exist when client output is written.
-- The host picks Brotli or gzip from `Accept-Encoding`.
-  With no copy, it compresses JS, CSS, and HTML on demand.
-  HTML from the app keeps streaming.
-  Each write flushes Brotli or gzip output, so the shell reaches
-  the client before the source ends.
-  Source failures reach the response reader.
-  Cancelling the response cancels its unfinished source.
-- Responses that can be compressed have
-  `Vary: Accept-Encoding`, even when sent plain.
-- Hashed files under `/assets/` have a one-year cache.
-  Other built files need revalidation.
-- HEAD returns headers with no body.
-- A public gzip download keeps its original bytes.
-- Chrome's client entry has a comment, the compile hint,
-  on by default.
-  It asks Chrome to compile functions off the main thread.
-  This uses more memory for functions that never run.
-  Other browsers ignore the comment.
-  To turn it off:
-
-  ```ts
-  tinker({
-    serverEntry: "cmds/server.ts",
-    compileHints: false,
-  });
-  ```
-
-## More scope promises
-
-With auth on, the app root does not start without auth settings.
-An account ID keeps its colons; a similar prefix names no account.
-The router loads and checks through the snapshot loader.
-It dehydrates on the server, hydrates in the tab, then streams.
-A notice removes that stream's wait.
-Closing the last other waiter stops the shared clock.
-Waiting again replaces the stream's old wait; it adds no second wait.
-Streams that share one read each get their own byte copy.
-The router part binds stdout as the sink on a server render.
-The observer takes Core's level and span history from its tags.
-The sync on part streams through the tab's owner.
-The off part adds nothing and binds nothing.
+The lander runs mutation checks. Tooling keeps its 75 floor;
+the golden copied runtime has an 85 floor in the scaffold's `stryker.config.json`.
+Local package packing and registry builds publish nothing.

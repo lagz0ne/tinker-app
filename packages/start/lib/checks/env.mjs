@@ -48,7 +48,7 @@ function partProblems(root, local, listed) {
 }
 
 /**
- * Check 9: each key `.env.example` lists is set in `.env` or the shell, and each on part's key
+ * Check 7: each key `.env.example` lists is set in `.env` or the shell, and each on part's key
  * holds a value that part accepts. Lines follow `.env.example`, not parseEnv's sorted keys.
  * No fix: doctor never writes a secret.
  */

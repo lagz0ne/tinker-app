@@ -1,5 +1,3 @@
-import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   readFileSync,
   readdirSync,
@@ -15,7 +13,7 @@ import { dirname, join } from "node:path";
 
 import { onTestFinished } from "vite-plus/test";
 
-import { baseDir, basePackage } from "../lib/paths.mjs";
+import { baseDir } from "../lib/paths.mjs";
 
 /**
  * A temp app folder holding `files` (path to text), removed when the test ends.
@@ -87,45 +85,9 @@ export function goodApp(files = {}) {
     "src/routes/__root.tsx":
       'import style from "@/style.css?url"; export const Route = createRootRoute({head:()=>({links:[{rel:"stylesheet",href:style}]})});\n',
     "src/routes/index.tsx": 'export const Route = createFileRoute("/")({});\n',
-    ...Object.fromEntries(
-      Object.entries(basePackage.tinker.tested).map(([name, version]) => [
-        `node_modules/${name}/package.json`,
-        JSON.stringify({ name, version }),
-      ]),
-    ),
     ...files,
   });
+  mkdirSync(join(root, "node_modules/@tinker"), { recursive: true });
   symlinkSync(baseDir, join(root, "node_modules/@tinker/start"));
-  return root;
-}
-
-const hash = (text) => createHash("sha256").update(text).digest("hex");
-
-/**
- * An app with a packed base 9.0.0 installed under node_modules, as an install leaves it, and
- * the same base packed as `base.tgz`.
- * @param {Record<string, string>} [dependencies] - From a test; why: the app's package.json specs.
- */
-export function installedApp(dependencies = { "@tinker/start": "file:base.tgz" }) {
-  const base = {
-    "package.json": JSON.stringify({
-      name: "@tinker/start",
-      version: "9.0.0",
-      exports: { "./package.json": "./package.json" },
-    }),
-    "files.json": JSON.stringify({ "src/a.ts": hash("a"), "src/b.ts": hash("b") }),
-    "src/a.ts": "a",
-    "src/b.ts": "b",
-  };
-  const root = fixture({
-    "package.json": JSON.stringify({ dependencies }),
-    ...Object.fromEntries(
-      Object.entries(base).map(([file, text]) => [`node_modules/@tinker/start/${file}`, text]),
-    ),
-    ...Object.fromEntries(
-      Object.entries(base).map(([file, text]) => [`pack/package/${file}`, text]),
-    ),
-  });
-  execFileSync("tar", ["-czf", join(root, "base.tgz"), "-C", join(root, "pack"), "package"]);
   return root;
 }

@@ -11,18 +11,18 @@ Read this before adding app code.
 Choose one form for each piece of work:
 
 - Tag: fixed settings passed in by the entry.
-  See `databaseUrl` in `tinker/components/demo/backend/database.server.ts`.
+  See `databaseUrl` in `tinker/components/database/database.server.ts`.
 - Data: changing records, drafts, and visible progress.
   See `profile` and `nameDraft` in `tinker/components/demo/frontend/state.ts`.
 - Resource: a client or work owned by the app or session.
-  See `database` and `auth` in `src/backend/`.
+  See `database` and `auth` in their copied components.
 - Operation: an action, including a read, write, or send.
   See `changeTodo` in `tinker/components/demo/backend/todos.server.ts`.
 
 A unit body, and every helper it calls, gets an outside library
 only from a lazy module dep.
-Declare one resource per import path in `tinker/components/demo/backend/modules.ts`.
-Take Drizzle helpers from `drizzleOrm` in `@tinker/start/server`.
+Declare one resource per import path in `tinker/components/database/modules.ts`.
+Take Drizzle helpers from `drizzleOrm` in `~/components/database/index.server`.
 Import tables, schemas, and own code at the top.
 Release owned clients with `ctx.defer`.
 Use `ctx.signal`, `ctx.clock`, and `ctx.random`.
@@ -63,7 +63,7 @@ Whoever makes the scope fills the tags:
 - the server seam's `settings(env)`, at start;
 - a test, with typed values.
 
-The base parts follow it too.
+The copied components follow it too.
 Auth needs `authSettings`.
 Telemetry's units need `telemetrySide`, `telemetryService`,
 `tracesUrl`, `logsUrl`, `logLevel`, and `spanHistory`,
@@ -156,7 +156,7 @@ A feature operation depends on the request controller:
 
 ```ts
 import { operation } from "@tinker/core";
-import { httpRequest } from "@tinker/start/server";
+import { httpRequest } from "~/components/http/index.server";
 import { raise } from "@/errors";
 
 export const postNotice = operation({

@@ -1,404 +1,134 @@
 # Your Start app
 
-A shared counter, accounts, profiles, and private todos.
-The app uses Postgres, Better Auth, and SMTP.
+A shared counter, accounts, profiles, private todos, and mail.
+Postgres stores app data. Better Auth owns accounts. SMTP sends mail.
 Victoria stores traces and logs.
 
 ## Start
 
-This app runs on the package `@tinker/start`.
-The base owns entries, telemetry, auth routes, and sync.
-Core, React, and Start come from one GitHub release tag.
-There is no npm package; `package.json` names each tarball's URL.
-
-The fastest start is the template repo `lagz0ne/tinker-app`.
-Its `demo` branch is this app:
+The app owns its runtime in `tinker/base` and `tinker/components`.
+`@tinker/start` is a dev dependency for builds, doctor, and the Node host.
+Core and React come from the immutable tarball URLs in `package.json`.
 
 ```bash
-npx degit lagz0ne/tinker-app#demo my-app
-cd my-app
 npm run setup
 npm run dev
 ```
 
-`npm run setup` writes `.env` with a new `AUTH_SECRET`.
-It starts the compose stack and installs packages.
-Its `small` branch is the smallest app;
-`main` lists every branch.
+Setup writes `.env` with a new secret, starts the local Compose services,
+and installs packages. It never writes commands or app wiring.
+Open `http://localhost:4318` when dev starts.
 
-To build an app from registry items, start in an empty folder:
+## Layout and rules
 
-```bash
-npx shadcn@4.21.0 add \
-  "https://raw.githubusercontent.com/lagz0ne/tinkered/\
-start-v0.8.0/apps/start-scaffold/public/r/app.json" --yes
-```
+| Path                 | Owns                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| `cmds/server.ts`     | Server roots, settings, auth hooks, sync slots, and shutdown                           |
+| `cmds/router.ts`     | Browser roots, router options, records, and reader slots                               |
+| `cmds/start.ts`      | The Start middleware hand-off                                                          |
+| `src/`               | App routes, UI, transport, root shell, and styles                                      |
+| `tinker/base/`       | Entry, close, panics, and observer hand-off                                            |
+| `tinker/components/` | Copied errors, requests, health, http, database, auth, telemetry, sync, mail, and demo |
+| `tests/runtime/`     | Tests for the copied runtime, with strict type isolation                               |
 
-This is the smallest app, with telemetry on.
-The items below add the full demo.
+Commands import only `~/base`, `~/components`, `@/`, and `@tinker/core`.
+Src imports components and npm packages, plus its own source.
+Components declare direct `requires` in `component.json`; they never import src, cmds, or base.
+Base imports requests and errors; the commands pass optional parts into it.
+Imports omit TypeScript file endings. Keep blank-line steps in function bodies.
 
-From your project folder:
+Choose tags for fixed inputs, data for changing records, resources for owned clients,
+and operations for actions. Read [AGENTS.md](AGENTS.md) and the copied skills before editing.
+No module owns an app scope outside commands or copied entry code.
+The plain-function cap is 17. Only the named copied base entry functions have exceptions.
+No component, src, or cmd function is skipped.
 
-```bash
-cp .env.example .env
-npm install
-```
+## Command wiring
 
-For a copied demo, use `examples/demo.env.example`
-in place of `.env.example`.
-Set `AUTH_SECRET` in `.env` to a long random value.
-The other sample values point at the local compose stack.
-SMTP user and password may be empty for Mailpit.
-
-```bash
-docker compose pull
-docker compose up -d --wait
-npm run dev
-```
-
-Open `http://localhost:4318`.
-For a copied demo, open its `/demo` page.
-Make an account, save a name, and add a todo.
-Open `http://localhost:18025` to see mail in Mailpit.
-Open two tabs to see shared changes.
-Each account sees only its own profile and todos.
-Startup applies the checked-in migrations.
-
-For a built app:
-
-```bash
-npm run build
-npm start
-```
-
-The Node host reads `.env`.
-The dev command also reads `.env`.
-`HOST` and `PORT` set the listen address.
-Keep `PUBLIC_ORIGIN` equal to the URL you open.
-All settings and compose ports are in `.env.example`.
-
-## Layout
-
-- `node_modules/@tinker/start/`: the base package.
-  Update it with `tinker upgrade`; never edit its files.
-- `.tinker/`: generated config, route tree, and parts.
-  It is ignored by git; never edit it by hand.
-- `cmds/router.ts`: your browser wiring and router options.
-- `cmds/server.ts`: your server values.
-- `tinker/components/demo/`: database, auth, sync, and saved data.
-- `tinker/components/mail/`: mail and its lazy module.
-- `component.json`: each component's requires list.
-- `src/frontend/`: actions and views.
-- `tinker/components/demo/contracts/`: input readers and wire values.
-- `src/transport/`: Start server functions.
-- `src/routes/`: pages and HTTP routes.
-- `drizzle/`: checked-in database migrations.
-- `tests/`: scope tests and database/mail presets.
-- `.agents/skills/`: short guides for app changes.
-
-`.tinker/routeTree.gen.ts` is generated.
-Never edit it by hand.
-Native clients load inside their resource factories.
-Requests share one auth instance.
-Backend files use `.server.ts`; server functions use `.functions.ts`.
-The browser build refuses server imports.
-
-## Rules
-
-Use a tag for settings, data for changing state,
-a resource for a shared client, and an operation for an action.
-Code outside these four forms needs a TSDoc reason.
-Read `AGENTS.md` and the skill for the work you are doing.
-The base reaches your code through the two lib seams.
-`Register` fills its open types with your feature bodies.
-
-A mutation returns an execution ID.
-Sync applies saved changes, then ends the wait for that ID.
-Remote changes use that same path.
-Draft text stays separate from saved data.
-Sign-up and password reset do not wait for mail.
-Auth mail failure writes `mail.failed` to the log sink.
-Profile save and retry return a receipt without waiting for mail.
-A profile save is complete after commit and mail acceptance.
-Mail failure gives a partial result and keeps the saved name.
-Retry sends mail without saving the name again.
-The process owns sends and waits for them on graceful close.
-The profile shows your email and the last result.
-
-The stream checks auth at open, once per wake, and on heartbeats.
-Private route guards check the account with the server each time.
-Route loads reuse the tab's snapshot while the account stays the same.
-A signed-out private route checks only the account before redirecting.
-Account exit cancels waits and starts a new snapshot lifetime.
-Scope close cancels response readers left open by their consumer.
-
-## Glue and seams
-
-`vite.config.ts`:
+Vite names the server command, with no part switches:
 
 ```ts
-import { defineConfig } from "vite-plus";
-import { tinker } from "@tinker/start/vite";
-export default defineConfig({
-  plugins: [tinker({
-    serverEntry: "cmds/server.ts",
-    auth: true, sync: true,
-  })],
-});
+tinker({ serverEntry: "cmds/server.ts" });
 ```
 
-`tsconfig.json`:
+The command reads env once and calls each component's `settings(values)`.
+It starts telemetry before the app, borrows its observer, and closes roots in reverse order.
+The full working pattern is in [cmds/server.ts](cmds/server.ts).
+These are the actual auth hooks and server slots inside its tags list:
 
-```json
-{
-  "extends": "./.tinker/tsconfig.json",
-  "include": ["src", "cmds", "tinker", "tests"]
-}
+```ts
+bootstrapSlot(bootstrap),
+readAccountSlot(readAccount),
+sendAuthMail((message) => app.resolve(mail.authMail).enqueue(message)),
+sessionDeleted((accountId) => app.run(publishAccountNotice, { rawInput: { accountId } })),
 ```
 
-[cmds/server.ts](cmds/server.ts) starts and closes the roots.
-It imports the demo's public server API.
-It fills settings and lists extensions by hand.
-The file is 43 lines.
-The one named demo import takes eight lines to keep unused exports out of the build.
-It calls the copied helpers in `tinker/base/server.ts`.
-[cmds/router.ts](cmds/router.ts) wires the browser readers.
-The component index adds its `Register` types.
+Auth's two hooks are required and have no defaults.
+A missing hook fails `root.ready` with its name and the command file to edit.
+Auth depends only on errors, requests, and database; the command joins mail and sync.
 
-`@/*` names src; `~/*` names tinker.
-Generated glue supplies both aliases and the private paths.
-The app extends that tsconfig; it does not copy paths or aliases.
+The browser command binds each app-owned reader and records descriptor:
 
-Doctor checks the import direction:
-cmds may import src and component public indexes.
-Src may import component public indexes, but never cmds.
-Components never import src or cmds.
-Imports of another component need a direct requires entry.
-Requires tells a future add command what else to fetch.
-It never chooses a wiring order.
+```ts
+recordsSlot(records),
+readBatchSlot(readBatch),
+readBootstrapSlot(readBootstrap),
+readSnapshotSlot(readSnapshot),
+streamMessageSlot(streamMessage),
+```
 
-## Checks
+Read [cmds/router.ts](cmds/router.ts) for the full pattern.
+The demo declares its sync bodies at `~/components/sync`.
+Every route and server function uses the same copied requests middleware.
+There are no generated wiring modules or role files.
 
-From this repo's root:
+## Registry items and app ownership
+
+Build JSON from the actual app source:
 
 ```bash
-vp run @tinker-start-scaffold#check
+vp run registry:build
+vp run test:registry
 ```
 
-It runs every named app check, one at a time.
-The Compose proof starts its own Postgres and Mailpit.
-It needs Docker, curl, and agent-browser with Lightpanda.
-It stops its servers and removes its own volumes.
+There is one item per component. Its `registryDependencies` equal its direct `requires`.
+`base` owns the copied entry helpers. `app` adds base, health, telemetry, and user files
+into an empty folder. Examples add their own files and never overwrite app files.
+The build refuses two owners for one path and any example aimed at a protected app path.
 
-Each check also has a name in `package.json`:
-
-- `check:plain`: strict app forms and HTTP rules.
-  It reads base symbols and checks `PLAIN.md`.
-- `test:schema`: generate from a fresh prepared copy.
-  No new migration may appear.
-- `test:imports`: importing app units starts no services.
-  Drizzle table declarations may load.
-  Native drivers, auth, and mail clients may not load.
-- `test:middleware`: native request and function calls
-  share one session; SSE replays and closes.
-- `test:serve`: the base host serves a native JSON reply.
-- `test:seam:fixture`: notes compile with their own
-  Register bodies and the installed base.
-- `test:registry`: built items match source;
-  their complete app builds in a scratch folder.
-- `test:compose`: real auth, SMTP, migrations,
-  and two tabs sharing a todo through sync.
-
-`registry:build` writes the local registry payloads.
-It publishes nothing.
-Build, type checks, and scope tests run separately:
+For a local registry served at `http://127.0.0.1:4870/r`, start in an empty folder:
 
 ```bash
-npm run build
-npm run typecheck
-vp test
-npm run doctor
-node scripts/check-plain.mjs --prove
-```
-
-Doctor 5 checks the names the base reads from the seams.
-Doctor 6 checks imports through the base's public entries.
-It also reads module declarations and import-equals.
-An absolute path into the base fails too.
-Doctor 10 reads the last build's import violations.
-The plugin already refuses server code in a browser.
-The old seam and boundary scripts are removed.
-Their base rules are already checked there.
-
-Tests use `createScope` and app operations.
-They run no framework, server, build, or browser.
-The named proof scripts run those outside tests.
-
-## Local registry
-
-The registry is built from source.
-It publishes nothing.
-`app` writes the smallest app once.
-Its package and page come from `apps/start-min`.
-Its two seams start with empty extensions.
-Its config uses `tinker()` and the generated tsconfig.
-The base stays in `node_modules/@tinker/start`.
-
-Run the full local proof from this repo's root:
-
-```bash
-node apps/start-scaffold/maintain/proof-registry.mjs
-```
-
-It packs Core, React, and Start without publishing.
-It serves the registry at 127.0.0.1.
-It starts from an empty folder and runs real shadcn.
-It builds, runs doctor, and curls the served page.
-It adds examples and checks a changed source with `--diff`.
-It upgrades to a local 0.7.1 version-bump fixture.
-It checks user files stay the same, then stops each server
-by its own PID.
-The scratch folder stays for review.
-The printed local URL works only during that proof.
-
-For a local registry you keep running, pack these first:
-
-```bash
-mkdir -p /tmp/tinker-packs
-vp pm --dir packages/core pack \
-  --pack-destination /tmp/tinker-packs
-vp pm --dir packages/react pack \
-  --pack-destination /tmp/tinker-packs
-node packages/start/scripts/pack.mjs /tmp/tinker-packs
-```
-
-Build with a local package override:
-
-```bash
-export TINKER_PACKAGE_DIR=/tmp/tinker-packs
-TINKER_REGISTRY_URL=http://127.0.0.1:4870/r
-export TINKER_REGISTRY_URL
-vp run @tinker-start-scaffold#registry:build
-```
-
-`TINKER_PACKAGE_DIR` writes absolute `file:` tarball specs.
-They work on this machine only.
-`TINKER_REGISTRY_URL` sets links between example items.
-`TINKER_REGISTRY_OUT` can keep proof output outside this repo.
-Without the overrides, builds use GitHub release URLs
-and raw GitHub registry URLs at the same tag.
-Run `registry:build` again without overrides before committing.
-`test:registry` rejects built items that differ from source.
-
-Serve it from this repo root:
-
-```bash
-python3 -m http.server 4870 --bind 127.0.0.1 \
-  --directory apps/start-scaffold/public
-```
-
-Stop that server with Ctrl-C when you finish.
-From an empty app folder, the one install command is:
-
-```bash
-npx shadcn@4.21.0 add \
-  http://127.0.0.1:4870/r/app.json --yes
-```
-
-Then run:
-
-```bash
+npx shadcn@4.21.0 add http://127.0.0.1:4870/r/app.json --yes --overwrite
 npm install
 vp build
 npx tinker doctor
 npm start
 ```
 
-Never re-apply `app` to update an app.
-Upgrade its base with `tinker upgrade`.
-Review example changes with `shadcn add --diff`.
+Use `maintain/build-registry.mjs` with `TINKER_REGISTRY_OUT` and `TINKER_REGISTRY_URL`
+to write payloads for a local HTTP server. `TINKER_PACKAGE_DIR` selects a locally packed Start.
+No command here publishes a registry or package.
 
-## Example items
+Use that first install only in an empty folder. `--overwrite` replaces the dependency
+stub that shadcn creates before copying the app package file.
+Example installs use no overwrite flag.
 
-Examples add their own files.
-They never replace the app's config, first page, or seams.
-The registry build refuses a protected app target.
-It also refuses two items that own the same target.
+Never re-apply `app`. Review a copied component with `shadcn add --diff`.
+An update replaces that component whole. It does not merge changes into user code.
+The old runtime package item and `tinker upgrade` are retired.
 
-- `mail-example`: SMTP settings, client, send action, and errors.
-  No base part is needed.
-  Fill `smtpUrl` and `mailFrom` in `settings`
-  in `cmds/server.ts`.
-  The app then needs the SMTP settings to start.
-- `postgres-auth-mail-example`: the shared demo bodies,
-  migrations, UI, and a new page at `/demo`.
-  It depends on mail.
-- `todos-example`, `profile-example`, `auth-pages-example`,
-  `counter-example`, and `example-wiring`:
-  each adds its own requirements file.
-  Each depends on the shared demo.
-- `starter`: the shared demo plus tests and guides.
-  Add it to an existing `app`; it adds no app template files.
-- `runtime`: a package-only item for old users.
+`postgres-auth-mail-example` keeps the demo bodies, migrations, and UI together.
+It adds a `/demo` page and leaves your first page alone.
+`todos-example`, `profile-example`, `auth-pages-example`, `counter-example`,
+and `example-wiring` depend on that shared demo.
+`mail-example` adds only the mail component and its declared dependencies.
+`starter` adds the shared demo, tests, and guides to an existing app.
 
-The demo's feature bodies stay joined.
-Adding one feature installs the whole shared demo.
-The first page stays yours; the demo starts at `/demo`.
-Its copied env sample is `examples/demo.env.example`.
-No example writes `.env` or a secret.
-
-Every example states `meta.parts` and `meta.seams`.
-A copied `src/examples/<item>.tinker.json` file keeps
-those needs beside the app, so doctor needs no network.
-Doctor names each missing switch and the exact export line.
-It also names a database startup extension missing from
-an existing empty extensions list.
-
-From an app made with `app`:
-
-```bash
-npx shadcn@4.21.0 add \
-  http://127.0.0.1:4870/r/todos-example.json --yes
-npx tinker doctor
-```
-
-Keep your config and name the server entry:
-
-```ts
-tinker({
-  serverEntry: "cmds/server.ts",
-  auth: true, sync: true,
-});
-```
-
-Wire copied components by hand in your command files.
-The server imports its public API:
-
-```ts
-import { serverParts } from "@tinker/start/server";
-
-import { auth } from "~/components/auth/index.server";
-import { database } from "~/components/database/index.server";
-import { bootstrap, readAccount } from "~/components/demo/index.server";
-
-const parts = serverParts({ auth, database, bootstrap, readAccount });
-// Add parts to the app scope tags.
-```
-
-Import `databaseSetup` and `settings` from the database component.
-Add `databaseSetup` to the app scope's extensions and call `settings(values)`.
-Bind auth's `sendAuthMail` and `sessionDeleted` tags in the command,
-as shown in [cmds/server.ts](cmds/server.ts).
-Keep your own bindings in the order you need.
-Start generates no wiring and checks no shared tag override.
-Missing wiring fails in your code at type check or run time.
-The full server file is [cmds/server.ts](cmds/server.ts).
-
+After an example install, wire its command slots by hand as shown above.
 The app owns `src/routes/__root.tsx` and `src/style.css`.
-The installer never replaces them.
-The demo ships the actual scaffold shape as `examples/demo-root.tsx`
-and `examples/demo-style.css`.
-Read both, then copy their shape by hand beside your command wiring.
+The demo ships actual scaffold source as `examples/demo-root.tsx`
+and `examples/demo-style.css`. Read both, then copy their shape by hand.
 For the untouched `app` shell, the exact edits are:
 
 ```diff
@@ -415,61 +145,41 @@ For the untouched `app` shell, the exact edits are:
 ```
 
 Keep the shell's HTML, `<Outlet />`, and stylesheet link.
-Copy `examples/demo-style.css` into `src/style.css`, keeping any of your own styles.
-These are user edits. A component update replaces its own files whole;
-it does not merge changes into `src/`.
+Copy `examples/demo-style.css` into `src/style.css`, keeping your own styles.
+Set the keys from `examples/demo.env.example` in your own `.env`.
+No installer writes `.env`, a secret, or these app edits.
 
-The browser command imports the copied readers:
+Doctor reads env rules from copied `component.json` files, without importing runtime code.
+A build starts no Postgres or SMTP client. A running demo needs both services.
+Its database startup applies the committed migrations.
 
-```ts
-export {
-  records, readSnapshot, readBootstrap,
-  readBatch, streamMessage,
-} from "~/components/demo";
-```
+## Checks and local copies
 
-Keep its router options and extension list too.
-The copied component declares its `Register` bodies.
+Run heavy jobs one at a time:
 
 ```bash
-cp examples/demo.env.example .env
-vp build
-tinker doctor
+VITEST_MAX_WORKERS=1 VP_RUN_CONCURRENCY_LIMIT=1 vp build
+VITEST_MAX_WORKERS=1 VP_RUN_CONCURRENCY_LIMIT=1 vp check
+VITEST_MAX_WORKERS=1 VP_RUN_CONCURRENCY_LIMIT=1 vp test
+node scripts/check-plain.mjs
+node scripts/check-plain.mjs --prove
+npm run doctor
+node scripts/check-schema.mjs
 ```
 
-Build and doctor need no running Postgres or SMTP.
-Serving the joined demo needs Postgres and SMTP settings.
-The server applies migrations at startup.
-Auth needs `AUTH_SECRET` and `PUBLIC_ORIGIN`.
-Sync uses auth and the database.
-Telemetry is on by default.
+The native proof in `maintain/scaffold-proof.mjs` uses real Postgres, SMTP, and two tabs.
+Entry proofs cover HMR, full reload, root close, render observers, and panic cleanup.
+Registry proofs check source equality, direct dependencies, protected paths, and real copies.
+The notes fixture builds another app's sync bodies with no demo files.
 
-Run the proof of safe example adds:
+From the workspace root, copy both templates into a new empty output folder:
 
 ```bash
-node apps/start-scaffold/maintain/\
-  proof-no-overwrite.mjs
+node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
-It uses real shadcn and a local registry at 127.0.0.1.
-Each item is added to a fresh app without overwrite.
-It checks config and command hashes before user wiring.
-All servers stop by their own PID.
-Nothing is published.
-
-Review newer mail source without writing any file:
-
-```bash
-npx shadcn@4.21.0 add \
-  http://127.0.0.1:4870/r/mail-example.json \
-  --diff tinker/components/mail/mail.server.ts
-```
-
-Publishing waits for the user's go.
-No account or domain is needed for an app install.
-[The release steps](../../docs/roadmap/start-base/RELEASE.md)
-name the tag, assets, and raw GitHub registry paths.
-No package or registry is published by the local scripts.
+The export copies source. It never changes template branches or another checkout.
+The golden runtime is `tinker/`; its mutation floor is 85. The lander runs mutation checks.
 
 ## Promises tested through app scopes
 
@@ -501,8 +211,7 @@ No package or registry is published by the local scripts.
 - A revoked session receives no queued private rows.
 - A quiet private stream closes at the heartbeat after sign-out.
 - A final result replay completes a wait after disconnect.
-  The base owns the request, HTTP, telemetry, and tab tests.
-  Read `@tinker/start`'s README for those promises.
+  The copied runtime tests cover request, HTTP, telemetry, and tab work.
 
 ## Limits
 
@@ -517,9 +226,9 @@ Storage failure can drop records when its bounded queue fills.
 
 ## App HTTP rules
 
-Use `httpRequest` from `@tinker/start/server`.
+Use `httpRequest` from `~/components/http/index.server`.
 Map its reply to a feature value or managed error.
-Tests bind `httpBackend` from `@tinker/start/testing`.
+Tests bind `httpBackend` from `~/components/http`.
 App code may not use that tag or the raw `http` resource.
 
 The plain check refuses built-in fetch, raw HTTP clients,

@@ -28,12 +28,12 @@ export const say = {
     `.tinker/routeTree.gen.ts:${line} imports ${path}, which does not exist; ${next}`,
   misses: (file, next) => `.tinker/routeTree.gen.ts misses ${file}; ${next}`,
   prepareNext: "run tinker prepare",
-  check7Next: "fix check 7 first, then run tinker prepare",
+  check7Next: "fix check 5 first, then run tinker prepare",
   generatorNext: "the route generator stopped; see its error above",
   ignore: (entry) => `.gitignore does not list ${entry}`,
   generator: "tinker prepare: the route generator left the tree stale; fix the lines below:",
   notRun:
-    "tinker prepare: check 7 fails, so the route generator did not run (it would stop, or write src/); fix the lines below:",
+    "tinker prepare: check 5 fails, so the route generator did not run (it would stop, or write src/); fix the lines below:",
   passed: ".tinker/ matches this base and src/routes; .gitignore lists .tinker/ and .tanstack/",
   fixed: (added) =>
     `ran tinker prepare${added.length > 0 ? `; added ${added.join(" ")} to .gitignore` : ""}`,
@@ -66,7 +66,7 @@ function treeImports(tree) {
 /**
  * What the route tree lacks: no tree at all, imports of files that are gone, and route files
  * that export `Route` (as TanStack reads them) but are not in it.
- * @param {string} root - From check 3 or tinker prepare; why: the app to compare.
+ * @param {string} root - From check 1 or tinker prepare; why: the app to compare.
  */
 function treeGaps(root) {
   const tree = join(root, ".tinker/routeTree.gen.ts");
@@ -84,8 +84,8 @@ function treeGaps(root) {
 }
 
 /**
- * Check 3's route tree lines. A route that clashes with a base route is check 7's to name:
- * the generator stops on it. While check 7 fails, the advice is to fix that first.
+ * Check 1's route tree lines. A route that clashes with a base route is check 5's to name:
+ * the generator stops on it. While check 5 fails, the advice is to fix that first.
  * @param {string} root - From folderProblems; why: the app to compare.
  */
 function treeProblems(root) {
@@ -97,7 +97,7 @@ function treeProblems(root) {
  * The route tree's gaps as lines, each ending in what to do next.
  * @param {ReturnType<typeof treeGaps>} gaps - From treeGaps; why: what the tree lacks.
  * @param {string} next - From the caller; why: the step that heals the tree from here.
- * @param {(file: string) => boolean} [named] - From check 3; why: the missed files it names.
+ * @param {(file: string) => boolean} [named] - From check 1; why: the missed files it names.
  */
 function treeLines(gaps, next, named = () => true) {
   if (gaps.noTree) return [say.noTree(next)];
@@ -108,10 +108,10 @@ function treeLines(gaps, next, named = () => true) {
 }
 
 /**
- * Why `tinker prepare` must not run TanStack's generator now: while check 7 fails, the generator
+ * Why `tinker prepare` must not run TanStack's generator now: while check 5 fails, the generator
  * would stop on a clash, or rewrite a wrong createFileRoute path or an empty route file in src/.
  * Empty when it may run.
- * @param {string} root - From tinker prepare and check 3's --fix; why: the app to prepare.
+ * @param {string} root - From tinker prepare and check 1's --fix; why: the app to prepare.
  */
 export function generatorBlocked(root) {
   const checked = routes(root);
@@ -119,7 +119,7 @@ export function generatorBlocked(root) {
 }
 
 /**
- * After `tinker prepare` ran the generator: what still keeps the route tree stale, with check 7's
+ * After `tinker prepare` ran the generator: what still keeps the route tree stale, with check 5's
  * lines for why. The generator logs a route clash and stops without failing, so prepare checks.
  * @param {string} root - From tinker prepare; why: the app whose tree was just written.
  */
@@ -155,7 +155,7 @@ function addIgnored(root, entries) {
 
 /**
  * The route tree half of --fix: `tinker prepare`, which runs TanStack's generator only while
- * check 7 passes (see generatorBlocked), so --fix never writes src/. A failed run is not
+ * check 5 passes (see generatorBlocked), so --fix never writes src/. A failed run is not
  * thrown: the check that runs next reports.
  * @param {string} root - From the generated fix; why: the app to prepare.
  */
@@ -185,16 +185,16 @@ function folderProblems(root) {
 }
 
 /**
- * Check 3: `.tinker/` matches this base, the route tree has every route file and no
+ * Check 1: `.tinker/` matches this base, the route tree has every route file and no
  * dead import, and .gitignore lists the generated folders. `--fix` rewrites `.tinker/` and adds
  * the ignore lines; a stale route tree also needs `tinker prepare`, which loads the app's Vite
- * config, and runs only while check 7 passes (see fixTree).
+ * config, and runs only while check 5 passes (see fixTree).
  */
 export function generated(root) {
   const other = otherBase(root);
   if (other) return fail([other]);
   if (serverProblems(root).length > 0) {
-    return skip("name and add the server entry first; see check 5");
+    return skip("name and add the server entry first; see check 3");
   }
 
   const missing = unignored(root);

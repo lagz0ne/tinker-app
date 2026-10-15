@@ -6,18 +6,6 @@
     "replace": "...[]"
   },
   {
-    "name": "example missing parts are missed",
-    "file": "lib/checks/examples.mjs",
-    "find": "!on.includes(part)",
-    "replace": "false"
-  },
-  {
-    "name": "example requirements are not checked by doctor",
-    "file": "lib/checks/named.mjs",
-    "find": "...(installed.status === \"fail\" ? installed.lines : [])",
-    "replace": "...[]"
-  },
-  {
     "name": "seam module declarations are missed",
     "file": "lib/source.mjs",
     "find": "node.id.value",
@@ -34,18 +22,6 @@
     "file": "lib/checks/imports.mjs",
     "find": " || isAbsolute(name)",
     "replace": ""
-  },
-  {
-    "name": "check version always passes",
-    "file": "lib/checks/version.mjs",
-    "find": "export function version(root) {",
-    "replace": "export function version(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
-  },
-  {
-    "name": "check bytes always passes",
-    "file": "lib/checks/bytes.mjs",
-    "find": "export function bytes(root) {",
-    "replace": "export function bytes(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
   },
   {
     "name": "check generated always passes",
@@ -94,12 +70,6 @@
     "file": "lib/checks/boundary.mjs",
     "find": "export function boundary(root) {",
     "replace": "export function boundary(root) {\n  return { status: \"ok\", lines: [\"broken\"] };"
-  },
-  {
-    "name": "bytes --fix restores nothing",
-    "file": "lib/checks/bytes.mjs",
-    "find": "else writeFileSync(",
-    "replace": "else if (false) writeFileSync("
   },
   {
     "name": "generated --fix adds no ignore line",
@@ -264,12 +234,6 @@
     "replace": "false"
   },
   {
-    "name": "a stale pin is not named",
-    "file": "lib/checks/version.mjs",
-    "find": ".filter(([, spec]) => exact.test(spec))",
-    "replace": ".filter(() => false)"
-  },
-  {
     "name": "tinker prepare wipes the boundary record",
     "file": "lib/prepare.mjs",
     "find": "  return Object.keys(files);\n}",
@@ -412,12 +376,6 @@
     "file": "lib/env.mjs",
     "find": "process.env[key] = value;",
     "replace": "process.env[key] ??= value;"
-  },
-  {
-    "name": "upgrade breaks a tarball peer",
-    "file": "lib/upgrade.mjs",
-    "find": "if (installed(name) === version) continue;",
-    "replace": ""
   },
   {
     "name": "check 9 checks no part key",

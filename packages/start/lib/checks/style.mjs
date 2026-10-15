@@ -34,7 +34,7 @@ export const say = {
 /**
  * The paths shadcn reads, as tsconfig-paths merges them: the app's own, else the last extended
  * file that sets them (an extends array, as tsc reads it; a package name is skipped). Null when
- * a tsconfig does not parse: check 4 names that line, so the alias lines here would only guess.
+ * a tsconfig does not parse: check 2 names that line, so the alias lines here would only guess.
  * @param {string} root - From componentsProblems; why: the app's tsconfig.json.
  */
 function mergedPaths(root) {
@@ -203,7 +203,7 @@ function linksStyle(root) {
 }
 
 /**
- * Check 8: the page gets its styles. A user shell links src/style.css, no stylesheet sits
+ * Check 6: the page gets its styles. A user shell links src/style.css, no stylesheet sits
  * unlinked, Tailwind's packages are there when the stylesheet imports it, and shadcn's
  * aliases land inside src/. No fix: these are app files.
  */

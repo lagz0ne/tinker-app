@@ -24,7 +24,8 @@
     "doctor": "tinker doctor",
     "test:compose": "node maintain/check-compose.mjs",
     "check": "node maintain/check-app.mjs",
-    "mutate": "stryker run"
+    "mutate": "stryker run",
+    "test:template": "node maintain/check-template.mjs"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",

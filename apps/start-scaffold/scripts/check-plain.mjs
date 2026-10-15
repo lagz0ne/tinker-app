@@ -1354,17 +1354,17 @@ function isEntryHelper(node) {
       "observeServerPanics",
     ],
     "tinker/base/panics.tsx": [
-      // c55998e entry/dev-error devErrorPage: read a failed response and build its dev page.
+      // New: copied c55998e entry/dev-error devErrorPage: read a failed response and build its dev page.
       "devErrorPage",
     ],
     "tinker/base/router-entry.tsx": [
       // New: bind optional parts to Start's request-time router loader.
       "createRouterEntry",
-      // c55998e entry/router getRouter: load the route tree and own the tab scopes.
+      // New: copied c55998e entry/router getRouter: load the route tree and own the tab scopes.
       "getRouter",
-      // c55998e router readTelemetry.observe: read the borrowed or owned observer.
+      // New: copied c55998e router readTelemetry.observe: read the borrowed or owned observer.
       "observe",
-      // c55998e router readTelemetry.close: stop the browser's telemetry root.
+      // New: copied c55998e router readTelemetry.close: stop the browser's telemetry root.
       "close",
       // New: await both tab roots and report their first close failure.
       "finishClose",
@@ -1372,15 +1372,15 @@ function isEntryHelper(node) {
     "tinker/base/server-entry.ts": [
       // New: bind Start's renderer to the command's request scope.
       "createServerHandler",
-      // c55998e entry/server fetch: dispatch a request through Start or app fetch.
+      // New: copied c55998e entry/server fetch: dispatch a request through Start or app fetch.
       "fetch",
-      // c55998e entry/server next: render the request and map its dev error response.
+      // New: copied c55998e entry/server next: render the request and map its dev error response.
       "next",
     ],
     "tinker/base/start-entry.ts": [
       // New: put CSRF and requests before the app's Start middleware.
       "createStartEntry",
-      // c55998e entry/start readOptions: await and cache the app's options once.
+      // New: copied c55998e entry/start readOptions: await and cache the app's options once.
       "readOptions",
     ],
   };

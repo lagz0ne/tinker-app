@@ -20,7 +20,7 @@ Choose one of these four forms before adding app work.
   A unit body, and every helper it calls, gets an outside library
   only from a lazy module dep.
   Declare one resource per import path in `tinker/components/demo/backend/modules.ts`.
-  Take Drizzle helpers from `drizzleOrm` in `@tinker/start/server`.
+  Take Drizzle helpers from `drizzleOrm` in `~/components/database/index.server`.
   Import tables, schemas, and own code at the top.
   Release what it owns through `ctx.defer`.
 - **Operation:** an action, including reads, writes, sends, and retries.
@@ -31,7 +31,7 @@ An action must run through an operation to get observation and cancellation.
 Outgoing HTTP uses httpRequest.controller; never call fetch from app code.
 The http resource owns requests and wraps built-in fetch through httpBackend.
 App code cannot reference http or httpBackend; use only httpRequest.
-Tests bind the tag through `@tinker/start/testing`.
+Tests bind the tag through `~/components/http`.
 The plain check bans app imports of the named HTTP clients and raw sockets.
 Telemetry uses it directly to avoid tracing its own sends.
 A resource may retain native handles and private work state.
@@ -71,7 +71,7 @@ React props cannot carry Core handles or signals; components cannot await.
 The plain-function cap is 17; raising it needs a decision.
 
 The copied base entries live in `tinker/base/`.
-The remaining runtime parts stay in `@tinker/start` during the move.
+The package `@tinker/start` holds only build tools, doctor, and the host.
 Keep feature units in app files.
 
 ## The app server entry
@@ -111,21 +111,20 @@ Commands sit directly under cmds; nested command files fail the checks.
 Src and components never import tinker/base or cmds.
 The requests component owns backendStop and the request middleware.
 Copied base code owns only entry, close, panic, and observation glue.
-Commands import only ~/, @/, @tinker/core, and their framework entry.
-@tinker/start is allowed until Start is decomposed into base registry components (next card).
-Fill the serverParts tag with the component exports; never re-export them from the main.
+Commands import only ~/base, ~/components, @/, and @tinker/core.
+Bind one tag per app slot. Never re-export app wiring from a command.
 The app calls createScopeClose to close the app, then telemetry.
 That helper starts nothing and shares one close promise.
 A start or close error is rethrown after both roots end.
 
-The default export has three fields:
-`requestContext`, `renderObserve`, and `close`.
-Start borrows the context and observer.
+The server handle has two fields:
+`requestContext` and `close`.
+Start borrows the context. The command binds the render observer tag.
 An optional `fetch(request, next)` can wrap requests.
 The entry closes on HMR replacement and process shutdown.
 
 The scaffold's client wiring lives in `cmds/router.ts`.
-It exports router options, extensions, and the sync readers.
+It binds router options, extensions, and each sync reader tag.
 No app code may import a command file.
 Commands may import app code and component public entries.
 

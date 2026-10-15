@@ -4,5 +4,3 @@ export const counter = pgTable("public_counter", {
   id: integer().primaryKey(),
   value: integer().notNull().default(0),
 });
-
-export { event, execution, stream } from "~/components/sync/index.server";

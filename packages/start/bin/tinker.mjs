@@ -13,7 +13,6 @@ import { doctor } from "../lib/doctor.mjs";
 import { loadEnv } from "../lib/env.mjs";
 import { prepare, prepareExitCode } from "../lib/prepare.mjs";
 import { createAssets } from "../lib/serve.mjs";
-import { upgrade } from "../lib/upgrade.mjs";
 
 /**
  * Write `.tinker/routeTree.gen.ts` with no dev server and no build: resolving the app's own
@@ -62,7 +61,6 @@ async function serve(root) {
 
 const [command, ...rest] = process.argv.slice(2);
 const root = process.cwd();
-const flag = (name) => rest[rest.indexOf(name) + 1];
 
 const commands = {
   prepare: async () => {
@@ -90,16 +88,11 @@ const commands = {
     console.log(lines.join("\n"));
     return code;
   },
-  upgrade: () =>
-    upgrade(root, rest[0], {
-      from: rest.includes("--from") ? flag("--from") : undefined,
-      force: rest.includes("--force"),
-    }),
   serve: () => serve(root),
 };
 
 if (!existsSync(join(root, "package.json")) || !(command in commands)) {
-  console.log("usage: tinker prepare | doctor [--fix] | upgrade <version> [--from <dir>] | serve");
+  console.log("usage: tinker prepare | doctor [--fix] | serve");
   process.exit(2);
 }
 

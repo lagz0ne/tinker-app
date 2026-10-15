@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join, posix, resolve } from "node:path";
 
 import { releaseUrls } from "../../../packages/start/lib/release.mjs";
@@ -15,6 +15,7 @@ function checkTargets(registry) {
     "~/vite.config.ts",
     "~/vite.config.mts",
     "~/tsconfig.json",
+    "~/cmds/start.ts",
     "~/cmds/router.ts",
     "~/cmds/server.ts",
   ]);
@@ -34,6 +35,51 @@ function checkTargets(registry) {
       owners.set(file.target, item.name);
     }
   }
+}
+
+/** All copied runtime files come from the golden app, with one item per owner. */
+async function checkCopiedItems(registry) {
+  const folders = await readdir(join(app, "tinker/components"), { withFileTypes: true });
+  for (const folder of folders.filter((entry) => entry.isDirectory())) {
+    const prefix = `tinker/components/${folder.name}`;
+    const manifest = JSON.parse(await readFile(join(app, prefix, "component.json"), "utf8"));
+    await checkCopiedItem(registry, folder.name, prefix, manifest.requires);
+  }
+
+  await checkCopiedItem(registry, "base", "tinker/base", ["errors", "requests"]);
+}
+
+/** Dependencies are direct requires, and source paths cover that owner exactly. */
+async function checkCopiedItem(registry, name, prefix, requires) {
+  const item = registry.items.find((entry) => entry.name === name);
+  assert.ok(item, `missing copied item ${name}`);
+  assert.deepEqual(
+    [...(item.registryDependencies ?? [])].sort((a, b) => a.localeCompare(b)),
+    requires.map((entry) => `@tinker-start/${entry}`).sort((a, b) => a.localeCompare(b)),
+    `${name}: registryDependencies must equal requires`,
+  );
+
+  const files = item.files.filter((file) => file.target.startsWith(`~/${prefix}/`));
+  assert.deepEqual(
+    files.map((file) => file.path).sort(),
+    (await copiedFiles(prefix)).sort(),
+    `${name}: files must cover its golden source`,
+  );
+  for (const file of files) {
+    assert.equal(file.target, `~/${file.path}`, `${name}: copied source target`);
+    assert.equal(file.type, "registry:file", `${name}: explicit file target`);
+  }
+}
+
+async function copiedFiles(prefix) {
+  const entries = await readdir(join(app, prefix), { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const path = `${prefix}/${entry.name}`;
+    if (entry.isDirectory()) files.push(...(await copiedFiles(path)));
+    else files.push(path);
+  }
+  return files;
 }
 
 /** Release specs replace workspace and catalog names; local packs never enter a normal build. */
@@ -91,24 +137,11 @@ function itemDependencies(item, full) {
       .map((field) => [
         field,
         item[field].map((dependency) => {
-          const name = dependency.slice(0, dependency.lastIndexOf("@"));
+          const name = dependency.match(/^(@[^/]+\/[^@]+|[^@]+)/)[0];
           return `${name}@${full.dependencies[name] ?? full.devDependencies[name]}`;
         }),
       ]),
   );
-}
-
-/** A copied receipt lets doctor read the item's requirements without a registry connection. */
-function receipt(item) {
-  if (!item.meta.parts) return [];
-  return [
-    {
-      path: `src/examples/${item.name}.tinker.json`,
-      target: `~/src/examples/${item.name}.tinker.json`,
-      type: "registry:file",
-      content: JSON.stringify({ name: item.name, parts: item.meta.parts }, null, 2) + "\n",
-    },
-  ];
 }
 
 /** Package files come from their template; tests are copied as they are. */
@@ -125,6 +158,7 @@ export async function registryItems(options = {}) {
   const registry =
     options.registry ?? JSON.parse(await readFile(join(app, "registry.json"), "utf8"));
   checkTargets(registry);
+  await checkCopiedItems(registry);
 
   const full = await releasePackage(join(app, "package.json"), packs, version);
   const minimal = await releasePackage(join(root, "apps/start-min/package.json"), packs, version);
@@ -157,7 +191,6 @@ export async function registryItems(options = {}) {
       })),
     );
 
-    emitted.files.push(...receipt(item));
     items.push(emitted);
   }
 

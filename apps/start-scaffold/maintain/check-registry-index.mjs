@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import { app, registryItems } from "./registry-source.mjs";
@@ -9,7 +9,12 @@ export async function checkRegistryIndex() {
   const { registry, items } = await registryItems();
   assert.equal(new Set(items.map((item) => item.name)).size, items.length);
   const names = new Set(items.map((item) => item.name));
-  assert.deepEqual(items.find((item) => item.name === "runtime").files, []);
+  assert.ok(!names.has("runtime"), "runtime package item is retired");
+  assert.deepEqual(
+    (await readdir(join(app, "public/r"))).sort(),
+    ["registry.json", ...items.map((item) => `${item.name}.json`)].sort(),
+    "no stale registry items",
+  );
 
   assert.deepEqual(
     JSON.parse(await readFile(join(app, "public/r/registry.json"), "utf8")),

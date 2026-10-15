@@ -1,5 +1,4 @@
 import { boundary } from "./checks/boundary.mjs";
-import { bytes } from "./checks/bytes.mjs";
 import { env } from "./checks/env.mjs";
 import { generated } from "./checks/generated.mjs";
 import { breaksBuild, glue } from "./checks/glue.mjs";
@@ -7,12 +6,9 @@ import { imports } from "./checks/imports.mjs";
 import { named } from "./checks/named.mjs";
 import { routes } from "./checks/routes.mjs";
 import { style } from "./checks/style.mjs";
-import { version } from "./checks/version.mjs";
 
 /** Doctor's checks, in the order it prints them (ADR 0106). */
 export const checks = [
-  { label: "base version", check: version },
-  { label: "base bytes", check: bytes },
   { label: "generated folder", check: generated },
   { label: "glue", check: glue },
   { label: "named files", check: named },
@@ -27,7 +23,7 @@ export const checks = [
 const stopping = new Set(["named files", "imports", "routes", "style"]);
 
 /** Checks a build reads too; their lines only warn, save a glue line that breaks the build. */
-const warning = new Set(["base version", "glue"]);
+const warning = new Set(["glue"]);
 
 /**
  * What tinker() runs at build start: doctor's own lines, so the build and doctor agree.

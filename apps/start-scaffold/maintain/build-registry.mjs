@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import { app, registryItems } from "./registry-source.mjs";
@@ -13,6 +13,11 @@ const { registry, items, packages } = await registryItems({
 });
 
 await mkdir(out, { recursive: true });
+const names = new Set(["registry.json", ...items.map((item) => `${item.name}.json`)]);
+
+for (const file of await readdir(out)) {
+  if (file.endsWith(".json") && !names.has(file)) await rm(join(out, file));
+}
 
 for (const item of items) {
   await writeFile(join(out, `${item.name}.json`), JSON.stringify(item, null, 2) + "\n");

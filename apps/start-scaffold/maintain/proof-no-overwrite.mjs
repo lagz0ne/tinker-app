@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -63,8 +63,11 @@ async function hashes(consumer) {
   for (const file of [
     "vite.config.ts",
     "tsconfig.json",
+    "cmds/start.ts",
     "cmds/router.ts",
     "cmds/server.ts",
+    "src/routes/__root.tsx",
+    "src/style.css",
     "src/routes/index.tsx",
     "src/backend/greet.ts",
     ".env.example",
@@ -79,20 +82,24 @@ async function hashes(consumer) {
 }
 
 async function wire(consumer) {
-  const config = join(consumer, "vite.config.ts");
-  await writeFile(
-    config,
-    (await readFile(config, "utf8")).replace(
-      'serverEntry: "cmds/server.ts"',
-      'serverEntry: "cmds/server.ts", auth: true, sync: true',
-    ),
-  );
   for (const name of ["server.ts", "router.ts"]) {
-    await cp(join(app, "cmds", name), join(consumer, "cmds", name));
+    const path = join(consumer, "cmds", name);
+    const before = await readFile(path, "utf8");
+    const keep =
+      before.match(/export const user(?:client|server) = "keep-(?:client|server)";/g) ?? [];
+    await writeFile(
+      path,
+      (await readFile(join(app, "cmds", name), "utf8")) + "\n" + keep.join("\n") + "\n",
+    );
+    for (const line of keep) assert.ok((await readFile(path, "utf8")).includes(line));
   }
+
   await cp(join(consumer, "examples/demo.env.example"), join(consumer, ".env"));
+  await cp(join(consumer, "examples/demo-root.tsx"), join(consumer, "src/routes/__root.tsx"));
+  await cp(join(consumer, "examples/demo-style.css"), join(consumer, "src/style.css"));
+  assert.ok((await readFile(join(consumer, "vite.config.ts"), "utf8")).includes("__USER_KEEP__"));
   console.log(
-    "Applied doctor's switches and export lines by hand; kept both user seam exports and the user's config setting.",
+    "Applied command bindings and demo shell/style by hand; user exports and config setting remain.",
   );
 }
 
@@ -133,9 +140,6 @@ async function serve(consumer, full, serviceEnv) {
 }
 
 try {
-  for (const name of ["core", "react"]) {
-    run("vp", ["pm", "pack", "--pack-destination", packs], join(root, "packages", name));
-  }
   run(process.execPath, [join(root, "packages/start/scripts/pack.mjs"), packs]);
 
   const staticServer = spawn(
@@ -265,10 +269,15 @@ try {
     SMTP_PORT: String(smtpPort),
   };
   const index = JSON.parse(await readFile(join(registry, "registry.json"), "utf8"));
-  for (const item of index.items.filter((item) => item.name !== "app")) {
+  for (const item of index.items.filter((item) => item.meta.demo || item.name === "mail-example")) {
     const consumer = join(scratch, item.name);
     await mkdir(consumer);
-    run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/app.json`, "--yes"], consumer);
+    assert.deepEqual(await readdir(consumer), [], "app installs start in an empty folder");
+    run(
+      "npx",
+      ["--yes", "shadcn@4.21.0", "add", `${url}/app.json`, "--yes", "--overwrite"],
+      consumer,
+    );
     run("npm", ["install"], consumer);
 
     const config = join(consumer, "vite.config.ts");
@@ -307,16 +316,30 @@ try {
     );
 
     const tinker = join(consumer, "node_modules/.bin/tinker");
-    const full = item.meta.parts?.includes("sync") ?? false;
-    const report = run(tinker, ["doctor"], consumer, {}, full ? 1 : 0);
+    const full = item.meta.demo === true;
     if (full) {
-      const plain = report.replace(/\s+/g, " ");
-      for (const part of item.meta.parts) assert.ok(plain.includes(`tinker({ ${part}: true })`));
-      await wire(consumer, item);
+      const empty = {
+        PUBLIC_ORIGIN: "",
+        AUTH_SECRET: "",
+        DATABASE_URL: "",
+        SMTP_HOST: "",
+        SMTP_PORT: "",
+        SMTP_FROM: "",
+      };
+      const report = run(tinker, ["doctor"], consumer, empty, 1);
+      for (const key of Object.keys(empty)) {
+        assert.ok(report.includes(key), `missing key must be named: ${key}`);
+      }
+      await wire(consumer);
     }
 
     run("vp", ["build"], consumer);
-    run(tinker, ["doctor"], consumer);
+    run(
+      tinker,
+      ["doctor"],
+      consumer,
+      full ? {} : { SMTP_HOST: "127.0.0.1", SMTP_PORT: "1025", SMTP_FROM: "proof@example.com" },
+    );
     await serve(consumer, full, serviceEnv);
     console.log(`PASS: ${item.name}: build, doctor, serve EXIT 0.`);
   }

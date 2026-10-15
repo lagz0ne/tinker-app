@@ -12,6 +12,7 @@ for (const task of [
   "test:middleware",
   "test:serve",
   "test:seam:fixture",
+  "test:template",
   "registry:build",
   "test:registry",
   "test:compose",

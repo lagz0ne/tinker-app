@@ -54,7 +54,7 @@ Keep drafts apart from saved records.
 
 Every sign-in action must hold reconnects during auth.
 Depend on `snapshotLoader` from
-`@tinker/start/client` as `snapshots`.
+`~/components/sync` as `snapshots`.
 Follow `signIn` in `src/frontend/auth-actions.ts`:
 
 ```ts

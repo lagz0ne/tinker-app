@@ -117,6 +117,6 @@ test("copied sync declares its direct dependencies and owns no env table", () =>
       "utf8",
     ),
   );
-  expect(basePackage.tinker).not.toHaveProperty("parts");
+  expect(basePackage).not.toHaveProperty("tinker");
   expect(manifest).toEqual({ requires: ["errors", "requests", "auth", "database"] });
 });

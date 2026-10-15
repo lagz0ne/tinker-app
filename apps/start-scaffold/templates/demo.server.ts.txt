@@ -1,5 +1,0 @@
-import { databaseSetup } from "~/components/database/index.server";
-export const extensions = [databaseSetup];
-export { auth } from "~/components/auth/index.server";
-export { database, settings } from "~/components/database/index.server";
-export { bootstrap, readAccount } from "~/components/demo/index.server";

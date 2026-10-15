@@ -153,3 +153,10 @@ test("copied sync mounts physically from the app and has no plugin switch", () =
   expect(readFileSync(join(root, "src/routes/api.sync.ts"), "utf8")).toBe(file);
   expect(() => passThrough({ sync: true })).toThrow("tinker(): unknown option sync");
 });
+
+test("a missing server option names the exact command config before Start resolves entries", () => {
+  const root = fixture({ "vite.config.ts": "export default {};" });
+  expect(() => startOptions(root)).toThrow(
+    'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts" })',
+  );
+});

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { setImmediate } from "node:timers/promises";
 
 /** Real Postgres, better-auth, Mailpit, and two Lightpanda tabs. This is a proof, never a test. */
@@ -14,6 +14,8 @@ const app = join(repo, "apps/start-scaffold");
 const logFile =
   process.env.SCAFFOLD_PROOF_LOG ??
   join(repo, "docs/roadmap/start-base/proof/16-scaffold-on-base.txt");
+
+await mkdir(dirname(logFile), { recursive: true });
 
 const scratch = await mkdtemp(join(tmpdir(), "scaffold-on-base-"));
 const rows = [];

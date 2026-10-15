@@ -16,6 +16,7 @@ for (const target of new Set([
   "~/vite.config.ts",
   "~/vite.config.mts",
   "~/tsconfig.json",
+  "~/cmds/start.ts",
   "~/cmds/router.ts",
   "~/cmds/server.ts",
 ])) {
@@ -42,6 +43,31 @@ duplicate.items
   });
 
 await assert.rejects(registryItems({ registry: duplicate }), /already owned/);
+
+for (const name of [
+  "errors",
+  "requests",
+  "health",
+  "http",
+  "database",
+  "auth",
+  "telemetry",
+  "sync",
+  "mail",
+  "demo",
+  "base",
+]) {
+  const wrong = structuredClone(registry);
+  wrong.items.find((item) => item.name === name).registryDependencies.push("@tinker-start/extra");
+  await assert.rejects(
+    registryItems({ registry: wrong }),
+    /registryDependencies must equal requires/,
+  );
+
+  const missing = structuredClone(registry);
+  missing.items.find((item) => item.name === name).files.shift();
+  await assert.rejects(registryItems({ registry: missing }), /files must cover its golden source/);
+}
 
 for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]) {
   const consumer = await mkdtemp(join(tmpdir(), "start-registry-consumer-"));

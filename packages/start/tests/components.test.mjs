@@ -203,3 +203,21 @@ test.each([
   });
   expect(readComponentModules(root).problems).toEqual([expect.stringContaining(problem)]);
 });
+
+test.each(["~/components/../../outside", "~/base/../components/../../outside", "@/../cmds/server"])(
+  "command aliases cannot escape their allowed roots: %s",
+  (name) => {
+    const checked = imports(goodApp({ "cmds/probe.ts": `import "${name}";` }));
+    expect(checked.lines).toEqual([`cmds/probe.ts:1 ${commandImport(name)}`]);
+  },
+);
+
+test.each(["auth", "database", "http", "health", "mail", "demo"])(
+  "base cannot import optional %s",
+  (name) => {
+    const checked = imports(goodApp({ "tinker/base/probe.ts": `import "~/components/${name}";` }));
+    expect(checked.lines).toContain(
+      `tinker/base/probe.ts:1 "~/components/${name}" imports an optional component; the command must pass it into base`,
+    );
+  },
+);

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-component.json",
+  "name": "database",
+  "type": "registry:lib",
+  "title": "database",
+  "description": "Copied database component. You own its files.",
+  "dependencies": [
+    "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+    "drizzle-orm@1.0.0-rc.4",
+    "pg@8.20.0",
+    "zod@^4.0.0"
+  ],
+  "registryDependencies": [
+    "https://raw.githubusercontent.com/lagz0ne/tinkered/start-v0.8.0/apps/start-scaffold/public/r/errors.json"
+  ],
+  "files": [
+    {
+      "path": "tinker/components/database/component.json",
+      "type": "registry:file",
+      "target": "~/tinker/components/database/component.json",
+      "content": "{\n  \"requires\": [\"errors\"],\n  \"env\": {\n    \"DATABASE_URL\": {\n      \"rule\": \"url\"\n    }\n  }\n}\n"
+    },
+    {
+      "path": "tinker/components/database/database.server.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/database/database.server.ts",
+      "content": "import { extension, operation, resource, tag } from \"@tinker/core\";\n\nimport { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from \"./modules\";\nimport type { Database } from \"./types\";\n\n/** Where Postgres is. */\nexport const databaseUrl = tag<URL>({ label: \"database.url\" });\n\nconst migrationsFolder = \"drizzle\";\n\n/** Feature code uses native PostgreSQL queries, without the driver's client field. */\nexport const database = resource({\n  label: \"database\",\n  depends: { url: databaseUrl, postgres, orm: drizzlePostgres },\n  factory: async ({ url, postgres, orm }, { defer }): Promise<Database.Handle> => {\n    const { default: pg } = postgres;\n    const { drizzle } = orm;\n    const client = new pg.Pool({ connectionString: url.href });\n    const listeners = new Set<AbortController>();\n\n    defer(async () => {\n      for (const stop of listeners) stop.abort();\n      await client.end();\n    });\n\n    return Object.assign(drizzle({ client }), {\n      async listen(heard: (payload: string) => void, disconnected: () => void) {\n        const listener = await client.connect();\n        const notified = (message: { payload?: string }) => heard(message.payload ?? \"\");\n        listener.on(\"notification\", notified);\n        listener.on(\"error\", disconnected);\n        listener.on(\"end\", disconnected);\n\n        const stop = new AbortController();\n        listeners.add(stop);\n\n        stop.signal.addEventListener(\n          \"abort\",\n          () => {\n            listeners.delete(stop);\n            listener.removeListener(\"notification\", notified);\n            listener.removeListener(\"error\", disconnected);\n            listener.removeListener(\"end\", disconnected);\n            listener.release(true);\n          },\n          { once: true },\n        );\n\n        try {\n          await listener.query(\"LISTEN start_sync\");\n          return stop.abort.bind(stop);\n        } catch (error) {\n          stop.abort();\n          throw error;\n        }\n      },\n    });\n  },\n});\n\nexport const migrate = operation({\n  label: \"migrate\",\n  depends: {\n    database,\n    pgCore: drizzlePgCore,\n    migrator: drizzleMigrator,\n  },\n  run: async ({ database, pgCore, migrator }) => {\n    const { migrate } = pgCore;\n    const { readMigrationFiles } = migrator;\n    await migrate(readMigrationFiles({ migrationsFolder }), database, { migrationsFolder });\n  },\n});\n\nexport const databaseSetup = extension({\n  label: \"database.setup\",\n  hooks: {\n    async start({ next, scope }) {\n      await next();\n      await scope.run(migrate);\n    },\n  },\n});\n"
+    },
+    {
+      "path": "tinker/components/database/index.server.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/database/index.server.ts",
+      "content": "export type { Database } from \"./types\";\nexport { database, databaseSetup, databaseUrl, migrate } from \"./database.server\";\nexport { drizzleOrm } from \"./modules\";\nexport { settings } from \"./settings.server\";\n"
+    },
+    {
+      "path": "tinker/components/database/index.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/database/index.ts",
+      "content": "export type { Database } from \"./types\";\nexport { databaseUrl } from \"./database.server\";\n"
+    },
+    {
+      "path": "tinker/components/database/modules.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/database/modules.ts",
+      "content": "import { resource } from \"@tinker/core\";\n\nexport const postgres = resource({\n  label: \"module:pg\",\n  target: \"scope\",\n  factory: () => import(\"pg\"),\n});\n\nexport const drizzlePostgres = resource({\n  label: \"module:drizzle-orm/node-postgres\",\n  target: \"scope\",\n  factory: () => import(\"drizzle-orm/node-postgres\"),\n});\n\nexport const drizzlePgCore = resource({\n  label: \"module:drizzle-orm/pg-core\",\n  target: \"scope\",\n  factory: () => import(\"drizzle-orm/pg-core\"),\n});\n\nexport const drizzleMigrator = resource({\n  label: \"module:drizzle-orm/migrator\",\n  target: \"scope\",\n  factory: () => import(\"drizzle-orm/migrator\"),\n});\n\nexport const drizzleOrm = resource({\n  label: \"module:drizzle-orm\",\n  target: \"scope\",\n  factory: () => import(\"drizzle-orm\"),\n});\n"
+    },
+    {
+      "path": "tinker/components/database/settings.server.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/database/settings.server.ts",
+      "content": "import { z } from \"zod\";\n\nimport { raise } from \"~/components/errors\";\nimport type { Env } from \"~/components/errors\";\n\nimport { databaseUrl } from \"./database.server\";\n\nconst appEnv = z.object({\n  DATABASE_URL: z.url(),\n});\n\n/**\n * The main validates database keys once; database units receive typed tags (ADR 0113).\n * @param env - From the app's server entry; why: the keys to check and convert.\n */\nexport function settings(env: Env.Values) {\n  const parsed = appEnv.safeParse(env);\n  if (!parsed.success) {\n    raise(\"BadSettings\", {\n      part: \"database\",\n      keys: parsed.error.issues.map((issue) => issue.path.join(\".\")),\n    });\n  }\n\n  return [databaseUrl(new URL(parsed.data.DATABASE_URL))];\n}\n"
+    },
+    {
+      "path": "tinker/components/database/types.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/database/types.ts",
+      "content": "import type { PgAsyncDatabase, PgQueryResultHKT } from \"drizzle-orm/pg-core\";\n\nexport declare namespace Database {\n  /**\n   * What the server seam's `database` gives the sync part: a drizzle Postgres database, and\n   * `listen`, which calls `heard` with the payload of each `start_sync` notification until the\n   * returned stop. A payload is a table name for a saved change, or `account:<id>` for a notice.\n   */\n  type Handle = PgAsyncDatabase<PgQueryResultHKT> & {\n    listen: (\n      heard: (payload: string) => void,\n      disconnected: () => void,\n    ) => Promise<() => void | Promise<void>>;\n  };\n  type Transaction = Parameters<Parameters<Handle[\"transaction\"]>[0]>[0];\n}\n"
+    }
+  ],
+  "meta": {
+    "ownership": "userland",
+    "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+  },
+  "devDependencies": ["@types/pg@^8.15.6"]
+}

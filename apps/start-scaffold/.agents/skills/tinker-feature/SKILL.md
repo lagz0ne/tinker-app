@@ -30,7 +30,7 @@ vp exec drizzle-kit generate
 
 A private operation depends on `currentUser`.
 Take the owner from that user, never from caller input.
-Use `eventHistory` from `@tinker/start/server`.
+Use `eventHistory` from `~/components/sync/index.server`.
 In one transaction, `lock` orders writes to the stream.
 `find` checks the execution ID before any saved effect.
 `append` stores the events with the saved change.
@@ -38,7 +38,7 @@ See `changeTodo` in `tinker/components/demo/backend/todos.server.ts`.
 A repeated execution ID must not repeat saved effects.
 
 For outgoing HTTP, depend on httpRequest.controller and run it.
-Import it from `@tinker/start/server` and pass request values with rawInput.
+Import it from `~/components/http/index.server` and pass request values with rawInput.
 Map the reply to a feature value or managed error (ADR 0103).
 The filled request example is in tinker-forms.
 Never call built-in fetch from feature code.

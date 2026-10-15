@@ -214,7 +214,7 @@ function fixGlue(root, read, problems) {
 }
 
 /**
- * Check 4: the Vite config calls tinker() once and adds nothing it owns; tsconfig.json extends
+ * Check 2: the Vite config calls tinker() once and adds nothing it owns; tsconfig.json extends
  * `.tinker/`, and neither it nor a local file it extends after `.tinker/` overrides a base
  * option; postinstall runs `tinker prepare`.
  * `--fix` writes the extends key and the postinstall script, and keeps the rest of each file;

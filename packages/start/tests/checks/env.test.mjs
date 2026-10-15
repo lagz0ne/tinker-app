@@ -112,7 +112,7 @@ test("an unset auth key that .env.example lists is named once, by .env.example",
   ]);
 });
 
-test("with auth on and good keys, check 9 passes for both parts", () => {
+test("with auth on and good keys, check 7 passes for both parts", () => {
   const root = fixture({
     "tinker/components/auth/component.json": authManifest,
     ".env": `PUBLIC_ORIGIN=http://localhost:4318\nAUTH_SECRET=${"s".repeat(32)}\n`,

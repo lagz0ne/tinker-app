@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,11 +26,6 @@ export function lineAt(text, offset) {
 
 /** This base's own package.json. */
 export const basePackage = readJson(join(baseDir, "package.json"));
-
-/** @param {string} path - From a file walk; why: pin or compare its bytes. */
-export function sha256(path) {
-  return createHash("sha256").update(readFileSync(path)).digest("hex");
-}
 
 /**
  * Where a package sits in the app's node_modules, walking up like Node; the link, not its target.

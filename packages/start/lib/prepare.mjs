@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { appFiles } from "./named.mjs";
@@ -54,7 +54,7 @@ export function render(root) {
         "../vite.config.mts",
         "./routeTree.gen.ts",
       ],
-      exclude: ["../dist", "../node_modules"],
+      exclude: ["../tests/runtime", "../dist", "../node_modules"],
     }),
     "base.json": json({ base: basePackage.version }),
   };
@@ -66,6 +66,10 @@ export function render(root) {
 export function prepare(root) {
   const dir = join(root, ".tinker");
   mkdirSync(dir, { recursive: true });
+  for (const name of ["parts.ts", "parts.server.ts", "telemetry-env.ts"]) {
+    rmSync(join(dir, name), { force: true });
+  }
+
   const files = render(root);
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
   return Object.keys(files);

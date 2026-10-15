@@ -24,13 +24,20 @@ export function aliases(root) {
  * @param {string} root - From tinker(); why: Start takes paths relative to that app's src.
  */
 export function startOptions(root) {
+  const server = serverFile(root).file;
+  if (!server) {
+    throw new Error(
+      'vite.config.ts: name the server entry with tinker({ serverEntry: "cmds/server.ts" })',
+    );
+  }
+
   const src = join(root, "src");
   const fromSrc = (file) => relative(src, join(root, file));
 
   return {
     srcDirectory: "src",
     start: { entry: fromSrc("cmds/start.ts") },
-    server: { entry: fromSrc(serverFile(root).file) },
+    server: { entry: fromSrc(server) },
     router: {
       entry: fromSrc("cmds/router.ts"),
       generatedRouteTree: "../.tinker/routeTree.gen.ts",

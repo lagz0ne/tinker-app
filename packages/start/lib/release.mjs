@@ -14,12 +14,3 @@ export function releaseUrls(version, origin = "https://github.com") {
     ]),
   );
 }
-
-/**
- * An upgrade replaces all three specs, even if an old spec already installs the version.
- * @param {Record<string, string>} dependencies - From package.json; why: keep the app's other packages.
- * @param {string} version - From argv; why: choose the shared release tag.
- */
-export function releaseDependencies(dependencies, version) {
-  return { ...dependencies, ...releaseUrls(version) };
-}

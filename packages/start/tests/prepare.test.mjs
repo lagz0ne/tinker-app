@@ -35,7 +35,11 @@ test("the build's tsc checks vite.config.ts too, so a tinker() option type is ch
 });
 
 test("prepare writes build isolation and version data, never app wiring", () => {
-  const root = goodApp();
+  const root = goodApp({
+    ".tinker/parts.ts": "old generated runtime",
+    ".tinker/parts.server.ts": "old generated runtime",
+    ".tinker/telemetry-env.ts": "old generated runtime",
+  });
   expect(prepare(root)).toEqual(["tsconfig.json", "base.json"]);
 
   expect(JSON.parse(readFileSync(join(root, ".tinker/base.json"), "utf8"))).toEqual({

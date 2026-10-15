@@ -51,13 +51,10 @@ const entries = new Set(["@tinker/start/vite"]);
 
 /** A command imports only its copied entry helpers, components, app code, and Core. */
 export function commandImport(name) {
-  if (
-    /^~\/(base|components)(?:\/|$)/.test(name) ||
-    name.startsWith("@/") ||
-    name === "@tinker/core"
-  ) {
-    return null;
-  }
+  const local =
+    !name.split("/").includes("..") &&
+    (/^~\/(base|components)(?:\/|$)/.test(name) || name.startsWith("@/"));
+  if (local || name === "@tinker/core") return null;
   return `"${name}" is not a command import; use ~/base, ~/components, @/, or @tinker/core`;
 }
 
@@ -133,7 +130,7 @@ function componentImport(name, file, line, folders, root) {
   return problems;
 }
 
-/** Graph errors belong to named files; check 6 reports import boundaries without loading items. */
+/** Graph errors belong to named files; check 4 reports import boundaries without loading items. */
 function componentImports(root, sources) {
   const { declared: folders } = readComponentModules(root);
   return sources.flatMap(({ file, imports }) =>
@@ -149,7 +146,7 @@ function sourcePath(name, file, root) {
   return name.startsWith(".") ? posix.join(posix.dirname(file), name) : null;
 }
 
-/** Rules for the copied layers warn while the runtime moves out of the package. */
+/** Copied layers keep one direction after the runtime leaves the package. */
 export function directionImport(root, file, name, line) {
   if (isTest(file)) return [];
   const at = `${file}:${line} "${name}"`;
@@ -184,13 +181,13 @@ function baseDirection(at, name, target) {
   if (name.startsWith("#tinker/") && name !== "#tinker/routes") {
     return [`${at} reads app wiring; pass the app value into the base entry`];
   }
-  if (target && /^tinker\/components\/(sync|telemetry)(?:\/|$)/.test(target)) {
+  if (target && /^tinker\/components\/(?!errors(?:\/|$)|requests(?:\/|$))/.test(target)) {
     return [`${at} imports an optional component; the command must pass it into base`];
   }
   return [];
 }
 
-/** Read source only; warnings never load app modules or change existing failures. */
+/** Read source only; direction checks never load app modules. */
 export function importDirections(root) {
   return appSources(root).flatMap((file) =>
     specifiers(parseSource(join(root, file))).flatMap(({ name, line }) =>
@@ -233,7 +230,7 @@ function isolation(root, sources) {
 }
 
 /**
- * Check 6: app code reaches the base only through its entries, and never by a base-only
+ * Check 4: app code reaches the base only through its entries, and never by a base-only
  * `#tinker/*` name or a path into the package. App imports omit TypeScript file endings.
  * No fix: doctor never edits app code.
  */

@@ -4,20 +4,11 @@
   "type": "registry:file",
   "title": "Counter example",
   "description": "Counter example",
-  "files": [
-    {
-      "path": "src/examples/counter-example.tinker.json",
-      "target": "~/src/examples/counter-example.tinker.json",
-      "type": "registry:file",
-      "content": "{\n  \"name\": \"counter-example\",\n  \"parts\": [\n    \"auth\"\n  ]\n}\n"
-    }
-  ],
+  "files": [],
   "meta": {
-    "version": "0.6.0",
     "ownership": "userland",
-    "update": "These files are yours. Review changes with shadcn add --diff before replacing them.",
-    "parts": ["auth"],
-    "requires": "The dependency adds the shared demo bodies. Enable the named parts and join the named seam exports by hand."
+    "demo": true,
+    "requires": "Install the shared demo, then bind the command slots and copy the demo shell/style shape by hand."
   },
   "registryDependencies": [
     "https://raw.githubusercontent.com/lagz0ne/tinkered/start-v0.8.0/apps/start-scaffold/public/r/postgres-auth-mail-example.json"

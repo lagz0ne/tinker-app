@@ -2,7 +2,6 @@ import { expect, test } from "vite-plus/test";
 
 import { imports } from "../lib/checks/imports.mjs";
 import { doctor } from "../lib/doctor.mjs";
-import { basePackage } from "../lib/paths.mjs";
 import { prepare } from "../lib/prepare.mjs";
 import { goodApp, write } from "./fixture.mjs";
 
@@ -20,16 +19,14 @@ function preparedApp(files = {}) {
 test("doctor prints a status line per check, in order, and passes with exit 0", () => {
   const { lines, code } = doctor(preparedApp(), false);
   expect(lines.filter((line) => !line.startsWith(" "))).toEqual([
-    "ok    1 base version",
-    "skip  2 base bytes",
-    "ok    3 generated folder",
-    "ok    4 glue",
-    "ok    5 named files",
-    "ok    6 imports",
-    "ok    7 routes",
-    "ok    8 style",
-    "ok    9 env",
-    "skip  10 boundary",
+    "ok    1 generated folder",
+    "ok    2 glue",
+    "ok    3 named files",
+    "ok    4 imports",
+    "ok    5 routes",
+    "ok    6 style",
+    "ok    7 env",
+    "skip  8 boundary",
     "doctor: all checks pass",
   ]);
   expect(code).toBe(0);
@@ -37,13 +34,9 @@ test("doctor prints a status line per check, in order, and passes with exit 0", 
 
 test("each finding prints under its check, wrapped at 50 characters for a phone", () => {
   const { lines, code } = doctor(preparedApp({ "package.json": "{}" }), false);
-  expect(lines.slice(lines.indexOf("fail  4 glue"), lines.indexOf("ok    5 named files"))).toEqual([
-    "fail  4 glue",
+  expect(lines.slice(lines.indexOf("fail  2 glue"), lines.indexOf("ok    3 named files"))).toEqual([
+    "fail  2 glue",
     '      package.json:1 has no "postinstall": "tinker\n      prepare"; a fresh clone has no .tinker/',
-  ]);
-  expect(lines.slice(0, 2)).toEqual([
-    "ok    1 base version",
-    `      @tinker/start ${basePackage.version}; 4 peers match the tested\n      versions`,
   ]);
   expect(lines.at(-1)).toBe("doctor: 1 check(s) fail");
   expect(code).toBe(1);
@@ -54,8 +47,8 @@ test("doctor --fix prints fixed for each check it repaired, and exits 0", () => 
     preparedApp({ "package.json": "{}", "tsconfig.json": "{}" }),
     true,
   );
-  expect(lines.slice(lines.indexOf("fixed 4 glue"), lines.indexOf("ok    5 named files"))).toEqual([
-    "fixed 4 glue",
+  expect(lines.slice(lines.indexOf("fixed 2 glue"), lines.indexOf("ok    3 named files"))).toEqual([
+    "fixed 2 glue",
     "      wrote the extends line in tsconfig.json and the\n      postinstall script in package.json",
   ]);
   expect(code).toBe(0);
@@ -64,8 +57,8 @@ test("doctor --fix prints fixed for each check it repaired, and exits 0", () => 
 test("doctor counts every failing check in its last line", () => {
   const { lines, code } = doctor(goodApp({ "package.json": "{}" }), false);
   expect(lines.filter((line) => line.startsWith("fail"))).toEqual([
-    "fail  3 generated folder",
-    "fail  4 glue",
+    "fail  1 generated folder",
+    "fail  2 glue",
   ]);
   expect(lines.at(-1)).toBe("doctor: 2 check(s) fail");
   expect(code).toBe(1);
@@ -133,7 +126,7 @@ for (const { file, name, symbol, messages } of [
 
     const checked = doctor(root, false);
 
-    expect(checked.lines).toContain("fail  6 imports");
+    expect(checked.lines).toContain("fail  4 imports");
     for (const message of messages) {
       expect(checked.lines.join(" ").replaceAll(/\s+/g, " ")).toContain(message);
     }
@@ -206,7 +199,7 @@ test("a graph error elsewhere does not make declared imports undeclared", () => 
 
   const checked = doctor(root, false);
 
-  expect(checked.lines).toContain("ok    6 imports");
+  expect(checked.lines).toContain("ok    4 imports");
 });
 
 test("doctor includes the server public entry for a private server import", () => {
@@ -234,7 +227,7 @@ test("item tests can use private relative paths only with a declared dependency"
 
   const missing = doctor(root, false);
 
-  expect(missing.lines).toContain("fail  6 imports");
+  expect(missing.lines).toContain("fail  4 imports");
   expect(missing.lines.join(" ").replaceAll(/\s+/g, " ")).toContain(
     'tinker/components/inbox/x.test.ts:1 "../mail/secret" needs "mail" in tinker/components/inbox/component.json requires',
   );

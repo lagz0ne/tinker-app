@@ -63,7 +63,7 @@ function shellProblems(root) {
 }
 
 /**
- * Check 7: src/routes exists, each route file exports `Route`, the shell renders an outlet,
+ * Check 5: src/routes exists, each route file exports `Route`, the shell renders an outlet,
  * and no route takes or nests under a path the base mounts, an on part's included. No fix.
  */
 export function routes(root) {

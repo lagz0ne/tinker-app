@@ -9,15 +9,15 @@ Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
 
 Use this when adding or fixing app behavior.
 Read `tests/todos.test.ts` for a full example.
-Import exported operations from the app's package seams.
-Bind raw request headers only through the testing entry:
+Import operations from the component public entries.
+Tests may bind raw request headers from requests:
 
 ```ts
-import { requestHeaders } from "@tinker/start/testing";
+import { requestHeaders } from "~/components/requests/index.server";
 ```
 
 App code uses principal or currentUser.
-Do not import private source files.
+Tests may import component private files when they prove that owner.
 Do not boot Start to test an operation.
 
 `tests/presets.ts` replaces database and mail resources.
@@ -63,9 +63,9 @@ const settings = [
 ];
 ```
 
-`authSettings` comes from `@tinker/start/server`.
+`authSettings` comes from `~/components/auth/index.server`.
 The worked tests show their filled values.
-For outgoing HTTP, bind httpBackend through the base testing entry:
+For outgoing HTTP, bind httpBackend through the HTTP component:
 
 ```ts
 const stop = new AbortController();
@@ -100,8 +100,8 @@ try {
 }
 ```
 
-Import httpBackend from `@tinker/start/testing`.
-Import httpRequest from `@tinker/start/server`.
+Import httpBackend from `~/components/http`.
+Import httpRequest from `~/components/http/index.server`.
 Bind the fake in the test's scope; never replace global fetch.
 
 One test names one public cause and decisive outcome.
