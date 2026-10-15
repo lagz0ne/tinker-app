@@ -32,6 +32,8 @@ beforeAll(async () => {
 
 afterAll(() => template.close());
 
+export const databaseQueries: string[] = [];
+
 /** Explicit local proof wiring; production factories always use Postgres and SMTP. */
 export const proofDatabase = preset(
   database,
@@ -39,9 +41,19 @@ export const proofDatabase = preset(
     const { drizzle } = await import("drizzle-orm/pglite");
     const client = await template.clone();
     defer(() => client.close());
-    return Object.assign(drizzle({ client }), {
-      listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
-    });
+    return Object.assign(
+      drizzle({
+        client,
+        logger: {
+          logQuery(query) {
+            databaseQueries.push(query);
+          },
+        },
+      }),
+      {
+        listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
+      },
+    );
   },
 );
 

@@ -72,10 +72,58 @@ try {
   browser(b, "reload");
   browser(b, "wait", "--text", "ENG · Engineering");
   browser(b, "wait", "--text", "Your role: member");
+  browser(a, "find", "role", "link", "click", "--name", "Open ENG issues", "--exact");
+  browser(a, "wait", 'input[name="title"]');
+  browser(a, "fill", 'form:not([data-issue]) input[name="title"]', "Fix login");
+  browser(a, "find", "role", "button", "click", "--name", "Create issue", "--exact");
+  browser(a, "wait", "--text", "ENG-1 · Fix login");
+  browser(a, "fill", 'form:not([data-issue]) input[name="title"]', "Add search");
+  browser(a, "find", "role", "button", "click", "--name", "Create issue", "--exact");
+  browser(a, "wait", "--text", "ENG-2 · Add search");
+
+  const member = browser(
+    a,
+    "eval",
+    `[...document.querySelector('form[data-issue="ENG-1"] select[name="assigneeId"]').options].find(option => option.textContent === "User B").value`,
+  ).result;
+  browser(a, "select", 'form[data-issue="ENG-1"] select[name="state"]', "in_progress");
+  browser(a, "select", 'form[data-issue="ENG-1"] select[name="priority"]', "1");
+  browser(a, "select", 'form[data-issue="ENG-1"] select[name="assigneeId"]', member);
+  browser(a, "find", "role", "button", "click", "--name", "Save ENG-1", "--exact");
+  browser(
+    a,
+    "wait",
+    "--fn",
+    `document.querySelector('[data-testid="issue-summary-1"]').textContent.includes("In progress · Priority 1 · User B")`,
+  );
+  browser(a, "select", 'form[data-issue="ENG-2"] select[name="state"]', "done");
+  browser(a, "select", 'form[data-issue="ENG-2"] select[name="priority"]', "3");
+  browser(a, "find", "role", "button", "click", "--name", "Save ENG-2", "--exact");
+  browser(
+    a,
+    "wait",
+    "--fn",
+    `document.querySelector('[data-testid="issue-summary-2"]').textContent.includes("Done · Priority 3 · Unassigned")`,
+  );
+  browser(a, "reload");
+  browser(
+    a,
+    "wait",
+    "--fn",
+    `document.querySelector('[data-testid="issue-summary-1"]')?.textContent.includes("In progress · Priority 1 · User B")`,
+  );
+  browser(
+    a,
+    "wait",
+    "--fn",
+    `document.querySelector('[data-testid="issue-summary-2"]')?.textContent.includes("Done · Priority 3 · Unassigned")`,
+  );
+  if (process.env.BOARD_STATE) browser(a, "state", "save", process.env.BOARD_STATE);
+
   assert.deepEqual(browser(a, "errors").errors, []);
   assert.deepEqual(browser(b, "errors").errors, []);
   console.log(
-    "PASS (agent-browser / Lightpanda): A signs up and creates ENG; B signs up; A adds B by email; B sees ENG live and after reload. Form uses POST. No page errors.",
+    "PASS slice 2 (agent-browser / Lightpanda): A creates ENG-1 and ENG-2; ENG-1 is in_progress, priority 1, assigned to B; ENG-2 is done, priority 3, unassigned. Saved values survive reload. Slice 1 sign-up and team add also pass. No page errors.",
   );
 } finally {
   browser(a, "close");

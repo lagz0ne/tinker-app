@@ -27,6 +27,7 @@ Tests and generated files do not count.
   - `kind`: `N`. From the failing caller; why: choose the managed error.
   - `payload`: `Errors.Payload<N>`. From the failing caller; why: keep facts for that error.
   - Callers:
+    - `src/backend/issues.server.ts#changeIssue.run.callback1`
     - `src/backend/teams.server.ts#changeTeam.run.callback1`
     - `src/backend/teams.server.ts#changeTeam.run.callback2`
     - `src/backend/teams.server.ts#readTeam.run`
@@ -44,6 +45,7 @@ Tests and generated files do not count.
     - `src/frontend/auth-actions.ts#signIn.input`
     - `src/frontend/auth-actions.ts#signIn.run`
     - `src/frontend/auth-actions.ts#signOut.run`
+    - `src/frontend/Issues.tsx#saveIssue.run`
     - `src/frontend/profile-actions.ts#saveName.run`
     - `src/frontend/Teams.tsx#saveTeam.run`
     - `src/transport/result.server.ts#readReceipt`
@@ -61,6 +63,7 @@ Tests and generated files do not count.
   - `error`: `unknown`. From a form action failure; why: pick the shown message.
   - Callers:
     - `src/frontend/App.tsx#AccountForm`
+    - `src/frontend/Issues.tsx#Issues`
     - `src/frontend/Profile.tsx#ProfileForm`
     - `src/frontend/Teams.tsx#Teams`
 
@@ -81,6 +84,7 @@ Tests and generated files do not count.
   - `result`: `RunResult<{ executionId: string }>`. From a settled mutation; why: turn its result into a network receipt.
   - Callers:
     - `src/transport/counter.functions.ts#updateCounter.callback`
+    - `src/transport/issues.functions.ts#updateIssue.callback`
     - `src/transport/profile.functions.ts#retryProfileNotification.callback`
     - `src/transport/profile.functions.ts#updateProfile.callback`
     - `src/transport/teams.functions.ts#updateTeam.callback`
@@ -132,6 +136,7 @@ Tests and generated files do not count.
     - `src/routes/api.sync.ts#Route.GET`
     - `src/routes/api.telemetry.ts#Route.POST`
     - `src/transport/greet.functions.ts#runGreet.callback`
+    - `src/transport/issues.functions.ts#getTeamMembers.callback`
     - `src/transport/profile.functions.ts#getProfile.callback`
     - `src/transport/todos.functions.ts#getTodos.callback`
     - `tinker/components/sync/functions.ts#getAccount.callback`

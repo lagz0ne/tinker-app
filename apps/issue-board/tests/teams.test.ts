@@ -1,9 +1,8 @@
 import { createScope, type Scope } from "@tinker/core";
-import { preset } from "@tinker/core/testing";
 import { beforeEach, afterEach, test, expect } from "vite-plus/test";
 
 import { authStartup, authSettings } from "~/components/auth/index.server";
-import { migrate, databaseUrl, database, type Database } from "~/components/database/index.server";
+import { migrate, databaseUrl, database } from "~/components/database/index.server";
 import { startRequests, backendStop } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
@@ -12,42 +11,26 @@ import { readAccount } from "@/demo/backend/auth.server";
 import { bootstrap } from "@/demo/backend/sync.server";
 import { isError } from "@/demo/errors";
 
-import { authBindings, handleAuth, proofMail, requestHeaders } from "./presets";
+import {
+  authBindings,
+  handleAuth,
+  proofDatabase,
+  databaseQueries as queries,
+  proofMail,
+  requestHeaders,
+} from "./presets";
 
 let stop: AbortController;
 let root: Scope.RootHandle;
 let ada: Headers;
 let grace: Headers;
-const queries: string[] = [];
 
 beforeEach(async () => {
   stop = new AbortController();
   root = createScope({
     signal: stop.signal,
     extensions: [startRequests, authStartup],
-    presets: [
-      proofMail,
-      preset(database, async (_deps, { defer }): Promise<Database.Handle> => {
-        const { PGlite } = await import("@electric-sql/pglite");
-        const { drizzle } = await import("drizzle-orm/pglite");
-        const client = await PGlite.create();
-        defer(() => client.close());
-
-        return Object.assign(
-          drizzle({
-            client,
-            logger: {
-              logQuery(query) {
-                queries.push(query);
-              },
-            },
-          }),
-          {
-            listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
-          },
-        );
-      }),
-    ],
+    presets: [proofDatabase, proofMail],
     tags: [
       backendStop(stop.signal),
       authBindings,

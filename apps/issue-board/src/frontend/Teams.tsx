@@ -114,6 +114,11 @@ export function Teams() {
           </CardHeader>
           <CardContent>
             <p className="mb-4">Your role: {row.role}</p>
+            <Button asChild className="mb-4">
+              <Link to="/issues/$teamId" params={{ teamId: row.id }}>
+                Open {row.key} issues
+              </Link>
+            </Button>
             {row.role === "admin" && (
               <form
                 className="grid gap-3"

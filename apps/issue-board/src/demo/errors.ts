@@ -2,6 +2,8 @@ import type { Errors as BaseErrors } from "~/components/errors";
 
 export declare namespace Errors {
   type Payloads = {
+    IssueMissing: Record<string, never>;
+    InvalidAssignee: Record<string, never>;
     NotTeamMember: Record<string, never>;
     TeamKeyTaken: Record<string, never>;
     TeamAdminRequired: Record<string, never>;

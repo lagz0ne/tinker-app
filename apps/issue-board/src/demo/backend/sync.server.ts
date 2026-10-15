@@ -8,7 +8,7 @@ import { readCursor, readPrivateCursor } from "~/components/sync";
 import type { Sync } from "~/components/sync";
 import { eventHistory, event } from "~/components/sync/index.server";
 
-import { team, teamMember } from "@/backend/board.schema.server";
+import { team, teamMember, issue, issueFields } from "@/backend/board.schema.server";
 import { readFeatureEvents } from "@/demo/contracts/sync";
 import { raise } from "@/demo/errors";
 
@@ -62,7 +62,15 @@ export const bootstrapPrivate = operation({
         .where(eq(teamMember.userId, currentUser.id))
         .orderBy(asc(team.key));
 
-      return { stream: currentUser.id, revision, profile, todos, teams };
+      const issues = await tx
+        .select(issueFields)
+        .from(issue)
+        .innerJoin(team, eq(issue.teamId, team.id))
+        .innerJoin(teamMember, eq(teamMember.teamId, team.id))
+        .where(eq(teamMember.userId, currentUser.id))
+        .orderBy(asc(team.key), asc(issue.number));
+
+      return { stream: currentUser.id, revision, profile, todos, teams, issues };
     });
   },
 });

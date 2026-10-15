@@ -22,7 +22,11 @@ export const teamChange = z.discriminatedUnion("kind", [
     })
     .strict(),
   z
-    .object({ kind: z.literal("addMember"), teamId: z.uuid(), email: z.string().trim().email() })
+    .object({
+      kind: z.literal("addMember"),
+      teamId: z.uuid(),
+      email: z.string().trim().pipe(z.email()),
+    })
     .strict(),
 ]);
 

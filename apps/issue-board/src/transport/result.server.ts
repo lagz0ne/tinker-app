@@ -3,6 +3,8 @@ import type { RunResult } from "@tinker/core";
 import { isError, raise } from "@/demo/client";
 
 const rejections = [
+  ["IssueMissing", "That issue is not in this team."],
+  ["InvalidAssignee", "Choose a member of this team."],
   ["SignInRequired", "Sign in to change private records."],
   ["NotTeamMember", "You are not on that team."],
   ["TeamAdminRequired", "Only a team admin can add members."],

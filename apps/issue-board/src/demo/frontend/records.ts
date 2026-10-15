@@ -2,24 +2,27 @@ import { resource } from "@tinker/core";
 
 import type { Sync } from "~/components/sync";
 
-import { profile, todos, counter, nameDraft, profileResult, teams } from "./state";
+import { profile, todos, counter, nameDraft, profileResult, teams, issues } from "./state";
 
 /** Saved records have one publisher; drafts belong to the local editor. */
 export const records = resource({
   label: "records",
   depends: {
     teams: teams.controller,
+    issues: issues.controller,
     profile: profile.controller,
     todos: todos.controller,
     counter: counter.controller,
     draft: nameDraft.controller,
     result: profileResult.controller,
   },
-  factory: ({ profile, todos, counter, draft, result, teams }): Sync.Records => ({
+  factory: ({ profile, todos, counter, draft, result, teams, issues }): Sync.Records => ({
     resetPrivate() {
       profile.set(null);
       todos.set([]);
       teams.set([]);
+      issues.set([]);
+
       draft.set(undefined);
       result.set(null);
     },
@@ -31,9 +34,13 @@ export const records = resource({
       profile.set(value.profile);
       todos.set(value.todos);
       teams.set(value.teams ?? []);
+      issues.set(value.issues ?? []);
     },
     change(change: Sync.Change) {
       switch (change.kind) {
+        case "issues":
+          issues.set(change.rows);
+          break;
         case "teams":
           teams.set(change.rows);
           break;
@@ -61,6 +68,7 @@ export const records = resource({
                 profile: saved,
                 todos: todos.get(),
                 teams: teams.get(),
+                issues: issues.get(),
               },
       };
     },
