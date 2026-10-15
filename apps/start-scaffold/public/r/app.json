@@ -57,7 +57,7 @@
       "path": "templates/env.example",
       "type": "registry:file",
       "target": "~/.env.example",
-      "content": "# Config is typed tags, filled by the app command. This file defines no env requirements.\n# Required tag: backendStop (the command owns its AbortController)\n# Required tag: telemetrySide\n# Required tag: telemetryService\n# Required tag: tracesUrl\n# Required tag: logsUrl\n# Safe defaults: logLevel = info; spanHistory = 80.\n# Read cmds/server.ts for the actual bindings and their inputs.\n"
+      "content": "# Config is typed tags, filled by the app command. This file defines no env requirements.\n# Required tag: backendStop (the command owns its AbortController)\n# Required tag: telemetrySide\n# Required tag: telemetryService\n# Required tag: tracesUrl\n# Required tag: logsUrl\n# Safe defaults: logLevel = info (30); spanHistory = 80.\n# LOG_LEVEL takes 20 (debug), 30 (info), 40 (warn), or 50 (error).\n# Read cmds/server.ts for the actual bindings and their inputs.\n"
     },
     {
       "path": "templates/gitignore",

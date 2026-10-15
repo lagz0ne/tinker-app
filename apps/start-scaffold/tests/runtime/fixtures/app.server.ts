@@ -1,6 +1,6 @@
 import type { PGliteInterface } from "@electric-sql/pglite";
 import { createScope, operation, resource, tag } from "@tinker/core";
-import type { Many, Resource, Scope } from "@tinker/core";
+import type { Resource, Scope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { afterAll, beforeAll } from "vite-plus/test";
 
@@ -25,7 +25,6 @@ export type AuthPort = {
  * the names the auth and sync parts read. Its auth library echoes each request it is handed,
  * and signs a request in by its `x-account` header, while that account is in `signedIn`.
  */
-export const extensions: Many<Scope.Extension<unknown>> = [];
 export const signedIn = tag<ReadonlySet<string>>({ label: "test.signedIn", default: new Set() });
 
 export const auth = resource({

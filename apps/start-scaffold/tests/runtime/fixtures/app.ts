@@ -1,5 +1,4 @@
 import { data, resource } from "@tinker/core";
-import type { Many, Scope } from "@tinker/core";
 import { z } from "zod";
 
 import {
@@ -22,7 +21,6 @@ import type { Sync } from "~/components/sync/envelopes";
  * A stand-in client seam for the base's own tests and type check, as the router command slots: the names
  * the sync part reads. Its records keep each snapshot part and each applied change in cells.
  */
-export const extensions: Many<Scope.Extension<unknown>> = [];
 export const savedPublic = data<Sync.Public | null>({ label: "test.public", initial: null });
 export const savedPrivate = data<Sync.Private | null>({ label: "test.private", initial: null });
 export const applied = data<unknown[]>({ label: "test.applied", initial: [] });
@@ -65,8 +63,6 @@ export const streamMessage = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("changes"), events: z.array(eventEnvelope).max(100) }),
   z.object({ kind: z.literal("account-change") }),
 ]);
-
-export const router: import("~/base/router-entry").RouterOptions = {};
 
 export const clientBindings = [
   syncSide("tab"),
