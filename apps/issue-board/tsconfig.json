@@ -8,6 +8,7 @@
     "vite.config.ts",
     ".tinker/routeTree.gen.ts",
     "examples",
-    "vite.worker.config.ts"
+    "vite.worker.config.ts",
+    "vite.cli.config.ts"
   ]
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from "node:fs";
 
 import pg from "pg";
 
@@ -36,6 +36,9 @@ let worker = spawn(process.execPath, ["maintain/worker.mjs"], {
 });
 
 let workerOutput = "";
+let importing;
+let imported;
+let csvPath;
 
 worker.stdout.on("data", (chunk) => {
   workerOutput += chunk.toString();
@@ -394,6 +397,56 @@ try {
     ["exec", "--net", "--timeout", "120", "--", "node", "maintain/measure-live.mjs", a, b, "200"],
     { stdio: "inherit" },
   );
+  browser(a, "find", "role", "link", "click", "--name", "All teams", "--exact");
+  browser(a, "wait", 'input[name="key"]');
+  browser(a, "fill", 'input[name="key"]', "CSV");
+  browser(a, "fill", 'input[name="name"]', "CSV import");
+  browser(a, "find", "role", "button", "click", "--name", "Make team", "--exact");
+  browser(a, "wait", "--text", "CSV · CSV import");
+  browser(a, "find", "role", "link", "click", "--name", "Open CSV issues", "--exact");
+  browser(a, "wait", 'input[name="title"]');
+  assert.equal(browser(a, "eval", 'document.querySelectorAll("[data-card]").length').result, 0);
+  csvPath = `.tinker/demo-import-${runId}.csv`;
+  writeFileSync(
+    csvPath,
+    "ID,Title,Description,Status,Priority,Assignee\r\n" +
+      Array.from(
+        { length: 201 },
+        (_, index) =>
+          `OLD-${index + 1},"Imported ${index + 1}, live","A ""quoted"" value",Todo,High,`,
+      ).join("\r\n"),
+  );
+  const cliArgs = ["maintain/cli.mjs", "--file", csvPath, "--team", "CSV", "--actor", emailA];
+  importing = spawn(process.execPath, cliArgs, { stdio: ["ignore", "pipe", "inherit"] });
+  let importOutput = "";
+  importing.stdout.on("data", (chunk) => {
+    importOutput += chunk.toString();
+  });
+  imported = new Promise((resolve) =>
+    importing.once("exit", (code, signal) => resolve({ code, signal })),
+  );
+  // The browser stays on this board while the outside command commits its batches.
+  browser(a, "wait", "--fn", 'document.querySelectorAll("[data-card]").length === 201');
+  assert.deepEqual(await imported, { code: 0, signal: null });
+  assert(importOutput.includes("Imported 201 rows; 201 changed."));
+  const batchLogs = importOutput
+    .split("\n")
+    .filter((line) => line.startsWith("{"))
+    .map((line) => JSON.parse(line))
+    .filter(
+      (entry) => entry.message === "import.batch" && typeof entry.attributes.rows === "number",
+    );
+  assert.deepEqual(
+    batchLogs.map((entry) => entry.attributes.rows),
+    [100, 100, 1],
+  );
+  const replayOutput = execFileSync(process.execPath, cliArgs, { encoding: "utf8" });
+  assert(replayOutput.includes("Imported 201 rows; 0 changed."));
+  assert.equal(browser(a, "eval", 'document.querySelectorAll("[data-card]").length').result, 201);
+  console.log(
+    "PASS slice 7 CLI: empty open CSV board fills live with 201 cards, no reload; batches 100/100/1; quoted CSV retained; built CLI replay changes zero rows.",
+  );
+
   if (process.env.BOARD_PREVIEW) {
     const main = browser(a, "eval", "document.querySelector('main').outerHTML").result;
     const css = readdirSync("dist/client/assets")
@@ -415,6 +468,12 @@ try {
     "PASS slice 3 (agent-browser / Lightpanda): A sends HTML5 drag/drop for ENG-1 to In progress; B sees it without reload. B stale edit is rejected. A creates ENG-1 and ENG-2; ENG-1 is in_progress, priority 1, assigned to B; ENG-2 is done, priority 3, unassigned. Saved values survive reload. Slice 1 sign-up and team add also pass. No page errors.",
   );
 } finally {
+  if (importing && importing.exitCode === null && importing.signalCode === null) {
+    importing.kill("SIGTERM");
+    await imported;
+  }
+  if (csvPath) rmSync(csvPath, { force: true });
+
   browser(a, "close");
   browser(b, "close");
   browser(outsider, "close");
@@ -440,3 +499,5 @@ execFileSync(process.execPath, ["maintain/proof-worker-host.mjs"], { stdio: "inh
 
 execFileSync(process.execPath, ["maintain/proof-digest.mjs"], { stdio: "inherit" });
 execFileSync(process.execPath, ["maintain/proof-smtp-auth.mjs"], { stdio: "inherit" });
+
+execFileSync(process.execPath, ["maintain/proof-import.mjs"], { stdio: "inherit" });

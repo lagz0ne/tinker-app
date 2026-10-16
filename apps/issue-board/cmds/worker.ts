@@ -38,7 +38,6 @@ export default async function main(input: WorkerInput) {
     ],
   });
   await root.ready;
-  root.resolve(digestHourUTC);
 
   const closed = root
     .run(runMailWorker, { signal })

@@ -253,3 +253,46 @@ test("blank digest hour refuses worker startup", async () => {
     }
   }
 });
+
+test("failed digest waits thirty seconds across notification wakes while alerts still drain", async () => {
+  const clock = makeTestClock();
+
+  const stop = new AbortController();
+  let ticks = 0;
+  let batches = 0;
+  let ticksBeforeDeadline = 0;
+  const root = createScope({
+    signal: stop.signal,
+    clock,
+    presets: [
+      preset(queueDailyDigests, async () => {
+        ticks += 1;
+        throw new Error("statement timeout");
+      }),
+      preset(deliverMailBatch, async () => {
+        batches += 1;
+        return { claimed: 0, sent: 0, failed: 0 };
+      }),
+      preset(outboxWake, async () => ({
+        listen: async () => {},
+        retry: async () => {
+          throw new Error("Unexpected reconnect");
+        },
+        wait: async () => {
+          if (batches === 1) clock.advance(29_999);
+          if (batches === 2) ticksBeforeDeadline = ticks;
+          if (batches === 3) clock.advance(1);
+          if (batches === 4) {
+            stop.abort();
+          }
+        },
+      })),
+    ],
+  });
+  await root.ready;
+  await root.settle(runMailWorker, { signal: stop.signal });
+  expect(ticksBeforeDeadline).toBe(1);
+  expect(batches).toBe(4);
+  expect(ticks).toBe(2);
+  expect((await root.closed).status).toBe("success");
+});

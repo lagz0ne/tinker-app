@@ -58,3 +58,25 @@ export const queueDailyDigests = operation({
     return { queued };
   },
 });
+
+/** Failed snapshots wait thirty seconds even when notifications keep arriving. */
+export const digestRetry = resource({
+  label: "digest.retry",
+  factory: async () => ({ at: 0 }),
+});
+
+export const tickMailDigest = operation({
+  label: "digest.workerTick",
+  depends: { digest: queueDailyDigests.controller, retry: digestRetry },
+  run: async ({ digest, retry }, { clock, signal, log }) => {
+    if (clock.currentTimeMillis() < retry.at) return;
+    try {
+      await digest.run();
+      retry.at = 0;
+    } catch (error) {
+      if (signal.aborted) return;
+      retry.at = clock.currentTimeMillis() + 30_000;
+      log.error("digest.failed", { error: String(error) });
+    }
+  },
+});

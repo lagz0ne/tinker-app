@@ -5,6 +5,24 @@ Callers include direct calls and typed callback registrations.
 Repeated calls by one caller count once; self-calls do not count.
 Tests and generated files do not count.
 
+- **cmds/cli.ts#main**
+  - `{
+env,
+args,
+signal,
+stdout,
+stderr,
+presets,
+}`: `{
+env: Readonly<Record<string, string | undefined>>;
+args: readonly string[];
+signal: AbortSignal;
+stdout: { write(chunk: string): unknown };
+stderr: { write(chunk: string): unknown };
+presets?: Scope.Preset[];
+}`. From the host; why: bind args, settings, output, and stop.
+  - Callers:
+
 - **cmds/server.ts#ended**
   - `result`: `Scope.Result`. From a root's closed promise; why: report its first failure after cleanup.
   - Callers:
@@ -32,6 +50,8 @@ Tests and generated files do not count.
   - `payload`: `Errors.Payload<N>`. From the failing caller; why: keep facts for that error.
   - Callers:
     - `src/backend/comments.server.ts#addComment.run.callback1`
+    - `src/backend/import.server.ts#importBatch.run.callback1`
+    - `src/backend/import.server.ts#readImport.run`
     - `src/backend/issues.server.ts#changeIssue.run.callback1`
     - `src/backend/teams.server.ts#changeTeam.run.callback1`
     - `src/backend/teams.server.ts#changeTeam.run.callback2`

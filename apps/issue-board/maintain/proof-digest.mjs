@@ -34,6 +34,7 @@ const coordinator = new pg.Client({ connectionString });
 const observer = new pg.Client({ connectionString });
 const clients = [];
 const roots = [];
+const queries = [];
 const stop = new AbortController();
 const ids = [`${prefix}-a`, `${prefix}-b`, `${prefix}-outsider`];
 const teamId = randomUUID();
@@ -78,7 +79,18 @@ try {
     const root = createScope({
       signal: stop.signal,
       clock,
-      presets: [preset(database, async () => drizzle({ client }))],
+      presets: [
+        preset(database, async () =>
+          drizzle({
+            client,
+            logger: {
+              logQuery(query) {
+                queries.push(query);
+              },
+            },
+          }),
+        ),
+      ],
     });
     roots.push(root);
     await root.ready;
@@ -123,7 +135,10 @@ try {
     ids.slice(0, 2).map((id) => `${id}@example.test`),
   );
   assert(receipts.every((row) => row.text.includes("Digest race")));
+  (await roots[1].resolve(digestDone)).day = "";
+  const beforeReplay = queries.length;
   const replay = await roots[1].run(queueDailyDigests);
+  assert.equal(queries.length, beforeReplay + 1, "replay must reach SQL, not the day gate");
   assert.equal(replay.queued, 0);
   console.log(
     "PASS live digest race: second INSERT waits on transactionid until first commits; second queues 0; one durable digest per member/day, zero outsider receipts; replay queues zero.",

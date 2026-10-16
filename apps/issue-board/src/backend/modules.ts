@@ -17,3 +17,15 @@ export const smtp = resource({
   target: "scope",
   factory: () => import("nodemailer"),
 });
+
+export const files = resource({
+  label: "module:node:fs/promises",
+  target: "scope",
+  factory: () => import("node:fs/promises"),
+});
+
+export const csvParser = resource({
+  label: "module:csv-parse/sync",
+  target: "scope",
+  factory: () => import("csv-parse/sync"),
+});

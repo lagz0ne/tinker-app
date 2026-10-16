@@ -80,7 +80,8 @@ The same worker checks the day before draining batches and after each wake.
 A scope-held day gate runs the heavy SQL once per worker per UTC day after the hour.
 Members who become eligible after that snapshot wait until tomorrow. A fresh
 worker after a restart may catch them today; existing durable receipts still stop
-a second enqueue. A failed digest logs digest.failed and does not block alerts.
+a second enqueue. A failed digest logs digest.failed and does not block alerts. It waits at least
+30 seconds before retrying, even when alert notifications keep waking the worker.
 By default it queues today's digest at or after 09:00 UTC. A late restart catches
 up for today. It does not backfill days when the worker was down. Set the typed
 hour tag through the worker command when needed:
