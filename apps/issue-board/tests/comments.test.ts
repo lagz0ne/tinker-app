@@ -328,15 +328,22 @@ test("database checks comment text when the input reader is bypassed", async () 
   const db = await root.resolve(database);
   const values = { issueId: snapshot.issues![0]!.id, authorId: snapshot.profile.id };
 
-  for (const body of ["", " ", "\t\n\r", "\u00a0\ufeff\u2000", "x".repeat(5001)]) {
+  for (const body of [
+    "",
+    " ",
+    "\t\n\r",
+    "\u00a0\ufeff\u2000",
+    "x".repeat(5001),
+    " \t" + "x".repeat(5000) + "\ufeff",
+  ]) {
     await expect(
       db.insert(commentTable).values({ ...values, id: crypto.randomUUID(), body }),
     ).rejects.toMatchObject({ cause: { code: "23514", constraint: "comment_body" } });
   }
   expect(await db.select().from(commentTable)).toEqual([]);
 
-  for (const body of ["x", "x".repeat(5000), " \t" + "x".repeat(5000) + "\ufeff"]) {
+  for (const body of ["x", "x".repeat(5000)]) {
     await db.insert(commentTable).values({ ...values, id: crypto.randomUUID(), body });
   }
-  expect(await db.select().from(commentTable)).toHaveLength(3);
+  expect(await db.select().from(commentTable)).toHaveLength(2);
 });

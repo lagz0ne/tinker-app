@@ -9,7 +9,7 @@ import { issueCommand } from "@/contracts/issues";
 import { currentUser } from "@/demo/backend/auth.server";
 import { raise } from "@/demo/errors";
 
-import { issue, issueFields, team, teamMember } from "./board.schema.server";
+import { issue, issueFields, team, teamMember, mailOutbox } from "./board.schema.server";
 import { fractionalIndex } from "./modules";
 import { readTeam } from "./teams.server";
 
@@ -187,16 +187,31 @@ export const changeIssue = operation({
         });
       }
 
-      const delta = await tx
+      const { delta, subject } = await tx
         .select(issueFields)
         .from(issue)
         .innerJoin(team, eq(issue.teamId, team.id))
         .where(eq(issue.id, savedId))
         .then(([saved]) =>
           change.kind === "remove"
-            ? { kind: "issue.remove" as const, id: savedId }
-            : { kind: "issue.upsert" as const, issue: saved! },
+            ? {
+                delta: { kind: "issue.remove" as const, id: savedId },
+                subject: "An issue was removed",
+              }
+            : {
+                delta: { kind: "issue.upsert" as const, issue: saved! },
+                subject: `${saved!.teamKey}-${saved!.number}: ${saved!.title}`,
+              },
         );
+      await tx.execute(sql`
+        INSERT INTO ${mailOutbox} ("to", subject, text, dedupe_key)
+        SELECT ${user.email}, ${subject}, ${`${currentUser.name}: issue ${change.kind}.`},
+          ${input.executionId} || ':' || ${user.id}
+        FROM ${teamMember} INNER JOIN ${user} ON ${teamMember.userId} = ${user.id}
+        WHERE ${teamMember.teamId} = ${change.teamId} AND ${user.id} <> ${currentUser.id}
+        ON CONFLICT (dedupe_key) DO NOTHING
+      `);
+
       await tx.insert(execution).values({ id: input.executionId, stream: currentUser.id });
 
       const deliveries = members.map((member) => ({

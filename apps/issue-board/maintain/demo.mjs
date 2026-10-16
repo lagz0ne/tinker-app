@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 
 import pg from "pg";
@@ -29,6 +29,14 @@ function browser(session, ...args) {
 
   return reply.data;
 }
+
+const worker = spawn(process.execPath, ["maintain/worker.mjs"], {
+  stdio: ["ignore", "ignore", "inherit"],
+});
+
+const workerExit = new Promise((resolve) =>
+  worker.once("exit", (code, signal) => resolve({ code, signal })),
+);
 
 try {
   browser(a, "open", origin);
@@ -164,6 +172,44 @@ try {
   console.log(
     "PASS slice 4 comments: B receives the existing discussion on join, then A's new ENG-1 comment live with no reload; B's draft survives; actor form clears after save; actual non-member stream contains zero comment.add events.",
   );
+  const delivered = new pg.Client({
+    connectionString: "postgres://issue_board@127.0.0.1:15433/postgres",
+  });
+  await delivered.connect();
+  try {
+    const deadline = AbortSignal.timeout(40_000);
+    let saved;
+    do {
+      deadline.throwIfAborted();
+      saved = (
+        await delivered.query(
+          "SELECT * FROM mail_outbox WHERE \"to\" = $1 AND subject = 'New comment on ENG-1' AND text LIKE '%A live comment for B%'",
+          [emailB],
+        )
+      ).rows;
+    } while (saved.length !== 1 || saved[0].sent_at === null);
+
+    assert.equal(saved[0].attempts, 1);
+    const inbox = await (
+      await fetch(
+        `http://127.0.0.1:18026/api/v1/search?query=${encodeURIComponent(`to:${emailB} subject:New comment on ENG-1`)}&limit=100`,
+      )
+    ).json();
+    assert(inbox.messages.some((message) => message.Subject === "New comment on ENG-1"));
+    assert.equal(
+      (
+        await delivered.query('SELECT count(*)::int AS count FROM mail_outbox WHERE "to"=$1', [
+          emailOutsider,
+        ])
+      ).rows[0].count,
+      0,
+    );
+    console.log(
+      "PASS slice 5 mail: A's saved comment alerts B through the outbox and local Mailpit; one delivery attempt; no non-member alert.",
+    );
+  } finally {
+    await delivered.end();
+  }
   browser(b, "fill", '[data-card="ENG-1"] textarea[name="comment"]', "Selected comment text");
   const textDrag = browser(
     b,
@@ -288,6 +334,10 @@ try {
   browser(a, "close");
   browser(b, "close");
   browser(outsider, "close");
+
+  worker.kill("SIGTERM");
+  const stopped = await workerExit;
+  assert.equal(stopped.code, 0, JSON.stringify(stopped));
 }
 
 execFileSync(process.execPath, ["maintain/proof-issues.mjs"], { stdio: "inherit" });
@@ -295,3 +345,5 @@ execFileSync(process.execPath, ["maintain/proof-issues.mjs"], { stdio: "inherit"
 execFileSync(process.execPath, ["maintain/proof-lock-order.mjs"], { stdio: "inherit" });
 
 execFileSync(process.execPath, ["maintain/proof-comments.mjs"], { stdio: "inherit" });
+
+execFileSync(process.execPath, ["maintain/proof-outbox.mjs"], { stdio: "inherit" });

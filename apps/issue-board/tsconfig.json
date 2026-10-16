@@ -7,6 +7,7 @@
     "tests",
     "vite.config.ts",
     ".tinker/routeTree.gen.ts",
-    "examples"
+    "examples",
+    "vite.worker.config.ts"
   ]
 }

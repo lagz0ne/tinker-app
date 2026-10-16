@@ -12,7 +12,9 @@
     "postinstall": "tinker prepare",
     "test": "vp test --maxWorkers=1 --no-file-parallelism",
     "check:plain": "node scripts/check-plain.mjs",
-    "test:schema": "node scripts/check-schema.mjs"
+    "test:schema": "node scripts/check-schema.mjs",
+    "build:worker": "vp build --config vite.worker.config.ts",
+    "worker": "node maintain/worker.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "catalog:",

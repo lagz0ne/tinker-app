@@ -1,5 +1,6 @@
 import { operation } from "@tinker/core";
 
+import { user } from "~/components/auth/index.server";
 import { database, drizzleOrm } from "~/components/database/index.server";
 import type { Sync } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
@@ -8,7 +9,7 @@ import { commentCommand } from "@/contracts/comments";
 import { currentUser } from "@/demo/backend/auth.server";
 import { raise } from "@/demo/errors";
 
-import { comment, issue, team, teamMember } from "./board.schema.server";
+import { comment, issue, team, teamMember, mailOutbox } from "./board.schema.server";
 
 export const addComment = operation({
   label: "comments.add",
@@ -58,6 +59,22 @@ export const addComment = operation({
         })
         .returning();
       const added = { ...saved!, createdAt: saved!.createdAt.toISOString() };
+
+      const [label] = await tx
+        .select({ key: team.key, number: issue.number })
+        .from(issue)
+        .innerJoin(team, eq(issue.teamId, team.id))
+        .where(eq(issue.id, target.id));
+      await tx.execute(sql`
+        INSERT INTO ${mailOutbox} ("to", subject, text, dedupe_key)
+        SELECT ${user.email}, ${`New comment on ${label!.key}-${label!.number}`},
+          ${`${currentUser.name} commented:\n\n${draft.body}`},
+          ${input.executionId} || ':' || ${user.id}
+        FROM ${teamMember} INNER JOIN ${user} ON ${teamMember.userId} = ${user.id}
+        WHERE ${teamMember.teamId} = ${draft.teamId} AND ${user.id} <> ${currentUser.id}
+        ON CONFLICT (dedupe_key) DO NOTHING
+      `);
+
       await tx.insert(execution).values({ id: input.executionId, stream: currentUser.id });
 
       for (const member of members) {

@@ -5,3 +5,9 @@ export const fractionalIndex = resource({
   target: "scope",
   factory: () => import("fractional-indexing"),
 });
+
+export const postgres = resource({
+  label: "module:pg",
+  target: "scope",
+  factory: () => import("pg"),
+});

@@ -11,6 +11,10 @@ Tests and generated files do not count.
     - `cmds/server.ts#closed.closeRoots`
     - `cmds/server.ts#main`
 
+- **cmds/worker.ts#main**
+  - `input`: `WorkerInput`. From the Node host; why: bind settings, stop, and output at the entry.
+  - Callers:
+
 - **src/demo/contracts/commands.ts#readProfileCommand**
   - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.
   - Callers:
