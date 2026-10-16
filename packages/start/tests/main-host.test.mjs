@@ -338,7 +338,7 @@ test("abort reasons stay quiet and a repeated late reason prints once", async ()
 
   const host = createMainHost(
     async ({ exit }) => {
-      exit(143, new DOMException("SIGTERM", "AbortError"));
+      exit(143);
       exit(1, error);
       exit(1, error);
       throw error;
@@ -357,4 +357,135 @@ test("abort reasons stay quiet and a repeated late reason prints once", async ()
   expect(await host.closed).toBe(143);
 
   expect(errors).toBe(`after exit 143: ${error.stack}\n`);
+});
+
+test("hung cleanup prints the exit reason before the hard stop", async () => {
+  vi.useFakeTimers();
+  const error = new Error("hung cleanup");
+  let errors = "";
+  const hardStop = vi.fn(() => {
+    expect(errors).toBe(`command failed (exit 1): ${error.stack}\n`);
+  });
+  try {
+    const host = createMainHost(
+      async ({ exit }) => {
+        exit(1, error);
+        return { closed: new Promise(() => {}) };
+      },
+      {
+        env: {},
+        stdout: quiet,
+        stderr: {
+          write(text) {
+            errors += text;
+          },
+        },
+        graceMs: 100,
+        hardStop,
+      },
+    );
+
+    await host.started;
+    expect(errors).toBe(`command failed (exit 1): ${error.stack}\n`);
+    expect(hardStop).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(hardStop).toHaveBeenCalledTimes(1);
+    expect(errors).toBe(`command failed (exit 1): ${error.stack}\n`);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+for (const code of [1, 65, 75]) {
+  test(`typed exit ${code} keeps the useful error detail`, async () => {
+    const error = Object.assign(new Error("bad input"), {
+      kind: "BadInput",
+      payload: { reason: "CSV row 5: wrong cell count" },
+    });
+    let errors = "";
+    const host = createMainHost(
+      async ({ exit }) => {
+        exit(code, error);
+        return { closed: Promise.resolve() };
+      },
+      {
+        env: {},
+        stdout: quiet,
+        stderr: {
+          write(text) {
+            errors += text;
+          },
+        },
+      },
+    );
+    expect(await host.closed).toBe(code);
+
+    const detail = code === 1 ? error.stack : `${error.kind}: ${JSON.stringify(error.payload)}`;
+    expect(errors).toBe(`command failed (exit ${code}): ${detail}\n`);
+  });
+}
+
+test("a command AbortError is printed", async () => {
+  const error = new DOMException("app failed", "AbortError");
+  let errors = "";
+  const host = createMainHost(
+    async ({ exit }) => {
+      exit(1, error);
+      return { closed: Promise.resolve() };
+    },
+    {
+      env: {},
+      stdout: quiet,
+      stderr: {
+        write(text) {
+          errors += text;
+        },
+      },
+    },
+  );
+  expect(await host.closed).toBe(1);
+  expect(errors).toBe(`command failed (exit 1): ${error.stack}\n`);
+});
+
+test("a plain main throw is printed once", async () => {
+  const error = new Error("main failed");
+  let errors = "";
+  const host = createMainHost(
+    async () => {
+      throw error;
+    },
+    {
+      env: {},
+      stdout: quiet,
+      stderr: {
+        write(text) {
+          errors += text;
+        },
+      },
+    },
+  );
+  expect(await host.closed).toBe(1);
+  expect(errors).toBe(`command failed (exit 1): ${error.stack}\n`);
+});
+
+test("different main and cleanup errors are both printed once", async () => {
+  const error = new Error("start failed");
+  const cleanup = new Error("cleanup failed");
+  let errors = "";
+
+  const host = createMainHost(async () => ({ closed: Promise.reject(cleanup) }), {
+    env: {},
+    stdout: quiet,
+    stderr: {
+      write(text) {
+        errors += text;
+      },
+    },
+    onStart() {
+      throw error;
+    },
+  });
+  expect(await host.closed).toBe(1);
+  expect(errors).toBe(`command failed (exit 1): ${error.stack}\nafter exit 1: ${cleanup.stack}\n`);
 });

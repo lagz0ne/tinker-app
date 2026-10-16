@@ -6,9 +6,10 @@ Core is unchanged. Start changes are allowed for this refactor.
 All three commands use the typed identity defineMain from tinker/base/main.ts.
 The host passes env, args, signal, stdout, stderr, and exit. Only a command
 calls exit. The first stop code wins, including a later signal or throw.
-The host prints the saved error stack once when a nonzero command exit finishes.
+The host prints the saved reason once as soon as a nonzero command exit starts.
+Code 1 keeps the stack. Typed errors at other codes show kind and payload.
 A distinct late reason prints once as after exit N; it does not change the code.
-AbortError reasons stay quiet. A rethrow of the saved reason adds no output.
+Only host-made abort reasons stay quiet. A rethrow of the saved reason adds no output.
 Commands return a stopped result after startup exit, so dev startup errors use
 its existing 503 Command stopped response. The host aborts the signal, joins
 closed, flushes the streams, then sets process.exitCode. It never calls process.exit. The default
@@ -225,3 +226,8 @@ The review follow-up shares checkout through leaseFrom, discards clients on
 failed transaction SQL, blocks nested transactions, and joins explicit end
 failures in defer. Worker reads watch their soft-stop tag. Each delivery batch
 owns its own child, not one transaction for an entire polling pass.
+
+The served-server close check runs as the live proof maintain/proof-server-close.mjs,
+not inside the unit test suite. Its paths use the module location, not the working directory.
+Run it with `node apps/issue-board/maintain/proof-server-close.mjs` from the repo root;
+then run `node apps/issue-board/maintain/proof-exit-controls.mjs` for its broken controls.

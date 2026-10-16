@@ -22,20 +22,29 @@ export function createMainHost(main, options) {
   let savedReason;
 
   const printed = new Set();
+  const hostReasons = new WeakSet();
 
-  const report = (prefix, reason) => {
-    if (reason == null || reason.name === "AbortError" || printed.has(reason)) return;
+  const report = (prefix, reason, exitCode) => {
+    if (reason == null || hostReasons.has(reason) || printed.has(reason)) return;
     printed.add(reason);
-    stderr.write(`${prefix}: ${reason.stack ?? String(reason)}\n`);
+    const detail =
+      exitCode !== 1 && reason.kind && reason.payload
+        ? `${reason.kind}: ${JSON.stringify(reason.payload)}`
+        : (reason.stack ?? String(reason));
+    stderr.write(`${prefix}: ${detail}\n`);
   };
 
   let timer;
 
   let finished = false;
 
-  const stop = (next, reason = new DOMException("Command stopped", "AbortError")) => {
+  const stop = (next, reason) => {
+    if (reason === undefined) {
+      reason = new DOMException("Command stopped", "AbortError");
+      hostReasons.add(reason);
+    }
     if (code !== undefined || finished) {
-      if (reason !== savedReason) report(`after exit ${code ?? 0}`, reason);
+      if (reason !== savedReason) report(`after exit ${code ?? 0}`, reason, next);
 
       return;
     }
@@ -43,6 +52,8 @@ export function createMainHost(main, options) {
     code = next;
 
     savedReason = reason;
+
+    if (code !== 0) report(`command failed (exit ${code})`, savedReason, code);
 
     timer = setTimeout(() => hardStop(), graceMs);
 
@@ -70,8 +81,6 @@ export function createMainHost(main, options) {
       stderr.write(`host close failed: ${String(error)}\n`);
     }
 
-    if (code !== undefined && code !== 0) report(`command failed (exit ${code})`, savedReason);
-
     await flushOutput([stdout, stderr]).catch(() => {
       failed = true;
     });
@@ -81,7 +90,16 @@ export function createMainHost(main, options) {
     return code ?? (failed ? 1 : 0);
   });
 
-  return { started, closed, stop, signal: controller.signal };
+  return {
+    started,
+    closed,
+    signal: controller.signal,
+    stop(next, reason) {
+      // Only native host stops own these abort reasons; command exit does not.
+      if (reason?.name === "AbortError") hostReasons.add(reason);
+      stop(next, reason);
+    },
+  };
 }
 
 /** Native startup and close always join, including errors after exit. */

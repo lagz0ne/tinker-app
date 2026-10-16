@@ -7,11 +7,14 @@ import { createServer } from "vite-plus";
 
 const { createMainHost } = await import(
   pathToFileURL(
-    resolve(process.env.BOARD_EXIT_HOST_COPY ?? "../../packages/start/lib/main-host.mjs"),
+    process.env.BOARD_EXIT_HOST_COPY
+      ? resolve(process.env.BOARD_EXIT_HOST_COPY)
+      : fileURLToPath(new URL("../../../packages/start/lib/main-host.mjs", import.meta.url)),
   ).href
 );
 
 const vite = await createServer({
+  root: fileURLToPath(new URL("..", import.meta.url)),
   configFile: false,
   optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false },
