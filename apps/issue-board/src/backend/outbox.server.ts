@@ -4,6 +4,7 @@ import { database, databaseUrl, drizzleOrm } from "~/components/database/index.s
 
 import { alertMail } from "./alert-mail.server";
 import { mailOutbox } from "./board.schema.server";
+import { queueDailyDigests } from "./digest.server";
 import { postgres } from "./modules";
 
 /** SMTP runs while the row is locked; another worker skips this batch. */
@@ -152,11 +153,16 @@ export const outboxWake = resource({
 
 export const runMailWorker = operation({
   label: "outbox.worker",
-  depends: { deliver: deliverMailBatch.controller, wake: outboxWake },
-  run: async ({ deliver, wake }, { signal, log }) => {
+  depends: {
+    deliver: deliverMailBatch.controller,
+    wake: outboxWake,
+    digest: queueDailyDigests.controller,
+  },
+  run: async ({ deliver, wake, digest }, { signal, log }) => {
     while (!signal.aborted) {
       try {
         await wake.listen();
+        await digest.run();
         const result = await deliver.run();
         log("outbox.batch", result);
         if (result.claimed === 20) continue;

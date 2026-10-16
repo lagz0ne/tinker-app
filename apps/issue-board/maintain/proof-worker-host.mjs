@@ -16,6 +16,15 @@ await db.connect();
 await db.query("BEGIN");
 await db.query("SELECT id FROM mail_outbox WHERE sent_at IS NULL FOR UPDATE");
 assert.equal(existsSync(`${directory}/.env`), false);
+const day = new Date().toISOString().slice(0, 10);
+
+const before = (
+  await db.query("SELECT id,dedupe_key FROM mail_outbox WHERE dedupe_key LIKE $1 ORDER BY id", [
+    `digest:%:${day}`,
+  ])
+).rows;
+
+assert(before.length > 0, "The demo must first create a daily receipt");
 
 const child = spawn(process.execPath, [fileURLToPath(new URL("./worker.mjs", import.meta.url))], {
   cwd: directory,
@@ -24,6 +33,7 @@ const child = spawn(process.execPath, [fileURLToPath(new URL("./worker.mjs", imp
     DATABASE_URL: "postgres://issue_board@127.0.0.1:15433/postgres",
     SMTP_URL: "smtp://127.0.0.1:11026",
     SMTP_FROM: "board@example.test",
+    DIGEST_HOUR_UTC: "0",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -58,6 +68,16 @@ try {
   const [code] = await exited;
   assert.equal(code, 0, errors);
   assert(output.includes("outbox worker stopped\n"));
+  const after = (
+    await db.query("SELECT id,dedupe_key FROM mail_outbox WHERE dedupe_key LIKE $1 ORDER BY id", [
+      `digest:%:${day}`,
+    ])
+  ).rows;
+  assert.deepEqual(after, before);
+  assert(output.includes('"message":"digest.queued"'));
+  console.log(
+    "PASS digest process restart: fresh built worker ticks with hour=0 and leaves today's durable receipts unchanged.",
+  );
   console.log(
     "PASS worker host: no .env file; explicit local settings start the built worker; SIGTERM prints stopped and exits 0.",
   );

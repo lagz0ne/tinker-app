@@ -4,6 +4,7 @@ import { databaseUrl } from "~/components/database/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
 
 import { alertMailTimeout } from "@/backend/alert-mail.server";
+import { digestHourUTC } from "@/backend/digest.server";
 import { runMailWorker } from "@/backend/outbox.server";
 
 type WorkerInput = {
@@ -27,6 +28,7 @@ export default async function main(input: WorkerInput) {
     observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
     extensions: [mailStartup],
     tags: [
+      env.DIGEST_HOUR_UTC !== undefined && digestHourUTC(Number(env.DIGEST_HOUR_UTC)),
       env.OUTBOX_SMTP_TIMEOUT_MS !== undefined &&
         alertMailTimeout(Number(env.OUTBOX_SMTP_TIMEOUT_MS)),
       env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),

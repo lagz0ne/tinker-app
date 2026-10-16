@@ -129,6 +129,6 @@ export const mailOutbox = pgTable(
   (row) => [
     index("mail_outbox_due")
       .on(row.nextAt, row.id)
-      .where(sql`${row.sentAt} is null`),
+      .where(sql`${row.sentAt} is null and ${row.attempts} < 12`),
   ],
 );

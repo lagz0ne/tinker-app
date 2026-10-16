@@ -6,6 +6,7 @@ import { expect, test } from "vite-plus/test";
 
 import { databaseUrl } from "~/components/database/index.server";
 
+import { queueDailyDigests } from "@/backend/digest.server";
 import { deliverMailBatch, outboxWake, runMailWorker } from "@/backend/outbox.server";
 
 // oxlint-disable-next-line import/no-relative-parent-imports -- Test the native command seam; app source aliases intentionally exclude cmds.
@@ -32,6 +33,7 @@ test("worker connect attempts stay bounded across late end events and clock tick
     random: makeTestRandom({ seed: 42 }),
     tags: [databaseUrl(new URL(`postgres://proof@127.0.0.1:${address.port}/proof`))],
     presets: [
+      preset(queueDailyDigests, async () => ({ queued: 0 })),
       preset(deliverMailBatch, async () => {
         throw new Error("No claim before a connection");
       }),
@@ -81,9 +83,14 @@ test("worker drains a full batch before waiting and stops while idle", async () 
   const waiting = Promise.withResolvers<void>();
   let batches = 0;
   let polls = 0;
+  let digestTicks = 0;
   const root = createScope({
     signal: stop.signal,
     presets: [
+      preset(queueDailyDigests, async () => {
+        digestTicks += 1;
+        return { queued: 0 };
+      }),
       preset(deliverMailBatch, async () => {
         batches += 1;
         return { claimed: batches === 1 ? 20 : 1, sent: batches === 1 ? 20 : 1, failed: 0 };
@@ -110,6 +117,7 @@ test("worker drains a full batch before waiting and stops while idle", async () 
     await waiting.promise;
     expect(batches).toBe(2);
     expect(polls).toBe(1);
+    expect(digestTicks).toBe(2);
   } finally {
     stop.abort();
     await running;
@@ -138,6 +146,7 @@ test("worker command prints a clean stop and surfaces real teardown errors", asy
         },
       },
       presets: [
+        preset(queueDailyDigests, async () => ({ queued: 0 })),
         preset(deliverMailBatch, async () => ({ claimed: 0, sent: 0, failed: 0 })),
         preset(outboxWake, async (_deps, { closing, defer }) => {
           defer(() => {

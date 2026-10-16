@@ -16,10 +16,12 @@ export const alertMail = resource({
   label: "outbox.sender",
   depends: { url: smtpUrl, from: mailFrom, timeout: alertMailTimeout, smtp },
   factory: async ({ url, from, timeout, smtp }, { defer }): Promise<Mail.Sender> => {
+    const user = decodeURIComponent(url.username);
     const transport = smtp.default.createTransport({
-      host: url.hostname,
-      port: Number(url.port),
-      secure: url.protocol === "smtps:",
+      host: url.hostname.replace(/^\[(.*)\]$/, "$1"),
+      port: url.port ? Number(url.port) : undefined,
+      secure: url.protocol === "smtps:" || url.port === "465",
+      auth: user ? { user, pass: decodeURIComponent(url.password) } : undefined,
       pool: true,
       maxConnections: 1,
       connectionTimeout: timeout,

@@ -73,3 +73,40 @@ SELECT id, "to", attempts, last_error
 FROM mail_outbox
 WHERE sent_at IS NULL AND attempts >= 12;
 ```
+
+## Daily digest
+
+The same worker ticks before each batch and after each normal 30-second wake.
+By default it queues today's digest at or after 09:00 UTC. A late restart catches
+up for today. It does not backfill days when the worker was down. Set the typed
+hour tag through the worker command when needed:
+
+```bash
+DIGEST_HOUR_UTC=9 pnpm run worker
+```
+
+Each member with open issues gets one message across all their current teams.
+The text lists open issue keys, titles, states, and priorities, in team/number
+order. Done and canceled issues are left out. Empty boards send no digest.
+The key is digest:<user>:<yyyy-mm-dd>. The outbox's unique key and INSERT ON
+CONFLICT DO NOTHING keep concurrent ticks and restarts from queuing a second row.
+Sent and dead rows keep that receipt. The existing SMTP crash window still means
+that delivery itself can repeat; this is one durable enqueue per UTC day.
+
+The tick reads membership and issues in one SQL snapshot. Receipt insert order
+uses sorted user IDs so concurrent ticks take unique-index locks in the same
+order. Users who already have a receipt are excluded before aggregation.
+
+Dead rows now stay outside mail_outbox_due's partial index. The sender also
+honors SMTP URL credentials, IPv6 hosts, and implicit TLS on port 465. Trial mail
+still goes only to local Mailpit. The auth proof uses a second local Mailpit at
+127.0.0.1:11027 (HTTP 18027), configured with synthetic test credentials.
+
+Start the second Mailpit for the credential proof in another terminal. These are
+synthetic trial credentials. The flags follow the [Mailpit SMTP guide](https://mailpit.axllent.org/docs/configuration/smtp/).
+
+```bash
+MP_SMTP_AUTH='digest-user:p@ss-word' ~/.local/bin/mailpit \
+  --listen 127.0.0.1:18027 --smtp 127.0.0.1:11027 \
+  --smtp-auth-allow-insecure
+```

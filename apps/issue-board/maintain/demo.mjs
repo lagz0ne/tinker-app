@@ -31,6 +31,7 @@ function browser(session, ...args) {
 }
 
 const worker = spawn(process.execPath, ["maintain/worker.mjs"], {
+  env: { ...process.env, DIGEST_HOUR_UTC: "0" },
   stdio: ["ignore", "pipe", "inherit"],
 });
 
@@ -207,17 +208,19 @@ try {
     assert(inbox.messages.some((message) => message.Subject === "New comment on ENG-1"));
     assert.equal(
       (
-        await delivered.query('SELECT count(*)::int AS count FROM mail_outbox WHERE "to"=$1', [
-          emailOutsider,
-        ])
+        await delivered.query(
+          "SELECT count(*)::int AS count FROM mail_outbox WHERE \"to\"=$1 AND dedupe_key NOT LIKE 'digest:%'",
+          [emailOutsider],
+        )
       ).rows[0].count,
       0,
     );
     assert.equal(
       (
-        await delivered.query('SELECT count(*)::int AS count FROM mail_outbox WHERE "to"=$1', [
-          emailA,
-        ])
+        await delivered.query(
+          "SELECT count(*)::int AS count FROM mail_outbox WHERE \"to\"=$1 AND dedupe_key NOT LIKE 'digest:%'",
+          [emailA],
+        )
       ).rows[0].count,
       0,
     );
@@ -226,6 +229,56 @@ try {
     );
   } finally {
     await delivered.end();
+  }
+  const digestDb = new pg.Client({
+    connectionString: "postgres://issue_board@127.0.0.1:15433/postgres",
+  });
+  await digestDb.connect();
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const deadline = AbortSignal.timeout(40_000);
+    let receipt;
+    do {
+      deadline.throwIfAborted();
+      receipt = (
+        await digestDb.query('SELECT * FROM mail_outbox WHERE "to"=$1 AND dedupe_key LIKE $2', [
+          emailB,
+          `digest:%:${day}`,
+        ])
+      ).rows;
+      if (receipt.length !== 1 || receipt[0].sent_at === null) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    } while (receipt.length !== 1 || receipt[0].sent_at === null);
+
+    const before = receipt[0].id;
+    // Another board write already woke the scheduler; the unique receipt must remain one row.
+    assert.equal(receipt[0].attempts, 1);
+    const inbox = await (
+      await fetch(
+        `http://127.0.0.1:18026/api/v1/search?query=${encodeURIComponent(`to:${emailB} subject:Daily issue digest ${day}`)}&limit=100`,
+      )
+    ).json();
+    assert.equal(inbox.messages.length, 1);
+
+    const message = await (
+      await fetch(`http://127.0.0.1:18026/api/v1/message/${inbox.messages[0].ID}`)
+    ).json();
+    assert(message.Text.includes("ENG-1"));
+    assert.equal(
+      (
+        await digestDb.query(
+          'SELECT count(*)::int AS count FROM mail_outbox WHERE "to"=$1 AND dedupe_key LIKE $2',
+          [emailOutsider, `digest:%:${day}`],
+        )
+      ).rows[0].count,
+      0,
+    );
+    console.log(
+      `PASS slice 6 digest: B receives one UTC-day digest in local Mailpit, including ENG-1; durable receipt ${before}; outsider gets none.`,
+    );
+  } finally {
+    await digestDb.end();
   }
   browser(b, "fill", '[data-card="ENG-1"] textarea[name="comment"]', "Selected comment text");
   const textDrag = browser(
@@ -370,3 +423,6 @@ execFileSync(process.execPath, ["maintain/proof-comments.mjs"], { stdio: "inheri
 execFileSync(process.execPath, ["maintain/proof-outbox.mjs"], { stdio: "inherit" });
 
 execFileSync(process.execPath, ["maintain/proof-worker-host.mjs"], { stdio: "inherit" });
+
+execFileSync(process.execPath, ["maintain/proof-digest.mjs"], { stdio: "inherit" });
+execFileSync(process.execPath, ["maintain/proof-smtp-auth.mjs"], { stdio: "inherit" });
