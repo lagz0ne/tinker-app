@@ -28,18 +28,10 @@ export const auth = resource({
     adapter: betterAuthDrizzle,
     start: betterAuthStart,
   },
-  factory: async ({
-    database,
-    settings,
-    calls,
-    outside,
-    send,
-    deleted,
-    created,
-    auth,
-    adapter,
-    start,
-  }) => {
+  factory: async (
+    { database, settings, calls, outside, send, deleted, created, auth, adapter, start },
+    { log },
+  ) => {
     const { betterAuth } = auth;
     const { drizzleAdapter } = adapter;
     const { tanstackStartCookies } = start;
@@ -51,11 +43,18 @@ export const auth = resource({
         user: {
           create: {
             after: async ({ id }) => {
-              await calls.fire(created, id, outside);
+              try {
+                await calls.fire(created, id, outside);
+              } catch (error) {
+                log.error("auth.accountStreamFailed", { accountId: id, error: String(error) });
+              }
             },
           },
         },
         session: {
+          create: {
+            after: ({ userId }) => calls.fire(created, userId, outside),
+          },
           delete: {
             after: ({ userId }) => calls.fire(deleted, userId, outside),
           },

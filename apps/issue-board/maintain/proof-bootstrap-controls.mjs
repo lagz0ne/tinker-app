@@ -15,6 +15,13 @@ writeFileSync(
 
 const cases = [
   {
+    name: "sign-in-no-repair",
+    target: "tinker/components/auth/auth.server.ts",
+    from: "after: ({ userId }) => calls.fire(created, userId, outside),",
+    to: "after: async () => {},",
+    reason: "sign-in must repair the missing stream",
+  },
+  {
     name: "bootstrap-inserts",
     target: "src/demo/backend/sync.server.ts",
     from: "history.read(tx,",

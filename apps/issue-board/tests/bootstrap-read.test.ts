@@ -236,3 +236,88 @@ test("migration backfills existing users idempotently without resetting revision
     await root.close({ graceful: true });
   }
 });
+
+for (const failure of ["none", "user hook", "sign-in hook"] as const) {
+  test(`sign-in repairs a missing stream and page loads; failure=${failure}`, async () => {
+    let refuse = failure === "user hook";
+    const root = createScope({
+      extensions: [startRequests, authStartup],
+      presets: [proofDatabase, proofMail],
+      tags: [
+        authBindings,
+        backendStop(new AbortController().signal),
+        bootstrapSlot(bootstrap),
+        readAccountSlot(readAccount),
+        databaseUrl(new URL("postgres://proof")),
+        authSettings({
+          origin: "http://localhost:4318",
+          secret: "test-secret-with-at-least-thirty-two-letters",
+        }),
+        userCreated(async (accountId, ctx) => {
+          if (refuse) {
+            refuse = false;
+            throw new Error("stream insert refused once");
+          }
+          await ctx.run(createAccountStream, { rawInput: { accountId } });
+        }),
+      ],
+    });
+    await root.ready;
+    try {
+      await root.run(migrate);
+      const signup = await root.run(handleAuth, {
+        input: new Request("http://localhost:4318/api/auth/sign-up/email", {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: "http://localhost:4318" },
+          body: JSON.stringify({
+            name: "Repair",
+            email: "repair@example.test",
+            password: "safe-password-42",
+          }),
+        }),
+        tags: requestHeaders(new Headers()),
+      });
+      expect(signup.status, "user-hook failure must not fail committed sign-up").toBe(200);
+
+      const db = await root.resolve(database);
+      const { eq } = await root.resolve(drizzleOrm);
+      const [account] = await db.select().from(user).where(eq(user.email, "repair@example.test"));
+      await db.delete(stream).where(eq(stream.id, account.id));
+      refuse = failure === "sign-in hook";
+
+      let response;
+      for (let attempt = 0; attempt < (failure === "sign-in hook" ? 2 : 1); attempt += 1) {
+        response = await root.run(handleAuth, {
+          input: new Request("http://localhost:4318/api/auth/sign-in/email", {
+            method: "POST",
+            headers: { "content-type": "application/json", origin: "http://localhost:4318" },
+            body: JSON.stringify({ email: "repair@example.test", password: "safe-password-42" }),
+          }),
+          tags: requestHeaders(new Headers()),
+        });
+        if (failure === "sign-in hook" && attempt === 0) {
+          expect(response.status).toBeGreaterThanOrEqual(400);
+          expect(await db.select().from(stream).where(eq(stream.id, account.id))).toEqual([]);
+        }
+      }
+
+      expect(response!.status).toBe(200);
+      expect(
+        await db.select().from(stream).where(eq(stream.id, account.id)),
+        "sign-in must repair the missing stream",
+      ).toEqual([{ id: account.id, revision: 0 }]);
+      const headers = new Headers({
+        cookie: response!.headers
+          .getSetCookie()
+          .map((value) => value.split(";")[0])
+          .join("; "),
+      });
+      expect(await root.settle(bootstrap, { tags: requestHeaders(headers) })).toMatchObject({
+        status: "success",
+        value: { private: { stream: account.id } },
+      });
+    } finally {
+      await root.close({ graceful: true });
+    }
+  });
+}

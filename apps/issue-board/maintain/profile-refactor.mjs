@@ -87,6 +87,8 @@ try {
     'TRUNCATE TABLE "user",team,sync_stream,sync_execution,sync_event,mail_outbox RESTART IDENTITY CASCADE',
   );
 
+  await db.query("INSERT INTO sync_stream(id) VALUES('public') ON CONFLICT DO NOTHING");
+
   const signup = await fetch(origin + "/api/auth/sign-up/email", {
     method: "POST",
     headers: { "content-type": "application/json", origin },

@@ -231,3 +231,15 @@ The served-server close check runs as the live proof maintain/proof-server-close
 not inside the unit test suite. Its paths use the module location, not the working directory.
 Run it with `node apps/issue-board/maintain/proof-server-close.mjs` from the repo root;
 then run `node apps/issue-board/maintain/proof-exit-controls.mjs` for its broken controls.
+
+Auth scopes must bind the required `userCreated` tag. The server binds it to
+`createAccountStream`. Both user creation and session creation await that
+idempotent insert. A user-hook failure is logged as `auth.accountStreamFailed`;
+sign-in retries stream creation. A session-hook failure fails that sign-in,
+and the next sign-in can repair it. Page bootstrap stays read-only.
+
+Run `maintain/proof-bootstrap-snapshot.mjs` for the two-client PostgreSQL
+snapshot check and `maintain/proof-bootstrap-snapshot-controls.mjs` for its
+broken isolation control. The reader runs the real bootstrap operation; the
+writer commits between its cursor and data reads. Both clients use a fresh
+schema that is dropped at the end.

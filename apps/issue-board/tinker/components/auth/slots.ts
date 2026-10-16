@@ -15,7 +15,7 @@ export const sessionDeleted = tag<
   label: "auth.sessionDeleted",
 });
 
-/** Await the app's account initialization before the create call can return. */
+/** Idempotent account initialization on user creation and every new session. */
 export const userCreated = tag<(accountId: string, context: Scope.ExtensionCtx) => Promise<void>>({
   label: "auth.userCreated",
 });
