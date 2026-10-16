@@ -243,3 +243,9 @@ snapshot check and `maintain/proof-bootstrap-snapshot-controls.mjs` for its
 broken isolation control. The reader runs the real bootstrap operation; the
 writer commits between its cursor and data reads. Both clients use a fresh
 schema that is dropped at the end.
+
+Run `pnpm test:proofs` from apps/issue-board with the other review gates.
+It runs the served-server close check, exit controls, and bootstrap controls
+in order. No services are needed. The Start gate list in AGENTS.md includes it.
+Exit logging falls back to the stack or String(reason) when a typed payload
+cannot be JSON encoded. Even a broken output stream cannot stop exit cleanup.

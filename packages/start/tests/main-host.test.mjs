@@ -489,3 +489,106 @@ test("different main and cleanup errors are both printed once", async () => {
   expect(await host.closed).toBe(1);
   expect(errors).toBe(`command failed (exit 1): ${error.stack}\nafter exit 1: ${cleanup.stack}\n`);
 });
+
+for (const payloadKind of ["bigint", "cycle"]) {
+  for (const reasonKind of ["error", "plain"]) {
+    test(`exit never throws for ${payloadKind} payload on ${reasonKind} reason`, async () => {
+      const payload = { value: 1n };
+      if (payloadKind === "cycle") payload.value = payload;
+      const reason = Object.assign(
+        reasonKind === "error"
+          ? new Error("bad data")
+          : {
+              toString() {
+                return "plain bad data";
+              },
+            },
+        {
+          kind: "BadInput",
+          payload,
+        },
+      );
+      let errors = "";
+      let returned = false;
+      const host = createMainHost(
+        async ({ exit }) => {
+          expect(() => exit(65, reason)).not.toThrow();
+          returned = true;
+          return { closed: Promise.resolve() };
+        },
+        {
+          env: {},
+          stdout: quiet,
+          stderr: {
+            write(text) {
+              errors += text;
+            },
+          },
+        },
+      );
+
+      expect(await host.closed).toBe(65);
+      expect(returned).toBe(true);
+      expect(host.signal.reason).toBe(reason);
+      expect(errors).toBe(`command failed (exit 65): ${reason.stack ?? String(reason)}\n`);
+    });
+  }
+}
+
+test("exit still aborts and joins when even the reason cannot be shown", async () => {
+  const reason = {
+    get stack() {
+      throw new Error("bad stack");
+    },
+    toString() {
+      throw new Error("bad string");
+    },
+  };
+  let errors = "";
+  let returned = false;
+  const host = createMainHost(
+    async ({ exit }) => {
+      exit(1, reason);
+      returned = true;
+      return { closed: Promise.resolve() };
+    },
+    {
+      env: {},
+      stdout: quiet,
+      stderr: {
+        write(text) {
+          errors += text;
+        },
+      },
+    },
+  );
+
+  expect(await host.closed).toBe(1);
+  expect(returned).toBe(true);
+  expect(host.signal.aborted).toBe(true);
+  expect(errors).toBe("command failed (exit 1): Unprintable command failure\n");
+});
+
+test("exit still aborts and joins when stderr write throws", async () => {
+  let returned = false;
+  const host = createMainHost(
+    async ({ exit }) => {
+      exit(1, new Error("failure"));
+      returned = true;
+      return { closed: Promise.resolve() };
+    },
+    {
+      env: {},
+      stdout: quiet,
+      stderr: {
+        write() {
+          throw new Error("broken stream");
+        },
+      },
+    },
+  );
+
+  expect(await host.closed).toBe(1);
+  expect(returned).toBe(true);
+  expect(host.signal.aborted).toBe(true);
+});

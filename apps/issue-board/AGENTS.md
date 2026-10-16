@@ -163,6 +163,7 @@ Run the shipped checks before review:
 npm run build
 npm run typecheck
 vp test
+npm run test:proofs
 node scripts/check-plain.mjs
 node scripts/check-plain.mjs --prove
 npm run doctor

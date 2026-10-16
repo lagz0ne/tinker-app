@@ -27,11 +27,12 @@ export function createMainHost(main, options) {
   const report = (prefix, reason, exitCode) => {
     if (reason == null || hostReasons.has(reason) || printed.has(reason)) return;
     printed.add(reason);
-    const detail =
-      exitCode !== 1 && reason.kind && reason.payload
-        ? `${reason.kind}: ${JSON.stringify(reason.payload)}`
-        : (reason.stack ?? String(reason));
-    stderr.write(`${prefix}: ${detail}\n`);
+    const detail = describeReason(reason, exitCode);
+    try {
+      stderr.write(`${prefix}: ${detail}\n`);
+    } catch {
+      // A broken output stream must not block abort or the grace deadline.
+    }
   };
 
   let timer;
@@ -100,6 +101,21 @@ export function createMainHost(main, options) {
       stop(next, reason);
     },
   };
+}
+
+/** Error text is best effort; a bad payload must never interrupt a stop. */
+function describeReason(reason, exitCode) {
+  try {
+    return exitCode !== 1 && reason.kind && reason.payload
+      ? `${reason.kind}: ${JSON.stringify(reason.payload)}`
+      : (reason.stack ?? String(reason));
+  } catch {
+    try {
+      return reason.stack ?? String(reason);
+    } catch {
+      return "Unprintable command failure";
+    }
+  }
 }
 
 /** Native startup and close always join, including errors after exit. */
