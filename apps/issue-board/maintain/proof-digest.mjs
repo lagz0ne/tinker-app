@@ -21,7 +21,7 @@ const vite = await createServer({
   },
 });
 
-const { queueDailyDigests } = await vite.ssrLoadModule("/src/backend/digest.server.ts");
+const { queueDailyDigests, digestDone } = await vite.ssrLoadModule("/src/backend/digest.server.ts");
 
 const { database, databaseUrl } = await vite.ssrLoadModule(
   "/tinker/components/database/index.server.ts",
@@ -89,28 +89,28 @@ try {
     ),
   );
   assert.equal(new Set(pids).size, 2);
-  // Both INSERTs see no committed receipt and must reach the database at once.
-  await coordinator.query("BEGIN");
-  await coordinator.query("LOCK TABLE mail_outbox IN SHARE MODE");
-  writes = roots.map((root) => root.run(queueDailyDigests));
-  const done = Promise.allSettled(writes);
+  // Keep the first insert invisible so the second must wait on its unique key.
+  await clients[0].query("BEGIN");
+  const first = await roots[0].run(queueDailyDigests);
+  assert(first.queued >= 2);
+  const second = roots[1].run(queueDailyDigests);
+  writes = [second];
+  const settled = Promise.allSettled(writes);
   const deadline = AbortSignal.timeout(10_000);
-  let blocked = 0;
-  while (blocked !== 2) {
+  let blocked = false;
+  while (!blocked) {
     deadline.throwIfAborted();
     blocked = (
       await observer.query(
-        "SELECT count(*)::int AS count FROM pg_stat_activity WHERE pid=ANY($1::int[]) AND wait_event_type='Lock' AND query LIKE '%INSERT INTO%mail_outbox%'",
-        [pids],
+        "SELECT wait_event FROM pg_stat_activity WHERE pid=$1 AND wait_event_type='Lock'",
+        [pids[1]],
       )
-    ).rows[0].count;
+    ).rows.some((row) => row.wait_event === "transactionid");
   }
-  await coordinator.query("COMMIT");
-  const results = await done;
-  assert(
-    results.every((result) => result.status === "fulfilled"),
-    JSON.stringify(results),
-  );
+  await clients[0].query("COMMIT");
+  const results = await settled;
+  assert.equal(results[0].status, "fulfilled", JSON.stringify(results));
+  assert.equal(results[0].value.queued, 0);
   const receipts = (
     await observer.query(
       "SELECT * FROM mail_outbox WHERE dedupe_key=ANY($1::text[]) ORDER BY dedupe_key",
@@ -126,7 +126,7 @@ try {
   const replay = await roots[1].run(queueDailyDigests);
   assert.equal(replay.queued, 0);
   console.log(
-    "PASS live digest race: two separate INSERTs blocked together at mail_outbox; one durable digest per member/day, zero outsider receipts; replay queues zero.",
+    "PASS live digest race: second INSERT waits on transactionid until first commits; second queues 0; one durable digest per member/day, zero outsider receipts; replay queues zero.",
   );
 
   wakeRoot = createScope({
@@ -146,15 +146,16 @@ try {
   const pending = wake.wait().then(() => {
     woke = true;
   });
+  (await roots[1].resolve(digestDone)).day = "";
   await roots[1].run(queueDailyDigests);
   await observer.query("SELECT 1");
-  assert.equal(emptyNotices, 0, "conflict-only insert must emit no notification");
+  assert.equal(emptyNotices, 0, "zero-row insert must emit no notification");
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(woke, false, "a conflict-only digest tick must not notify itself");
+  assert.equal(woke, false, "a zero-row digest tick must not notify itself");
   clock.advance(30_000);
   await pending;
   console.log(
-    "PASS digest idle tick: conflict-only insert emits no board_outbox wake; healthy 30s poll remains pending until its deadline.",
+    "PASS digest idle tick: zero-row insert emits no board_outbox wake; healthy 30s poll remains pending until its deadline.",
   );
 
   await observer.query("SET enable_seqscan=off");
@@ -174,12 +175,13 @@ try {
   ).rows[0].predicate;
   assert(predicate.includes("attempts < 12"), predicate);
   console.log(
-    "PASS live claim index: parameterized claim uses mail_outbox_due; partial predicate excludes sent and attempts>=12 rows.",
+    "PASS live claim index: parameterized claim shape can use mail_outbox_due; partial predicate excludes sent and attempts>=12 rows.",
   );
   console.log(plan);
 } finally {
-  await coordinator.query("ROLLBACK");
+  await clients[0]?.query("ROLLBACK");
   await Promise.allSettled(writes);
+  await coordinator.query("ROLLBACK");
   stop.abort();
   await Promise.all(roots.map((root) => root.closed));
   if (wakeRoot) await wakeRoot.closed;

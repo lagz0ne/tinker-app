@@ -28,7 +28,8 @@ export default async function main(input: WorkerInput) {
     observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
     extensions: [mailStartup],
     tags: [
-      env.DIGEST_HOUR_UTC !== undefined && digestHourUTC(Number(env.DIGEST_HOUR_UTC)),
+      env.DIGEST_HOUR_UTC !== undefined &&
+        digestHourUTC(env.DIGEST_HOUR_UTC.trim() === "" ? NaN : Number(env.DIGEST_HOUR_UTC)),
       env.OUTBOX_SMTP_TIMEOUT_MS !== undefined &&
         alertMailTimeout(Number(env.OUTBOX_SMTP_TIMEOUT_MS)),
       env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
@@ -37,6 +38,7 @@ export default async function main(input: WorkerInput) {
     ],
   });
   await root.ready;
+  root.resolve(digestHourUTC);
 
   const closed = root
     .run(runMailWorker, { signal })

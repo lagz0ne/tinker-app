@@ -1,13 +1,15 @@
 import { createServer, type Socket } from "node:net";
 
 import { createScope } from "@tinker/core";
+import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
 import { database, migrate } from "~/components/database/index.server";
 import { smtpUrl, mailFrom } from "~/components/mail/index.server";
 
-import { alertMailTimeout } from "@/backend/alert-mail.server";
+import { alertMail, alertMailTimeout } from "@/backend/alert-mail.server";
 import { mailOutbox } from "@/backend/board.schema.server";
+import { smtp } from "@/backend/modules";
 import { deliverMailBatch } from "@/backend/outbox.server";
 
 import { proofDatabase } from "./presets";
@@ -58,5 +60,45 @@ test("a local endpoint that never greets times out and releases the claim", asyn
     expect((await root.closed).status).toBe("success");
     for (const socket of sockets) socket.destroy();
     await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("SMTP URL options keep credentials, IPv6, TLS and no-auth settings", async () => {
+  for (const [url, expected] of [
+    [
+      "smtp://digest%2Duser:p%40ss@[::1]:465",
+      { host: "::1", port: 465, secure: true, auth: { user: "digest-user", pass: "p@ss" } },
+    ],
+    ["smtp://127.0.0.1:11026", { host: "127.0.0.1", port: 11026, secure: false, auth: undefined }],
+    ["smtps://localhost", { host: "localhost", port: undefined, secure: true, auth: undefined }],
+  ] as const) {
+    const options: unknown[] = [];
+    const stop = new AbortController();
+    const root = createScope({
+      signal: stop.signal,
+      tags: [smtpUrl(new URL(url)), mailFrom("board@example.test")],
+      presets: [
+        preset(
+          smtp,
+          async () =>
+            ({
+              default: {
+                createTransport: (value: unknown) => {
+                  options.push(value);
+                  return { close: () => {}, sendMail: async () => {} };
+                },
+              },
+            }) as never,
+        ),
+      ],
+    });
+    try {
+      await root.ready;
+      await root.resolve(alertMail);
+      expect(options).toEqual([expect.objectContaining(expected)]);
+    } finally {
+      stop.abort();
+      expect((await root.closed).status).toBe("success");
+    }
   }
 });

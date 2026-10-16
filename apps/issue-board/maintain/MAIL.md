@@ -49,7 +49,7 @@ the batch. A clean SIGTERM prints "outbox worker stopped". Close errors still fa
 the process. The host also works with only environment values and no .env file.
 
 The existing auth/profile demo mail still uses the starter sender. This outbox
-owns board alerts only. No digest, cron, import, or new registry component is added.
+owns board alerts and daily digests. No import or new registry component is added.
 
 Run the scripted demo and real-Postgres proofs after building the worker:
 
@@ -61,7 +61,7 @@ The demo owns one worker process and stops it by PID before running the live
 proofs. Unit tests run serially with the PGlite preset. Only the live proof can
 show that separate transactions skip each other's locked rows.
 
-Rank-only moves still send alerts. Slice 6 may replace those with digest mail.
+Rank-only moves still send alerts alongside daily digests.
 The app clock selects due rows, while the database clock sets their first next_at;
 clock skew can delay a new row until a later poll. A future member-removal path
 must also cancel that member's pending alerts.
@@ -76,7 +76,11 @@ WHERE sent_at IS NULL AND attempts >= 12;
 
 ## Daily digest
 
-The same worker ticks before each batch and after each normal 30-second wake.
+The same worker checks the day before draining batches and after each wake.
+A scope-held day gate runs the heavy SQL once per worker per UTC day after the hour.
+Members who become eligible after that snapshot wait until tomorrow. A fresh
+worker after a restart may catch them today; existing durable receipts still stop
+a second enqueue. A failed digest logs digest.failed and does not block alerts.
 By default it queues today's digest at or after 09:00 UTC. A late restart catches
 up for today. It does not backfill days when the worker was down. Set the typed
 hour tag through the worker command when needed:
@@ -87,7 +91,8 @@ DIGEST_HOUR_UTC=9 pnpm run worker
 
 Each member with open issues gets one message across all their current teams.
 The text lists open issue keys, titles, states, and priorities, in team/number
-order. Done and canceled issues are left out. Empty boards send no digest.
+order, limited to 50 issues followed by the remaining count. Done and canceled
+issues are left out. Empty boards send no digest.
 The key is digest:<user>:<yyyy-mm-dd>. The outbox's unique key and INSERT ON
 CONFLICT DO NOTHING keep concurrent ticks and restarts from queuing a second row.
 Sent and dead rows keep that receipt. The existing SMTP crash window still means

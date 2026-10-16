@@ -83,6 +83,8 @@ test("UTC tick queues once per member per day and keeps each user's visible open
   clock.advance(1);
   expect(await root.run(queueDailyDigests)).toEqual({ queued: 2 });
   expect(await root.run(queueDailyDigests)).toEqual({ queued: 0 });
+  expect(await root.run(queueDailyDigests)).toEqual({ queued: 0 });
+  expect(databaseQueries).toHaveLength(1);
 
   const rows = await db.select().from(mailOutbox);
   expect(rows).toHaveLength(2);
@@ -139,4 +141,43 @@ test("the claim index excludes sent rows and dead rows", async () => {
   expect(indexes).toMatchObject({
     rows: [{ indexdef: expect.stringContaining("sent_at IS NULL") }],
   });
+});
+
+test("a member joining after the daily snapshot waits until tomorrow", async () => {
+  clock.advance(1);
+  expect(await root.run(queueDailyDigests)).toEqual({ queued: 2 });
+  const db = await root.resolve(database);
+
+  await db.insert(teamMember).values({ teamId: eng, userId: "outsider", role: "member" });
+
+  clock.setTime(Date.parse("2030-01-01T10:00:00Z"));
+  expect(await root.run(queueDailyDigests)).toEqual({ queued: 0 });
+  expect(
+    (await db.select().from(mailOutbox)).some((row) => row.to === "outsider@example.test"),
+  ).toBe(false);
+
+  clock.setTime(Date.parse("2030-01-02T09:00:00Z"));
+  expect(await root.run(queueDailyDigests)).toEqual({ queued: 3 });
+});
+
+test("digest text lists at most fifty issues and reports the rest", async () => {
+  const db = await root.resolve(database);
+
+  await db.insert(issue).values(
+    Array.from({ length: 51 }, (_, index) => ({
+      id: crypto.randomUUID(),
+      teamId: eng,
+      number: index + 3,
+      title: "Extra issue",
+      creatorId: "ada",
+      rank: "a0",
+    })),
+  );
+
+  clock.advance(1);
+  await root.run(queueDailyDigests);
+  const rows = await db.select().from(mailOutbox);
+  const grace = rows.find((row) => row.to === "grace@example.test")!;
+  expect(grace.text.split("\n").filter((line) => line.startsWith("ENG-"))).toHaveLength(50);
+  expect(grace.text).toContain("And 2 more open issues.");
 });

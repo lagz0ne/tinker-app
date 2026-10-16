@@ -1,4 +1,4 @@
-import { operation, tag } from "@tinker/core";
+import { operation, resource, tag } from "@tinker/core";
 import { z } from "zod";
 
 import { user } from "~/components/auth/index.server";
@@ -13,23 +13,30 @@ export const digestHourUTC = tag<number>({
   parse: z.number().int().min(0).max(23),
 });
 
+/** Scope-owned day gate; durable receipts still cover other workers and restarts. */
+export const digestDone = resource({
+  label: "digest.done",
+  factory: async () => ({ day: "" }),
+});
+
 /** One SQL snapshot applies membership and queues one digest per user across all their teams. */
 export const queueDailyDigests = operation({
   label: "digest.tick",
-  depends: { database, orm: drizzleOrm, hour: digestHourUTC },
-  run: async ({ database, orm, hour }, { clock, log }) => {
+  depends: { database, orm: drizzleOrm, hour: digestHourUTC, done: digestDone },
+  run: async ({ database, orm, hour, done }, { clock, log }) => {
     const now = new Date(clock.currentTimeMillis());
-    if (now.getUTCHours() < hour) return { queued: 0 };
     const day = now.toISOString().slice(0, 10);
+    if (now.getUTCHours() < hour || done.day === day) return { queued: 0 };
     const { sql } = orm;
 
     const inserted = await database.execute(sql`
       INSERT INTO ${mailOutbox} ("to", subject, text, dedupe_key, next_at)
       SELECT ${user.email}, ${`Daily issue digest ${day}`},
         ${`Open issues for ${day} (UTC)\n\n`} ||
-        string_agg(${team.key} || '-' || ${issue.number}::text || ' · ' || ${issue.title} ||
-          ' [' || ${issue.state} || '], priority ' || ${issue.priority}::text,
-          E'\n' ORDER BY ${team.key} COLLATE "C", ${issue.number}),
+        array_to_string((array_agg(${team.key} || '-' || ${issue.number}::text || ' · ' || ${issue.title} ||
+          ' [' || ${issue.state} || '], priority ' || ${issue.priority}::text
+          ORDER BY ${team.key} COLLATE "C", ${issue.number}))[1:50], E'\n') ||
+        CASE WHEN count(*) > 50 THEN E'\nAnd ' || (count(*) - 50)::text || ' more open issues.' ELSE '' END,
         'digest:' || ${user.id} || ':' || ${day}, ${now}
       FROM ${user}
       INNER JOIN ${teamMember} ON ${teamMember.userId} = ${user.id}
@@ -46,7 +53,8 @@ export const queueDailyDigests = operation({
       RETURNING id
     `);
     const queued = z.object({ rows: z.array(z.unknown()) }).parse(inserted).rows.length;
-    log("digest.queued", { day, queued });
+    done.day = day;
+    log("digest.completed", { day, queued });
     return { queued };
   },
 });

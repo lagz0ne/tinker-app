@@ -74,7 +74,7 @@ try {
     ])
   ).rows;
   assert.deepEqual(after, before);
-  assert(output.includes('"message":"digest.queued"'));
+  assert(output.includes('"message":"digest.completed"'));
   console.log(
     "PASS digest process restart: fresh built worker ticks with hour=0 and leaves today's durable receipts unchanged.",
   );

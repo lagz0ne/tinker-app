@@ -162,10 +162,18 @@ export const runMailWorker = operation({
     while (!signal.aborted) {
       try {
         await wake.listen();
-        await digest.run();
-        const result = await deliver.run();
-        log("outbox.batch", result);
-        if (result.claimed === 20) continue;
+        try {
+          await digest.run();
+        } catch (error) {
+          if (signal.aborted) return;
+          log.error("digest.failed", { error: String(error) });
+        }
+
+        let result;
+        do {
+          result = await deliver.run();
+          log("outbox.batch", result);
+        } while (result.claimed === 20 && !signal.aborted);
       } catch (error) {
         if (signal.aborted) return;
         log.error("outbox.unavailable", { error: String(error) });

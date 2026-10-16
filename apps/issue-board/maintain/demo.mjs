@@ -30,7 +30,7 @@ function browser(session, ...args) {
   return reply.data;
 }
 
-const worker = spawn(process.execPath, ["maintain/worker.mjs"], {
+let worker = spawn(process.execPath, ["maintain/worker.mjs"], {
   env: { ...process.env, DIGEST_HOUR_UTC: "0" },
   stdio: ["ignore", "pipe", "inherit"],
 });
@@ -41,7 +41,7 @@ worker.stdout.on("data", (chunk) => {
   workerOutput += chunk.toString();
 });
 
-const workerExit = new Promise((resolve) =>
+let workerExit = new Promise((resolve) =>
   worker.once("exit", (code, signal) => resolve({ code, signal })),
 );
 
@@ -230,6 +230,20 @@ try {
   } finally {
     await delivered.end();
   }
+  // A fresh worker catches up today's snapshot after the new members have issues.
+  worker.kill("SIGTERM");
+  assert.deepEqual(await workerExit, { code: 0, signal: null });
+  worker = spawn(process.execPath, ["maintain/worker.mjs"], {
+    env: { ...process.env, DIGEST_HOUR_UTC: "0" },
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  worker.stdout.on("data", (chunk) => {
+    workerOutput += chunk.toString();
+  });
+  workerExit = new Promise((resolve) =>
+    worker.once("exit", (code, signal) => resolve({ code, signal })),
+  );
+
   const digestDb = new pg.Client({
     connectionString: "postgres://issue_board@127.0.0.1:15433/postgres",
   });

@@ -117,7 +117,7 @@ test("worker drains a full batch before waiting and stops while idle", async () 
     await waiting.promise;
     expect(batches).toBe(2);
     expect(polls).toBe(1);
-    expect(digestTicks).toBe(2);
+    expect(digestTicks).toBe(1);
   } finally {
     stop.abort();
     await running;
@@ -179,6 +179,77 @@ test("worker command prints a clean stop and surfaces real teardown errors", asy
     } else {
       expect(result).toEqual({ ok: true });
       expect(output).toContain("outbox worker stopped\n");
+    }
+  }
+});
+
+test("digest failure logs its own event and still delivers alerts", async () => {
+  const stop = new AbortController();
+  const delivered = Promise.withResolvers<void>();
+  const messages: string[] = [];
+  let batches = 0;
+  const root = createScope({
+    signal: stop.signal,
+    observe: {
+      log: (entry) => {
+        messages.push(entry.message);
+      },
+    },
+    presets: [
+      preset(queueDailyDigests, async () => {
+        throw new Error("digest SQL failed");
+      }),
+      preset(deliverMailBatch, async () => {
+        batches += 1;
+        return { claimed: 0, sent: 0, failed: 0 };
+      }),
+      preset(outboxWake, async (_deps, { closing }) => ({
+        listen: async () => {},
+        retry: async () => {
+          throw new Error("Unexpected retry");
+        },
+        wait: async () => {
+          delivered.resolve();
+          await new Promise<void>((resolve) =>
+            closing.addEventListener("abort", () => resolve(), { once: true }),
+          );
+        },
+      })),
+    ],
+  });
+
+  await root.ready;
+  const running = root.settle(runMailWorker, { signal: stop.signal });
+  try {
+    await delivered.promise;
+    expect(batches).toBe(1);
+    expect(messages.filter((message) => message === "digest.failed")).toHaveLength(1);
+    expect(messages).not.toContain("outbox.unavailable");
+  } finally {
+    stop.abort();
+    await running;
+    expect((await root.closed).status).toBe("success");
+  }
+});
+
+test("blank digest hour refuses worker startup", async () => {
+  for (const hour of ["", " "]) {
+    const stop = new AbortController();
+    try {
+      await expect(
+        main({
+          env: {
+            DIGEST_HOUR_UTC: hour,
+            SMTP_URL: "smtp://127.0.0.1:11026",
+            SMTP_FROM: "board@example.test",
+          },
+          signal: stop.signal,
+          stdout: { write: () => {} },
+          stderr: { write: () => {} },
+        }),
+      ).rejects.toThrow();
+    } finally {
+      stop.abort();
     }
   }
 });

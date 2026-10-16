@@ -14,7 +14,7 @@ import { deliverMailBatch } from "@/backend/outbox.server";
 import { currentUser } from "@/demo/backend/auth.server";
 import { bootstrapPrivate } from "@/demo/backend/sync.server";
 
-import { proofDatabase } from "./presets";
+import { databaseQueries, proofDatabase } from "./presets";
 
 let root: Scope.RootHandle;
 let clock: Clock.Test;
@@ -305,4 +305,11 @@ test("stopping a batch finishes its current send and releases the remaining rows
   expect(rows.filter((row) => row.sentAt !== null)).toHaveLength(1);
   expect(rows.filter((row) => row.sentAt === null)).toMatchObject([{ attempts: 0 }]);
   expect(sent).toHaveLength(1);
+});
+
+test("the real claim SQL keeps the attempts cap for the partial index", async () => {
+  databaseQueries.length = 0;
+  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  const claim = databaseQueries.find((query) => query.includes("skip locked"));
+  expect(claim).toMatch(/"attempts" < \$/);
 });
