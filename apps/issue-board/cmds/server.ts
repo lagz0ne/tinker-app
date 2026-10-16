@@ -9,6 +9,7 @@ import {
   authSettings,
   sendAuthMail,
   sessionDeleted,
+  userCreated,
 } from "~/components/auth/index.server";
 import { databaseSetup, databaseUrl } from "~/components/database/index.server";
 import { abortReasons } from "~/components/errors";
@@ -20,6 +21,7 @@ import {
   bootstrapSlot,
   readAccountSlot,
   publishAccountNotice,
+  createAccountStream,
 } from "~/components/sync/index.server";
 import {
   telemetryExport,
@@ -78,6 +80,9 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
           bootstrapSlot(bootstrap),
           readAccountSlot(readAccount),
           sendAuthMail((message, ctx) => ctx.resolve(mail.authMail).enqueue(message)),
+          userCreated((accountId, ctx) =>
+            ctx.run(createAccountStream, { rawInput: { accountId } }),
+          ),
           sessionDeleted((accountId, ctx) =>
             ctx.run(publishAccountNotice, { rawInput: { accountId } }),
           ),

@@ -1,14 +1,15 @@
-import { resource } from "@tinker/core";
+import { operation, resource } from "@tinker/core";
+import { z } from "zod";
 
-import { drizzleOrm } from "~/components/database/index.server";
+import { database, drizzleOrm } from "~/components/database/index.server";
 import type { Database } from "~/components/database/index.server";
 import { raise } from "~/components/errors";
 import type { Sync } from "~/components/sync/envelopes";
 import { stream, event, execution } from "~/components/sync/schema";
 
 /**
- * The app's writes to a sync stream. A stream row stays locked until its records and events
- * commit together. The Drizzle module builds as a dep before the history body runs.
+ * Snapshots read a cursor without a row lock. Writers keep their stream row locked
+ * until its records and events commit together. The Drizzle module is a lazy dep.
  */
 export const eventHistory = resource({
   label: "sync.history",
@@ -16,6 +17,11 @@ export const eventHistory = resource({
   factory: async ({ orm }) => {
     const { eq, sql } = orm;
     return {
+      async read(tx: Database.Transaction, id: string) {
+        const [row] = await tx.select().from(stream).where(eq(stream.id, id));
+        if (!row) raise("StreamMissing", {});
+        return row.revision;
+      },
       async lock(tx: Database.Transaction, id: string) {
         await tx.insert(stream).values({ id }).onConflictDoNothing();
         const row = (await tx.select().from(stream).where(eq(stream.id, id)).for("update")).at(0);
@@ -59,5 +65,15 @@ export const eventHistory = resource({
         }
       },
     };
+  },
+});
+
+/** Better Auth awaits this idempotent insert after its own user transaction. */
+export const createAccountStream = operation({
+  label: "sync.accountCreated",
+  input: z.strictObject({ accountId: z.string().min(1) }),
+  depends: { database },
+  run: async ({ database }, { input }) => {
+    await database.insert(stream).values({ id: input.accountId }).onConflictDoNothing();
   },
 });

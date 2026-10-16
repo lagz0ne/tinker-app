@@ -16,8 +16,9 @@ These rules cover slice 7 and its refactor. Review fixes keep Core unchanged.
    response or progress output. The worker has one child per claimed delivery
    batch, rather than per whole polling pass. That keeps row locks short. Mail
    stays an outbox row inside the transaction. There is no afterCommit hook.
-   Page-render writes remain prohibited. The older bootstrap cursor upsert is
-   an open Start limit (37), not an approved exception to this rule.
+   Page-render writes remain prohibited. Limit 37 is closed: account streams
+   are created at sign-up, the public stream is seeded by migration, and
+   bootstrap only reads a repeatable snapshot.
 4. Writes use controller steps and shared lock/event/outbox operations. A pure
    formatting step may remain an operation to show its own trace span.
 5. Imports stay at the top: external, copied base/components, app, relative.

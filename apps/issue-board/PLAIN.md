@@ -117,6 +117,7 @@ Tests and generated files do not count.
     - `tinker/components/sync/history.server.ts#append`
     - `tinker/components/sync/history.server.ts#find`
     - `tinker/components/sync/history.server.ts#lock`
+    - `tinker/components/sync/history.server.ts#read`
     - `tinker/components/sync/notifications.server.ts#subscribe`
     - `tinker/components/sync/stream.server.ts#lease.check`
     - `tinker/components/sync/stream.server.ts#lease.open`

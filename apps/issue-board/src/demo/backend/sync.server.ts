@@ -20,14 +20,17 @@ export const bootstrapPublic = operation({
   label: "bootstrapPublic",
   depends: { database, history: eventHistory },
   run: ({ database, history }) => {
-    return database.transaction(async (tx) => {
-      const revision = await history.lock(tx, "public");
-      return {
-        stream: "public" as const,
-        revision,
-        value: (await tx.select().from(counter)).at(0)?.value ?? 0,
-      };
-    });
+    return database.transaction(
+      async (tx) => {
+        const revision = await history.read(tx, "public");
+        return {
+          stream: "public" as const,
+          revision,
+          value: (await tx.select().from(counter)).at(0)?.value ?? 0,
+        };
+      },
+      { isolationLevel: "repeatable read", accessMode: "read only" },
+    );
   },
 });
 
@@ -36,64 +39,67 @@ export const bootstrapPrivate = operation({
   depends: { orm: drizzleOrm, currentUser, database, history: eventHistory },
   run: ({ orm, currentUser, database, history }) => {
     const { asc, eq, sql } = orm;
-    return database.transaction(async (tx) => {
-      const revision = await history.lock(tx, currentUser.id);
-      const profile = (
-        await tx
+    return database.transaction(
+      async (tx) => {
+        const revision = await history.read(tx, currentUser.id);
+        const profile = (
+          await tx
+            .select({
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              emailVerified: user.emailVerified,
+            })
+            .from(user)
+            .where(eq(user.id, currentUser.id))
+        ).at(0);
+        if (!profile) raise("SignInRequired", {});
+        const todos = await tx
+          .select({ id: todo.id, title: todo.title, done: todo.done })
+          .from(todo)
+          .where(eq(todo.ownerId, currentUser.id))
+          .orderBy(asc(todo.id));
+        const teams = await tx
+          .select({ id: team.id, key: team.key, name: team.name, role: teamMember.role })
+          .from(team)
+          .innerJoin(teamMember, eq(team.id, teamMember.teamId))
+          .where(eq(teamMember.userId, currentUser.id))
+          .orderBy(asc(team.key));
+
+        const issues = await tx
+          .select(issueFields)
+          .from(issue)
+          .innerJoin(team, eq(issue.teamId, team.id))
+          .innerJoin(teamMember, eq(teamMember.teamId, team.id))
+          .where(eq(teamMember.userId, currentUser.id))
+          .orderBy(asc(team.key), sql`${issue.rank} collate "C"`, asc(issue.id));
+
+        const comments = await tx
           .select({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            emailVerified: user.emailVerified,
+            id: comment.id,
+            issueId: comment.issueId,
+            authorId: comment.authorId,
+            body: comment.body,
+            createdAt: comment.createdAt,
           })
-          .from(user)
-          .where(eq(user.id, currentUser.id))
-      ).at(0);
-      if (!profile) raise("SignInRequired", {});
-      const todos = await tx
-        .select({ id: todo.id, title: todo.title, done: todo.done })
-        .from(todo)
-        .where(eq(todo.ownerId, currentUser.id))
-        .orderBy(asc(todo.id));
-      const teams = await tx
-        .select({ id: team.id, key: team.key, name: team.name, role: teamMember.role })
-        .from(team)
-        .innerJoin(teamMember, eq(team.id, teamMember.teamId))
-        .where(eq(teamMember.userId, currentUser.id))
-        .orderBy(asc(team.key));
+          .from(comment)
+          .innerJoin(issue, eq(comment.issueId, issue.id))
+          .innerJoin(teamMember, eq(teamMember.teamId, issue.teamId))
+          .where(eq(teamMember.userId, currentUser.id))
+          .orderBy(asc(comment.createdAt), asc(comment.id));
 
-      const issues = await tx
-        .select(issueFields)
-        .from(issue)
-        .innerJoin(team, eq(issue.teamId, team.id))
-        .innerJoin(teamMember, eq(teamMember.teamId, team.id))
-        .where(eq(teamMember.userId, currentUser.id))
-        .orderBy(asc(team.key), sql`${issue.rank} collate "C"`, asc(issue.id));
-
-      const comments = await tx
-        .select({
-          id: comment.id,
-          issueId: comment.issueId,
-          authorId: comment.authorId,
-          body: comment.body,
-          createdAt: comment.createdAt,
-        })
-        .from(comment)
-        .innerJoin(issue, eq(comment.issueId, issue.id))
-        .innerJoin(teamMember, eq(teamMember.teamId, issue.teamId))
-        .where(eq(teamMember.userId, currentUser.id))
-        .orderBy(asc(comment.createdAt), asc(comment.id));
-
-      return {
-        stream: currentUser.id,
-        revision,
-        profile,
-        todos,
-        teams,
-        issues,
-        comments: comments.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
-      };
-    });
+        return {
+          stream: currentUser.id,
+          revision,
+          profile,
+          todos,
+          teams,
+          issues,
+          comments: comments.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
+        };
+      },
+      { isolationLevel: "repeatable read", accessMode: "read only" },
+    );
   },
 });
 

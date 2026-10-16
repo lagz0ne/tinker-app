@@ -3,7 +3,13 @@ import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
-import { auth, handleAuth, sendAuthMail, sessionDeleted } from "~/components/auth/index.server";
+import {
+  auth,
+  handleAuth,
+  sendAuthMail,
+  sessionDeleted,
+  userCreated,
+} from "~/components/auth/index.server";
 import { authSettings, authStartup } from "~/components/auth/index.server";
 import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
@@ -13,7 +19,7 @@ import type { AuthPort } from "./fixtures/app.server";
 
 const requestBindings = requestHostStop(new AbortController().signal);
 
-const hooks = [sendAuthMail(() => {}), sessionDeleted(async () => {})];
+const hooks = [userCreated(async () => {}), sendAuthMail(() => {}), sessionDeleted(async () => {})];
 
 /** The same auth descriptor, typed only to the two methods the mount uses. */
 const authPort: Resource.Handle<Promise<AuthPort>> = auth;
@@ -153,6 +159,7 @@ test("auth startup names each missing required hook before any auth client start
   for (const [provided, missing] of [
     [sessionDeleted(async () => {}), "auth.sendMail"],
     [sendAuthMail(() => {}), "auth.sessionDeleted"],
+    [[sendAuthMail(() => {}), sessionDeleted(async () => {})], "auth.userCreated"],
   ] as const) {
     const root = createScope({ extensions: [authStartup], tags: [keys, provided] });
     await expect(root.ready).rejects.toMatchObject({

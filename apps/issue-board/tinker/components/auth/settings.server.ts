@@ -2,7 +2,7 @@ import { extension, tag } from "@tinker/core";
 import { z } from "zod";
 
 import { authCalls } from "./calls.server";
-import { sendAuthMail, sessionDeleted } from "./slots";
+import { sendAuthMail, sessionDeleted, userCreated } from "./slots";
 
 export declare namespace Auth {
   type Settings = { origin: string; secret: string };
@@ -21,6 +21,8 @@ export const authStartup = extension({
       event.resolve(authSettings);
       event.resolve(sendAuthMail);
       event.resolve(sessionDeleted);
+      event.resolve(userCreated);
+
       await event.next();
       return event;
     },

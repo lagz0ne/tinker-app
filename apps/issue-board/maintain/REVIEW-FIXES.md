@@ -18,9 +18,10 @@ Base: 9dc7dcad6bd4060e555a4f780ccfe9d58f04545f. One new commit; do not amend the
   delay and clean timer removal. Each has a broken-copy control; reason does too.
 - F8: worker cancellation closes its root. The worker call has its own child
   session so a rejected cancellation does not fail the root before cleanup.
-- F9: open limit 37. Cursor initialization is still in the bootstrap path.
-  Moving it needs public/account stream creation and migration/auth rules.
-  This is not small. No render-path workaround or silent exception was added.
+- F9: closed by Duke's at-sign-up rule. The awaited user-create hook creates
+  account streams; a migration backfills existing users and seeds public.
+  Bootstrap reads a repeatable, read-only snapshot and fails StreamMissing
+  instead of creating or locking a missing cursor.
 - F10: the shared-write import moved to the relative group at the top.
 
 - N1: step inputs use Zod schemas; no unchecked raw-as readers or inline Zod imports.

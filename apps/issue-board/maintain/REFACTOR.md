@@ -98,6 +98,11 @@ late throw, output flush, grace timeout, and dev socket close after cleanup.
 
 Outside src and cmds, the runtime and host changes are:
 
+- tinker/components/auth/{auth.server,settings.server,slots,index.server}.ts:
+  await and bind the required account-create hook, without importing sync.
+- tinker/components/sync/{history.server,index.server}.ts: read-only cursors and
+  an idempotent account-stream insert.
+- drizzle/20261016143346_account_streams: seed public and backfill accounts.
 - tinker/components/errors/errors.ts: add the typed TransactionEnded error.
 - tinker/components/database/component.json: declare that error dependency.
 - tinker/base/main.ts: MainContext, defineMain, startup code mapping, close check.
@@ -128,18 +133,28 @@ The existing vendor archive stays unchanged. No registry or Core file changes.
 ## Streamed page audit
 
 No issue, comment, team, or import write runs in a page loader or render.
-The older bootstrap cursor write below remains an open limit, not an exception.
-The page loaders call bootstrap, account reads, and getTeamMembers. Components
-send writes only from event handlers through the POST server functions above.
-The CLI and worker run outside rendering. Mail enqueue stays inside the write
-transaction; there is no afterCommit hook.
+Limit 37 is closed under Duke's at-sign-up rule. Better Auth's user create.after
+hook awaits the required userCreated tag. The server binds that tag to
+sync.accountCreated, which inserts the account stream with ON CONFLICT DO NOTHING.
+Better Auth queues its after-create hook after the user transaction, without
+passing its transaction client. The stream insert is therefore a separate,
+idempotent, awaited SQL call; it finishes before sign-up returns. It is not
+fire-and-forget and adds no Core afterCommit hook. Components read no env.
 
-Bootstrap still initializes and locks sync cursor rows in a page bootstrap call
-(src/demo/backend/sync.server.ts:23 and :39, through history.lock at
-tinker/components/sync/history.server.ts:20). Its native transaction commits
-before the snapshot, but this is still a render-path write. It breaks decision 3. Limit 37 records it; moving creation into signup plus public-stream migration
-needs a shared lifecycle rule. No claim that the streamed-page audit is clean
-is made. See REVIEW-FIXES.md and DECISIONS.md.
+The account_streams migration backfills existing users with INSERT SELECT and
+seeds the public stream. Both inserts preserve existing rows and revisions.
+Bootstrap uses history.read, which only selects the cursor and raises typed
+StreamMissing when it is absent. Public and private snapshots each use a
+REPEATABLE READ, READ ONLY transaction so cursor and records share one snapshot
+without a row lock. Neither page bootstrap inserts nor locks sync_stream.
+The existing history.lock remains the write-only path; writer lock order,
+version guards, stream appends, and outbox rules stay unchanged.
+
+The SQL-log tests cover fresh sign-up, first bootstrap, missing public/private
+rows, an awaited initialization hook, and repeatable backfill. Broken bootstrap
+copies that insert or row-lock must fail those same page-read SQL assertions.
+The Lightpanda demo signs up, opens teams, and reloads the first page. Mail stays
+in local Mailpit. No page-render workaround or stream-creation exception remains.
 
 The starter counter, todo, and profile POST functions also settle with signal
 (src/transport/counter.functions.ts:15, todos.functions.ts:23,
@@ -148,7 +163,7 @@ native transactions before returning. The profile's existing background
 notification remains as shipped and commits its result separately; it is
 never started by a page render. Auth GET/POST dispatch at
 src/routes/api.auth.$.ts:14 and :18 also awaits its child call before returning
-its response. The bootstrap cursor write still needs moving under limit 37.
+its response. Bootstrap now follows the read-only rule above.
 
 ## Exact call shape and driver guard
 

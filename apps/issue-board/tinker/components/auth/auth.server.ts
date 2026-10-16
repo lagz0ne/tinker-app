@@ -7,7 +7,7 @@ import { authCalls } from "./calls.server";
 import { betterAuthModule, betterAuthDrizzle, betterAuthStart } from "./modules";
 import * as schema from "./schema.server";
 import { authSettings, authStartup } from "./settings.server";
-import { sendAuthMail, sessionDeleted } from "./slots";
+import { sendAuthMail, sessionDeleted, userCreated } from "./slots";
 
 /**
  * The root tracks each mail action; auth callbacks return before delivery.
@@ -23,11 +23,23 @@ export const auth = resource({
     outside: authStartup,
     send: sendAuthMail.required,
     deleted: sessionDeleted.required,
+    created: userCreated.required,
     auth: betterAuthModule,
     adapter: betterAuthDrizzle,
     start: betterAuthStart,
   },
-  factory: async ({ database, settings, calls, outside, send, deleted, auth, adapter, start }) => {
+  factory: async ({
+    database,
+    settings,
+    calls,
+    outside,
+    send,
+    deleted,
+    created,
+    auth,
+    adapter,
+    start,
+  }) => {
     const { betterAuth } = auth;
     const { drizzleAdapter } = adapter;
     const { tanstackStartCookies } = start;
@@ -36,6 +48,13 @@ export const auth = resource({
       secret: settings.secret,
       database: drizzleAdapter(database, { provider: "pg", schema }),
       databaseHooks: {
+        user: {
+          create: {
+            after: async ({ id }) => {
+              await calls.fire(created, id, outside);
+            },
+          },
+        },
         session: {
           delete: {
             after: ({ userId }) => calls.fire(deleted, userId, outside),
