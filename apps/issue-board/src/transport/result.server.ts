@@ -4,7 +4,7 @@ import { isError, raise } from "@/demo/client";
 
 const rejections = [
   ["TeamChanged", "Team membership changed. Try again."],
-  ["IssueConflict", "This issue changed. Close this edit and open it again."],
+  ["IssueConflict", "Someone changed this issue first. Check the board and try again."],
   ["InvalidPosition", "That position changed. Try the move again."],
   ["IssueMissing", "That issue is not in this team."],
   ["InvalidAssignee", "Choose a member of this team."],

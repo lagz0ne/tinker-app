@@ -9,7 +9,7 @@ import { teamCommand, teamInput } from "@/contracts/board";
 import { currentUser } from "@/demo/backend/auth.server";
 import { raise } from "@/demo/errors";
 
-import { team, teamMember } from "./board.schema.server";
+import { issue, issueFields, team, teamMember } from "./board.schema.server";
 
 export const listTeams = operation({
   label: "teams.list",
@@ -109,6 +109,16 @@ export const changeTeam = operation({
           .onConflictDoNothing();
         await tx.insert(execution).values({ id: input.executionId, stream: currentUser.id });
 
+        const existingIssues = await tx
+          .select(issueFields)
+          .from(issue)
+          .innerJoin(team, eq(issue.teamId, team.id))
+          .where(eq(issue.teamId, change.teamId));
+        const issueChanges = existingIssues.map((issue) => ({
+          kind: "change" as const,
+          change: { kind: "issue.upsert" as const, issue },
+        }));
+
         for (const stream of streams) {
           const rows = await tx
             .select({ id: team.id, key: team.key, name: team.name, role: teamMember.role })
@@ -116,7 +126,10 @@ export const changeTeam = operation({
             .innerJoin(teamMember, eq(team.id, teamMember.teamId))
             .where(eq(teamMember.userId, stream))
             .orderBy(asc(team.key));
-          const payloads: Sync.Payload[] = [{ kind: "change", change: { kind: "teams", rows } }];
+          const payloads: Sync.Payload[] = [
+            { kind: "change", change: { kind: "teams", rows } },
+            ...issueChanges.filter(() => stream === target.id),
+          ];
           if (stream === currentUser.id) {
             payloads.push({ kind: "result", result: { kind: "complete", action: "team" } });
           }

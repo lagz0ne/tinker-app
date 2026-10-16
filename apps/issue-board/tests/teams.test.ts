@@ -2,10 +2,11 @@ import { createScope, type Scope } from "@tinker/core";
 import { beforeEach, afterEach, test, expect } from "vite-plus/test";
 
 import { authStartup, authSettings } from "~/components/auth/index.server";
-import { migrate, databaseUrl, database } from "~/components/database/index.server";
+import { migrate, databaseUrl, database, drizzleOrm } from "~/components/database/index.server";
 import { startRequests, backendStop } from "~/components/requests";
-import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+import { event, bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
+import { changeIssue } from "@/backend/issues.server";
 import { changeTeam, readTeam, listTeams } from "@/backend/teams.server";
 import { readAccount } from "@/demo/backend/auth.server";
 import { bootstrap } from "@/demo/backend/sync.server";
@@ -237,4 +238,52 @@ test("a non-member add gets NotTeamMember before any email lookup", async () => 
   expect(
     queries.filter((query) => query.includes('from "user"') && query.includes('"user"."email" =')),
   ).toEqual([]);
+});
+
+test("adding a member sends existing issues to their already open account stream", async () => {
+  const graceBefore = (await root.run(bootstrap, { tags: requestHeaders(grace) })).private!;
+  await root.run(changeTeam, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: { kind: "create", key: "ENG", name: "Engineering" },
+    },
+    tags: requestHeaders(ada),
+  });
+  const [team] = await root.run(listTeams, { tags: requestHeaders(ada) });
+  await root.run(changeIssue, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: {
+        kind: "create",
+        teamId: team!.id,
+        title: "Already here",
+        description: "",
+        state: "backlog",
+        priority: 0,
+        assigneeId: null,
+      },
+    },
+    tags: requestHeaders(ada),
+  });
+
+  const [issue] = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
+  const executionId = crypto.randomUUID();
+  await root.run(changeTeam, {
+    rawInput: {
+      executionId,
+      change: { kind: "addMember", teamId: team!.id, email: "grace@example.com" },
+    },
+    tags: requestHeaders(ada),
+  });
+
+  const db = await root.resolve(database);
+  const { and, eq, gt } = await root.resolve(drizzleOrm);
+  const events = await db
+    .select()
+    .from(event)
+    .where(and(eq(event.stream, graceBefore.stream), gt(event.revision, graceBefore.revision)));
+  expect(events.map((row) => row.payload)).toEqual([
+    { kind: "change", change: { kind: "teams", rows: [{ ...team, role: "member" }] } },
+    { kind: "change", change: { kind: "issue.upsert", issue } },
+  ]);
 });

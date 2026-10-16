@@ -62,6 +62,16 @@ try {
   browser(b, "find", "role", "link", "click", "--name", "Open teams", "--exact");
   browser(b, "wait", "--text", "No teams yet. Make your first team.");
 
+  browser(a, "find", "role", "link", "click", "--name", "Open ENG issues", "--exact");
+  browser(a, "wait", 'input[name="title"]');
+  browser(a, "fill", 'form:not([data-issue]) input[name="title"]', "Fix login");
+  browser(a, "find", "role", "button", "click", "--name", "Create issue", "--exact");
+  browser(a, "wait", "--text", "ENG-1 · Fix login");
+  browser(a, "fill", 'form:not([data-issue]) input[name="title"]', "Add search");
+  browser(a, "find", "role", "button", "click", "--name", "Create issue", "--exact");
+  browser(a, "wait", "--text", "ENG-2 · Add search");
+  browser(a, "find", "role", "link", "click", "--name", "All teams", "--exact");
+  browser(a, "wait", 'input[name="email"]');
   browser(a, "fill", 'input[name="email"]', emailB);
   browser(a, "find", "role", "button", "click", "--name", "Add member", "--exact");
   browser(b, "wait", "--text", "ENG · Engineering");
@@ -74,17 +84,8 @@ try {
     ).result,
     false,
   );
-  browser(b, "reload");
-  browser(b, "wait", "--text", "ENG · Engineering");
-  browser(b, "wait", "--text", "Your role: member");
+
   browser(a, "find", "role", "link", "click", "--name", "Open ENG issues", "--exact");
-  browser(a, "wait", 'input[name="title"]');
-  browser(a, "fill", 'form:not([data-issue]) input[name="title"]', "Fix login");
-  browser(a, "find", "role", "button", "click", "--name", "Create issue", "--exact");
-  browser(a, "wait", "--text", "ENG-1 · Fix login");
-  browser(a, "fill", 'form:not([data-issue]) input[name="title"]', "Add search");
-  browser(a, "find", "role", "button", "click", "--name", "Create issue", "--exact");
-  browser(a, "wait", "--text", "ENG-2 · Add search");
 
   browser(b, "find", "role", "link", "click", "--name", "Open ENG issues", "--exact");
   browser(b, "wait", "--text", "ENG-2 · Add search");
@@ -107,7 +108,7 @@ try {
   );
   browser(b, "fill", 'form[data-issue="ENG-1"] input[name="title"]', "Stale title");
   browser(b, "find", "role", "button", "click", "--name", "Save ENG-1", "--exact");
-  browser(b, "wait", "--text", "This issue changed. Close this edit and open it again.");
+  browser(b, "wait", "--text", "Someone changed this issue first. Check the board and try again.");
   assert(
     browser(
       b,
@@ -161,6 +162,11 @@ try {
     ["exec", "--net", "--timeout", "120", "--", "node", "maintain/measure-live.mjs", a, b],
     { stdio: "inherit" },
   );
+  execFileSync(
+    "benchctl",
+    ["exec", "--net", "--timeout", "120", "--", "node", "maintain/measure-live.mjs", a, b, "200"],
+    { stdio: "inherit" },
+  );
   if (process.env.BOARD_PREVIEW) {
     const main = browser(a, "eval", "document.querySelector('main').outerHTML").result;
     const css = readdirSync("dist/client/assets")
@@ -186,3 +192,5 @@ try {
 }
 
 execFileSync(process.execPath, ["maintain/proof-issues.mjs"], { stdio: "inherit" });
+
+execFileSync(process.execPath, ["maintain/proof-lock-order.mjs"], { stdio: "inherit" });

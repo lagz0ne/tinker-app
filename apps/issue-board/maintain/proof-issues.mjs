@@ -171,7 +171,7 @@ try {
   assert.equal(
     (
       await observer.query(
-        `SELECT count(*)::int AS count FROM pg_locks WHERE pid = ANY($1::int[]) AND relation = 'team'::regclass AND mode = 'RowShareLock'`,
+        `SELECT count(*)::int AS count FROM pg_locks WHERE pid = ANY($1::int[]) AND relation = 'team'::regclass AND mode <> 'AccessShareLock'`,
         [pids.slice(0, 2)],
       )
     ).rows[0].count,

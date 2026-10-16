@@ -4,8 +4,7 @@ import { beforeEach, afterEach, test, expect } from "vite-plus/test";
 import { authStartup, authSettings } from "~/components/auth/index.server";
 import { database, drizzleOrm, migrate, databaseUrl } from "~/components/database/index.server";
 import { backendStop, startRequests } from "~/components/requests";
-import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
-import { event } from "~/components/sync/index.server";
+import { bootstrapSlot, readAccountSlot, event } from "~/components/sync/index.server";
 
 import { team } from "@/backend/board.schema.server";
 import { changeIssue, listTeamMembers } from "@/backend/issues.server";
@@ -376,6 +375,7 @@ test("a move between two fractional keys sorts between them; stale saves cannot 
   expect(rows[1]!.rank > first!.rank && rows[1]!.rank < second!.rank).toBe(true);
   expect(rows[1]!.version).toBe(2);
 
+  databaseQueries.length = 0;
   for (const change of [
     { ...draft, kind: "edit", teamId, id: third!.id, version: third!.version },
     { kind: "move", teamId, id: third!.id, version: third!.version, state: "done", beforeId: null },
@@ -389,7 +389,96 @@ test("a move between two fractional keys sorts between them; stale saves cannot 
     if (refused.status !== "failed") throw new Error("Expected stale version refusal");
     expect(isError(refused.error, "IssueConflict")).toBe(true);
   }
+  const guardedWrites = databaseQueries.filter((query) =>
+    /^(update|delete from) "issue"/.test(query),
+  );
+  expect(guardedWrites).toHaveLength(3);
+  expect(guardedWrites.every((query) => /where.*"issue"\."version" = \$\d+/.test(query))).toBe(
+    true,
+  );
   expect((await root.run(bootstrap, { tags: requestHeaders(grace) })).private!.issues).toEqual(
     rows,
   );
+});
+
+test("an edit into another column gets a fresh end rank and a later drop can go between the cards", async () => {
+  for (const [title, state] of [
+    ["A", "backlog"],
+    ["B", "todo"],
+    ["C", "backlog"],
+  ]) {
+    await root.run(changeIssue, {
+      rawInput: {
+        executionId: crypto.randomUUID(),
+        change: { ...draft, kind: "create", teamId, title, state },
+      },
+      tags: requestHeaders(ada),
+    });
+  }
+  const original = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
+  const a = original.find((row) => row.title === "A")!;
+  const b = original.find((row) => row.title === "B")!;
+  const c = original.find((row) => row.title === "C")!;
+  expect(a.rank).toBe(b.rank);
+
+  await root.run(changeIssue, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: {
+        ...draft,
+        kind: "edit",
+        teamId,
+        id: b.id,
+        version: b.version,
+        title: "B",
+        state: "backlog",
+      },
+    },
+    tags: requestHeaders(ada),
+  });
+  const edited = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
+  expect(new Set(edited.map((row) => row.rank)).size).toBe(3);
+  expect(edited.find((row) => row.id === b.id)!.rank > c.rank).toBe(true);
+  await root.run(changeIssue, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: {
+        kind: "move",
+        teamId,
+        id: c.id,
+        version: c.version,
+        state: "backlog",
+        beforeId: b.id,
+      },
+    },
+    tags: requestHeaders(grace),
+  });
+  const moved = (await root.run(bootstrap, { tags: requestHeaders(grace) })).private!.issues!;
+  expect(moved.map((row) => row.id)).toEqual([a.id, c.id, b.id]);
+  expect(a.rank < moved[1]!.rank && moved[1]!.rank < moved[2]!.rank).toBe(true);
+
+  databaseQueries.length = 0;
+  await root.run(changeIssue, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: {
+        ...draft,
+        kind: "edit",
+        teamId,
+        id: b.id,
+        version: 2,
+        title: "B renamed",
+        state: "backlog",
+      },
+    },
+    tags: requestHeaders(ada),
+  });
+  expect(
+    (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!.find(
+      (row) => row.id === b.id,
+    )!.rank,
+  ).toBe(moved[2]!.rank);
+  expect(
+    databaseQueries.filter((query) => query.startsWith('select "id", "rank" from "issue"')),
+  ).toEqual([]);
 });

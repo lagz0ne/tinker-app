@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 // benchctl runs this driver on the host. The shared sockets drive the same two
 // Lightpanda tabs and the real dev server; no extra proxy or test transport.
-const [a, b] = process.argv.slice(2);
+const [a, b, control = "0"] = process.argv.slice(2);
+const controlWaitMs = Number(control);
 
 const browserPath = fileURLToPath(
   new URL(
@@ -54,6 +56,7 @@ for (let index = 0; index < 6; index++) {
     "eval",
     `window.boardDropAt = Date.now(); document.querySelector('[data-state="${state}"]').dispatchEvent(new DragEvent('drop', {bubbles:true,cancelable:true,dataTransfer:window.boardTransfer}));`,
   );
+  await delay(controlWaitMs);
   browser(b, "wait", "--fn", "window.boardSeenAt !== null");
 
   const started = browser(a, "eval", "window.boardDropAt").result;
@@ -63,19 +66,21 @@ for (let index = 0; index < 6; index++) {
 }
 
 const ordered = [...samples].sort((a, b) => a - b);
-const median = ordered[2];
-const mad = samples.map((value) => Math.abs(value - median)).sort((a, b) => a - b)[2];
+const middle = Math.floor(ordered.length / 2);
+const median = ordered[middle];
+const mad = samples.map((value) => Math.abs(value - median)).sort((a, b) => a - b)[middle];
 
 console.log(
   JSON.stringify({
     proof: "HTML5 drop to other tab DOM, real SSE, no reload",
     unit: "ms",
     warmup: 1,
+    controlWaitMs,
     samples,
     min: ordered[0],
     median,
     mad,
-    max: ordered[4],
+    max: ordered[ordered.length - 1],
     note: "Queued driver; live browser/server include host load; clocks are on the same host.",
   }),
 );
