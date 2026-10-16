@@ -44,40 +44,39 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       await root.close();
       throw error;
     }
-    const closed = root.run(runImport, { signal }).then(
-      async (result) => {
-        const ended = await root.close({ graceful: true });
-        checkClosed(ended);
-        stdout.write(`Imported ${result.rows} rows; ${result.changed} changed.\n`);
-        exit(0);
-      },
-      // oxlint-disable-next-line complexity -- The command maps each typed import failure to its exit code.
-      async (error) => {
-        await root.close();
-        if (signal.aborted && error === signal.reason) return;
+    const closed = root
+      .run(runImport, { signal })
+      .then(
+        async (result) => {
+          const ended = await root.close({ graceful: true });
+          checkClosed(ended);
+          stdout.write(`Imported ${result.rows} rows; ${result.changed} changed.\n`);
+          exit(0);
+        },
+        // oxlint-disable-next-line complexity -- The command maps each typed import failure to its exit code.
+        async (error) => {
+          await root.close();
+          if (signal.aborted && error === signal.reason) return;
 
-        stderr.write(`import failed: ${String(error)}\n`);
+          const kind =
+            error && typeof error === "object" && "kind" in error ? String(error.kind) : "";
 
-        const kind =
-          error && typeof error === "object" && "kind" in error ? String(error.kind) : "";
+          const code =
+            kind === "TeamChanged"
+              ? 75
+              : ["BadInput", "InvalidAssignee", "NotTeamMember"].includes(kind)
+                ? 65
+                : 1;
 
-        const code =
-          kind === "TeamChanged"
-            ? 75
-            : ["BadInput", "InvalidAssignee", "NotTeamMember"].includes(kind)
-              ? 65
-              : 1;
-
-        exit(code, error);
-        if (code === 1) throw error;
-      },
-    );
+          exit(code, error);
+        },
+      )
+      .catch((error) => {
+        exit(1, error);
+      });
     return { closed };
   } catch (error) {
-    stderr.write(`import start failed: ${String(error)}\n`);
-    const code = mainErrorCode(error);
-    exit(code, error);
-    if (code === 1) throw error;
+    exit(mainErrorCode(error), error);
     return { closed: Promise.resolve() };
   }
 });

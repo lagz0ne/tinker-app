@@ -7,7 +7,6 @@ export function observeServerPanics(
   stderr: { write(chunk: string): unknown },
 ): () => void {
   const fail = async (error: unknown) => {
-    stderr.write(`server: unhandled rejection ${inspect(error)}\n`);
     try {
       abort(error);
       await closed;

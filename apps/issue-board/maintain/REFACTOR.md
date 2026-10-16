@@ -6,8 +6,12 @@ Core is unchanged. Start changes are allowed for this refactor.
 All three commands use the typed identity defineMain from tinker/base/main.ts.
 The host passes env, args, signal, stdout, stderr, and exit. Only a command
 calls exit. The first stop code wins, including a later signal or throw.
-A later error is logged. The host aborts the signal, joins closed, flushes the
-streams, then sets process.exitCode. It never calls process.exit. The default
+The host prints the saved error stack once when a nonzero command exit finishes.
+A distinct late reason prints once as after exit N; it does not change the code.
+AbortError reasons stay quiet. A rethrow of the saved reason adds no output.
+Commands return a stopped result after startup exit, so dev startup errors use
+its existing 503 Command stopped response. The host aborts the signal, joins
+closed, flushes the streams, then sets process.exitCode. It never calls process.exit. The default
 10-second grace deadline uses SIGKILL only if cleanup has not finished.
 
 Codes: 0 success, 1 unexpected error, 64 bad args, 65 bad CSV data, 75 temporary failure, 78 bad

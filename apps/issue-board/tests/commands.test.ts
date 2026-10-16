@@ -10,6 +10,8 @@ test("server missing database startup tag exits 78 before any generic close code
 
   let errors = "";
 
+  let reason: unknown;
+
   const app = await serverMain({
     env: {
       PUBLIC_ORIGIN: "http://localhost:4327",
@@ -28,8 +30,9 @@ test("server missing database startup tag exits 78 before any generic close code
         errors += text;
       },
     },
-    exit(code) {
+    exit(code, error) {
       codes.push(code);
+      reason = error;
     },
   });
 
@@ -37,7 +40,9 @@ test("server missing database startup tag exits 78 before any generic close code
 
   expect(codes).toEqual([78]);
 
-  expect(errors).toContain("MissingTag");
+  expect(reason).toMatchObject({ kind: "MissingTag" });
+
+  expect(errors).toBe("");
 });
 
 test("CLI missing database startup tag exits 78", async () => {

@@ -48,25 +48,21 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
         async (error) => {
           if (signal.aborted && error === signal.reason) return root.close({ graceful: true });
 
-          stderr.write(`outbox worker failed: ${String(error)}\n`);
           await root.close();
-          throw error;
+          exit(1, error);
         },
       )
       .then((result) => {
+        if (!result) return;
         checkClosed(result);
         stdout.write("outbox worker stopped\n");
       })
       .catch((error) => {
         exit(1, error);
-        throw error;
       });
     return { closed };
   } catch (error) {
-    stderr.write(`worker start failed: ${String(error)}\n`);
-    const code = mainErrorCode(error);
-    exit(code, error);
-    if (code === 1) throw error;
+    exit(mainErrorCode(error), error);
     return { closed: Promise.resolve() };
   }
 });

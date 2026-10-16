@@ -104,9 +104,8 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
           checkClosed(toolsEnd);
         })
         .catch((error) => {
-          if (serving) exit(1, error);
-
-          throw error;
+          if (!serving) throw error;
+          exit(1, error);
         });
       void closed.catch(() => {});
 
@@ -138,12 +137,7 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       throw error;
     }
   } catch (error) {
-    if (signal.aborted && error === signal.reason) throw error;
-    stderr.write(`server start failed: ${String(error)}\n`);
-    const code = mainErrorCode(error);
-
-    exit(code, error);
-    if (code === 1) throw error;
+    exit(mainErrorCode(error), error);
     return { fetch: stoppedFetch, closed: Promise.resolve() };
   }
 });
