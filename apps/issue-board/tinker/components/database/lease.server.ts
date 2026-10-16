@@ -22,7 +22,6 @@ export function leaseFrom<
   let connection: C | undefined;
 
   async function query(...args: unknown[]) {
-    await guard?.begin();
     const client = await (pending ??= connect().then((client) => {
       connection = client;
       return client;
@@ -30,12 +29,22 @@ export function leaseFrom<
     return Reflect.apply(client.query, client, args);
   }
 
+  const guardedQuery = new Proxy(query, {
+    async apply(target, receiver, args) {
+      await guard?.begin();
+      return Reflect.apply(target, receiver, args);
+    },
+  });
+
   return {
     db: drizzle({
       client: new Proxy({} as C, {
         get(_target, key) {
-          if (key === "query") return query;
-          return connection && Reflect.get(connection, key, connection);
+          if (key === "query") return guardedQuery;
+          if (!connection) {
+            throw new Error(`Database client field ${String(key)} read before checkout`);
+          }
+          return Reflect.get(connection, key, connection);
         },
       }),
       // Reject before Drizzle wraps a driver error.
@@ -47,13 +56,7 @@ export function leaseFrom<
         },
       },
     }),
-    async query(text) {
-      const client = await (pending ??= connect().then((client) => {
-        connection = client;
-        return client;
-      }));
-      return Reflect.apply(client.query, client, [text]);
-    },
+    query,
     release: (broken) => connection?.release(broken),
   };
 }

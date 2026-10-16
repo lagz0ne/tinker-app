@@ -40,6 +40,7 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       throw error;
     }
 
+    // The repeated call tag opens a child session; the root tag supplies the same stop signal.
     const closed = root
       .run(runMailWorker, { tags: [mailWorkerStop(signal)] })
       .then(

@@ -4,7 +4,13 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import type { PoolClient } from "pg";
 import { expect, test } from "vite-plus/test";
 
-import { database, drizzleOrm, leaseFrom, transaction } from "~/components/database/index.server";
+import {
+  database,
+  drizzleOrm,
+  leaseFrom,
+  transaction,
+  type Database,
+} from "~/components/database/index.server";
 
 for (const failed of ["BEGIN", "COMMIT", "ROLLBACK", "COMMIT+ROLLBACK"]) {
   test(`failed ${failed} destroys the checked-out client`, async () => {
@@ -31,7 +37,7 @@ for (const failed of ["BEGIN", "COMMIT", "ROLLBACK", "COMMIT+ROLLBACK"]) {
 
     const handle = Object.assign(drizzle({ client: connection }), {
       listen: async () => () => {},
-      checkout: async (guard?: import("~/components/database/index.server").Database.QueryGuard) =>
+      checkout: async (guard?: Database.QueryGuard) =>
         leaseFrom(async () => connection, drizzle, guard),
     });
 
@@ -79,7 +85,7 @@ for (const queried of [false, true]) {
 
     const handle = Object.assign(drizzle({ client: connection }), {
       listen: async () => () => {},
-      checkout: async (guard?: import("~/components/database/index.server").Database.QueryGuard) =>
+      checkout: async (guard?: Database.QueryGuard) =>
         leaseFrom(
           async () => {
             acquired += 1;
@@ -119,3 +125,42 @@ for (const queried of [false, true]) {
     await root.close({ graceful: true });
   });
 }
+
+test("client fields fail before checkout and forward after checkout", async () => {
+  let acquired = 0;
+
+  let bound: PoolClient | undefined;
+
+  const releases: (boolean | undefined)[] = [];
+
+  const connection = {
+    user: "proof",
+    query: async () => ({ rows: [], rowCount: 0 }),
+    release: (broken?: boolean) => releases.push(broken),
+  } as unknown as PoolClient;
+
+  const lease = leaseFrom(
+    async () => {
+      acquired += 1;
+      return connection;
+    },
+    (options) => {
+      bound = options.client;
+      return drizzle(options);
+    },
+  );
+
+  expect(() => bound!.user).toThrow("Database client field user read before checkout");
+
+  expect(acquired).toBe(0);
+
+  await lease.query("BEGIN");
+
+  expect(bound!.user).toBe("proof");
+
+  expect(acquired).toBe(1);
+
+  lease.release(false);
+
+  expect(releases).toEqual([false]);
+});

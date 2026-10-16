@@ -34,9 +34,9 @@ lifetime. It does not own the write transaction.
 
 The CLI and worker dispatch now use settle with a real signal. Their write
 operations and steps never create a session or commit. Each step resolves the
-same session-target database.transaction. Its factory checks out one client,
-waits until its first query to start BEGIN, and defers COMMIT on success or
-ROLLBACK on failure/cancel/release, then releases the client.
+same session-target database.transaction. Its first query checks out one client
+and starts BEGIN. The resource defers COMMIT on success or ROLLBACK on
+failure/cancel/release, then releases the client.
 COMMIT errors escape as TeardownFailed. The dispatch returns only after close.
 Idle sessions send no transaction SQL. Optional commit/rollback ends are safe
 to repeat; a later query raises typed TransactionEnded. No integration commits
@@ -46,6 +46,13 @@ The installed Core ownerOf returns the resolving layer for target session.
 The owner test resolves a probe in the request parent and gets a second probe
 in the write child. The child closes before dispatch returns; the parent stays
 open. Empty tags do not create a child. The test supplies a signal.
+
+The pool keeps databaseConnectTimeout at 5,000 ms on the server too. Failing
+fast beats a hung request; this uses pg's connectionTimeoutMillis. A server
+write waits at most 5 seconds for a free connection, then fails. This bounds
+pool checkout, not the SQL query or the whole call. The server has no special
+retryable response for that timeout: readReceipt throws the unknown error.
+No new error mapping is added.
 
 Reads keep database. Digest enqueue is still one atomic SQL statement on that
 handle; it needs no multi-step transaction. Delivery uses transaction.
