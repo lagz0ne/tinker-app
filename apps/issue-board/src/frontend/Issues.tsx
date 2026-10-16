@@ -207,6 +207,8 @@ export function Issues({
                   draggable={!busy}
                   className="mb-3 space-y-3 rounded-lg border bg-white p-3 shadow-sm"
                   onDragStart={(event) => {
+                    if ((event.target as HTMLElement).closest("[data-comment-area]")) return;
+
                     event.dataTransfer.setData("text/plain", row.id);
                     drag.run({ input: row });
                   }}

@@ -71,6 +71,14 @@ try {
     const client = new pg.Client({ connectionString, application_name: `${prefix}-${index}` });
     clients.push(client);
     await client.connect();
+    // Expose the deliberately reversed insertion order instead of using the primary key.
+    await client.query("SET enable_indexscan = off; SET enable_bitmapscan = off");
+    assert.deepEqual(
+      (await client.query("SELECT user_id FROM team_member WHERE team_id = $1", [teamId])).rows.map(
+        (row) => row.user_id,
+      ),
+      [ids[1], ids[0]],
+    );
     await client.query("SET lock_timeout = '5s'; SET statement_timeout = '10s'");
 
     const root = createScope({
@@ -149,11 +157,27 @@ try {
     executionId: randomUUID(),
     comment: { teamId, issueId, body: "Exactly once under concurrent retry" },
   };
+  await coordinator.query("BEGIN");
+  await coordinator.query("SELECT id FROM sync_stream WHERE id = $1 FOR UPDATE", [ids[0]]);
   writes = [
     roots[0].run(addComment, { rawInput: retry }),
     roots[3].run(addComment, { rawInput: retry }),
   ];
-  for (const outcome of await Promise.allSettled(writes)) {
+  const retries = Promise.allSettled(writes);
+  const retryDeadline = AbortSignal.timeout(15_000);
+  let retryBlocked = 0;
+  while (retryBlocked !== 2) {
+    retryDeadline.throwIfAborted();
+    retryBlocked = (
+      await observer.query(
+        `SELECT count(*)::int AS count FROM pg_stat_activity WHERE pid = ANY($1::int[]) AND wait_event_type = 'Lock' AND query LIKE '%"sync_stream"%'`,
+        [[pids[0], pids[3]]],
+      )
+    ).rows[0].count;
+  }
+  console.log("PASS retry barrier: both separate backend PIDs wait on sync_stream before release.");
+  await coordinator.query("COMMIT");
+  for (const outcome of await retries) {
     assert.equal(outcome.status, "fulfilled", outcome.reason?.message);
   }
   assert.equal(

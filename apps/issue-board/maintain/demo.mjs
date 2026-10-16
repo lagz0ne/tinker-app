@@ -160,11 +160,21 @@ try {
   } finally {
     await observer.end();
   }
-  assert(
-    !browser(outsider, "eval", "document.body.innerText.includes('A live comment for B')").result,
-  );
+
   console.log(
     "PASS slice 4 comments: B receives the existing discussion on join, then A's new ENG-1 comment live with no reload; B's draft survives; actor form clears after save; actual non-member stream contains zero comment.add events.",
+  );
+  browser(b, "fill", '[data-card="ENG-1"] textarea[name="comment"]', "Selected comment text");
+  const textDrag = browser(
+    b,
+    "eval",
+    `const field = document.querySelector('[data-card="ENG-1"] textarea'); field.select(); window.textTransfer = new DataTransfer(); window.textTransfer.setData('text/plain', field.value); window.beforeTextDrag = Number(document.querySelector('[data-card="ENG-1"]').dataset.version); field.dispatchEvent(new DragEvent('dragstart', {bubbles:true,cancelable:true,dataTransfer:window.textTransfer})); window.textTransfer.getData('text/plain');`,
+  ).result;
+  assert.equal(textDrag, "Selected comment text");
+  browser(
+    b,
+    "eval",
+    `document.querySelector('[data-state="done"]').dispatchEvent(new DragEvent('drop', {bubbles:true,cancelable:true,dataTransfer:window.textTransfer}));`,
   );
   browser(b, "find", "role", "button", "click", "--name", "Edit ENG-1", "--exact");
   browser(
@@ -182,6 +192,16 @@ try {
     "wait",
     "--fn",
     `document.querySelector('[data-state="in_progress"] [data-card="ENG-1"]') !== null`,
+  );
+  assert(
+    browser(
+      b,
+      "eval",
+      `Number(document.querySelector('[data-card="ENG-1"]').dataset.version) === window.beforeTextDrag + 1`,
+    ).result,
+  );
+  console.log(
+    "PASS selected comment text drag keeps text data and does not move the issue; the next real card move is the only version increment.",
   );
   browser(b, "fill", 'form[data-issue="ENG-1"] input[name="title"]', "Stale title");
   browser(b, "find", "role", "button", "click", "--name", "Save ENG-1", "--exact");

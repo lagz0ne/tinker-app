@@ -130,7 +130,8 @@ export const changeTeam = operation({
           })
           .from(comment)
           .innerJoin(issue, eq(comment.issueId, issue.id))
-          .where(eq(issue.teamId, change.teamId));
+          .where(eq(issue.teamId, change.teamId))
+          .orderBy(asc(comment.createdAt), asc(comment.id));
         const commentChanges = existingComments.map((row) => ({
           kind: "change" as const,
           change: {

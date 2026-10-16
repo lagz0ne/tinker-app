@@ -207,7 +207,7 @@ test("a non-member cannot read or add comments, and an issue cannot be addressed
   expect(isError(refused.error, "IssueMissing")).toBe(true);
 });
 
-test("comment bodies are bounded and the caller cannot choose an author or mutate a comment", async () => {
+test("comment input bounds the body and refuses author, metadata, and operation keys", async () => {
   for (const extra of [
     { body: " " },
     { body: "x".repeat(5001) },
@@ -317,4 +317,26 @@ test("a failed event insert rolls back the entire comment", async () => {
   expect(result.status).toBe("failed");
   expect(await db.select().from(commentTable)).toEqual([]);
   expect((await root.run(bootstrap, { tags: requestHeaders(grace) })).private).toEqual(before);
+});
+
+test("database checks comment text when the input reader is bypassed", async () => {
+  await root.run(changeIssue, {
+    rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
+    tags: requestHeaders(ada),
+  });
+  const snapshot = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!;
+  const db = await root.resolve(database);
+  const values = { issueId: snapshot.issues![0]!.id, authorId: snapshot.profile.id };
+
+  for (const body of ["", " ", "\t\n\r", "\u00a0\ufeff\u2000", "x".repeat(5001)]) {
+    await expect(
+      db.insert(commentTable).values({ ...values, id: crypto.randomUUID(), body }),
+    ).rejects.toMatchObject({ cause: { code: "23514", constraint: "comment_body" } });
+  }
+  expect(await db.select().from(commentTable)).toEqual([]);
+
+  for (const body of ["x", "x".repeat(5000), " \t" + "x".repeat(5000) + "\ufeff"]) {
+    await db.insert(commentTable).values({ ...values, id: crypto.randomUUID(), body });
+  }
+  expect(await db.select().from(commentTable)).toHaveLength(3);
 });

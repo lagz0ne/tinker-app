@@ -9,6 +9,7 @@ import {
   check,
   smallint,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
 import { user } from "~/components/auth/index.server";
@@ -88,14 +89,25 @@ export const issueFields = {
   version: issue.version,
 };
 
-export const comment = pgTable("comment", {
-  id: uuid().primaryKey(),
-  issueId: uuid("issue_id")
-    .notNull()
-    .references(() => issue.id, { onDelete: "cascade" }),
-  authorId: text("author_id")
-    .notNull()
-    .references(() => user.id),
-  body: text().notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const comment = pgTable(
+  "comment",
+  {
+    id: uuid().primaryKey(),
+    issueId: uuid("issue_id")
+      .notNull()
+      .references(() => issue.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => user.id),
+    body: text().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (row) => [
+    // Use the same whitespace set as JavaScript String.trim().
+    check(
+      "comment_body",
+      sql`char_length(btrim(${row.body}, U&'\\0009\\000A\\000B\\000C\\000D\\0020\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000\\FEFF')) between 1 and 5000`,
+    ),
+    index("comment_issue_created").on(row.issueId, row.createdAt, row.id),
+  ],
+);

@@ -75,6 +75,9 @@ export const records = resource({
         case "issue.remove":
           issues.set(issues.get().filter((row) => row.id !== change.id));
           comments.set(comments.get().filter((row) => row.issueId !== change.id));
+          commentDrafts.update((drafts) =>
+            Object.fromEntries(Object.entries(drafts).filter(([id]) => id !== change.id)),
+          );
           break;
         case "teams":
           teams.set(change.rows);

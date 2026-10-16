@@ -62,7 +62,11 @@ export function Comments({
   const submit = useRun(submitComment);
 
   return (
-    <section aria-label={`Comments on ${label}`} className="space-y-3 border-t pt-3">
+    <section
+      data-comment-area
+      aria-label={`Comments on ${label}`}
+      className="space-y-3 border-t pt-3"
+    >
       <h4 className="font-semibold">Comments</h4>
       <ol data-comments={label} className="space-y-3">
         {rows.map((row) => (

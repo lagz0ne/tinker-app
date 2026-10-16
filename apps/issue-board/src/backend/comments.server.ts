@@ -26,9 +26,11 @@ export const addComment = operation({
         .orderBy(sql`${teamMember.userId} collate "C"`);
       if (!members.some((member) => member.id === currentUser.id)) raise("NotTeamMember", {});
       for (const member of members) await history.lock(tx, member.id);
+
       if (await history.find(tx, input.executionId, currentUser.id)) return;
 
       // Joins must lock a current member stream before changing membership.
+      // A future removal path must also reject a shrunk member set.
       const currentMembers = await tx
         .select({ id: teamMember.userId })
         .from(teamMember)
@@ -36,7 +38,9 @@ export const addComment = operation({
       if (currentMembers.some((member) => !members.some((locked) => locked.id === member.id))) {
         raise("TeamChanged", {});
       }
+
       await tx.select().from(team).where(eq(team.id, draft.teamId)).for("no key update");
+
       const [target] = await tx
         .select({ id: issue.id })
         .from(issue)

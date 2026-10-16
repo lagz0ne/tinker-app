@@ -6,7 +6,7 @@ import { database, drizzleOrm, migrate, databaseUrl } from "~/components/databas
 import { backendStop, startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot, event } from "~/components/sync/index.server";
 
-import { team } from "@/backend/board.schema.server";
+import { team, issue } from "@/backend/board.schema.server";
 import { changeIssue, listTeamMembers } from "@/backend/issues.server";
 import { changeTeam, listTeams } from "@/backend/teams.server";
 import { readAccount } from "@/demo/backend/auth.server";
@@ -492,7 +492,6 @@ test("a legacy equal-rank gap returns InvalidPosition rather than a plain librar
   }
 
   const rows = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
-  const { issue } = await import("@/backend/board.schema.server");
   const { eq } = await root.resolve(drizzleOrm);
   const db = await root.resolve(database);
   await db.update(issue).set({ rank: rows[0]!.rank }).where(eq(issue.id, rows[1]!.id));

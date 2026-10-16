@@ -74,6 +74,13 @@ test("comment events are idempotent, beat older snapshots, and clear on issue re
     root.run(applyBootstrap, { input: { snapshot, version } });
     expect(root.resolve(comments)).toEqual([comment]);
 
+    root.run(
+      operation({
+        label: "proof.removedCommentDraft",
+        depends: { drafts: commentDrafts.controller },
+        run: ({ drafts }) => drafts.set({ [comment.issueId]: "Draft on a removed issue" }),
+      }),
+    );
     root.run(applyEvents, {
       input: {
         version,
@@ -87,6 +94,7 @@ test("comment events are idempotent, beat older snapshots, and clear on issue re
       },
     });
     expect(root.resolve(comments)).toEqual([]);
+    expect(root.resolve(commentDrafts)).toEqual({});
     root.run(applyEvents, { input: { version, events: [{ ...saved, revision: 4 }] } });
     root.run(
       operation({
