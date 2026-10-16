@@ -8,7 +8,7 @@ import { readCursor, readPrivateCursor } from "~/components/sync";
 import type { Sync } from "~/components/sync";
 import { eventHistory, event } from "~/components/sync/index.server";
 
-import { team, teamMember, issue, issueFields } from "@/backend/board.schema.server";
+import { team, teamMember, issue, issueFields, comment } from "@/backend/board.schema.server";
 import { readFeatureEvents } from "@/demo/contracts/sync";
 import { raise } from "@/demo/errors";
 
@@ -70,7 +70,29 @@ export const bootstrapPrivate = operation({
         .where(eq(teamMember.userId, currentUser.id))
         .orderBy(asc(team.key), sql`${issue.rank} collate "C"`, asc(issue.id));
 
-      return { stream: currentUser.id, revision, profile, todos, teams, issues };
+      const comments = await tx
+        .select({
+          id: comment.id,
+          issueId: comment.issueId,
+          authorId: comment.authorId,
+          body: comment.body,
+          createdAt: comment.createdAt,
+        })
+        .from(comment)
+        .innerJoin(issue, eq(comment.issueId, issue.id))
+        .innerJoin(teamMember, eq(teamMember.teamId, issue.teamId))
+        .where(eq(teamMember.userId, currentUser.id))
+        .orderBy(asc(comment.createdAt), asc(comment.id));
+
+      return {
+        stream: currentUser.id,
+        revision,
+        profile,
+        todos,
+        teams,
+        issues,
+        comments: comments.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
+      };
     });
   },
 });

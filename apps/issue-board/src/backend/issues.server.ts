@@ -124,8 +124,12 @@ export const changeIssue = operation({
                       ? stateRows.findIndex((row) => row.id === change.beforeId)
                       : stateRows.length;
                   if (position < 0) raise("InvalidPosition", {});
+
                   const lower = stateRows[position - 1] ?? { rank: null };
                   const upper = stateRows[position] ?? { rank: null };
+                  if (lower.rank === upper.rank && lower.rank !== null) {
+                    raise("InvalidPosition", {});
+                  }
                   return generateKeyBetween(lower.rank, upper.rank);
                 });
         savedId = await placement.then(async (rank) => {

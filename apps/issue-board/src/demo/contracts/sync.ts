@@ -8,6 +8,7 @@ import {
 } from "~/components/sync";
 
 import { teamRecord } from "@/contracts/board";
+import { commentRecord } from "@/contracts/comments";
 import { issueRecord } from "@/contracts/issues";
 
 export declare namespace FeatureSync {
@@ -27,7 +28,10 @@ const profileRecord = z.object({
 const todoRecord = z.object({ id: z.number(), title: z.string(), done: z.boolean() });
 
 const result = z.union([
-  z.object({ kind: z.literal("complete"), action: z.enum(["counter", "todo", "team", "issue"]) }),
+  z.object({
+    kind: z.literal("complete"),
+    action: z.enum(["counter", "todo", "team", "issue", "comment"]),
+  }),
   z.object({ kind: z.literal("complete"), action: z.literal("profile"), profileId: z.string() }),
   z.object({
     kind: z.literal("partial"),
@@ -37,12 +41,13 @@ const result = z.union([
   }),
   z.object({
     kind: z.literal("failed"),
-    action: z.enum(["counter", "todo", "profile", "team", "issue"]),
+    action: z.enum(["counter", "todo", "profile", "team", "issue", "comment"]),
     message: z.string(),
   }),
 ]);
 
 const change = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("comment.add"), comment: commentRecord }),
   z.object({ kind: z.literal("issue.upsert"), issue: issueRecord }),
   z.object({ kind: z.literal("issue.remove"), id: z.uuid() }),
   z.object({ kind: z.literal("teams"), rows: z.array(teamRecord) }),
@@ -72,6 +77,7 @@ const snapshot = snapshotEnvelope.extend({
       todos: z.array(todoRecord),
       teams: z.array(teamRecord).optional(),
       issues: z.array(issueRecord).optional(),
+      comments: z.array(commentRecord).optional(),
     })
     .nullable(),
 });

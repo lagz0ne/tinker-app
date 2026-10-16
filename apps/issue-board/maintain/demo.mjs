@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 
+import pg from "pg";
+
 const origin = process.env.BOARD_ORIGIN ?? "http://localhost:4327";
 const runId = `${process.pid}-${Date.now()}`;
 const a = `issue-board-a-${runId}`;
 const b = `issue-board-b-${runId}`;
+const outsider = `issue-board-outsider-${runId}`;
+const emailOutsider = `board-outsider-${runId}@example.test`;
 const emailA = `board-a-${runId}@example.test`;
 const emailB = `board-b-${runId}@example.test`;
 
@@ -62,6 +66,21 @@ try {
   browser(b, "find", "role", "link", "click", "--name", "Open teams", "--exact");
   browser(b, "wait", "--text", "No teams yet. Make your first team.");
 
+  browser(outsider, "open", origin);
+  browser(
+    outsider,
+    "wait",
+    "--fn",
+    'Object.keys(document.querySelector("form") ?? {}).some(key => key.startsWith("__reactProps$"))',
+  );
+  browser(outsider, "fill", 'input[name="name"]', "Non-member");
+  browser(outsider, "fill", 'input[name="email"]', emailOutsider);
+  browser(outsider, "fill", 'input[name="password"]', "board-proof-password-42");
+  browser(outsider, "find", "role", "button", "click", "--name", "Make account", "--exact");
+  browser(outsider, "wait", "--text", "Open teams");
+  browser(outsider, "find", "role", "link", "click", "--name", "Open teams", "--exact");
+  browser(outsider, "wait", "--text", "No teams yet. Make your first team.");
+
   browser(a, "find", "role", "link", "click", "--name", "Open ENG issues", "--exact");
   browser(a, "wait", 'input[name="title"]');
   browser(a, "fill", 'form:not([data-issue]) input[name="title"]', "Fix login");
@@ -70,6 +89,14 @@ try {
   browser(a, "fill", 'form:not([data-issue]) input[name="title"]', "Add search");
   browser(a, "find", "role", "button", "click", "--name", "Create issue", "--exact");
   browser(a, "wait", "--text", "ENG-2 · Add search");
+  browser(
+    a,
+    "fill",
+    '[data-card="ENG-1"] textarea[name="comment"]',
+    "Existing discussion before B joins",
+  );
+  browser(a, "find", "role", "button", "click", "--name", "Add comment to ENG-1", "--exact");
+  browser(a, "wait", "--text", "Existing discussion before B joins");
   browser(a, "find", "role", "link", "click", "--name", "All teams", "--exact");
   browser(a, "wait", 'input[name="email"]');
   browser(a, "fill", 'input[name="email"]', emailB);
@@ -89,6 +116,56 @@ try {
 
   browser(b, "find", "role", "link", "click", "--name", "Open ENG issues", "--exact");
   browser(b, "wait", "--text", "ENG-2 · Add search");
+  browser(b, "wait", "--text", "Existing discussion before B joins");
+  browser(b, "fill", '[data-card="ENG-1"] textarea[name="comment"]', "Unsent local draft");
+  browser(a, "fill", '[data-card="ENG-1"] textarea[name="comment"]', "A live comment for B");
+  browser(a, "find", "role", "button", "click", "--name", "Add comment to ENG-1", "--exact");
+  browser(b, "wait", "--text", "A live comment for B");
+  assert.equal(
+    browser(
+      b,
+      "eval",
+      `document.querySelector('[data-card="ENG-1"] textarea[name="comment"]').value`,
+    ).result,
+    "Unsent local draft",
+  );
+  browser(b, "fill", '[data-card="ENG-1"] textarea[name="comment"]', "");
+  browser(
+    a,
+    "wait",
+    "--fn",
+    `document.querySelector('[data-card="ENG-1"] textarea[name="comment"]').value === ""`,
+  );
+  const observer = new pg.Client({
+    connectionString:
+      process.env.BOARD_DATABASE_URL ?? "postgres://issue_board@127.0.0.1:15433/postgres",
+  });
+  await observer.connect();
+  try {
+    const visible = await observer.query(
+      `SELECT u.email, count(*)::int AS count FROM sync_event e JOIN "user" u ON e.stream = u.id WHERE u.email = ANY($1::text[]) AND e.payload->'change'->>'kind' = 'comment.add' GROUP BY u.email`,
+      [[emailA, emailB, emailOutsider]],
+    );
+    assert.equal(visible.rows.find((row) => row.email === emailOutsider)?.count ?? 0, 0);
+    assert.equal(visible.rows.find((row) => row.email === emailB)?.count, 2);
+    assert.equal(visible.rows.find((row) => row.email === emailA)?.count, 2);
+    assert.equal(
+      (
+        await observer.query(
+          "SELECT count(*)::int AS count FROM sync_event WHERE stream = 'public' AND payload->'change'->>'kind' = 'comment.add'",
+        )
+      ).rows[0].count,
+      0,
+    );
+  } finally {
+    await observer.end();
+  }
+  assert(
+    !browser(outsider, "eval", "document.body.innerText.includes('A live comment for B')").result,
+  );
+  console.log(
+    "PASS slice 4 comments: B receives the existing discussion on join, then A's new ENG-1 comment live with no reload; B's draft survives; actor form clears after save; actual non-member stream contains zero comment.add events.",
+  );
   browser(b, "find", "role", "button", "click", "--name", "Edit ENG-1", "--exact");
   browser(
     a,
@@ -176,21 +253,25 @@ try {
     mkdirSync(process.env.BOARD_PREVIEW, { recursive: true });
     writeFileSync(
       `${process.env.BOARD_PREVIEW}/index.html`,
-      `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Issue board · Slice 3</title><style>${css}</style><div class="p-5 bg-blue-50">Saved board from the two-user demo. This preview has no live controls.</div>${main}<footer class="p-5"><h2>Feedback</h2><p>Is the board easy to read on your phone? Reply in chat.</p></footer><script>document.querySelectorAll('input,textarea,select,button').forEach(node=>node.disabled=true);document.querySelectorAll('a').forEach(node=>node.removeAttribute('href'));</script></html>`,
+      `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Issue board · Slice 4</title><style>${css}</style><div class="p-5 bg-blue-50">Saved board from the two-user demo. This preview has no live controls.</div>${main}<footer class="p-5"><h2>Feedback</h2><p>Is the board easy to read on your phone? Reply in chat.</p></footer><script>document.querySelectorAll('input,textarea,select,button').forEach(node=>node.disabled=true);document.querySelectorAll('a').forEach(node=>node.removeAttribute('href'));</script></html>`,
     );
   }
   if (process.env.BOARD_STATE) browser(a, "state", "save", process.env.BOARD_STATE);
 
   assert.deepEqual(browser(a, "errors").errors, []);
   assert.deepEqual(browser(b, "errors").errors, []);
+  assert.deepEqual(browser(outsider, "errors").errors, []);
   console.log(
     "PASS slice 3 (agent-browser / Lightpanda): A sends HTML5 drag/drop for ENG-1 to In progress; B sees it without reload. B stale edit is rejected. A creates ENG-1 and ENG-2; ENG-1 is in_progress, priority 1, assigned to B; ENG-2 is done, priority 3, unassigned. Saved values survive reload. Slice 1 sign-up and team add also pass. No page errors.",
   );
 } finally {
   browser(a, "close");
   browser(b, "close");
+  browser(outsider, "close");
 }
 
 execFileSync(process.execPath, ["maintain/proof-issues.mjs"], { stdio: "inherit" });
 
 execFileSync(process.execPath, ["maintain/proof-lock-order.mjs"], { stdio: "inherit" });
+
+execFileSync(process.execPath, ["maintain/proof-comments.mjs"], { stdio: "inherit" });

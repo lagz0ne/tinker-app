@@ -482,3 +482,39 @@ test("an edit into another column gets a fresh end rank and a later drop can go 
     databaseQueries.filter((query) => query.startsWith('select "id", "rank" from "issue"')),
   ).toEqual([]);
 });
+
+test("a legacy equal-rank gap returns InvalidPosition rather than a plain library error", async () => {
+  for (let index = 0; index < 3; index++) {
+    await root.run(changeIssue, {
+      rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
+      tags: requestHeaders(ada),
+    });
+  }
+
+  const rows = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
+  const { issue } = await import("@/backend/board.schema.server");
+  const { eq } = await root.resolve(drizzleOrm);
+  const db = await root.resolve(database);
+  await db.update(issue).set({ rank: rows[0]!.rank }).where(eq(issue.id, rows[1]!.id));
+
+  const duplicate = (
+    await root.run(bootstrap, { tags: requestHeaders(ada) })
+  ).private!.issues!.filter((row) => row.rank === rows[0]!.rank);
+  const result = await root.settle(changeIssue, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: {
+        kind: "move",
+        teamId,
+        id: rows[2]!.id,
+        version: 1,
+        state: "backlog",
+        beforeId: duplicate[1]!.id,
+      },
+    },
+    tags: requestHeaders(ada),
+  });
+  expect(result.status).toBe("failed");
+  if (result.status !== "failed") throw new Error("Expected invalid gap refusal");
+  expect(isError(result.error, "InvalidPosition")).toBe(true);
+});

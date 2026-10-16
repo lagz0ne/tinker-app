@@ -2,12 +2,24 @@ import { resource } from "@tinker/core";
 
 import type { Sync } from "~/components/sync";
 
-import { profile, todos, counter, nameDraft, profileResult, teams, issues } from "./state";
+import {
+  profile,
+  todos,
+  counter,
+  nameDraft,
+  profileResult,
+  teams,
+  issues,
+  comments,
+  commentDrafts,
+} from "./state";
 
 /** Saved records have one publisher; drafts belong to the local editor. */
 export const records = resource({
   label: "records",
   depends: {
+    comments: comments.controller,
+    commentDrafts: commentDrafts.controller,
     teams: teams.controller,
     issues: issues.controller,
     profile: profile.controller,
@@ -16,12 +28,24 @@ export const records = resource({
     draft: nameDraft.controller,
     result: profileResult.controller,
   },
-  factory: ({ profile, todos, counter, draft, result, teams, issues }): Sync.Records => ({
+  factory: ({
+    profile,
+    todos,
+    counter,
+    draft,
+    result,
+    teams,
+    issues,
+    comments,
+    commentDrafts,
+  }): Sync.Records => ({
     resetPrivate() {
       profile.set(null);
       todos.set([]);
       teams.set([]);
       issues.set([]);
+      comments.set([]);
+      commentDrafts.set({});
 
       draft.set(undefined);
       result.set(null);
@@ -31,18 +55,26 @@ export const records = resource({
     },
     bootstrapPrivate(value: NonNullable<Sync.Snapshot["private"]>, after: number) {
       if (value.revision < after) return;
+
       profile.set(value.profile);
       todos.set(value.todos);
       teams.set(value.teams ?? []);
       issues.set(value.issues ?? []);
+      comments.set(value.comments ?? []);
     },
     change(change: Sync.Change) {
       switch (change.kind) {
+        case "comment.add":
+          comments.update((rows) =>
+            rows.some((row) => row.id === change.comment.id) ? rows : [...rows, change.comment],
+          );
+          break;
         case "issue.upsert":
           issues.set([...issues.get().filter((row) => row.id !== change.issue.id), change.issue]);
           break;
         case "issue.remove":
           issues.set(issues.get().filter((row) => row.id !== change.id));
+          comments.set(comments.get().filter((row) => row.issueId !== change.id));
           break;
         case "teams":
           teams.set(change.rows);
@@ -72,6 +104,7 @@ export const records = resource({
                 todos: todos.get(),
                 teams: teams.get(),
                 issues: issues.get(),
+                comments: comments.get(),
               },
       };
     },

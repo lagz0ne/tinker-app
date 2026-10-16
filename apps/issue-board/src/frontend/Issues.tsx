@@ -16,6 +16,7 @@ import { raise } from "@/demo/errors";
 import { issues, profile, teams } from "@/demo/frontend/state";
 import { updateIssue } from "@/transport/issues.functions";
 
+import { Comments } from "./Comments";
 import { errorText } from "./error-text";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
@@ -236,6 +237,12 @@ export function Issues({
                     {row.priority} ·{" "}
                     {members.find((member) => member.id === row.assigneeId)?.name ?? "Unassigned"}
                   </p>
+                  <Comments
+                    issueId={row.id}
+                    teamId={teamId}
+                    label={`${row.teamKey}-${row.number}`}
+                    members={members}
+                  />
                   <label className="grid gap-1">
                     Move {row.teamKey}-{row.number}
                     <select

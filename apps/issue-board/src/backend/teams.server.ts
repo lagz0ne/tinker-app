@@ -9,7 +9,7 @@ import { teamCommand, teamInput } from "@/contracts/board";
 import { currentUser } from "@/demo/backend/auth.server";
 import { raise } from "@/demo/errors";
 
-import { issue, issueFields, team, teamMember } from "./board.schema.server";
+import { comment, issue, issueFields, team, teamMember } from "./board.schema.server";
 
 export const listTeams = operation({
   label: "teams.list",
@@ -91,13 +91,14 @@ export const changeTeam = operation({
         if (!member) raise("NotTeamMember", {});
         if (member.role !== "admin") raise("TeamAdminRequired", {});
 
-        const target = (
-          await tx
-            .select({ id: user.id })
-            .from(user)
-            .where(eq(user.email, change.email.toLowerCase()))
-        ).at(0);
-        if (!target) raise("UserNotFound", {});
+        const target = await tx
+          .select({ id: user.id })
+          .from(user)
+          .where(eq(user.email, change.email.toLowerCase()))
+          .then(([target]) => {
+            if (!target) raise("UserNotFound", {});
+            return target;
+          });
 
         const streams = [...new Set([currentUser.id, target.id])].sort();
         for (const stream of streams) await history.lock(tx, stream);
@@ -119,6 +120,25 @@ export const changeTeam = operation({
           change: { kind: "issue.upsert" as const, issue },
         }));
 
+        const existingComments = await tx
+          .select({
+            id: comment.id,
+            issueId: comment.issueId,
+            authorId: comment.authorId,
+            body: comment.body,
+            createdAt: comment.createdAt,
+          })
+          .from(comment)
+          .innerJoin(issue, eq(comment.issueId, issue.id))
+          .where(eq(issue.teamId, change.teamId));
+        const commentChanges = existingComments.map((row) => ({
+          kind: "change" as const,
+          change: {
+            kind: "comment.add" as const,
+            comment: { ...row, createdAt: row.createdAt.toISOString() },
+          },
+        }));
+
         for (const stream of streams) {
           const rows = await tx
             .select({ id: team.id, key: team.key, name: team.name, role: teamMember.role })
@@ -128,7 +148,7 @@ export const changeTeam = operation({
             .orderBy(asc(team.key));
           const payloads: Sync.Payload[] = [
             { kind: "change", change: { kind: "teams", rows } },
-            ...issueChanges.filter(() => stream === target.id),
+            ...(stream === target.id ? [...issueChanges, ...commentChanges] : []),
           ];
           if (stream === currentUser.id) {
             payloads.push({ kind: "result", result: { kind: "complete", action: "team" } });

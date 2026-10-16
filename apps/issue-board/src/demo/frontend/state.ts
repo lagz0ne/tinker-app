@@ -3,6 +3,7 @@ import { data } from "@tinker/core";
 import type { Sync } from "~/components/sync";
 
 import type { Team } from "@/contracts/board";
+import type { Comment } from "@/contracts/comments";
 import type { Issue } from "@/contracts/issues";
 import type { Profile } from "@/demo/contracts/profile-contract";
 import type { Todos } from "@/demo/contracts/todos-contract";
@@ -27,3 +28,10 @@ export const profileResult = data<{ executionId: string; result: Sync.Result } |
 export const teams = data<Team[]>({ label: "teams", initial: [] });
 
 export const issues = data<Issue[]>({ label: "issues", initial: [] });
+
+export const comments = data<Comment[]>({ label: "comments", initial: [] });
+
+export const commentDrafts = data<Record<string, string>>({
+  label: "comments.drafts",
+  initial: {},
+});

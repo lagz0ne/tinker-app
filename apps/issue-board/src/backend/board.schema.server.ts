@@ -87,3 +87,15 @@ export const issueFields = {
   rank: issue.rank,
   version: issue.version,
 };
+
+export const comment = pgTable("comment", {
+  id: uuid().primaryKey(),
+  issueId: uuid("issue_id")
+    .notNull()
+    .references(() => issue.id, { onDelete: "cascade" }),
+  authorId: text("author_id")
+    .notNull()
+    .references(() => user.id),
+  body: text().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
