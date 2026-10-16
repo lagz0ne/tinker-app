@@ -1,11 +1,13 @@
-import { createScope } from "@tinker/core";
+import { createScope, type Scope } from "@tinker/core";
 
 import { databaseUrl } from "~/components/database/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
 
+import { alertMailTimeout } from "@/backend/alert-mail.server";
 import { runMailWorker } from "@/backend/outbox.server";
 
 type WorkerInput = {
+  presets?: Scope.Preset[];
   env: Readonly<Record<string, string | undefined>>;
   signal: AbortSignal;
   stdout: { write(chunk: string): unknown };
@@ -21,30 +23,35 @@ export default async function main(input: WorkerInput) {
 
   const root = createScope({
     signal,
+    presets: input.presets,
     observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
     extensions: [mailStartup],
     tags: [
+      env.OUTBOX_SMTP_TIMEOUT_MS !== undefined &&
+        alertMailTimeout(Number(env.OUTBOX_SMTP_TIMEOUT_MS)),
       env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
       env.SMTP_URL !== undefined && smtpUrl(new URL(env.SMTP_URL)),
       env.SMTP_FROM !== undefined && mailFrom(env.SMTP_FROM),
     ],
   });
   await root.ready;
-  const running = root.run(runMailWorker, { signal });
-  const closed = running.then(
-    async () => {
-      const result = await root.close({ graceful: true });
+
+  const closed = root
+    .run(runMailWorker, { signal })
+    .then(
+      () => root.close({ graceful: true }),
+      async (error) => {
+        if (signal.aborted && error === signal.reason) return root.closed;
+
+        stderr.write(`outbox worker failed: ${String(error)}\n`);
+        await root.close();
+        throw error;
+      },
+    )
+    .then((result) => {
       if (result.status === "failed") throw result.error;
       if (result.teardownErrors?.length) throw result.teardownErrors[0];
       stdout.write("outbox worker stopped\n");
-    },
-    async (error) => {
-      await root.close();
-      if (signal.aborted) return;
-
-      stderr.write(`outbox worker failed: ${String(error)}\n`);
-      throw error;
-    },
-  );
+    });
   return { closed };
 }

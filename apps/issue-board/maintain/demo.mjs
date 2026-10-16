@@ -31,7 +31,13 @@ function browser(session, ...args) {
 }
 
 const worker = spawn(process.execPath, ["maintain/worker.mjs"], {
-  stdio: ["ignore", "ignore", "inherit"],
+  stdio: ["ignore", "pipe", "inherit"],
+});
+
+let workerOutput = "";
+
+worker.stdout.on("data", (chunk) => {
+  workerOutput += chunk.toString();
 });
 
 const workerExit = new Promise((resolve) =>
@@ -187,6 +193,9 @@ try {
           [emailB],
         )
       ).rows;
+      if (saved.length !== 1 || saved[0].sent_at === null) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
     } while (saved.length !== 1 || saved[0].sent_at === null);
 
     assert.equal(saved[0].attempts, 1);
@@ -200,6 +209,14 @@ try {
       (
         await delivered.query('SELECT count(*)::int AS count FROM mail_outbox WHERE "to"=$1', [
           emailOutsider,
+        ])
+      ).rows[0].count,
+      0,
+    );
+    assert.equal(
+      (
+        await delivered.query('SELECT count(*)::int AS count FROM mail_outbox WHERE "to"=$1', [
+          emailA,
         ])
       ).rows[0].count,
       0,
@@ -338,6 +355,10 @@ try {
   worker.kill("SIGTERM");
   const stopped = await workerExit;
   assert.equal(stopped.code, 0, JSON.stringify(stopped));
+  assert(workerOutput.includes("outbox worker stopped\n"));
+  console.log(
+    "PASS clean worker SIGTERM: stopped line printed; exit 0; claims released or committed.",
+  );
 }
 
 execFileSync(process.execPath, ["maintain/proof-issues.mjs"], { stdio: "inherit" });
@@ -347,3 +368,5 @@ execFileSync(process.execPath, ["maintain/proof-lock-order.mjs"], { stdio: "inhe
 execFileSync(process.execPath, ["maintain/proof-comments.mjs"], { stdio: "inherit" });
 
 execFileSync(process.execPath, ["maintain/proof-outbox.mjs"], { stdio: "inherit" });
+
+execFileSync(process.execPath, ["maintain/proof-worker-host.mjs"], { stdio: "inherit" });

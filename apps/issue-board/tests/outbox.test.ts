@@ -4,8 +4,9 @@ import { afterEach, beforeEach, expect, test } from "vite-plus/test";
 
 import { user } from "~/components/auth/index.server";
 import { database, migrate, drizzleOrm } from "~/components/database/index.server";
-import { mail, type Mail } from "~/components/mail/index.server";
+import { type Mail } from "~/components/mail/index.server";
 
+import { alertMail } from "@/backend/alert-mail.server";
 import { team, teamMember, mailOutbox } from "@/backend/board.schema.server";
 import { addComment } from "@/backend/comments.server";
 import { changeIssue } from "@/backend/issues.server";
@@ -20,6 +21,9 @@ let clock: Clock.Test;
 let stop: AbortController;
 let teamId: string;
 let refuse: boolean;
+let logs: string[];
+let hold: Promise<void> | undefined;
+let entered: ReturnType<typeof Promise.withResolvers<void>> | undefined;
 let sent: { to: string; subject: string; text: string }[];
 
 const draft = {
@@ -35,11 +39,20 @@ beforeEach(async () => {
   stop = new AbortController();
   clock = makeTestClock({ now: Date.parse("2030-01-01T00:00:00.000Z") });
   refuse = false;
+  logs = [];
+  hold = undefined;
+  entered = undefined;
   sent = [];
   teamId = crypto.randomUUID();
   root = createScope({
     signal: stop.signal,
     clock,
+    observe: {
+      history: 32,
+      log: (entry) => {
+        logs.push(entry.message);
+      },
+    },
     presets: [
       proofDatabase,
       preset(currentUser, async () => ({
@@ -47,9 +60,11 @@ beforeEach(async () => {
         name: "Author",
         email: "author@example.test",
       })),
-      preset(mail, async () => ({
+      preset(alertMail, async () => ({
         send: async (message: Mail.Message) => {
           if (refuse) throw new Error("local SMTP refused");
+          entered?.resolve();
+          await hold;
           sent.push(message);
         },
       })),
@@ -138,10 +153,12 @@ test("a failed saved event rolls back the alert with the issue or comment", asyn
 
 test("worker retries with exponential backoff and leaves future mail alone", async () => {
   const db = await root.resolve(database);
-  await db
-    .insert(mailOutbox)
-    .values({ to: "member@example.test", subject: "Retry", text: "Local only", dedupeKey: "retry" })
-    .returning();
+  await db.insert(mailOutbox).values({
+    to: "member@example.test",
+    subject: "Retry",
+    text: "Local only",
+    dedupeKey: "retry",
+  });
 
   refuse = true;
   expect(await root.run(deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
@@ -189,4 +206,103 @@ test("a batch is limited to twenty and dedupe keys reject duplicate rows", async
   expect(await root.run(deliverMailBatch)).toEqual({ claimed: 20, sent: 20, failed: 0 });
   expect(await root.run(deliverMailBatch)).toEqual({ claimed: 1, sent: 1, failed: 0 });
   expect(sent).toHaveLength(21);
+});
+
+test("twelve failures keep a dead row, log it, and stop claiming it", async () => {
+  const db = await root.resolve(database);
+  await db.insert(mailOutbox).values({
+    to: "member@example.test",
+    subject: "Poison",
+    text: "Local only",
+    dedupeKey: "poison",
+  });
+
+  refuse = true;
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
+    expect(await root.run(deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+    const [row] = await db.select().from(mailOutbox);
+    expect(row!.attempts).toBe(attempt);
+
+    const delay = Math.min(1_800_000, 1000 * 2 ** (attempt - 1));
+    expect(row!.nextAt.getTime()).toBe(clock.currentTimeMillis() + delay);
+    clock.advance(delay);
+  }
+
+  refuse = false;
+  clock.advance(86_400_000);
+  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  expect(await db.select().from(mailOutbox)).toMatchObject([
+    { attempts: 12, sentAt: null, lastError: "Error: local SMTP refused" },
+  ]);
+  expect(sent).toEqual([]);
+  expect(logs.filter((message) => message === "outbox.dead")).toHaveLength(1);
+});
+
+test("edit, move and remove each queue one alert for the other member", async () => {
+  await root.run(changeIssue, {
+    rawInput: { executionId: crypto.randomUUID(), change: { ...draft, teamId } },
+  });
+
+  const [issue] = (await root.run(bootstrapPrivate)).issues;
+  await root.run(changeIssue, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: { ...draft, kind: "edit", teamId, id: issue!.id, version: 1, title: "Edited" },
+    },
+  });
+  await root.run(changeIssue, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: {
+        kind: "move",
+        teamId,
+        id: issue!.id,
+        version: 2,
+        state: "in_progress",
+        beforeId: null,
+      },
+    },
+  });
+  await root.run(changeIssue, {
+    rawInput: {
+      executionId: crypto.randomUUID(),
+      change: { kind: "remove", teamId, id: issue!.id, version: 3 },
+    },
+  });
+
+  const rows = await (await root.resolve(database)).select().from(mailOutbox);
+  expect(rows).toHaveLength(4);
+  expect(rows.map((row) => row.subject)).toEqual([
+    "ENG-1: Mail alert",
+    "ENG-1: Edited",
+    "ENG-1: Edited",
+    "An issue was removed",
+  ]);
+  expect(rows.every((row) => row.to === "member@example.test")).toBe(true);
+});
+
+test("stopping a batch finishes its current send and releases the remaining rows", async () => {
+  const db = await root.resolve(database);
+  await db.insert(mailOutbox).values(
+    [0, 1].map((index) => ({
+      to: "member@example.test",
+      subject: "Stop",
+      text: "Local only",
+      dedupeKey: `stop:${index}`,
+    })),
+  );
+  const release = Promise.withResolvers<void>();
+  entered = Promise.withResolvers<void>();
+  hold = release.promise;
+  const callStop = new AbortController();
+  const running = root.settle(deliverMailBatch, { signal: callStop.signal });
+  await entered.promise;
+  callStop.abort();
+  release.resolve();
+  await running;
+
+  const rows = await db.select().from(mailOutbox);
+  expect(rows.filter((row) => row.sentAt !== null)).toHaveLength(1);
+  expect(rows.filter((row) => row.sentAt === null)).toMatchObject([{ attempts: 0 }]);
+  expect(sent).toHaveLength(1);
 });

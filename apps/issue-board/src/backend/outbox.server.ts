@@ -1,17 +1,17 @@
 import { operation, resource } from "@tinker/core";
 
 import { database, databaseUrl, drizzleOrm } from "~/components/database/index.server";
-import { mail } from "~/components/mail/index.server";
 
+import { alertMail } from "./alert-mail.server";
 import { mailOutbox } from "./board.schema.server";
 import { postgres } from "./modules";
 
 /** SMTP runs while the row is locked; another worker skips this batch. */
 export const deliverMailBatch = operation({
   label: "outbox.deliverBatch",
-  depends: { database, orm: drizzleOrm, mail },
-  run: async ({ database, orm, mail }, { clock, log }) => {
-    const { and, eq, lte, isNull, asc } = orm;
+  depends: { database, orm: drizzleOrm, mail: alertMail },
+  run: async ({ database, orm, mail }, { clock, log, signal }) => {
+    const { and, eq, lt, lte, isNull, asc } = orm;
     return database.transaction(async (tx) => {
       const rows = await tx
         .select()
@@ -19,6 +19,7 @@ export const deliverMailBatch = operation({
         .where(
           and(
             isNull(mailOutbox.sentAt),
+            lt(mailOutbox.attempts, 12),
             lte(mailOutbox.nextAt, new Date(clock.currentTimeMillis())),
           ),
         )
@@ -26,7 +27,10 @@ export const deliverMailBatch = operation({
         .limit(20)
         .for("update", { skipLocked: true });
       let sent = 0;
+      let failed = 0;
       for (const row of rows) {
+        if (signal.aborted) break;
+
         try {
           await mail.send({ to: row.to, subject: row.subject, text: row.text });
         } catch (error) {
@@ -41,7 +45,11 @@ export const deliverMailBatch = operation({
               lastError: String(error).slice(0, 1000),
             })
             .where(eq(mailOutbox.id, row.id));
-          log.error("outbox.retry", { id: row.id, attempts: row.attempts + 1 });
+          failed += 1;
+          log.error(row.attempts + 1 === 12 ? "outbox.dead" : "outbox.retry", {
+            id: row.id,
+            attempts: row.attempts + 1,
+          });
           continue;
         }
         await tx
@@ -54,7 +62,7 @@ export const deliverMailBatch = operation({
           .where(eq(mailOutbox.id, row.id));
         sent += 1;
       }
-      return { claimed: rows.length, sent, failed: rows.length - sent };
+      return { claimed: rows.length, sent, failed };
     });
   },
 });
@@ -63,47 +71,65 @@ export const deliverMailBatch = operation({
 export const outboxWake = resource({
   label: "outbox.wake",
   depends: { url: databaseUrl, postgres },
-  factory: async ({ url, postgres }, { clock, closing, defer }) => {
+  factory: async ({ url, postgres }, { clock, random, closing, defer, log }) => {
     let client: InstanceType<typeof postgres.default.Client> | undefined;
-    let disconnected = false;
+    let connected = false;
     let dirty = false;
+    let failures = 0;
     let waiting: ReturnType<typeof Promise.withResolvers<void>> | undefined;
     defer(async () => {
       await client?.end();
     });
 
-    const wake = {
+    return {
       async listen() {
-        if (client && !disconnected) return;
+        if (connected) return;
 
-        await client?.end();
-        client = new postgres.default.Client({ connectionString: url.href });
-        disconnected = false;
-        client.on("notification", () => {
+        const old = client;
+        client = undefined;
+        await old?.end();
+        const next = new postgres.default.Client({
+          connectionString: url.href,
+          connectionTimeoutMillis: 10_000,
+        });
+        client = next;
+        next.on("error", () => {
+          if (client !== next || !connected) return;
+          connected = false;
+          waiting?.resolve();
+        });
+        next.on("end", () => {
+          if (client !== next || !connected) return;
+          connected = false;
+          waiting?.resolve();
+        });
+        next.on("notification", () => {
+          if (client !== next || !connected) return;
           dirty = true;
           waiting?.resolve();
         });
-        client.on("error", () => {
-          disconnected = true;
-          waiting?.resolve();
+        await next.connect();
+        await next.query("LISTEN board_outbox");
+        connected = true;
+      },
+      async retry() {
+        // A failed connect must wait on the timer alone, never an old client's end event.
+        const delay = Math.floor(
+          Math.min(30_000, 1000 * 2 ** Math.min(failures, 5)) * (0.5 + random.next() / 2),
+        );
+        failures += 1;
+        log("outbox.reconnect", { attempt: failures, delay });
+        await clock.sleep(delay, closing).catch((error) => {
+          if (!closing.aborted) throw error;
         });
-        client.on("end", () => {
-          disconnected = true;
-          waiting?.resolve();
-        });
-        try {
-          await client.connect();
-          await client.query("LISTEN board_outbox");
-        } catch (error) {
-          disconnected = true;
-          throw error;
-        }
       },
       async wait() {
-        if (dirty) {
+        // A drop during a batch must return to listen instead of losing the wake for 30 seconds.
+        if (dirty || !connected) {
           dirty = false;
           return;
         }
+        failures = 0;
 
         const stop = new AbortController();
         waiting = Promise.withResolvers<void>();
@@ -121,7 +147,6 @@ export const outboxWake = resource({
         dirty = false;
       },
     };
-    return wake;
   },
 });
 
@@ -138,6 +163,8 @@ export const runMailWorker = operation({
       } catch (error) {
         if (signal.aborted) return;
         log.error("outbox.unavailable", { error: String(error) });
+        await wake.retry();
+        continue;
       }
       await wake.wait();
     }

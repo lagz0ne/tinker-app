@@ -11,3 +11,9 @@ export const postgres = resource({
   target: "scope",
   factory: () => import("pg"),
 });
+
+export const smtp = resource({
+  label: "module:nodemailer",
+  target: "scope",
+  factory: () => import("nodemailer"),
+});

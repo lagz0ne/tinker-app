@@ -28,7 +28,7 @@ const { database, databaseUrl } = await vite.ssrLoadModule(
   "/tinker/components/database/index.server.ts",
 );
 
-const { mail } = await vite.ssrLoadModule("/tinker/components/mail/index.server.ts");
+const { alertMail } = await vite.ssrLoadModule("/src/backend/alert-mail.server.ts");
 const connectionString = "postgres://issue_board@127.0.0.1:15433/postgres";
 // Intentionally fixed to the local Mailpit. No external SMTP is allowed in a proof.
 const smtp = nodemailer.createTransport({ host: "127.0.0.1", port: 11026, secure: false });
@@ -39,6 +39,9 @@ const clients = [];
 const roots = [];
 const entered = [Promise.withResolvers(), Promise.withResolvers()];
 const release = Promise.withResolvers();
+const crashEntered = Promise.withResolvers();
+const crashRelease = Promise.withResolvers();
+const clientErrors = [];
 const stop = new AbortController();
 let batches = [];
 let wakeRoot;
@@ -53,6 +56,7 @@ try {
   for (let index = 0; index < 2; index += 1) {
     const client = new pg.Client({ connectionString });
     clients.push(client);
+    client.on("error", (error) => clientErrors.push(error));
     await client.connect();
     await client.query("SET lock_timeout='5s'; SET statement_timeout='10s'");
 
@@ -60,8 +64,13 @@ try {
       signal: stop.signal,
       presets: [
         preset(database, async () => drizzle({ client })),
-        preset(mail, async () => ({
+        preset(alertMail, async () => ({
           send: async (message) => {
+            if (index === 0 && message.text === "Crash recovery") {
+              crashEntered.resolve();
+              await crashRelease.promise;
+              throw new Error("worker database connection was killed before SMTP");
+            }
             entered[index].resolve();
             await release.promise;
             await smtp.sendMail({ from: "board@example.test", ...message });
@@ -119,6 +128,35 @@ try {
     "PASS live SKIP LOCKED: two separate connections hold disjoint batches of 20 and 1 at the SMTP barrier; zero unlocked due rows; all 21 sent once to local Mailpit.",
   );
 
+  await coordinator.query("BEGIN");
+  await coordinator.query(
+    "SELECT id FROM mail_outbox WHERE sent_at IS NULL AND dedupe_key NOT LIKE $1 FOR UPDATE",
+    [`${prefix}%`],
+  );
+  await observer.query(
+    `INSERT INTO mail_outbox ("to",subject,text,dedupe_key) VALUES ('proof@example.test',$1,'Crash recovery',$2)`,
+    [prefix, `${prefix}:crash`],
+  );
+  const crashedPid = (await clients[0].query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
+  const crashed = roots[0].settle(deliverMailBatch);
+  await crashEntered.promise;
+  await observer.query("SELECT pg_terminate_backend($1)", [crashedPid]);
+  crashRelease.resolve();
+  assert.equal((await crashed).status, "failed");
+  assert(clientErrors.length > 0);
+  const unsent = (
+    await observer.query("SELECT sent_at, attempts FROM mail_outbox WHERE dedupe_key=$1", [
+      `${prefix}:crash`,
+    ])
+  ).rows[0];
+  assert.equal(unsent.sent_at, null);
+  assert.equal(unsent.attempts, 0);
+  assert.deepEqual(await roots[1].run(deliverMailBatch), { claimed: 1, sent: 1, failed: 0 });
+  await coordinator.query("ROLLBACK");
+  console.log(
+    "PASS crash recovery: killed the claiming worker backend PID before SMTP; transaction rolled back with attempts=0; another worker claims and sends its row once to local Mailpit.",
+  );
+
   const clock = makeTestClock();
   const listenerUrl = new URL(connectionString);
   listenerUrl.searchParams.set("application_name", prefix);
@@ -130,7 +168,16 @@ try {
   await wakeRoot.ready;
   const wake = await wakeRoot.resolve(outboxWake);
   await wake.listen();
-  const woke = wake.wait();
+  const beforePid = (
+    await observer.query(
+      "SELECT pid FROM pg_stat_activity WHERE application_name=$1 AND query='LISTEN board_outbox'",
+      [prefix],
+    )
+  ).rows[0].pid;
+  let notified = false;
+  const woke = wake.wait().then(() => {
+    notified = true;
+  });
   await coordinator.query("BEGIN");
   await coordinator.query(
     "INSERT INTO mail_outbox (\"to\",subject,text,dedupe_key) VALUES ('proof@example.test',$1,'Rollback',$2)",
@@ -145,17 +192,26 @@ try {
     ).rows[0].count,
     0,
   );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(notified, false, "rollback must not wake the listener");
   await coordinator.query(
     "INSERT INTO mail_outbox (\"to\",subject,text,dedupe_key) VALUES ('proof@example.test',$1,'Wake',$2)",
     [prefix, `${prefix}:wake`],
   );
   await woke;
+  const afterPid = (
+    await observer.query(
+      "SELECT pid FROM pg_stat_activity WHERE application_name=$1 AND query='LISTEN board_outbox'",
+      [prefix],
+    )
+  ).rows[0].pid;
+  assert.equal(afterPid, beforePid, "wake must be a notification, not a dropped listener");
   let polled = false;
   const poll = wake.wait().then(() => {
     polled = true;
   });
   clock.advance(29_999);
-  await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(polled, false);
   clock.advance(1);
   await poll;
@@ -185,12 +241,13 @@ try {
       `http://127.0.0.1:18026/api/v1/search?query=${encodeURIComponent(`subject:${prefix}`)}&limit=100`,
     )
   ).json();
-  assert.equal(mailpit.messages.length, 21);
+  assert.equal(mailpit.messages.length, 22);
   console.log(
-    "PASS live outbox wake: LISTEN board_outbox wakes after committed insert; rolled-back insert leaves no row; Mailpit confirms 21 messages.",
+    "PASS live outbox wake: LISTEN board_outbox wakes after committed insert; rolled-back insert leaves no row; Mailpit confirms 22 messages (21 batch + 1 crash recovery).",
   );
 } finally {
   release.resolve();
+  crashRelease.resolve();
   await coordinator.query("ROLLBACK");
   await Promise.allSettled(batches);
   stop.abort();
