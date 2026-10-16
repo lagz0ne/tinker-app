@@ -8,6 +8,9 @@ export declare namespace Errors {
     StartSessionAlreadySet: Record<string, never>;
     StartScopeMissing: Record<string, never>;
     Cancelled: Record<string, never>;
+
+    NestedTransaction: Record<string, never>;
+
     TransactionEnded: Record<string, never>;
     StreamMissing: Record<string, never>;
     StreamDenied: Record<string, never>;

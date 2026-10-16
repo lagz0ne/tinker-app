@@ -3,7 +3,7 @@ import { preset } from "@tinker/core/testing";
 import { afterAll, beforeAll } from "vite-plus/test";
 
 import { sendAuthMail, sessionDeleted } from "~/components/auth/index.server";
-import { database } from "~/components/database/index.server";
+import { database, leaseFrom } from "~/components/database/index.server";
 import type { Database } from "~/components/database/index.server";
 import { authMail } from "~/components/mail/index.server";
 import { mail } from "~/components/mail/index.server";
@@ -40,7 +40,9 @@ export const proofDatabase = preset(
   database,
   async (_deps, { defer }): Promise<Database.Handle> => {
     const { drizzle } = await import("drizzle-orm/pglite");
-    const client = await template.clone();
+
+    const client: import("@electric-sql/pglite").PGlite = await template.clone();
+
     defer(() => client.close());
 
     const handle = Object.assign(
@@ -60,36 +62,38 @@ export const proofDatabase = preset(
     let previous = Promise.resolve();
     return Object.assign(handle, {
       async checkout(guard?: Database.QueryGuard) {
-        const before = previous;
         const released = Promise.withResolvers<void>();
-        previous = released.promise;
-        await before;
-        return {
-          db: drizzle({
-            client: new Proxy(client, {
-              get(target, key) {
-                if (key === "query") {
-                  return async (...args: unknown[]) => {
-                    await guard?.begin();
-                    return Reflect.apply(target.query.bind(target), target, args);
-                  };
-                }
-                return Reflect.get(target, key, target);
-              },
-            }),
-            logger: {
-              logQuery(query) {
-                guard?.check();
-                databaseQueries.push(query);
-              },
-            },
-          }),
-          query: (text: string) => {
-            transactionQueries.push(text);
-            return client.exec(text);
+
+        const connection = new Proxy(client, {
+          get(target, key) {
+            if (key === "release") return released.resolve;
+
+            if (key === "query") {
+              return (text: string, ...args: unknown[]) => {
+                if (["BEGIN", "COMMIT", "ROLLBACK"].includes(text)) transactionQueries.push(text);
+
+                return Reflect.apply(target.query.bind(target), target, [text, ...args]);
+              };
+            }
+            return Reflect.get(target, key, target);
           },
-          release: released.resolve,
-        };
+        }) as typeof client & { release(broken?: boolean): void };
+
+        return leaseFrom(
+          async () => {
+            const before = previous;
+            previous = released.promise;
+            await before;
+            return connection;
+          },
+          drizzle,
+          guard && {
+            ...guard,
+            logQuery(query) {
+              databaseQueries.push(query);
+            },
+          },
+        );
       },
     });
   },

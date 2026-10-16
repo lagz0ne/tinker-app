@@ -709,6 +709,8 @@ function zodDeclaration(node, file) {
       "regex",
       "trim",
       "toUpperCase",
+      "pipe",
+      "omit",
       "brand",
       "optional",
       "nullable",
@@ -729,6 +731,9 @@ function schemaDeclaration(node, file) {
       "pgTable",
       "text",
       "timestamp",
+      "uuid",
+      "smallint",
+      "bigserial",
       "boolean",
       "integer",
       "jsonb",
@@ -1325,6 +1330,8 @@ function checkPlainFunction(node) {
 
 /** Named copied entry helpers and the approved server and browser mains keep native contracts. */
 const entryHelpers = {
+  "tinker/components/database/database.server.ts": ["queryWithStop"],
+  "tinker/components/database/lease.server.ts": ["leaseFrom", "logQuery", "query", "release"],
   "tinker/base/main.ts": ["defineMain", "mainErrorCode", "checkClosed"],
   "tinker/base/panics.server.ts": [
     // c55998e createServerEntry: register process panic cleanup without identity wrapping.
@@ -1653,6 +1660,39 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    [
+      "local-resource-return-allowed",
+      null,
+      'import {resource} from "@tinker/core"; export const probe=resource({label:"probe",factory:(_,{clock})=>{const handle=Object.assign({}, {read(){return clock.currentTimeMillis();}});return handle;}});',
+    ],
+    [
+      "local-operation-return-forbidden",
+      "plain-effect",
+      'import {operation} from "@tinker/core"; export const probe=operation({label:"probe",run:()=>{const handle=Object.assign({}, {read(){return Date.now();}});return handle.read();}});',
+    ],
+    [
+      "resource-method-options-allowed",
+      null,
+      'import {resource,operation} from "@tinker/core"; const sender=resource({label:"probe.sender",factory:()=>({send(options:{done:()=>number}){return options.done();}})});export const probe=operation({label:"probe",depends:{sender},run:({sender},{clock})=>sender.send({done:()=>clock.currentTimeMillis()})});',
+    ],
+    [
+      "real-main-marker-allowed",
+      null,
+      'import {defineMain} from "~/base/main"; export default defineMain(async({exit})=>{exit(0);return {closed:Promise.resolve()};});',
+      "cmds/plain-probe.ts",
+    ],
+    [
+      "fake-main-marker-forbidden",
+      "service-owner",
+      "const defineMain=(fn:()=>unknown)=>fn; export default defineMain(()=>new AbortController());",
+      "cmds/plain-probe.ts",
+    ],
+    [
+      "foreign-lease-name-forbidden",
+      "plain-effect",
+      "export function leaseFrom(){return Date.now();}",
+    ],
+
     [
       "zod-catch-name-callback-allowed",
       null,

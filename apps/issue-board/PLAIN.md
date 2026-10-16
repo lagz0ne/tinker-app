@@ -5,12 +5,6 @@ Callers include direct calls and typed callback registrations.
 Repeated calls by one caller count once; self-calls do not count.
 Tests and generated files do not count.
 
-- **cmds/server.ts#ended**
-  - `result`: `Scope.Result`. From a root's closed promise; why: report its first failure after cleanup.
-  - Callers:
-    - `cmds/server.ts#closed.closeRoots`
-    - `cmds/server.ts#module.callback1`
-
 - **src/backend/team-write.server.ts#rowDeliveries**
   - `members`: `{ id: string }[]`. From team.lock; why: address each locked stream.
   - `change`: `Sync.Change`. From the saved row; why: send the same change to each member.
@@ -40,7 +34,9 @@ Tests and generated files do not count.
     - `src/backend/import.server.ts#importBatch.run`
     - `src/backend/import.server.ts#importTarget.run`
     - `src/backend/import.server.ts#readImport.run`
-    - `src/backend/issues.server.ts#saveIssue.run`
+    - `src/backend/issues.server.ts#rankIssue.run`
+    - `src/backend/issues.server.ts#readIssue.run`
+    - `src/backend/issues.server.ts#updateIssue.run`
     - `src/backend/team-write.server.ts#lockTeamWrite.run`
     - `src/backend/teams.server.ts#authorizeTeamJoin.run`
     - `src/backend/teams.server.ts#readTeam.run`
@@ -133,6 +129,7 @@ Tests and generated files do not count.
   - Callers:
     - `tinker/components/database/database.server.ts#lease.begin`
     - `tinker/components/database/database.server.ts#lease.check`
+    - `tinker/components/database/database.server.ts#tx.transaction`
     - `tinker/components/errors/errors.ts#raise`
     - `tinker/components/requests/result.server.ts#readResult`
     - `tinker/components/sync/client/sync.ts#client.leave`

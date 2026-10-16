@@ -96,7 +96,9 @@ for (const refuse of [false, true]) {
         },
       );
     }
-    expect(options).toEqual([{ connectionString: "postgres://u:p@db.test/app" }]);
+    expect(options).toEqual([
+      { connectionString: "postgres://u:p@db.test/app", connectionTimeoutMillis: 5000 },
+    ]);
     expect(queries).toEqual(
       refuse ? ["LISTEN start_sync"] : ["LISTEN start_sync", "LISTEN start_sync"],
     );

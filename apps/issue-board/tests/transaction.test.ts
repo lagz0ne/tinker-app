@@ -174,3 +174,95 @@ test("a query after either explicit end throws TransactionEnded without another 
     await root.close({ graceful: true });
   }
 });
+
+test("release(transaction) mid-call rolls back once", async () => {
+  const root = createScope({ presets: [proofDatabase] });
+
+  await root.ready;
+
+  transactionQueries.length = 0;
+
+  await root.session(async (session) => {
+    const tx = await session.resolve(transaction);
+
+    const { sql } = await session.resolve(drizzleOrm);
+
+    await tx.execute(sql`SELECT 1`);
+
+    session.release(transaction);
+  });
+
+  expect(transactionQueries).toEqual(["BEGIN", "ROLLBACK"]);
+
+  await root.close({ graceful: true });
+});
+
+test("nested transaction is blocked before it can commit the outer write", async () => {
+  const root = createScope({ presets: [proofDatabase] });
+
+  await root.ready;
+
+  const db = await root.resolve(database);
+
+  const { sql } = await root.resolve(drizzleOrm);
+
+  await db.execute(sql`CREATE TABLE tx_proof_child(parent_id int)`);
+
+  const call = operation({
+    label: "proof.nested",
+    depends: { save: save.controller, tx: transaction },
+    run: async ({ save, tx }) => {
+      await save.run({ rawInput: { parentId: 1 } });
+
+      await tx.transaction(async () => "must not run");
+    },
+  });
+
+  transactionQueries.length = 0;
+
+  await expect(root.run(call, { signal: new AbortController().signal })).rejects.toMatchObject({
+    kind: "NestedTransaction",
+  });
+
+  expect(transactionQueries).toEqual(["BEGIN", "ROLLBACK"]);
+
+  expect(await db.execute(sql`SELECT * FROM tx_proof_child`)).toMatchObject({ rows: [] });
+
+  await root.close({ graceful: true });
+});
+
+test("a dropped explicit commit rejection still fails the call at defer", async () => {
+  const root = createScope({ presets: [proofDatabase] });
+
+  await root.ready;
+
+  const db = await root.resolve(database);
+
+  const { sql } = await root.resolve(drizzleOrm);
+
+  await db.execute(sql`CREATE TABLE tx_proof_parent(id int PRIMARY KEY)`);
+
+  await db.execute(
+    sql`CREATE TABLE tx_proof_child(parent_id int REFERENCES tx_proof_parent(id) DEFERRABLE INITIALLY DEFERRED)`,
+  );
+
+  const call = operation({
+    label: "proof.droppedCommit",
+    depends: { save: save.controller, tx: transaction },
+    run: async ({ save, tx }) => {
+      await save.run({ rawInput: { parentId: 99 } });
+
+      void tx.commit();
+
+      return "saved";
+    },
+  });
+
+  await expect(root.run(call, { signal: new AbortController().signal })).rejects.toMatchObject({
+    kind: "TeardownFailed",
+  });
+
+  expect(await db.execute(sql`SELECT * FROM tx_proof_child`)).toMatchObject({ rows: [] });
+
+  await root.close({ graceful: true });
+});

@@ -10,7 +10,7 @@ A later error is logged. The host aborts the signal, joins closed, flushes the
 streams, then sets process.exitCode. It never calls process.exit. The default
 10-second grace deadline uses SIGKILL only if cleanup has not finished.
 
-Codes: 0 success, 1 unexpected error, 64 bad args, 65 bad CSV data, 78 bad
+Codes: 0 success, 1 unexpected error, 64 bad args, 65 bad CSV data, 75 temporary failure, 78 bad
 startup config, 130 SIGINT, 143 SIGTERM. Server results still need fetch.
 The worker treats the host signal as a soft stop so the current SMTP result
 can commit. Its root closes after the pass finishes.
@@ -25,7 +25,7 @@ Paths below start at apps/issue-board.
 | Comment server function                   | src/transport/comments.functions.ts:15   |
 | Team server function                      | src/transport/teams.functions.ts:15      |
 | CLI import runner, once per 100-row batch | src/transport/import-runner.server.ts:21 |
-| Worker pass, once per claimed batch       | src/backend/outbox.server.ts:175         |
+| Worker delivery, once per claimed batch   | src/backend/outbox.server.ts:211         |
 
 The server function calls already supplied signal. That opens a child of the
 request session and waits for its defers. The request session at
@@ -56,7 +56,7 @@ issues.change calls team.lock, issues.save, issues.delta, alerts.queue, and
 streams.fanOut. team.lock calls execution.seen. Comments call comments.save
 between the same shared lock, alerts, and fan-out steps. Teams use
 teams.authorizeJoin, teams.save, teams.publish, execution.seen, and streams.fanOut.
-Imports use import.target, team.lock, import.assignees when needed, and then
+Imports use import.target and team.lock (including member emails), then
 import.saveRow, alerts.queue, and streams.fanOut for each changed row.
 Every step runs through a controller and has its own span.
 
@@ -117,16 +117,18 @@ The existing vendor archive stays unchanged. No registry or Core file changes.
 ## Streamed page audit
 
 No issue, comment, team, or import write runs in a page loader or render.
-The page loaders call bootstrap/account reads and getTeamMembers. Components
+The older bootstrap cursor write below remains an open limit, not an exception.
+The page loaders call bootstrap, account reads, and getTeamMembers. Components
 send writes only from event handlers through the POST server functions above.
 The CLI and worker run outside rendering. Mail enqueue stays inside the write
 transaction; there is no afterCommit hook.
 
-Bootstrap does initialize and lock sync cursor rows. That work is already in
-an awaited native database.transaction inside bootstrapPublic/bootstrapPrivate
-(src/demo/backend/sync.server.ts:23 and :39), reached through the child call
-in tinker/components/sync/functions.ts:16. Its commit finishes before the
-snapshot returns. The streamed request session owns no pending transaction.
+Bootstrap still initializes and locks sync cursor rows in a page bootstrap call
+(src/demo/backend/sync.server.ts:23 and :39, through history.lock at
+tinker/components/sync/history.server.ts:20). Its native transaction commits
+before the snapshot, but this is still a render-path write. It breaks decision 3. Limit 37 records it; moving creation into signup plus public-stream migration
+needs a shared lifecycle rule. No claim that the streamed-page audit is clean
+is made. See REVIEW-FIXES.md and DECISIONS.md.
 
 The starter counter, todo, and profile POST functions also settle with signal
 (src/transport/counter.functions.ts:15, todos.functions.ts:23,
@@ -135,7 +137,7 @@ native transactions before returning. The profile's existing background
 notification remains as shipped and commits its result separately; it is
 never started by a page render. Auth GET/POST dispatch at
 src/routes/api.auth.$.ts:14 and :18 also awaits its child call before returning
-its response. No write needed to move out of a page render.
+its response. The bootstrap cursor write still needs moving under limit 37.
 
 ## Exact call shape and driver guard
 
@@ -192,3 +194,8 @@ lock order, version test, outbox rows, and event writes stay the same.
 The old demo timing driver now keeps its 12 drag/drop and no-reload checks
 without clocks, artificial delays, a DOM observer, or a bench queue job.
 The full Lightpanda demo still checks all three page error lists are empty.
+
+The review follow-up shares checkout through leaseFrom, discards clients on
+failed transaction SQL, blocks nested transactions, and joins explicit end
+failures in defer. Worker reads watch their soft-stop tag. Each delivery batch
+owns its own child, not one transaction for an entire polling pass.

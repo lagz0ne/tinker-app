@@ -231,8 +231,10 @@ try {
     }
   }
 
-  const lines = Array.from({ length: 101 }, (_, index) => `CSV-${index},Row ${index},`);
-  lines[100] = "CSV-100,Row 100,missing@example.test";
+  const lines = Array.from({ length: 201 }, (_, index) => `CSV-${index},Row ${index},`);
+
+  lines[150] = "CSV-150,Row 150,missing@example.test";
+
   writeFileSync(csv, "ID,Title,Assignee\r\n" + lines.join("\r\n"));
   const args = [resolve("maintain/cli.mjs"), "--file", csv, "--team", prefix, "--actor", email];
   const bad = spawnSync(process.execPath, args, { env, encoding: "utf8" });
@@ -245,18 +247,23 @@ try {
       )
     ).rows[0].n,
     100,
+    "failed second batch must roll back every row in that batch",
   );
   assert.equal(
     (await db.query("SELECT issue_seq FROM team WHERE id=$1", [teamId])).rows[0].issue_seq,
     101,
   );
-  lines[100] = "CSV-100,Row 100,";
+
+  lines[150] = "CSV-150,Row 150,";
+
   writeFileSync(csv, "ID,Title,Assignee\r\n" + lines.join("\r\n"));
   const fixed = spawnSync(process.execPath, args, { env, encoding: "utf8" });
   assert.equal(fixed.status, 0, fixed.stderr);
-  assert(fixed.stdout.includes("101 rows; 1 changed"), fixed.stdout);
+
+  assert(fixed.stdout.includes("201 rows; 101 changed"), fixed.stdout);
+
   console.log(
-    "PASS real CLI integration: failing second batch exits 65, keeps exactly the first 100 rows; fixed rerun commits only the missing row.",
+    "PASS real CLI integration: failing second batch exits 65, keeps exactly the first 100 rows; fixed rerun commits only the remaining 101 rows.",
   );
 } catch (error) {
   failure = error;

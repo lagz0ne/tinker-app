@@ -1,32 +1,26 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 
 /** The proof owns this client; the real session resource owns its BEGIN/COMMIT/ROLLBACK. */
-export function writeDatabase(client, logger) {
+export function writeDatabase(client, leaseFrom, logger) {
   const db = drizzle({ client, logger });
   return Object.assign(db, {
-    checkout: async (guard) => ({
-      db: drizzle({
-        client: new Proxy(client, {
-          get(target, key) {
-            if (key === "query") {
-              return async (...args) => {
-                await guard?.begin();
-                return Reflect.apply(target.query.bind(target), target, args);
-              };
-            }
-            return Reflect.get(target, key, target);
-          },
-        }),
-        logger: {
-          logQuery(...args) {
-            guard?.check();
-            logger?.logQuery(...args);
-          },
-        },
-      }),
-      query: client.query.bind(client),
-      release() {},
-    }),
+    checkout: async (guard) =>
+      leaseFrom(
+        async () =>
+          new Proxy(client, {
+            get(target, key) {
+              if (key === "release") {
+                return (broken) => {
+                  if (broken) void target.end().catch(() => {});
+                };
+              }
+
+              return Reflect.get(target, key, target);
+            },
+          }),
+        drizzle,
+        guard && { ...guard, logQuery: (...args) => logger?.logQuery(...args) },
+      ),
   });
 }
 

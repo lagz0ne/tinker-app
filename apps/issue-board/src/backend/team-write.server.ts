@@ -36,8 +36,9 @@ export const lockTeamWrite = operation({
   run: async ({ tx, orm, history, seen }, { input }) => {
     const { eq, sql } = orm;
     const members = await tx
-      .select({ id: teamMember.userId })
+      .select({ id: teamMember.userId, email: user.email })
       .from(teamMember)
+      .innerJoin(user, eq(user.id, teamMember.userId))
       .where(eq(teamMember.teamId, input.teamId))
       .orderBy(sql`${teamMember.userId} collate "C"`);
     if (!members.some((member) => member.id === input.actorId)) raise("NotTeamMember", {});
@@ -52,6 +53,8 @@ export const lockTeamWrite = operation({
     ) {
       return { members, seen: true as const };
     }
+    // Every membership insert locks a current member stream. A future removal
+    // path must refuse a shrinking set; actor checks above use the pre-lock list.
     const current = await tx
       .select({ id: teamMember.userId })
       .from(teamMember)

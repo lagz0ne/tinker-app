@@ -12,7 +12,7 @@ The team must exist. The actor email must belong to a member of that team.
 This is a trusted local command. It does not sign in or start a server.
 The host reads args and env, owns signals and output, and waits for closed.
 The command calls exit after cleanup. Codes are 0 for success, 64 for bad
-args, 65 for bad CSV data, 78 for bad config, and 1 for an unexpected error.
+args, 65 for bad CSV data, 75 for a temporary membership race (retry), 78 for bad config, and 1 for an unexpected error.
 SIGINT ends with 130; SIGTERM ends with 143. The first stop code wins.
 The command fills typed tags and owns one root. It never runs migrations.
 

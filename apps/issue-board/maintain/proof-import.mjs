@@ -28,7 +28,9 @@ const { importBatch, importTeam, importActor } = await vite.ssrLoadModule(
   process.env.BOARD_IMPORT_SOURCE ?? "/src/backend/import.server.ts",
 );
 
-const { database } = await vite.ssrLoadModule("/tinker/components/database/index.server.ts");
+const { database, leaseFrom } = await vite.ssrLoadModule(
+  "/tinker/components/database/index.server.ts",
+);
 
 const dispatch = writeDispatch();
 
@@ -86,7 +88,7 @@ try {
     );
     const root = createScope({
       signal: stop.signal,
-      presets: [preset(database, async () => writeDatabase(client))],
+      presets: [preset(database, async () => writeDatabase(client, leaseFrom))],
       tags: [importTeam(keys[index]), importActor(`${ids[index]}@example.test`)],
     });
     roots.push(root);

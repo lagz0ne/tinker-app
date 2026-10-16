@@ -15,17 +15,11 @@ writeFileSync(
   `import config from "../../vite.config";\nimport { proofFault } from "../../maintain/proof-fault.mjs";\nexport default {...config, plugins:[proofFault(), ...config.plugins]};\n`,
 );
 
-const commitFailureSite = original.match(
-  /await lease\.query\("ROLLBACK"\)\.catch\(\(\) => \{\}\);\s+throw error;/,
-)?.[0];
-
-assert(commitFailureSite);
-
 const cases = [
   {
     name: "commit-error-hidden",
-    from: commitFailureSite,
-    to: commitFailureSite.replace("throw error;", "void error;"),
+    from: '.then(() => lease.query("COMMIT"))',
+    to: '.then(() => lease.query("COMMIT").catch(() => {}))',
     expected: "failed COMMIT must be a client RPC error",
   },
   {
@@ -64,12 +58,89 @@ try {
     assert(output.includes(fault.expected), fault.name + " failed for the wrong reason: " + output);
     console.log("PASS broken scratch copy fails: " + fault.name + " — " + fault.expected);
   }
+  rmSync("dist", { recursive: true, force: true });
+
+  cpSync(good, "dist", { recursive: true });
+
+  const runnerFile = "src/transport/import-runner.server.ts";
+
+  const runner = readFileSync(runnerFile, "utf8");
+
+  const runnerCopy = resolve(directory, "row-commits.ts");
+
+  writeFileSync(
+    runnerCopy,
+    runner.replace("offset += 100", "offset += 1").replace("offset + 100)", "offset + 1)"),
+  );
+
+  const cliGood = resolve(directory, "good-cli");
+
+  rmSync(cliGood, { recursive: true, force: true });
+
+  cpSync("dist-cli", cliGood, { recursive: true });
+
+  try {
+    const cliConfig = resolve(directory, "vite.cli.config.ts");
+
+    writeFileSync(
+      cliConfig,
+      `import config from "../../vite.cli.config";\nimport {proofFault} from "../../maintain/proof-fault.mjs";\nexport default {...config,plugins:[proofFault(),...config.plugins]};\n`,
+    );
+
+    const built = spawnSync("pnpm", ["exec", "vp", "build", "--config", cliConfig], {
+      encoding: "utf8",
+      timeout: 180000,
+      env: {
+        ...process.env,
+        BOARD_PROOF_FAULT_FILE: runnerFile,
+        BOARD_PROOF_FAULT_COPY: runnerCopy,
+      },
+    });
+
+    assert.equal(built.status, 0, built.stderr);
+
+    const bad = spawnSync(process.execPath, ["maintain/proof-transaction.mjs"], {
+      encoding: "utf8",
+      timeout: 120000,
+    });
+
+    writeFileSync(resolve(directory, "row-commits-proof.log"), bad.stdout + bad.stderr);
+
+    assert.notEqual(bad.status, 0, "row commits must fail the batch rollback proof");
+
+    assert(
+      (bad.stdout + bad.stderr).includes(
+        "failed second batch must roll back every row in that batch",
+      ),
+      bad.stdout + bad.stderr,
+    );
+
+    console.log(
+      "PASS broken scratch copy fails: per-row commits — batch 2 must roll back its first 50 writes",
+    );
+  } finally {
+    rmSync("dist-cli", { recursive: true, force: true });
+
+    cpSync(cliGood, "dist-cli", { recursive: true });
+  }
   const resourceCases = [
     {
       name: "missing-rollback",
       from: "else await tx.rollback();",
       to: "else void 0;",
       expected: "a thrown step must roll back exactly once",
+    },
+    {
+      name: "cancel-rollback",
+      from: "else await tx.rollback();",
+      to: 'else if (end.status !== "cancelled") await tx.rollback();',
+      expected: "cancelled step must roll back exactly once",
+    },
+    {
+      name: "released-rollback",
+      from: "else await tx.rollback();",
+      to: 'else if (end.status !== "released") await tx.rollback();',
+      expected: "released transaction must roll back exactly once",
     },
     {
       name: "eager-begin",
@@ -79,8 +150,8 @@ try {
     },
     {
       name: "double-commit",
-      from: 'if (state === "committed" || state === "rolledBack") return;',
-      to: "if (false) return;",
+      from: 'if (state === "committed" || state === "rolledBack") return Promise.resolve();',
+      to: "if (false) return Promise.resolve();",
       suffixFrom: 'const opened = state === "open";',
       suffixTo: "const opened = true;",
       expected: "explicit commit then defer must not issue a second end",

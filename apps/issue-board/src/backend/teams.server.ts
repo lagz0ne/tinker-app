@@ -1,4 +1,5 @@
 import { operation } from "@tinker/core";
+import { z } from "zod";
 
 import { user } from "~/components/auth/index.server";
 import { database, transaction, drizzleOrm } from "~/components/database/index.server";
@@ -73,8 +74,7 @@ export const authorizeTeamJoin = operation({
 
 export const saveTeam = operation({
   label: "teams.save",
-  input: (raw: unknown) =>
-    raw as { command: import("zod").z.infer<typeof teamCommand>; targetId?: string },
+  input: z.object({ command: teamCommand, targetId: z.string().optional() }),
   depends: { tx: transaction, currentUser, history: eventHistory, seen: executionSeen.controller },
   run: async ({ tx, currentUser, history, seen }, { input, random }) => {
     const { command, targetId } = input;
@@ -106,8 +106,12 @@ export const saveTeam = operation({
 
 export const publishTeam = operation({
   label: "teams.publish",
-  input: (raw: unknown) =>
-    raw as { teamId: string; targetId?: string; streams: string[]; executionId: string },
+  input: z.object({
+    teamId: z.uuid(),
+    targetId: z.string().optional(),
+    streams: z.array(z.string()),
+    executionId: z.uuid(),
+  }),
   depends: { tx: transaction, orm: drizzleOrm, currentUser, publish: fanOut.controller },
   run: async ({ tx, orm, currentUser, publish }, { input }) => {
     const { eq, asc } = orm;

@@ -1,7 +1,7 @@
 import { createScope } from "@tinker/core";
 
 import { defineMain, mainErrorCode, checkClosed } from "~/base/main";
-import { databaseUrl } from "~/components/database/index.server";
+import { databaseUrl, databaseStop } from "~/components/database/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
 
 import { alertMailTimeout } from "@/backend/alert-mail.server";
@@ -17,13 +17,12 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
     return { closed: Promise.resolve() };
   }
   try {
-    const lifetime = new AbortController();
     const root = createScope({
-      signal: lifetime.signal,
       observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
       extensions: [mailStartup],
       tags: [
         mailWorkerStop(signal),
+        databaseStop(signal),
         env.DIGEST_HOUR_UTC !== undefined &&
           digestHourUTC(env.DIGEST_HOUR_UTC.trim() === "" ? NaN : Number(env.DIGEST_HOUR_UTC)),
         env.OUTBOX_SMTP_TIMEOUT_MS !== undefined &&
@@ -42,11 +41,11 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
     }
 
     const closed = root
-      .run(runMailWorker)
+      .run(runMailWorker, { tags: [mailWorkerStop(signal)] })
       .then(
         () => root.close({ graceful: true }),
         async (error) => {
-          if (signal.aborted && error === signal.reason) return root.closed;
+          if (signal.aborted && error === signal.reason) return root.close({ graceful: true });
 
           stderr.write(`outbox worker failed: ${String(error)}\n`);
           await root.close();

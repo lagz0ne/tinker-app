@@ -51,16 +51,23 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
         stdout.write(`Imported ${result.rows} rows; ${result.changed} changed.\n`);
         exit(0);
       },
+      // oxlint-disable-next-line complexity -- The command maps each typed import failure to its exit code.
       async (error) => {
-        stderr.write(`import failed: ${String(error)}\n`);
         await root.close();
         if (signal.aborted && error === signal.reason) return;
 
+        stderr.write(`import failed: ${String(error)}\n`);
+
         const kind =
           error && typeof error === "object" && "kind" in error ? String(error.kind) : "";
-        const code = ["BadInput", "InvalidAssignee", "NotTeamMember", "TeamChanged"].includes(kind)
-          ? 65
-          : 1;
+
+        const code =
+          kind === "TeamChanged"
+            ? 75
+            : ["BadInput", "InvalidAssignee", "NotTeamMember"].includes(kind)
+              ? 65
+              : 1;
+
         exit(code, error);
         if (code === 1) throw error;
       },

@@ -1,6 +1,11 @@
 import { operation, resource, tag } from "@tinker/core";
 
-import { transaction, databaseUrl, drizzleOrm } from "~/components/database/index.server";
+import {
+  transaction,
+  databaseUrl,
+  drizzleOrm,
+  databaseConnectTimeout,
+} from "~/components/database/index.server";
 
 import { alertMail } from "./alert-mail.server";
 import { mailOutbox } from "./board.schema.server";
@@ -77,8 +82,13 @@ export const deliverMailBatch = operation({
 /** LISTEN belongs to this resource; its private flag remembers wakes during a send. */
 export const outboxWake = resource({
   label: "outbox.wake",
-  depends: { url: databaseUrl, postgres, stopping: mailWorkerStop },
-  factory: async ({ url, postgres, stopping }, { clock, random, closing, defer, log }) => {
+  depends: {
+    url: databaseUrl,
+    postgres,
+    stopping: mailWorkerStop,
+    timeout: databaseConnectTimeout,
+  },
+  factory: async ({ url, postgres, stopping, timeout }, { clock, random, closing, defer, log }) => {
     const ending = stopping ? AbortSignal.any([closing, stopping]) : closing;
     let client: InstanceType<typeof postgres.default.Client> | undefined;
     let connected = false;
@@ -98,7 +108,7 @@ export const outboxWake = resource({
         await old?.end();
         const next = new postgres.default.Client({
           connectionString: url.href,
-          connectionTimeoutMillis: 10_000,
+          connectionTimeoutMillis: timeout,
         });
         client = next;
         next.on("error", () => {
@@ -116,9 +126,35 @@ export const outboxWake = resource({
           dirty = true;
           waiting?.resolve();
         });
-        await next.connect();
-        await next.query("LISTEN board_outbox");
-        connected = true;
+
+        ending.throwIfAborted();
+
+        const cancelled = Promise.withResolvers<never>();
+
+        const abort = () => {
+          void next.end().catch(() => {});
+
+          cancelled.reject(ending.reason);
+        };
+
+        ending.addEventListener("abort", abort, { once: true });
+
+        try {
+          await Promise.race([
+            Promise.resolve().then(async () => {
+              await next.connect();
+
+              await next.query("LISTEN board_outbox");
+            }),
+            cancelled.promise,
+          ]);
+
+          ending.throwIfAborted();
+
+          connected = true;
+        } finally {
+          ending.removeEventListener("abort", abort);
+        }
       },
       async retry() {
         // A failed connect must wait on the timer alone, never an old client's end event.

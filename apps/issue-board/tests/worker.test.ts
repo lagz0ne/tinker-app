@@ -4,7 +4,7 @@ import { createScope } from "@tinker/core";
 import { preset, makeTestClock, makeTestRandom } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
-import { databaseUrl } from "~/components/database/index.server";
+import { databaseUrl, databaseConnectTimeout } from "~/components/database/index.server";
 
 import { queueDailyDigests } from "@/backend/digest.server";
 import { deliverMailBatch, outboxWake, runMailWorker } from "@/backend/outbox.server";
@@ -302,4 +302,134 @@ test("failed digest waits thirty seconds across notification wakes while alerts 
   expect(batches).toBe(4);
   expect(ticks).toBe(2);
   expect((await root.closed).status).toBe("success");
+});
+
+test("stop interrupts a black-holed LISTEN handshake", async () => {
+  const sockets = new Set<import("node:net").Socket>();
+
+  const accepted = Promise.withResolvers<void>();
+
+  const server = createServer((socket) => {
+    sockets.add(socket);
+
+    accepted.resolve();
+
+    socket.on("close", () => sockets.delete(socket));
+  });
+
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+
+  const address = server.address();
+
+  if (!address || typeof address === "string") throw new Error("Expected TCP endpoint");
+
+  const { mailWorkerStop } = await import("@/backend/outbox.server");
+
+  const stopping = new AbortController();
+
+  const root = createScope({
+    tags: [
+      databaseUrl(new URL(`postgres://proof@127.0.0.1:${address.port}/proof`)),
+      mailWorkerStop(stopping.signal),
+      databaseConnectTimeout(100),
+    ],
+  });
+
+  try {
+    const wake = await root.resolve(outboxWake);
+
+    const listening = wake.listen();
+
+    const result = listening.catch((error) => error);
+
+    await accepted.promise;
+
+    stopping.abort();
+
+    expect(await result).toBe(stopping.signal.reason);
+
+    await Promise.race([
+      root.close({ graceful: true }),
+      new Promise((_, reject) =>
+        AbortSignal.timeout(1000).addEventListener(
+          "abort",
+          () => reject(new Error("stop must settle before host grace")),
+          { once: true },
+        ),
+      ),
+    ]);
+  } finally {
+    for (const socket of sockets) socket.destroy();
+
+    await root.close();
+
+    await new Promise<void>((done) => server.close(() => done()));
+  }
+});
+
+test("worker pool reads stop during a black-holed digest connection", async () => {
+  const sockets = new Set<import("node:net").Socket>();
+
+  const accepted = Promise.withResolvers<void>();
+
+  const server = createServer((socket) => {
+    sockets.add(socket);
+
+    accepted.resolve();
+
+    socket.on("close", () => sockets.delete(socket));
+  });
+
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+
+  const address = server.address();
+
+  if (!address || typeof address === "string") throw new Error("Expected TCP endpoint");
+
+  const { databaseStop, database, drizzleOrm } = await import("~/components/database/index.server");
+
+  const { operation } = await import("@tinker/core");
+
+  const stopping = new AbortController();
+
+  const root = createScope({
+    tags: [
+      databaseUrl(new URL(`postgres://proof@127.0.0.1:${address.port}/proof`)),
+      databaseStop(stopping.signal),
+      databaseConnectTimeout(100),
+    ],
+  });
+
+  const read = operation({
+    label: "proof.stoppedDigestRead",
+    depends: { database, orm: drizzleOrm },
+    run: async ({ database, orm }) => database.execute(orm.sql`SELECT 1`),
+  });
+
+  try {
+    const pending = root.settle(read, { signal: new AbortController().signal });
+
+    await accepted.promise;
+
+    stopping.abort();
+
+    expect((await pending).status).toBe("failed");
+
+    await Promise.race([
+      root.close({ graceful: true }),
+      new Promise((_, reject) =>
+        AbortSignal.timeout(1000).addEventListener(
+          "abort",
+          () => reject(new Error("stop must settle before host grace")),
+          { once: true },
+        ),
+      ),
+    ]);
+  } finally {
+    for (const socket of sockets) socket.destroy();
+
+    await root.close();
+
+    await new Promise<void>((done) => server.close(() => done()));
+  }
 });

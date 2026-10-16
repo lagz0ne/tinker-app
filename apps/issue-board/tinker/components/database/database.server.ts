@@ -1,24 +1,49 @@
 import { extension, operation, resource, tag } from "@tinker/core";
+import type { PoolClient } from "pg";
 import { z } from "zod";
 
 import { fail } from "~/components/errors";
 
+import { leaseFrom } from "./lease.server";
 import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";
 import type { Database } from "./types";
 
 /** Where Postgres is. */
 export const databaseUrl = tag<URL>({ label: "database.url", parse: z.instanceof(URL) });
 
+/** Worker-only soft stop cancels pool reads, while in-flight write leases finish. */
+export const databaseStop = tag<AbortSignal | undefined>({
+  label: "database.stop",
+  default: undefined,
+});
+
+export const databaseConnectTimeout = tag<number>({
+  label: "database.connectTimeout",
+  default: 5000,
+  parse: z.number().int().positive(),
+});
+
 const migrationsFolder = "drizzle";
 
 /** Feature code uses native PostgreSQL queries, without the driver's client field. */
 export const database = resource({
   label: "database",
-  depends: { url: databaseUrl, postgres, orm: drizzlePostgres },
-  factory: async ({ url, postgres, orm }, { defer }): Promise<Database.Handle> => {
+  depends: {
+    url: databaseUrl,
+    postgres,
+    orm: drizzlePostgres,
+    stopping: databaseStop,
+    timeout: databaseConnectTimeout,
+  },
+  factory: async (
+    { url, postgres, orm, stopping, timeout },
+    { defer },
+  ): Promise<Database.Handle> => {
     const { default: pg } = postgres;
     const { drizzle } = orm;
-    const client = new pg.Pool({ connectionString: url.href });
+
+    const client = new pg.Pool({ connectionString: url.href, connectionTimeoutMillis: timeout });
+
     const listeners = new Set<AbortController>();
 
     defer(async () => {
@@ -26,29 +51,60 @@ export const database = resource({
       await client.end();
     });
 
-    return Object.assign(drizzle({ client }), {
-      async checkout(guard?: Database.QueryGuard): Promise<Database.Lease> {
-        const connection = await client.connect();
-        const query = new Proxy(connection.query.bind(connection), {
-          async apply(query, receiver, args) {
-            await guard?.begin();
-            return Reflect.apply(query, receiver, args);
-          },
-        });
-        return {
-          db: drizzle({
-            client: new Proxy(connection, {
-              get(target, key) {
-                if (key === "query") return query;
-                return Reflect.get(target, key, target);
-              },
-            }),
-            // Keep TransactionEnded outside Drizzle's driver-error wrapper.
-            logger: { logQuery: () => guard?.check() },
-          }),
-          query: connection.query.bind(connection),
-          release: connection.release.bind(connection),
+    const reads = new Proxy(client, {
+      get(target, key) {
+        if (key !== "query" || !stopping) return Reflect.get(target, key, target);
+
+        /** Native pg callback; the resource owns its client and stop listener. */
+        return async function queryWithStop(...args: unknown[]) {
+          stopping.throwIfAborted();
+
+          let held: PoolClient | undefined;
+
+          const cancelled = Promise.withResolvers<never>();
+
+          const abort = () => {
+            held?.release(true);
+
+            held = undefined;
+
+            cancelled.reject(stopping.reason);
+          };
+
+          stopping.addEventListener("abort", abort, { once: true });
+
+          const work = Promise.resolve().then(async () => {
+            const connection = await client.connect();
+
+            if (stopping.aborted) {
+              connection.release(true);
+
+              throw stopping.reason;
+            }
+            held = connection;
+
+            try {
+              return await Reflect.apply(connection.query.bind(connection), connection, args);
+            } finally {
+              held?.release();
+
+              held = undefined;
+            }
+          });
+
+          try {
+            return await Promise.race([work, cancelled.promise]);
+          } finally {
+            stopping.removeEventListener("abort", abort);
+          }
         };
+      },
+    });
+
+    return Object.assign(drizzle({ client: reads }), {
+      async checkout(guard?: Database.QueryGuard): Promise<Database.Lease> {
+        // The lease is only a handle. Its first BEGIN checks out the pool client.
+        return leaseFrom<PoolClient>(client.connect.bind(client), drizzle, guard);
       },
       async listen(heard: (payload: string) => void, disconnected: () => void) {
         const listener = await client.connect();
@@ -118,7 +174,11 @@ export const transaction = resource({
     if (!database.checkout) throw new Error("Database preset must supply checkout for writes");
     let state: "idle" | "open" | "committed" | "rolledBack" = "idle";
     let starting: Promise<unknown> | undefined;
-    let ending: Promise<unknown> | undefined;
+
+    let ending: Promise<void> | undefined;
+
+    let broken = false;
+
     const lease = await database.checkout({
       check() {
         if (state === "committed" || state === "rolledBack") throw fail("TransactionEnded", {});
@@ -127,49 +187,77 @@ export const transaction = resource({
         if (state === "committed" || state === "rolledBack") throw fail("TransactionEnded", {});
         if (state === "idle") {
           state = "open";
-          starting = lease.query("BEGIN");
+
+          starting = lease.query("BEGIN").catch((error) => {
+            broken = true;
+
+            throw error;
+          });
         }
         await starting;
       },
     });
     const tx = Object.assign(lease.db, {
-      async commit() {
-        if (state === "committed" || state === "rolledBack") return;
+      transaction() {
+        throw fail("NestedTransaction", {});
+      },
+      commit() {
+        if (state === "committed" || state === "rolledBack") return Promise.resolve();
+
         const opened = state === "open";
         state = "committed";
 
-        if (!opened) return;
+        if (!opened) return Promise.resolve();
+
         ending = Promise.resolve(starting)
           .then(() => lease.query("COMMIT"))
+          .then(() => {})
           .catch(async (error) => {
+            broken = true;
+
             state = "rolledBack";
             await lease.query("ROLLBACK").catch(() => {});
             throw error;
           });
-        await ending;
+
+        void ending.catch(() => {});
+
+        return ending;
       },
-      async rollback() {
-        if (state === "committed" || state === "rolledBack") return;
+      rollback() {
+        if (state === "committed" || state === "rolledBack") return Promise.resolve();
+
         const opened = state === "open";
         state = "rolledBack";
 
-        if (!opened) return;
+        if (!opened) return Promise.resolve();
+
         ending = Promise.resolve(starting)
           .catch(() => {})
-          .then(() => lease.query("ROLLBACK"));
-        await ending;
+          .then(() => lease.query("ROLLBACK"))
+          .then(() => {})
+          .catch((error) => {
+            broken = true;
+
+            throw error;
+          });
+
+        void ending.catch(() => {});
+
+        return ending;
       },
     });
 
     defer(async (end) => {
       try {
-        await ending?.catch(() => {});
+        await ending;
+
         if (state === "open") {
           if (end.status === "success") await tx.commit();
           else await tx.rollback();
         }
       } finally {
-        lease.release();
+        lease.release(broken);
       }
     });
     return tx;

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { Writable } from "node:stream";
 
-import { expect, test } from "vite-plus/test";
+import { expect, test, vi } from "vite-plus/test";
 
 import { createMainHost } from "../lib/main-host.mjs";
 
@@ -40,15 +40,17 @@ test("exit during start aborts inputs, skips listening, and joins closed", async
 
 test("exit twice keeps the first code and reason", async () => {
   const host = createMainHost(
-    async ({ exit, signal }) => {
+    async ({ exit }) => {
       exit(65, "first");
       exit(78, "second");
-      expect(signal.reason).toBe("first");
+
       return { closed: Promise.resolve() };
     },
     { env: {}, stdout: quiet, stderr: quiet },
   );
   expect(await host.closed).toBe(65);
+
+  expect(host.signal.reason).toBe("first");
 });
 
 test("exit followed by SIGTERM keeps the command's first code", async () => {
@@ -198,4 +200,62 @@ test("repeated OS signals after exit cannot cut off cleanup or change its first 
   expect(result.signal).toBeNull();
   expect(result.status).toBe(64);
   expect(result.stdout).toContain("cleanup finished");
+});
+
+test("graceMs is a full delay before hardStop", async () => {
+  vi.useFakeTimers();
+
+  const finish = Promise.withResolvers();
+
+  const hardStop = vi.fn(() => finish.resolve());
+
+  try {
+    const host = createMainHost(
+      async ({ exit }) => {
+        exit(0);
+
+        return { closed: finish.promise };
+      },
+      { env: {}, stdout: quiet, stderr: quiet, graceMs: 100, hardStop },
+    );
+
+    await host.started;
+
+    await vi.advanceTimersByTimeAsync(99);
+
+    expect(hardStop).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(hardStop).toHaveBeenCalledTimes(1);
+
+    await host.closed;
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("clean close clears grace timeout even after its deadline passes", async () => {
+  vi.useFakeTimers();
+
+  const hardStop = vi.fn();
+
+  try {
+    const host = createMainHost(
+      async ({ exit }) => {
+        exit(0);
+
+        return { closed: Promise.resolve() };
+      },
+      { env: {}, stdout: quiet, stderr: quiet, graceMs: 100, hardStop },
+    );
+
+    expect(await host.closed).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(101);
+
+    expect(hardStop).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
 });

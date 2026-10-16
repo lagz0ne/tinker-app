@@ -4,7 +4,7 @@ import { z } from "zod";
 import { user } from "~/components/auth/index.server";
 import { transaction, drizzleOrm } from "~/components/database/index.server";
 
-import type { Issue } from "@/contracts/issues";
+import { issueRecord } from "@/contracts/issues";
 import { raise } from "@/demo/errors";
 
 import { issue, issueRowFields, team, teamMember } from "./board.schema.server";
@@ -27,6 +27,7 @@ export const readImport = operation({
     } catch (error) {
       raise("BadInput", { reason: String(error) });
     }
+
     const headers = records.shift() ?? [];
 
     if (new Set(headers).size !== headers.length) {
@@ -37,6 +38,7 @@ export const readImport = operation({
     }
 
     const seen = new Set<string>();
+
     return records
       .map((cells, index) => {
         if (cells.length !== headers.length) {
@@ -117,111 +119,161 @@ export const importTarget = operation({
   depends: { tx: transaction, orm: drizzleOrm, key: importTeam, email: importActor },
   run: async ({ tx, orm, key, email }) => {
     const { eq, and, sql } = orm;
+
     const [target] = await tx
       .select({ teamId: team.id, teamKey: team.key, id: user.id, name: user.name })
       .from(team)
       .innerJoin(teamMember, eq(teamMember.teamId, team.id))
       .innerJoin(user, eq(user.id, teamMember.userId))
       .where(and(eq(team.key, key), sql`lower(${user.email}) = ${email.toLowerCase()}`));
+
     if (!target) raise("NotTeamMember", {});
+
     return target;
   },
 });
 
-export const importAssignees = operation({
-  label: "import.assignees",
-  input: z.string(),
+const importRowInput = z.object({
+  teamId: z.uuid(),
+  actorId: z.string(),
+  teamKey: z.string(),
+  row: importBatchInput.shape.rows.element,
+  assigneeId: z.string().nullable(),
+});
+
+export const readImportRow = operation({
+  label: "import.readRow",
+  input: importRowInput,
   depends: { tx: transaction, orm: drizzleOrm },
   run: async ({ tx, orm }, { input }) => {
-    const { eq } = orm;
-    return tx
-      .select({ id: user.id, email: user.email })
-      .from(teamMember)
-      .innerJoin(user, eq(user.id, teamMember.userId))
-      .where(eq(teamMember.teamId, input));
+    const { eq, and } = orm;
+
+    const [current] = await tx
+      .select(issueRowFields)
+      .from(issue)
+      .where(and(eq(issue.teamId, input.teamId), eq(issue.externalId, input.row.externalId)));
+
+    const { row, assigneeId } = input;
+
+    const unchanged =
+      current !== undefined &&
+      current.title === row.title &&
+      current.description === row.description &&
+      current.state === row.state &&
+      current.priority === row.priority &&
+      current.assigneeId === assigneeId;
+
+    return { current: current ?? null, unchanged };
+  },
+});
+
+export const placeImportRow = operation({
+  label: "import.place",
+  input: importRowInput.extend({ current: issueRecord.omit({ teamKey: true }).nullable() }),
+  depends: { tx: transaction, orm: drizzleOrm, fractionalIndex },
+  run: async ({ tx, orm, fractionalIndex }, { input }) => {
+    const { eq, and, sql, asc } = orm;
+
+    const [last] = await tx
+      .select({ rank: issue.rank })
+      .from(issue)
+      .where(and(eq(issue.teamId, input.teamId), eq(issue.state, input.row.state)))
+      .orderBy(sql`${issue.rank} collate "C" desc`, asc(issue.id))
+      .limit(1);
+
+    return input.current?.state === input.row.state
+      ? input.current.rank
+      : fractionalIndex.generateKeyBetween(last?.rank ?? null, null);
+  },
+});
+
+export const createImportRow = operation({
+  label: "import.create",
+  input: importRowInput.extend({ rank: z.string() }),
+  depends: { tx: transaction, orm: drizzleOrm },
+  run: async ({ tx, orm }, { input, random, clock }) => {
+    const { eq, sql } = orm;
+
+    const { row, assigneeId, rank } = input;
+
+    const [counter] = await tx
+      .update(team)
+      .set({ issueSeq: sql`${team.issueSeq} + 1` })
+      .where(eq(team.id, input.teamId))
+      .returning({ number: team.issueSeq });
+
+    const [saved] = await tx
+      .insert(issue)
+      .values({
+        id: random.uuid(),
+        teamId: input.teamId,
+        externalId: row.externalId,
+        number: counter!.number,
+        creatorId: input.actorId,
+        title: row.title,
+        description: row.description,
+        state: row.state,
+        priority: row.priority,
+        assigneeId,
+        rank,
+        updatedAt: new Date(clock.currentTimeMillis()),
+      })
+      .returning(issueRowFields);
+
+    return saved!;
+  },
+});
+
+export const updateImportRow = operation({
+  label: "import.update",
+  input: importRowInput.extend({ id: z.uuid(), rank: z.string() }),
+  depends: { tx: transaction, orm: drizzleOrm },
+  run: async ({ tx, orm }, { input, clock }) => {
+    const { eq, sql } = orm;
+
+    const { row, assigneeId, rank } = input;
+    // The team row lock covers the earlier read and this update; no version can race.
+
+    const [saved] = await tx
+      .update(issue)
+      .set({
+        title: row.title,
+        description: row.description,
+        state: row.state,
+        priority: row.priority,
+        assigneeId,
+        rank,
+        updatedAt: new Date(clock.currentTimeMillis()),
+        version: sql`${issue.version} + 1`,
+      })
+      .where(eq(issue.id, input.id))
+      .returning(issueRowFields);
+
+    return saved!;
   },
 });
 
 export const saveImportRow = operation({
   label: "import.saveRow",
-  input: (raw: unknown) =>
-    raw as {
-      teamId: string;
-      actorId: string;
-      teamKey: string;
-      row: import("zod").z.infer<typeof importBatchInput>["rows"][number];
-      assigneeId: string | null;
-    },
-  depends: { tx: transaction, orm: drizzleOrm, fractionalIndex },
-  run: async ({ tx, orm, fractionalIndex }, { input, random, clock }) => {
-    const { eq, and, sql, asc } = orm;
-    const { row, assigneeId } = input;
-    return tx
-      .select()
-      .from(issue)
-      .where(and(eq(issue.teamId, input.teamId), eq(issue.externalId, row.externalId)))
-      .then(async ([old]) => {
-        const same =
-          old &&
-          Object.entries({
-            title: row.title,
-            description: row.description,
-            state: row.state,
-            priority: row.priority,
-            assigneeId,
-          }).every(([field, value]) => old[field as keyof typeof old] === value);
-        if (same) return null;
+  input: importRowInput,
+  depends: {
+    read: readImportRow.controller,
+    place: placeImportRow.controller,
+    create: createImportRow.controller,
+    update: updateImportRow.controller,
+  },
+  run: async ({ read, place, create, update }, { input }) => {
+    const { current, unchanged } = await read.run({ input });
 
-        const rank = await tx
-          .select({ rank: issue.rank })
-          .from(issue)
-          .where(and(eq(issue.teamId, input.teamId), eq(issue.state, row.state)))
-          .orderBy(sql`${issue.rank} collate "C" desc`, asc(issue.id))
-          .limit(1)
-          .then(([last]) =>
-            old?.state === row.state
-              ? old.rank
-              : fractionalIndex.generateKeyBetween(last?.rank ?? null, null),
-          );
-        const values = {
-          title: row.title,
-          description: row.description,
-          state: row.state,
-          priority: row.priority,
-          assigneeId,
-          rank,
-          updatedAt: new Date(clock.currentTimeMillis()),
-        };
-        const id = old?.id ?? random.uuid();
-        let saved: Omit<Issue, "teamKey">;
-        if (old) {
-          const rows = await tx
-            .update(issue)
-            .set({ ...values, version: sql`${issue.version} + 1` })
-            .where(eq(issue.id, id))
-            .returning(issueRowFields);
-          saved = rows[0]!;
-        } else {
-          const [counter] = await tx
-            .update(team)
-            .set({ issueSeq: sql`${team.issueSeq} + 1` })
-            .where(eq(team.id, input.teamId))
-            .returning({ number: team.issueSeq });
-          const rows = await tx
-            .insert(issue)
-            .values({
-              ...values,
-              id,
-              teamId: input.teamId,
-              externalId: row.externalId,
-              number: counter!.number,
-              creatorId: input.actorId,
-            })
-            .returning(issueRowFields);
-          saved = rows[0]!;
-        }
-        return { ...saved, teamKey: input.teamKey };
-      });
+    if (unchanged) return null;
+
+    const rank = await place.run({ input: { ...input, current } });
+
+    const saved = current
+      ? await update.run({ input: { ...input, id: current.id, rank } })
+      : await create.run({ input: { ...input, rank } });
+
+    return { ...saved, teamKey: input.teamKey };
   },
 });
 
@@ -231,17 +283,17 @@ export const importBatch = operation({
   depends: {
     target: importTarget.controller,
     lock: lockTeamWrite.controller,
-    assignees: importAssignees.controller,
     save: saveImportRow.controller,
     alerts: queueAlerts.controller,
     publish: fanOut.controller,
   },
-  run: async ({ target, lock, assignees, save, alerts, publish }, { input, random, signal }) => {
+  run: async ({ target, lock, save, alerts, publish }, { input, random, signal }) => {
     const writer = await target.run();
+
     const locked = await lock.run({ input: { teamId: writer.teamId, actorId: writer.id } });
-    const known = input.rows.some((row) => row.assignee !== "")
-      ? await assignees.run({ input: writer.teamId })
-      : [];
+
+    const known = locked.members;
+
     const ids = new Map<string, string | null>([
       ["", null],
       ...known.map((member): [string, string] => [member.email.toLowerCase(), member.id]),
@@ -286,6 +338,7 @@ export const importBatch = operation({
       });
       changed += 1;
     }
+
     return { changed };
   },
 });

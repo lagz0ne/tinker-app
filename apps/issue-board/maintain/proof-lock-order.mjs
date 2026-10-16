@@ -28,7 +28,9 @@ const vite = await createServer({
 const { changeIssue } = await vite.ssrLoadModule("/src/backend/issues.server.ts");
 const { currentUser } = await vite.ssrLoadModule("/src/demo/backend/auth.server.ts");
 
-const { database } = await vite.ssrLoadModule("/tinker/components/database/index.server.ts");
+const { database, leaseFrom } = await vite.ssrLoadModule(
+  "/tinker/components/database/index.server.ts",
+);
 
 const dispatch = writeDispatch();
 
@@ -88,7 +90,7 @@ try {
     const root = createScope({
       signal: stop.signal,
       presets: [
-        preset(database, async () => writeDatabase(client)),
+        preset(database, async () => writeDatabase(client, leaseFrom)),
         preset(currentUser, async () => ({
           id,
           name: `Order ${index}`,

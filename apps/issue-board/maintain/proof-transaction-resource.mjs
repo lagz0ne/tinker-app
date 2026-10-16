@@ -22,7 +22,7 @@ const vite = await createServer({
   },
 });
 
-const { database, transaction, drizzleOrm } = await vite.ssrLoadModule(
+const { database, transaction, drizzleOrm, leaseFrom } = await vite.ssrLoadModule(
   "/tinker/components/database/index.server.ts",
 );
 
@@ -33,7 +33,7 @@ const client = new pg.Client({
 await client.connect();
 await client.query("CREATE TEMP TABLE tx_resource_proof(value int)");
 const queries = [];
-const handle = writeDatabase(client);
+const handle = writeDatabase(client, leaseFrom);
 const checkout = handle.checkout;
 
 handle.checkout = async (guard) => {
@@ -144,6 +144,27 @@ try {
   );
 
   queries.length = 0;
+
+  await root.session(async (session) => {
+    const tx = await session.resolve(transaction);
+
+    const { sql } = await session.resolve(drizzleOrm);
+
+    await tx.execute(sql`SELECT 1`);
+
+    session.release(transaction);
+  });
+
+  assert.deepEqual(
+    queries,
+    ["BEGIN", "ROLLBACK"],
+    "released transaction must roll back exactly once",
+  );
+
+  console.log("PASS live PostgreSQL: release(transaction) sends exactly BEGIN/ROLLBACK.");
+
+  queries.length = 0;
+
   const committed = await root.settle(complete, { signal: new AbortController().signal });
   assert.equal(committed.status, "success");
   assert.equal(committed.value, "saved");

@@ -1,4 +1,5 @@
 import { operation } from "@tinker/core";
+import { z } from "zod";
 
 import { transaction, drizzleOrm } from "~/components/database/index.server";
 
@@ -11,8 +12,7 @@ import { lockTeamWrite, queueAlerts, fanOut, rowDeliveries } from "./team-write.
 
 export const saveComment = operation({
   label: "comments.save",
-  input: (raw: unknown) =>
-    raw as { command: import("zod").z.infer<typeof commentCommand>; teamKey: string },
+  input: z.object({ command: commentCommand, teamKey: z.string() }),
   depends: { tx: transaction, orm: drizzleOrm, currentUser },
   run: async ({ tx, orm, currentUser }, { input, random, clock }) => {
     const { eq, and } = orm;
