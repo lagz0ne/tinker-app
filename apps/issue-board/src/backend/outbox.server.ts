@@ -1,78 +1,85 @@
-import { operation, resource } from "@tinker/core";
+import { operation, resource, tag } from "@tinker/core";
 
-import { database, databaseUrl, drizzleOrm } from "~/components/database/index.server";
+import { transaction, databaseUrl, drizzleOrm } from "~/components/database/index.server";
 
 import { alertMail } from "./alert-mail.server";
 import { mailOutbox } from "./board.schema.server";
 import { tickMailDigest } from "./digest.server";
 import { postgres } from "./modules";
 
+/** Soft process stop: finish and commit the current SMTP send before closing the root. */
+export const mailWorkerStop = tag<AbortSignal | undefined>({
+  label: "outbox.stop",
+  default: undefined,
+});
+
 /** SMTP runs while the row is locked; another worker skips this batch. */
 export const deliverMailBatch = operation({
   label: "outbox.deliverBatch",
-  depends: { database, orm: drizzleOrm, mail: alertMail },
-  run: async ({ database, orm, mail }, { clock, log, signal }) => {
+  depends: { tx: transaction, orm: drizzleOrm, mail: alertMail, stopping: mailWorkerStop },
+  run: async ({ tx, orm, mail, stopping }, { clock, log, signal: contextSignal }) => {
+    const signal = stopping ?? contextSignal;
     const { and, eq, lt, lte, isNull, asc } = orm;
-    return database.transaction(async (tx) => {
-      const rows = await tx
-        .select()
-        .from(mailOutbox)
-        .where(
-          and(
-            isNull(mailOutbox.sentAt),
-            lt(mailOutbox.attempts, 12),
-            lte(mailOutbox.nextAt, new Date(clock.currentTimeMillis())),
-          ),
-        )
-        .orderBy(asc(mailOutbox.nextAt), asc(mailOutbox.id))
-        .limit(20)
-        .for("update", { skipLocked: true });
-      let sent = 0;
-      let failed = 0;
-      for (const row of rows) {
-        if (signal.aborted) break;
+    const rows = await tx
+      .select()
+      .from(mailOutbox)
+      .where(
+        and(
+          isNull(mailOutbox.sentAt),
+          lt(mailOutbox.attempts, 12),
+          lte(mailOutbox.nextAt, new Date(clock.currentTimeMillis())),
+        ),
+      )
+      .orderBy(asc(mailOutbox.nextAt), asc(mailOutbox.id))
+      .limit(20)
+      .for("update", { skipLocked: true });
+    let sent = 0;
 
-        try {
-          await mail.send({ to: row.to, subject: row.subject, text: row.text });
-        } catch (error) {
-          await tx
-            .update(mailOutbox)
-            .set({
-              attempts: row.attempts + 1,
-              nextAt: new Date(
-                clock.currentTimeMillis() +
-                  Math.min(1_800_000, 1000 * 2 ** Math.min(row.attempts, 11)),
-              ),
-              lastError: String(error).slice(0, 1000),
-            })
-            .where(eq(mailOutbox.id, row.id));
-          failed += 1;
-          log.error(row.attempts + 1 === 12 ? "outbox.dead" : "outbox.retry", {
-            id: row.id,
-            attempts: row.attempts + 1,
-          });
-          continue;
-        }
+    let failed = 0;
+    for (const row of rows) {
+      if (signal.aborted) break;
+
+      try {
+        await mail.send({ to: row.to, subject: row.subject, text: row.text });
+      } catch (error) {
         await tx
           .update(mailOutbox)
           .set({
             attempts: row.attempts + 1,
-            sentAt: new Date(clock.currentTimeMillis()),
-            lastError: null,
+            nextAt: new Date(
+              clock.currentTimeMillis() +
+                Math.min(1_800_000, 1000 * 2 ** Math.min(row.attempts, 11)),
+            ),
+            lastError: String(error).slice(0, 1000),
           })
           .where(eq(mailOutbox.id, row.id));
-        sent += 1;
+        failed += 1;
+        log.error(row.attempts + 1 === 12 ? "outbox.dead" : "outbox.retry", {
+          id: row.id,
+          attempts: row.attempts + 1,
+        });
+        continue;
       }
-      return { claimed: rows.length, sent, failed };
-    });
+      await tx
+        .update(mailOutbox)
+        .set({
+          attempts: row.attempts + 1,
+          sentAt: new Date(clock.currentTimeMillis()),
+          lastError: null,
+        })
+        .where(eq(mailOutbox.id, row.id));
+      sent += 1;
+    }
+    return { claimed: rows.length, sent, failed };
   },
 });
 
 /** LISTEN belongs to this resource; its private flag remembers wakes during a send. */
 export const outboxWake = resource({
   label: "outbox.wake",
-  depends: { url: databaseUrl, postgres },
-  factory: async ({ url, postgres }, { clock, random, closing, defer, log }) => {
+  depends: { url: databaseUrl, postgres, stopping: mailWorkerStop },
+  factory: async ({ url, postgres, stopping }, { clock, random, closing, defer, log }) => {
+    const ending = stopping ? AbortSignal.any([closing, stopping]) : closing;
     let client: InstanceType<typeof postgres.default.Client> | undefined;
     let connected = false;
     let dirty = false;
@@ -120,8 +127,8 @@ export const outboxWake = resource({
         );
         failures += 1;
         log("outbox.reconnect", { attempt: failures, delay });
-        await clock.sleep(delay, closing).catch((error) => {
-          if (!closing.aborted) throw error;
+        await clock.sleep(delay, ending).catch((error) => {
+          if (!ending.aborted) throw error;
         });
       },
       async wait() {
@@ -134,8 +141,8 @@ export const outboxWake = resource({
 
         const stop = new AbortController();
         waiting = Promise.withResolvers<void>();
-        const tick = clock.sleep(30_000, AbortSignal.any([closing, stop.signal])).catch((error) => {
-          if (!stop.signal.aborted && !closing.aborted) throw error;
+        const tick = clock.sleep(30_000, AbortSignal.any([ending, stop.signal])).catch((error) => {
+          if (!stop.signal.aborted && !ending.aborted) throw error;
         });
 
         try {
@@ -151,31 +158,45 @@ export const outboxWake = resource({
   },
 });
 
-export const runMailWorker = operation({
-  label: "outbox.worker",
+/** Native worker integration: one child per claimed batch, with soft-stop commit. */
+export const runMailPass = operation({
+  label: "outbox.pass",
   depends: {
     deliver: deliverMailBatch.controller,
-    wake: outboxWake,
     digest: tickMailDigest.controller,
+    stopping: mailWorkerStop,
   },
-  run: async ({ deliver, wake, digest }, { signal, log }) => {
+  run: async ({ deliver, digest, stopping }, { signal: contextSignal, log }) => {
+    const signal = stopping ?? contextSignal;
+    await digest.run();
+    if (signal.aborted) return;
+    let result;
+    do {
+      const delivered = await deliver.settle({ signal: contextSignal });
+      if (delivered.status === "failed") throw delivered.error;
+      if (delivered.status === "cancelled") return;
+      result = delivered.value;
+      log("outbox.batch", result);
+    } while (result.claimed === 20 && !signal.aborted);
+  },
+});
+
+export const runMailWorker = operation({
+  label: "outbox.worker",
+  depends: { pass: runMailPass.controller, wake: outboxWake, stopping: mailWorkerStop },
+  run: async ({ pass, wake, stopping }, { signal: contextSignal, log }) => {
+    const signal = stopping ?? contextSignal;
     while (!signal.aborted) {
       try {
         await wake.listen();
-        await digest.run();
-
-        let result;
-        do {
-          result = await deliver.run();
-          log("outbox.batch", result);
-        } while (result.claimed === 20 && !signal.aborted);
+        await pass.run();
       } catch (error) {
         if (signal.aborted) return;
         log.error("outbox.unavailable", { error: String(error) });
         await wake.retry();
         continue;
       }
-      await wake.wait();
+      if (!signal.aborted) await wake.wait();
     }
   },
 });

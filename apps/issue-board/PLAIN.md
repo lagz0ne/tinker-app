@@ -5,33 +5,20 @@ Callers include direct calls and typed callback registrations.
 Repeated calls by one caller count once; self-calls do not count.
 Tests and generated files do not count.
 
-- **cmds/cli.ts#main**
-  - `{
-env,
-args,
-signal,
-stdout,
-stderr,
-presets,
-}`: `{
-env: Readonly<Record<string, string | undefined>>;
-args: readonly string[];
-signal: AbortSignal;
-stdout: { write(chunk: string): unknown };
-stderr: { write(chunk: string): unknown };
-presets?: Scope.Preset[];
-}`. From the host; why: bind args, settings, output, and stop.
-  - Callers:
-
 - **cmds/server.ts#ended**
   - `result`: `Scope.Result`. From a root's closed promise; why: report its first failure after cleanup.
   - Callers:
     - `cmds/server.ts#closed.closeRoots`
-    - `cmds/server.ts#main`
+    - `cmds/server.ts#module.callback1`
 
-- **cmds/worker.ts#main**
-  - `input`: `WorkerInput`. From the Node host; why: bind settings, stop, and output at the entry.
+- **src/backend/team-write.server.ts#rowDeliveries**
+  - `members`: `{ id: string }[]`. From team.lock; why: address each locked stream.
+  - `change`: `Sync.Change`. From the saved row; why: send the same change to each member.
+  - `actorId`: `string`. From the checked actor; why: only the actor gets a result.
   - Callers:
+    - `src/backend/comments.server.ts#addComment.run`
+    - `src/backend/import.server.ts#importBatch.run`
+    - `src/backend/issues.server.ts#changeIssue.run`
 
 - **src/demo/contracts/commands.ts#readProfileCommand**
   - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.
@@ -49,13 +36,15 @@ presets?: Scope.Preset[];
   - `kind`: `N`. From the failing caller; why: choose the managed error.
   - `payload`: `Errors.Payload<N>`. From the failing caller; why: keep facts for that error.
   - Callers:
-    - `src/backend/comments.server.ts#addComment.run.callback1`
-    - `src/backend/import.server.ts#importBatch.run.callback1`
+    - `src/backend/comments.server.ts#saveComment.run`
+    - `src/backend/import.server.ts#importBatch.run`
+    - `src/backend/import.server.ts#importTarget.run`
     - `src/backend/import.server.ts#readImport.run`
-    - `src/backend/issues.server.ts#changeIssue.run.callback1`
-    - `src/backend/teams.server.ts#changeTeam.run.callback1`
-    - `src/backend/teams.server.ts#changeTeam.run.callback2`
+    - `src/backend/issues.server.ts#saveIssue.run`
+    - `src/backend/team-write.server.ts#lockTeamWrite.run`
+    - `src/backend/teams.server.ts#authorizeTeamJoin.run`
     - `src/backend/teams.server.ts#readTeam.run`
+    - `src/backend/teams.server.ts#saveTeam.run`
     - `src/demo/backend/auth.server.ts#currentUser.factory`
     - `src/demo/backend/counter.server.ts#incrementCounter.run.callback1`
     - `src/demo/backend/profile.server.ts#notifyProfile.run`
@@ -142,6 +131,8 @@ presets?: Scope.Preset[];
   - `kind`: `N`. From a failed base action; why: choose the managed error.
   - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
   - Callers:
+    - `tinker/components/database/database.server.ts#lease.begin`
+    - `tinker/components/database/database.server.ts#lease.check`
     - `tinker/components/errors/errors.ts#raise`
     - `tinker/components/requests/result.server.ts#readResult`
     - `tinker/components/sync/client/sync.ts#client.leave`

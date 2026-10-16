@@ -1,0 +1,140 @@
+import { operation } from "@tinker/core";
+import { z } from "zod";
+
+import { user } from "~/components/auth/index.server";
+import { transaction, drizzleOrm } from "~/components/database/index.server";
+import type { Sync } from "~/components/sync";
+import { eventHistory, execution } from "~/components/sync/index.server";
+
+import { raise } from "@/demo/errors";
+
+import { team, teamMember, mailOutbox } from "./board.schema.server";
+
+export const executionSeen = operation({
+  label: "execution.seen",
+  input: z.object({ executionId: z.string(), owner: z.string() }),
+  depends: { tx: transaction, history: eventHistory },
+  run: async ({ tx, history }, { input }) =>
+    !!(await history.find(tx, input.executionId, input.owner)),
+});
+
+/** One lock protocol for issue, comment, and outside-server writes. */
+export const lockTeamWrite = operation({
+  label: "team.lock",
+  input: z.object({
+    teamId: z.string(),
+    actorId: z.string(),
+    executionId: z.string().optional(),
+    assigneeId: z.string().nullable().optional(),
+  }),
+  depends: {
+    tx: transaction,
+    orm: drizzleOrm,
+    history: eventHistory,
+    seen: executionSeen.controller,
+  },
+  run: async ({ tx, orm, history, seen }, { input }) => {
+    const { eq, sql } = orm;
+    const members = await tx
+      .select({ id: teamMember.userId })
+      .from(teamMember)
+      .where(eq(teamMember.teamId, input.teamId))
+      .orderBy(sql`${teamMember.userId} collate "C"`);
+    if (!members.some((member) => member.id === input.actorId)) raise("NotTeamMember", {});
+    for (const member of members) await history.lock(tx, member.id);
+    if (input.assigneeId != null && !members.some((member) => member.id === input.assigneeId)) {
+      raise("InvalidAssignee", {});
+    }
+
+    if (
+      input.executionId &&
+      (await seen.run({ input: { executionId: input.executionId, owner: input.actorId } }))
+    ) {
+      return { members, seen: true as const };
+    }
+    const current = await tx
+      .select({ id: teamMember.userId })
+      .from(teamMember)
+      .where(eq(teamMember.teamId, input.teamId));
+    if (current.some((member) => !members.some((locked) => locked.id === member.id))) {
+      raise("TeamChanged", {});
+    }
+    const [locked] = await tx
+      .select()
+      .from(team)
+      .where(eq(team.id, input.teamId))
+      .for("no key update");
+    return { members, seen: false as const, teamKey: locked!.key };
+  },
+});
+
+export const queueAlerts = operation({
+  label: "alerts.queue",
+  input: z.object({
+    teamId: z.string(),
+    actorId: z.string(),
+    executionId: z.string(),
+    subject: z.string(),
+    text: z.string(),
+  }),
+  depends: { tx: transaction, orm: drizzleOrm },
+  run: async ({ tx, orm }, { input }) => {
+    const { sql } = orm;
+    await tx.execute(sql`
+      INSERT INTO ${mailOutbox} ("to", subject, text, dedupe_key)
+      SELECT ${user.email}, ${input.subject}, ${input.text},
+        ${input.executionId} || ':' || ${user.id}
+      FROM ${teamMember} INNER JOIN ${user} ON ${teamMember.userId} = ${user.id}
+      WHERE ${teamMember.teamId} = ${input.teamId} AND ${user.id} <> ${input.actorId}
+      ON CONFLICT (dedupe_key) DO NOTHING
+    `);
+  },
+});
+
+export const fanOut = operation({
+  label: "streams.fanOut",
+  input: z.object({
+    executionId: z.string(),
+    owner: z.string(),
+    deliveries: z
+      .array(z.object({ stream: z.string(), payloads: z.array(z.unknown()).min(1) }))
+      .min(1),
+  }),
+  depends: { tx: transaction, history: eventHistory },
+  run: async ({ tx, history }, { input }) => {
+    await tx.insert(execution).values({ id: input.executionId, stream: input.owner });
+    for (const delivery of input.deliveries) {
+      await history.append(
+        tx,
+        delivery.stream,
+        input.executionId,
+        delivery.payloads as Sync.Payload[],
+      );
+    }
+  },
+});
+
+/**
+ * @param members - From team.lock; why: address each locked stream.
+ * @param change - From the saved row; why: send the same change to each member.
+ * @param actorId - From the checked actor; why: only the actor gets a result.
+ */
+export function rowDeliveries(members: { id: string }[], change: Sync.Change, actorId: string) {
+  return members.map((member) => ({
+    stream: member.id,
+    payloads: [
+      { kind: "change" as const, change },
+      ...(member.id === actorId
+        ? [
+            {
+              kind: "result" as const,
+              result: {
+                kind: "complete" as const,
+                action: change.kind === "comment.add" ? ("comment" as const) : ("issue" as const),
+              },
+            },
+          ]
+        : []),
+    ],
+  }));
+}

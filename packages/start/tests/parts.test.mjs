@@ -18,7 +18,7 @@ test.each(["auth", "sync", "telemetry"])(
     for (const value of [true, false, "off", 0]) {
       expect(() => passThrough({ [name]: value })).toThrow(`tinker(): unknown option ${name}`);
     }
-    expect(Object.keys(basePackage.exports)).toEqual(["./vite", "./package.json"]);
+    expect(Object.keys(basePackage.exports)).toEqual(["./vite", "./package.json", "./main-host"]);
     expect(basePackage.files).not.toContain("src");
   },
 );

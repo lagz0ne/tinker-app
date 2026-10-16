@@ -20,6 +20,7 @@ import {
   proofMail,
   requestHeaders,
 } from "./presets";
+import { write, settleWrite } from "./write-boundary";
 
 let stop: AbortController;
 let root: Scope.RootHandle;
@@ -76,7 +77,7 @@ afterEach(async () => {
 });
 
 test("a non-member reading a team gets NotTeamMember", async () => {
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "create", key: "ENG", name: "Engineering" },
@@ -97,7 +98,7 @@ test("a non-member reading a team gets NotTeamMember", async () => {
 
 test("a team key clash is rejected and leaves one team", async () => {
   for (const [index, headers] of [ada, grace].entries()) {
-    const result = await root.settle(changeTeam, {
+    const result = await settleWrite(root, changeTeam, {
       rawInput: {
         executionId: crypto.randomUUID(),
         change: { kind: "create", key: index ? "eng" : "ENG", name: "Engineering" },
@@ -121,15 +122,15 @@ test("an admin adds a user with a padded mixed-case email; retries keep one memb
     executionId: crypto.randomUUID(),
     change: { kind: "create", key: "ENG", name: "Engineering" },
   };
-  await root.run(changeTeam, { rawInput: create, tags: requestHeaders(ada) });
-  await root.run(changeTeam, { rawInput: create, tags: requestHeaders(ada) });
+  await write(root, changeTeam, { rawInput: create, tags: requestHeaders(ada) });
+  await write(root, changeTeam, { rawInput: create, tags: requestHeaders(ada) });
   const [team] = await root.run(listTeams, { tags: requestHeaders(ada) });
   const add = {
     executionId: crypto.randomUUID(),
     change: { kind: "addMember", teamId: team!.id, email: " GRACE@example.com " },
   };
-  await root.run(changeTeam, { rawInput: add, tags: requestHeaders(ada) });
-  await root.run(changeTeam, { rawInput: add, tags: requestHeaders(ada) });
+  await write(root, changeTeam, { rawInput: add, tags: requestHeaders(ada) });
+  await write(root, changeTeam, { rawInput: add, tags: requestHeaders(ada) });
 
   expect(
     await root.run(readTeam, { rawInput: { teamId: team!.id }, tags: requestHeaders(grace) }),
@@ -140,7 +141,7 @@ test("an admin adds a user with a padded mixed-case email; retries keep one memb
 });
 
 test("adding an unknown email is rejected without a change", async () => {
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "create", key: "ENG", name: "Engineering" },
@@ -151,7 +152,7 @@ test("adding an unknown email is rejected without a change", async () => {
 
   queries.length = 0;
 
-  const result = await root.settle(changeTeam, {
+  const result = await settleWrite(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "addMember", teamId: team!.id, email: "missing@example.com" },
@@ -176,7 +177,7 @@ test("adding an unknown email is rejected without a change", async () => {
 });
 
 test("a non-admin member is refused before any email lookup", async () => {
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "create", key: "ENG", name: "Engineering" },
@@ -184,7 +185,7 @@ test("a non-admin member is refused before any email lookup", async () => {
     tags: requestHeaders(ada),
   });
   const [team] = await root.run(listTeams, { tags: requestHeaders(ada) });
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "addMember", teamId: team!.id, email: "grace@example.com" },
@@ -194,7 +195,7 @@ test("a non-admin member is refused before any email lookup", async () => {
   queries.length = 0;
 
   for (const email of ["ada@example.com", "missing@example.com"]) {
-    const result = await root.settle(changeTeam, {
+    const result = await settleWrite(root, changeTeam, {
       rawInput: {
         executionId: crypto.randomUUID(),
         change: { kind: "addMember", teamId: team!.id, email },
@@ -212,7 +213,7 @@ test("a non-admin member is refused before any email lookup", async () => {
 });
 
 test("a non-member add gets NotTeamMember before any email lookup", async () => {
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "create", key: "ENG", name: "Engineering" },
@@ -223,7 +224,7 @@ test("a non-member add gets NotTeamMember before any email lookup", async () => 
   queries.length = 0;
 
   for (const email of ["ada@example.com", "missing@example.com"]) {
-    const result = await root.settle(changeTeam, {
+    const result = await settleWrite(root, changeTeam, {
       rawInput: {
         executionId: crypto.randomUUID(),
         change: { kind: "addMember", teamId: team!.id, email },
@@ -242,7 +243,7 @@ test("a non-member add gets NotTeamMember before any email lookup", async () => 
 
 test("adding a member sends existing issues to their already open account stream", async () => {
   const graceBefore = (await root.run(bootstrap, { tags: requestHeaders(grace) })).private!;
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "create", key: "ENG", name: "Engineering" },
@@ -250,7 +251,7 @@ test("adding a member sends existing issues to their already open account stream
     tags: requestHeaders(ada),
   });
   const [team] = await root.run(listTeams, { tags: requestHeaders(ada) });
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: {
@@ -268,7 +269,7 @@ test("adding a member sends existing issues to their already open account stream
 
   const [issue] = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
   const executionId = crypto.randomUUID();
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId,
       change: { kind: "addMember", teamId: team!.id, email: "grace@example.com" },

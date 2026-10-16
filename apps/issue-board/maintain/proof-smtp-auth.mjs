@@ -5,8 +5,11 @@ import { fileURLToPath } from "node:url";
 import { createScope } from "@tinker/core";
 import { createServer } from "vite-plus";
 
+import { proofFault } from "./proof-fault.mjs";
+
 const vite = await createServer({
   configFile: false,
+  plugins: [proofFault()],
   cacheDir: ".tinker/proof-smtp-auth-vite-cache",
   optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false },

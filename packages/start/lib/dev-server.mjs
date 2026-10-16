@@ -2,13 +2,20 @@ import { existsSync } from "node:fs";
 
 import main from "#tinker/server-main";
 
-let started;
-let stop;
+import { createMainHost, registerDevMain, finishDevMain } from "./main-host.mjs";
+
+let host;
+let detach;
+const root = import.meta.env.TINKER_APP_ROOT;
 
 const close = async () => {
-  stop?.abort();
-  const app = await started?.catch(() => undefined);
-  await app?.closed;
+  const own = host;
+  host = undefined;
+  detach?.();
+
+  detach = undefined;
+  own?.stop(0);
+  await own?.closed;
 };
 
 if (import.meta.hot) {
@@ -18,19 +25,33 @@ if (import.meta.hot) {
 
 export default {
   fetch: async (request) => {
-    if (!started) {
-      stop = new AbortController();
+    if (!host) {
       if (existsSync(".env")) process.loadEnvFile();
-      started = main({
+      host = createMainHost(main, {
         env: process.env,
-        signal: stop.signal,
+        args: [],
         stdout: process.stdout,
         stderr: process.stderr,
-      }).catch((error) => {
-        started = undefined;
-        throw error;
+        validate: (app) => {
+          if (typeof app.fetch !== "function") throw new TypeError("server main must return fetch");
+        },
+      });
+      const own = host;
+      detach = registerDevMain(root, own);
+      void own.closed.then((code) => {
+        process.exitCode = code;
+        if (host === own) void finishDevMain(root, own);
       });
     }
-    return (await started).fetch(request);
+    const own = host;
+    try {
+      const app = await own.started;
+      if (own.signal.aborted) return new Response("Command stopped", { status: 503 });
+      return app.fetch(request);
+    } catch (error) {
+      await own.closed;
+      if (host === own) host = undefined;
+      throw error;
+    }
   },
 };

@@ -8,8 +8,11 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { createServer } from "vite-plus";
 
+import { proofFault } from "./proof-fault.mjs";
+
 const vite = await createServer({
   configFile: false,
+  plugins: [proofFault()],
   cacheDir: ".tinker/proof-digest-vite-cache",
   optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false },

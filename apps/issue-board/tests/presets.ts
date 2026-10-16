@@ -33,6 +33,7 @@ beforeAll(async () => {
 afterAll(() => template.close());
 
 export const databaseQueries: string[] = [];
+export const transactionQueries: string[] = [];
 
 /** Explicit local proof wiring; production factories always use Postgres and SMTP. */
 export const proofDatabase = preset(
@@ -41,7 +42,8 @@ export const proofDatabase = preset(
     const { drizzle } = await import("drizzle-orm/pglite");
     const client = await template.clone();
     defer(() => client.close());
-    return Object.assign(
+
+    const handle = Object.assign(
       drizzle({
         client,
         logger: {
@@ -54,6 +56,42 @@ export const proofDatabase = preset(
         listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
       },
     );
+    // PGlite has one connection; checkout serializes whole write sessions, like its native transaction.
+    let previous = Promise.resolve();
+    return Object.assign(handle, {
+      async checkout(guard?: Database.QueryGuard) {
+        const before = previous;
+        const released = Promise.withResolvers<void>();
+        previous = released.promise;
+        await before;
+        return {
+          db: drizzle({
+            client: new Proxy(client, {
+              get(target, key) {
+                if (key === "query") {
+                  return async (...args: unknown[]) => {
+                    await guard?.begin();
+                    return Reflect.apply(target.query.bind(target), target, args);
+                  };
+                }
+                return Reflect.get(target, key, target);
+              },
+            }),
+            logger: {
+              logQuery(query) {
+                guard?.check();
+                databaseQueries.push(query);
+              },
+            },
+          }),
+          query: (text: string) => {
+            transactionQueries.push(text);
+            return client.exec(text);
+          },
+          release: released.resolve,
+        };
+      },
+    });
   },
 );
 

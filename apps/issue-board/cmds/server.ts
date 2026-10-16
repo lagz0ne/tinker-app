@@ -1,8 +1,9 @@
 import { createScope, type Scope } from "@tinker/core";
 
+import { defineMain, mainErrorCode } from "~/base/main";
 import { renderObservation } from "~/base/observe";
 import { observeServerPanics } from "~/base/panics.server";
-import { createServerHandler } from "~/base/server-entry";
+import { createServerHandler, stoppedFetch } from "~/base/server-entry";
 import {
   authStartup,
   authSettings,
@@ -41,98 +42,108 @@ import { bootstrap } from "@/demo/backend/sync.server";
 
 /** The host starts the server; importing this command opens nothing. */
 // oxlint-disable-next-line complexity -- Cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; deliberately untested glue.
-export default async function main({
-  env,
-  signal,
-  stdout,
-  stderr,
-}: {
-  env: Readonly<Record<string, string | undefined>>;
-  signal: AbortSignal;
-  stdout: { write(chunk: string): unknown };
-  stderr: { write(chunk: string): unknown };
-}) {
-  const stop = { tools: new AbortController(), app: new AbortController() };
-  const appStop = AbortSignal.any([signal, stop.app.signal]);
-  const tools = createScope({
-    signal: stop.tools.signal,
-    extensions: [telemetryExport],
-    tags: [
-      telemetrySide("server"),
-      consoleOutput(stdout),
-      env.OTEL_SERVICE_NAME !== undefined && telemetryService(env.OTEL_SERVICE_NAME),
-      env.VICTORIA_TRACES_URL !== undefined && tracesUrl(new URL(env.VICTORIA_TRACES_URL)),
-      env.VICTORIA_LOGS_URL !== undefined && logsUrl(new URL(env.VICTORIA_LOGS_URL)),
-      env.LOG_LEVEL !== undefined && logLevel(Number(env.LOG_LEVEL)),
-      env.SPAN_HISTORY !== undefined && spanHistory(Number(env.SPAN_HISTORY)),
-    ],
-  });
-
-  /** @param result - From a root's closed promise; why: report its first failure after cleanup. */
-  function ended(result: Scope.Result) {
-    if (result.status === "failed") throw result.error;
-    if (result.teardownErrors?.length) throw result.teardownErrors[0];
+export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) => {
+  if (args.length) {
+    stderr.write("Usage: tinker serve\n");
+    exit(64);
+    return { fetch: stoppedFetch, closed: Promise.resolve() };
   }
-
-  await tools.ready;
-
   try {
-    const app = createScope({
-      signal: appStop,
-      observe: tools.resolve(observer),
-      extensions: [startRequests, authStartup, databaseSetup, mail.mailStartup, syncStartup],
+    const stop = { tools: new AbortController(), app: new AbortController() };
+    const appStop = AbortSignal.any([signal, stop.app.signal]);
+    const tools = createScope({
+      signal: stop.tools.signal,
+      extensions: [telemetryExport],
       tags: [
-        backendStop(appStop),
-        syncSide("server"),
-        bootstrapSlot(bootstrap),
-        readAccountSlot(readAccount),
-        sendAuthMail((message, ctx) => ctx.resolve(mail.authMail).enqueue(message)),
-        sessionDeleted((accountId, ctx) =>
-          ctx.run(publishAccountNotice, { rawInput: { accountId } }),
-        ),
-        env.PUBLIC_ORIGIN !== undefined &&
-          env.AUTH_SECRET !== undefined &&
-          authSettings({ origin: env.PUBLIC_ORIGIN, secret: env.AUTH_SECRET }),
-        env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
-        env.SMTP_URL !== undefined && mail.smtpUrl(new URL(env.SMTP_URL)),
-        env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM),
-        renderObservation(tools.resolve(renderObserve, { ns: renderNs })),
-        browserTelemetry(tools.resolve(browserIngest).ingest),
+        telemetrySide("server"),
+        consoleOutput(stdout),
+        env.OTEL_SERVICE_NAME !== undefined && telemetryService(env.OTEL_SERVICE_NAME),
+        env.VICTORIA_TRACES_URL !== undefined && tracesUrl(new URL(env.VICTORIA_TRACES_URL)),
+        env.VICTORIA_LOGS_URL !== undefined && logsUrl(new URL(env.VICTORIA_LOGS_URL)),
+        env.LOG_LEVEL !== undefined && logLevel(Number(env.LOG_LEVEL)),
+        env.SPAN_HISTORY !== undefined && spanHistory(Number(env.SPAN_HISTORY)),
       ],
     });
 
-    const closed = app.closed.then(async function closeRoots(appEnd) {
-      stop.tools.abort(abortReasons.closed);
-      const toolsEnd = await tools.closed;
-      ended(appEnd);
-      ended(toolsEnd);
-    });
-    void closed.catch(() => {});
+    /** @param result - From a root's closed promise; why: report its first failure after cleanup. */
+    function ended(result: Scope.Result) {
+      if (result.status === "failed") throw result.error;
+      if (result.teardownErrors?.length) throw result.teardownErrors[0];
+    }
+
+    await tools.ready;
 
     try {
-      await app.ready;
-      signal.throwIfAborted(); // Aborted during start: app is closing, so no handler.
-    } catch (error) {
-      await closed.catch((cleanup) => {
-        if (cleanup !== error) stderr.write(`close failed: ${String(cleanup)}\n`);
+      const app = createScope({
+        signal: appStop,
+        observe: tools.resolve(observer),
+        extensions: [startRequests, authStartup, databaseSetup, mail.mailStartup, syncStartup],
+        tags: [
+          backendStop(appStop),
+          syncSide("server"),
+          bootstrapSlot(bootstrap),
+          readAccountSlot(readAccount),
+          sendAuthMail((message, ctx) => ctx.resolve(mail.authMail).enqueue(message)),
+          sessionDeleted((accountId, ctx) =>
+            ctx.run(publishAccountNotice, { rawInput: { accountId } }),
+          ),
+          env.PUBLIC_ORIGIN !== undefined &&
+            env.AUTH_SECRET !== undefined &&
+            authSettings({ origin: env.PUBLIC_ORIGIN, secret: env.AUTH_SECRET }),
+          env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
+          env.SMTP_URL !== undefined && mail.smtpUrl(new URL(env.SMTP_URL)),
+          env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM),
+          renderObservation(tools.resolve(renderObserve, { ns: renderNs })),
+          browserTelemetry(tools.resolve(browserIngest).ingest),
+        ],
       });
+
+      const closed = app.closed
+        .then(async function closeRoots(appEnd) {
+          stop.tools.abort(abortReasons.closed);
+          const toolsEnd = await tools.closed;
+          ended(appEnd);
+          ended(toolsEnd);
+        })
+        .catch((error) => {
+          exit(1, error);
+          throw error;
+        });
+      void closed.catch(() => {});
+
+      try {
+        await app.ready;
+        signal.throwIfAborted(); // Aborted during start: app is closing, so no handler.
+      } catch (error) {
+        await closed.catch((cleanup) => {
+          if (cleanup !== error) stderr.write(`close failed: ${String(cleanup)}\n`);
+        });
+        throw error;
+      }
+      app.onClose(observeServerPanics(exit.bind(null, 1), closed, stderr));
+      return {
+        fetch: createServerHandler(
+          { requestContext: app.resolve(startRequests) },
+          { dev: import.meta.env.DEV },
+        ).fetch,
+        closed,
+      };
+    } catch (error) {
+      stop.tools.abort(error);
+      try {
+        ended(await tools.closed);
+      } catch (cleanup) {
+        if (cleanup !== error) stderr.write(`close failed: ${String(cleanup)}\n`);
+      }
       throw error;
     }
-    app.onClose(observeServerPanics(stop.app.abort.bind(stop.app), closed, stderr));
-    return {
-      fetch: createServerHandler(
-        { requestContext: app.resolve(startRequests) },
-        { dev: import.meta.env.DEV },
-      ).fetch,
-      closed,
-    };
   } catch (error) {
-    stop.tools.abort(error);
-    try {
-      ended(await tools.closed);
-    } catch (cleanup) {
-      if (cleanup !== error) stderr.write(`close failed: ${String(cleanup)}\n`);
-    }
-    throw error;
+    if (signal.aborted && error === signal.reason) throw error;
+    stderr.write(`server start failed: ${String(error)}\n`);
+    const code = mainErrorCode(error);
+
+    exit(code, error);
+    if (code === 1) throw error;
+    return { fetch: stoppedFetch, closed: Promise.resolve() };
   }
-}
+});

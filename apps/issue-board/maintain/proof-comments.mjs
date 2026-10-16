@@ -4,13 +4,16 @@ import { fileURLToPath } from "node:url";
 
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { createServer } from "vite-plus";
+
+import { proofFault } from "./proof-fault.mjs";
+import { writeDatabase, writeDispatch } from "./proof-write.mjs";
 
 // Live scope proof: each writer owns a real connection and a distinct account stream.
 const vite = await createServer({
   configFile: false,
+  plugins: [proofFault()],
   cacheDir: ".tinker/proof-comments-vite-cache",
   optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false },
@@ -24,7 +27,10 @@ const vite = await createServer({
 
 const { changeIssue } = await vite.ssrLoadModule("/src/backend/issues.server.ts");
 const { currentUser } = await vite.ssrLoadModule("/src/demo/backend/auth.server.ts");
+
 const { database } = await vite.ssrLoadModule("/tinker/components/database/index.server.ts");
+
+const dispatch = writeDispatch();
 
 const connectionString =
   process.env.BOARD_DATABASE_URL ?? "postgres://issue_board@127.0.0.1:15433/postgres";
@@ -84,7 +90,7 @@ try {
     const root = createScope({
       signal: stop.signal,
       presets: [
-        preset(database, async () => drizzle({ client })),
+        preset(database, async () => writeDatabase(client)),
         preset(currentUser, async () => ({
           id,
           name: `Comment ${index}`,
@@ -106,7 +112,7 @@ try {
   await coordinator.query("SELECT id FROM sync_stream WHERE id = $1 FOR UPDATE", [ids[0]]);
   const executions = [randomUUID(), randomUUID()];
   writes = roots.slice(0, 2).map((root, index) =>
-    root.run(addComment, {
+    dispatch.run(root, addComment, {
       rawInput: {
         executionId: executions[index],
         comment: { teamId, issueId, body: `Concurrent comment ${index}` },
@@ -160,8 +166,8 @@ try {
   await coordinator.query("BEGIN");
   await coordinator.query("SELECT id FROM sync_stream WHERE id = $1 FOR UPDATE", [ids[0]]);
   writes = [
-    roots[0].run(addComment, { rawInput: retry }),
-    roots[3].run(addComment, { rawInput: retry }),
+    dispatch.run(roots[0], addComment, { rawInput: retry }),
+    dispatch.run(roots[3], addComment, { rawInput: retry }),
   ];
   const retries = Promise.allSettled(writes);
   const retryDeadline = AbortSignal.timeout(15_000);
@@ -201,13 +207,13 @@ try {
   await coordinator.query("BEGIN");
   await coordinator.query("SELECT id FROM sync_stream WHERE id = $1 FOR UPDATE", [ids[0]]);
   writes = [
-    roots[0].run(addComment, {
+    dispatch.run(roots[0], addComment, {
       rawInput: {
         executionId: randomUUID(),
         comment: { teamId, issueId, body: "Comment alongside a move" },
       },
     }),
-    roots[1].run(changeIssue, {
+    dispatch.run(roots[1], changeIssue, {
       rawInput: {
         executionId: randomUUID(),
         change: {
@@ -243,7 +249,7 @@ try {
   assert.equal(new Set(member.comments.map((row) => row.id)).size, 4);
   assert.equal(member.issues[0].version, 2);
   assert.deepEqual(outsider.comments, []);
-  const refusal = await roots[2].settle(addComment, {
+  const refusal = await dispatch.settle(roots[2], addComment, {
     rawInput: { executionId: randomUUID(), comment: { teamId, issueId, body: "Not allowed" } },
   });
   assert.equal(refusal.status, "failed");

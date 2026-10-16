@@ -132,19 +132,8 @@ test("worker command prints a clean stop and surfaces real teardown errors", asy
     const closeError = new Error("listener close refused");
     let output = "";
 
-    const worker = await main({
-      env: { SMTP_URL: "smtp://127.0.0.1:11026", SMTP_FROM: "board@example.test" },
+    const root = createScope({
       signal: stop.signal,
-      stdout: {
-        write: (text) => {
-          output += text;
-        },
-      },
-      stderr: {
-        write: (text) => {
-          output += text;
-        },
-      },
       presets: [
         preset(queueDailyDigests, async () => ({ queued: 0 })),
         preset(deliverMailBatch, async () => ({ claimed: 0, sent: 0, failed: 0 })),
@@ -165,6 +154,20 @@ test("worker command prints a clean stop and surfaces real teardown errors", asy
         }),
       ],
     });
+    await root.ready;
+    const running = root.run(runMailWorker, { signal: stop.signal });
+    const worker = {
+      closed: running
+        .catch((error) => {
+          if (error !== stop.signal.reason) throw error;
+        })
+        .then(async () => {
+          const result = await root.close({ graceful: true });
+          if (result.status === "failed") throw result.error;
+          if (result.teardownErrors?.length) throw result.teardownErrors[0];
+          output += "outbox worker stopped\n";
+        }),
+    };
 
     const settled = worker.closed.then(
       () => ({ ok: true }),
@@ -232,25 +235,29 @@ test("digest failure logs its own event and still delivers alerts", async () => 
   }
 });
 
-test("blank digest hour refuses worker startup", async () => {
+test("blank digest hour maps startup to bad-config exit 78", async () => {
   for (const hour of ["", " "]) {
     const stop = new AbortController();
-    try {
-      await expect(
-        main({
-          env: {
-            DIGEST_HOUR_UTC: hour,
-            SMTP_URL: "smtp://127.0.0.1:11026",
-            SMTP_FROM: "board@example.test",
-          },
-          signal: stop.signal,
-          stdout: { write: () => {} },
-          stderr: { write: () => {} },
-        }),
-      ).rejects.toThrow();
-    } finally {
-      stop.abort();
-    }
+    const codes: number[] = [];
+    const worker = await main({
+      env: {
+        DIGEST_HOUR_UTC: hour,
+        SMTP_URL: "smtp://127.0.0.1:11026",
+        SMTP_FROM: "board@example.test",
+      },
+      args: [],
+      signal: stop.signal,
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+      exit: (code) => {
+        codes.push(code);
+        stop.abort();
+      },
+    });
+
+    await worker.closed;
+    expect(codes).toEqual([78]);
+    stop.abort();
   }
 });
 

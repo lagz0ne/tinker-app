@@ -1,0 +1,2 @@
+# Keep the demo's RFC-style CSV bytes, including CRLF, in each checkout.
+import-201.csv -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

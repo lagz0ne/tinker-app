@@ -11,5 +11,10 @@ export const postComment = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
   .validator(commentCommand)
   .handler(async ({ context, data }) =>
-    readReceipt(await context.session.settle(addComment, { input: data, signal: context.signal })),
+    readReceipt(
+      await context.session.settle(addComment, {
+        input: data,
+        signal: context.signal,
+      }),
+    ),
   );

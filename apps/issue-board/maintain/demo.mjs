@@ -235,7 +235,7 @@ try {
   }
   // A fresh worker catches up today's snapshot after the new members have issues.
   worker.kill("SIGTERM");
-  assert.deepEqual(await workerExit, { code: 0, signal: null });
+  assert.deepEqual(await workerExit, { code: 143, signal: null });
   worker = spawn(process.execPath, ["maintain/worker.mjs"], {
     env: { ...process.env, DIGEST_HOUR_UTC: "0" },
     stdio: ["ignore", "pipe", "inherit"],
@@ -387,16 +387,7 @@ try {
     "--fn",
     `document.querySelector('[data-testid="issue-summary-2"]')?.textContent.includes("Done · Priority 3 · Unassigned")`,
   );
-  execFileSync(
-    "benchctl",
-    ["exec", "--net", "--timeout", "120", "--", "node", "maintain/measure-live.mjs", a, b],
-    { stdio: "inherit" },
-  );
-  execFileSync(
-    "benchctl",
-    ["exec", "--net", "--timeout", "120", "--", "node", "maintain/measure-live.mjs", a, b, "200"],
-    { stdio: "inherit" },
-  );
+  execFileSync(process.execPath, ["maintain/measure-live.mjs", a, b], { stdio: "inherit" });
   browser(a, "find", "role", "link", "click", "--name", "All teams", "--exact");
   browser(a, "wait", 'input[name="key"]');
   browser(a, "fill", 'input[name="key"]', "CSV");
@@ -407,15 +398,7 @@ try {
   browser(a, "wait", 'input[name="title"]');
   assert.equal(browser(a, "eval", 'document.querySelectorAll("[data-card]").length').result, 0);
   csvPath = `.tinker/demo-import-${runId}.csv`;
-  writeFileSync(
-    csvPath,
-    "ID,Title,Description,Status,Priority,Assignee\r\n" +
-      Array.from(
-        { length: 201 },
-        (_, index) =>
-          `OLD-${index + 1},"Imported ${index + 1}, live","A ""quoted"" value",Todo,High,`,
-      ).join("\r\n"),
-  );
+  writeFileSync(csvPath, readFileSync(new URL("./import-201.csv", import.meta.url)));
   const cliArgs = ["maintain/cli.mjs", "--file", csvPath, "--team", "CSV", "--actor", emailA];
   importing = spawn(process.execPath, cliArgs, { stdio: ["ignore", "pipe", "inherit"] });
   let importOutput = "";
@@ -480,10 +463,10 @@ try {
 
   worker.kill("SIGTERM");
   const stopped = await workerExit;
-  assert.equal(stopped.code, 0, JSON.stringify(stopped));
+  assert.equal(stopped.code, 143, JSON.stringify(stopped));
   assert(workerOutput.includes("outbox worker stopped\n"));
   console.log(
-    "PASS clean worker SIGTERM: stopped line printed; exit 0; claims released or committed.",
+    "PASS clean worker SIGTERM: stopped line printed; exit 143; claims released or committed.",
   );
 }
 

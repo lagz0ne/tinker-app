@@ -75,10 +75,9 @@ export const issue = pgTable(
   ],
 );
 
-export const issueFields = {
+export const issueRowFields = {
   id: issue.id,
   teamId: issue.teamId,
-  teamKey: team.key,
   number: issue.number,
   title: issue.title,
   description: issue.description,
@@ -89,6 +88,8 @@ export const issueFields = {
   rank: issue.rank,
   version: issue.version,
 };
+
+export const issueFields = { ...issueRowFields, teamKey: team.key };
 
 export const comment = pgTable(
   "comment",

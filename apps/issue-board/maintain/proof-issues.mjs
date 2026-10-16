@@ -4,13 +4,16 @@ import { fileURLToPath } from "node:url";
 
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { createServer } from "vite-plus";
+
+import { proofFault } from "./proof-fault.mjs";
+import { writeDatabase, writeDispatch } from "./proof-write.mjs";
 
 // Live scope proof: each writer owns a real connection and a distinct account stream.
 const vite = await createServer({
   configFile: false,
+  plugins: [proofFault()],
   cacheDir: ".tinker/proof-vite-cache",
   optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false },
@@ -24,7 +27,10 @@ const vite = await createServer({
 
 const { changeIssue } = await vite.ssrLoadModule("/src/backend/issues.server.ts");
 const { currentUser } = await vite.ssrLoadModule("/src/demo/backend/auth.server.ts");
+
 const { database } = await vite.ssrLoadModule("/tinker/components/database/index.server.ts");
+
+const dispatch = writeDispatch();
 
 const connectionString =
   process.env.BOARD_DATABASE_URL ?? "postgres://issue_board@127.0.0.1:15433/postgres";
@@ -67,7 +73,7 @@ try {
     const root = createScope({
       signal: stop.signal,
       presets: [
-        preset(database, async () => drizzle({ client })),
+        preset(database, async () => writeDatabase(client)),
         preset(currentUser, async () => ({
           id,
           name: `Proof ${index}`,
@@ -88,7 +94,7 @@ try {
   await coordinator.query("BEGIN");
   await coordinator.query("SELECT id FROM team WHERE id = $1 FOR UPDATE", [teamId]);
   writes = roots.map((root, index) =>
-    root.run(changeIssue, {
+    dispatch.run(root, changeIssue, {
       rawInput: {
         executionId: randomUUID(),
         change: {
@@ -142,7 +148,7 @@ try {
     [...ids].sort()[0],
   ]);
   moves = roots.slice(0, 2).map((root, index) =>
-    root.run(changeIssue, {
+    dispatch.run(root, changeIssue, {
       rawInput: {
         executionId: randomUUID(),
         change: {
@@ -195,7 +201,7 @@ try {
   ]);
   const refusedIds = [randomUUID(), randomUUID()];
   moves = roots.slice(0, 2).map(async (root, index) =>
-    root.settle(changeIssue, {
+    dispatch.settle(root, changeIssue, {
       rawInput: {
         executionId: refusedIds[index],
         change: {

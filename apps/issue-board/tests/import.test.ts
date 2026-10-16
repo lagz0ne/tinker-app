@@ -14,14 +14,15 @@ import { team, teamMember, issue, mailOutbox } from "@/backend/board.schema.serv
 import {
   readImport,
   importBatch,
-  runImport,
   importTeam,
   importActor,
   importFile,
 } from "@/backend/import.server";
 import { files } from "@/backend/modules";
+import { runImport } from "@/transport/import-runner.server";
 
 import { proofDatabase, databaseQueries } from "./presets";
+import { write } from "./write-boundary";
 
 let root: Scope.RootHandle;
 let stop: AbortController;
@@ -98,7 +99,7 @@ test("CSV refuses bad quotes, missing and repeated IDs, bad states and prioritie
 test("upsert sends member events and peer mail; replay has no saved effects", async () => {
   const db = await root.resolve(database);
 
-  expect(await root.run(importBatch, { rawInput: { rows: [row] } })).toEqual({ changed: 1 });
+  expect(await write(root, importBatch, { rawInput: { rows: [row] } })).toEqual({ changed: 1 });
   const [saved] = await db.select().from(issue);
   expect(saved).toMatchObject({
     externalId: "OLD-1",
@@ -115,19 +116,19 @@ test("upsert sends member events and peer mail; replay has no saved effects", as
   expect((await db.select().from(mailOutbox)).map((entry) => entry.to)).toEqual([
     "grace@example.test",
   ]);
-  expect(await root.run(importBatch, { rawInput: { rows: [row] } })).toEqual({ changed: 0 });
+  expect(await write(root, importBatch, { rawInput: { rows: [row] } })).toEqual({ changed: 0 });
   expect(await db.select().from(event)).toHaveLength(3);
   expect(await db.select().from(mailOutbox)).toHaveLength(1);
   expect(await db.select().from(execution)).toHaveLength(1);
   expect((await db.select().from(team))[0]!.issueSeq).toBe(1);
-  await root.run(importBatch, { rawInput: { rows: [{ ...row, title: "Changed" }] } });
+  await write(root, importBatch, { rawInput: { rows: [{ ...row, title: "Changed" }] } });
   expect((await db.select().from(issue))[0]).toMatchObject({
     id: saved!.id,
     number: 1,
     version: 2,
     rank: saved!.rank,
   });
-  await root.run(importBatch, {
+  await write(root, importBatch, {
     rawInput: { rows: [{ ...row, title: "Changed", state: "done", assignee: "" }] },
   });
   expect((await db.select().from(issue))[0]).toMatchObject({
@@ -141,13 +142,13 @@ test("refused actor and bad assignee leave the whole batch unchanged", async () 
   const db = await root.resolve(database);
 
   await expect(
-    root.run(importBatch, {
+    write(root, importBatch, {
       rawInput: { rows: [row] },
       tags: importActor("outsider@example.test"),
     }),
   ).rejects.toThrow();
   await expect(
-    root.run(importBatch, {
+    write(root, importBatch, {
       rawInput: { rows: [row, { ...row, externalId: "OLD-2", assignee: "outsider@example.test" }] },
     }),
   ).rejects.toThrow();
@@ -160,11 +161,11 @@ test("refused actor and bad assignee leave the whole batch unchanged", async () 
 test("external ID is scoped to its team", async () => {
   const db = await root.resolve(database);
 
-  await root.run(importBatch, { rawInput: { rows: [row] } });
+  await write(root, importBatch, { rawInput: { rows: [row] } });
   const ops = crypto.randomUUID();
   await db.insert(team).values({ id: ops, key: "OPS", name: "Operations" });
   await db.insert(teamMember).values({ teamId: ops, userId: "ada", role: "admin" });
-  await root.run(importBatch, {
+  await write(root, importBatch, {
     rawInput: { rows: [{ ...row, assignee: "" }] },
     tags: importTeam("OPS"),
   });
@@ -203,7 +204,7 @@ test("file import uses batches of 100 and checks the whole CSV before any write"
   databaseQueries.length = 0;
   await expect(
     Promise.resolve().then(() =>
-      root.run(importBatch, { rawInput: { rows: Array.from({ length: 101 }, () => row) } }),
+      write(root, importBatch, { rawInput: { rows: Array.from({ length: 101 }, () => row) } }),
     ),
   ).rejects.toThrow();
   expect(databaseQueries).toEqual([]);

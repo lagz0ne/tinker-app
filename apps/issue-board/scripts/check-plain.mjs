@@ -232,7 +232,7 @@ function assignedReturn(object, owner) {
   return (
     ts.isCallExpression(call) &&
     nameOf(call.expression) === "Object.assign" &&
-    directReturn(call, owner)
+    (directReturn(call, owner) || localReturn(call, owner))
   );
 }
 
@@ -478,7 +478,11 @@ function nativeOption(node) {
 
   const call = object.parent;
   if (coreSymbol(call.expression, "namespace")) return false;
-  return argumentOf(object, call) && externalCall(call) && externalDeclaration(call);
+  return (
+    argumentOf(object, call) &&
+    externalCall(call) &&
+    [externalDeclaration, resolvedMethod].some((rule) => !!rule(call))
+  );
 }
 
 function namedNativeCallback(node) {
@@ -506,7 +510,7 @@ function classifyNativeCallback(node) {
 
 function graphOwner(node) {
   for (let parent = enclosingFunction(node); parent; parent = enclosingFunction(parent)) {
-    if (optionsMember(parent) || factoryBody(parent) || isEntryHelper(parent)) return true;
+    if (optionsMember(parent) || factoryBody(parent) || entryFunction(parent)) return true;
   }
   return false;
 }
@@ -804,7 +808,7 @@ function coreDeclaration(node) {
 }
 
 function moduleDeclarationCall(node) {
-  if (coreDeclaration(node) || clientDeclaration(node)) return true;
+  if ([coreDeclaration, clientDeclaration, definedMainCall].some((read) => read(node))) return true;
   const file = declarationFile(node);
   return (
     zodDeclaration(node, file) ||
@@ -1321,6 +1325,7 @@ function checkPlainFunction(node) {
 
 /** Named copied entry helpers and the approved server and browser mains keep native contracts. */
 const entryHelpers = {
+  "tinker/base/main.ts": ["defineMain", "mainErrorCode", "checkClosed"],
   "tinker/base/panics.server.ts": [
     // c55998e createServerEntry: register process panic cleanup without identity wrapping.
     "observeServerPanics",
@@ -1346,6 +1351,7 @@ const entryHelpers = {
   "tinker/base/server-entry.ts": [
     // New: bind Start's renderer to the command's request scope.
     "createServerHandler",
+    "stoppedFetch",
     // New: copied c55998e entry/server fetch: dispatch a request through Start or app fetch.
     "fetch",
     // New: copied c55998e entry/server next: render the request and map its dev error response.
@@ -1363,6 +1369,26 @@ function serverEntryFunction(node) {
     node.parent === node.getSourceFile() &&
     (ts.getCombinedModifierFlags(node) & (ts.ModifierFlags.Export | ts.ModifierFlags.Default)) ===
       (ts.ModifierFlags.Export | ts.ModifierFlags.Default)
+  );
+}
+
+function definedMainCall(node) {
+  return (
+    ts.isCallExpression(node) &&
+    isCommand(node) &&
+    node.parent &&
+    ts.isExportAssignment(node.parent) &&
+    nameOf(node.expression) === "defineMain" &&
+    declarationFile(node).endsWith("/tinker/base/main.ts")
+  );
+}
+
+function definedMainCallback(node) {
+  return (
+    (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+    node.parent &&
+    definedMainCall(node.parent) &&
+    node.parent.arguments[0] === node
   );
 }
 
@@ -1392,7 +1418,7 @@ function commandModulePath(node) {
 
 function entryFunction(node) {
   if (!node) return false;
-  return isEntryHelper(node);
+  return isEntryHelper(node) || definedMainCallback(node);
 }
 
 function checkCommandImport(node) {

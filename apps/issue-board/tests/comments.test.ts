@@ -15,6 +15,7 @@ import { bootstrap, replayPrivate } from "@/demo/backend/sync.server";
 import { isError } from "@/demo/errors";
 
 import { authBindings, handleAuth, proofDatabase, proofMail, requestHeaders } from "./presets";
+import { write, settleWrite } from "./write-boundary";
 
 let root: Scope.RootHandle;
 let stop: AbortController;
@@ -78,7 +79,7 @@ beforeEach(async () => {
   graceId = (await root.run(readAccount, { tags: requestHeaders(grace) }))!;
   outsiderId = (await root.run(readAccount, { tags: requestHeaders(outsider) }))!;
 
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "create", key: "ENG", name: "Engineering" },
@@ -86,7 +87,7 @@ beforeEach(async () => {
     tags: requestHeaders(ada),
   });
   teamId = (await root.run(listTeams, { tags: requestHeaders(ada) }))[0]!.id;
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "addMember", teamId, email: "grace@example.com" },
@@ -103,7 +104,7 @@ afterEach(async () => {
 const post = { body: "  Ready for review.  " };
 
 test("one comment fans out to members only, and retrying an execution adds nothing", async () => {
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });
@@ -112,8 +113,8 @@ test("one comment fans out to members only, and retrying an execution adds nothi
     executionId: crypto.randomUUID(),
     comment: { ...post, teamId, issueId: issue!.id },
   };
-  await root.run(addComment, { rawInput: command, tags: requestHeaders(ada) });
-  await root.run(addComment, { rawInput: command, tags: requestHeaders(ada) });
+  await write(root, addComment, { rawInput: command, tags: requestHeaders(ada) });
+  await write(root, addComment, { rawInput: command, tags: requestHeaders(ada) });
   const snapshot = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!;
   const rows = snapshot.comments!;
   expect(rows).toHaveLength(1);
@@ -145,12 +146,12 @@ test("one comment fans out to members only, and retrying an execution adds nothi
 });
 
 test("a non-member cannot read or add comments, and an issue cannot be addressed through another team", async () => {
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });
   const [issue] = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
-  await root.run(addComment, {
+  await write(root, addComment, {
     rawInput: {
       executionId: crypto.randomUUID(),
       comment: { ...post, teamId, issueId: issue!.id },
@@ -158,7 +159,7 @@ test("a non-member cannot read or add comments, and an issue cannot be addressed
     tags: requestHeaders(ada),
   });
   for (const issueId of [issue!.id, crypto.randomUUID()]) {
-    const refused = await root.settle(addComment, {
+    const refused = await settleWrite(root, addComment, {
       rawInput: { executionId: crypto.randomUUID(), comment: { ...post, teamId, issueId } },
       tags: requestHeaders(outsider),
     });
@@ -175,7 +176,7 @@ test("a non-member cannot read or add comments, and an issue cannot be addressed
   });
   expect(outsiderEvents).toEqual([]);
 
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "create", key: "OPS", name: "Operations" },
@@ -185,7 +186,7 @@ test("a non-member cannot read or add comments, and an issue cannot be addressed
   const other = (await root.run(listTeams, { tags: requestHeaders(ada) })).find(
     (row) => row.key === "OPS",
   )!;
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { ...draft, kind: "create", teamId: other.id },
@@ -195,7 +196,7 @@ test("a non-member cannot read or add comments, and an issue cannot be addressed
   const foreign = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!.find(
     (row) => row.teamId === other.id,
   )!;
-  const refused = await root.settle(addComment, {
+  const refused = await settleWrite(root, addComment, {
     rawInput: {
       executionId: crypto.randomUUID(),
       comment: { ...post, teamId, issueId: foreign.id },
@@ -217,7 +218,7 @@ test("comment input bounds the body and refuses author, metadata, and operation 
     { kind: "remove" },
     { createdAt: "1990-01-01T00:00:00.000Z" },
   ]) {
-    const result = await root.settle(addComment, {
+    const result = await settleWrite(root, addComment, {
       rawInput: {
         executionId: crypto.randomUUID(),
         comment: { ...post, teamId, issueId: crypto.randomUUID(), ...extra },
@@ -232,12 +233,12 @@ test("comment input bounds the body and refuses author, metadata, and operation 
 });
 
 test("a newly added member receives existing issues and comments without a reload", async () => {
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });
   const [issue] = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
-  await root.run(addComment, {
+  await write(root, addComment, {
     rawInput: {
       executionId: crypto.randomUUID(),
       comment: { ...post, teamId, issueId: issue!.id },
@@ -248,7 +249,7 @@ test("a newly added member receives existing issues and comments without a reloa
   const old = (await root.run(bootstrap, { tags: requestHeaders(outsider) })).private!;
   expect(old.comments).toEqual([]);
   const executionId = crypto.randomUUID();
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: { executionId, change: { kind: "addMember", teamId, email: "outsider@example.com" } },
     tags: requestHeaders(ada),
   });
@@ -268,12 +269,12 @@ test("a newly added member receives existing issues and comments without a reloa
 });
 
 test("issue removal cascades its comments", async () => {
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });
   const [issue] = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
-  await root.run(addComment, {
+  await write(root, addComment, {
     rawInput: {
       executionId: crypto.randomUUID(),
       comment: { ...post, teamId, issueId: issue!.id },
@@ -281,7 +282,7 @@ test("issue removal cascades its comments", async () => {
     tags: requestHeaders(ada),
   });
 
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "remove", id: issue!.id, teamId, version: issue!.version },
@@ -296,7 +297,7 @@ test("issue removal cascades its comments", async () => {
 
 test("a failed event insert rolls back the entire comment", async () => {
   const db = await root.resolve(database);
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });
@@ -310,7 +311,7 @@ test("a failed event insert rolls back the entire comment", async () => {
     sql`CREATE TRIGGER reject_comment_event BEFORE INSERT ON sync_event FOR EACH ROW EXECUTE FUNCTION reject_comment_event()`,
   );
 
-  const result = await root.settle(addComment, {
+  const result = await settleWrite(root, addComment, {
     rawInput: { executionId: crypto.randomUUID(), comment: { ...post, teamId, issueId: next!.id } },
     tags: requestHeaders(ada),
   });
@@ -320,7 +321,7 @@ test("a failed event insert rolls back the entire comment", async () => {
 });
 
 test("database checks comment text when the input reader is bypassed", async () => {
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });

@@ -21,6 +21,7 @@ import {
   requestHeaders,
   databaseQueries,
 } from "./presets";
+import { write, settleWrite } from "./write-boundary";
 
 let root: Scope.RootHandle;
 let stop: AbortController;
@@ -84,7 +85,7 @@ beforeEach(async () => {
   graceId = (await root.run(readAccount, { tags: requestHeaders(grace) }))!;
   outsiderId = (await root.run(readAccount, { tags: requestHeaders(outsider) }))!;
 
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "create", key: "ENG", name: "Engineering" },
@@ -92,7 +93,7 @@ beforeEach(async () => {
     tags: requestHeaders(ada),
   });
   teamId = (await root.run(listTeams, { tags: requestHeaders(ada) }))[0]!.id;
-  await root.run(changeTeam, {
+  await write(root, changeTeam, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "addMember", teamId, email: "grace@example.com" },
@@ -109,7 +110,7 @@ afterEach(async () => {
 test("sequential numbering gives ENG-1 through ENG-20 with one counter UPDATE per create", async () => {
   databaseQueries.length = 0;
   for (let index = 0; index < 20; index++) {
-    await root.run(changeIssue, {
+    await write(root, changeIssue, {
       rawInput: {
         executionId: crypto.randomUUID(),
         change: { ...draft, kind: "create", teamId, title: `Issue ${index}` },
@@ -135,8 +136,8 @@ test("sequential numbering gives ENG-1 through ENG-20 with one counter UPDATE pe
 test("repeated execution IDs do not create a second row or increment the number; members can edit and assign", async () => {
   const create = { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } };
   await Promise.all([
-    root.run(changeIssue, { rawInput: create, tags: requestHeaders(ada) }),
-    root.run(changeIssue, { rawInput: create, tags: requestHeaders(ada) }),
+    write(root, changeIssue, { rawInput: create, tags: requestHeaders(ada) }),
+    write(root, changeIssue, { rawInput: create, tags: requestHeaders(ada) }),
   ]);
   const [row] = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
   const edit = {
@@ -153,8 +154,8 @@ test("repeated execution IDs do not create a second row or increment the number;
       assigneeId: graceId,
     },
   };
-  await root.run(changeIssue, { rawInput: edit, tags: requestHeaders(grace) });
-  await root.run(changeIssue, { rawInput: edit, tags: requestHeaders(grace) });
+  await write(root, changeIssue, { rawInput: edit, tags: requestHeaders(grace) });
+  await write(root, changeIssue, { rawInput: edit, tags: requestHeaders(grace) });
 
   const rows = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
   expect(rows).toEqual([
@@ -177,7 +178,7 @@ test("repeated execution IDs do not create a second row or increment the number;
 });
 
 test("a non-member cannot create, edit an existing or missing issue, or read issues and members", async () => {
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });
@@ -197,7 +198,7 @@ test("a non-member cannot create, edit an existing or missing issue, or read iss
     { kind: "remove", teamId, id: rows[0]!.id, version: rows[0]!.version },
     { ...draft, kind: "edit", teamId, id: crypto.randomUUID(), version: 1 },
   ]) {
-    const result = await root.settle(changeIssue, {
+    const result = await settleWrite(root, changeIssue, {
       rawInput: { executionId: crypto.randomUUID(), change },
       tags: requestHeaders(outsider),
     });
@@ -231,7 +232,7 @@ test("an insert failure rolls back the increment so the next issue is ENG-1", as
     sql`CREATE TRIGGER reject_issue BEFORE INSERT ON issue FOR EACH ROW EXECUTE FUNCTION reject_issue()`,
   );
 
-  const refused = await root.settle(changeIssue, {
+  const refused = await settleWrite(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { ...draft, kind: "create", teamId, title: "Refuse insert" },
@@ -242,7 +243,7 @@ test("an insert failure rolls back the increment so the next issue is ENG-1", as
   expect((await db.select().from(team))[0]!.issueSeq).toBe(0);
   expect((await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!).toEqual([]);
 
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });
@@ -254,7 +255,7 @@ test("an insert failure rolls back the increment so the next issue is ENG-1", as
 });
 
 test("invalid assignees, states, priorities, and caller-selected creators save no issue", async () => {
-  const assignee = await root.settle(changeIssue, {
+  const assignee = await settleWrite(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { ...draft, kind: "create", teamId, assigneeId: outsiderId },
@@ -272,7 +273,7 @@ test("invalid assignees, states, priorities, and caller-selected creators save n
     { creatorId: outsiderId },
     { title: " " },
   ]) {
-    const result = await root.settle(changeIssue, {
+    const result = await settleWrite(root, changeIssue, {
       rawInput: {
         executionId: crypto.randomUUID(),
         change: { ...draft, ...extra, kind: "create", teamId },
@@ -289,7 +290,7 @@ test("invalid assignees, states, priorities, and caller-selected creators save n
 });
 
 test("editing a missing issue is refused without changing the team counter", async () => {
-  const result = await root.settle(changeIssue, {
+  const result = await settleWrite(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { ...draft, kind: "edit", teamId, id: crypto.randomUUID(), version: 1 },
@@ -306,7 +307,7 @@ test("editing a missing issue is refused without changing the team counter", asy
 
 test("row changes fan out to both members, results only to the actor, and nothing to a non-member", async () => {
   const executionId = crypto.randomUUID();
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId, change: { ...draft, kind: "create", teamId } },
     tags: requestHeaders(ada),
   });
@@ -329,7 +330,7 @@ test("row changes fan out to both members, results only to the actor, and nothin
 
   const [row] = (await root.run(bootstrap, { tags: requestHeaders(grace) })).private!.issues!;
   const removeId = crypto.randomUUID();
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: removeId,
       change: { kind: "remove", id: row!.id, version: row!.version, teamId },
@@ -346,7 +347,7 @@ test("row changes fan out to both members, results only to the actor, and nothin
 
 test("a move between two fractional keys sorts between them; stale saves cannot undo it", async () => {
   for (let index = 0; index < 3; index++) {
-    await root.run(changeIssue, {
+    await write(root, changeIssue, {
       rawInput: {
         executionId: crypto.randomUUID(),
         change: { ...draft, kind: "create", teamId, title: `Card ${index}` },
@@ -356,7 +357,7 @@ test("a move between two fractional keys sorts between them; stale saves cannot 
   }
   const [first, second, third] = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!
     .issues!;
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: {
@@ -381,7 +382,7 @@ test("a move between two fractional keys sorts between them; stale saves cannot 
     { kind: "move", teamId, id: third!.id, version: third!.version, state: "done", beforeId: null },
     { kind: "remove", teamId, id: third!.id, version: third!.version },
   ]) {
-    const refused = await root.settle(changeIssue, {
+    const refused = await settleWrite(root, changeIssue, {
       rawInput: { executionId: crypto.randomUUID(), change },
       tags: requestHeaders(ada),
     });
@@ -407,7 +408,7 @@ test("an edit into another column gets a fresh end rank and a later drop can go 
     ["B", "todo"],
     ["C", "backlog"],
   ]) {
-    await root.run(changeIssue, {
+    await write(root, changeIssue, {
       rawInput: {
         executionId: crypto.randomUUID(),
         change: { ...draft, kind: "create", teamId, title, state },
@@ -421,7 +422,7 @@ test("an edit into another column gets a fresh end rank and a later drop can go 
   const c = original.find((row) => row.title === "C")!;
   expect(a.rank).toBe(b.rank);
 
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: {
@@ -439,7 +440,7 @@ test("an edit into another column gets a fresh end rank and a later drop can go 
   const edited = (await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!;
   expect(new Set(edited.map((row) => row.rank)).size).toBe(3);
   expect(edited.find((row) => row.id === b.id)!.rank > c.rank).toBe(true);
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: {
@@ -458,7 +459,7 @@ test("an edit into another column gets a fresh end rank and a later drop can go 
   expect(a.rank < moved[1]!.rank && moved[1]!.rank < moved[2]!.rank).toBe(true);
 
   databaseQueries.length = 0;
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: {
@@ -485,7 +486,7 @@ test("an edit into another column gets a fresh end rank and a later drop can go 
 
 test("a legacy equal-rank gap returns InvalidPosition rather than a plain library error", async () => {
   for (let index = 0; index < 3; index++) {
-    await root.run(changeIssue, {
+    await write(root, changeIssue, {
       rawInput: { executionId: crypto.randomUUID(), change: { ...draft, kind: "create", teamId } },
       tags: requestHeaders(ada),
     });
@@ -499,7 +500,7 @@ test("a legacy equal-rank gap returns InvalidPosition rather than a plain librar
   const duplicate = (
     await root.run(bootstrap, { tags: requestHeaders(ada) })
   ).private!.issues!.filter((row) => row.rank === rows[0]!.rank);
-  const result = await root.settle(changeIssue, {
+  const result = await settleWrite(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: {

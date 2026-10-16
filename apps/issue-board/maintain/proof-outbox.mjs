@@ -4,13 +4,16 @@ import { fileURLToPath } from "node:url";
 
 import { createScope } from "@tinker/core";
 import { preset, makeTestClock } from "@tinker/core/testing";
-import { drizzle } from "drizzle-orm/node-postgres";
 import nodemailer from "nodemailer";
 import pg from "pg";
 import { createServer } from "vite-plus";
 
+import { proofFault } from "./proof-fault.mjs";
+import { writeDatabase, writeDispatch } from "./proof-write.mjs";
+
 const vite = await createServer({
   configFile: false,
+  plugins: [proofFault()],
   cacheDir: ".tinker/proof-outbox-vite-cache",
   optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false },
@@ -27,6 +30,8 @@ const { deliverMailBatch, outboxWake } = await vite.ssrLoadModule("/src/backend/
 const { database, databaseUrl } = await vite.ssrLoadModule(
   "/tinker/components/database/index.server.ts",
 );
+
+const dispatch = writeDispatch();
 
 const { alertMail } = await vite.ssrLoadModule("/src/backend/alert-mail.server.ts");
 const connectionString = "postgres://issue_board@127.0.0.1:15433/postgres";
@@ -63,7 +68,7 @@ try {
     const root = createScope({
       signal: stop.signal,
       presets: [
-        preset(database, async () => drizzle({ client })),
+        preset(database, async () => writeDatabase(client)),
         preset(alertMail, async () => ({
           send: async (message) => {
             if (index === 0 && message.text === "Crash recovery") {
@@ -87,11 +92,11 @@ try {
     "SELECT id FROM mail_outbox WHERE sent_at IS NULL AND dedupe_key NOT LIKE $1 FOR UPDATE",
     [`${prefix}%`],
   );
-  batches = [roots[0].run(deliverMailBatch)];
+  batches = [dispatch.run(roots[0], deliverMailBatch)];
   const outcomes = [];
   outcomes.push(Promise.allSettled(batches));
   await Promise.race([entered[0].promise, batches[0]]);
-  batches.push(roots[1].run(deliverMailBatch));
+  batches.push(dispatch.run(roots[1], deliverMailBatch));
   outcomes.push(Promise.allSettled([batches[1]]));
   await Promise.race([entered[1].promise, batches[1]]);
   const pids = (
@@ -138,7 +143,7 @@ try {
     [prefix, `${prefix}:crash`],
   );
   const crashedPid = (await clients[0].query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
-  const crashed = roots[0].settle(deliverMailBatch);
+  const crashed = dispatch.settle(roots[0], deliverMailBatch);
   await crashEntered.promise;
   await observer.query("SELECT pg_terminate_backend($1)", [crashedPid]);
   crashRelease.resolve();
@@ -151,7 +156,11 @@ try {
   ).rows[0];
   assert.equal(unsent.sent_at, null);
   assert.equal(unsent.attempts, 0);
-  assert.deepEqual(await roots[1].run(deliverMailBatch), { claimed: 1, sent: 1, failed: 0 });
+  assert.deepEqual(await dispatch.run(roots[1], deliverMailBatch), {
+    claimed: 1,
+    sent: 1,
+    failed: 0,
+  });
   await coordinator.query("ROLLBACK");
   console.log(
     "PASS crash recovery: killed the claiming worker backend PID before SMTP; transaction rolled back with attempts=0; another worker claims and sends its row once to local Mailpit.",

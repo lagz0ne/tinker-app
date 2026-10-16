@@ -10,6 +10,7 @@ import { generatorBlocked, staleTree } from "../lib/checks/generated.mjs";
 import { serverProblems } from "../lib/checks/named.mjs";
 import { compressResponse } from "../lib/compression.mjs";
 import { doctor } from "../lib/doctor.mjs";
+import { createMainHost } from "../lib/main-host.mjs";
 import { prepare, prepareExitCode } from "../lib/prepare.mjs";
 import { createAssets } from "../lib/serve.mjs";
 
@@ -30,32 +31,25 @@ async function writeRouteTree(root) {
  * @param {string} root - From tinker serve; why: the built app to serve.
  */
 async function serve(root) {
-  const stop = new AbortController();
-  const abort = () => stop.abort();
-  process.once("SIGINT", abort);
-  process.once("SIGTERM", abort);
-  const stopped = new Promise((done) =>
-    stop.signal.addEventListener("abort", done, { once: true }),
-  );
+  if (existsSync(join(root, ".env"))) process.loadEnvFile(join(root, ".env"));
+  const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
+  let server;
 
-  try {
-    if (existsSync(join(root, ".env"))) process.loadEnvFile(join(root, ".env"));
-    const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
-    const app = await built.default({
-      env: process.env,
-      signal: stop.signal,
-      stdout: process.stdout,
-      stderr: process.stderr,
-    });
-
-    try {
+  let stopped;
+  const host = createMainHost(built.default, {
+    env: process.env,
+    args: rest,
+    stdout: process.stdout,
+    stderr: process.stderr,
+    validate: (app) => {
+      if (typeof app.fetch !== "function") throw new TypeError("server main must return fetch");
+    },
+    onStart: async (app, signal) => {
       const asset = await createAssets(root);
-      if (stop.signal.aborted) {
-        await app.closed;
-        return 0;
-      }
+      if (signal.aborted) return;
+
       const render = async (request) => compressResponse(request, await app.fetch(request));
-      const server = listen(
+      server = listen(
         {
           overrideGlobalObjects: false,
           hostname: process.env.HOST ?? "127.0.0.1",
@@ -65,28 +59,34 @@ async function serve(root) {
         (info) =>
           console.log(`tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${info.port}`),
       );
-
-      await stopped;
-      await new Promise((done, reject) =>
-        server.close((error) => (error ? reject(error) : done())),
+      signal.addEventListener(
+        "abort",
+        () => {
+          stopped = new Promise((resolve, reject) =>
+            server.close((error) => (error ? reject(error) : resolve())),
+          );
+        },
+        { once: true },
       );
-      await app.closed;
-      return 0;
-    } catch (error) {
-      stop.abort();
-      await app.closed.catch((cleanup) => {
-        if (cleanup !== error) console.error("close failed:", cleanup);
-      });
-      console.error(error);
-      return 1;
-    }
-  } catch (error) {
-    if (error === stop.signal.reason) return 0;
-    console.error(error);
-    return 1;
+    },
+    onStop: async () => {
+      if (server && !stopped) {
+        stopped = new Promise((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        );
+      }
+      await stopped;
+    },
+  });
+  const interrupt = () => host.stop(130, new DOMException("SIGINT", "AbortError"));
+  const terminate = () => host.stop(143, new DOMException("SIGTERM", "AbortError"));
+  process.on("SIGINT", interrupt);
+  process.on("SIGTERM", terminate);
+  try {
+    return await host.closed;
   } finally {
-    process.off("SIGINT", abort);
-    process.off("SIGTERM", abort);
+    process.off("SIGINT", interrupt);
+    process.off("SIGTERM", terminate);
   }
 }
 
@@ -124,7 +124,5 @@ const commands = {
 
 if (!existsSync(join(root, "package.json")) || !(command in commands)) {
   console.log("usage: tinker prepare | doctor [--fix] | serve");
-  process.exit(2);
-}
-
-process.exitCode = await commands[command]();
+  process.exitCode = 64;
+} else process.exitCode = await commands[command]();

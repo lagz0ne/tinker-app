@@ -10,11 +10,12 @@ import { alertMail } from "@/backend/alert-mail.server";
 import { team, teamMember, mailOutbox } from "@/backend/board.schema.server";
 import { addComment } from "@/backend/comments.server";
 import { changeIssue } from "@/backend/issues.server";
-import { deliverMailBatch } from "@/backend/outbox.server";
+import { deliverMailBatch, mailWorkerStop } from "@/backend/outbox.server";
 import { currentUser } from "@/demo/backend/auth.server";
 import { bootstrapPrivate } from "@/demo/backend/sync.server";
 
 import { databaseQueries, proofDatabase } from "./presets";
+import { write, settleWrite } from "./write-boundary";
 
 let root: Scope.RootHandle;
 let clock: Clock.Test;
@@ -94,16 +95,16 @@ afterEach(async () => {
 
 test("issue and comment alerts commit once, only for other team members", async () => {
   const command = { executionId: crypto.randomUUID(), change: { ...draft, teamId } };
-  await root.run(changeIssue, { rawInput: command });
-  await root.run(changeIssue, { rawInput: command });
+  await write(root, changeIssue, { rawInput: command });
+  await write(root, changeIssue, { rawInput: command });
 
   const snapshot = await root.run(bootstrapPrivate);
   const comment = {
     executionId: crypto.randomUUID(),
     comment: { teamId, issueId: snapshot.issues[0]!.id, body: "Ready to read" },
   };
-  await root.run(addComment, { rawInput: comment });
-  await root.run(addComment, { rawInput: comment });
+  await write(root, addComment, { rawInput: comment });
+  await write(root, addComment, { rawInput: comment });
 
   const db = await root.resolve(database);
   const rows = await db.select().from(mailOutbox);
@@ -112,8 +113,8 @@ test("issue and comment alerts commit once, only for other team members", async 
   expect(new Set(rows.map((row) => row.dedupeKey)).size).toBe(2);
   expect(rows.map((row) => row.subject)).toEqual(["ENG-1: Mail alert", "New comment on ENG-1"]);
   expect(sent).toEqual([]);
-  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 2, sent: 2, failed: 0 });
-  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 2, sent: 2, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
   expect(sent).toHaveLength(2);
   expect(
     (await db.select().from(mailOutbox)).every((row) => row.sentAt !== null && row.attempts === 1),
@@ -121,7 +122,7 @@ test("issue and comment alerts commit once, only for other team members", async 
 });
 
 test("a failed saved event rolls back the alert with the issue or comment", async () => {
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, teamId } },
   });
 
@@ -137,13 +138,13 @@ test("a failed saved event rolls back the alert with the issue or comment", asyn
     sql`CREATE TRIGGER refuse_alert_event BEFORE INSERT ON sync_event FOR EACH ROW EXECUTE FUNCTION refuse_alert_event()`,
   );
 
-  const comment = await root.settle(addComment, {
+  const comment = await settleWrite(root, addComment, {
     rawInput: {
       executionId: crypto.randomUUID(),
       comment: { teamId, issueId: snapshot.issues[0]!.id, body: "Must roll back" },
     },
   });
-  const issue = await root.settle(changeIssue, {
+  const issue = await settleWrite(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, teamId } },
   });
   expect(comment.status).toBe("failed");
@@ -161,7 +162,7 @@ test("worker retries with exponential backoff and leaves future mail alone", asy
   });
 
   refuse = true;
-  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
   const [first] = await db.select().from(mailOutbox);
   expect(first).toMatchObject({
     attempts: 1,
@@ -169,9 +170,9 @@ test("worker retries with exponential backoff and leaves future mail alone", asy
     lastError: "Error: local SMTP refused",
   });
   expect(first!.nextAt.getTime()).toBe(clock.currentTimeMillis() + 1000);
-  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
   clock.advance(1000);
-  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
   const [second] = await db.select().from(mailOutbox);
   expect(second!.attempts).toBe(2);
   // The next failure doubles the one-second retry delay.
@@ -179,7 +180,7 @@ test("worker retries with exponential backoff and leaves future mail alone", asy
 
   refuse = false;
   clock.advance(2000);
-  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 1, sent: 1, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 1, failed: 0 });
   expect((await db.select().from(mailOutbox))[0]).toMatchObject({ attempts: 3, lastError: null });
   expect(sent).toHaveLength(1);
 });
@@ -203,8 +204,8 @@ test("a batch is limited to twenty and dedupe keys reject duplicate rows", async
     }),
   ).rejects.toMatchObject({ cause: { code: "23505" } });
 
-  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 20, sent: 20, failed: 0 });
-  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 1, sent: 1, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 20, sent: 20, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 1, failed: 0 });
   expect(sent).toHaveLength(21);
 });
 
@@ -219,7 +220,7 @@ test("twelve failures keep a dead row, log it, and stop claiming it", async () =
 
   refuse = true;
   for (let attempt = 1; attempt <= 12; attempt += 1) {
-    expect(await root.run(deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+    expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
     const [row] = await db.select().from(mailOutbox);
     expect(row!.attempts).toBe(attempt);
 
@@ -230,7 +231,7 @@ test("twelve failures keep a dead row, log it, and stop claiming it", async () =
 
   refuse = false;
   clock.advance(86_400_000);
-  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
   expect(await db.select().from(mailOutbox)).toMatchObject([
     { attempts: 12, sentAt: null, lastError: "Error: local SMTP refused" },
   ]);
@@ -239,18 +240,18 @@ test("twelve failures keep a dead row, log it, and stop claiming it", async () =
 });
 
 test("edit, move and remove each queue one alert for the other member", async () => {
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: { executionId: crypto.randomUUID(), change: { ...draft, teamId } },
   });
 
   const [issue] = (await root.run(bootstrapPrivate)).issues;
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { ...draft, kind: "edit", teamId, id: issue!.id, version: 1, title: "Edited" },
     },
   });
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: {
@@ -263,7 +264,7 @@ test("edit, move and remove each queue one alert for the other member", async ()
       },
     },
   });
-  await root.run(changeIssue, {
+  await write(root, changeIssue, {
     rawInput: {
       executionId: crypto.randomUUID(),
       change: { kind: "remove", teamId, id: issue!.id, version: 3 },
@@ -295,7 +296,7 @@ test("stopping a batch finishes its current send and releases the remaining rows
   entered = Promise.withResolvers<void>();
   hold = release.promise;
   const callStop = new AbortController();
-  const running = root.settle(deliverMailBatch, { signal: callStop.signal });
+  const running = settleWrite(root, deliverMailBatch, { tags: mailWorkerStop(callStop.signal) });
   await entered.promise;
   callStop.abort();
   release.resolve();
@@ -309,7 +310,7 @@ test("stopping a batch finishes its current send and releases the remaining rows
 
 test("the real claim SQL keeps the attempts cap for the partial index", async () => {
   databaseQueries.length = 0;
-  expect(await root.run(deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
   const claim = databaseQueries.find((query) => query.includes("skip locked"));
   expect(claim).toMatch(/"attempts" < \$/);
 });

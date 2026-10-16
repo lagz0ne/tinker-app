@@ -29,6 +29,9 @@ the same command cannot enqueue another alert.
 
 Each worker locks at most 20 due rows with FOR UPDATE SKIP LOCKED. It holds those
 locks until sending and updating the rows finish. Other workers skip those rows.
+The worker pass opens a child session for each batch. The session transaction
+commits before the pass reports a sent batch. A soft stop finishes the current
+send and commits its result before that child closes.
 SMTP failures record the error and retry after 1, 2, 4, 8 seconds, up to 30 minutes.
 After 12 failures, attempts=12 and sent_at=NULL mark the row dead. It stays in the
 table for inspection, logs outbox.dead, and is never claimed again.
@@ -46,7 +49,9 @@ earlier accepted messages too. There is no claim of exactly-once delivery.
 The board sender uses 10-second connection, greeting, and socket-idle timeouts.
 A stop finishes the current send, commits its result, and releases the rest of
 the batch. A clean SIGTERM prints "outbox worker stopped". Close errors still fail
-the process. The host also works with only environment values and no .env file.
+the process. SIGINT ends with code 130; SIGTERM ends with 143. The host waits
+for cleanup and flushes output before setting its code. A 10-second host
+deadline is the only hard stop. The host also works with only environment values and no .env file.
 
 The existing auth/profile demo mail still uses the starter sender. This outbox
 owns board alerts and daily digests. No import or new registry component is added.

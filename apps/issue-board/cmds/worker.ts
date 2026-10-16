@@ -1,60 +1,72 @@
-import { createScope, type Scope } from "@tinker/core";
+import { createScope } from "@tinker/core";
 
+import { defineMain, mainErrorCode, checkClosed } from "~/base/main";
 import { databaseUrl } from "~/components/database/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
 
 import { alertMailTimeout } from "@/backend/alert-mail.server";
 import { digestHourUTC } from "@/backend/digest.server";
-import { runMailWorker } from "@/backend/outbox.server";
+import { runMailWorker, mailWorkerStop } from "@/backend/outbox.server";
 
-type WorkerInput = {
-  presets?: Scope.Preset[];
-  env: Readonly<Record<string, string | undefined>>;
-  signal: AbortSignal;
-  stdout: { write(chunk: string): unknown };
-  stderr: { write(chunk: string): unknown };
-};
-
-/**
- * Run after the server has applied migrations; this command never migrates.
- * @param input - From the Node host; why: bind settings, stop, and output at the entry.
- */
-export default async function main(input: WorkerInput) {
-  const { env, signal, stdout, stderr } = input;
-
-  const root = createScope({
-    signal,
-    presets: input.presets,
-    observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
-    extensions: [mailStartup],
-    tags: [
-      env.DIGEST_HOUR_UTC !== undefined &&
-        digestHourUTC(env.DIGEST_HOUR_UTC.trim() === "" ? NaN : Number(env.DIGEST_HOUR_UTC)),
-      env.OUTBOX_SMTP_TIMEOUT_MS !== undefined &&
-        alertMailTimeout(Number(env.OUTBOX_SMTP_TIMEOUT_MS)),
-      env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
-      env.SMTP_URL !== undefined && smtpUrl(new URL(env.SMTP_URL)),
-      env.SMTP_FROM !== undefined && mailFrom(env.SMTP_FROM),
-    ],
-  });
-  await root.ready;
-
-  const closed = root
-    .run(runMailWorker, { signal })
-    .then(
-      () => root.close({ graceful: true }),
-      async (error) => {
-        if (signal.aborted && error === signal.reason) return root.closed;
-
-        stderr.write(`outbox worker failed: ${String(error)}\n`);
-        await root.close();
-        throw error;
-      },
-    )
-    .then((result) => {
-      if (result.status === "failed") throw result.error;
-      if (result.teardownErrors?.length) throw result.teardownErrors[0];
-      stdout.write("outbox worker stopped\n");
+/** Run after the server migrates. The host owns stop and output. */
+// oxlint-disable-next-line complexity -- Native entry keeps each typed config binding inline, as the server does.
+export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) => {
+  if (args.length) {
+    stderr.write("Usage: worker\n");
+    exit(64);
+    return { closed: Promise.resolve() };
+  }
+  try {
+    const lifetime = new AbortController();
+    const root = createScope({
+      signal: lifetime.signal,
+      observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
+      extensions: [mailStartup],
+      tags: [
+        mailWorkerStop(signal),
+        env.DIGEST_HOUR_UTC !== undefined &&
+          digestHourUTC(env.DIGEST_HOUR_UTC.trim() === "" ? NaN : Number(env.DIGEST_HOUR_UTC)),
+        env.OUTBOX_SMTP_TIMEOUT_MS !== undefined &&
+          alertMailTimeout(Number(env.OUTBOX_SMTP_TIMEOUT_MS)),
+        env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
+        env.SMTP_URL !== undefined && smtpUrl(new URL(env.SMTP_URL)),
+        env.SMTP_FROM !== undefined && mailFrom(env.SMTP_FROM),
+      ],
     });
-  return { closed };
-}
+    try {
+      await root.ready;
+      root.resolve(databaseUrl);
+    } catch (error) {
+      await root.close();
+      throw error;
+    }
+
+    const closed = root
+      .run(runMailWorker)
+      .then(
+        () => root.close({ graceful: true }),
+        async (error) => {
+          if (signal.aborted && error === signal.reason) return root.closed;
+
+          stderr.write(`outbox worker failed: ${String(error)}\n`);
+          await root.close();
+          throw error;
+        },
+      )
+      .then((result) => {
+        checkClosed(result);
+        stdout.write("outbox worker stopped\n");
+      })
+      .catch((error) => {
+        exit(1, error);
+        throw error;
+      });
+    return { closed };
+  } catch (error) {
+    stderr.write(`worker start failed: ${String(error)}\n`);
+    const code = mainErrorCode(error);
+    exit(code, error);
+    if (code === 1) throw error;
+    return { closed: Promise.resolve() };
+  }
+});

@@ -5,7 +5,6 @@ import { readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 
 const directory = process.env.BOARD_PROOF_LOG_DIR ?? ".tinker/import-controls";
 mkdirSync(directory, { recursive: true });
-const importer = readFileSync("src/backend/import.server.ts", "utf8");
 const digest = readFileSync("src/backend/digest.server.ts", "utf8");
 const digestProof = readFileSync("maintain/proof-digest.mjs", "utf8");
 const paths = [];
@@ -13,13 +12,15 @@ const paths = [];
 const faults = [
   {
     name: "sorted-locks",
+    file: "src/backend/team-write.server.ts",
     check: "locks",
-    from: '.orderBy(sql`${user.id} collate "C"`)',
-    to: '.orderBy(sql`${user.id} collate "C" desc`)',
+    from: '.orderBy(sql`${teamMember.userId} collate "C"`)',
+    to: '.orderBy(sql`${teamMember.userId} collate "C" desc`)',
     reason: /could not obtain lock/,
   },
   {
     name: "team-lock",
+    file: "src/backend/team-write.server.ts",
     check: "team",
     from: '.for("no key update")',
     to: "",
@@ -27,34 +28,39 @@ const faults = [
   },
   {
     name: "membership",
+    file: "src/backend/team-write.server.ts",
     check: "membership",
-    from: "if (current.some((member) => !members.some((locked) => locked.id === member.userId)))",
+    from: "if (current.some((member) => !members.some((locked) => locked.id === member.id)))",
     to: "if (false)",
     reason: /AssertionError/,
   },
   {
     name: "row-events",
+    file: "src/backend/team-write.server.ts",
     check: "effects",
-    from: "await history.append(tx, member.id, executionId, [",
-    to: "await Promise.resolve([",
+    from: "await history.append(",
+    to: "await Promise.resolve(",
     reason: /AssertionError/,
   },
   {
     name: "peer-mail",
+    file: "src/backend/team-write.server.ts",
     check: "effects",
-    from: "AND ${user.id} <> ${writer.id}",
+    from: "AND ${user.id} <> ${input.actorId}",
     to: "AND false",
     reason: /AssertionError/,
   },
   {
     name: "replay",
+    file: "src/backend/import.server.ts",
     check: "replay",
-    from: "if (same) return;",
-    to: "if (false) return;",
+    from: "if (same) return null;",
+    to: "if (false) return null;",
     reason: /AssertionError/,
   },
   {
     name: "update-version",
+    file: "src/backend/import.server.ts",
     check: "effects",
     from: ".set({ ...values, version: sql`${issue.version} + 1` })",
     to: ".set({ ...values })",
@@ -62,24 +68,24 @@ const faults = [
   },
   {
     name: "rollback",
+    file: "tinker/components/database/database.server.ts",
     check: "rollback",
-    from: "return database.transaction(async (tx) => {",
-    to: "return (async (tx) => {",
-    suffixFrom: "return { changed };\n    });",
-    suffixTo: "return { changed };\n    })(database);",
+    from: 'starting = lease.query("BEGIN")',
+    to: 'starting = lease.query("SELECT 1")',
     reason: /AssertionError/,
   },
 ];
 
 try {
   for (const fault of faults) {
+    const importer = readFileSync(fault.file, "utf8");
     assert(importer.includes(fault.from), `Missing mutation site: ${fault.name}`);
     let source = importer.replace(fault.from, fault.to);
     if (fault.suffixFrom) {
       assert(source.includes(fault.suffixFrom));
       source = source.replace(fault.suffixFrom, fault.suffixTo);
     }
-    const path = "src/backend/import-control.scratch.server.ts";
+    const path = ".tinker/import-control.scratch.server.ts";
     paths.push(path);
     writeFileSync(path, source);
 
@@ -88,7 +94,8 @@ try {
       timeout: 45_000,
       env: {
         ...process.env,
-        BOARD_IMPORT_SOURCE: "/src/backend/import-control.scratch.server.ts",
+        BOARD_PROOF_FAULT_FILE: fault.file,
+        BOARD_PROOF_FAULT_COPY: path,
         BOARD_PROOF_CASE: fault.check,
       },
     });

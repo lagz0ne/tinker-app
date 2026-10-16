@@ -11,6 +11,9 @@ node maintain/cli.mjs --file issues.csv --team ENG --actor ada@example.test
 The team must exist. The actor email must belong to a member of that team.
 This is a trusted local command. It does not sign in or start a server.
 The host reads args and env, owns signals and output, and waits for closed.
+The command calls exit after cleanup. Codes are 0 for success, 64 for bad
+args, 65 for bad CSV data, 78 for bad config, and 1 for an unexpected error.
+SIGINT ends with 130; SIGTERM ends with 143. The first stop code wins.
 The command fills typed tags and owns one root. It never runs migrations.
 
 Example issues.csv:
@@ -34,7 +37,9 @@ CRLF, LF, and a UTF-8 BOM are accepted. Bad quotes, wrong cell counts,
 duplicate headers, blank IDs, repeated IDs, bad titles, unknown states, and
 bad priorities fail before writes begin. The file is read in full.
 
-Each group of at most 100 rows commits in one transaction. A failed group
+The import runner opens a child session for each group of at most 100 rows.
+The session owns database.transaction. Its first write starts BEGIN. Its close commits before the runner
+counts or reports the group. The batch and its steps only use that resource. A failed group
 rolls back its issue rows, counter, events, and mail. Earlier groups stay
 saved. Fix the input and run it again to finish.
 
@@ -67,6 +72,8 @@ Run the fault controls after the server has applied migrations:
 ```bash
 node maintain/proof-import-controls.mjs
 node maintain/proof-prior-controls.mjs
+node maintain/proof-transaction.mjs
+node maintain/proof-transaction-controls.mjs
 ```
 
 Each control writes a broken scratch copy, requires its check to fail, and removes
@@ -77,3 +84,10 @@ The real source stays unchanged.
 The prior controls also break the inherited numbering, lock order, comments,
 outbox batch size, SMTP login, and worker stop proofs. Run those after the
 demo has made its current-day digest receipts. All controls run one at a time.
+
+The transaction proof holds a real COMMIT and checks that the server sends no
+response bytes. It then refuses COMMIT with a deferred constraint and requires
+a client error, with no accepted receipt or saved rows. Two broken scratch
+builds prove these checks fail. Four resource faults check lazy BEGIN, rollback,
+single end, and TransactionEnded. A real CLI run also checks that one bad row
+rolls back its batch while the prior batch stays saved.

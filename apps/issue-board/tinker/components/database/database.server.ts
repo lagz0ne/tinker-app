@@ -1,6 +1,8 @@
 import { extension, operation, resource, tag } from "@tinker/core";
 import { z } from "zod";
 
+import { fail } from "~/components/errors";
+
 import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";
 import type { Database } from "./types";
 
@@ -25,6 +27,29 @@ export const database = resource({
     });
 
     return Object.assign(drizzle({ client }), {
+      async checkout(guard?: Database.QueryGuard): Promise<Database.Lease> {
+        const connection = await client.connect();
+        const query = new Proxy(connection.query.bind(connection), {
+          async apply(query, receiver, args) {
+            await guard?.begin();
+            return Reflect.apply(query, receiver, args);
+          },
+        });
+        return {
+          db: drizzle({
+            client: new Proxy(connection, {
+              get(target, key) {
+                if (key === "query") return query;
+                return Reflect.get(target, key, target);
+              },
+            }),
+            // Keep TransactionEnded outside Drizzle's driver-error wrapper.
+            logger: { logQuery: () => guard?.check() },
+          }),
+          query: connection.query.bind(connection),
+          release: connection.release.bind(connection),
+        };
+      },
       async listen(heard: (payload: string) => void, disconnected: () => void) {
         const listener = await client.connect();
         const notified = (message: { payload?: string }) => heard(message.payload ?? "");
@@ -81,5 +106,72 @@ export const databaseSetup = extension({
       await next();
       await scope.run(migrate);
     },
+  },
+});
+
+/** The call's session owns a lazy transaction and waits for its end before returning. */
+export const transaction = resource({
+  label: "database.transaction",
+  target: "session",
+  depends: { database },
+  factory: async ({ database }, { defer }): Promise<Database.SessionTransaction> => {
+    if (!database.checkout) throw new Error("Database preset must supply checkout for writes");
+    let state: "idle" | "open" | "committed" | "rolledBack" = "idle";
+    let starting: Promise<unknown> | undefined;
+    let ending: Promise<unknown> | undefined;
+    const lease = await database.checkout({
+      check() {
+        if (state === "committed" || state === "rolledBack") throw fail("TransactionEnded", {});
+      },
+      async begin() {
+        if (state === "committed" || state === "rolledBack") throw fail("TransactionEnded", {});
+        if (state === "idle") {
+          state = "open";
+          starting = lease.query("BEGIN");
+        }
+        await starting;
+      },
+    });
+    const tx = Object.assign(lease.db, {
+      async commit() {
+        if (state === "committed" || state === "rolledBack") return;
+        const opened = state === "open";
+        state = "committed";
+
+        if (!opened) return;
+        ending = Promise.resolve(starting)
+          .then(() => lease.query("COMMIT"))
+          .catch(async (error) => {
+            state = "rolledBack";
+            await lease.query("ROLLBACK").catch(() => {});
+            throw error;
+          });
+        await ending;
+      },
+      async rollback() {
+        if (state === "committed" || state === "rolledBack") return;
+        const opened = state === "open";
+        state = "rolledBack";
+
+        if (!opened) return;
+        ending = Promise.resolve(starting)
+          .catch(() => {})
+          .then(() => lease.query("ROLLBACK"));
+        await ending;
+      },
+    });
+
+    defer(async (end) => {
+      try {
+        await ending?.catch(() => {});
+        if (state === "open") {
+          if (end.status === "success") await tx.commit();
+          else await tx.rollback();
+        }
+      } finally {
+        lease.release();
+      }
+    });
+    return tx;
   },
 });

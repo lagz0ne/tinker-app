@@ -16,16 +16,16 @@ const faults = [
   },
   {
     name: "lock-order",
-    file: "issues.server.ts",
+    file: "team-write.server.ts",
     from: '.orderBy(sql`${teamMember.userId} collate "C"`)',
     to: '.orderBy(sql`${teamMember.userId} collate "C" desc`)',
     reason: /could not obtain lock/,
   },
   {
     name: "comments",
-    file: "comments.server.ts",
-    from: "if (await history.find(tx, input.executionId, currentUser.id)) return;",
-    to: "",
+    file: "team-write.server.ts",
+    from: "!!(await history.find(tx, input.executionId, input.owner))",
+    to: "false",
     reason: /AssertionError/,
   },
   {
@@ -51,19 +51,18 @@ try {
     const source = readFileSync(`src/backend/${fault.file}`, "utf8");
     assert(source.includes(fault.from), `Missing fault site: ${fault.name}`);
     const sourcePath = "src/backend/prior-control.scratch.server.ts";
+
     paths.push(sourcePath);
     writeFileSync(sourcePath, source.replace(fault.from, fault.to));
-    const proof = readFileSync(`maintain/proof-${fault.name}.mjs`, "utf8");
-    const original = `/src/backend/${fault.file}`;
-    assert(proof.includes(original));
-    const proofPath = "maintain/proof-prior.scratch.mjs";
-    paths.push(proofPath);
-    writeFileSync(
-      proofPath,
-      proof.replace(original, "/src/backend/prior-control.scratch.server.ts"),
-    );
-
-    const result = spawnSync(process.execPath, [proofPath], { encoding: "utf8", timeout: 60_000 });
+    const result = spawnSync(process.execPath, [`maintain/proof-${fault.name}.mjs`], {
+      encoding: "utf8",
+      timeout: 60_000,
+      env: {
+        ...process.env,
+        BOARD_PROOF_FAULT_FILE: `src/backend/${fault.file}`,
+        BOARD_PROOF_FAULT_COPY: sourcePath,
+      },
+    });
     const output = result.stdout + result.stderr;
     writeFileSync(`${directory}/${fault.name}.log`, output);
     assert.equal(result.error, undefined, output);
@@ -73,14 +72,22 @@ try {
       `PASS negative inherited ${fault.name}: broken scratch source exits ${result.status}; ${directory}/${fault.name}.log`,
     );
     unlinkSync(paths.pop());
-    unlinkSync(paths.pop());
   }
 
-  const hostPath = "maintain/worker-control.scratch.mjs";
+  const hostPath = ".bench/main-host-control.scratch.mjs";
   paths.push(hostPath);
-  const host = readFileSync("maintain/worker.mjs", "utf8");
-  assert(host.includes('process.once("SIGTERM", () => stop.abort());'));
-  writeFileSync(hostPath, host.replace('process.once("SIGTERM", () => stop.abort());', ""));
+  const host = readFileSync("../../packages/start/lib/main-host.mjs", "utf8");
+  assert(host.includes('process.on("SIGTERM", terminate);'));
+  writeFileSync(hostPath, host.replace('process.on("SIGTERM", terminate);', ""));
+  const runnerPath = "maintain/worker-control.scratch.mjs";
+  paths.push(runnerPath);
+  writeFileSync(
+    runnerPath,
+    readFileSync("maintain/worker.mjs", "utf8").replace(
+      '"@tinker/start/main-host"',
+      '"../.bench/main-host-control.scratch.mjs"',
+    ),
+  );
   const proofPath = "maintain/proof-worker-host.scratch.mjs";
   paths.push(proofPath);
   writeFileSync(
@@ -94,7 +101,7 @@ try {
   writeFileSync(`${directory}/worker-host.log`, result.stdout + result.stderr);
   assert.equal(result.error, undefined);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /null !== 0/);
+  assert.match(result.stderr, /null !== 143/);
   console.log(
     `PASS negative inherited worker-host: missing SIGTERM handler exits by signal; ${directory}/worker-host.log`,
   );

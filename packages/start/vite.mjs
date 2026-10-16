@@ -11,6 +11,7 @@ import { say as routeSay } from "./lib/checks/routes.mjs";
 import { buildChecks } from "./lib/doctor.mjs";
 import { aliases, passThrough, startOptions } from "./lib/glue.mjs";
 import { recordViolation, restartNote, startViolations } from "./lib/hooks.mjs";
+import { installDevServer } from "./lib/main-host.mjs";
 import { baseDir } from "./lib/paths.mjs";
 import { prepare } from "./lib/prepare.mjs";
 import { checkTypes } from "./lib/typecheck.mjs";
@@ -20,6 +21,7 @@ function glueConfig(root) {
   const address = { host: process.env.HOST ?? "127.0.0.1", port: Number(process.env.PORT ?? 4318) };
   return {
     resolve: { alias: aliases(root) },
+    define: { "import.meta.env.TINKER_APP_ROOT": JSON.stringify(root) },
     server: address,
     preview: address,
     tsconfig: join(root, ".tinker/tsconfig.json"),
@@ -70,6 +72,7 @@ function restartOn(root) {
     name: "tinker:restart",
     apply: "serve",
     configureServer(server) {
+      installDevServer(root, server);
       const restart = (verb) => (path) => {
         const note = restartNote(root, path, verb);
         if (!note) return;

@@ -25,5 +25,10 @@ export const updateIssue = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
   .validator(issueCommand)
   .handler(async ({ context, data }) =>
-    readReceipt(await context.session.settle(changeIssue, { input: data, signal: context.signal })),
+    readReceipt(
+      await context.session.settle(changeIssue, {
+        input: data,
+        signal: context.signal,
+      }),
+    ),
   );

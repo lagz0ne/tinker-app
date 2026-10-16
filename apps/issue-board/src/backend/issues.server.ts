@@ -1,15 +1,14 @@
 import { operation } from "@tinker/core";
 
 import { user } from "~/components/auth/index.server";
-import { database, drizzleOrm } from "~/components/database/index.server";
-import { eventHistory, execution } from "~/components/sync/index.server";
+import { database, transaction, drizzleOrm } from "~/components/database/index.server";
 
 import { teamInput } from "@/contracts/board";
-import { issueCommand } from "@/contracts/issues";
+import { issueCommand, type Issue } from "@/contracts/issues";
 import { currentUser } from "@/demo/backend/auth.server";
 import { raise } from "@/demo/errors";
 
-import { issue, issueFields, team, teamMember, mailOutbox } from "./board.schema.server";
+import { issue, issueRowFields, team, teamMember } from "./board.schema.server";
 import { fractionalIndex } from "./modules";
 import { readTeam } from "./teams.server";
 
@@ -30,119 +29,86 @@ export const listTeamMembers = operation({
   },
 });
 
-export const changeIssue = operation({
-  label: "issues.change",
+import { lockTeamWrite, queueAlerts, fanOut, rowDeliveries } from "./team-write.server";
+
+export const saveIssue = operation({
+  label: "issues.save",
   input: issueCommand,
-  depends: { database, orm: drizzleOrm, currentUser, history: eventHistory, fractionalIndex },
-  run: async (
-    { database, orm, currentUser, history, fractionalIndex },
-    { input, random, clock },
-  ) => {
+  depends: { tx: transaction, orm: drizzleOrm, currentUser, fractionalIndex },
+  run: async ({ tx, orm, currentUser, fractionalIndex }, { input, random, clock }) => {
     const { eq, and, asc, sql, ne } = orm;
     const { generateKeyBetween } = fractionalIndex;
     const change = input.change;
-
-    await database.transaction(async (tx) => {
-      const members = await tx
-        .select({ id: teamMember.userId })
-        .from(teamMember)
-        .where(eq(teamMember.teamId, change.teamId))
-        .orderBy(sql`${teamMember.userId} collate "C"`)
-        .then(async (members) => {
-          if (!members.some((member) => member.id === currentUser.id)) raise("NotTeamMember", {});
-          for (const member of members) await history.lock(tx, member.id);
-
-          if ((change.kind === "create" || change.kind === "edit") && change.assigneeId !== null) {
-            if (!members.some((member) => member.id === change.assigneeId)) {
-              raise("InvalidAssignee", {});
-            }
-          }
-          return members;
-        });
-      if (await history.find(tx, input.executionId, currentUser.id)) return;
-
-      // Every membership insert must lock a current member stream; otherwise this join guard is unsafe.
-      // A future removal path must also refuse a member set that shrinks.
+    let unchangedRank: string | undefined;
+    if (change.kind !== "create") {
       await tx
-        .select({ id: teamMember.userId })
-        .from(teamMember)
-        .where(eq(teamMember.teamId, change.teamId))
-        .then((currentMembers) => {
-          if (currentMembers.some((member) => !members.some((locked) => locked.id === member.id))) {
-            raise("TeamChanged", {});
+        .select()
+        .from(issue)
+        .where(and(eq(issue.id, change.id), eq(issue.teamId, change.teamId)))
+        .then(([current]) => {
+          if (!current) raise("IssueMissing", {});
+          if (change.kind === "edit" && current.state === change.state) {
+            unchangedRank = current.rank;
           }
         });
+    }
 
-      await tx.select().from(team).where(eq(team.id, change.teamId)).for("no key update");
+    let savedRow: Omit<Issue, "teamKey">;
+    if (change.kind === "remove") {
+      const removed = await tx
+        .delete(issue)
+        .where(
+          and(
+            eq(issue.id, change.id),
+            eq(issue.teamId, change.teamId),
+            eq(issue.version, change.version),
+          ),
+        )
+        .returning(issueRowFields);
+      if (!removed.length) raise("IssueConflict", {});
+      savedRow = removed[0]!;
+    } else {
+      const placement =
+        unchangedRank !== undefined
+          ? Promise.resolve(unchangedRank)
+          : tx
+              .select({ id: issue.id, rank: issue.rank })
+              .from(issue)
+              .where(
+                and(
+                  eq(issue.teamId, change.teamId),
+                  eq(issue.state, change.state),
+                  change.kind !== "create" ? ne(issue.id, change.id) : undefined,
+                ),
+              )
+              .orderBy(sql`${issue.rank} collate "C"`, asc(issue.id))
+              .then((stateRows) => {
+                const position =
+                  change.kind === "move" && change.beforeId !== null
+                    ? stateRows.findIndex((row) => row.id === change.beforeId)
+                    : stateRows.length;
+                if (position < 0) raise("InvalidPosition", {});
 
-      let unchangedRank: string | undefined;
-      if (change.kind !== "create") {
-        await tx
-          .select()
-          .from(issue)
-          .where(and(eq(issue.id, change.id), eq(issue.teamId, change.teamId)))
-          .then(([current]) => {
-            if (!current) raise("IssueMissing", {});
-            if (change.kind === "edit" && current.state === change.state) {
-              unchangedRank = current.rank;
-            }
-          });
-      }
+                const lower = stateRows[position - 1] ?? { rank: null };
+                const upper = stateRows[position] ?? { rank: null };
+                if (lower.rank === upper.rank && lower.rank !== null) {
+                  raise("InvalidPosition", {});
+                }
+                return generateKeyBetween(lower.rank, upper.rank);
+              });
+      savedRow = await placement.then(async (rank) => {
+        const updatedAt = new Date(clock.currentTimeMillis());
 
-      let savedId: string;
-      if (change.kind === "remove") {
-        const removed = await tx
-          .delete(issue)
-          .where(
-            and(
-              eq(issue.id, change.id),
-              eq(issue.teamId, change.teamId),
-              eq(issue.version, change.version),
-            ),
-          )
-          .returning({ id: issue.id });
-        if (!removed.length) raise("IssueConflict", {});
-        savedId = change.id;
-      } else {
-        const placement =
-          unchangedRank !== undefined
-            ? Promise.resolve(unchangedRank)
-            : tx
-                .select({ id: issue.id, rank: issue.rank })
-                .from(issue)
-                .where(
-                  and(
-                    eq(issue.teamId, change.teamId),
-                    eq(issue.state, change.state),
-                    change.kind !== "create" ? ne(issue.id, change.id) : undefined,
-                  ),
-                )
-                .orderBy(sql`${issue.rank} collate "C"`, asc(issue.id))
-                .then((stateRows) => {
-                  const position =
-                    change.kind === "move" && change.beforeId !== null
-                      ? stateRows.findIndex((row) => row.id === change.beforeId)
-                      : stateRows.length;
-                  if (position < 0) raise("InvalidPosition", {});
-
-                  const lower = stateRows[position - 1] ?? { rank: null };
-                  const upper = stateRows[position] ?? { rank: null };
-                  if (lower.rank === upper.rank && lower.rank !== null) {
-                    raise("InvalidPosition", {});
-                  }
-                  return generateKeyBetween(lower.rank, upper.rank);
-                });
-        savedId = await placement.then(async (rank) => {
-          const updatedAt = new Date(clock.currentTimeMillis());
-
-          if (change.kind === "create") {
-            const [counter] = await tx
-              .update(team)
-              .set({ issueSeq: sql`${team.issueSeq} + 1` })
-              .where(eq(team.id, change.teamId))
-              .returning({ number: team.issueSeq });
-            const id = random.uuid();
-            await tx.insert(issue).values({
+        if (change.kind === "create") {
+          const [counter] = await tx
+            .update(team)
+            .set({ issueSeq: sql`${team.issueSeq} + 1` })
+            .where(eq(team.id, change.teamId))
+            .returning({ number: team.issueSeq });
+          const id = random.uuid();
+          const [created] = await tx
+            .insert(issue)
+            .values({
               id,
               teamId: change.teamId,
               number: counter!.number,
@@ -154,85 +120,103 @@ export const changeIssue = operation({
               creatorId: currentUser.id,
               rank,
               updatedAt,
-            });
-            return id;
-          } else {
-            const values =
-              change.kind === "move"
-                ? { state: change.state, rank, updatedAt, version: sql`${issue.version} + 1` }
-                : {
-                    title: change.title,
-                    description: change.description,
-                    state: change.state,
-                    priority: change.priority,
-                    assigneeId: change.assigneeId,
-                    rank,
-                    updatedAt,
-                    version: sql`${issue.version} + 1`,
-                  };
-            const saved = await tx
-              .update(issue)
-              .set(values)
-              .where(
-                and(
-                  eq(issue.id, change.id),
-                  eq(issue.teamId, change.teamId),
-                  eq(issue.version, change.version),
-                ),
-              )
-              .returning({ id: issue.id });
-            if (!saved.length) raise("IssueConflict", {});
-            return change.id;
-          }
-        });
-      }
+            })
+            .returning(issueRowFields);
+          return created!;
+        } else {
+          const values =
+            change.kind === "move"
+              ? { state: change.state, rank, updatedAt, version: sql`${issue.version} + 1` }
+              : {
+                  title: change.title,
+                  description: change.description,
+                  state: change.state,
+                  priority: change.priority,
+                  assigneeId: change.assigneeId,
+                  rank,
+                  updatedAt,
+                  version: sql`${issue.version} + 1`,
+                };
+          const saved = await tx
+            .update(issue)
+            .set(values)
+            .where(
+              and(
+                eq(issue.id, change.id),
+                eq(issue.teamId, change.teamId),
+                eq(issue.version, change.version),
+              ),
+            )
+            .returning(issueRowFields);
+          if (!saved.length) raise("IssueConflict", {});
+          return saved[0]!;
+        }
+      });
+    }
 
-      const { delta, subject } = await tx
-        .select(issueFields)
-        .from(issue)
-        .innerJoin(team, eq(issue.teamId, team.id))
-        .where(eq(issue.id, savedId))
-        .then(([saved]) =>
-          change.kind === "remove"
-            ? {
-                delta: { kind: "issue.remove" as const, id: savedId },
-                subject: "An issue was removed",
-              }
-            : {
-                delta: { kind: "issue.upsert" as const, issue: saved! },
-                subject: `${saved!.teamKey}-${saved!.number}: ${saved!.title}`,
-              },
-        );
-      await tx.execute(sql`
-        INSERT INTO ${mailOutbox} ("to", subject, text, dedupe_key)
-        SELECT ${user.email}, ${subject}, ${`${currentUser.name}: issue ${change.kind}.`},
-          ${input.executionId} || ':' || ${user.id}
-        FROM ${teamMember} INNER JOIN ${user} ON ${teamMember.userId} = ${user.id}
-        WHERE ${teamMember.teamId} = ${change.teamId} AND ${user.id} <> ${currentUser.id}
-        ON CONFLICT (dedupe_key) DO NOTHING
-      `);
+    return savedRow;
+  },
+});
 
-      await tx.insert(execution).values({ id: input.executionId, stream: currentUser.id });
+export const issueDelta = operation({
+  label: "issues.delta",
+  input: (raw: unknown) =>
+    raw as { row: Omit<Issue, "teamKey">; teamKey: string; removed: boolean },
+  run: async (_deps, { input }) => {
+    const saved = { ...input.row, teamKey: input.teamKey };
+    return input.removed
+      ? { delta: { kind: "issue.remove" as const, id: saved.id }, subject: "An issue was removed" }
+      : {
+          delta: { kind: "issue.upsert" as const, issue: saved },
+          subject: `${saved.teamKey}-${saved.number}: ${saved.title}`,
+        };
+  },
+});
 
-      const deliveries = members.map((member) => ({
-        member,
-        payloads: [
-          { kind: "change" as const, change: delta },
-          ...(member.id === currentUser.id
-            ? [
-                {
-                  kind: "result" as const,
-                  result: { kind: "complete" as const, action: "issue" as const },
-                },
-              ]
-            : []),
-        ],
-      }));
-      for (const { member, payloads } of deliveries) {
-        await history.append(tx, member.id, input.executionId, payloads);
-      }
+export const changeIssue = operation({
+  label: "issues.change",
+  input: issueCommand,
+  depends: {
+    currentUser,
+    lock: lockTeamWrite.controller,
+    save: saveIssue.controller,
+    delta: issueDelta.controller,
+    alerts: queueAlerts.controller,
+    publish: fanOut.controller,
+  },
+  run: async ({ currentUser, lock, save, delta, alerts, publish }, { input }) => {
+    const change = input.change;
+    const locked = await lock.run({
+      input: {
+        teamId: change.teamId,
+        actorId: currentUser.id,
+        executionId: input.executionId,
+        assigneeId:
+          change.kind === "create" || change.kind === "edit" ? change.assigneeId : undefined,
+      },
     });
+    if (locked.seen) return { executionId: input.executionId };
 
+    const row = await save.run({ input });
+    const saved = await delta.run({
+      input: { row, teamKey: locked.teamKey, removed: change.kind === "remove" },
+    });
+    await alerts.run({
+      input: {
+        teamId: change.teamId,
+        actorId: currentUser.id,
+        executionId: input.executionId,
+        subject: saved.subject,
+        text: `${currentUser.name}: issue ${change.kind}.`,
+      },
+    });
+    await publish.run({
+      input: {
+        executionId: input.executionId,
+        owner: currentUser.id,
+        deliveries: rowDeliveries(locked.members, saved.delta, currentUser.id),
+      },
+    });
     return { executionId: input.executionId };
   },
 });

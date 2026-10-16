@@ -46,3 +46,8 @@ export function createServerHandler(app: ServerEntry.Handle, { dev }: { dev: boo
     },
   };
 }
+
+/** A stopped command still satisfies the host's server result check. */
+export async function stoppedFetch() {
+  return new Response(null, { status: 503 });
+}

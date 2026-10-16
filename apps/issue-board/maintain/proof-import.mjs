@@ -4,12 +4,15 @@ import { fileURLToPath } from "node:url";
 
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { createServer } from "vite-plus";
 
+import { proofFault } from "./proof-fault.mjs";
+import { writeDatabase, writeDispatch } from "./proof-write.mjs";
+
 const vite = await createServer({
   configFile: false,
+  plugins: [proofFault()],
   cacheDir: ".tinker/proof-import-vite-cache",
   optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false },
@@ -26,6 +29,9 @@ const { importBatch, importTeam, importActor } = await vite.ssrLoadModule(
 );
 
 const { database } = await vite.ssrLoadModule("/tinker/components/database/index.server.ts");
+
+const dispatch = writeDispatch();
+
 const connectionString = "postgres://issue_board@127.0.0.1:15433/postgres";
 const coordinator = new pg.Client({ connectionString });
 const observer = new pg.Client({ connectionString });
@@ -80,7 +86,7 @@ try {
     );
     const root = createScope({
       signal: stop.signal,
-      presets: [preset(database, async () => drizzle({ client }))],
+      presets: [preset(database, async () => writeDatabase(client))],
       tags: [importTeam(keys[index]), importActor(`${ids[index]}@example.test`)],
     });
     roots.push(root);
@@ -99,7 +105,9 @@ try {
     await coordinator.query("SAVEPOINT streams");
 
     await coordinator.query("SELECT id FROM sync_stream WHERE id=$1 FOR UPDATE", [ids[0]]);
-    const writes = roots.map((root) => root.run(importBatch, { rawInput: { rows: [sample] } }));
+    const writes = roots.map((root) =>
+      dispatch.run(root, importBatch, { rawInput: { rows: [sample] } }),
+    );
     const outcomes = Promise.allSettled(writes);
     pending.push(outcomes);
     const deadline = AbortSignal.timeout(15_000);
@@ -143,7 +151,7 @@ try {
   if (["all", "membership"].includes(check)) {
     await coordinator.query("BEGIN");
     await coordinator.query("SELECT id FROM sync_stream WHERE id=$1 FOR UPDATE", [ids[0]]);
-    const writing = roots[0].settle(importBatch, {
+    const writing = dispatch.settle(roots[0], importBatch, {
       rawInput: { rows: [{ ...sample, externalId: "JOIN-RACE" }] },
     });
     pending.push(writing);
@@ -190,7 +198,7 @@ try {
     const row = { ...sample, externalId: "REPLAY" };
     const options = { rawInput: { rows: [row] }, tags: importTeam(keys[0]) };
     const writes = (check === "rollback" ? roots.slice(0, 1) : roots).map((root) =>
-      root.run(importBatch, options),
+      dispatch.run(root, importBatch, options),
     );
     const outcomes = Promise.allSettled(writes);
     pending.push(outcomes);
@@ -228,7 +236,7 @@ try {
     assert.equal(alerts.length, 1);
     assert.notEqual(alerts[0].to, `${ids[2]}@example.test`);
     const before = JSON.stringify({ saved, events, alerts });
-    assert.equal((await roots[0].run(importBatch, options)).changed, 0);
+    assert.equal((await dispatch.run(roots[0], importBatch, options)).changed, 0);
     const after = {
       saved: (await observer.query("SELECT * FROM issue WHERE id=$1", [issueId])).rows,
       events: (
@@ -257,7 +265,7 @@ try {
 
     assert.equal(
       (
-        await roots[0].run(importBatch, {
+        await dispatch.run(roots[0], importBatch, {
           ...options,
           rawInput: { rows: [{ ...row, title: "Updated import", state: "done" }] },
         })
@@ -305,7 +313,7 @@ try {
     );
     refusal = true;
     await assert.rejects(
-      roots[0].run(importBatch, {
+      dispatch.run(roots[0], importBatch, {
         rawInput: { rows: [{ ...sample, externalId: "ROLLBACK", title: "REFUSE IMPORT PROOF" }] },
       }),
     );

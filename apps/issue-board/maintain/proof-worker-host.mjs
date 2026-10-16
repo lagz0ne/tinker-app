@@ -66,7 +66,7 @@ try {
 
   child.kill("SIGTERM");
   const [code] = await exited;
-  assert.equal(code, 0, errors);
+  assert.equal(code, 143, errors);
   assert(output.includes("outbox worker stopped\n"));
   const after = (
     await db.query("SELECT id,dedupe_key FROM mail_outbox WHERE dedupe_key LIKE $1 ORDER BY id", [
@@ -79,7 +79,7 @@ try {
     "PASS digest process restart: fresh built worker ticks with hour=0 and leaves today's durable receipts unchanged.",
   );
   console.log(
-    "PASS worker host: no .env file; explicit local settings start the built worker; SIGTERM prints stopped and exits 0.",
+    "PASS worker host: no .env file; explicit local settings start the built worker; SIGTERM prints stopped and exits 143.",
   );
 } finally {
   if (child.exitCode === null && child.signalCode === null) {
