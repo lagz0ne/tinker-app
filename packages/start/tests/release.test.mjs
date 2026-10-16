@@ -4,15 +4,30 @@ import { expect, test } from "vite-plus/test";
 
 import { releaseUrls } from "../lib/release.mjs";
 
-test("release URLs name all three tarballs under the same tag", () => {
+test("release URLs name Start under tinker-app and Core/React under tinkered 0.8.0", () => {
   expect(releaseUrls("0.7.0")).toEqual({
     "@tinker/core":
-      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.7.0/tinker-core-0.7.0.tgz",
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
     "@tinker/react":
-      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.7.0/tinker-react-0.7.0.tgz",
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
     "@tinker/start":
-      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.7.0/tinker-start-0.7.0.tgz",
+      "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.7.0/tinker-start-0.7.0.tgz",
   });
+});
+
+test("the apps install the same Core and React the release names", () => {
+  const root = new URL("../../../", import.meta.url);
+  const urls = releaseUrls("0.7.0");
+  for (const path of [
+    "apps/start-min/package.json",
+    "apps/start-scaffold/package.json",
+    "apps/start-scaffold/app.package.json",
+    "packages/start/package.json",
+  ]) {
+    const pkg = JSON.parse(readFileSync(new URL(path, root), "utf8"));
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    for (const name of ["@tinker/core", "@tinker/react"]) expect(deps[name]).toBe(urls[name]);
+  }
 });
 
 test("a missing version or a path cannot name a release", () => {

@@ -31,6 +31,22 @@ pnpm --filter @tinker-start-scaffold doctor
 vp check
 ```
 
+## Release
+
+A tag `start-vX.Y.Z` on `next` holds one asset: the Start tarball.
+Core and React keep their tinkered `start-v0.8.0` tarball URLs.
+The registry is read from the tag's own `apps/start-scaffold/public/r`.
+
+```bash
+pnpm --dir apps/start-scaffold run registry:build
+node scripts/release.mjs 0.9.0
+node scripts/release-check.mjs 0.9.0 > .release/start-v0.9.0/notes.md
+```
+
+`release.mjs` packs Start into `.release/start-v0.9.0/`.
+`release-check.mjs` checks the version, the UPGRADE.md section, and the registry links.
+Neither script publishes.
+
 ## Copied runtime and templates
 
 Start runtime source lives in `apps/start-scaffold/tinker/`.
