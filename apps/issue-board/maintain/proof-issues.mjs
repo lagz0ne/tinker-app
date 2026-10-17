@@ -95,40 +95,104 @@ try {
 
   await coordinator.query("BEGIN");
   await coordinator.query("SELECT id FROM team WHERE id = $1 FOR UPDATE", [teamId]);
+  const inputs = roots.map((_, index) => ({
+    executionId: randomUUID(),
+    change: {
+      kind: "create",
+      teamId,
+      title: `Concurrent ${index}`,
+      description: "",
+      state: "backlog",
+      priority: 0,
+      assigneeId: null,
+    },
+  }));
+  const settled = new Set();
   writes = roots.map((root, index) =>
-    dispatch.run(root, changeIssue, {
-      rawInput: {
-        executionId: randomUUID(),
-        change: {
-          kind: "create",
-          teamId,
-          title: `Concurrent ${index}`,
-          description: "",
-          state: "backlog",
-          priority: 0,
-          assigneeId: null,
-        },
-      },
-    }),
+    dispatch
+      .run(root, changeIssue, {
+        rawInput: inputs[index],
+      })
+      .finally(() => settled.add(index)),
   );
   // Attach rejection handlers while observing locks, so a failed writer is reported cleanly.
   const completed = Promise.allSettled(writes);
   const deadline = AbortSignal.timeout(30_000);
-  let blocked = 0;
-  while (blocked !== 20) {
+  // The held team row queues the first writer; the other 19 queue on its
+  // first stream. SQL bounds can expire before all 20 waits overlap. Observe
+  // each writer waiting OR settled, rather than demand a simultaneous snapshot.
+  const observed = new Set();
+  // Keep the barrier until at least one bounded failure exercises rollback/retry.
+  while (observed.size !== 20 || settled.size === 0) {
     deadline.throwIfAborted();
     const result = await observer.query(
-      `SELECT count(*)::int AS count FROM pg_stat_activity
+      `SELECT pid FROM pg_stat_activity
        WHERE pid = ANY($1::int[]) AND wait_event_type = 'Lock'
        AND (query LIKE '%"team"%' OR query LIKE '%"sync_stream"%')`,
       [pids],
     );
-    blocked = result.rows[0].count;
+    for (const { pid } of result.rows) observed.add(pids.indexOf(pid));
+    for (const index of settled) observed.add(index);
   }
   await coordinator.query("COMMIT");
   const outcomes = await completed;
-  for (const outcome of outcomes) {
-    assert.equal(outcome.status, "fulfilled", outcome.reason?.message);
+  for (const [index, outcome] of outcomes.entries()) {
+    if (outcome.status === "fulfilled") continue;
+
+    // Only PostgreSQL's bounded lock/statement failures may be retried. A bug,
+    // deadlock or connection error must still fail this proof at its own site.
+    let cause = outcome.reason;
+    while (cause?.cause) cause = cause.cause;
+    assert(["55P03", "57014"].includes(cause?.code), outcome.reason?.stack);
+
+    const input = inputs[index];
+    assert.equal(
+      (
+        await observer.query(
+          "SELECT count(*)::int AS count FROM issue WHERE team_id = $1 AND title = $2",
+          [teamId, input.change.title],
+        )
+      ).rows[0].count,
+      0,
+      "timed-out issue rolled back",
+    );
+    for (const table of ["sync_execution", "sync_event"]) {
+      const column = table === "sync_execution" ? "id" : '"executionId"';
+      assert.equal(
+        (
+          await observer.query(`SELECT count(*)::int AS count FROM ${table} WHERE ${column} = $1`, [
+            input.executionId,
+          ])
+        ).rows[0].count,
+        0,
+        `timed-out ${table} rolled back`,
+      );
+    }
+    assert.equal(
+      (
+        await observer.query(
+          "SELECT count(*)::int AS count FROM mail_outbox WHERE dedupe_key LIKE $1",
+          [`${input.executionId}:%`],
+        )
+      ).rows[0].count,
+      0,
+      "timed-out alerts rolled back",
+    );
+    assert.equal(
+      (
+        await observer.query(
+          "SELECT state = 'idle' AND xact_start IS NULL AS ended FROM pg_stat_activity WHERE pid = $1",
+          [pids[index]],
+        )
+      ).rows[0].ended,
+      true,
+      "timed-out transaction ended",
+    );
+
+    // The initial wave has finished and the coordinator released its lock.
+    // Retry the same execution once, serially, with production SQL bounds.
+    await dispatch.run(roots[index], changeIssue, { rawInput: input });
+    console.log(`PASS bounded SQL retry: writer ${index}; ${cause.code}; no partial write.`);
   }
 
   const rows = (
@@ -139,6 +203,7 @@ try {
   assert.deepEqual(
     rows.map((row) => row.number),
     Array.from({ length: 20 }, (_, index) => index + 1),
+    "issue numbers must be contiguous 1..20",
   );
   assert.equal(new Set(rows.map((row) => row.id)).size, 20);
   assert.equal(
@@ -267,7 +332,7 @@ try {
     "PASS live Postgres moves: two members on separate connections wait on the first sorted member stream before taking any team row lock; both moves commit without deadlock; both versions 2; distinct fractional ranks.",
   );
   console.log(
-    "PASS live Postgres: 20 separate connections; 20 concurrent writers observed blocked on sorted member streams / team row; numbers 1..20, no gaps or duplicates; 20 rows; counter 20.",
+    "PASS live Postgres: 20 separate connections; 20 concurrent writers observed waiting or settled; SQL timeouts roll back and retry; numbers 1..20, no gaps or duplicates; 20 rows; counter 20.",
   );
 } finally {
   await coordinator.query("ROLLBACK");

@@ -12,7 +12,7 @@ const faults = [
     file: "issues.server.ts",
     from: "sql`${team.issueSeq} + 1`",
     to: "sql`${team.issueSeq} + 2`",
-    reason: /AssertionError/,
+    reason: /AssertionError[^\n]*: issue numbers must be contiguous 1\.\.20/,
   },
   {
     name: "lock-order",
