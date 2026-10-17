@@ -168,7 +168,7 @@ import { startRequests } from "~/components/requests";
 import { readResult } from "~/components/requests/index.server";
 export const Route = createFileRoute("/proof/write")({server: {
   middleware: [startRequests.middleware], handlers: {
-    POST: async ({context}) => Response.json(readResult(await context.session.settle(incrementCounter, {input: {executionId: crypto.randomUUID()}}))),
+    POST: async ({context}) => Response.json(readResult(await context.session.settle(incrementCounter, {input: {executionId: crypto.randomUUID()}, signal: context.signal}))),
   },
 }});
 `,

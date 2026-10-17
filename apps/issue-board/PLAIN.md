@@ -42,14 +42,14 @@ Tests and generated files do not count.
     - `src/backend/teams.server.ts#readTeam.run`
     - `src/backend/teams.server.ts#saveTeam.run`
     - `src/demo/backend/auth.server.ts#currentUser.factory`
-    - `src/demo/backend/counter.server.ts#incrementCounter.run.callback1`
+    - `src/demo/backend/counter.server.ts#incrementCounter.run`
     - `src/demo/backend/profile.server.ts#notifyProfile.run`
     - `src/demo/backend/profile.server.ts#retryNotification.run.callback1`
     - `src/demo/backend/profile.server.ts#saveProfile.run.callback1`
     - `src/demo/backend/sync.server.ts#bootstrapPrivate.run.callback1`
     - `src/demo/backend/sync.server.ts#replayPrivate.run`
     - `src/demo/backend/sync.server.ts#replayPublic.run`
-    - `src/demo/backend/todos.server.ts#changeTodo.run.callback1`
+    - `src/demo/backend/todos.server.ts#changeTodo.run`
     - `src/demo/contracts/profile-contract.ts#module`
     - `src/demo/contracts/todos-contract.ts#module`
     - `src/frontend/auth-actions.ts#signIn.input`

@@ -30,7 +30,9 @@ try {
     "tinker",
     "package.json",
     "tsconfig.json",
-    "vite.config.ts",
+    ...(await readdir(app)).filter((name) =>
+      /^vite(?:\.[^.]+)?\.config\.(?:ts|mts|js|mjs)$/.test(name),
+    ),
   ]) {
     await cp(join(app, name), join(consumer, name), { recursive: true });
   }

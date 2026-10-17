@@ -91,8 +91,7 @@ That folder has a strict type project so the demo's sync bodies do not leak into
 The app's `PLAIN.md` has a cap of 17. Only named copied base entry functions have exceptions.
 Components and src have no function skips. Commands allow only the named server and browser mains.
 
-The lander runs mutation checks. Tooling keeps its 75 floor;
-the golden copied runtime has an 85 floor in the scaffold's `stryker.config.json`.
+The lander runs mutation checks. Tooling and the golden copied runtime each keep an 85 floor in their `stryker.config.json`.
 Local package packing and registry builds publish nothing.
 
 Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) for the main context,

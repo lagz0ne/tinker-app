@@ -26,6 +26,7 @@ import { readReceipt } from "@/transport/result.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+import { write } from "./write-boundary";
 
 const requestBindings = requestHostStop(new AbortController().signal);
 
@@ -73,10 +74,10 @@ test("concurrent public writes replay in commit order and a repeated receipt cha
     const second = { executionId: crypto.randomUUID() };
 
     await Promise.all([
-      root.run(incrementCounter, { input: first }),
-      root.run(incrementCounter, { input: second }),
+      write(root, incrementCounter, { input: first }),
+      write(root, incrementCounter, { input: second }),
     ]);
-    await root.run(incrementCounter, { input: first });
+    await write(root, incrementCounter, { input: first });
 
     const replay = await root.run(replayPublic, {
       input: { after: 0 },

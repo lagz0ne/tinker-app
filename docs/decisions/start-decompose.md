@@ -141,7 +141,7 @@ Command stopped; the host prints the error.
 
 ### Write calls
 
-New board multi-step writes use one owned child call with a real signal. The
+New board multi-step writes and the counter/todo writes use one owned child call with a real signal. The
 server function, route call, CLI batch, or worker dispatch owns that call. Steps
 only depend on its session transaction; they do not open sessions or commit.
 The request's streamed-body session is not the transaction owner.
@@ -162,7 +162,8 @@ board mail from the outbox; one alert send plus record/COMMIT must fit the host
 grace. Its send deadline is at most 3000 ms and destroys active owned sockets.
 SQL limits bound waits on a working database, not arbitrary network loss.
 
-The old counter, todos, and profile demos still await native transactions.
+Counter and todos now use the same owned transaction call. Old profile writes
+still await native transactions.
 They are migration work, not examples of the new session transaction. Auth's
 single pool hooks and its mail queue are also separate from the board outbox.
 See [the migration list](../../apps/issue-board/maintain/REFACTOR.md).

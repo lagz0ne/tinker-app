@@ -97,10 +97,11 @@ late throw, output flush, grace timeout, and dev socket close after cleanup.
 
 ## Files to upstream
 
-Outside src and cmds, the runtime and host changes are:
+The golden and minimal copies now include the shared runtime and host changes
+below. Board feature operations and its worker stay in the board app.
 
 - Auth/sync/mail hooks: upstream the direct auth dependencies on sync account
-  operations and mail.authWork, removal of hook tags and the saved-context bridge,
+  operations and mail.authMail, removal of hook tags and the saved-context bridge,
   and the stream file move into auth with its component dependency changes.
   apps/start-scaffold now has these direct hooks, sign-in repair and read-only
   page reads; its registry output is rebuilt from that source.
@@ -163,8 +164,8 @@ in local Mailpit. No page-render workaround or stream-creation exception remains
 
 The starter counter, todo, and profile POST functions also settle with signal
 (src/transport/counter.functions.ts:15, todos.functions.ts:23,
-profile.functions.ts:22 and :30). Those older operations still await their
-native transactions before returning. The profile's existing background
+profile.functions.ts:22 and :30). Counter and todos now use the session transaction; profile still awaits its
+native transaction before returning. The profile's existing background
 notification remains as shipped and commits its result separately; it is
 never started by a page render. Auth GET/POST dispatch at
 src/routes/api.auth.$.ts:14 and :18 also awaits its child call before returning
@@ -284,3 +285,37 @@ stays inline instead of keeping a one-caller helper. Its base copy retains
 checkClosed; the board shares mainErrorCode across three process commands.
 The new scaffold data migration uses its own generated schema snapshot.
 No worker was added to the scaffold; board alert delivery keeps its send budget.
+
+## Write scope and remaining migration
+
+Rule 5 applies to board issue/comment/team writes, CLI batches, delivery batches,
+and now the small counter/todo writes in both apps. Reads retain database. Each
+write call owns a child session and joins its transaction before returning.
+Counter and todo integration points remain src/transport/counter.functions.ts
+and todos.functions.ts. Their replay receipts, stream locks and event bodies
+stay the same; tests now use the same owned child-call boundary.
+
+The remaining legacy write list is short:
+
+| Operation         | Current owner                                                    | Migration work                                                                                                                               |
+| ----------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| saveProfile       | Awaited native transaction in src/demo/backend/profile.server.ts | Move the mail kickoff to an explicit call after the write session closes. Simply swapping dependencies would start mail before defer COMMIT. |
+| retryNotification | Awaited native transaction in that same file                     | Keep the stored retry record and its post-commit kickoff together with the profile change.                                                   |
+| notifyProfile     | Native transaction after SMTP, in that same file                 | Preserve the complete/partial result, replay guard and owned background-work join, or replace the flow with an outbox.                       |
+
+Those three operations are a coupled mail/retry flow, not a small dependency
+swap. They already await their native COMMIT before reporting saved work. They
+are never called by page loaders or render. The old profile notification row
+and auth's owned mail queue are not the board outbox. Auth's SDK-owned writes
+and idempotent account/notice pool calls remain intentional native boundaries.
+No afterCommit hook is added.
+
+Host config and startup slots are checked before ready. Request headers/stops,
+cross-root callbacks, and replaceable native/test IO are bound at their own
+boundary; they are not missing startup config. The five-rule contract in the
+app guides names those exceptions and keeps the plain-function cap at 17.
+
+The named-command gap from limit 25 is closed by 3f87b7c: Doctor and build
+checks validate optional workerEntry and cliEntry; gate:commands builds and
+host-checks each entry serially. A single vp build still builds the server;
+worker/CLI keep their explicit Vite configs and shared native host runners.

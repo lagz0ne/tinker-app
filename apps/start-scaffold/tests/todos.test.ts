@@ -14,6 +14,7 @@ import * as demo from "@/demo/index.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+import { write, settleWrite } from "./write-boundary";
 
 const requestBindings = requestHostStop(new AbortController().signal);
 
@@ -68,14 +69,14 @@ test("two real accounts can change only their own saved todos", async () => {
       }),
     );
 
-    await root.run(changeTodo, {
+    await write(root, changeTodo, {
       rawInput: {
         executionId: crypto.randomUUID(),
         change: { kind: "add", title: "  Write code  " },
       },
       tags: requestHeaders(ada),
     });
-    await root.run(changeTodo, {
+    await write(root, changeTodo, {
       input: { executionId: crypto.randomUUID(), change: { kind: "add", title: "Find a bug" } },
       tags: requestHeaders(grace),
     });
@@ -92,7 +93,7 @@ test("two real accounts can change only their own saved todos", async () => {
         { kind: "setDone", id, done: true } as const,
         { kind: "delete", id } as const,
       ]) {
-        const result = await root.settle(changeTodo, {
+        const result = await settleWrite(root, changeTodo, {
           input: { executionId: crypto.randomUUID(), change: input },
           tags: requestHeaders(grace),
         });
@@ -105,14 +106,14 @@ test("two real accounts can change only their own saved todos", async () => {
 
     expect(await root.run(listTodos, { tags: requestHeaders(ada) })).toEqual(adaRows);
 
-    await root.run(changeTodo, {
+    await write(root, changeTodo, {
       input: {
         executionId: crypto.randomUUID(),
         change: { kind: "setDone", id: adaTodo.id, done: true },
       },
       tags: requestHeaders(ada),
     });
-    await root.run(changeTodo, {
+    await write(root, changeTodo, {
       input: {
         executionId: crypto.randomUUID(),
         change: { kind: "setDone", id: adaTodo.id, done: true },
@@ -124,7 +125,7 @@ test("two real accounts can change only their own saved todos", async () => {
       { ...adaTodo, done: true },
     ]);
 
-    await root.run(changeTodo, {
+    await write(root, changeTodo, {
       input: { executionId: crypto.randomUUID(), change: { kind: "delete", id: adaTodo.id } },
       tags: requestHeaders(ada),
     });
@@ -150,7 +151,7 @@ test("signed-out todo reads and writes are refused", async () => {
   try {
     await root.run(migrate);
 
-    const result = await root.settle(changeTodo, {
+    const result = await settleWrite(root, changeTodo, {
       input: { executionId: crypto.randomUUID(), change: { kind: "add", title: "No account" } },
       tags: requestHeaders(new Headers()),
     });
@@ -180,7 +181,7 @@ test("todo changes reject empty titles, long titles, and caller-selected owners"
       { kind: "add", title: "x".repeat(201) },
       { kind: "add", title: "Valid title", ownerId: "someone-else" },
     ]) {
-      const result = await root.settle(changeTodo, {
+      const result = await settleWrite(root, changeTodo, {
         rawInput: { executionId: crypto.randomUUID(), change: rawInput },
       });
       if (result.status !== "failed") raise("BadInput", { reason: "expected input refusal" });

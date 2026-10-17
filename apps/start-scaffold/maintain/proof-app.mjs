@@ -31,7 +31,6 @@ export async function copyProofApp(source, target) {
     database
       .slice(0, start)
       .replace('import type { PoolClient } from "pg";\n', "")
-      .replace('import { leaseFrom } from "./lease.server";\n', "")
       .replace(
         'import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";',
         'import { drizzlePgCore, drizzleMigrator } from "./modules";',
@@ -44,8 +43,27 @@ export async function copyProofApp(source, target) {
       ]);
       const client = await PGlite.create();
       defer(() => client.close());
-      return Object.assign(drizzle({ client }), {
+      const handle = Object.assign(drizzle({ client }), {
         listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
+      });
+      let previous = Promise.resolve();
+      return Object.assign(handle, {
+        async checkout(guard?: Database.QueryGuard) {
+          const released = Promise.withResolvers<void>();
+          const connection = new Proxy(client, {
+            get(target, key) {
+              if (key === "release") return released.resolve;
+              if (key === "query") return target.query.bind(target);
+              return Reflect.get(target, key, target);
+            },
+          }) as typeof client & { release(broken?: boolean): void };
+          return leaseFrom(async () => {
+            const before = previous;
+            previous = released.promise;
+            await before;
+            return connection;
+          }, drizzle, guard);
+        },
       });
     },
   });\n` +

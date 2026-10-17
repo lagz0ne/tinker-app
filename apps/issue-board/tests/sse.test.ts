@@ -28,6 +28,7 @@ import * as demo from "@/demo/index.server";
 import { clientBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+import { write } from "./write-boundary";
 
 const requestBindings = requestHostStop(new AbortController().signal);
 
@@ -91,7 +92,7 @@ test("SQL notifications wake after commit, stay silent on rollback, and survive 
     if (refused.status !== "failed" || !isError(refused.error, "Rollback")) throw refused;
     expect(feed.revision()).toBe(before);
 
-    await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+    await write(root, incrementCounter, { input: { executionId: crypto.randomUUID() } });
     await feed.wait(subscription, before);
     expect(feed.revision()).toBeGreaterThan(before);
 
@@ -123,7 +124,7 @@ test("SSE replays the supplied cursor and a held reader receives the next commit
   await root.ready;
   try {
     await root.run(migrate);
-    await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+    await write(root, incrementCounter, { input: { executionId: crypto.randomUUID() } });
 
     const response = await root.run(openSync, {
       input: { cursor: { public: 0, private: null } },
@@ -136,7 +137,7 @@ test("SSE replays the supplied cursor and a held reader receives the next commit
     expect(new TextDecoder().decode((await reader.read()).value)).toBe(": connected\n\n");
 
     const waiting = reader.read();
-    await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+    await write(root, incrementCounter, { input: { executionId: crypto.randomUUID() } });
     expect(new TextDecoder().decode((await waiting).value)).toContain('"value":2');
 
     const idle = reader.read();

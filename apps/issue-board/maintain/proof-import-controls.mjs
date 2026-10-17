@@ -70,8 +70,8 @@ const faults = [
     name: "rollback",
     file: "tinker/components/database/database.server.ts",
     check: "rollback",
-    from: 'starting = lease.query("BEGIN")',
-    to: 'starting = lease.query("SELECT 1")',
+    from: '.query("BEGIN")',
+    to: '.query("SELECT 1")',
     reason: /AssertionError/,
   },
 ];

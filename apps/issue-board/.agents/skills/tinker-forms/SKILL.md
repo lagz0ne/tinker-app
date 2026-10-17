@@ -11,8 +11,8 @@ Do not copy a second version of those rules into feature code.
 
 Choose a tag for an injected value, data for visible state, a resource for an
 owned client/private work state, or an operation for an action. The examples
-are databaseUrl, profile/nameDraft, database/auth, and changeTodo. The old todo
-transaction is a migration example, not the new write-session pattern.
+are databaseUrl, profile/nameDraft, database/auth, and changeTodo. Counter and todo writes now use the session transaction; profile mail is the
+remaining coupled migration.
 
 For a new write, read database.transaction and the board's issues.change steps.
 Resolve transaction only in write steps; reads keep database. A native call

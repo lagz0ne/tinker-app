@@ -27,6 +27,7 @@ import { authClient, signIn } from "@/frontend/actions";
 import { clientBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+import { write } from "./write-boundary";
 
 const requestBindings = requestHostStop(new AbortController().signal);
 
@@ -61,7 +62,7 @@ test("a stream checks the session once at open, and a save does not check it aga
   await root.ready;
   try {
     await root.run(migrate);
-    await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+    await write(root, incrementCounter, { input: { executionId: crypto.randomUUID() } });
 
     const response = await root.run(openSync, { input: { cursor: { public: 0, private: null } } });
     const reader = response.getReader();
@@ -69,7 +70,7 @@ test("a stream checks the session once at open, and a save does not check it aga
     await reader.read();
 
     const waiting = reader.read();
-    await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+    await write(root, incrementCounter, { input: { executionId: crypto.randomUUID() } });
     await waiting;
 
     expect(root.spans().filter((span) => span.name === "sync.liveAccount")).toHaveLength(1);

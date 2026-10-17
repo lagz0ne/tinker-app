@@ -16,6 +16,8 @@ old host. See the [current authoring contract](https://github.com/lagz0ne/tinker
 - Auth directly depends on sync and mail; hook slots and the context bridge are
   removed. Streams are created at sign-up, repaired at sign-in, and backfilled.
   Page reads write no tables; the browser renews aged logins through explicit POST.
+- Counter and todo writes also use the owned session transaction. The profile
+  mail/retry flow remains an explicit migration; its native transactions are awaited.
 - Golden and minimal templates, registry output, and shared tests follow that
   pattern. Start add/update/check is planned; it is not an available command.
 

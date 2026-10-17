@@ -7,8 +7,8 @@ description: Add a feature from its table to its page.
 
 Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) for imports, ownership,
 input checks, and commit-before-success. Use the board's issue operations as
-the new session-transaction write example. Todos still has a native transaction;
-use it for the feature/data path, not for new transaction ownership.
+the new session-transaction write example. Counter and todos use the same session transaction and owned call boundary;
+their small write bodies are useful starting examples.
 
 Read this path in order:
 
