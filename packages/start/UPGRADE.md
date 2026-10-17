@@ -1,4 +1,43 @@
-# Move to copied Start components
+# Upgrade
+
+## 0.9.0
+
+Start 0.9.0 is released from `lagz0ne/tinker-app`, tag `start-v0.9.0`.
+The tag holds the Start tarball only.
+Core and React stay at 0.8.0, from the tinkered `start-v0.8.0` release:
+
+```json
+"@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
+"@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.9.0/tinker-start-0.9.0.tgz"
+```
+
+The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.9.0/apps/start-scaffold/public/r`.
+
+Three changes need an app edit:
+
+- Start runtime code is now app source in `tinker/base` and `tinker/components`.
+  `@tinker/start` keeps only build tooling, doctor, and the Node host.
+  Follow "Move to copied Start components" below.
+- Config is tags. Each component names typed config tags.
+  Only `cmds/server.ts` reads env and binds those tags.
+  A start extension names each missing required tag at boot.
+- `cmds/server.ts` exports one async `main`.
+  The host calls `main({ env, signal, stdout, stderr })` once, before it listens.
+  Main returns `{ fetch, closed }`.
+  Aborting `signal` closes the app root, then telemetry.
+  `closed` reports the app failure first, then the first teardown error.
+  Importing the command must open nothing.
+
+New, with no edit needed:
+
+- Doctor warns when a copied layer imports the wrong way.
+- Vite needs all three command paths: `cmds/server.ts`, `cmds/router.ts`, `cmds/start.ts`.
+- On a stop signal during startup, the prod host closes the app,
+  never listens, and exits 0.
+
+### Move to copied Start components
 
 `@tinker/start` now holds build tooling, doctor, and the Node host.
 It has no root, server, client, or testing runtime exports.

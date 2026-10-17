@@ -11,6 +11,6 @@
     "requires": "Install the shared demo, then bind the command slots and copy the demo shell/style shape by hand."
   },
   "registryDependencies": [
-    "https://raw.githubusercontent.com/lagz0ne/tinkered/start-v0.9.0/apps/start-scaffold/public/r/postgres-auth-mail-example.json"
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.9.0/apps/start-scaffold/public/r/postgres-auth-mail-example.json"
   ]
 }

@@ -134,7 +134,7 @@ async function releasePackage(path, packs, releaseVersion) {
 /** One release tag pins packages and registry links unless a local proof supplies paths. */
 async function registryRelease({ packs, url, version }) {
   version ??= JSON.parse(await readFile(join(root, "packages/start/package.json"), "utf8")).version;
-  url ??= `https://raw.githubusercontent.com/lagz0ne/tinkered/start-v${version}/apps/start-scaffold/public/r`;
+  url ??= `https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v${version}/apps/start-scaffold/public/r`;
   return { packs, url, version };
 }
 
