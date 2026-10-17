@@ -5,10 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
-const source = readFileSync(
-  new URL("../../../packages/start/lib/main-host.mjs", import.meta.url),
-  "utf8",
-);
+const source = readFileSync(new URL(import.meta.resolve("@tinker/start/main-host")), "utf8");
 
 const server = readFileSync(new URL("../cmds/server.ts", import.meta.url), "utf8");
 const directory = mkdtempSync(join(tmpdir(), "board-exit-controls-"));

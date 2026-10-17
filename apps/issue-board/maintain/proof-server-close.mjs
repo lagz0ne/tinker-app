@@ -6,11 +6,9 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { createServer } from "vite-plus";
 
 const { createMainHost } = await import(
-  pathToFileURL(
-    process.env.BOARD_EXIT_HOST_COPY
-      ? resolve(process.env.BOARD_EXIT_HOST_COPY)
-      : fileURLToPath(new URL("../../../packages/start/lib/main-host.mjs", import.meta.url)),
-  ).href
+  process.env.BOARD_EXIT_HOST_COPY
+    ? pathToFileURL(resolve(process.env.BOARD_EXIT_HOST_COPY)).href
+    : import.meta.resolve("@tinker/start/main-host")
 );
 
 const vite = await createServer({

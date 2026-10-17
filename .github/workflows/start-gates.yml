@@ -85,6 +85,7 @@ jobs:
           pnpm --dir apps/start-scaffold run registry:build
           node apps/start-scaffold/maintain/check-template.mjs
           node apps/start-scaffold/maintain/proof-registry.mjs
+          node apps/start-scaffold/maintain/proof-export.mjs
       - name: Live PostgreSQL and local Mailpit proofs and fault controls, serially
         working-directory: apps/issue-board
         run: |

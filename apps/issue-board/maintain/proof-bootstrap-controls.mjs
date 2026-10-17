@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const directory = resolve(".bench/bootstrap-controls");
 mkdirSync(directory, { recursive: true });
@@ -73,10 +74,9 @@ try {
     writeFileSync(copy, source.replaceAll(trial.from, trial.to));
 
     const run = spawnSync(
-      "pnpm",
+      process.execPath,
       [
-        "exec",
-        "vp",
+        fileURLToPath(new URL("./bin/vp", import.meta.resolve("vite-plus/package.json"))),
         "test",
         trial.test ?? "tests/bootstrap-read.test.ts",
         "--config",
@@ -90,6 +90,8 @@ try {
         timeout: 120000,
       },
     );
+
+    assert.equal(run.error, undefined, String(run.error));
 
     writeFileSync(resolve(directory, trial.name + ".log"), run.stdout + run.stderr);
 
