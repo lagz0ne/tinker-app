@@ -105,8 +105,8 @@ The prod host never listens after that signal and exits 0 for that stop reason.
 Any other start failure still exits with code 1, even if the host signal was aborted.
 A start error closes what started, writes cleanup errors to stderr, and rethrows the start error.
 The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
-The dev host owns startup sharing, retry after failure, and abort on HMR replacement.
-The dev host shares one startup promise and clears it on failure so the next request can retry.
+A command exit closes the dev server. Fix startup config, then restart `vp dev`.
+The dev host shares startup and closes on HMR replacement.
 It lists extensions and settings by hand, in the user's order.
 It imports each component's public index.
 There are no generated wiring files or role files.
@@ -135,7 +135,7 @@ An optional `fetch(request, next)` can wrap requests.
 The dev host closes on HMR replacement. The prod host closes on process shutdown.
 
 The default server main is the only server cmd exception.
-The cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; it stays untested glue on purpose.
+Commands keep env bindings inline. Tests cover input, startup, exit, and close.
 The browser main lives in `cmds/router.ts#getRouter`, an approved named cmd exception.
 It binds router options, extensions, and each sync reader tag.
 No app code may import a command file.

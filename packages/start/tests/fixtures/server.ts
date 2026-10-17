@@ -22,7 +22,7 @@ import {
 } from "~/components/telemetry/index.server";
 
 /** The host starts the server; importing this command opens nothing. */
-// oxlint-disable-next-line complexity -- Cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; deliberately untested glue.
+// oxlint-disable-next-line complexity -- Commands keep env bindings inline. Tests cover input, startup, exit, and close.
 export default async function main({
   env,
   signal,

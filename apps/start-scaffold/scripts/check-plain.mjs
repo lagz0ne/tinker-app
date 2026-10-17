@@ -1330,7 +1330,7 @@ const entryHelpers = {
     "devErrorPage",
   ],
   "cmds/server.ts": [
-    // Cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; deliberately untested glue.
+    // Commands keep env bindings inline. Tests cover input, startup, exit, and close.
     "main",
   ],
   "cmds/router.ts": [

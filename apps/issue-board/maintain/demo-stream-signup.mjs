@@ -59,9 +59,41 @@ try {
 
   browser("wait", "--text", "No teams yet. Make your first team.");
 
+  const aged = new Date(Date.now() + 3600000);
+  await db.query(
+    'UPDATE session SET "expiresAt"=$1, "updatedAt"=to_timestamp(0) WHERE "userId"=$2',
+    [aged, created.rows[0].id],
+  );
+
   browser("reload");
 
   browser("wait", "--text", "No teams yet. Make your first team.");
+
+  const deadline = AbortSignal.timeout(10000);
+  while (true) {
+    const renewed = await db.query('SELECT "expiresAt" FROM session WHERE "userId"=$1', [
+      created.rows[0].id,
+    ]);
+    if (renewed.rows[0].expiresAt > aged) break;
+    if (deadline.aborted) {
+      console.error(browser("errors"));
+      console.error(
+        browser("network", "requests")
+          .requests.filter((request) => request.url.endsWith("/api/auth/get-session"))
+          .map(({ method, status }) => ({ method, status })),
+      );
+      assert.fail("mounted browser session must renew an aged login");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  const refreshes = browser("network", "requests").requests.filter(
+    (request) => request.method === "POST" && request.url.endsWith("/api/auth/get-session"),
+  );
+  assert(
+    refreshes.some((request) => request.status === 200),
+    "the browser must send a successful refresh POST",
+  );
 
   assert.deepEqual(browser("errors").errors, []);
 
@@ -72,7 +104,7 @@ try {
   assert.equal(mail.messages.length, 1, "verification mail must stay in local Mailpit");
 
   console.log(
-    "PASS Lightpanda: sign-up creates one stream; first teams page and reload work; no page errors; one local Mailpit message.",
+    "PASS Lightpanda: sign-up creates one stream; first teams page works; aged login renews after reload; no page errors; one local Mailpit message.",
   );
 } finally {
   browser("close");

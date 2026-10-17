@@ -270,3 +270,9 @@ POST /api/auth/get-session remains available for refresh and expiry cleanup.
 Old and expired cookies are checked against all SQL writes, including live
 account checks and bootstrap. The legacy auth/profile mail paths remain as
 described above; the board outbox is not a claim about all demo mail.
+
+The page shell mounts Better Auth's browser session hook. It checks on mount,
+focus, and every five minutes while signed in. An aged session returns
+needsRefresh from the read-only auth GET; the SDK then sends the explicit
+POST /api/auth/get-session and stores its renewed cookie. Page account and
+bootstrap reads still disable refresh and write no tables.

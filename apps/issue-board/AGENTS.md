@@ -106,8 +106,8 @@ Startup config errors use 78; unexpected errors use 1 unless an earlier exit won
 An outer start catch calls exit(mainErrorCode(error), error), then returns a stopped result.
 It does not rethrow or print the same error; the host prints the reason.
 The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
-The dev host owns startup sharing, retry after failure, and abort on HMR replacement.
-The dev host shares one startup promise and clears it on failure so the next request can retry.
+A command exit closes the dev server. Fix startup config, then restart `vp dev`.
+The dev host shares startup and closes on HMR replacement.
 It lists extensions and settings by hand, in the user's order.
 It imports each component's public index.
 There are no generated wiring files or role files.

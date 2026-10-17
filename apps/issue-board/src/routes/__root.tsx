@@ -1,6 +1,9 @@
 import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { Suspense } from "react";
 
 import type { Sync } from "~/components/sync";
+
+import { AuthSession } from "@/frontend/auth-session";
 
 import style from "@/style.css?url";
 
@@ -17,7 +20,14 @@ export const Route = createRootRouteWithContext<{
     ],
     links: [{ rel: "stylesheet", href: style }],
   }),
-  component: () => <Outlet />,
+  component: () => (
+    <>
+      <Suspense fallback={null}>
+        <AuthSession />
+      </Suspense>
+      <Outlet />
+    </>
+  ),
   shellComponent: ({ children }) => (
     <html lang="en">
       <head>

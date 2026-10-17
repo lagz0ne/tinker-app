@@ -16,7 +16,21 @@ export const authClient = resource({
   depends: { auth: betterAuthReact },
   factory: async ({ auth }) => {
     const { createAuthClient } = auth;
-    return createAuthClient();
+    return createAuthClient({
+      sessionOptions: { refetchInterval: 300 },
+      fetchOptions: {
+        onRequest(request) {
+          if (
+            request.method !== "POST" ||
+            !new URL(request.url).pathname.endsWith("/get-session")
+          ) {
+            return;
+          }
+          request.headers.set("content-type", "application/json");
+          request.body = "{}";
+        },
+      },
+    });
   },
 });
 
