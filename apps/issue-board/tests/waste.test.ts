@@ -5,6 +5,7 @@ import { test, expect } from "vite-plus/test";
 
 import { authStartup } from "~/components/auth/index.server";
 import { authSettings } from "~/components/auth/index.server";
+import { openSync } from "~/components/auth/index.server";
 import { migrate, databaseUrl } from "~/components/database/index.server";
 import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
@@ -16,7 +17,6 @@ import { tabStop } from "~/components/sync/client/tab";
 import { snapshotSource } from "~/components/sync/functions";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 import { syncStartup } from "~/components/sync/slots";
-import { openSync } from "~/components/sync/stream.server";
 
 import { readAccount } from "@/demo/backend/auth.server";
 import { incrementCounter } from "@/demo/backend/counter.server";
@@ -25,7 +25,6 @@ import * as demo from "@/demo/index.server";
 import { authClient, signIn } from "@/frontend/actions";
 
 import { clientBindings } from "./presets";
-import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
@@ -54,7 +53,6 @@ test("a stream checks the session once at open, and a save does not check it aga
           requestStop(stop.signal),
           requestHeaders(new Headers()),
         ],
-        authBindings,
       ],
     ],
     presets: [proofDatabase, proofMail],
@@ -99,13 +97,13 @@ test("a signed-out private redirect loads one snapshot across separate renders",
   const page = createScope({
     signal: stop.signal,
     extensions: [syncStartup],
-    tags: [clientBindings, tabStop(stop.signal), authBindings],
+    tags: [clientBindings, tabStop(stop.signal)],
     presets: [source],
   });
   const redirected = createScope({
     signal: stop.signal,
     extensions: [syncStartup],
-    tags: [clientBindings, tabStop(stop.signal), authBindings],
+    tags: [clientBindings, tabStop(stop.signal)],
     presets: [source],
   });
 
@@ -132,7 +130,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   const server = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [requestBindings, [settings, authBindings]],
+    tags: [requestBindings, [settings]],
     presets: [proofDatabase, proofMail],
   });
   await server.ready;
@@ -141,7 +139,7 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   const browser = createScope({
     signal: stop.signal,
     extensions: [syncStartup],
-    tags: [clientBindings, tabStop(stop.signal), authBindings],
+    tags: [clientBindings, tabStop(stop.signal)],
     presets: [
       preset(authClient, async () =>
         createAuthClient({
@@ -216,14 +214,14 @@ test("a private route check clears cached records after another tab signs out", 
   const server = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [requestBindings, [settings, authBindings]],
+    tags: [requestBindings, [settings]],
     presets: [proofDatabase, proofMail],
   });
 
   const browser = createScope({
     signal: stop.signal,
     extensions: [syncStartup],
-    tags: [clientBindings, tabStop(stop.signal), authBindings],
+    tags: [clientBindings, tabStop(stop.signal)],
     presets: [
       preset(snapshotSource, () => ({
         async load() {

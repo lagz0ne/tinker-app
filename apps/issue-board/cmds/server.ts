@@ -4,13 +4,7 @@ import { defineMain, mainErrorCode, checkClosed } from "~/base/main";
 import { renderObservation } from "~/base/observe";
 import { observeServerPanics } from "~/base/panics.server";
 import { createServerHandler, stoppedFetch } from "~/base/server-entry";
-import {
-  authStartup,
-  authSettings,
-  sendAuthMail,
-  sessionDeleted,
-  userCreated,
-} from "~/components/auth/index.server";
+import { authStartup, authSettings } from "~/components/auth/index.server";
 import { databaseSetup, databaseUrl } from "~/components/database/index.server";
 import { abortReasons } from "~/components/errors";
 import * as mail from "~/components/mail/index.server";
@@ -20,8 +14,6 @@ import {
   syncSide,
   bootstrapSlot,
   readAccountSlot,
-  publishAccountNotice,
-  createAccountStream,
 } from "~/components/sync/index.server";
 import {
   telemetryExport,
@@ -79,13 +71,6 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
           syncSide("server"),
           bootstrapSlot(bootstrap),
           readAccountSlot(readAccount),
-          sendAuthMail((message, ctx) => ctx.resolve(mail.authMail).enqueue(message)),
-          userCreated((accountId, ctx) =>
-            ctx.run(createAccountStream, { rawInput: { accountId } }),
-          ),
-          sessionDeleted((accountId, ctx) =>
-            ctx.run(publishAccountNotice, { rawInput: { accountId } }),
-          ),
           env.PUBLIC_ORIGIN !== undefined &&
             env.AUTH_SECRET !== undefined &&
             authSettings({ origin: env.PUBLIC_ORIGIN, secret: env.AUTH_SECRET }),

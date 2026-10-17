@@ -1,13 +1,13 @@
 import { operation, resource } from "@tinker/core";
 
 import { database } from "~/components/database/index.server";
+import { authMail } from "~/components/mail/index.server";
 import { requestHeaders } from "~/components/requests/index.server";
+import { createAccountStream, publishAccountNotice } from "~/components/sync/index.server";
 
-import { authCalls } from "./calls.server";
 import { betterAuthModule, betterAuthDrizzle, betterAuthStart } from "./modules";
 import * as schema from "./schema.server";
-import { authSettings, authStartup } from "./settings.server";
-import { sendAuthMail, sessionDeleted, userCreated } from "./slots";
+import { authSettings } from "./settings.server";
 
 /**
  * The root tracks each mail action; auth callbacks return before delivery.
@@ -19,17 +19,15 @@ export const auth = resource({
   depends: {
     database,
     settings: authSettings,
-    calls: authCalls,
-    outside: authStartup,
-    send: sendAuthMail.required,
-    deleted: sessionDeleted.required,
-    created: userCreated.required,
+    send: authMail,
+    deleted: publishAccountNotice,
+    created: createAccountStream,
     auth: betterAuthModule,
     adapter: betterAuthDrizzle,
     start: betterAuthStart,
   },
   factory: async (
-    { database, settings, calls, outside, send, deleted, created, auth, adapter, start },
+    { database, settings, send, deleted, created, auth, adapter, start },
     { log },
   ) => {
     const { betterAuth } = auth;
@@ -44,7 +42,7 @@ export const auth = resource({
           create: {
             after: async ({ id }) => {
               try {
-                await calls.fire(created, id, outside);
+                await created.run({ input: { accountId: id } });
               } catch (error) {
                 log.error("auth.accountStreamFailed", { accountId: id, error: String(error) });
               }
@@ -53,24 +51,22 @@ export const auth = resource({
         },
         session: {
           create: {
-            after: ({ userId }) => calls.fire(created, userId, outside),
+            after: ({ userId }) => created.run({ input: { accountId: userId } }),
           },
           delete: {
-            after: ({ userId }) => calls.fire(deleted, userId, outside),
+            after: ({ userId }) => deleted.run({ rawInput: { accountId: userId } }),
           },
         },
       },
       emailAndPassword: {
         enabled: true,
-        sendResetPassword: async ({ user, url }) => {
-          calls.fire(send, { to: user.email, subject: "Reset your password", text: url }, outside);
-        },
+        sendResetPassword: async ({ user, url }) =>
+          send.enqueue({ to: user.email, subject: "Reset your password", text: url }),
       },
       emailVerification: {
         sendOnSignUp: true,
-        sendVerificationEmail: async ({ user, url }) => {
-          calls.fire(send, { to: user.email, subject: "Check your email", text: url }, outside);
-        },
+        sendVerificationEmail: async ({ user, url }) =>
+          send.enqueue({ to: user.email, subject: "Check your email", text: url }),
       },
       plugins: [tanstackStartCookies()],
     });

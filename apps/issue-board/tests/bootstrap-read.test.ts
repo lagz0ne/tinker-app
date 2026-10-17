@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
 
 import { createScope } from "@tinker/core";
+import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
-import { authStartup, authSettings, user, userCreated } from "~/components/auth/index.server";
+import { authStartup, authSettings, user } from "~/components/auth/index.server";
 import { database, databaseUrl, drizzleOrm, migrate } from "~/components/database/index.server";
 import { startRequests, backendStop } from "~/components/requests";
 import {
@@ -17,12 +18,12 @@ import { readAccount } from "@/demo/backend/auth.server";
 import { bootstrap } from "@/demo/backend/sync.server";
 
 import {
-  authBindings,
   proofDatabase,
   proofMail,
   handleAuth,
   requestHeaders,
   databaseQueries,
+  transactionQueries,
 } from "./presets";
 
 for (const missing of [null, "private", "public"] as const) {
@@ -31,7 +32,6 @@ for (const missing of [null, "private", "public"] as const) {
       extensions: [startRequests, authStartup],
       presets: [proofDatabase, proofMail],
       tags: [
-        authBindings,
         backendStop(new AbortController().signal),
         bootstrapSlot(bootstrap),
         readAccountSlot(readAccount),
@@ -134,9 +134,16 @@ test("sign-up waits for stream initialization before returning", async () => {
 
   const root = createScope({
     extensions: [startRequests, authStartup],
-    presets: [proofDatabase, proofMail],
+    presets: [
+      proofDatabase,
+      proofMail,
+      preset(createAccountStream, async (_deps, ctx) => {
+        entered.resolve(ctx.input.accountId);
+        await release.promise;
+        await createAccountStream.run({ database: await root.resolve(database) }, ctx);
+      }),
+    ],
     tags: [
-      authBindings,
       backendStop(new AbortController().signal),
       bootstrapSlot(bootstrap),
       readAccountSlot(readAccount),
@@ -144,13 +151,6 @@ test("sign-up waits for stream initialization before returning", async () => {
       authSettings({
         origin: "http://localhost:4318",
         secret: "test-secret-with-at-least-thirty-two-letters",
-      }),
-      userCreated(async (accountId, ctx) => {
-        entered.resolve(accountId);
-
-        await release.promise;
-
-        await ctx.run(createAccountStream, { rawInput: { accountId } });
       }),
     ],
   });
@@ -242,9 +242,18 @@ for (const failure of ["none", "user hook", "sign-in hook"] as const) {
     let refuse = failure === "user hook";
     const root = createScope({
       extensions: [startRequests, authStartup],
-      presets: [proofDatabase, proofMail],
+      presets: [
+        proofDatabase,
+        proofMail,
+        preset(createAccountStream, async (_deps, ctx) => {
+          if (refuse) {
+            refuse = false;
+            throw new Error("stream insert refused once");
+          }
+          await createAccountStream.run({ database: await root.resolve(database) }, ctx);
+        }),
+      ],
       tags: [
-        authBindings,
         backendStop(new AbortController().signal),
         bootstrapSlot(bootstrap),
         readAccountSlot(readAccount),
@@ -252,13 +261,6 @@ for (const failure of ["none", "user hook", "sign-in hook"] as const) {
         authSettings({
           origin: "http://localhost:4318",
           secret: "test-secret-with-at-least-thirty-two-letters",
-        }),
-        userCreated(async (accountId, ctx) => {
-          if (refuse) {
-            refuse = false;
-            throw new Error("stream insert refused once");
-          }
-          await ctx.run(createAccountStream, { rawInput: { accountId } });
         }),
       ],
     });
@@ -321,3 +323,71 @@ for (const failure of ["none", "user hook", "sign-in hook"] as const) {
     }
   });
 }
+
+test("direct auth hooks keep spans under scope resources and use the pool", async () => {
+  const root = createScope({
+    observe: { history: 200 },
+    extensions: [startRequests, authStartup],
+    presets: [proofDatabase, proofMail],
+    tags: [
+      backendStop(new AbortController().signal),
+      authSettings({
+        origin: "http://localhost:4318",
+        secret: "test-secret-with-at-least-thirty-two-letters",
+      }),
+    ],
+  });
+  await root.ready;
+  try {
+    await root.run(migrate);
+    transactionQueries.length = 0;
+    const signup = await root.settle(handleAuth, {
+      input: new Request("http://localhost:4318/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://localhost:4318" },
+        body: JSON.stringify({
+          name: "Trace",
+          email: "trace@example.test",
+          password: "safe-password-42",
+        }),
+      }),
+      signal: new AbortController().signal,
+    });
+    expect(signup.status).toBe("success");
+    if (signup.status !== "success") throw signup;
+    expect(signup.value.status).toBe(200);
+
+    const cookie = signup.value.headers
+      .getSetCookie()
+      .map((value) => value.split(";")[0])
+      .join("; ");
+    const signout = await root.settle(handleAuth, {
+      input: new Request("http://localhost:4318/api/auth/sign-out", {
+        method: "POST",
+        headers: { cookie, origin: "http://localhost:4318", "content-type": "application/json" },
+        body: "{}",
+      }),
+      signal: new AbortController().signal,
+    });
+    expect(signout.status).toBe("success");
+    if (signout.status !== "success") throw signout;
+    expect(signout.value.status).toBe(200);
+    expect(transactionQueries, "auth hooks must not resolve the session transaction").toEqual([]);
+  } finally {
+    await root.close({ graceful: true });
+  }
+
+  const spans = root.spans();
+  const owner = spans.find((span) => span.name === "auth")!;
+  const created = spans.filter((span) => span.name === "sync.accountCreated");
+  const deleted = spans.filter((span) => span.name === "sync.accountNotice");
+  expect(created).toHaveLength(2);
+  expect(deleted).toHaveLength(1);
+  expect([...created, ...deleted].every((span) => span.parentId === owner.id)).toBe(true);
+
+  const mailOwner = spans.find((span) => span.name === "mail.authWork")!;
+  expect(spans.find((span) => span.name === "sendMail")!.parentId).toBe(mailOwner.id);
+  console.log(
+    "TRACE auth -> sync.accountCreated (user + session), sync.accountNotice; mail.authWork -> sendMail",
+  );
+});

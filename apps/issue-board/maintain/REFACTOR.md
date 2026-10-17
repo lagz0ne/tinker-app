@@ -99,8 +99,8 @@ late throw, output flush, grace timeout, and dev socket close after cleanup.
 
 Outside src and cmds, the runtime and host changes are:
 
-- tinker/components/auth/{auth.server,settings.server,slots,index.server}.ts:
-  await and bind the required account-create hook, without importing sync.
+- tinker/components/auth/{auth.server,settings.server,index.server}.ts:
+  directly depend on sync account operations and the mail queue.
 - tinker/components/sync/{history.server,index.server}.ts: read-only cursors and
   an idempotent account-stream insert.
 - drizzle/20261016143346_account_streams: seed public and backfill accounts.
@@ -135,8 +135,8 @@ The existing vendor archive stays unchanged. No registry or Core file changes.
 
 No issue, comment, team, or import write runs in a page loader or render.
 Limit 37 is closed under Duke's at-sign-up rule. Better Auth's user create.after
-hook awaits the required userCreated tag. The server binds that tag to
-sync.accountCreated, which inserts the account stream with ON CONFLICT DO NOTHING.
+hook runs its sync.accountCreated dependency, which inserts the account stream
+with ON CONFLICT DO NOTHING.
 Better Auth queues its after-create hook after the user transaction, without
 passing its transaction client. The stream insert is therefore a separate,
 idempotent, awaited SQL call; it finishes before sign-up returns. It is not
@@ -232,8 +232,9 @@ not inside the unit test suite. Its paths use the module location, not the worki
 Run it with `node apps/issue-board/maintain/proof-server-close.mjs` from the repo root;
 then run `node apps/issue-board/maintain/proof-exit-controls.mjs` for its broken controls.
 
-Auth scopes must bind the required `userCreated` tag. The server binds it to
-`createAccountStream`. Both user creation and session creation await that
+Auth directly depends on `createAccountStream`, `publishAccountNotice`, and
+`authMail`; hook tags and the saved-context bridge are gone. Both user creation
+and session creation await that
 idempotent insert. A user-hook failure is logged as `auth.accountStreamFailed`;
 sign-in retries stream creation. A session-hook failure fails that sign-in,
 and the next sign-in can repair it. Page bootstrap stays read-only.

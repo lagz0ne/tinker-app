@@ -26,3 +26,8 @@ These rules cover slice 7 and its refactor. Review fixes keep Core unchanged.
 
 Duke's final performance direction assumes performance is the same. Keep the
 saved flamegraphs. Do not run new profiles or timing comparisons.
+
+Auth directly depends on sync account operations and the mail queue. Hooks keep
+operation spans under the scope-owned auth build span; mail sends stay under
+mail.authWork. There are no hook tags, saved context, or AsyncLocalStorage.
+The auth-bound stream file moves into auth so components do not form a loop.

@@ -17,8 +17,3 @@ export const betterAuthStart = resource({
   target: "scope",
   factory: () => import("better-auth/tanstack-start"),
 });
-
-export const asyncHooks = resource({
-  label: "module:node:async_hooks",
-  factory: () => import("node:async_hooks"),
-});

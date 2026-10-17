@@ -2,10 +2,8 @@ import type { PGliteInterface } from "@electric-sql/pglite";
 import { preset } from "@tinker/core/testing";
 import { afterAll, beforeAll } from "vite-plus/test";
 
-import { sendAuthMail, sessionDeleted, userCreated } from "~/components/auth/index.server";
 import { database, leaseFrom } from "~/components/database/index.server";
 import type { Database } from "~/components/database/index.server";
-import { authMail } from "~/components/mail/index.server";
 import { mail } from "~/components/mail/index.server";
 import {
   syncSide,
@@ -15,7 +13,6 @@ import {
   readSnapshotSlot,
   streamMessageSlot,
 } from "~/components/sync";
-import { publishAccountNotice, createAccountStream } from "~/components/sync/index.server";
 
 import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo/client";
 
@@ -107,13 +104,6 @@ export const proofMail = preset(mail, async (_deps, { log }) => ({
 
 export { requestHeaders } from "~/components/requests/index.server";
 export { handleAuth } from "~/components/auth/index.server";
-
-/** Test entries bind the same three hooks as the server command. */
-export const authBindings = [
-  userCreated((accountId, ctx) => ctx.run(createAccountStream, { rawInput: { accountId } })),
-  sendAuthMail((message, ctx) => ctx.resolve(authMail).enqueue(message)),
-  sessionDeleted((accountId, ctx) => ctx.run(publishAccountNotice, { rawInput: { accountId } })),
-];
 
 export const clientBindings = [
   syncSide("tab"),

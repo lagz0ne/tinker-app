@@ -1,14 +1,13 @@
 import { operation, resource } from "@tinker/core";
 import type { Operation } from "@tinker/core";
 
-import { liveAccount } from "~/components/auth/index.server";
 import { database, drizzleOrm } from "~/components/database/index.server";
 import { raise } from "~/components/errors";
 import { backendStop, requestStop, startRequests } from "~/components/requests";
-import { notifications } from "~/components/sync/notifications.server";
-import { streamCursor, streamRequest } from "~/components/sync/protocol";
-import type { Stream } from "~/components/sync/protocol";
-import { event } from "~/components/sync/schema";
+import { notifications, streamCursor, streamRequest, event } from "~/components/sync/index.server";
+import type { Stream } from "~/components/sync/index.server";
+
+import { liveAccount } from "./auth.server";
 
 /** One replay page owns its database read and encoded bytes. */
 const readFrame = operation({

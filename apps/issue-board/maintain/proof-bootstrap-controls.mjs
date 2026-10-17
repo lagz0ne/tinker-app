@@ -17,7 +17,7 @@ const cases = [
   {
     name: "sign-in-no-repair",
     target: "tinker/components/auth/auth.server.ts",
-    from: "after: ({ userId }) => calls.fire(created, userId, outside),",
+    from: "after: ({ userId }) => created.run({ input: { accountId: userId } }),",
     to: "after: async () => {},",
     reason: "sign-in must repair the missing stream",
   },

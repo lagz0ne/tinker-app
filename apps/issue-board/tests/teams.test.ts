@@ -13,7 +13,6 @@ import { bootstrap } from "@/demo/backend/sync.server";
 import { isError } from "@/demo/errors";
 
 import {
-  authBindings,
   handleAuth,
   proofDatabase,
   databaseQueries as queries,
@@ -35,7 +34,6 @@ beforeEach(async () => {
     presets: [proofDatabase, proofMail],
     tags: [
       backendStop(stop.signal),
-      authBindings,
       bootstrapSlot(bootstrap),
       readAccountSlot(readAccount),
       databaseUrl(new URL("postgres://proof")),

@@ -108,6 +108,9 @@ Tests and generated files do not count.
   - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
   - Callers:
     - `tinker/base/server-entry.ts#renderRequest.callback`
+    - `tinker/components/auth/stream.server.ts#lease.check`
+    - `tinker/components/auth/stream.server.ts#lease.open`
+    - `tinker/components/auth/stream.server.ts#lease.wait`
     - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
     - `tinker/components/requests/render-lifetime.server.ts#retain`
     - `tinker/components/requests/start.ts#middleware.callback`
@@ -119,9 +122,6 @@ Tests and generated files do not count.
     - `tinker/components/sync/history.server.ts#lock`
     - `tinker/components/sync/history.server.ts#read`
     - `tinker/components/sync/notifications.server.ts#subscribe`
-    - `tinker/components/sync/stream.server.ts#lease.check`
-    - `tinker/components/sync/stream.server.ts#lease.open`
-    - `tinker/components/sync/stream.server.ts#lease.wait`
     - `tinker/components/telemetry/ingest.server.ts#receiveTelemetry.run`
 
 - **tinker/components/errors/errors.ts#fail**

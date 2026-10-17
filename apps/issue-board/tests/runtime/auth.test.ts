@@ -3,13 +3,7 @@ import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
-import {
-  auth,
-  handleAuth,
-  sendAuthMail,
-  sessionDeleted,
-  userCreated,
-} from "~/components/auth/index.server";
+import { auth, handleAuth } from "~/components/auth/index.server";
 import { authSettings, authStartup } from "~/components/auth/index.server";
 import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
@@ -18,8 +12,6 @@ import { bindings } from "./fixtures/app.server";
 import type { AuthPort } from "./fixtures/app.server";
 
 const requestBindings = requestHostStop(new AbortController().signal);
-
-const hooks = [userCreated(async () => {}), sendAuthMail(() => {}), sessionDeleted(async () => {})];
 
 /** The same auth descriptor, typed only to the two methods the mount uses. */
 const authPort: Resource.Handle<Promise<AuthPort>> = auth;
@@ -103,10 +95,10 @@ test("with auth on, the app root does not start without the auth settings", asyn
 });
 
 test("with auth on and good keys, the app root starts with them read", async () => {
-  const root = createScope({ extensions: [authStartup], tags: [keys, hooks] });
+  const root = createScope({ extensions: [authStartup], tags: [keys] });
   await root.ready;
   expect(root.resolve(authSettings).origin).toBe("https://shop.example");
-  expect(root.resolve(authStartup).kind).toBe("start");
+  expect(root.resolve(authStartup)).toBeUndefined();
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
@@ -124,7 +116,7 @@ test("auth work shows on the trace as handleAuth; its settings are a tag", async
   const root = createScope({
     observe: { history: 20 },
     extensions: [authStartup, startRequests],
-    tags: [requestBindings, [bindings, keys, hooks]],
+    tags: [requestBindings, [bindings, keys]],
     presets: [proofAuth],
   });
   await root.ready;
@@ -132,12 +124,7 @@ test("auth work shows on the trace as handleAuth; its settings are a tag", async
     await root.settle(handleAuth, { input: new Request("http://app/api/auth/get-session") }),
   ).toMatchObject({ status: "success" });
   expect((await root.close({ graceful: true })).status).toBe("success");
-  expect(root.spans().map(({ name }) => name)).toEqual([
-    "module:node:async_hooks",
-    "auth.calls",
-    "auth",
-    "handleAuth",
-  ]);
+  expect(root.spans().map(({ name }) => name)).toEqual(["auth", "handleAuth"]);
 });
 
 test("missing app auth wiring reports the tag instead of importing the main", async () => {
@@ -155,17 +142,9 @@ test("missing app auth wiring reports the tag instead of importing the main", as
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("auth startup names each missing required hook before any auth client starts", async () => {
-  for (const [provided, missing] of [
-    [sessionDeleted(async () => {}), "auth.sendMail"],
-    [sendAuthMail(() => {}), "auth.sessionDeleted"],
-    [[sendAuthMail(() => {}), sessionDeleted(async () => {})], "auth.userCreated"],
-  ] as const) {
-    const root = createScope({ extensions: [authStartup], tags: [keys, provided] });
-    await expect(root.ready).rejects.toMatchObject({
-      kind: "MissingTag",
-      payload: { label: missing },
-    });
-    expect((await root.close({ graceful: true })).status).toBe("failed");
-  }
+test("auth startup needs only auth settings, with no hook bridge", async () => {
+  const root = createScope({ extensions: [authStartup], tags: keys, observe: { history: 20 } });
+  await root.ready;
+  expect(root.spans()).toEqual([]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
 });

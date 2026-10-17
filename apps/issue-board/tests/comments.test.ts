@@ -14,7 +14,7 @@ import { readAccount } from "@/demo/backend/auth.server";
 import { bootstrap, replayPrivate } from "@/demo/backend/sync.server";
 import { isError } from "@/demo/errors";
 
-import { authBindings, handleAuth, proofDatabase, proofMail, requestHeaders } from "./presets";
+import { handleAuth, proofDatabase, proofMail, requestHeaders } from "./presets";
 import { write, settleWrite } from "./write-boundary";
 
 let root: Scope.RootHandle;
@@ -42,7 +42,6 @@ beforeEach(async () => {
     presets: [proofDatabase, proofMail],
     tags: [
       backendStop(stop.signal),
-      authBindings,
       bootstrapSlot(bootstrap),
       readAccountSlot(readAccount),
       databaseUrl(new URL("postgres://proof")),

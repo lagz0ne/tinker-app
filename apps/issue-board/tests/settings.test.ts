@@ -2,12 +2,7 @@ import { createScope } from "@tinker/core";
 import type { Tag } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
-import {
-  authSettings,
-  authStartup,
-  sendAuthMail,
-  sessionDeleted,
-} from "~/components/auth/index.server";
+import { authSettings, authStartup } from "~/components/auth/index.server";
 import { databaseSetup, databaseUrl } from "~/components/database/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
 import { backendStop, startRequests } from "~/components/requests";
@@ -26,11 +21,7 @@ import { bootstrap, readAccount } from "@/demo/index.server";
 
 import { clientBindings } from "./presets";
 
-const authTags = [
-  authSettings({ origin: "http://proof.test", secret: "s".repeat(32) }),
-  sendAuthMail(() => {}),
-  sessionDeleted(async () => {}),
-];
+const authTags = [authSettings({ origin: "http://proof.test", secret: "s".repeat(32) })];
 
 const mailTags = [smtpUrl(new URL("smtp://proof.test:25")), mailFrom("proof@example.com")];
 

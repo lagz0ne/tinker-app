@@ -24,7 +24,6 @@ import { raise, isError } from "@/demo/errors";
 import * as demo from "@/demo/index.server";
 import { readReceipt } from "@/transport/result.server";
 
-import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
@@ -61,7 +60,7 @@ test("concurrent public writes replay in commit order and a repeated receipt cha
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -110,7 +109,7 @@ test("private cursors cannot read another real account's history", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -156,7 +155,7 @@ test("failed notification keeps the saved profile and retry replies before sendi
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -268,7 +267,7 @@ test("request exit cannot strand a profile that already committed", async () => 
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -336,7 +335,7 @@ test("profile replies finish while duplicate receipts share one pending notifica
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -389,7 +388,7 @@ test("profile replies finish while duplicate receipts share one pending notifica
 test("a bad stored event returns a stored data failure", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -417,7 +416,7 @@ test("a bad stored event returns a stored data failure", async () => {
 test("a bad stored event is not shown to the user as a rejected change", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -445,7 +444,7 @@ test("a bad stored event is not shown to the user as a rejected change", async (
 test("a bad stored notification result has no retry available", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;

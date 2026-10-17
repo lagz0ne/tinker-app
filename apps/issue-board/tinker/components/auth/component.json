@@ -1,3 +1,1 @@
-{
-  "requires": ["requests", "database"]
-}
+{ "requires": ["requests", "database", "sync", "mail", "errors"] }

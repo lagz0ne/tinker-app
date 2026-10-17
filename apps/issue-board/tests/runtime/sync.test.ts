@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
+import { eventStream, openSync } from "~/components/auth/index.server";
 import { backendStop as requestHostStop } from "~/components/requests";
 import { backendStop, requestStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
@@ -13,7 +14,6 @@ import { eventHistory } from "~/components/sync/history.server";
 import { accountNotice } from "~/components/sync/notice";
 import { notifications } from "~/components/sync/notifications.server";
 import { execution } from "~/components/sync/schema";
-import { eventStream, openSync } from "~/components/sync/stream.server";
 
 import { Route } from "@/routes/api.sync";
 
