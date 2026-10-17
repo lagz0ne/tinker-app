@@ -168,7 +168,10 @@ await test("the commit hook checks the staged registry", async (t) => {
         } else {
           await appendFile(join(scratch, path), "\n// Hook proof.\n");
         }
-        rejected(commit([path]));
+        // A source version below the planned host cannot lower the emitted pins.
+        // The hook must still run and confirm that the registry stays unchanged.
+        if (path === "packages/start/package.json") passed(commit([path]));
+        else rejected(commit([path]));
       });
     }
 

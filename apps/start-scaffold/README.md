@@ -139,9 +139,9 @@ Telemetry keeps safe defaults: logLevel info (30) and spanHistory 80.
 The server command accepts LOG_LEVEL as 20 (debug), 30 (info), 40 (warn), or 50 (error).
 A bad value fails start and names telemetry.logLevel.
 
-Auth keeps callbacks in their live call context. Its run hook resolves a lazy async
-resource, so all app-root runs return promises, even operations with sync bodies.
-Await app runs when authStartup is enabled.
+Auth imports sync and mail directly. authStartup checks authSettings before ready.
+See the [current auth contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md#auth-and-account-streams)
+for hook calls and their owner.
 Doctor checks component dependencies and imports from JSON; it does not read app config.
 A build starts no Postgres or SMTP client. A running demo needs both services.
 Its database startup applies the committed migrations.
