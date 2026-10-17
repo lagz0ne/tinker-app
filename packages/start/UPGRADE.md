@@ -1,5 +1,24 @@
 # Upgrade
 
+## Unreleased
+
+These changes are in current source, not the released 0.9.0 tarball. Use the
+matching tooling host with the copied runtime; do not mix the new main with the
+old host. See the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md).
+
+- Process commands use defineMain with env, args, signal, stdout, stderr, and exit.
+  Exit requests cleanup, keeps the first code, prints the reason once, and returns
+  a stopped result. A startup exit closes dev; fix config and restart vp dev.
+- Writes can use the lazy session transaction resource. Defer joins COMMIT or
+  ROLLBACK before the call returns. Idle handles end without checkout; ended
+  queries fail; failed transaction SQL destroys the connection. Typed SQL limits
+  bound lock and statement waits. Board alert sends have a total send budget.
+- Auth directly depends on sync and mail; hook slots and the context bridge are
+  removed. Streams are created at sign-up, repaired at sign-in, and backfilled.
+  Page reads write no tables; the browser renews aged logins through explicit POST.
+- Golden and minimal templates, registry output, and shared tests follow that
+  pattern. Start add/update/check is planned; it is not an available command.
+
 ## 0.9.0
 
 Start 0.9.0 is released from `lagz0ne/tinker-app`, tag `start-v0.9.0`.

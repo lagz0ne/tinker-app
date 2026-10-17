@@ -46,58 +46,10 @@ Only cmds/router.ts#getRouter and cmds/server.ts#main have approved cmd entry ex
 
 ## Command wiring
 
-Vite names all three commands, with no fixed entry mount or part switches:
-
-```ts
-tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts" });
-```
-
-The host calls `main({ env, signal, stdout, stderr })` once. The streams need only
-`write(chunk: string): unknown`. The command reads no process globals and loads no env file.
-It binds each value inline, for example `env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)`.
-Main returns `{ fetch, closed }`. Aborting the host signal closes app, then telemetry.
-The one `closed` promise reports app failure first, then the first teardown error.
-A signal during startup lets the start finish, then closes app before telemetry.
-The prod host never listens after that signal and exits 0 for that stop reason.
-Any other start failure still exits with code 1, even if the host signal was aborted.
-A start error closes what started, writes cleanup errors to stderr, and rethrows the start error.
-The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
-The dev host owns startup sharing, retry after failure, and abort on HMR replacement.
-An unset required value leaves its tag unbound; startup fails with MissingTag and the tag name.
-Importing it starts nothing. Its sole default export is async main.
-The prod host calls and awaits main once before listening; the dev host starts on its first fetch.
-Concurrent dev requests share one startup promise in the host. Failed startup clears it for retry.
-Main starts telemetry before the app, borrows its observer, and closes roots in reverse order.
-The full working pattern is in [cmds/server.ts](cmds/server.ts).
-These are the actual auth hooks and server slots inside its tags list:
-
-```ts
-bootstrapSlot(bootstrap),
-readAccountSlot(readAccount),
-sendAuthMail((message, ctx) => ctx.resolve(mail.authMail).enqueue(message)),
-sessionDeleted((accountId, ctx) => ctx.run(publishAccountNotice, { rawInput: { accountId } })),
-```
-
-Auth's two hooks are required and have no defaults.
-A missing hook fails `root.ready` with its name.
-Auth depends only on requests and database; the command joins mail and sync.
-
-The browser command opens telemetry, then its app root, and writes their close order.
-It lists syncStartup by name and binds syncSide("tab") and tabStop.
-It binds each app-owned reader and records descriptor:
-
-```ts
-recordsSlot(records),
-readBatchSlot(readBatch),
-readBootstrapSlot(readBootstrap),
-readSnapshotSlot(readSnapshot),
-streamMessageSlot(streamMessage),
-```
-
-Read [cmds/router.ts](cmds/router.ts) for the full pattern.
-The demo declares its sync bodies at `~/components/sync`.
-Every route and server function uses the same copied requests middleware.
-There are no generated wiring modules or role files.
+Follow the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) and the actual
+[server](cmds/server.ts) and [router](cmds/router.ts) commands. They show inline
+config bindings and the full owned close order. Auth imports its sync/mail work
+directly; sync's app readers and records still use required tags.
 
 ## Registry items and app ownership
 
@@ -164,17 +116,18 @@ For the untouched `app` shell, the exact edits are:
 +}>()({
 ```
 
-Keep the shell's HTML, `<Outlet />`, and stylesheet link.
+Keep the shell's HTML, `<Outlet />`, and stylesheet link. Mount the AuthSession
+shown in examples/demo-root.tsx so active logins renew through explicit POST.
 Copy `examples/demo-style.css` into `src/style.css`, keeping your own styles.
 Read the required tag list in `examples/demo.env.example`; bind each tag in cmds/server.ts.
 No installer writes `.env`, a secret, or these app edits.
 
 Components take typed tags. They never take env objects or convert env values.
-Each component checks its required tags in its one start extension.
+Startup extensions check host config and startup slots; request tags are bound per call.
 
 | Component   | Required tags                                                                                                |
 | ----------- | ------------------------------------------------------------------------------------------------------------ |
-| auth        | authSettings, sendAuthMail, sessionDeleted                                                                   |
+| auth        | authSettings                                                                                                 |
 | database    | databaseUrl                                                                                                  |
 | mail        | smtpUrl, mailFrom                                                                                            |
 | telemetry   | telemetrySide, telemetryService; tracesUrl and logsUrl on the server                                         |

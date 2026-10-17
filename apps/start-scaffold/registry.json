@@ -102,7 +102,7 @@
       ],
       "meta": {
         "ownership": "install-only",
-        "update": "Never re-apply app. Review copied component changes with shadcn add --diff."
+        "update": "Never re-apply app. Review copied source; planned Start updates stop on local edits."
       },
       "registryDependencies": [
         "@tinker-start/base",
@@ -230,7 +230,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
       }
     },
     {
@@ -284,7 +284,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
       },
       "devDependencies": ["@types/pg@^8.15.6"]
     },
@@ -426,7 +426,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
       }
     },
     {
@@ -459,7 +459,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
       }
     },
     {
@@ -501,7 +501,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
       }
     },
     {
@@ -544,7 +544,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
       },
       "devDependencies": ["@types/nodemailer@^7.0.11"]
     },
@@ -622,7 +622,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
       }
     },
     {
@@ -736,7 +736,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
       }
     },
     {
@@ -817,7 +817,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review with shadcn add --diff. An update replaces the component whole; merge src edits by hand."
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
       }
     },
     {

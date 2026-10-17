@@ -5,68 +5,26 @@ description: Choose mutations and sync for saved state.
 
 # Saved changes and waits
 
-Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
+Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) for owned calls, auth,
+stream creation, and transactions. Use sync for committed shared state; keep
+drafts and view choices in data. Read-only page/bootstrap calls never write.
 
-Use this when adding a save or a shared view.
-A mutation asks the server to change saved state.
-Sync carries that saved change to every allowed view.
-A draft or a local view setting needs only local data.
-A read with no shared saved state can use a read operation.
+Read saveName in src/frontend/profile-actions.ts. It makes an execution ID with
+ctx.random.uuid and registers sync.execute before sending the native server
+function. Pass the native send function and its plain data record directly.
+Do not wrap it in a signal-taking helper. Saved events update records; a final
+result ends the wait. Do not patch saved records from a command receipt.
 
-See `saveName` in `src/frontend/auth-actions.ts`.
-It makes an execution ID with `ctx.random.uuid()`.
-`sync.execute` registers the wait before sending.
-Pass the native send function with its data record:
+A lost reply retries the same execution ID. A separate mail retry uses a new
+ID. Results distinguish a complete save, a saved value with failed required
+mail work, and a failed save. The profile mail demo is a legacy flow; new board
+mail uses an outbox row in the write transaction.
 
-```ts
-const executionId = ctx.random.uuid();
-const completed = await sync.execute(
-  executionId,
-  {
-    send: updateProfile,
-    data: { executionId, profile: ctx.input },
-  },
-  ctx.signal,
-);
-```
+Sign-in holds reconnects with snapshotLoader.beginAccountChange, registers
+endAccountChange in defer, leaves sync, then awaits completeAccountChange before
+releasing the hold. Account exit cancels waits and ignores old replies.
+The page shell's AuthSession keeps active logins fresh through explicit POST;
+that does not move a write back into bootstrap.
 
-Do not add a signal-taking helper around the native send.
-The server returns that ID as its receipt.
-Saved events update data, then the final result ends the wait.
-Remote events update data without a local wait.
-Never patch saved records from the mutation receipt.
-
-Results describe the operation's required work:
-
-- Complete: all required work finished.
-  Todos finish at commit.
-- Partial: some required work finished.
-  Profile commit passed but mail failed.
-  Keep the saved name usable and offer mail retry.
-- Failed: required work failed before a usable save.
-  Show the failure and keep the old saved record.
-
-See `src/demo/contracts/sync.ts` for the exact bodies.
-Retry uses the same execution ID for a lost reply.
-Mail retry uses a new ID and keeps the old profile save.
-Account exit cancels waits and ignores old responses.
-Keep drafts apart from saved records.
-
-Every sign-in action must hold reconnects during auth.
-Depend on `snapshotLoader` from
-`~/components/sync` as `snapshots`.
-Follow `signIn` in `src/frontend/auth-actions.ts`:
-
-```ts
-const change = snapshots.beginAccountChange();
-ctx.defer(() => snapshots.endAccountChange(change));
-sync.leave();
-```
-
-After auth succeeds, apply its snapshot before releasing:
-
-```ts
-await snapshots.completeAccountChange(ctx.signal, change);
-```
-
-Skipping this hold can load the snapshot twice.
+Read src/demo/contracts/sync.ts for bodies and tests/sync.test.ts for the public
+result. Stream/account checks use auth's public server entry.

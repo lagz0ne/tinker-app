@@ -74,73 +74,12 @@ The copied base entries live in `tinker/base/`.
 The package `@tinker/start` holds only build tools, doctor, and the host.
 Keep feature units in app files.
 
-## The app server entry
+## Current contract
 
-[cmds/server.ts](cmds/server.ts) owns the server roots.
-The app names it in `vite.config.ts`:
-
-```ts
-tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts" });
-```
-
-The app's tsconfig includes `cmds` and `tinker`.
-`@/*` names src; `~/*` names the committed tinker folder.
-Components have component.json and public indexes.
-Components never import src or cmds.
-Imports of another component need a direct requires entry.
-Src imports components only through their public indexes.
-There is no default server entry.
-Prepare and doctor name a missing entry and show starter code.
-They never write an entry for the app.
-
-Importing the server command starts nothing. It exports its async main through defineMain.
-The prod host calls main once before listening. The dev host starts on its first fetch.
-The host calls `main({ env, args, signal, stdout, stderr, exit })` once. The streams need only
-`write(chunk: string): unknown`. The command reads no process globals and loads no env file.
-It binds each value inline, for example `env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)`.
-Main returns `{ fetch, closed }`. Aborting the host signal closes app, then telemetry.
-The one `closed` promise reports app failure first, then the first teardown error.
-A signal during startup lets the start finish, then closes app before telemetry.
-The prod host never listens after that signal. The first exit code wins; SIGINT is 130 and SIGTERM is 143.
-Startup config errors use 78; unexpected errors use 1 unless an earlier exit won.
-An outer start catch calls exit(mainErrorCode(error), error), then returns a stopped result.
-It does not rethrow or print the same error; the host prints the reason.
-The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
-A command exit closes the dev server. Fix startup config, then restart `vp dev`.
-The dev host shares startup and closes on HMR replacement.
-It lists extensions and settings by hand, in the user's order.
-It imports each component's public index.
-There are no generated wiring files or role files.
-Import createScope from @tinker/core.
-Main keeps local state and close callbacks inline. checkClosed checks root results.
-`server-entry.ts` renders over the supplied app handle.
-`panics.server.ts` reports process failures without wrapping the handle.
-`router-entry.tsx` loads the route tree and binds native views; the browser command owns both roots.
-`cmds/start.ts` lists CSRF, requests, then app middleware. The base caches its native Start options.
-The command binds the renderObservation tag from `base/observe.ts`.
-Each server render reads that tag from its request root.
-Only the command retains roots and stop controllers. No close helper borrows a scope.
-Helpers keep only repeated code; the main keeps startup steps.
-Commands sit directly under cmds; nested command files fail the checks.
-Src and components never import tinker/base or cmds.
-The requests component owns backendStop and the request middleware.
-Copied base code owns only entry, close, panic, and observation glue.
-Commands import only ~/base, ~/components, @/, and @tinker/core.
-Bind one tag per app slot. Never re-export app wiring from a command.
-The app writes the close order itself: app, then telemetry.
-A close error calls exit(1, error) after both roots end; main still returns its closed promise.
-
-The server adapter receives `requestContext`.
-Start borrows the context. The command binds the render observer tag.
-An optional `fetch(request, next)` can wrap requests.
-The dev host closes on HMR replacement. The prod host closes on process shutdown.
-
-Server, worker, and CLI process mains use defineMain and the same host contract.
-Commands keep wiring inline. Their input, startup, exit, and close contracts are tested.
-The browser main lives in `cmds/router.ts#getRouter`, an approved named cmd exception.
-It binds router options, extensions, and each sync reader tag.
-No app code may import a command file.
-Commands may import app code and component public entries.
+Read the [current Start contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) for commands, config, imports,
+owned calls, auth, and copied updates. It includes the full defineMain context
+and clean exit contract. A command exit closes the dev server; fix startup
+config and restart `vp dev`. Released 0.9.0 behavior is kept in UPGRADE.md.
 
 ## App skills
 
