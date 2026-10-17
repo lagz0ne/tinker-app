@@ -33,6 +33,10 @@ export async function copyTemplates(out) {
 async function copyDemoFiles(target) {
   for (const path of [
     "tests",
+    "maintain/proof-server-close.mjs",
+    "maintain/proof-exit-controls.mjs",
+    "maintain/proof-bootstrap-controls.mjs",
+    "maintain/proof-fault.mjs",
     "scripts/check-plain.mjs",
     "scripts/check-schema.mjs",
     "scripts/setup.mjs",

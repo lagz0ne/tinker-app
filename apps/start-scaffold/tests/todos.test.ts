@@ -12,7 +12,6 @@ import { listTodos, changeTodo } from "@/demo/backend/todos.server";
 import { raise, isError } from "@/demo/errors";
 import * as demo from "@/demo/index.server";
 
-import { authBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
@@ -49,7 +48,7 @@ test("two real accounts can change only their own saved todos", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;
@@ -143,7 +142,7 @@ test("signed-out todo reads and writes are refused", async () => {
   const root = createScope({
     extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     presets: [proofDatabase, proofMail],
     observe: { history: 80 },
   });
@@ -170,7 +169,7 @@ test("signed-out todo reads and writes are refused", async () => {
 test("todo changes reject empty titles, long titles, and caller-selected owners", async () => {
   const stop = new AbortController();
   const root = createScope({
-    tags: [requestBindings, [tags, authBindings]],
+    tags: [requestBindings, tags],
     extensions: [startRequests, authStartup],
     signal: stop.signal,
   });

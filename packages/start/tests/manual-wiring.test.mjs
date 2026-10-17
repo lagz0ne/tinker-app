@@ -26,7 +26,7 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
       ]),
     ),
     ...Object.fromEntries(
-      ["requests", "health", "http", "database", "auth", "telemetry"].flatMap((component) =>
+      ["requests", "health", "http", "database", "telemetry"].flatMap((component) =>
         readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
           (file) => [
             `tinker/components/${component}/${file}`,
@@ -40,7 +40,7 @@ test("prepare writes glue only and leaves component graph checks to doctor", () 
     ),
     "cmds/server.ts": entry,
     ...Object.fromEntries(
-      ["panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map((file) => [
+      ["main.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map((file) => [
         `tinker/base/${file}`,
         readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
       ]),
@@ -70,7 +70,7 @@ test("a copied component stays unconfigured until the app binds its required tag
       ]),
     ),
     ...Object.fromEntries(
-      ["requests", "health", "http", "database", "auth", "telemetry"].flatMap((component) =>
+      ["requests", "health", "http", "database", "telemetry"].flatMap((component) =>
         readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
           (file) => [
             `tinker/components/${component}/${file}`,
@@ -84,7 +84,7 @@ test("a copied component stays unconfigured until the app binds its required tag
     ),
     "cmds/server.ts": entry,
     ...Object.fromEntries(
-      ["panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map((file) => [
+      ["main.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map((file) => [
         `tinker/base/${file}`,
         readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
       ]),

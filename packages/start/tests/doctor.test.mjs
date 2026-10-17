@@ -1,3 +1,6 @@
+import { rmSync } from "node:fs";
+import { join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
 
 import { imports } from "../lib/checks/imports.mjs";
@@ -176,6 +179,8 @@ for (const name of ["~/components/postgres", "~/components/mail/../postgres"]) {
       "tinker/components/postgres/component.json": '{"requires":[]}',
       "tinker/components/postgres/index.ts": "export const db = 1;",
     });
+
+    rmSync(join(root, "tinker/components/mail/component.json"));
 
     const checked = doctor(root, false);
 

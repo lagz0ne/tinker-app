@@ -102,8 +102,8 @@ Outside src and cmds, the runtime and host changes are:
 - Auth/sync/mail hooks: upstream the direct auth dependencies on sync account
   operations and mail.authWork, removal of hook tags and the saved-context bridge,
   and the stream file move into auth with its component dependency changes.
-  apps/start-scaffold still ships the old bridge and tags; update its source
-  and registry copies when upstreaming.
+  apps/start-scaffold now has these direct hooks, sign-in repair and read-only
+  page reads; its registry output is rebuilt from that source.
 - tinker/components/sync/{history.server,index.server}.ts: read-only cursors and
   an idempotent account-stream insert.
 - drizzle/20261016143346_account_streams: seed public and backfill accounts.
@@ -132,7 +132,8 @@ App-only support changes outside src and cmds are the serial test dispatch and
 presets, affected feature tests, transaction tests, PLAIN.md, IMPORT.md, MAIL.md,
 and the maintain hosts, demo, proof scripts, scratch transforms, CPU profile capture and SVG rendering,
 and trace capture. The final report lists every changed path with diff counts.
-The existing vendor archive stays unchanged. No registry or Core file changes.
+The existing vendor archive and Core stay unchanged. Registry output is rebuilt
+from the scaffold source.
 
 ## Streamed page audit
 
@@ -276,3 +277,10 @@ focus, and every five minutes while signed in. An aged session returns
 needsRefresh from the read-only auth GET; the SDK then sends the explicit
 POST /api/auth/get-session and stores its renewed cookie. Page account and
 bootstrap reads still disable refresh and write no tables.
+
+The golden and minimal apps now share defineMain, exit, checkClosed and the
+new host. The golden app has one process main, so its startup code mapping
+stays inline instead of keeping a one-caller helper. Its base copy retains
+checkClosed; the board shares mainErrorCode across three process commands.
+The new scaffold data migration uses its own generated schema snapshot.
+No worker was added to the scaffold; board alert delivery keeps its send budget.

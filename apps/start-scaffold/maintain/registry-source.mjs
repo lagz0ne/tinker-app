@@ -174,11 +174,11 @@ export async function registryItems(options = {}) {
   minimal.name = "tinker-app";
 
   const tasks = Object.keys(full.scripts).filter(
-    (name) => name.startsWith("test:") && name !== "test:schema",
+    (name) => name.startsWith("test:") && !["test:schema", "test:proofs"].includes(name),
   );
   for (const name of ["registry:build", "check:commands", ...tasks]) delete full.scripts[name];
   full.scripts.check =
-    "vp check && vp run typecheck && vp run test && vp run check:plain && vp run test:schema && vp run doctor";
+    "vp check && vp run typecheck && vp run test && vp run test:proofs && vp run check:plain && vp run test:schema && vp run doctor";
 
   const packages = { "app.package.json": minimal, "starter.package.json": full };
   const items = [];

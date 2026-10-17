@@ -183,6 +183,10 @@ export const Route = createFileRoute("/proof/write")({server: {
     const stop = new AbortController();
     const app = await built.default({
       env: process.env,
+      args: [],
+      exit(_code, reason) {
+        stop.abort(reason);
+      },
       signal: stop.signal,
       stdout: process.stdout,
       stderr: process.stderr,

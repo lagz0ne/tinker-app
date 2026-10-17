@@ -96,7 +96,9 @@ for (const refuse of [false, true]) {
         },
       );
     }
-    expect(options).toEqual([{ connectionString: "postgres://u:p@db.test/app" }]);
+    expect(options).toEqual([
+      { connectionString: "postgres://u:p@db.test/app", connectionTimeoutMillis: 5000 },
+    ]);
     expect(queries).toEqual(
       refuse ? ["LISTEN start_sync"] : ["LISTEN start_sync", "LISTEN start_sync"],
     );
@@ -119,6 +121,6 @@ test("database setup runs the real migrations before ready resolves", async () =
   const rows = await db.execute(
     sql`select count(*)::int as count from drizzle.__drizzle_migrations`,
   );
-  expect(rows).toMatchObject({ rows: [{ count: 5 }] });
+  expect(rows).toMatchObject({ rows: [{ count: 6 }] });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });

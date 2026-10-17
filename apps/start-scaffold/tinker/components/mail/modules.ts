@@ -5,3 +5,10 @@ export const smtp = resource({
   target: "scope",
   factory: () => import("nodemailer"),
 });
+
+/** SMTP owns these sockets so a total deadline can destroy an active send. */
+export const smtpNet = resource({
+  label: "module:node:net",
+  target: "scope",
+  factory: () => import("node:net"),
+});

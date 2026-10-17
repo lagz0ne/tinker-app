@@ -117,12 +117,14 @@ for (const app of ["start-scaffold", "start-min"]) {
 
     expect(body.map((node) => node.type)).toEqual(["ExportDefaultDeclaration"]);
     expect(body[0].declaration).toMatchObject({
-      type: "FunctionDeclaration",
-      id: { name: "main" },
-      async: true,
+      type: "CallExpression",
+      callee: { type: "Identifier", name: "defineMain" },
+      arguments: [{ type: "ArrowFunctionExpression", async: true }],
     });
     expect(readFileSync(file, "utf8")).not.toContain("import.meta.hot");
-    expect(readFileSync(file, "utf8")).not.toMatch(/\blet\b/);
+    expect(
+      body[0].declaration.arguments[0].params[0].properties.map((property) => property.key.name),
+    ).toEqual(["env", "args", "signal", "stdout", "stderr", "exit"]);
     expect(readFileSync(file, "utf8")).not.toMatch(/process\.|loadEnvFile|\bonce\s*\(/);
   });
 }

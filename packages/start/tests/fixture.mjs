@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 import { onTestFinished } from "vite-plus/test";
 
@@ -50,7 +50,7 @@ export function goodApp(files = {}) {
     "tsconfig.json": JSON.stringify({ extends: "./.tinker/tsconfig.json" }),
     ".gitignore": ".tinker/\n.tanstack/\n",
     ...Object.fromEntries(
-      ["panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map((file) => [
+      ["main.ts", "panics.server.ts", "server-entry.ts", "panics.tsx", "observe.ts"].map((file) => [
         `tinker/base/${file}`,
         readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
       ]),
@@ -65,16 +65,19 @@ export function goodApp(files = {}) {
       ]),
     ),
     ...Object.fromEntries(
-      ["requests", "health", "http", "database", "auth", "telemetry"].flatMap((component) =>
-        readdirSync(join(baseDir, "../../apps/start-scaffold/tinker/components", component)).map(
-          (file) => [
-            `tinker/components/${component}/${file}`,
-            readFileSync(
-              join(baseDir, "../../apps/start-scaffold/tinker/components", component, file),
-              "utf8",
-            ),
-          ],
-        ),
+      ["requests", "health", "http", "database", "auth", "telemetry", "sync", "mail"].flatMap(
+        (component) => {
+          const folder = join(baseDir, "../../apps/start-scaffold/tinker/components", component);
+          return readdirSync(folder, { withFileTypes: true, recursive: true })
+            .filter((entry) => entry.isFile())
+            .map((entry) => {
+              const file = join(entry.parentPath, entry.name);
+              return [
+                `tinker/components/${component}/${relative(folder, file)}`,
+                readFileSync(file, "utf8"),
+              ];
+            });
+        },
       ),
     ),
     "cmds/server.ts": readFileSync(join(baseDir, "tests/fixtures/server.ts"), "utf8"),

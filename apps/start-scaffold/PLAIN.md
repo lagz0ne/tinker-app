@@ -5,12 +5,6 @@ Callers include direct calls and typed callback registrations.
 Repeated calls by one caller count once; self-calls do not count.
 Tests and generated files do not count.
 
-- **cmds/server.ts#ended**
-  - `result`: `Scope.Result`. From a root's closed promise; why: report its first failure after cleanup.
-  - Callers:
-    - `cmds/server.ts#closed.closeRoots`
-    - `cmds/server.ts#main`
-
 - **src/demo/contracts/commands.ts#readProfileCommand**
   - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.
   - Callers:
@@ -79,11 +73,20 @@ Tests and generated files do not count.
     - `src/transport/profile.functions.ts#updateProfile.callback`
     - `src/transport/todos.functions.ts#updateTodo.callback`
 
+- **tinker/base/main.ts#checkClosed**
+  - `result`: `Scope.Result`. From a closed root; why: surface work and cleanup errors before exit.
+  - Callers:
+    - `cmds/server.ts#closed.closeRoots`
+    - `cmds/server.ts#module.callback1`
+
 - **tinker/components/errors/errors.ts#raise**
   - `kind`: `N`. From a failed base action; why: choose the managed error.
   - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
   - Callers:
     - `tinker/base/server-entry.ts#renderRequest.callback`
+    - `tinker/components/auth/stream.server.ts#lease.check`
+    - `tinker/components/auth/stream.server.ts#lease.open`
+    - `tinker/components/auth/stream.server.ts#lease.wait`
     - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
     - `tinker/components/requests/render-lifetime.server.ts#retain`
     - `tinker/components/requests/start.ts#middleware.callback`
@@ -93,16 +96,17 @@ Tests and generated files do not count.
     - `tinker/components/sync/history.server.ts#append`
     - `tinker/components/sync/history.server.ts#find`
     - `tinker/components/sync/history.server.ts#lock`
+    - `tinker/components/sync/history.server.ts#read`
     - `tinker/components/sync/notifications.server.ts#subscribe`
-    - `tinker/components/sync/stream.server.ts#lease.check`
-    - `tinker/components/sync/stream.server.ts#lease.open`
-    - `tinker/components/sync/stream.server.ts#lease.wait`
     - `tinker/components/telemetry/ingest.server.ts#receiveTelemetry.run`
 
 - **tinker/components/errors/errors.ts#fail**
   - `kind`: `N`. From a failed base action; why: choose the managed error.
   - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
   - Callers:
+    - `tinker/components/database/database.server.ts#lease.begin`
+    - `tinker/components/database/database.server.ts#lease.check`
+    - `tinker/components/database/database.server.ts#tx.transaction`
     - `tinker/components/errors/errors.ts#raise`
     - `tinker/components/requests/result.server.ts#readResult`
     - `tinker/components/sync/client/sync.ts#client.leave`

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import {
   cpSync,
   existsSync,
@@ -49,8 +50,8 @@ try {
       "  probe.toolsClosed = tools.closed; probe.abort = () => stop.app.abort(abortReasons.closed);\n  await tools.ready;",
     )
     .replace(
-      "    const closed = app.closed.then",
-      "    probe.appClosed = app.closed;\n    const closed = app.closed.then",
+      /(\s+)const closed = app.closed/,
+      "$1probe.appClosed = app.closed;$1const closed = app.closed",
     )
     .replace("    void closed.catch", "    probe.closed = closed;\n    void closed.catch")}`;
   const routerFile = join(
@@ -81,16 +82,18 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
     server: { port: 0, watch: { usePolling: true, interval: 50 } },
   });
   await vite.listen();
-  const address = `http://127.0.0.1:${vite.httpServer.address().port}/scope-proof`;
-  const imported = await vite.environments.ssr.runner.import(entry);
+  let address = `http://127.0.0.1:${vite.httpServer.address().port}/scope-proof`;
+  await vite.environments.ssr.runner.import(entry);
   assert.equal(globalThis.__entryProof.starts, 0, "dev import starts nothing");
   if (existsSync(join(fixture, "tinker/components/mail/component.json"))) {
     const from = process.env.SMTP_FROM;
     delete process.env.SMTP_FROM;
     try {
+      const stopped = once(vite.httpServer, "close", { signal: AbortSignal.timeout(10000) });
       const refused = await fetch(address);
-      assert.equal(refused.status, 500, "the first request reports startup failure");
-      assert.ok((await refused.text()).includes("MissingTag"));
+      assert.equal(refused.status, 503, "startup exit returns the stopped response");
+      assert.ok((await refused.text()).includes("Command stopped"));
+      await stopped;
 
       const failed = globalThis.__entryProof;
       const [appEnd, toolsEnd] = await Promise.all([failed.appClosed, failed.toolsClosed]);
@@ -100,12 +103,22 @@ ${routerSource.replace("extensions: [routerScope", "extensions: [routerScope, re
       if (from !== undefined) process.env.SMTP_FROM = from;
     }
 
-    assert.equal((await vite.environments.ssr.runner.import(entry)).default, imported.default);
+    await vite.close();
+    vite = await createServer({
+      root: fixture,
+      server: { port: 0, watch: { usePolling: true, interval: 50 } },
+    });
+    await vite.listen();
+    address = `http://127.0.0.1:${vite.httpServer.address().port}/scope-proof`;
     const replies = await Promise.all([1, 2, 3].map(() => fetch(address)));
     for (const reply of replies) assert.equal(await reply.text(), "first");
-    assert.equal(globalThis.__entryProof.starts, 2, "a failed startup is not cached");
+    assert.equal(
+      globalThis.__entryProof.starts,
+      1,
+      "restart starts one command for concurrent requests",
+    );
     console.log(
-      "PASS: dev import is idle; failed first request closes roots; concurrent next requests share one retry in the same module.",
+      "PASS: dev import is idle; startup exit closes the server; restart shares one start for concurrent requests.",
     );
   } else {
     assert.equal(await (await fetch(address)).text(), "first");

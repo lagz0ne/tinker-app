@@ -16,6 +16,18 @@
   ],
   "files": [
     {
+      "path": "tinker/base/fallbacks.tsx",
+      "type": "registry:file",
+      "target": "~/tinker/base/fallbacks.tsx",
+      "content": "import type { ErrorComponentProps } from \"@tanstack/react-router\";\n\nimport { ErrorDetails } from \"./panics\";\n\n/**\n * A production page hides error text; the server reports its route failure to the console.\n */\nexport function TinkerError({\n  error,\n  dev,\n  server,\n}: ErrorComponentProps & { dev: boolean; server: boolean }) {\n  if (server) console.error(\"tinker: a route failed on the server:\", error);\n  return <ErrorDetails error={error} dev={dev} />;\n}\n\n/** The base's 404 page; a route's own notFoundComponent, or the router command, replaces it. */\nexport function TinkerNotFound() {\n  return (\n    <main>\n      <h1>Not found</h1>\n    </main>\n  );\n}\n"
+    },
+    {
+      "path": "tinker/base/main.ts",
+      "type": "registry:file",
+      "target": "~/tinker/base/main.ts",
+      "content": "import type { Scope } from \"@tinker/core\";\n\n/** The host supplies inputs and owns process stop. Commands choose exit codes. */\nexport type MainContext = {\n  env: Readonly<Record<string, string | undefined>>;\n  args: readonly string[];\n  signal: AbortSignal;\n  stdout: { write(chunk: string): unknown };\n  stderr: { write(chunk: string): unknown };\n  exit: (code: number, reason?: unknown) => void;\n};\n\n/** Type-only entry marker, with no startup, state, or hidden error policy. */\nexport const defineMain = <R extends { closed: Promise<void> }>(\n  main: (ctx: MainContext) => Promise<R>,\n) => main;\n\n/** @param result - From a closed root; why: surface work and cleanup errors before exit. */\nexport function checkClosed(result: Scope.Result) {\n  if (result.status === \"failed\") throw result.error;\n  if (result.teardownErrors?.length) throw result.teardownErrors[0];\n}\n"
+    },
+    {
       "path": "tinker/base/observe.ts",
       "type": "registry:file",
       "target": "~/tinker/base/observe.ts",
@@ -25,7 +37,7 @@
       "path": "tinker/base/panics.server.ts",
       "type": "registry:file",
       "target": "~/tinker/base/panics.server.ts",
-      "content": "import { inspect } from \"node:util\";\n\n/** Report unhandled work, close through the caller, then leave with failure. */\nexport function observeServerPanics(\n  abort: () => void,\n  closed: Promise<void>,\n  stderr: { write(chunk: string): unknown },\n): () => void {\n  const fail = async (error: unknown) => {\n    stderr.write(`server: unhandled rejection ${inspect(error)}\\n`);\n    try {\n      abort();\n      await closed;\n    } finally {\n      process.exit(1);\n    }\n  };\n  process.on(\"unhandledRejection\", fail);\n  return process.off.bind(process, \"unhandledRejection\", fail);\n}\n"
+      "content": "import { inspect } from \"node:util\";\n\n/** Report unhandled work, close through the caller, then leave with failure. */\nexport function observeServerPanics(\n  abort: (error: unknown) => void,\n  closed: Promise<void>,\n  stderr: { write(chunk: string): unknown },\n): () => void {\n  const fail = async (error: unknown) => {\n    try {\n      abort(error);\n      await closed;\n    } catch (cleanup) {\n      stderr.write(`server close failed: ${inspect(cleanup)}\\n`);\n    }\n  };\n  process.on(\"unhandledRejection\", fail);\n  return process.off.bind(process, \"unhandledRejection\", fail);\n}\n"
     },
     {
       "path": "tinker/base/panics.tsx",
@@ -43,19 +55,13 @@
       "path": "tinker/base/server-entry.ts",
       "type": "registry:file",
       "target": "~/tinker/base/server-entry.ts",
-      "content": "import {\n  createStartHandler as createStart,\n  defaultStreamHandler as renderStream,\n} from \"@tanstack/react-start/server\";\nimport type { Scope } from \"@tinker/core\";\n\nimport { raise } from \"~/components/errors\";\nimport { renderFrames } from \"~/components/requests/index.server\";\n\nimport { devErrorPage } from \"./panics\";\nimport type { createRouterEntry } from \"./router-entry\";\n\n/** The command retains both roots; Start borrows context and observation. */\nexport declare namespace ServerEntry {\n  type Next = (request: Request) => Promise<Response>;\n  type Handle = {\n    requestContext: { scope: Scope.Handle };\n    fetch?(request: Request, next: Next): Promise<Response> | Response;\n  };\n}\n\n/** Render over the supplied app; request bodies retain each render's close. */\nexport function createServerHandler(app: ServerEntry.Handle, { dev }: { dev: boolean }) {\n  const renderRequest = createStart(async (context) => {\n    const router: typeof context.router & {\n      close?: Awaited<ReturnType<typeof createRouterEntry>>[\"close\"];\n    } = context.router;\n    if (typeof router.close !== \"function\") raise(\"StartScopeMissing\", {});\n    app.requestContext.scope.resolve(renderFrames).retain(context.request, router.close);\n\n    try {\n      return await renderStream(context);\n    } catch (error) {\n      await router.close();\n      throw error;\n    }\n  });\n\n  return {\n    fetch(this: void, request: Request) {\n      const next = async (forwarded: Request) => {\n        const response = await renderRequest(forwarded, { context: app.requestContext });\n        return dev ? devErrorPage(forwarded, response) : response;\n      };\n      return app.fetch ? app.fetch(request, next) : next(request);\n    },\n  };\n}\n"
+      "content": "import {\n  createStartHandler as createStart,\n  defaultStreamHandler as renderStream,\n} from \"@tanstack/react-start/server\";\nimport type { Scope } from \"@tinker/core\";\n\nimport { raise } from \"~/components/errors\";\nimport { renderFrames } from \"~/components/requests/index.server\";\n\nimport { devErrorPage } from \"./panics\";\nimport type { createRouterEntry } from \"./router-entry\";\n\n/** The command retains both roots; Start borrows context and observation. */\nexport declare namespace ServerEntry {\n  type Next = (request: Request) => Promise<Response>;\n  type Handle = {\n    requestContext: { scope: Scope.Handle };\n    fetch?(request: Request, next: Next): Promise<Response> | Response;\n  };\n}\n\n/** Render over the supplied app; request bodies retain each render's close. */\nexport function createServerHandler(app: ServerEntry.Handle, { dev }: { dev: boolean }) {\n  const renderRequest = createStart(async (context) => {\n    const router: typeof context.router & {\n      close?: Awaited<ReturnType<typeof createRouterEntry>>[\"close\"];\n    } = context.router;\n    if (typeof router.close !== \"function\") raise(\"StartScopeMissing\", {});\n    app.requestContext.scope.resolve(renderFrames).retain(context.request, router.close);\n\n    try {\n      return await renderStream(context);\n    } catch (error) {\n      await router.close();\n      throw error;\n    }\n  });\n\n  return {\n    fetch(this: void, request: Request) {\n      const next = async (forwarded: Request) => {\n        const response = await renderRequest(forwarded, { context: app.requestContext });\n        return dev ? devErrorPage(forwarded, response) : response;\n      };\n      return app.fetch ? app.fetch(request, next) : next(request);\n    },\n  };\n}\n\n/** A stopped command still satisfies the host's server result check. */\nexport async function stoppedFetch() {\n  return new Response(null, { status: 503 });\n}\n"
     },
     {
       "path": "tinker/base/start-entry.ts",
       "type": "registry:file",
       "target": "~/tinker/base/start-entry.ts",
       "content": "import { createCsrfMiddleware, createStart } from \"@tanstack/react-start\";\n\n/** Start owns one CSRF guard and caches the command's async options once. */\nexport function createStartEntry(\n  read: (\n    csrf: ReturnType<typeof createCsrfMiddleware>,\n  ) => ReturnType<Parameters<typeof createStart>[0]>,\n) {\n  const csrf = createCsrfMiddleware({ filter: (ctx) => ctx.handlerType === \"serverFn\" });\n  let options: ReturnType<typeof read> | undefined;\n  return createStart(() => (options ??= read(csrf)));\n}\n"
-    },
-    {
-      "path": "tinker/base/fallbacks.tsx",
-      "type": "registry:file",
-      "target": "~/tinker/base/fallbacks.tsx",
-      "content": "import type { ErrorComponentProps } from \"@tanstack/react-router\";\n\nimport { ErrorDetails } from \"./panics\";\n\n/**\n * A production page hides error text; the server reports its route failure to the console.\n */\nexport function TinkerError({\n  error,\n  dev,\n  server,\n}: ErrorComponentProps & { dev: boolean; server: boolean }) {\n  if (server) console.error(\"tinker: a route failed on the server:\", error);\n  return <ErrorDetails error={error} dev={dev} />;\n}\n\n/** The base's 404 page; a route's own notFoundComponent, or the router command, replaces it. */\nexport function TinkerNotFound() {\n  return (\n    <main>\n      <h1>Not found</h1>\n    </main>\n  );\n}\n"
     }
   ],
   "meta": {

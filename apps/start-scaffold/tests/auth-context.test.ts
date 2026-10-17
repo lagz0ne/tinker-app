@@ -3,16 +3,11 @@ import type { Resource } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
-import {
-  auth,
-  authSettings,
-  authStartup,
-  handleAuth,
-  sendAuthMail,
-  sessionDeleted,
-} from "~/components/auth/index.server";
+import { auth, authSettings, authStartup, handleAuth } from "~/components/auth/index.server";
 import { betterAuthModule, betterAuthDrizzle, betterAuthStart } from "~/components/auth/modules";
 import { database } from "~/components/database/index.server";
+import { authMail } from "~/components/mail/index.server";
+import { publishAccountNotice } from "~/components/sync/index.server";
 
 const marker = tag<string>({ label: "proof.call", default: "outside" });
 const authModule: Resource.Handle<Promise<unknown>> = betterAuthModule;
@@ -27,7 +22,7 @@ type Hooks = {
   databaseHooks: { session: { delete: { after(input: { userId: string }): Promise<void> } } };
 };
 
-test("auth hooks use their live request context, isolate concurrent calls, and use root context only outside a live flow", async () => {
+test("auth hooks serve concurrent and detached SDK calls without a saved request context", async () => {
   const first = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
   const detached = Promise.withResolvers<void>();
@@ -37,16 +32,16 @@ test("auth hooks use their live request context, isolate concurrent calls, and u
   let hooks: Hooks | undefined;
   const app = createScope({
     extensions: [authStartup],
-    tags: [
-      authSettings({ origin: "http://proof.test", secret: "s".repeat(32) }),
-      sendAuthMail((_message, ctx) => {
-        seen.push(`send:${ctx.resolve(marker)}`);
-      }),
-      sessionDeleted(async (_account, ctx) => {
-        seen.push(`delete:${ctx.resolve(marker)}`);
-      }),
-    ],
+    tags: [authSettings({ origin: "http://proof.test", secret: "s".repeat(32) })],
     presets: [
+      preset(authMail, () => ({
+        enqueue: async () => {
+          seen.push("send");
+        },
+      })),
+      preset(publishAccountNotice, async () => {
+        seen.push("delete");
+      }),
       preset(databasePort, async () => ({})),
       preset(adapterModule, async () => ({ drizzleAdapter: () => ({}) })),
       preset(startModule, async () => ({ tanstackStartCookies: () => ({}) })),
@@ -93,7 +88,7 @@ test("auth hooks use their live request context, isolate concurrent calls, and u
     await app.run(handleAuth, { input: new Request("http://proof.test"), tags: marker("second") });
     release.resolve();
     await left;
-    expect(seen).toEqual(["send:second", "delete:second", "send:first", "delete:first"]);
+    expect(seen).toEqual(["send", "delete", "send", "delete"]);
 
     await app.run(handleAuth, {
       input: new Request("http://proof.test", { headers: { "x-detach": "yes" } }),
@@ -102,27 +97,22 @@ test("auth hooks use their live request context, isolate concurrent calls, and u
     detached.resolve();
     await detachedDone.promise;
     await hooks!.databaseHooks.session.delete.after({ userId: "background" });
-    expect(seen.slice(-2)).toEqual(["send:outside", "delete:outside"]);
+    expect(seen.slice(-2)).toEqual(["send", "delete"]);
     expect(await app.resolve(auth)).toBeDefined();
   } finally {
     await app.close({ graceful: true });
   }
 });
 
-test("authStartup makes app-root runs async", async () => {
+test("authStartup validates config without wrapping synchronous root runs", async () => {
   const app = createScope({
     extensions: [authStartup],
-    tags: [
-      authSettings({ origin: "http://proof.test", secret: "s".repeat(32) }),
-      sendAuthMail(() => {}),
-      sessionDeleted(async () => {}),
-    ],
+    tags: [authSettings({ origin: "http://proof.test", secret: "s".repeat(32) })],
   });
   await app.ready;
   try {
     const result = app.run(operation({ label: "proof.sync", run: () => 1 }));
-    expect(result).toBeInstanceOf(Promise);
-    await expect(result).resolves.toBe(1);
+    expect(result).toBe(1);
   } finally {
     expect((await app.close({ graceful: true })).status).toBe("success");
   }

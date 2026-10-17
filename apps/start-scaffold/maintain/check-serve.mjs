@@ -115,8 +115,8 @@ export async function checkServe(source) {
     assert.ok(main.includes("  const stop ="));
     const planted = main
       .replace(
-        "import { createScope, type Scope }",
-        "import { createScope, extension, type Scope }",
+        'import { createScope } from "@tinker/core";',
+        'import { createScope, extension } from "@tinker/core";',
       )
       .replace("  const appStop =", '  stdout.write("proof.main\\n"); const appStop =')
       .replace(
@@ -196,7 +196,7 @@ export const Route = createFileRoute("/proof/response")({
       );
 
       assert.notEqual(failed.status, null, failed.stdout + failed.stderr);
-      assert.equal(failed.status, 1, failed.stdout + failed.stderr);
+      assert.equal(failed.status, 78, failed.stdout + failed.stderr);
       assert.ok(failed.stderr.includes("MissingTag"), failed.stderr);
       assert.ok(failed.stderr.includes("mail.from"), failed.stderr);
       assert.ok(!failed.stderr.includes("EADDRINUSE"), failed.stderr);
@@ -219,7 +219,7 @@ export const Route = createFileRoute("/proof/response")({
     const listenLog = listenFailed.stdout + listenFailed.stderr;
     assert.equal(listenFailed.status, 1, listenLog);
     assert.ok(listenFailed.stderr.includes("ERR_SOCKET_BAD_PORT"), listenLog);
-    assert.ok(listenFailed.stderr.includes("close failed: Error: proof.close"), listenLog);
+    assert.match(listenFailed.stderr, /after exit 1:.*proof.close/s, listenLog);
     assert.ok(!listenFailed.stdout.includes("tinker serve:"), listenLog);
     assert.ok(
       listenLog.indexOf("proof.app.closed\n") < listenLog.indexOf("proof.tools.closed\n"),
@@ -229,13 +229,13 @@ export const Route = createFileRoute("/proof/response")({
       "PASS: listen failure reports its close failure and ends app before tools; EXIT 1.",
     );
 
-    await signalCase(source, proof, { PROOF_TOOLS_WAIT: "1" }, "proof.tools.waiting", 0, 1);
+    await signalCase(source, proof, { PROOF_TOOLS_WAIT: "1" }, "proof.tools.waiting", 143, 1);
     await signalCase(
       source,
       proof,
       { PROOF_TOOLS_WAIT: "1", PROOF_TOOLS_FAIL: "1" },
       "proof.tools.waiting",
-      1,
+      143,
       0,
     );
     await signalCase(
@@ -243,7 +243,7 @@ export const Route = createFileRoute("/proof/response")({
       proof,
       { DATABASE_URL: "postgres://hold" },
       "proof.migration.waiting",
-      0,
+      143,
       1,
     );
     await signalCase(
@@ -251,7 +251,7 @@ export const Route = createFileRoute("/proof/response")({
       proof,
       { PROOF_CLOSE_FAIL: "1", PORT: String(address.port) },
       "tinker serve:",
-      1,
+      143,
       1,
     );
 
@@ -290,7 +290,7 @@ export const Route = createFileRoute("/proof/response")({
     const ended = once(server, "close");
     server.kill("SIGTERM");
     const [code, signal] = await ended;
-    assert.equal(code, 0, output);
+    assert.equal(code, 143, output);
     assert.equal(signal, null, output);
     assert.ok(
       output.indexOf("proof.app.closed\n") < output.indexOf("proof.tools.closed\n"),
@@ -299,7 +299,7 @@ export const Route = createFileRoute("/proof/response")({
     assert.equal(output.split("proof.app.closed\n").length - 1, 1, output);
     assert.equal(output.split("proof.tools.closed\n").length - 1, 1, output);
     console.log(
-      "PASS built starter serves native Response.json; prod calls main once; SIGTERM closes app then tools with EXIT 0",
+      "PASS built starter serves native Response.json; prod calls main once; SIGTERM closes app then tools with EXIT 143",
     );
   } finally {
     if (server && server.exitCode === null) {

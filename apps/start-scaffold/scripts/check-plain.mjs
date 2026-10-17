@@ -232,7 +232,7 @@ function assignedReturn(object, owner) {
   return (
     ts.isCallExpression(call) &&
     nameOf(call.expression) === "Object.assign" &&
-    directReturn(call, owner)
+    (directReturn(call, owner) || localReturn(call, owner))
   );
 }
 
@@ -478,7 +478,11 @@ function nativeOption(node) {
 
   const call = object.parent;
   if (coreSymbol(call.expression, "namespace")) return false;
-  return argumentOf(object, call) && externalCall(call) && externalDeclaration(call);
+  return (
+    argumentOf(object, call) &&
+    externalCall(call) &&
+    [externalDeclaration, resolvedMethod].some((rule) => !!rule(call))
+  );
 }
 
 function namedNativeCallback(node) {
@@ -506,7 +510,7 @@ function classifyNativeCallback(node) {
 
 function graphOwner(node) {
   for (let parent = enclosingFunction(node); parent; parent = enclosingFunction(parent)) {
-    if (optionsMember(parent) || factoryBody(parent) || isEntryHelper(parent)) return true;
+    if (optionsMember(parent) || factoryBody(parent) || entryFunction(parent)) return true;
   }
   return false;
 }
@@ -705,6 +709,8 @@ function zodDeclaration(node, file) {
       "regex",
       "trim",
       "toUpperCase",
+      "pipe",
+      "omit",
       "brand",
       "optional",
       "nullable",
@@ -725,6 +731,9 @@ function schemaDeclaration(node, file) {
       "pgTable",
       "text",
       "timestamp",
+      "uuid",
+      "smallint",
+      "bigserial",
       "boolean",
       "integer",
       "jsonb",
@@ -804,7 +813,7 @@ function coreDeclaration(node) {
 }
 
 function moduleDeclarationCall(node) {
-  if (coreDeclaration(node) || clientDeclaration(node)) return true;
+  if ([coreDeclaration, clientDeclaration, definedMainCall].some((read) => read(node))) return true;
   const file = declarationFile(node);
   return (
     zodDeclaration(node, file) ||
@@ -1083,6 +1092,17 @@ function createRequireReference(node) {
   );
 }
 
+// SMTP owns its native sockets; only its lazy net module may load TCP.
+function smtpNetModule(node, specifier) {
+  const owner = enclosingFunction(node);
+  return (
+    specifier.text === "node:net" &&
+    pathOf(node) === "tinker/components/mail/modules.ts" &&
+    owner &&
+    factoryBody(owner)
+  );
+}
+
 function checkHttpImport(node) {
   if (typeOnlyImport(node) || typeReference(node)) return;
   const specifier = importSpecifier(node);
@@ -1096,6 +1116,8 @@ function checkHttpImport(node) {
     fail(node, "http-client: module loads must use a literal path");
     return;
   }
+
+  if (smtpNetModule(node, specifier)) return;
 
   if (
     httpClients.some(
@@ -1321,6 +1343,9 @@ function checkPlainFunction(node) {
 
 /** Named copied entry helpers and the approved server and browser mains keep native contracts. */
 const entryHelpers = {
+  "tinker/components/database/database.server.ts": ["queryWithStop"],
+  "tinker/components/database/lease.server.ts": ["leaseFrom", "logQuery", "query", "release"],
+  "tinker/base/main.ts": ["defineMain"],
   "tinker/base/panics.server.ts": [
     // c55998e createServerEntry: register process panic cleanup without identity wrapping.
     "observeServerPanics",
@@ -1330,7 +1355,7 @@ const entryHelpers = {
     "devErrorPage",
   ],
   "cmds/server.ts": [
-    // Commands keep env bindings inline. Tests cover input, startup, exit, and close.
+    // Commands keep wiring inline; tests cover input, startup, exit, and close contracts.
     "main",
   ],
   "cmds/router.ts": [
@@ -1346,6 +1371,7 @@ const entryHelpers = {
   "tinker/base/server-entry.ts": [
     // New: bind Start's renderer to the command's request scope.
     "createServerHandler",
+    "stoppedFetch",
     // New: copied c55998e entry/server fetch: dispatch a request through Start or app fetch.
     "fetch",
     // New: copied c55998e entry/server next: render the request and map its dev error response.
@@ -1363,6 +1389,26 @@ function serverEntryFunction(node) {
     node.parent === node.getSourceFile() &&
     (ts.getCombinedModifierFlags(node) & (ts.ModifierFlags.Export | ts.ModifierFlags.Default)) ===
       (ts.ModifierFlags.Export | ts.ModifierFlags.Default)
+  );
+}
+
+function definedMainCall(node) {
+  return (
+    ts.isCallExpression(node) &&
+    isCommand(node) &&
+    node.parent &&
+    ts.isExportAssignment(node.parent) &&
+    nameOf(node.expression) === "defineMain" &&
+    declarationFile(node).endsWith("/tinker/base/main.ts")
+  );
+}
+
+function definedMainCallback(node) {
+  return (
+    (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+    node.parent &&
+    definedMainCall(node.parent) &&
+    node.parent.arguments[0] === node
   );
 }
 
@@ -1392,7 +1438,7 @@ function commandModulePath(node) {
 
 function entryFunction(node) {
   if (!node) return false;
-  return isEntryHelper(node);
+  return isEntryHelper(node) || definedMainCallback(node);
 }
 
 function checkCommandImport(node) {
@@ -1627,6 +1673,51 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    [
+      "mail-net-static-import",
+      "http-client",
+      'import * as forbiddenNet from "node:net"; export { forbiddenNet };',
+      "tinker/components/mail/modules.ts",
+    ],
+    [
+      "mail-other-native-module",
+      "http-client",
+      'import {resource} from "@tinker/core"; export const forbiddenTls = resource({factory: () => import("node:tls")});',
+      "tinker/components/mail/modules.ts",
+    ],
+    [
+      "local-resource-return-allowed",
+      null,
+      'import {resource} from "@tinker/core"; export const probe=resource({label:"probe",factory:(_,{clock})=>{const handle=Object.assign({}, {read(){return clock.currentTimeMillis();}});return handle;}});',
+    ],
+    [
+      "local-operation-return-forbidden",
+      "plain-effect",
+      'import {operation} from "@tinker/core"; export const probe=operation({label:"probe",run:()=>{const handle=Object.assign({}, {read(){return Date.now();}});return handle.read();}});',
+    ],
+    [
+      "resource-method-options-allowed",
+      null,
+      'import {resource,operation} from "@tinker/core"; const sender=resource({label:"probe.sender",factory:()=>({send(options:{done:()=>number}){return options.done();}})});export const probe=operation({label:"probe",depends:{sender},run:({sender},{clock})=>sender.send({done:()=>clock.currentTimeMillis()})});',
+    ],
+    [
+      "real-main-marker-allowed",
+      null,
+      'import {defineMain} from "~/base/main"; export default defineMain(async({exit})=>{exit(0);return {closed:Promise.resolve()};});',
+      "cmds/plain-probe.ts",
+    ],
+    [
+      "fake-main-marker-forbidden",
+      "service-owner",
+      "const defineMain=(fn:()=>unknown)=>fn; export default defineMain(()=>new AbortController());",
+      "cmds/plain-probe.ts",
+    ],
+    [
+      "foreign-lease-name-forbidden",
+      "plain-effect",
+      "export function leaseFrom(){return Date.now();}",
+    ],
+
     [
       "zod-catch-name-callback-allowed",
       null,

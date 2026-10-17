@@ -1,13 +1,13 @@
 import { operation, resource } from "@tinker/core";
 
 import { database } from "~/components/database/index.server";
+import { authMail } from "~/components/mail/index.server";
 import { requestHeaders } from "~/components/requests/index.server";
+import { createAccountStream, publishAccountNotice } from "~/components/sync/index.server";
 
-import { authCalls } from "./calls.server";
 import { betterAuthModule, betterAuthDrizzle, betterAuthStart } from "./modules";
 import * as schema from "./schema.server";
-import { authSettings, authStartup } from "./settings.server";
-import { sendAuthMail, sessionDeleted } from "./slots";
+import { authSettings } from "./settings.server";
 
 /**
  * The root tracks each mail action; auth callbacks return before delivery.
@@ -19,15 +19,17 @@ export const auth = resource({
   depends: {
     database,
     settings: authSettings,
-    calls: authCalls,
-    outside: authStartup,
-    send: sendAuthMail.required,
-    deleted: sessionDeleted.required,
+    send: authMail,
+    deleted: publishAccountNotice,
+    created: createAccountStream,
     auth: betterAuthModule,
     adapter: betterAuthDrizzle,
     start: betterAuthStart,
   },
-  factory: async ({ database, settings, calls, outside, send, deleted, auth, adapter, start }) => {
+  factory: async (
+    { database, settings, send, deleted, created, auth, adapter, start },
+    { log },
+  ) => {
     const { betterAuth } = auth;
     const { drizzleAdapter } = adapter;
     const { tanstackStartCookies } = start;
@@ -35,24 +37,37 @@ export const auth = resource({
       baseURL: settings.origin,
       secret: settings.secret,
       database: drizzleAdapter(database, { provider: "pg", schema }),
+      session: { deferSessionRefresh: true },
       databaseHooks: {
+        user: {
+          create: {
+            after: async ({ id }) => {
+              try {
+                await created.run({ input: { accountId: id } });
+              } catch (error) {
+                log.error("auth.accountStreamFailed", { accountId: id, error: String(error) });
+              }
+            },
+          },
+        },
         session: {
+          create: {
+            after: ({ userId }) => created.run({ input: { accountId: userId } }),
+          },
           delete: {
-            after: ({ userId }) => calls.fire(deleted, userId, outside),
+            after: ({ userId }) => deleted.run({ rawInput: { accountId: userId } }),
           },
         },
       },
       emailAndPassword: {
         enabled: true,
-        sendResetPassword: async ({ user, url }) => {
-          calls.fire(send, { to: user.email, subject: "Reset your password", text: url }, outside);
-        },
+        sendResetPassword: async ({ user, url }) =>
+          send.enqueue({ to: user.email, subject: "Reset your password", text: url }),
       },
       emailVerification: {
         sendOnSignUp: true,
-        sendVerificationEmail: async ({ user, url }) => {
-          calls.fire(send, { to: user.email, subject: "Check your email", text: url }, outside);
-        },
+        sendVerificationEmail: async ({ user, url }) =>
+          send.enqueue({ to: user.email, subject: "Check your email", text: url }),
       },
       plugins: [tanstackStartCookies()],
     });
@@ -63,7 +78,13 @@ export const principal = resource({
   label: "request.principal",
   target: "session",
   depends: { auth, headers: requestHeaders },
-  factory: async ({ auth, headers }) => (await auth.api.getSession({ headers }))?.user ?? null,
+  factory: async ({ auth, headers }) =>
+    (
+      await auth.api.getSession({
+        headers,
+        query: { disableCookieCache: true, disableRefresh: true },
+      })
+    )?.user ?? null,
 });
 
 /** A long stream rechecks the live cookie without using caches or refreshing the session. */

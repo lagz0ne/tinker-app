@@ -94,7 +94,8 @@ test("with auth on, the main needs only its default export", () => {
 
 test("a copied sync component with a missing dependency stops the build with its manifest line", () => {
   const root = goodApp({
-    "tinker/components/sync/component.json": '{"requires":["missing"]}',
+    "tinker/components/sync/component.json":
+      '{"requires":["errors","requests","database","missing"]}',
     "tinker/components/sync/index.ts": "export const sync = 1;",
   });
   expect(buildChecks(root).errors).toEqual([

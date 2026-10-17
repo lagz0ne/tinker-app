@@ -8,7 +8,7 @@
     "build": "vp build",
     "start": "tinker serve",
     "setup": "node scripts/setup.mjs",
-    "test": "vp test",
+    "test": "vp test --maxWorkers=1 --no-file-parallelism",
     "db:generate": "drizzle-kit generate",
     "test:imports": "node maintain/check-imports.mjs",
     "test:middleware": "node maintain/check-middleware.mjs",
@@ -27,7 +27,8 @@
     "check": "node maintain/check-app.mjs",
     "mutate": "stryker run",
     "test:template": "node maintain/check-template.mjs",
-    "check:commands": "node maintain/check-commands.mjs"
+    "check:commands": "node maintain/check-commands.mjs",
+    "test:proofs": "node maintain/proof-server-close.mjs && node maintain/proof-exit-controls.mjs && node maintain/proof-bootstrap-controls.mjs"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",

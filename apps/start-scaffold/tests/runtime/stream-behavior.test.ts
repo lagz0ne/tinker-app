@@ -3,10 +3,10 @@ import { makeTestClock, preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
 import { liveAccount } from "~/components/auth/index.server";
+import { openSync } from "~/components/auth/index.server";
 import { backendStop, requestStop, startRequests } from "~/components/requests";
 import { requestHeaders } from "~/components/requests/index.server";
 import { notifications } from "~/components/sync/notifications.server";
-import { openSync } from "~/components/sync/stream.server";
 
 import { bindings, proofServices } from "./fixtures/app.server";
 import { handWoken } from "./fixtures/sync";

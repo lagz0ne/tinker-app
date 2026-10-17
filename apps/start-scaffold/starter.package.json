@@ -8,15 +8,16 @@
     "build": "vp build",
     "start": "tinker serve",
     "setup": "node scripts/setup.mjs",
-    "test": "vp test",
+    "test": "vp test --maxWorkers=1 --no-file-parallelism",
     "db:generate": "drizzle-kit generate",
     "test:schema": "node scripts/check-schema.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "check:plain": "node scripts/check-plain.mjs",
     "postinstall": "tinker prepare",
     "doctor": "tinker doctor",
-    "check": "vp check && vp run typecheck && vp run test && vp run check:plain && vp run test:schema && vp run doctor",
-    "mutate": "stryker run"
+    "check": "vp check && vp run typecheck && vp run test && vp run test:proofs && vp run check:plain && vp run test:schema && vp run doctor",
+    "mutate": "stryker run",
+    "test:proofs": "node maintain/proof-server-close.mjs && node maintain/proof-exit-controls.mjs && node maintain/proof-bootstrap-controls.mjs"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",

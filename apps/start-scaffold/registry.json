@@ -83,6 +83,21 @@
           "path": "../start-min/src/style.css",
           "target": "~/src/style.css",
           "type": "registry:file"
+        },
+        {
+          "path": "../start-min/src/routes/api.health.ts",
+          "type": "registry:file",
+          "target": "~/src/routes/api.health.ts"
+        },
+        {
+          "path": "../start-min/src/routes/api.telemetry.ts",
+          "type": "registry:file",
+          "target": "~/src/routes/api.telemetry.ts"
+        },
+        {
+          "path": "../start-min/src/routes/tinker.tsx",
+          "type": "registry:file",
+          "target": "~/src/routes/tinker.tsx"
         }
       ],
       "meta": {
@@ -108,6 +123,16 @@
       ],
       "registryDependencies": ["@tinker-start/errors", "@tinker-start/requests"],
       "files": [
+        {
+          "path": "tinker/base/fallbacks.tsx",
+          "type": "registry:file",
+          "target": "~/tinker/base/fallbacks.tsx"
+        },
+        {
+          "path": "tinker/base/main.ts",
+          "type": "registry:file",
+          "target": "~/tinker/base/main.ts"
+        },
         {
           "path": "tinker/base/observe.ts",
           "type": "registry:file",
@@ -137,11 +162,6 @@
           "path": "tinker/base/start-entry.ts",
           "type": "registry:file",
           "target": "~/tinker/base/start-entry.ts"
-        },
-        {
-          "path": "tinker/base/fallbacks.tsx",
-          "type": "registry:file",
-          "target": "~/tinker/base/fallbacks.tsx"
         }
       ],
       "meta": {
@@ -159,17 +179,18 @@
         "drizzle-orm@catalog:",
         "zod@catalog:"
       ],
-      "registryDependencies": ["@tinker-start/requests", "@tinker-start/database"],
+      "registryDependencies": [
+        "@tinker-start/requests",
+        "@tinker-start/database",
+        "@tinker-start/sync",
+        "@tinker-start/mail",
+        "@tinker-start/errors"
+      ],
       "files": [
         {
           "path": "tinker/components/auth/auth.server.ts",
           "type": "registry:file",
           "target": "~/tinker/components/auth/auth.server.ts"
-        },
-        {
-          "path": "tinker/components/auth/calls.server.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/auth/calls.server.ts"
         },
         {
           "path": "tinker/components/auth/component.json",
@@ -202,14 +223,9 @@
           "target": "~/tinker/components/auth/settings.server.ts"
         },
         {
-          "path": "tinker/components/auth/slots.ts",
+          "path": "tinker/components/auth/stream.server.ts",
           "type": "registry:file",
-          "target": "~/tinker/components/auth/slots.ts"
-        },
-        {
-          "path": "src/routes/api.auth.$.ts",
-          "type": "registry:file",
-          "target": "~/src/routes/api.auth.$.ts"
+          "target": "~/tinker/components/auth/stream.server.ts"
         }
       ],
       "meta": {
@@ -228,7 +244,7 @@
         "pg@8.20.0",
         "zod@catalog:"
       ],
-      "registryDependencies": [],
+      "registryDependencies": ["@tinker-start/errors"],
       "files": [
         {
           "path": "tinker/components/database/component.json",
@@ -249,6 +265,11 @@
           "path": "tinker/components/database/index.ts",
           "type": "registry:file",
           "target": "~/tinker/components/database/index.ts"
+        },
+        {
+          "path": "tinker/components/database/lease.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database/lease.server.ts"
         },
         {
           "path": "tinker/components/database/modules.ts",
@@ -434,16 +455,6 @@
           "path": "tinker/components/health/index.ts",
           "type": "registry:file",
           "target": "~/tinker/components/health/index.ts"
-        },
-        {
-          "path": "src/routes/api.health.ts",
-          "type": "registry:file",
-          "target": "~/src/routes/api.health.ts"
-        },
-        {
-          "path": "src/routes/tinker.tsx",
-          "type": "registry:file",
-          "target": "~/src/routes/tinker.tsx"
         }
       ],
       "meta": {
@@ -524,6 +535,11 @@
           "path": "tinker/components/mail/modules.ts",
           "type": "registry:file",
           "target": "~/tinker/components/mail/modules.ts"
+        },
+        {
+          "path": "tinker/components/mail/sockets.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mail/sockets.server.ts"
         }
       ],
       "meta": {
@@ -624,7 +640,6 @@
       "registryDependencies": [
         "@tinker-start/errors",
         "@tinker-start/requests",
-        "@tinker-start/auth",
         "@tinker-start/database"
       ],
       "files": [
@@ -717,16 +732,6 @@
           "path": "tinker/components/sync/slots.ts",
           "type": "registry:file",
           "target": "~/tinker/components/sync/slots.ts"
-        },
-        {
-          "path": "tinker/components/sync/stream.server.ts",
-          "type": "registry:file",
-          "target": "~/tinker/components/sync/stream.server.ts"
-        },
-        {
-          "path": "src/routes/api.sync.ts",
-          "type": "registry:file",
-          "target": "~/src/routes/api.sync.ts"
         }
       ],
       "meta": {
@@ -808,11 +813,6 @@
           "path": "tinker/components/telemetry/settings.ts",
           "type": "registry:file",
           "target": "~/tinker/components/telemetry/settings.ts"
-        },
-        {
-          "path": "src/routes/api.telemetry.ts",
-          "type": "registry:file",
-          "target": "~/src/routes/api.telemetry.ts"
         }
       ],
       "meta": {
@@ -1072,6 +1072,31 @@
           "path": "src/frontend/modules.ts",
           "type": "registry:file",
           "target": "~/src/frontend/modules.ts"
+        },
+        {
+          "path": "src/frontend/auth-session.tsx",
+          "type": "registry:file",
+          "target": "~/src/frontend/auth-session.tsx"
+        },
+        {
+          "path": "drizzle/20261016143346_account_streams/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261016143346_account_streams/migration.sql"
+        },
+        {
+          "path": "drizzle/20261016143346_account_streams/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261016143346_account_streams/snapshot.json"
+        },
+        {
+          "path": "src/routes/api.auth.$.ts",
+          "type": "registry:file",
+          "target": "~/src/routes/api.auth.$.ts"
+        },
+        {
+          "path": "src/routes/api.sync.ts",
+          "type": "registry:file",
+          "target": "~/src/routes/api.sync.ts"
         }
       ],
       "meta": {
@@ -1161,9 +1186,34 @@
           "target": "~/vitest.config.ts"
         },
         {
+          "path": "stryker.config.json",
+          "type": "registry:file",
+          "target": "~/stryker.config.json"
+        },
+        {
+          "path": "tests/auth-context.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/auth-context.test.ts"
+        },
+        {
           "path": "tests/backend.test.ts",
           "type": "registry:file",
           "target": "~/tests/backend.test.ts"
+        },
+        {
+          "path": "tests/bootstrap-read.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/bootstrap-read.test.ts"
+        },
+        {
+          "path": "tests/commands.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/commands.test.ts"
+        },
+        {
+          "path": "tests/database-adapter.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/database-adapter.test.ts"
         },
         {
           "path": "tests/errors.test.ts",
@@ -1174,6 +1224,11 @@
           "path": "tests/presets.ts",
           "type": "registry:file",
           "target": "~/tests/presets.ts"
+        },
+        {
+          "path": "tests/profile-behavior.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/profile-behavior.test.ts"
         },
         {
           "path": "tests/request-copy.test.ts",
@@ -1231,9 +1286,24 @@
           "target": "~/tests/runtime/http.test.ts"
         },
         {
+          "path": "tests/runtime/mail-adapter.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/runtime/mail-adapter.test.ts"
+        },
+        {
           "path": "tests/runtime/modules.test.ts",
           "type": "registry:file",
           "target": "~/tests/runtime/modules.test.ts"
+        },
+        {
+          "path": "tests/runtime/notifications-behavior.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/runtime/notifications-behavior.test.ts"
+        },
+        {
+          "path": "tests/runtime/queue-behavior.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/runtime/queue-behavior.test.ts"
         },
         {
           "path": "tests/runtime/requests.test.mjs",
@@ -1254,6 +1324,11 @@
           "path": "tests/runtime/ssr-telemetry.test.ts",
           "type": "registry:file",
           "target": "~/tests/runtime/ssr-telemetry.test.ts"
+        },
+        {
+          "path": "tests/runtime/stream-behavior.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/runtime/stream-behavior.test.ts"
         },
         {
           "path": "tests/runtime/sync-client.test.ts",
@@ -1336,44 +1411,44 @@
           "target": "~/tests/todos.test.ts"
         },
         {
+          "path": "tests/transaction-lease.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/transaction-lease.test.ts"
+        },
+        {
+          "path": "tests/transaction.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/transaction.test.ts"
+        },
+        {
           "path": "tests/waste.test.ts",
           "type": "registry:file",
           "target": "~/tests/waste.test.ts"
         },
         {
-          "path": "stryker.config.json",
+          "path": "tests/write-boundary.ts",
           "type": "registry:file",
-          "target": "~/stryker.config.json"
+          "target": "~/tests/write-boundary.ts"
         },
         {
-          "path": "tests/database-adapter.test.ts",
+          "path": "maintain/proof-bootstrap-controls.mjs",
           "type": "registry:file",
-          "target": "~/tests/database-adapter.test.ts"
+          "target": "~/maintain/proof-bootstrap-controls.mjs"
         },
         {
-          "path": "tests/profile-behavior.test.ts",
+          "path": "maintain/proof-exit-controls.mjs",
           "type": "registry:file",
-          "target": "~/tests/profile-behavior.test.ts"
+          "target": "~/maintain/proof-exit-controls.mjs"
         },
         {
-          "path": "tests/runtime/mail-adapter.test.ts",
+          "path": "maintain/proof-fault.mjs",
           "type": "registry:file",
-          "target": "~/tests/runtime/mail-adapter.test.ts"
+          "target": "~/maintain/proof-fault.mjs"
         },
         {
-          "path": "tests/runtime/notifications-behavior.test.ts",
+          "path": "maintain/proof-server-close.mjs",
           "type": "registry:file",
-          "target": "~/tests/runtime/notifications-behavior.test.ts"
-        },
-        {
-          "path": "tests/runtime/queue-behavior.test.ts",
-          "type": "registry:file",
-          "target": "~/tests/runtime/queue-behavior.test.ts"
-        },
-        {
-          "path": "tests/runtime/stream-behavior.test.ts",
-          "type": "registry:file",
-          "target": "~/tests/runtime/stream-behavior.test.ts"
+          "target": "~/maintain/proof-server-close.mjs"
         }
       ],
       "meta": {

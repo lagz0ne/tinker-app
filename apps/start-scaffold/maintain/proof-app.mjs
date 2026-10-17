@@ -30,6 +30,8 @@ export async function copyProofApp(source, target) {
     databaseFile,
     database
       .slice(0, start)
+      .replace('import type { PoolClient } from "pg";\n', "")
+      .replace('import { leaseFrom } from "./lease.server";\n', "")
       .replace(
         'import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";',
         'import { drizzlePgCore, drizzleMigrator } from "./modules";',
@@ -104,10 +106,12 @@ export const missingMailChild = `
 import assert from "node:assert/strict";
 const { default: main } = await import("./dist/server/server.js");
 const stop = new AbortController();
-await assert.rejects(main({ env: process.env, signal: stop.signal, stdout: process.stdout, stderr: process.stderr }), (error) => {
-  assert.equal(error.kind, "MissingTag");
-  assert.equal(error.payload.label, "mail.from");
-  return true;
-});
+let code;
+let reason;
+const app = await main({ env: process.env, args: [], signal: stop.signal, stdout: process.stdout, stderr: process.stderr, exit(value, error) { code=value; reason=error; stop.abort(error); } });
+await app.closed;
+assert.equal(code, 78);
+assert.equal(reason.kind, "MissingTag");
+assert.equal(reason.payload.label, "mail.from");
 console.log("PASS: command startup rejects MissingTag mail.from before serving.");
 `;

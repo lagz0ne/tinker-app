@@ -1,3 +1,6 @@
+import { rmSync } from "node:fs";
+import { join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
 
 import { glue } from "../lib/checks/glue.mjs";
@@ -46,6 +49,8 @@ test("doctor names component manifests and unknown keys without choosing wiring 
     "tinker/components/db/index.ts": "export const value = 2;",
   });
 
+  rmSync(join(root, "tinker/components/mail/component.json"));
+
   expect(named(root).lines).toEqual([
     'tinker/components/db/component.json: unknown key "order"; only requires are allowed',
     'tinker/components/mail: missing component.json; add tinker/components/mail/component.json with { "requires": [] }',
@@ -63,6 +68,8 @@ test("generated tsconfig includes command and component files with the base alia
 
 test("a component with only a nested helper still needs its manifest", () => {
   const root = goodApp({ "tinker/components/mail/backend/send.ts": "export const value = 1;" });
+
+  rmSync(join(root, "tinker/components/mail/component.json"));
 
   expect(named(root).lines).toEqual([
     'tinker/components/mail: missing component.json; add tinker/components/mail/component.json with { "requires": [] }',

@@ -21,7 +21,7 @@
       "path": "tinker/components/mail/index.server.ts",
       "type": "registry:file",
       "target": "~/tinker/components/mail/index.server.ts",
-      "content": "export { authMail, mail, mailFrom, sendMail, smtpUrl, mailStartup } from \"./mail.server\";\nexport type { Mail } from \"./mail.server\";\n"
+      "content": "export { authMail, mail, mailFrom, sendMail, smtpUrl, mailStartup } from \"./mail.server\";\nexport type { Mail } from \"./mail.server\";\n\nexport { smtpSockets } from \"./sockets.server\";\n"
     },
     {
       "path": "tinker/components/mail/mail.server.ts",
@@ -33,7 +33,13 @@
       "path": "tinker/components/mail/modules.ts",
       "type": "registry:file",
       "target": "~/tinker/components/mail/modules.ts",
-      "content": "import { resource } from \"@tinker/core\";\n\nexport const smtp = resource({\n  label: \"module:nodemailer\",\n  target: \"scope\",\n  factory: () => import(\"nodemailer\"),\n});\n"
+      "content": "import { resource } from \"@tinker/core\";\n\nexport const smtp = resource({\n  label: \"module:nodemailer\",\n  target: \"scope\",\n  factory: () => import(\"nodemailer\"),\n});\n\n/** SMTP owns these sockets so a total deadline can destroy an active send. */\nexport const smtpNet = resource({\n  label: \"module:node:net\",\n  target: \"scope\",\n  factory: () => import(\"node:net\"),\n});\n"
+    },
+    {
+      "path": "tinker/components/mail/sockets.server.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/mail/sockets.server.ts",
+      "content": "import type { Socket } from \"node:net\";\n\nimport { resource } from \"@tinker/core\";\nimport type { GetSocketCallback } from \"nodemailer/lib/mailer\";\n\nimport { smtpUrl } from \"./mail.server\";\nimport { smtpNet } from \"./modules\";\n\n/** The SMTP pool owns protocol state; this resource owns its cancellable TCP sockets. */\nexport const smtpSockets = resource({\n  label: \"mail.sockets\",\n  depends: { net: smtpNet, url: smtpUrl },\n  factory: async ({ net, url }, { defer }) => {\n    const sockets = new Set<Socket>();\n    defer(() => {\n      for (const socket of sockets) socket.destroy();\n    });\n    return {\n      getSocket(this: void, _options: unknown, callback: GetSocketCallback) {\n        const socket = net.createConnection({\n          host: url.hostname.replace(/^\\[(.*)\\]$/, \"$1\"),\n          port: url.port ? Number(url.port) : url.protocol === \"smtps:\" ? 465 : 587,\n        });\n\n        sockets.add(socket);\n        socket.on(\"error\", () => {});\n        socket.once(\"close\", () => sockets.delete(socket));\n        socket.once(\"error\", callback);\n        socket.once(\"connect\", () => {\n          socket.removeListener(\"error\", callback);\n          callback(null, { connection: socket });\n        });\n      },\n      abort() {\n        for (const socket of sockets) socket.destroy(new Error(\"Alert send total timeout\"));\n      },\n    };\n  },\n});\n"
     }
   ],
   "meta": {

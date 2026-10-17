@@ -28,18 +28,6 @@
       "type": "registry:file",
       "target": "~/tinker/components/health/index.ts",
       "content": "export { health, baseVersion } from \"./health\";\n"
-    },
-    {
-      "path": "src/routes/api.health.ts",
-      "type": "registry:file",
-      "target": "~/src/routes/api.health.ts",
-      "content": "import { createFileRoute } from \"@tanstack/react-router\";\n\nimport { health } from \"~/components/health\";\nimport { startRequests } from \"~/components/requests\";\nimport { readResult } from \"~/components/requests/index.server\";\n\nexport const Route = createFileRoute(\"/api/health\")({\n  server: {\n    middleware: [startRequests.middleware],\n    handlers: {\n      GET: async ({ context }) =>\n        Response.json(\n          readResult(await context.session.settle(health, { signal: context.signal })),\n          {\n            headers: { \"Cache-Control\": \"no-store\" },\n          },\n        ),\n    },\n  },\n});\n"
-    },
-    {
-      "path": "src/routes/tinker.tsx",
-      "type": "registry:file",
-      "target": "~/src/routes/tinker.tsx",
-      "content": "import { createFileRoute } from \"@tanstack/react-router\";\n\nimport { baseVersion } from \"~/components/health\";\n\nexport const Route = createFileRoute(\"/tinker\")({\n  component: () => (\n    <main>\n      <h1>Tinker base</h1>\n      <p>@tinker/start {baseVersion}</p>\n    </main>\n  ),\n});\n"
     }
   ],
   "meta": {

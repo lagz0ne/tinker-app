@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { isError as isCoreError } from "@tinker/core";
 
+import { openSync } from "~/components/auth/index.server";
 import { isError } from "~/components/errors";
 import { startRequests } from "~/components/requests";
 import { readResult } from "~/components/requests/index.server";
-import { openSync } from "~/components/sync/index.server";
 
 /** The copied route owns HTTP; the component owns the request's event stream. */
 export const Route = createFileRoute("/api/sync")({
