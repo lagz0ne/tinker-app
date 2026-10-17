@@ -12,6 +12,30 @@ const appPackages = [
   "apps/start-scaffold/app.package.json",
 ];
 
+/** Only package-manager fields carry install URLs; prose links are not dependencies. */
+function packageLinks(pkg) {
+  const links = [];
+  for (const field of ["dependencies", "devDependencies", "peerDependencies"]) {
+    const values = Array.isArray(pkg[field]) ? pkg[field] : Object.values(pkg[field] ?? {});
+    for (const spec of values) {
+      const link = spec.match(/https:\/\/(?:raw\.githubusercontent|github)\.com\/\S+/)?.[0];
+      if (link) links.push(link);
+    }
+  }
+  return links;
+}
+
+/** Registry files may include a package manifest; other copied text stays untouched. */
+function registryLinks(json) {
+  return (json.items ?? [json]).flatMap((item) => [
+    ...(item.registryDependencies ?? []),
+    ...packageLinks(item),
+    ...(item.files ?? [])
+      .filter((file) => file.target === "~/package.json")
+      .flatMap((file) => packageLinks(JSON.parse(file.content))),
+  ]);
+}
+
 /** @param {string} file - From the checks; why: compare JSON by value, not by layout. */
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
@@ -32,7 +56,8 @@ export function releaseNotes(text, version) {
 }
 
 /**
- * Each GitHub link in the committed registry must be this release or the pinned Core/React.
+ * Package specs and registry dependencies must name this release or pinned Core/React.
+ * Copied guide/source text may link to the current authoring contract.
  * @param {string} root - From releaseProblems; why: the committed files.
  * @param {string} version - From releaseProblems; why: the tag the links must name.
  */
@@ -45,8 +70,8 @@ function linkProblems(root, version) {
   ];
 
   return files.flatMap((file) => {
-    const text = readFileSync(join(root, file), "utf8");
-    const links = text.match(/https:\/\/(raw\.githubusercontent|github)\.com\/[^"\s\\]+/g) ?? [];
+    const json = readJson(join(root, file));
+    const links = registryLinks(json);
     return links
       .filter((link) => !allowed.has(link) && !link.startsWith(raw))
       .map((link) => `${file} links ${link}`);
