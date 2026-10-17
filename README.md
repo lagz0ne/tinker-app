@@ -37,13 +37,21 @@ A tag `start-vX.Y.Z` on `next` holds one asset: the Start tarball.
 Core and React keep their tinkered `start-v0.8.0` tarball URLs.
 The registry is read from the tag's own `apps/start-scaffold/public/r`.
 
+The 0.9.0 release steps are history. They do not apply to this source.
+`next` uses the planned Start 0.10.0 contract. Default source exports are blocked
+while the tooling version is below 0.10.0. Default registry installs need its
+published host and registry. Local-pack proofs work now.
+
+Before preparing 0.10.0, set the package version and add its released UPGRADE.md
+section. Keep that version, the release assets, and the registry in step. Then:
+
 ```bash
 pnpm --dir apps/start-scaffold run registry:build
-node scripts/release.mjs 0.9.0
-node scripts/release-check.mjs 0.9.0 > .release/start-v0.9.0/notes.md
+node scripts/release.mjs 0.10.0
+node scripts/release-check.mjs 0.10.0 > .release/start-v0.10.0/notes.md
 ```
 
-`release.mjs` packs Start into `.release/start-v0.9.0/`.
+`release.mjs` packs Start into `.release/start-v0.10.0/`.
 `release-check.mjs` checks the version, the UPGRADE.md section, and the registry links.
 Neither script publishes.
 
@@ -62,8 +70,17 @@ The registry keeps one owner per target. Component updates replace files whole.
 node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
-This exports small and demo copies from source into an empty output folder.
+This command is blocked until the source tooling version reaches 0.10.0.
+After that release, it exports small and demo copies into an empty output folder.
 It never changes another checkout, branch, or tag.
+
+To check an export now with an explicit pack of the current host:
+
+```bash
+node apps/start-scaffold/maintain/proof-export.mjs
+```
+
+This proof installs and checks a temporary export without a global package manager.
 
 Run heavy jobs one at a time with `VITEST_MAX_WORKERS=1` and
 `VP_RUN_CONCURRENCY_LIMIT=1`. The native scaffold and entry proofs run here.

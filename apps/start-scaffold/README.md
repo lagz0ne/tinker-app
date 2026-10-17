@@ -241,5 +241,8 @@ Their resources own and close the connection.
 
 `npm start` uses the `tinker serve` host from the `@tinker/start` dev dependency.
 Keep dev dependencies installed on the server; an `npm install --omit=dev` install cannot start it.
-Start 0.9.0 must be published before a template or degit trial (card 7).
-Local proofs use a packed Start through `TINKER_PACKAGE_DIR`.
+`next` uses the planned Start 0.10.0 contract. Default source exports are blocked
+while the tooling version is below 0.10.0. Default registry installs need its
+published host and registry. Local-pack proofs work now.
+Local registry proofs use a packed Start through `TINKER_PACKAGE_DIR`.
+The standalone export proof supplies a current host pack explicitly.
