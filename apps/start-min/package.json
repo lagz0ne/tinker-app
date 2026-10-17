@@ -9,7 +9,8 @@
     "start": "tinker serve",
     "doctor": "tinker doctor",
     "typecheck": "tsc --noEmit",
-    "postinstall": "tinker prepare"
+    "postinstall": "tinker prepare",
+    "gate:commands": "node node_modules/@tinker/start/lib/command-gate.mjs"
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.41",

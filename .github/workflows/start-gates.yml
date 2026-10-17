@@ -1,0 +1,112 @@
+name: Start and copied app gates
+
+on:
+  pull_request:
+  push:
+    branches: [next, board/slice-7]
+
+permissions:
+  contents: read
+
+jobs:
+  serial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      VITEST_MAX_WORKERS: "1"
+      VP_RUN_CONCURRENCY_LIMIT: "1"
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_USER: issue_board
+          POSTGRES_DB: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 15433:5432
+        options: >-
+          --health-cmd "pg_isready -U issue_board -d postgres"
+          --health-interval 2s --health-timeout 2s --health-retries 30
+      mailpit:
+        image: axllent/mailpit:v1.27.8
+        ports:
+          - 11026:1025
+          - 18026:8025
+      mailpit-auth:
+        image: axllent/mailpit:v1.27.8
+        env:
+          MP_SMTP_AUTH: "digest-user:p@ss-word"
+          MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+        ports:
+          - 11027:1025
+          - 18027:8025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install the pinned package manager in the user folder
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install workspace dependencies and expose its pinned tools
+        run: |
+          pnpm install --frozen-lockfile
+          echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Build and check every process command, serially
+        run: |
+          pnpm --dir apps/issue-board run gate:commands
+          pnpm --dir apps/start-scaffold run gate:commands
+          pnpm --dir apps/start-min run gate:commands
+      - name: Types, tests and service-free fault controls, serially
+        run: |
+          pnpm --dir apps/issue-board run typecheck
+          pnpm --dir apps/start-scaffold run typecheck
+          pnpm --dir apps/start-min run typecheck
+          pnpm --dir packages/start exec vp test --maxWorkers=1 --no-file-parallelism
+          pnpm --dir apps/issue-board test
+          pnpm --dir apps/start-scaffold test
+          pnpm --dir apps/issue-board run test:proofs
+          pnpm --dir apps/start-scaffold run test:proofs
+      - name: Doctor, schema, style and complete plain proofs, serially
+        run: |
+          pnpm --dir apps/issue-board run doctor
+          pnpm --dir apps/start-scaffold run doctor
+          pnpm --dir apps/start-min run doctor
+          pnpm --dir apps/issue-board run test:schema
+          pnpm --dir apps/start-scaffold run test:schema
+          pnpm exec vp check apps/issue-board apps/start-scaffold apps/start-min packages/start
+          node apps/issue-board/scripts/check-plain.mjs
+          node apps/issue-board/scripts/check-plain.mjs --prove
+          node apps/start-scaffold/scripts/check-plain.mjs
+          node apps/start-scaffold/scripts/check-plain.mjs --prove
+      - name: Fresh templates and registry app
+        run: |
+          pnpm --dir apps/start-scaffold run registry:build
+          node apps/start-scaffold/maintain/check-template.mjs
+          node apps/start-scaffold/maintain/proof-registry.mjs
+      - name: Live PostgreSQL and local Mailpit proofs and fault controls, serially
+        working-directory: apps/issue-board
+        run: |
+          node maintain/proof-transaction-resource.mjs
+          node maintain/proof-transaction.mjs
+          node maintain/proof-transaction-controls.mjs
+          node maintain/proof-bootstrap-snapshot.mjs
+          node maintain/proof-bootstrap-snapshot-controls.mjs
+          node maintain/proof-sql-cancel.mjs
+          node maintain/proof-alert-grace.mjs
+          node maintain/proof-bounds-controls.mjs
+          node maintain/proof-checkout.mjs
+          node maintain/proof-checkout-controls.mjs
+          node maintain/proof-command-exits.mjs
+          node maintain/proof-host-controls.mjs
+          node maintain/proof-issues.mjs
+          node maintain/proof-lock-order.mjs
+          node maintain/proof-comments.mjs
+          node maintain/proof-outbox.mjs
+          node maintain/proof-worker-host.mjs
+          node maintain/proof-digest.mjs
+          node maintain/proof-smtp-auth.mjs
+          node maintain/proof-import.mjs
+          node maintain/proof-import-controls.mjs
+          node maintain/proof-prior-controls.mjs

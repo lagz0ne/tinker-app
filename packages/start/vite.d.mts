@@ -10,6 +10,9 @@ export declare function tinker(
     serverEntry: string;
     routerEntry: string;
     startEntry: string;
+    /** Optional process commands, each with its matching vite.<role>.config file. */
+    workerEntry?: string;
+    cliEntry?: string;
     root?: string;
     /** Chrome compiles the client entry eagerly; on by default. */
     compileHints?: boolean;

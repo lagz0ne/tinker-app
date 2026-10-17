@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, basename, extname, resolve } from "node:path";
 
 import { parseSource } from "./source.mjs";
 
@@ -7,7 +7,9 @@ import { parseSource } from "./source.mjs";
 const namedFiles = [
   { option: "routerEntry", reads: "getRouter", required: true },
   { option: "startEntry", reads: "startInstance", required: true },
-  { option: "serverEntry", reads: "default", required: true },
+  { option: "serverEntry", reads: "default", required: true, role: "server" },
+  { option: "workerEntry", reads: "default", required: false, role: "worker" },
+  { option: "cliEntry", reads: "default", required: false, role: "cli" },
 ];
 
 /** The app names all three native command entries in its own Vite config. */
@@ -16,7 +18,12 @@ function namedFile(root, entry) {
     (file) => existsSync(join(root, file)),
   );
   const file = config && entryPath(parseSource(join(root, config)).program, entry.option);
-  return { ...entry, file };
+  const conventional = entry.role && `cmds/${entry.role}.ts`;
+  return {
+    ...entry,
+    file,
+    present: Boolean(file || (conventional && existsSync(join(root, conventional)))),
+  };
 }
 
 export function serverFile(root) {
@@ -38,7 +45,53 @@ function entryPath(node, option) {
 }
 
 export function appFiles(root) {
-  return namedFiles.map((entry) => namedFile(root, entry));
+  return namedFiles
+    .map((entry) => namedFile(root, entry))
+    .filter((entry) => entry.required || entry.present);
+}
+
+/** Process entries share one host contract; optional entries keep their own SSR build config. */
+export function commandFiles(root) {
+  return appFiles(root)
+    .filter((entry) => entry.role)
+    .map((entry) => {
+      if (entry.role === "server") return { ...entry, output: "dist/server/server.js" };
+
+      const config = ["ts", "mts", "js", "mjs"]
+        .map((extension) => `vite.${entry.role}.config.${extension}`)
+        .find((file) => existsSync(join(root, file)));
+
+      const program = config && parseSource(join(root, config)).program;
+      const input = program && entryPath(program, "ssr");
+      const outDir = program && entryPath(program, "outDir");
+
+      return {
+        ...entry,
+        config,
+        input,
+        outDir,
+        output:
+          entry.file && outDir && join(outDir, basename(entry.file, extname(entry.file)) + ".js"),
+      };
+    });
+}
+
+/** Doctor and build use the same missing/configured process-entry checks. */
+export function commandProblems(root) {
+  return commandFiles(root)
+    .filter((entry) => entry.role !== "server" && entry.file)
+    .flatMap((entry) => {
+      if (!entry.config) {
+        return [
+          `${entry.file}:1 needs vite.${entry.role}.config.ts with build.ssr and build.outDir`,
+        ];
+      }
+      if (!entry.input || resolve(root, entry.input) !== resolve(root, entry.file)) {
+        return [`${entry.config}:1 build.ssr must name ${entry.file}`];
+      }
+      if (!entry.outDir) return [`${entry.config}:1 name a literal build.outDir for ${entry.file}`];
+      return [];
+    });
 }
 
 /** The page shell: when it exists, it replaces the base's root route. */

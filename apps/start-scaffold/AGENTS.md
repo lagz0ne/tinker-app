@@ -100,7 +100,7 @@ Run the build before the type check and tests.
 Run the shipped checks before review:
 
 ```bash
-npm run build
+npm run gate:commands
 npm run typecheck
 vp test
 npm run test:proofs

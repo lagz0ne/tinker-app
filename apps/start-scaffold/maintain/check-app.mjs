@@ -7,6 +7,7 @@ const app = resolve(import.meta.dirname, "..");
 
 for (const task of [
   "check:commands",
+  "gate:commands",
   "check:plain",
   "test:schema",
   "test:imports",

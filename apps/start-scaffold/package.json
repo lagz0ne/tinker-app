@@ -28,7 +28,8 @@
     "mutate": "stryker run",
     "test:template": "node maintain/check-template.mjs",
     "check:commands": "node maintain/check-commands.mjs",
-    "test:proofs": "node maintain/proof-server-close.mjs && node maintain/proof-exit-controls.mjs && node maintain/proof-bootstrap-controls.mjs"
+    "test:proofs": "node maintain/proof-server-close.mjs && node maintain/proof-exit-controls.mjs && node maintain/proof-bootstrap-controls.mjs",
+    "gate:commands": "node node_modules/@tinker/start/lib/command-gate.mjs"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",

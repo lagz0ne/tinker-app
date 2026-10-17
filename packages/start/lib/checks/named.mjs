@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { readComponentModules } from "../component-modules.mjs";
-import { appFiles, ignoredFiles, serverFile } from "../named.mjs";
+import { appFiles, ignoredFiles, serverFile, commandProblems } from "../named.mjs";
 import { serverSource } from "../server-source.mjs";
 import { mayExport } from "../source.mjs";
 import { fail, verdict } from "./result.mjs";
@@ -23,13 +23,16 @@ export const say = {
 /** Check each configured command export, copied dependency graph and ignored Start file. */
 export function serverProblems(root) {
   if (!serverFile(root).file) return [say.noEntry];
-  return appFiles(root).flatMap(({ file, option }) => {
-    if (!file) return [`vite.config.ts: name ${option} in tinker()`];
-    if (existsSync(join(root, file))) return [];
-    return option === "serverEntry"
-      ? [say.noServer(root)]
-      : [`${file} is missing; copy the app entry`];
-  });
+  return [
+    ...appFiles(root).flatMap(({ file, option }) => {
+      if (!file) return [`vite.config.ts: name ${option} in tinker()`];
+      if (existsSync(join(root, file))) return [];
+      return option === "serverEntry"
+        ? [say.noServer(root)]
+        : [`${file} is missing; copy the app entry`];
+    }),
+    ...commandProblems(root),
+  ];
 }
 
 export function named(root) {

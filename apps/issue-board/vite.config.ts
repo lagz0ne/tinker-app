@@ -7,6 +7,8 @@ export default defineConfig({
       serverEntry: "cmds/server.ts",
       routerEntry: "cmds/router.ts",
       startEntry: "cmds/start.ts",
+      workerEntry: "cmds/worker.ts",
+      cliEntry: "cmds/cli.ts",
     }),
   ],
 });

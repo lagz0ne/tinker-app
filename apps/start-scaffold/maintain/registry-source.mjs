@@ -178,7 +178,7 @@ export async function registryItems(options = {}) {
   );
   for (const name of ["registry:build", "check:commands", ...tasks]) delete full.scripts[name];
   full.scripts.check =
-    "vp check && vp run typecheck && vp run test && vp run test:proofs && vp run check:plain && vp run test:schema && vp run doctor";
+    "vp run gate:commands && vp check && vp run typecheck && vp run test && vp run test:proofs && vp run check:plain && vp run test:schema && vp run doctor";
 
   const packages = { "app.package.json": minimal, "starter.package.json": full };
   const items = [];

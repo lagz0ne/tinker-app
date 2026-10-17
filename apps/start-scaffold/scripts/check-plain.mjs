@@ -1354,10 +1354,6 @@ const entryHelpers = {
     // New: copied c55998e entry/dev-error devErrorPage: read a failed response and build its dev page.
     "devErrorPage",
   ],
-  "cmds/server.ts": [
-    // Commands keep wiring inline; tests cover input, startup, exit, and close contracts.
-    "main",
-  ],
   "cmds/router.ts": [
     // New: only the top-level named export owns the browser roots in plain view.
     "getRouter",
@@ -1383,15 +1379,6 @@ const entryHelpers = {
   ],
 };
 
-function serverEntryFunction(node) {
-  return (
-    ts.isFunctionDeclaration(node) &&
-    node.parent === node.getSourceFile() &&
-    (ts.getCombinedModifierFlags(node) & (ts.ModifierFlags.Export | ts.ModifierFlags.Default)) ===
-      (ts.ModifierFlags.Export | ts.ModifierFlags.Default)
-  );
-}
-
 function definedMainCall(node) {
   return (
     ts.isCallExpression(node) &&
@@ -1401,6 +1388,23 @@ function definedMainCall(node) {
     nameOf(node.expression) === "defineMain" &&
     declarationFile(node).endsWith("/tinker/base/main.ts")
   );
+}
+
+// Every process default uses the real typed marker, including worker and CLI commands.
+function checkCommandMain(node) {
+  if (!isCommand(node)) return;
+  if (ts.isExportAssignment(node) && !node.isExportEquals) {
+    if (!definedMainCall(node.expression)) {
+      fail(node, "command-main: use defineMain from ~/base/main");
+    }
+    return;
+  }
+  if (
+    ts.canHaveModifiers(node) &&
+    ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)
+  ) {
+    fail(node, "command-main: use defineMain from ~/base/main");
+  }
 }
 
 function definedMainCallback(node) {
@@ -1416,7 +1420,6 @@ function isEntryHelper(node) {
   if (!node) return false;
   const file = pathOf(node);
   if (!entryHelpers[file]?.includes(nameOf(functionName(node)))) return false;
-  if (file === "cmds/server.ts") return serverEntryFunction(node);
   if (file !== "cmds/router.ts") return true;
 
   return (
@@ -1619,6 +1622,7 @@ for (const source of sources) {
   }
   walk(source, (node) => {
     checkCommandImport(node);
+    checkCommandMain(node);
     checkOperationWire(node);
     checkFetch(node);
     checkBrowserHttp(node);
@@ -1673,6 +1677,18 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    ...["worker", "cli"].map((role) => [
+      `${role}-defined-main-allowed`,
+      null,
+      'import {defineMain} from "~/base/main"; export default defineMain(async({exit})=>{exit(64);return {closed:Promise.resolve()};});',
+      `cmds/check-${role}.ts`,
+    ]),
+    [
+      "bare-process-main",
+      "command-main",
+      "export default async function main(){return {closed:Promise.resolve()};}",
+      "cmds/check-old-main.ts",
+    ],
     [
       "mail-net-static-import",
       "http-client",

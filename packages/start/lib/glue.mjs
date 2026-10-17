@@ -63,7 +63,16 @@ const passed = ["prerender", "pages", "spa", "sitemap"];
  * @param {Record<string, unknown>} options - From vite.config.ts; why: what the app asked for.
  */
 export function passThrough(options) {
-  const known = ["root", "serverEntry", "routerEntry", "startEntry", "compileHints", ...passed];
+  const known = [
+    "root",
+    "serverEntry",
+    "routerEntry",
+    "startEntry",
+    "workerEntry",
+    "cliEntry",
+    "compileHints",
+    ...passed,
+  ];
   const unknown = Object.keys(options).filter((key) => !known.includes(key));
   if (unknown.length > 0) {
     throw new Error(`tinker(): unknown option ${unknown.join(", ")}; known: ${known.join(", ")}`);

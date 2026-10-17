@@ -17,7 +17,8 @@
     "build:worker": "vp build --config vite.worker.config.ts",
     "worker": "node maintain/worker.mjs",
     "build:cli": "vp build --config vite.cli.config.ts",
-    "cli": "node maintain/cli.mjs"
+    "cli": "node maintain/cli.mjs",
+    "gate:commands": "node node_modules/@tinker/start/lib/command-gate.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "catalog:",

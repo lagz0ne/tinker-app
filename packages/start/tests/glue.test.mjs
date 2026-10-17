@@ -129,7 +129,7 @@ test("Start's static output options pass on; an unknown option fails the build",
     prerender: { enabled: true },
   });
   expect(() => passThrough({ prerendr: {}, sap: {} })).toThrow(
-    "tinker(): unknown option prerendr, sap; known: root, serverEntry, routerEntry, startEntry, compileHints, prerender, pages, spa, sitemap",
+    "tinker(): unknown option prerendr, sap; known: root, serverEntry, routerEntry, startEntry, workerEntry, cliEntry, compileHints, prerender, pages, spa, sitemap",
   );
   expect(passThrough({ spa: { enabled: true } })).toStrictEqual({
     spa: { enabled: true },

@@ -19,6 +19,12 @@ old host. See the [current authoring contract](https://github.com/lagz0ne/tinker
 - Golden and minimal templates, registry output, and shared tests follow that
   pattern. Start add/update/check is planned; it is not an available command.
 
+The serial gate reads optional workerEntry and cliEntry beside serverEntry.
+Each extra entry has its own vite.worker/cli.config file with literal build.ssr
+and build.outDir. Build and doctor name those commands; gate:commands compiles
+and checks every configured process main with the host, in order. CI runs the
+app gates and live PostgreSQL proofs in one serial job.
+
 ## 0.9.0
 
 Start 0.9.0 is released from `lagz0ne/tinker-app`, tag `start-v0.9.0`.

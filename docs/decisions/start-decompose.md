@@ -127,6 +127,13 @@ A grace deadline of 10 seconds is the only hard stop. SIGINT is 130; SIGTERM is
 143, even if a later error asks for 1. Other codes are 0 success, 1 unexpected
 error, 64 bad args, 65 bad data, 75 temporary failure, and 78 bad startup config.
 
+Vite names serverEntry, routerEntry, and startEntry. Apps with a worker or CLI
+also name workerEntry and cliEntry and provide matching vite.worker.config.ts
+or vite.cli.config.ts with literal build.ssr and build.outDir. Doctor and build
+check those exports/configs. gate:commands builds and runs each process entry
+serially, proving its unknown-input exit and joined close without live services.
+The real app tests and live proofs exercise configured startup and work paths.
+
 Prod awaits main before listening and checks fetch. Dev shares one startup and
 closes on HMR replacement. **A command exit closes the dev server. Fix startup
 config, then restart `vp dev`.** A returned stopped server response is 503
