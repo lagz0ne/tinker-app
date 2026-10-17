@@ -17,6 +17,7 @@ function AccountForm() {
   const busy = useData(pending);
   return (
     <form
+      method="post"
       className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();

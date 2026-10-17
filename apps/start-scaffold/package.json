@@ -14,6 +14,7 @@
     "test:middleware": "node maintain/check-middleware.mjs",
     "test:serve": "node maintain/check-serve.mjs",
     "registry:build": "node maintain/build-registry.mjs",
+    "test:native-form": "node maintain/check-native-form.mjs && node maintain/check-native-form-control.mjs",
     "test:registry": "node maintain/check-registry.mjs",
     "test:registry-hook": "node --test maintain/test-registry-staged.mjs",
     "test:seam:fixture": "node maintain/check-seam-fixture.mjs",
