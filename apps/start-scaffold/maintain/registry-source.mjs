@@ -7,6 +7,9 @@ import { releaseUrls } from "../../../packages/start/lib/release.mjs";
 export const app = resolve(import.meta.dirname, "..");
 export const root = resolve(app, "../..");
 
+/** The new main/host contract first ships together in this planned release. */
+export const templateHostVersion = "0.10.0";
+
 /** Examples may add files, but never replace the app template or another item's files. */
 function checkTargets(registry) {
   const protectedFiles = new Set([
@@ -133,7 +136,12 @@ async function releasePackage(path, packs, releaseVersion) {
 
 /** One release tag pins packages and registry links unless a local proof supplies paths. */
 async function registryRelease({ packs, url, version }) {
-  version ??= JSON.parse(await readFile(join(root, "packages/start/package.json"), "utf8")).version;
+  version ??= templateHostVersion;
+  releaseUrls(version);
+  assert.ok(
+    packs || version.localeCompare(templateHostVersion, undefined, { numeric: true }) >= 0,
+    `These templates require @tinker/start ${templateHostVersion}; the released 0.9.0 host is incompatible. Publish a matching Start and registry release first, or use an explicit current local pack for proofs.`,
+  );
   url ??= `https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v${version}/apps/start-scaffold/public/r`;
   return { packs, url, version };
 }

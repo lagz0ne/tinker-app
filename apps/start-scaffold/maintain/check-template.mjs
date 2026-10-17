@@ -11,7 +11,21 @@ import { copyTemplates } from "./template-sync.mjs";
 const scratch = await mkdtemp(join(tmpdir(), "start-templates-"));
 
 try {
-  await copyTemplates(scratch);
+  const packs = await mkdtemp(join(tmpdir(), "start-template-packs-"));
+  try {
+    const packed = spawnSync(
+      process.execPath,
+      [join(root, "packages/start/scripts/pack.mjs"), packs],
+      {
+        encoding: "utf8",
+      },
+    );
+    assert.equal(packed.status, 0, packed.stdout + packed.stderr);
+    await copyTemplates(scratch, { packs });
+  } finally {
+    await rm(packs, { recursive: true, force: true });
+  }
+
   const minimal = join(root, "apps/start-min/tinker");
   await compareFiles(join(minimal, "base"), join(app, "tinker/base"));
   for (const name of await readdir(join(minimal, "components"))) {

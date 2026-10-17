@@ -171,6 +171,11 @@ From the workspace root, copy both templates into a new empty output folder:
 node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
+Default exports are blocked until the planned Start 0.10.0 host and matching
+registry release. Released 0.9.0 cannot run these templates. Local proofs pass
+an explicit current host pack; the export carries it in vendor and checks its
+host files against this source. Nothing is published.
+
 The export copies source. It never changes template branches or another checkout.
 The golden runtime is `tinker/`; its mutation floor is 85. The lander runs mutation checks.
 

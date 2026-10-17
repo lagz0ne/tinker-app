@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { expect, test } from "vite-plus/test";
 
+import {
+  registryItems,
+  templateHostVersion,
+} from "../../../apps/start-scaffold/maintain/registry-source.mjs";
+import { copyTemplates } from "../../../apps/start-scaffold/maintain/template-sync.mjs";
 import { releaseUrls } from "../lib/release.mjs";
 
 test("release URLs name Start under tinker-app and Core/React under tinkered 0.8.0", () => {
@@ -36,7 +44,7 @@ test("a missing version or a path cannot name a release", () => {
   }
 });
 
-test("the tooling version, app release URL, and both health copies agree", () => {
+test("the tooling and health copies agree while templates name their required host", () => {
   const root = new URL("../../../", import.meta.url);
   const version = JSON.parse(
     readFileSync(new URL("packages/start/package.json", root), "utf8"),
@@ -44,12 +52,32 @@ test("the tooling version, app release URL, and both health copies agree", () =>
   const app = JSON.parse(
     readFileSync(new URL("apps/start-scaffold/app.package.json", root), "utf8"),
   );
-  expect(app.devDependencies["@tinker/start"]).toBe(releaseUrls(version)["@tinker/start"]);
+  expect(app.devDependencies["@tinker/start"]).toBe(
+    releaseUrls(templateHostVersion)["@tinker/start"],
+  );
   for (const name of ["start-min", "start-scaffold"]) {
     const health = readFileSync(
       new URL(`apps/${name}/tinker/components/health/health.ts`, root),
       "utf8",
     );
     expect(health.match(/baseVersion = "([^"]+)"/)[1]).toBe(version);
+  }
+});
+
+test("unreleased exports refuse the old host before copying any app files", async () => {
+  const out = await mkdtemp(join(tmpdir(), "start-export-contract-"));
+  try {
+    await expect(copyTemplates(out)).rejects.toThrow("require @tinker/start 0.10.0");
+    expect(await readdir(out)).toEqual([]);
+    await expect(registryItems({ version: "0.9.0" })).rejects.toThrow(
+      "require @tinker/start 0.10.0",
+    );
+    const { packages } = await registryItems();
+    for (const pkg of Object.values(packages)) {
+      expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.10.0")["@tinker/start"]);
+      expect(JSON.stringify(pkg)).not.toMatch(/workspace:|catalog:/);
+    }
+  } finally {
+    await rm(out, { recursive: true, force: true });
   }
 });

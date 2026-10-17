@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+These templates require the planned Start 0.10.0 host and matching registry.
+Released 0.9.0 cannot run the new main contract. Default source exports stop
+with that message until the tooling version reaches 0.10.0. Local proof
+exports carry an explicit current host pack in vendor; nothing is published.
+
 These changes are in current source, not the released 0.9.0 tarball. Use the
 matching tooling host with the copied runtime; do not mix the new main with the
 old host. See the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md).
