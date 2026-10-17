@@ -99,8 +99,11 @@ late throw, output flush, grace timeout, and dev socket close after cleanup.
 
 Outside src and cmds, the runtime and host changes are:
 
-- tinker/components/auth/{auth.server,settings.server,index.server}.ts:
-  directly depend on sync account operations and the mail queue.
+- Auth/sync/mail hooks: upstream the direct auth dependencies on sync account
+  operations and mail.authWork, removal of hook tags and the saved-context bridge,
+  and the stream file move into auth with its component dependency changes.
+  apps/start-scaffold still ships the old bridge and tags; update its source
+  and registry copies when upstreaming.
 - tinker/components/sync/{history.server,index.server}.ts: read-only cursors and
   an idempotent account-stream insert.
 - drizzle/20261016143346_account_streams: seed public and backfill accounts.

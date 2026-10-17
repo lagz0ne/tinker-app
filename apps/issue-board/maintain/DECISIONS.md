@@ -31,3 +31,5 @@ Auth directly depends on sync account operations and the mail queue. Hooks keep
 operation spans under the scope-owned auth build span; mail sends stay under
 mail.authWork. There are no hook tags, saved context, or AsyncLocalStorage.
 The auth-bound stream file moves into auth so components do not form a loop.
+
+Accepted F1: during graceful shutdown, auth hooks are refused with `Disposed`; sign-in can error after commit and the next sign-in repairs the stream row; a lost sign-out notice is harmless because streams close.
