@@ -1092,6 +1092,17 @@ function createRequireReference(node) {
   );
 }
 
+// SMTP owns its native sockets; only its lazy net module may load TCP.
+function smtpNetModule(node, specifier) {
+  const owner = enclosingFunction(node);
+  return (
+    specifier.text === "node:net" &&
+    pathOf(node) === "tinker/components/mail/modules.ts" &&
+    owner &&
+    factoryBody(owner)
+  );
+}
+
 function checkHttpImport(node) {
   if (typeOnlyImport(node) || typeReference(node)) return;
   const specifier = importSpecifier(node);
@@ -1105,6 +1116,8 @@ function checkHttpImport(node) {
     fail(node, "http-client: module loads must use a literal path");
     return;
   }
+
+  if (smtpNetModule(node, specifier)) return;
 
   if (
     httpClients.some(
@@ -1332,7 +1345,7 @@ function checkPlainFunction(node) {
 const entryHelpers = {
   "tinker/components/database/database.server.ts": ["queryWithStop"],
   "tinker/components/database/lease.server.ts": ["leaseFrom", "logQuery", "query", "release"],
-  "tinker/base/main.ts": ["defineMain", "mainErrorCode", "checkClosed"],
+  "tinker/base/main.ts": ["defineMain"],
   "tinker/base/panics.server.ts": [
     // c55998e createServerEntry: register process panic cleanup without identity wrapping.
     "observeServerPanics",
@@ -1342,7 +1355,7 @@ const entryHelpers = {
     "devErrorPage",
   ],
   "cmds/server.ts": [
-    // Cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; deliberately untested glue.
+    // Commands keep wiring inline; tests cover input, startup, exit, and close contracts.
     "main",
   ],
   "cmds/router.ts": [
@@ -1660,6 +1673,18 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    [
+      "mail-net-static-import",
+      "http-client",
+      'import * as forbiddenNet from "node:net"; export { forbiddenNet };',
+      "tinker/components/mail/modules.ts",
+    ],
+    [
+      "mail-other-native-module",
+      "http-client",
+      'import {resource} from "@tinker/core"; export const forbiddenTls = resource({factory: () => import("node:tls")});',
+      "tinker/components/mail/modules.ts",
+    ],
     [
       "local-resource-return-allowed",
       null,

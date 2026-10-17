@@ -103,6 +103,21 @@ Tests and generated files do not count.
     - `src/transport/teams.functions.ts#updateTeam.callback`
     - `src/transport/todos.functions.ts#updateTodo.callback`
 
+- **tinker/base/main.ts#mainErrorCode**
+  - `error`: `unknown`. From command startup; why: map only known config errors to 78.
+  - Callers:
+    - `cmds/cli.ts#module.callback1`
+    - `cmds/server.ts#module.callback1`
+    - `cmds/worker.ts#module.callback1`
+
+- **tinker/base/main.ts#checkClosed**
+  - `result`: `Scope.Result`. From a closed root; why: surface work and cleanup errors before exit.
+  - Callers:
+    - `cmds/cli.ts#module.callback1`
+    - `cmds/server.ts#closed.closeRoots`
+    - `cmds/server.ts#module.callback1`
+    - `cmds/worker.ts#module.callback1`
+
 - **tinker/components/errors/errors.ts#raise**
   - `kind`: `N`. From a failed base action; why: choose the managed error.
   - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.

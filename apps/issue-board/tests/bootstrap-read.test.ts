@@ -4,7 +4,13 @@ import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
-import { authStartup, authSettings, user } from "~/components/auth/index.server";
+import {
+  authStartup,
+  authSettings,
+  user,
+  session as authSession,
+  liveAccount,
+} from "~/components/auth/index.server";
 import { database, databaseUrl, drizzleOrm, migrate } from "~/components/database/index.server";
 import { startRequests, backendStop } from "~/components/requests";
 import {
@@ -391,3 +397,80 @@ test("direct auth hooks keep spans under scope resources and use the pool", asyn
     "TRACE auth -> sync.accountCreated (user + session), sync.accountNotice; mail.authWork -> sendMail",
   );
 });
+
+for (const expired of [false, true]) {
+  test(`page account, bootstrap and live reads write no tables; expired=${expired}`, async () => {
+    const root = createScope({
+      extensions: [startRequests, authStartup],
+      presets: [proofDatabase, proofMail],
+      tags: [
+        backendStop(new AbortController().signal),
+        bootstrapSlot(bootstrap),
+        readAccountSlot(readAccount),
+        authSettings({
+          origin: "http://localhost:4318",
+          secret: "test-secret-with-at-least-thirty-two-letters",
+        }),
+      ],
+    });
+    await root.ready;
+    try {
+      await root.run(migrate);
+      const signup = await root.run(handleAuth, {
+        input: new Request("http://localhost:4318/api/auth/sign-up/email", {
+          method: "POST",
+          headers: { origin: "http://localhost:4318", "content-type": "application/json" },
+          body: JSON.stringify({
+            name: "Old cookie",
+            email: "old@example.test",
+            password: "safe-password-42",
+          }),
+        }),
+      });
+      expect(signup.status).toBe(200);
+      const headers = new Headers({
+        cookie: signup.headers
+          .getSetCookie()
+          .map((value) => value.split(";")[0])
+          .join("; "),
+      });
+      const db = await root.resolve(database);
+      const { eq } = await root.resolve(drizzleOrm);
+      const [before] = await db.select().from(authSession);
+      await db
+        .update(authSession)
+        .set({
+          expiresAt: new Date(Date.now() + (expired ? -1000 : 3600000)),
+          updatedAt: new Date(0),
+        })
+        .where(eq(authSession.id, before.id));
+
+      databaseQueries.length = 0;
+      expect(await root.run(readAccount, { tags: requestHeaders(headers) })).toBe(
+        expired ? null : before.userId,
+      );
+      const snapshot = await root.run(bootstrap, { tags: requestHeaders(headers) });
+      expect(snapshot.private?.stream ?? null).toBe(expired ? null : before.userId);
+      expect(await root.run(liveAccount, { tags: requestHeaders(headers) })).toBe(
+        expired ? null : before.userId,
+      );
+      expect(
+        databaseQueries.filter((query) => /\b(insert|update|delete)\b/i.test(query)),
+        "page reads must not write any table",
+      ).toEqual([]);
+
+      const action = await root.run(handleAuth, {
+        input: new Request("http://localhost:4318/api/auth/get-session", {
+          method: "POST",
+          headers: { cookie: headers.get("cookie")!, origin: "http://localhost:4318" },
+        }),
+      });
+      expect(action.status).toBe(200);
+      const after = await db.select().from(authSession);
+      if (expired) expect(after).toEqual([]);
+      else expect(after[0].expiresAt.getTime()).toBeGreaterThan(Date.now() + 3600000);
+    } finally {
+      await root.close({ graceful: true });
+    }
+  });
+}

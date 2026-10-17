@@ -18,6 +18,7 @@ import { write } from "./write-boundary";
 test("a local endpoint that never greets times out and releases the claim", async () => {
   const sockets = new Set<Socket>();
   let bytes = 0;
+
   const server = createServer((socket) => {
     sockets.add(socket);
     socket.on("data", (data) => {
@@ -25,11 +26,13 @@ test("a local endpoint that never greets times out and releases the claim", asyn
     });
     socket.on("close", () => sockets.delete(socket));
   });
+
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Expected local endpoint");
 
   const stop = new AbortController();
+
   const root = createScope({
     signal: stop.signal,
     presets: [proofDatabase],
@@ -75,6 +78,7 @@ test("SMTP URL options keep credentials, IPv6, TLS and no-auth settings", async 
   ] as const) {
     const options: unknown[] = [];
     const stop = new AbortController();
+
     const root = createScope({
       signal: stop.signal,
       tags: [smtpUrl(new URL(url)), mailFrom("board@example.test")],
@@ -101,5 +105,67 @@ test("SMTP URL options keep credentials, IPv6, TLS and no-auth settings", async 
       stop.abort();
       expect((await root.closed).status).toBe("success");
     }
+  }
+});
+
+test("a progressing SMTP reply is cut off at the total deadline", async () => {
+  const closed = Promise.withResolvers<void>();
+  let drips = 0;
+  const sockets = new Set<Socket>();
+
+  const server = createServer((socket) => {
+    sockets.add(socket);
+    socket.write("220 local SMTP\r\n");
+    let interval: ReturnType<typeof setInterval> | undefined;
+
+    socket.on("error", () => {});
+    socket.on("data", (data) => {
+      if (!data.toString().startsWith("EHLO") || interval) return;
+      interval = setInterval(() => {
+        drips += 1;
+        socket.write("250-still working\r\n");
+      }, 10);
+    });
+    socket.on("close", () => {
+      clearInterval(interval);
+      sockets.delete(socket);
+      closed.resolve();
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Expected local endpoint");
+
+  const root = createScope({
+    tags: [
+      smtpUrl(new URL(`smtp://127.0.0.1:${address.port}`)),
+      mailFrom("proof@example.test"),
+      alertMailTimeout(300),
+    ],
+  });
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await root.ready;
+    const sender = await root.resolve(alertMail);
+    await expect(
+      sender.send({
+        to: "proof@example.test",
+        subject: "No message is sent",
+        text: "SMTP never reaches MAIL",
+      }),
+    ).rejects.toThrow(/timeout/i);
+    expect(drips).toBeGreaterThan(0);
+
+    deadline = setTimeout(
+      () => closed.reject(new Error("active SMTP socket must close at total deadline")),
+      1500,
+    );
+    await closed.promise;
+  } finally {
+    clearTimeout(deadline);
+    await root.close({ graceful: true });
+    for (const socket of sockets) socket.destroy();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });

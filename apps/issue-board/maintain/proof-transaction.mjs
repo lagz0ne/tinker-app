@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync, readdirSync } from "node:fs";
 import { request } from "node:http";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
@@ -112,7 +112,11 @@ try {
   await db.query(`CREATE CONSTRAINT TRIGGER ${functionName} AFTER INSERT ON sync_execution
     DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ${functionName}()`);
   trigger = true;
-  const built = readFileSync(resolve(directory, "dist/server/server.js"), "utf8");
+  const output = resolve(directory, "dist/server");
+  const built = readdirSync(output, { recursive: true })
+    .filter((file) => file.endsWith(".js"))
+    .map((file) => readFileSync(resolve(output, file), "utf8"))
+    .join("\n");
   const functionId =
     /"([a-f0-9]{64})": \{\s+functionName: "updateIssue_createServerFn_handler"/.exec(built)?.[1];
   assert(functionId);

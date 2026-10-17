@@ -253,3 +253,20 @@ It runs the served-server close check, exit controls, and bootstrap controls
 in order. No services are needed. The Start gate list in AGENTS.md includes it.
 Exit logging falls back to the stack or String(reason) when a typed payload
 cannot be JSON encoded. Even a broken output stream cannot stop exit cleanup.
+
+Idle transaction handles now end on close or release without checking out a
+client. The first query sets LOCAL lock_timeout (500 ms) and statement_timeout
+(1000 ms); typed tags cap them at 1000 and 2000 ms. These bounds also apply to
+COMMIT. Alert sends have a separate total deadline of at most 3000 ms.
+The mail component owns TCP sockets through Nodemailer getSocket so a send
+timeout stops the active connection too. Its lazy node:net module is the sole
+new native network boundary; no dependency was added.
+Live checks are proof-sql-cancel.mjs, proof-alert-grace.mjs and
+proof-bounds-controls.mjs; run them beside the other PostgreSQL proofs.
+
+Page session GETs use Better Auth's deferSessionRefresh option and disable
+refresh/cache in the page lookup. Expired GETs do not delete sessions. Explicit
+POST /api/auth/get-session remains available for refresh and expiry cleanup.
+Old and expired cookies are checked against all SQL writes, including live
+account checks and bootstrap. The legacy auth/profile mail paths remain as
+described above; the board outbox is not a claim about all demo mail.

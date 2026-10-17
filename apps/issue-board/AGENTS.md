@@ -93,17 +93,18 @@ There is no default server entry.
 Prepare and doctor name a missing entry and show starter code.
 They never write an entry for the app.
 
-Importing the server command starts nothing. Its body has imports and one default async main.
+Importing the server command starts nothing. It exports its async main through defineMain.
 The prod host calls main once before listening. The dev host starts on its first fetch.
-The host calls `main({ env, signal, stdout, stderr })` once. The streams need only
+The host calls `main({ env, args, signal, stdout, stderr, exit })` once. The streams need only
 `write(chunk: string): unknown`. The command reads no process globals and loads no env file.
 It binds each value inline, for example `env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM)`.
 Main returns `{ fetch, closed }`. Aborting the host signal closes app, then telemetry.
 The one `closed` promise reports app failure first, then the first teardown error.
 A signal during startup lets the start finish, then closes app before telemetry.
-The prod host never listens after that signal and exits 0 for that stop reason.
-Any other start failure still exits with code 1, even if the host signal was aborted.
-A start error closes what started, writes cleanup errors to stderr, and rethrows the start error.
+The prod host never listens after that signal. The first exit code wins; SIGINT is 130 and SIGTERM is 143.
+Startup config errors use 78; unexpected errors use 1 unless an earlier exit won.
+An outer start catch calls exit(mainErrorCode(error), error), then returns a stopped result.
+It does not rethrow or print the same error; the host prints the reason.
 The Node host loads .env and stops accepting requests on SIGINT or SIGTERM.
 The dev host owns startup sharing, retry after failure, and abort on HMR replacement.
 The dev host shares one startup promise and clears it on failure so the next request can retry.
@@ -111,7 +112,7 @@ It lists extensions and settings by hand, in the user's order.
 It imports each component's public index.
 There are no generated wiring files or role files.
 Import createScope from @tinker/core.
-Main has no let, once helper, or close callback. A local ended checks close results.
+Main keeps local state and close callbacks inline. checkClosed checks root results.
 `server-entry.ts` renders over the supplied app handle.
 `panics.server.ts` reports process failures without wrapping the handle.
 `router-entry.tsx` loads the route tree and binds native views; the browser command owns both roots.
@@ -127,15 +128,15 @@ Copied base code owns only entry, close, panic, and observation glue.
 Commands import only ~/base, ~/components, @/, and @tinker/core.
 Bind one tag per app slot. Never re-export app wiring from a command.
 The app writes the close order itself: app, then telemetry.
-A start or close error is rethrown after both roots end.
+A close error calls exit(1, error) after both roots end; main still returns its closed promise.
 
 The server adapter receives `requestContext`.
 Start borrows the context. The command binds the render observer tag.
 An optional `fetch(request, next)` can wrap requests.
 The dev host closes on HMR replacement. The prod host closes on process shutdown.
 
-The default server main is the only server cmd exception.
-The cmd seam keeps Duke's inline env !== undefined && tag(...) list in plain view; it stays untested glue on purpose.
+Server, worker, and CLI process mains use defineMain and the same host contract.
+Commands keep wiring inline. Their input, startup, exit, and close contracts are tested.
 The browser main lives in `cmds/router.ts#getRouter`, an approved named cmd exception.
 It binds router options, extensions, and each sync reader tag.
 No app code may import a command file.
@@ -172,7 +173,7 @@ node scripts/check-schema.mjs
 
 Run the repo's lint and strict style census when present.
 Config enters through typed tags; local services use `compose.yml`.
-Only cmds/server.ts reads app inputs and fills typed tags.
+Direct cmds/* entry files read host inputs and fill typed tags.
 Tests bind typed tags directly, without env objects.
 
 ## TanStack setup

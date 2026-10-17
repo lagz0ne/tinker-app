@@ -120,7 +120,18 @@ for (const queried of [false, true]) {
 
     expect(releases).toEqual(queried ? [false] : []);
 
-    expect(queries).toEqual(queried ? ["BEGIN", "SELECT 1", "SELECT 2", "COMMIT"] : []);
+    expect(queries).toEqual(
+      queried
+        ? [
+            "BEGIN",
+            "SET LOCAL lock_timeout = '500ms'",
+            "SET LOCAL statement_timeout = '1000ms'",
+            "SELECT 1",
+            "SELECT 2",
+            "COMMIT",
+          ]
+        : [],
+    );
 
     await root.close({ graceful: true });
   });
@@ -164,3 +175,53 @@ test("client fields fail before checkout and forward after checkout", async () =
 
   expect(releases).toEqual([false]);
 });
+
+for (const end of ["close", "release"] as const) {
+  test(`an idle handle cannot query after ${end}, with zero checkout`, async () => {
+    let acquired = 0;
+    const queries: string[] = [];
+    const client = {
+      query: async (text: string) => {
+        queries.push(text);
+        return { rows: [] };
+      },
+      release() {},
+    } as unknown as PoolClient;
+    const root = createScope({
+      presets: [
+        preset(database, async () =>
+          Object.assign(drizzle({ client }), {
+            listen: async () => () => {},
+            checkout: async (guard?: Database.QueryGuard) =>
+              leaseFrom(
+                async () => {
+                  acquired += 1;
+                  return client;
+                },
+                drizzle,
+                guard,
+              ),
+          }),
+        ),
+      ],
+    });
+    await root.ready;
+    const session = root.createSession();
+    const tx = await session.resolve(transaction);
+    const { sql } = await root.resolve(drizzleOrm);
+    if (end === "close") await session.close({ graceful: true });
+    else session.release(transaction);
+
+    let failure;
+    try {
+      await tx.execute(sql`SELECT 1`);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ kind: "TransactionEnded" });
+    expect(acquired).toBe(0);
+    expect(queries).toEqual([]);
+    await session.close({ graceful: true });
+    await root.close({ graceful: true });
+  });
+}

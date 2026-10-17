@@ -121,7 +121,16 @@ try {
   const failed = await root.settle(refuse, { signal: new AbortController().signal });
   assert.equal(failed.status, "failed");
   assert.equal(failed.error.kind, "StepRefused");
-  assert.deepEqual(queries, ["BEGIN", "ROLLBACK"], "a thrown step must roll back exactly once");
+  assert.deepEqual(
+    queries,
+    [
+      "BEGIN",
+      "SET LOCAL lock_timeout = '500ms'",
+      "SET LOCAL statement_timeout = '1000ms'",
+      "ROLLBACK",
+    ],
+    "a thrown step must roll back exactly once",
+  );
   assert.equal(
     (await client.query("SELECT count(*)::int AS n FROM tx_resource_proof")).rows[0].n,
     0,
@@ -134,7 +143,16 @@ try {
   await written.promise;
   stop.abort();
   assert.equal((await cancelled).status, "cancelled");
-  assert.deepEqual(queries, ["BEGIN", "ROLLBACK"], "cancelled step must roll back exactly once");
+  assert.deepEqual(
+    queries,
+    [
+      "BEGIN",
+      "SET LOCAL lock_timeout = '500ms'",
+      "SET LOCAL statement_timeout = '1000ms'",
+      "ROLLBACK",
+    ],
+    "cancelled step must roll back exactly once",
+  );
   assert.equal(
     (await client.query("SELECT count(*)::int AS n FROM tx_resource_proof")).rows[0].n,
     0,
@@ -157,7 +175,12 @@ try {
 
   assert.deepEqual(
     queries,
-    ["BEGIN", "ROLLBACK"],
+    [
+      "BEGIN",
+      "SET LOCAL lock_timeout = '500ms'",
+      "SET LOCAL statement_timeout = '1000ms'",
+      "ROLLBACK",
+    ],
     "released transaction must roll back exactly once",
   );
 
@@ -170,7 +193,12 @@ try {
   assert.equal(committed.value, "saved");
   assert.deepEqual(
     queries,
-    ["BEGIN", "COMMIT"],
+    [
+      "BEGIN",
+      "SET LOCAL lock_timeout = '500ms'",
+      "SET LOCAL statement_timeout = '1000ms'",
+      "COMMIT",
+    ],
     "explicit commit then defer must not issue a second end",
   );
   assert.equal(
@@ -189,7 +217,12 @@ try {
     "TransactionEnded",
     "query after explicit end must throw TransactionEnded",
   );
-  assert.deepEqual(queries, ["BEGIN", "COMMIT"]);
+  assert.deepEqual(queries, [
+    "BEGIN",
+    "SET LOCAL lock_timeout = '500ms'",
+    "SET LOCAL statement_timeout = '1000ms'",
+    "COMMIT",
+  ]);
   console.log(
     "PASS live PostgreSQL: query after explicit end throws typed TransactionEnded, with no later SQL.",
   );

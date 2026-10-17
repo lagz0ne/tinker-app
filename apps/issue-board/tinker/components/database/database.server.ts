@@ -23,6 +23,19 @@ export const databaseConnectTimeout = tag<number>({
   parse: z.number().int().positive(),
 });
 
+/** Per-statement transaction bounds also cover COMMIT and deferred constraints. */
+export const databaseLockTimeout = tag<number>({
+  label: "database.lockTimeout",
+  default: 500,
+  parse: z.number().int().positive().max(1000),
+});
+
+export const databaseStatementTimeout = tag<number>({
+  label: "database.statementTimeout",
+  default: 1000,
+  parse: z.number().int().positive().max(2000),
+});
+
 const migrationsFolder = "drizzle";
 
 /** Feature code uses native PostgreSQL queries, without the driver's client field. */
@@ -169,8 +182,15 @@ export const databaseSetup = extension({
 export const transaction = resource({
   label: "database.transaction",
   target: "session",
-  depends: { database },
-  factory: async ({ database }, { defer }): Promise<Database.SessionTransaction> => {
+  depends: {
+    database,
+    lockTimeout: databaseLockTimeout,
+    statementTimeout: databaseStatementTimeout,
+  },
+  factory: async (
+    { database, lockTimeout, statementTimeout },
+    { defer },
+  ): Promise<Database.SessionTransaction> => {
     if (!database.checkout) throw new Error("Database preset must supply checkout for writes");
     let state: "idle" | "open" | "committed" | "rolledBack" = "idle";
     let starting: Promise<unknown> | undefined;
@@ -188,11 +208,15 @@ export const transaction = resource({
         if (state === "idle") {
           state = "open";
 
-          starting = lease.query("BEGIN").catch((error) => {
-            broken = true;
+          starting = lease
+            .query("BEGIN")
+            .then(() => lease.query(`SET LOCAL lock_timeout = '${lockTimeout}ms'`))
+            .then(() => lease.query(`SET LOCAL statement_timeout = '${statementTimeout}ms'`))
+            .catch((error) => {
+              broken = true;
 
-            throw error;
-          });
+              throw error;
+            });
         }
         await starting;
       },
@@ -250,12 +274,11 @@ export const transaction = resource({
 
     defer(async (end) => {
       try {
-        await ending;
-
-        if (state === "open") {
+        if (state === "idle" || state === "open") {
           if (end.status === "success") await tx.commit();
           else await tx.rollback();
         }
+        await ending;
       } finally {
         lease.release(broken);
       }

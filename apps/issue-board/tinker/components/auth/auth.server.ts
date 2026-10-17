@@ -37,6 +37,7 @@ export const auth = resource({
       baseURL: settings.origin,
       secret: settings.secret,
       database: drizzleAdapter(database, { provider: "pg", schema }),
+      session: { deferSessionRefresh: true },
       databaseHooks: {
         user: {
           create: {
@@ -77,7 +78,13 @@ export const principal = resource({
   label: "request.principal",
   target: "session",
   depends: { auth, headers: requestHeaders },
-  factory: async ({ auth, headers }) => (await auth.api.getSession({ headers }))?.user ?? null,
+  factory: async ({ auth, headers }) =>
+    (
+      await auth.api.getSession({
+        headers,
+        query: { disableCookieCache: true, disableRefresh: true },
+      })
+    )?.user ?? null,
 });
 
 /** A long stream rechecks the live cookie without using caches or refreshing the session. */

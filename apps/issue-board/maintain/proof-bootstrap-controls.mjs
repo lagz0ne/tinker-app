@@ -15,6 +15,29 @@ writeFileSync(
 
 const cases = [
   {
+    name: "smtp-socket-not-aborted",
+    target: "src/backend/alert-mail.server.ts",
+    from: "sockets.abort();",
+    to: "void sockets;",
+    test: "tests/alert-mail.test.ts",
+    reason: "active SMTP socket must close at total deadline",
+  },
+  {
+    name: "idle-handle-not-ended",
+    target: "tinker/components/database/database.server.ts",
+    from: 'if (state === "idle" || state === "open") {',
+    to: 'if (state === "open") {',
+    test: "tests/transaction-lease.test.ts",
+    reason: "an idle handle cannot query after close",
+  },
+  {
+    name: "page-auth-deletes",
+    target: "tinker/components/auth/auth.server.ts",
+    from: "session: { deferSessionRefresh: true }",
+    to: "session: { deferSessionRefresh: false }",
+    reason: "page reads must not write any table",
+  },
+  {
     name: "sign-in-no-repair",
     target: "tinker/components/auth/auth.server.ts",
     from: "after: ({ userId }) => created.run({ input: { accountId: userId } }),",
@@ -55,7 +78,7 @@ try {
         "exec",
         "vp",
         "test",
-        "tests/bootstrap-read.test.ts",
+        trial.test ?? "tests/bootstrap-read.test.ts",
         "--config",
         config,
         "--maxWorkers=1",
@@ -74,9 +97,7 @@ try {
 
     assert((run.stdout + run.stderr).includes(trial.reason), run.stdout + run.stderr);
 
-    console.log(
-      "PASS broken bootstrap control: " + trial.name + " fails the actual page-read SQL test.",
-    );
+    console.log("PASS broken bootstrap control: " + trial.name + " fails the actual scope test.");
   }
 } finally {
   rmSync(copies, { recursive: true, force: true });

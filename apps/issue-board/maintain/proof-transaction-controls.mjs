@@ -153,7 +153,7 @@ try {
       from: 'if (state === "committed" || state === "rolledBack") return Promise.resolve();',
       to: "if (false) return Promise.resolve();",
       suffixFrom: 'const opened = state === "open";',
-      suffixTo: "const opened = true;",
+      suffixTo: 'const opened = state !== "idle";',
       expected: "explicit commit then defer must not issue a second end",
     },
     {
