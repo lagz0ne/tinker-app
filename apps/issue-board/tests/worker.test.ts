@@ -434,3 +434,39 @@ test("worker pool reads stop during a black-holed digest connection", async () =
     await new Promise<void>((done) => server.close(() => done()));
   }
 });
+
+test("board worker recovers a plain delivery error before SIGTERM", async () => {
+  const stop = new AbortController();
+  const messages: string[] = [];
+  let attempts = 0;
+  const root = createScope({
+    observe: { log: (entry) => messages.push(entry.message) },
+    presets: [
+      preset(queueDailyDigests, async () => ({ queued: 0 })),
+      preset(deliverMailBatch, async () => {
+        if (++attempts === 1) throw new Error("temporary database failure");
+        return { claimed: 0, sent: 0, failed: 0 };
+      }),
+      preset(outboxWake, async () => ({
+        listen: async () => {},
+        retry: async () => {},
+        wait: async () => {
+          stop.abort(new Error("SIGTERM"));
+        },
+      })),
+    ],
+    tags: [(await import("~/components/mail/index.server")).mailWorkerStop(stop.signal)],
+  });
+
+  try {
+    const result = await root.settle(runMailWorker, {
+      tags: [(await import("~/components/mail/index.server")).mailWorkerStop(stop.signal)],
+    });
+
+    expect(attempts).toBe(2);
+    expect(messages.filter((message) => message === "outbox.unavailable")).toHaveLength(1);
+    expect(result.status).toBe("success");
+  } finally {
+    await root.close();
+  }
+});

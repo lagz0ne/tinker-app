@@ -35,7 +35,8 @@ export const runMailWorker = operation({
     while (!signal.aborted) {
       try {
         await wake.listen();
-        await pass.run();
+        const passed = await pass.settle();
+        if (passed.status === "failed") throw passed.error;
       } catch (error) {
         if (signal.aborted) return;
         log.error("outbox.unavailable", { error: String(error) });

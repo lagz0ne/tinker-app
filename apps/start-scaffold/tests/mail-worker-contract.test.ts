@@ -242,7 +242,7 @@ for (const fail of ["listen", "deliver", "none"] as const) {
 
     try {
       const result = await root.settle(runMailWorker, { signal: new AbortController().signal });
-      expect(result.status).toBe(fail === "deliver" ? "failed" : "success");
+      expect(result.status).toBe("success");
       expect(order).toEqual([
         ...(fail === "listen"
           ? ["listen", "retry"]

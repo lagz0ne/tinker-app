@@ -266,7 +266,10 @@ export const runMailWorker = operation({
         await wake.listen();
         let batch;
         do {
-          batch = await deliver.run({ signal });
+          const delivered = await deliver.settle({ signal });
+          if (delivered.status === "failed") throw delivered.error;
+          if (delivered.status === "cancelled") return;
+          batch = delivered.value;
         } while (batch.claimed === 20 && !stop.aborted);
       } catch (error) {
         if (stop.aborted) return;
