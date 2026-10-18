@@ -95,5 +95,5 @@ The lander runs mutation checks. Tooling and the golden copied runtime each keep
 Local package packing and registry builds publish nothing.
 
 Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) for the main context,
-clean exit, direct auth dependencies, and write-session ownership. Released
-0.9.0 behavior and current Unreleased changes are separate in [UPGRADE.md](UPGRADE.md).
+clean exit, direct auth dependencies, and write-session ownership. Each
+released version has its own section in [UPGRADE.md](UPGRADE.md).

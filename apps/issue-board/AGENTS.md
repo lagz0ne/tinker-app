@@ -2,7 +2,7 @@
 
 Follow the parent repo's rules too. The [current contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) owns the
 full API, import, input, update, and helper rules. These five rules are its
-local checklist; released 0.9.0 behavior stays in UPGRADE.md.
+local checklist; each release's changes stay in UPGRADE.md.
 
 1. **Own the boundary.** Hosts own process inputs, sockets, OS stops, and output
    flush. Direct cmds files bind app inputs and own roots; scope tests own theirs.

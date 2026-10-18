@@ -1,7 +1,7 @@
 # Current Start authoring contract
 
-This is the contract for the current source, including changes after Start 0.9.0.
-The released 0.9.0 contract stays in [UPGRADE.md](../../packages/start/UPGRADE.md#090).
+This is the contract for the current source, released as Start 0.10.0.
+Each released change set stays in [UPGRADE.md](../../packages/start/UPGRADE.md#0100).
 The golden copied source is `apps/start-scaffold/tinker/`; the small app shares
 its base and selected components. Core and React stay at 0.8.0. Do not patch Core.
 

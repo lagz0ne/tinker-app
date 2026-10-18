@@ -37,12 +37,10 @@ A tag `start-vX.Y.Z` on `next` holds one asset: the Start tarball.
 Core and React keep their tinkered `start-v0.8.0` tarball URLs.
 The registry is read from the tag's own `apps/start-scaffold/public/r`.
 
-The 0.9.0 release steps are history. They do not apply to this source.
-`next` uses the planned Start 0.10.0 contract. Default source exports are blocked
-while the tooling version is below 0.10.0. Default registry installs need its
-published host and registry. Local-pack proofs work now.
+Start 0.10.0 is released from tag `start-v0.10.0`. It ships the current main contract.
+Default exports and registry installs use that host and registry.
 
-Before preparing 0.10.0, set the package version and add its released UPGRADE.md
+For each release, set the package version and add its released UPGRADE.md
 section. Keep that version, the release assets, and the registry in step. Then:
 
 ```bash
@@ -70,8 +68,8 @@ The registry keeps one owner per target. Component updates replace files whole.
 node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
-This command is blocked until the source tooling version reaches 0.10.0.
-After that release, it exports small and demo copies into an empty output folder.
+It exports small and demo copies into an empty output folder.
+It refuses a source tooling version below 0.10.0.
 It never changes another checkout, branch, or tag.
 
 To check an export now with an explicit pack of the current host:

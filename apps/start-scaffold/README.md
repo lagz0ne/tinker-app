@@ -171,10 +171,10 @@ From the workspace root, copy both templates into a new empty output folder:
 node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
-Default exports are blocked until the planned Start 0.10.0 host and matching
-registry release. Released 0.9.0 cannot run these templates. Local proofs pass
-an explicit current host pack; the export carries it in vendor and checks its
-host files against this source. Nothing is published.
+Default exports pin the released Start 0.10.0 host and its matching registry.
+Start 0.9.0 cannot run these templates. Local proofs pass an explicit current
+host pack; the export carries it in vendor and checks its host files against
+this source. Nothing is published.
 
 The export copies source. It never changes template branches or another checkout.
 The golden runtime is `tinker/`; its mutation floor is 85. The lander runs mutation checks.
@@ -241,8 +241,7 @@ Their resources own and close the connection.
 
 `npm start` uses the `tinker serve` host from the `@tinker/start` dev dependency.
 Keep dev dependencies installed on the server; an `npm install --omit=dev` install cannot start it.
-`next` uses the planned Start 0.10.0 contract. Default source exports are blocked
-while the tooling version is below 0.10.0. Default registry installs need its
-published host and registry. Local-pack proofs work now.
+Templates use the Start 0.10.0 contract. Default installs use its released host
+and registry.
 Local registry proofs use a packed Start through `TINKER_PACKAGE_DIR`.
 The standalone export proof supplies a current host pack explicitly.

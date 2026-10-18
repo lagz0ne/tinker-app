@@ -1,15 +1,23 @@
 # Upgrade
 
-## Unreleased
+## 0.10.0
 
-These templates require the planned Start 0.10.0 host and matching registry.
-Released 0.9.0 cannot run the new main contract. Default source exports stop
-with that message until the tooling version reaches 0.10.0. Local proof
-exports carry an explicit current host pack in vendor; nothing is published.
+Start 0.10.0 is released from `lagz0ne/tinker-app`, tag `start-v0.10.0`.
+The tag holds the Start tarball only.
+Core and React stay at 0.8.0, from the tinkered `start-v0.8.0` release:
 
-These changes are in current source, not the released 0.9.0 tarball. Use the
-matching tooling host with the copied runtime; do not mix the new main with the
-old host. See the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md).
+```json
+"@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
+"@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.10.0/tinker-start-0.10.0.tgz"
+```
+
+The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.10.0/apps/start-scaffold/public/r`.
+
+The templates need this host and its matching registry. The 0.9.0 host cannot
+run the new main contract; do not mix the new main with the old host. Exports
+refuse a tooling version below 0.10.0. See the [authoring contract](https://github.com/lagz0ne/tinker-app/blob/start-v0.10.0/docs/decisions/start-decompose.md).
 
 - Process commands use defineMain with env, args, signal, stdout, stderr, and exit.
   Exit requests cleanup, keeps the first code, prints the reason once, and returns

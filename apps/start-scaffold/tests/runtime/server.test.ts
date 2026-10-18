@@ -46,7 +46,7 @@ test("readResult turns a cancelled call into the base's Cancelled error", async 
 
 test("the base's health operation reports the base version", async () => {
   const root = createScope();
-  expect(readResult(root.settle(health))).toEqual({ ok: true, base: "0.9.0" });
+  expect(readResult(root.settle(health))).toEqual({ ok: true, base: "0.10.0" });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 

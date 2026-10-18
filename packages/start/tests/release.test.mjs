@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -64,14 +64,20 @@ test("the tooling and health copies agree while templates name their required ho
   }
 });
 
-test("unreleased exports refuse the old host before copying any app files", async () => {
+test("default exports pin the released host and refuse the old one", async () => {
   const out = await mkdtemp(join(tmpdir(), "start-export-contract-"));
   try {
-    await expect(copyTemplates(out)).rejects.toThrow("require @tinker/start 0.10.0");
-    expect(await readdir(out)).toEqual([]);
+    await copyTemplates(out);
+    expect((await readdir(out)).sort()).toEqual(["demo", "small"]);
+    for (const name of ["demo", "small"]) {
+      const pkg = JSON.parse(await readFile(join(out, name, "package.json"), "utf8"));
+      expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.10.0")["@tinker/start"]);
+    }
+
     await expect(registryItems({ version: "0.9.0" })).rejects.toThrow(
       "require @tinker/start 0.10.0",
     );
+
     const { packages } = await registryItems();
     for (const pkg of Object.values(packages)) {
       expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.10.0")["@tinker/start"]);

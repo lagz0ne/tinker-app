@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
+import { releaseUrls } from "../../../packages/start/lib/release.mjs";
 import { root } from "./registry-source.mjs";
 import { copyTemplates } from "./template-sync.mjs";
 
@@ -41,7 +42,13 @@ try {
     );
   }
 
-  await assert.rejects(copyTemplates(out), /require @tinker\/start 0.10.0/);
+  const released = join(scratch, "released");
+  await copyTemplates(released);
+  const releasedPkg = JSON.parse(await readFile(join(released, "demo/package.json"), "utf8"));
+  assert.equal(
+    releasedPkg.devDependencies["@tinker/start"],
+    releaseUrls("0.10.0")["@tinker/start"],
+  );
   run(process.execPath, [join(root, "packages/start/scripts/pack.mjs"), packs], root);
   await copyTemplates(out, { packs });
   await rm(packs, { recursive: true });
@@ -54,7 +61,7 @@ try {
   run("npm", ["run", "test:proofs"], app, { env });
   run("npm", ["run", "check"], app, { env });
   console.log(
-    "PASS standalone export: default old-host export refused; real local install; test:proofs and check pass without repo paths or global pnpm/vp.",
+    "PASS standalone export: default export pins the released host; real local install; test:proofs and check pass without repo paths or global pnpm/vp.",
   );
 } finally {
   await rm(scratch, { recursive: true, force: true });
