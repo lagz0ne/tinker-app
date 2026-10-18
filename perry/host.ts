@@ -3,7 +3,7 @@
 import main from "../dist/server/server.js";
 
 const N = Number(process.env.N ?? 2000);
-const paths = ["/", "/api/health"];
+const paths = (process.env.PATHS ?? "/,/api/health").split(",");
 const env = {
   OTEL_SERVICE_NAME: "small",
   VICTORIA_TRACES_URL: "http://127.0.0.1:9/traces",
@@ -25,7 +25,7 @@ for (const p of paths) {
   console.log(p, r.status, body.slice(0, 120).replace(/\n/g, " "));
 }
 for (let i = 0; i < N; i++) {
-  const r = await app.fetch(new Request("http://127.0.0.1" + paths[i % 2]));
+  const r = await app.fetch(new Request("http://127.0.0.1" + paths[i % paths.length]));
   bytes += (await r.text()).length;
 }
 const t2 = performance.now();
