@@ -35,7 +35,7 @@
       "path": "tinker/components/mail/modules.ts",
       "type": "registry:file",
       "target": "~/tinker/components/mail/modules.ts",
-      "content": "import { resource } from \"@tinker/core\";\n\nexport const smtp = resource({\n  label: \"module:nodemailer\",\n  target: \"scope\",\n  factory: () => import(\"nodemailer\"),\n});\n\n/** SMTP owns these sockets so a total deadline can destroy an active send. */\nexport const smtpNet = resource({\n  label: \"module:node:net\",\n  target: \"scope\",\n  factory: () => import(\"node:net\"),\n});\n\n"
+      "content": "import { resource } from \"@tinker/core\";\n\nexport const smtp = resource({\n  label: \"module:nodemailer\",\n  target: \"scope\",\n  factory: () => import(\"nodemailer\"),\n});\n\n/** SMTP owns these sockets so a total deadline can destroy an active send. */\nexport const smtpNet = resource({\n  label: \"module:node:net\",\n  target: \"scope\",\n  factory: () => import(\"node:net\"),\n});\n"
     },
     {
       "path": "tinker/components/mail/sockets.server.ts",

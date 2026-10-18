@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- test:migrations applies the actual chain to fresh local Postgres and checks
+  notification trigger shape, empty inserts, rollback, and committed batches.
+  Its controls show schema-only checks accept missing or changed trigger SQL.
+  CI runs this live gate for both copied apps; no Drizzle trigger claim is made.
+
 - database.listen takes a validated lowercase channel name before its callbacks,
   plus an optional abort signal. Sync passes start_sync; mail passes board_outbox.
   Mail keeps its existing reconnect/backoff and poll using this shared listener.

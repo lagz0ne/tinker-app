@@ -1509,6 +1509,16 @@
           "path": "tests/mail-listen.test.ts",
           "type": "registry:file",
           "target": "~/tests/mail-listen.test.ts"
+        },
+        {
+          "path": "maintain/proof-migration-contract.mjs",
+          "type": "registry:file",
+          "target": "~/maintain/proof-migration-contract.mjs"
+        },
+        {
+          "path": "maintain/proof-migration-contract-controls.mjs",
+          "type": "registry:file",
+          "target": "~/maintain/proof-migration-contract-controls.mjs"
         }
       ],
       "meta": {

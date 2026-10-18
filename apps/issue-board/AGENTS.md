@@ -109,3 +109,7 @@ Use `vp dlx -- @tanstack/intent@0.5.0 list` to find other installed guides.
 The app's `intent.skills` list selects Start and Router packages.
 The guides stay in their packages and update with those packages.
 <!-- intent-skills:end -->
+
+With local Postgres running, also run `npm run test:migrations`. It checks the
+actual migration chain and rejects broken trigger SQL that schema snapshots
+cannot express. This live gate requires a local role that can create a test DB.

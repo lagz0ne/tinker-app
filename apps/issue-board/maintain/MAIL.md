@@ -141,3 +141,8 @@ does not run them without Postgres.
 Mail and sync use database.listen with explicit channel names. A listener still
 needs a dedicated pool connection; its owner closes it on stop or reconnect.
 The mail wait loop retains its capped reconnect backoff, jitter, and poll.
+
+Run `pnpm run test:migrations` with local Postgres. It applies the actual chain
+to a fresh database and checks the transition-table trigger and ordered wakes.
+The controls remove the trigger, change its channel, or drop the empty guard:
+each still passes schema generation but fails the live contract gate.
