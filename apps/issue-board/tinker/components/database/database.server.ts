@@ -119,33 +119,81 @@ export const database = resource({
         // The lease is only a handle. Its first BEGIN checks out the pool client.
         return leaseFrom<PoolClient>(client.connect.bind(client), drizzle, guard);
       },
-      async listen(heard: (payload: string) => void, disconnected: () => void) {
-        const listener = await client.connect();
-        const notified = (message: { payload?: string }) => heard(message.payload ?? "");
-        listener.on("notification", notified);
-        listener.on("error", disconnected);
-        listener.on("end", disconnected);
+      async listen(
+        channel: string,
+        heard: (payload: string) => void,
+        disconnected: () => void,
+        signal?: AbortSignal,
+      ) {
+        const topic = z
+          .string()
+          .regex(/^[a-z_][a-z0-9_]{0,62}$/)
+          .parse(channel);
+
+        signal?.throwIfAborted();
 
         const stop = new AbortController();
+
+        const cancelled = Promise.withResolvers<never>();
+
+        let listener: PoolClient | undefined;
+
+        const notified = (message: { payload?: string }) => heard(message.payload ?? "");
+
+        const abort = () => stop.abort(signal?.reason);
+
         listeners.add(stop);
 
         stop.signal.addEventListener(
           "abort",
           () => {
             listeners.delete(stop);
-            listener.removeListener("notification", notified);
-            listener.removeListener("error", disconnected);
-            listener.removeListener("end", disconnected);
-            listener.release(true);
+
+            signal?.removeEventListener("abort", abort);
+
+            listener?.removeListener("notification", notified);
+
+            listener?.removeListener("error", disconnected);
+
+            listener?.removeListener("end", disconnected);
+
+            listener?.release(true);
+
+            cancelled.reject(stop.signal.reason);
           },
           { once: true },
         );
 
+        signal?.addEventListener("abort", abort, { once: true });
+
+        const pending = client.connect().then((connection) => {
+          if (stop.signal.aborted) {
+            connection.release(true);
+
+            throw stop.signal.reason;
+          }
+          listener = connection;
+
+          return connection;
+        });
+
         try {
-          await listener.query("LISTEN start_sync");
+          await Promise.race([pending, cancelled.promise]);
+
+          stop.signal.throwIfAborted();
+
+          listener!.on("notification", notified);
+
+          listener!.on("error", disconnected);
+
+          listener!.on("end", disconnected);
+
+          await Promise.race([listener!.query(`LISTEN ${topic}`), cancelled.promise]);
+
           return stop.abort.bind(stop);
         } catch (error) {
-          stop.abort();
+          stop.abort(error);
+
           throw error;
         }
       },

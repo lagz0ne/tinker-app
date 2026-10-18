@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- database.listen takes a validated lowercase channel name before its callbacks,
+  plus an optional abort signal. Sync passes start_sync; mail passes board_outbox.
+  Mail keeps its existing reconnect/backoff and poll using this shared listener.
+
 - Auth mail callbacks await durable enqueue. Better Auth uses its own pool
   adapter, so enqueue has a separate committed call; app writes may enqueue in
   their existing session transaction. Mail owns its table and batch delivery.

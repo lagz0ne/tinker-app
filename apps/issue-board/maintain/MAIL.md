@@ -137,3 +137,7 @@ node maintain/proof-bounds-controls.mjs
 The controls remove SQL bounds or the total send deadline in scratch modules.
 Each must fail its named deadline check. They are live proofs, so test:proofs
 does not run them without Postgres.
+
+Mail and sync use database.listen with explicit channel names. A listener still
+needs a dedicated pool connection; its owner closes it on stop or reconnect.
+The mail wait loop retains its capped reconnect backoff, jitter, and poll.

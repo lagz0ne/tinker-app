@@ -52,7 +52,7 @@ export const proofDatabase = preset(
         },
       }),
       {
-        listen: async (wake: (payload: string) => void) => client.listen("start_sync", wake),
+        listen: async (channel: string, wake: (payload: string) => void) => client.listen(channel, wake),
       },
     );
     // PGlite has one connection; checkout serializes whole write sessions, like its native transaction.

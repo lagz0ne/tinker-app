@@ -111,6 +111,8 @@ jobs:
           node maintain/proof-auth-mail-controls.mjs
           node maintain/proof-mail-leases.mjs
           node maintain/proof-mail-leases-controls.mjs
+          node maintain/proof-database-channel.mjs
+          node maintain/proof-database-channel-controls.mjs
           node maintain/proof-outbox.mjs
           node maintain/proof-worker-host.mjs
           node maintain/proof-digest.mjs

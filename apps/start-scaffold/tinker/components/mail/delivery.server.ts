@@ -3,13 +3,11 @@ import { z } from "zod";
 
 import {
   transaction,
-  databaseUrl,
+  database,
   drizzleOrm,
-  databaseConnectTimeout,
 } from "~/components/database/index.server";
 
 import { mail as alertMail } from "./mail.server";
-import { postgres } from "./modules";
 import { mailOutbox } from "./schema.server";
 
 /** Soft process stop: finish and commit the current SMTP send before closing the root. */
@@ -163,79 +161,33 @@ export const deliverMailBatch = operation({
 /** LISTEN belongs to this resource; its private flag remembers wakes during a send. */
 export const outboxWake = resource({
   label: "outbox.wake",
-  depends: {
-    url: databaseUrl,
-    postgres,
-    stopping: mailWorkerStop,
-    timeout: databaseConnectTimeout,
-  },
-  factory: async ({ url, postgres, stopping, timeout }, { clock, random, closing, defer, log }) => {
+  depends: { database, stopping: mailWorkerStop },
+  factory: async ({ database, stopping }, { clock, random, closing, defer, log }) => {
     const ending = stopping ? AbortSignal.any([closing, stopping]) : closing;
-    let client: InstanceType<typeof postgres.default.Client> | undefined;
+    let close: (() => void | Promise<void>) | undefined;
     let connected = false;
     let dirty = false;
     let failures = 0;
     let waiting: ReturnType<typeof Promise.withResolvers<void>> | undefined;
     defer(async () => {
-      await client?.end();
+      await close?.();
     });
 
     return {
       async listen() {
         if (connected) return;
 
-        const old = client;
-        client = undefined;
-        await old?.end();
-        const next = new postgres.default.Client({
-          connectionString: url.href,
-          connectionTimeoutMillis: timeout,
-        });
-        client = next;
-        next.on("error", () => {
-          if (client !== next || !connected) return;
-          connected = false;
-          waiting?.resolve();
-        });
-        next.on("end", () => {
-          if (client !== next || !connected) return;
-          connected = false;
-          waiting?.resolve();
-        });
-        next.on("notification", () => {
-          if (client !== next || !connected) return;
+        await close?.();
+        close = undefined;
+        ending.throwIfAborted();
+        close = await database.listen("board_outbox", () => {
           dirty = true;
           waiting?.resolve();
-        });
-
-        ending.throwIfAborted();
-
-        const cancelled = Promise.withResolvers<never>();
-
-        const abort = () => {
-          void next.end().catch(() => {});
-
-          cancelled.reject(ending.reason);
-        };
-
-        ending.addEventListener("abort", abort, { once: true });
-
-        try {
-          await Promise.race([
-            Promise.resolve().then(async () => {
-              await next.connect();
-
-              await next.query("LISTEN board_outbox");
-            }),
-            cancelled.promise,
-          ]);
-
-          ending.throwIfAborted();
-
-          connected = true;
-        } finally {
-          ending.removeEventListener("abort", abort);
-        }
+        }, () => {
+          connected = false;
+          waiting?.resolve();
+        }, ending);
+        connected = true;
       },
       async retry() {
         // A failed connect must wait on the timer alone, never an old client's end event.

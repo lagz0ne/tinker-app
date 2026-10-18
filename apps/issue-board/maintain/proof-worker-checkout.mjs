@@ -80,6 +80,7 @@ try {
       const db = await root.resolve(database);
 
       closeListen = await db.listen(
+        "start_sync",
         () => {},
         () => {},
       );
