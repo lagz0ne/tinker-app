@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { startRequests } from "@tinker/start";
-import { readResult } from "@tinker/start/server";
+
+import { startRequests } from "~/components/requests";
+import { readResult } from "~/components/requests/index.server";
 
 import { greet } from "@/backend/greet";
 
