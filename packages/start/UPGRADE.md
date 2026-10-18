@@ -1,5 +1,11 @@
 # Upgrade
 
+## Unreleased
+
+- Server, worker, and CLI startup await one Postgres advisory-lock migration
+  owner. DATABASE_MIGRATION_TIMEOUT_MS bounds the ownership wait (default 5000).
+  Run every migration on the connection holding the stable TINK/MIGR lock.
+
 ## 0.10.0
 
 Start 0.10.0 is released from `lagz0ne/tinker-app`, tag `start-v0.10.0`.

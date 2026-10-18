@@ -9,6 +9,8 @@ export declare namespace Errors {
     StartScopeMissing: Record<string, never>;
     Cancelled: Record<string, never>;
 
+    MigrationBusy: { timeout: number };
+
     NestedTransaction: Record<string, never>;
 
     TransactionEnded: Record<string, never>;

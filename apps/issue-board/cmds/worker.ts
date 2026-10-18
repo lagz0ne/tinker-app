@@ -1,14 +1,19 @@
 import { createScope } from "@tinker/core";
 
 import { defineMain, mainErrorCode, checkClosed } from "~/base/main";
-import { databaseUrl, databaseStop } from "~/components/database/index.server";
+import {
+  databaseSetup,
+  databaseMigrationTimeout,
+  databaseUrl,
+  databaseStop,
+} from "~/components/database/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
 
 import { alertMailTimeout } from "@/backend/alert-mail.server";
 import { digestHourUTC } from "@/backend/digest.server";
 import { runMailWorker, mailWorkerStop } from "@/backend/outbox.server";
 
-/** Run after the server migrates. The host owns stop and output. */
+/** All processes await the shared migration owner; the host owns stop and output. */
 // oxlint-disable-next-line complexity -- Native entry keeps each typed config binding inline, as the server does.
 export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) => {
   if (args.length) {
@@ -19,8 +24,10 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
   try {
     const root = createScope({
       observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
-      extensions: [mailStartup],
+      extensions: [databaseSetup, mailStartup],
       tags: [
+        env.DATABASE_MIGRATION_TIMEOUT_MS !== undefined &&
+          databaseMigrationTimeout(Number(env.DATABASE_MIGRATION_TIMEOUT_MS)),
         mailWorkerStop(signal),
         databaseStop(signal),
         env.DIGEST_HOUR_UTC !== undefined &&

@@ -3,7 +3,7 @@
 Start the local Postgres and Mailpit used by the board demo. Mailpit uses SMTP
 127.0.0.1:11026 and HTTP 127.0.0.1:18026. Never use a real mail server for this trial.
 
-Run these commands from apps/issue-board. The server applies migrations on its first request:
+Run these commands from apps/issue-board. Every process awaits the shared migration lock before doing work:
 
 ```bash
 PORT=4327 HOST=127.0.0.1 vp dev
@@ -19,7 +19,8 @@ SMTP_URL=smtp://127.0.0.1:11026 SMTP_FROM=board@example.test \
 pnpm run worker
 ```
 
-The worker does not run migrations. Start the server first. Stop the worker with
+Server, worker, and CLI may start together. One connection owns migration; the
+others wait up to DATABASE_MIGRATION_TIMEOUT_MS (default 5000). Stop the worker with
 Ctrl-C, or send SIGTERM to its Node PID.
 
 Other team members get alerts for issue creation, edits, moves, removal, and new

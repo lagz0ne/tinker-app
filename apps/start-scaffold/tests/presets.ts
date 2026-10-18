@@ -72,7 +72,8 @@ export const proofDatabase = preset(
                 return Reflect.apply(target.query.bind(target), target, [text, ...args]);
               };
             }
-            return Reflect.get(target, key, target);
+            const value = Reflect.get(target, key, target);
+            return typeof value === "function" ? value.bind(target) : value;
           },
         }) as typeof client & { release(broken?: boolean): void };
 

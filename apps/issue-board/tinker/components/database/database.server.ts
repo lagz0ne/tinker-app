@@ -5,7 +5,7 @@ import { z } from "zod";
 import { fail } from "~/components/errors";
 
 import { leaseFrom } from "./lease.server";
-import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";
+import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator, drizzleOrm } from "./modules";
 import type { Database } from "./types";
 
 /** Where Postgres is. */
@@ -153,17 +153,61 @@ export const database = resource({
   },
 });
 
+/** Bound how long another process may own schema migration at startup. */
+export const databaseMigrationTimeout = tag<number>({
+  label: "database.migrationTimeout",
+  default: 5000,
+  parse: z.number().int().positive().max(60000),
+});
+
 export const migrate = operation({
   label: "migrate",
   depends: {
     database,
     pgCore: drizzlePgCore,
     migrator: drizzleMigrator,
+    orm: drizzleOrm,
+    timeout: databaseMigrationTimeout,
   },
-  run: async ({ database, pgCore, migrator }) => {
-    const { migrate } = pgCore;
-    const { readMigrationFiles } = migrator;
-    await migrate(readMigrationFiles({ migrationsFolder }), database, { migrationsFolder });
+  run: async ({ database, pgCore, migrator, orm, timeout }, { clock, signal }) => {
+    if (!database.checkout) throw new Error("Migration requires a dedicated connection");
+    const lease = await database.checkout();
+    // Stable application schema lock: ASCII TINK / MIGR, shared by every process.
+    const lock = orm.sql`SELECT pg_try_advisory_lock(1414090315, 1296648018) AS owned`;
+    const deadline = clock.currentTimeMillis() + timeout;
+    let broken = true;
+
+    let released = false;
+
+    const abort = () => {
+      released = true;
+      lease.release(true);
+    };
+
+    try {
+      while (true) {
+        signal.throwIfAborted();
+        const result = z
+          .object({ rows: z.array(z.object({ owned: z.boolean() })) })
+          .parse(await lease.db.execute(lock));
+        if (result.rows[0]!.owned) break;
+        if (clock.currentTimeMillis() >= deadline) throw fail("MigrationBusy", { timeout });
+        await clock.sleep(Math.min(50, deadline - clock.currentTimeMillis()), signal);
+      }
+      // Checkout has completed. An abort can now destroy this exact connection.
+      signal.addEventListener("abort", abort, { once: true });
+      signal.throwIfAborted();
+      await pgCore.migrate(migrator.readMigrationFiles({ migrationsFolder }), lease.db, {
+        migrationsFolder,
+      });
+
+      await lease.db.execute(orm.sql`SELECT pg_advisory_unlock(1414090315, 1296648018)`);
+      broken = false;
+    } finally {
+      signal.removeEventListener("abort", abort);
+      // Any failed migration/unlock destroys the connection and releases its lock.
+      if (!released) lease.release(broken);
+    }
   },
 });
 
