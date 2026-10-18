@@ -23,7 +23,7 @@ const vite = await createServer({
 });
 
 const { claimMailBatch, acknowledgeMail, deliverMailBatch, mailLeaseMs } = await vite.ssrLoadModule(
-  "/src/backend/outbox.server.ts",
+  "/tinker/components/mail/index.server.ts",
 );
 
 const { mail: alertMail } = await vite.ssrLoadModule("/tinker/components/mail/index.server.ts");

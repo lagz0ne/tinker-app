@@ -4,6 +4,16 @@ import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
+
+
+
+
+
+
+
+
+
+
 import { database, migrate } from "~/components/database/index.server";
 import { smtpUrl, mailFrom } from "~/components/mail/index.server";
 import {
@@ -11,9 +21,8 @@ import {
   mailSendTimeout as alertMailTimeout,
 } from "~/components/mail/index.server";
 import { smtp } from "~/components/mail/modules";
-
-import { mailOutbox } from "@/backend/board.schema.server";
-import { deliverMailBatch } from "@/backend/outbox.server";
+import { mailOutbox } from "~/components/mail/index.server";
+import { deliverMailBatch } from "~/components/mail/index.server";
 
 import { proofDatabase } from "./presets";
 import { write } from "./write-boundary";

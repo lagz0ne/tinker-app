@@ -12,3 +12,9 @@ export const smtpNet = resource({
   target: "scope",
   factory: () => import("node:net"),
 });
+
+export const postgres = resource({
+  label: "module:pg:mail",
+  target: "scope",
+  factory: () => import("pg"),
+});

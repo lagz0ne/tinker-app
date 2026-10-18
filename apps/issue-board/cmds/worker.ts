@@ -12,9 +12,10 @@ import {
 } from "~/components/database/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
 import { mailSendTimeout as alertMailTimeout } from "~/components/mail/index.server";
+import { mailWorkerStop, mailLeaseMs } from "~/components/mail/index.server";
 
 import { digestHourUTC } from "@/backend/digest.server";
-import { runMailWorker, mailWorkerStop, mailLeaseMs } from "@/backend/outbox.server";
+import { runMailWorker } from "@/backend/outbox.server";
 
 /** All processes await the shared migration owner; the host owns stop and output. */
 // oxlint-disable-next-line complexity -- Native entry keeps each typed config binding inline, as the server does.

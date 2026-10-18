@@ -319,3 +319,13 @@ The named-command gap from limit 25 is closed by 3f87b7c: Doctor and build
 checks validate optional workerEntry and cliEntry; gate:commands builds and
 host-checks each entry serially. A single vp build still builds the server;
 worker/CLI keep their explicit Vite configs and shared native host runners.
+
+## Durable auth mail
+
+Better Auth receives the pool database adapter in
+`tinker/components/auth/auth.server.ts:40`, outside the session transaction.
+Verification and reset callbacks await a separate committed mail.enqueue call.
+Board enqueue remains inside the issue/comment transaction. The mail component
+owns the shared table, lease delivery, and sender; the board retains its digest.
+The scaffold now includes a standalone mail worker. Profile keeps its existing
+stored notification/result flow; this round does not change that UI contract.

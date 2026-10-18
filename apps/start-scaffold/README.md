@@ -245,3 +245,22 @@ Templates use the Start 0.10.0 contract. Default installs use its released host
 and registry.
 Local registry proofs use a packed Start through `TINKER_PACKAGE_DIR`.
 The standalone export proof supplies a current host pack explicitly.
+
+## Durable mail worker
+
+Auth callbacks await a saved mail row. Better Auth writes through its own pool
+adapter, outside the session transaction, so auth enqueue is a separate call.
+App writes can call enqueueMail in their own transaction. SMTP can deliver more
+than once after acceptance followed by a lost acknowledgement.
+
+Build and run the starter's worker beside its server:
+
+```bash
+npm run build:worker
+npm run worker
+```
+
+Both await the same migration lock. The worker uses DATABASE_URL, SMTP_URL, and
+SMTP_FROM from the local .env or host environment. It claims up to 20 rows, sends
+outside locks, and saves results by lease token. OUTBOX_LEASE_MS defaults to
+180000; OUTBOX_SMTP_TIMEOUT_MS defaults to 3000 and may only shorten it.

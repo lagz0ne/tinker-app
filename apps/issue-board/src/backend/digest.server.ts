@@ -3,8 +3,9 @@ import { z } from "zod";
 
 import { user } from "~/components/auth/index.server";
 import { database, drizzleOrm } from "~/components/database/index.server";
+import { mailOutbox } from "~/components/mail/index.server";
 
-import { issue, mailOutbox, team, teamMember } from "./board.schema.server";
+import { issue, team, teamMember } from "./board.schema.server";
 
 /** Daily UTC hour; a later restart catches up for today, never for missed days. */
 export const digestHourUTC = tag<number>({

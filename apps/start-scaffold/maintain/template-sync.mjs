@@ -88,6 +88,8 @@ async function copyDemoFiles(target) {
     "README.md",
     ".agents",
     "vitest.config.ts",
+    "vite.worker.config.ts",
+    "maintain/worker.mjs",
     "stryker.config.json",
   ]) {
     await mkdir(dirname(join(target, path)), { recursive: true });

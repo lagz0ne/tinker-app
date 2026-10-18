@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Auth mail callbacks await durable enqueue. Better Auth uses its own pool
+  adapter, so enqueue has a separate committed call; app writes may enqueue in
+  their existing session transaction. Mail owns its table and batch delivery.
+  Run the scaffold mail worker beside its server; old in-memory pending sends
+  are not migrated. Existing board rows keep their table and dedupe keys.
+
 - Public mail sends have a total deadline (default/max 3000 ms), owned socket
   cleanup, and an optional per-send abort signal. Worker checkout is bounded to
   1000 ms; record/COMMIT retain their SQL bounds inside the 10 s host grace.

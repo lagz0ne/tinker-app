@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const source = readFileSync("src/backend/outbox.server.ts", "utf8");
+const source = readFileSync("tinker/components/mail/delivery.server.ts", "utf8");
 
 const directory = mkdtempSync(join(tmpdir(), "lease-control-"));
 
@@ -40,7 +40,7 @@ try {
       timeout: 30000,
       env: {
         ...process.env,
-        BOARD_PROOF_FAULT_FILE: "src/backend/outbox.server.ts",
+        BOARD_PROOF_FAULT_FILE: "tinker/components/mail/delivery.server.ts",
         BOARD_PROOF_FAULT_COPY: copy,
       },
     });

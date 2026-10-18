@@ -2,15 +2,24 @@ import { createScope, type Scope } from "@tinker/core";
 import { preset, makeTestClock, type Clock } from "@tinker/core/testing";
 import { afterEach, beforeEach, expect, test } from "vite-plus/test";
 
+
+
+
+
+
+
 import { user } from "~/components/auth/index.server";
 import { database, migrate, drizzleOrm } from "~/components/database/index.server";
 import { type Mail } from "~/components/mail/index.server";
 import { mail as alertMail } from "~/components/mail/index.server";
+import { mailOutbox } from "~/components/mail/index.server";
+import { deliverMailBatch, mailWorkerStop } from "~/components/mail/index.server";
 
-import { team, teamMember, mailOutbox } from "@/backend/board.schema.server";
+import { team, teamMember } from "@/backend/board.schema.server";
 import { addComment } from "@/backend/comments.server";
 import { changeIssue } from "@/backend/issues.server";
-import { deliverMailBatch, mailWorkerStop } from "@/backend/outbox.server";
+
+
 import { currentUser } from "@/demo/backend/auth.server";
 import { bootstrapPrivate } from "@/demo/backend/sync.server";
 

@@ -29,7 +29,8 @@ const { postgres } = await vite.ssrLoadModule("/tinker/components/database/modul
 
 const { mail } = await vite.ssrLoadModule("/tinker/components/mail/index.server.ts");
 
-const { runMailPass, mailWorkerStop } = await vite.ssrLoadModule("/src/backend/outbox.server.ts");
+const { runMailPass } = await vite.ssrLoadModule("/src/backend/outbox.server.ts");
+const { mailWorkerStop } = await vite.ssrLoadModule("/tinker/components/mail/index.server.ts");
 
 const { tickMailDigest } = await vite.ssrLoadModule("/src/backend/digest.server.ts");
 

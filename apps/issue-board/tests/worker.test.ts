@@ -5,9 +5,10 @@ import { preset, makeTestClock, makeTestRandom } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
 import { databaseUrl, databaseConnectTimeout } from "~/components/database/index.server";
+import { deliverMailBatch, outboxWake } from "~/components/mail/index.server";
 
 import { queueDailyDigests } from "@/backend/digest.server";
-import { deliverMailBatch, outboxWake, runMailWorker } from "@/backend/outbox.server";
+import { runMailWorker } from "@/backend/outbox.server";
 
 // oxlint-disable-next-line import/no-relative-parent-imports -- Test the native command seam; app source aliases intentionally exclude cmds.
 import main from "../cmds/worker";
@@ -323,7 +324,7 @@ test("stop interrupts a black-holed LISTEN handshake", async () => {
 
   if (!address || typeof address === "string") throw new Error("Expected TCP endpoint");
 
-  const { mailWorkerStop } = await import("@/backend/outbox.server");
+  const { mailWorkerStop } = await import("~/components/mail/index.server");
 
   const stopping = new AbortController();
 

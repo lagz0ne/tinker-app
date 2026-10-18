@@ -55,7 +55,9 @@ the process. SIGINT ends with code 130; SIGTERM ends with 143. The host waits
 for cleanup and flushes output before setting its code. A 10-second host
 deadline is the only hard stop. The host also works with only environment values and no .env file.
 
-The existing auth/profile demo mail still uses the starter sender. This outbox
+Auth verification/reset mail now uses this same durable mail queue. Better Auth
+writes through its own pool adapter, so its callback awaits a separate committed
+enqueue. Profile retains its stored notification/result flow. This outbox
 owns board alerts and daily digests. No import or new registry component is added.
 
 Run the scripted demo and real-Postgres proofs after building the worker:

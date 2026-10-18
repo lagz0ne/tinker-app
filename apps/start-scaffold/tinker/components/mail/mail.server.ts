@@ -1,7 +1,10 @@
 import { extension, operation, resource } from "@tinker/core";
 import { z } from "zod";
 
+import { transaction } from "~/components/database/index.server";
+
 import { smtp } from "./modules";
+import { mailOutbox } from "./schema.server";
 import { smtpUrl, mailFrom, mailSendTimeout } from "./settings";
 import { smtpSockets } from "./sockets.server";
 
@@ -92,25 +95,23 @@ export const sendMail = operation({
   },
 });
 
-/** Auth has no result stream; this owner drains sends and reports failed delivery. */
+/** The caller's write session owns this enqueue and its commit. */
+export const enqueueMail = operation({
+  label: "mail.enqueue",
+  input: message,
+  depends: { tx: transaction },
+  run: async ({ tx }, { input, random }) => {
+    await tx.insert(mailOutbox).values({ ...input, dedupeKey: `auth:${random.uuid()}` });
+  },
+});
+
+/** Better Auth owns its pool writes; each callback awaits this separate durable call. */
 export const authMail = resource({
   label: "mail.authWork",
-  depends: { send: sendMail },
-  factory: ({ send }, { log, defer }) => {
-    const running = new Set<Promise<void>>();
-    defer(async () => {
-      await Promise.all(running);
-    });
-    return {
-      enqueue(input: Mail.Message) {
-        const completed = send.settle({ rawInput: input }).then((result) => {
-          running.delete(completed);
-          if (result.status !== "success") log.error("mail.failed", { status: result.status });
-        });
-        running.add(completed);
-      },
-    };
-  },
+  depends: { enqueue: enqueueMail },
+  factory: ({ enqueue }, { closing }) => ({
+    enqueue: (input: Mail.Message) => enqueue.run({ input, signal: closing }),
+  }),
 });
 
 /** Missing mail config fails before the first send. */

@@ -30,7 +30,7 @@ const faults = [
   },
   {
     name: "outbox",
-    file: "outbox.server.ts",
+    file: "../../tinker/components/mail/delivery.server.ts",
     from: ".limit(20)",
     to: ".limit(19)",
     reason: /AssertionError/,
@@ -49,7 +49,7 @@ const paths = [];
 try {
   for (const fault of faults) {
     const target = fault.file.startsWith("../")
-      ? "tinker/components/mail/mail.server.ts"
+      ? fault.file.replace("../../", "")
       : `src/backend/${fault.file}`;
     const source = readFileSync(target, "utf8");
     assert(source.includes(fault.from), `Missing fault site: ${fault.name}`);

@@ -18,7 +18,9 @@
     "check": "vp run gate:commands && vp check && vp run typecheck && vp run test && vp run test:proofs && vp run check:plain && vp run test:schema && vp run doctor",
     "mutate": "stryker run",
     "test:proofs": "node maintain/proof-server-close.mjs && node maintain/proof-exit-controls.mjs && node maintain/proof-bootstrap-controls.mjs",
-    "gate:commands": "node node_modules/@tinker/start/lib/command-gate.mjs"
+    "gate:commands": "node node_modules/@tinker/start/lib/command-gate.mjs",
+    "build:worker": "vp build --config vite.worker.config.ts",
+    "worker": "node maintain/worker.mjs"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",

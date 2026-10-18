@@ -107,6 +107,8 @@ jobs:
           node maintain/proof-issues.mjs
           node maintain/proof-lock-order.mjs
           node maintain/proof-comments.mjs
+          node maintain/proof-auth-mail.mjs
+          node maintain/proof-auth-mail-controls.mjs
           node maintain/proof-mail-leases.mjs
           node maintain/proof-mail-leases-controls.mjs
           node maintain/proof-outbox.mjs

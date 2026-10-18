@@ -3,6 +3,7 @@ import { defineConfig } from "drizzle-kit";
 export default defineConfig({
   dialect: "postgresql",
   schema: [
+    "./tinker/components/mail/schema.server.ts",
     "./tinker/components/auth/schema.server.ts",
     "./tinker/components/sync/schema.ts",
     "./src/demo/backend/todos.schema.server.ts",

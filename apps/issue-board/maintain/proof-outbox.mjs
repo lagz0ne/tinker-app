@@ -25,7 +25,7 @@ const vite = await createServer({
   },
 });
 
-const { deliverMailBatch, outboxWake } = await vite.ssrLoadModule("/src/backend/outbox.server.ts");
+const { deliverMailBatch, outboxWake } = await vite.ssrLoadModule("/tinker/components/mail/index.server.ts");
 
 const { database, databaseUrl, leaseFrom } = await vite.ssrLoadModule(
   "/tinker/components/database/index.server.ts",

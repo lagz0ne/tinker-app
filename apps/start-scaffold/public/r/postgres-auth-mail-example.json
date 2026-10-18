@@ -189,7 +189,7 @@
       "path": "drizzle.config.ts",
       "type": "registry:file",
       "target": "~/drizzle.config.ts",
-      "content": "import { defineConfig } from \"drizzle-kit\";\n\nexport default defineConfig({\n  dialect: \"postgresql\",\n  schema: [\n    \"./tinker/components/auth/schema.server.ts\",\n    \"./tinker/components/sync/schema.ts\",\n    \"./src/demo/backend/todos.schema.server.ts\",\n    \"./src/demo/backend/sync.schema.server.ts\",\n  ],\n  out: \"./drizzle\",\n});\n"
+      "content": "import { defineConfig } from \"drizzle-kit\";\n\nexport default defineConfig({\n  dialect: \"postgresql\",\n  schema: [\n    \"./tinker/components/mail/schema.server.ts\",\n    \"./tinker/components/auth/schema.server.ts\",\n    \"./tinker/components/sync/schema.ts\",\n    \"./src/demo/backend/todos.schema.server.ts\",\n    \"./src/demo/backend/sync.schema.server.ts\",\n  ],\n  out: \"./drizzle\",\n});\n"
     },
     {
       "path": "templates/demo-route.tsx.txt",
