@@ -6,10 +6,13 @@ import { expect, test } from "vite-plus/test";
 
 import { database, migrate } from "~/components/database/index.server";
 import { smtpUrl, mailFrom } from "~/components/mail/index.server";
+import {
+  mail as alertMail,
+  mailSendTimeout as alertMailTimeout,
+} from "~/components/mail/index.server";
+import { smtp } from "~/components/mail/modules";
 
-import { alertMail, alertMailTimeout } from "@/backend/alert-mail.server";
 import { mailOutbox } from "@/backend/board.schema.server";
-import { smtp } from "@/backend/modules";
 import { deliverMailBatch } from "@/backend/outbox.server";
 
 import { proofDatabase } from "./presets";

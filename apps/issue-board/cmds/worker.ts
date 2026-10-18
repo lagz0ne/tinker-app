@@ -6,10 +6,13 @@ import {
   databaseMigrationTimeout,
   databaseUrl,
   databaseStop,
+  databaseConnectTimeout,
+  databaseLockTimeout,
+  databaseStatementTimeout,
 } from "~/components/database/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
+import { mailSendTimeout as alertMailTimeout } from "~/components/mail/index.server";
 
-import { alertMailTimeout } from "@/backend/alert-mail.server";
 import { digestHourUTC } from "@/backend/digest.server";
 import { runMailWorker, mailWorkerStop, mailLeaseMs } from "@/backend/outbox.server";
 
@@ -31,6 +34,9 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
         mailWorkerStop(signal),
         env.OUTBOX_LEASE_MS !== undefined && mailLeaseMs(Number(env.OUTBOX_LEASE_MS)),
         databaseStop(signal),
+        databaseConnectTimeout(1000),
+        databaseLockTimeout(500),
+        databaseStatementTimeout(1000),
         env.DIGEST_HOUR_UTC !== undefined &&
           digestHourUTC(env.DIGEST_HOUR_UTC.trim() === "" ? NaN : Number(env.DIGEST_HOUR_UTC)),
         env.OUTBOX_SMTP_TIMEOUT_MS !== undefined &&

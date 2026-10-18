@@ -26,7 +26,7 @@ const { claimMailBatch, acknowledgeMail, deliverMailBatch, mailLeaseMs } = await
   "/src/backend/outbox.server.ts",
 );
 
-const { alertMail } = await vite.ssrLoadModule("/src/backend/alert-mail.server.ts");
+const { mail: alertMail } = await vite.ssrLoadModule("/tinker/components/mail/index.server.ts");
 
 const { database, leaseFrom } = await vite.ssrLoadModule(
   "/tinker/components/database/index.server.ts",

@@ -47,7 +47,17 @@ for (const [url, expected] of [
     const sender = await root.resolve(mail);
     const message = { to: "receiver@example.com", subject: "Subject", text: "Body 😀" };
     await sender.send(message);
-    expect(options).toEqual([{ ...expected, pool: true }]);
+    expect(options).toMatchObject([
+      {
+        ...expected,
+        pool: true,
+        maxConnections: 1,
+        dnsTimeout: 3000,
+        connectionTimeout: 3000,
+        greetingTimeout: 3000,
+        socketTimeout: 3000,
+      },
+    ]);
     expect(sent).toEqual([{ ...message, from: "sender@example.com" }]);
     expect(closed).toBe(0);
     expect((await root.close({ graceful: true })).status).toBe("success");
@@ -118,4 +128,52 @@ test("a send failure reaches the caller and never logs completion", async () => 
   expect(result).toMatchObject({ status: "failed", error });
   expect(logs.filter((entry) => entry.message === "mail.completed")).toEqual([]);
   await root.close({ graceful: true });
+});
+
+test("public sender abort closes transport and rejects with the caller reason", async () => {
+  let starts = 0;
+  let closes = 0;
+  const entered = Promise.withResolvers<void>();
+  const pending = Promise.withResolvers<void>();
+  const stop = new AbortController();
+  const reason = new Error("caller cancelled mail");
+  const root = createScope({
+    tags: [smtpUrl(new URL("smtp://127.0.0.1:11026")), mailFrom("proof@example.test")],
+    presets: [
+      preset(
+        smtp,
+        async () =>
+          ({
+            default: {
+              createTransport: () => ({
+                sendMail() {
+                  starts++;
+                  entered.resolve();
+                  return pending.promise;
+                },
+                close() {
+                  closes++;
+                  pending.reject(reason);
+                },
+              }),
+            },
+          }) as unknown as typeof import("nodemailer"),
+      ),
+    ],
+  });
+
+  await root.ready;
+  const sender = await root.resolve(mail);
+  const message = { to: "proof@example.test", subject: "Abort", text: "No SMTP" };
+  const sent = sender.send(message, { signal: stop.signal });
+  const refused = expect(sent).rejects.toBe(reason);
+  await entered.promise;
+  stop.abort(reason);
+  await refused;
+  expect(closes).toBe(1);
+  expect(starts).toBe(1);
+  await expect(sender.send(message, { signal: stop.signal })).rejects.toBe(reason);
+  expect(starts).toBe(1);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+  expect(closes).toBe(2);
 });

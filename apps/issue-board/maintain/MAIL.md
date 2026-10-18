@@ -41,14 +41,14 @@ Postgres commits sent_at. SMTP and Postgres cannot commit together. The unique
 key stops duplicate enqueue, not this crash case. A failed acknowledgement leaves
 the lease recoverable. There is no claim of exactly-once delivery.
 
-The board sender has a 3-second total send deadline, including all SMTP stages.
+The public sender has a 3-second total send deadline, including all SMTP stages.
 OUTBOX_SMTP_TIMEOUT_MS may shorten it, but cannot exceed 3000 ms. A timed-out
 transport has its owned TCP sockets destroyed, then is closed and replaced
 before the next attempt. Nodemailer gets these sockets through its public
 getSocket hook; pooling stays on. Transaction statements
 are bounded to 1000 ms by default, with a 500 ms lock wait. The typed limits cap
-statements at 2000 ms and lock waits at 1000 ms. Thus send + record + COMMIT uses
-at most 7 seconds; even a final rollback fits inside the 10-second host grace.
+statements at 2000 ms and lock waits at 1000 ms. The worker also fixes checkout to 1000 ms. Thus send + checkout + record + COMMIT uses
+at most 6 seconds with its configured bounds; even a final rollback fits inside the 10-second host grace.
 A stop finishes the current send, commits its result, and releases the rest of
 the batch. A clean SIGTERM prints "outbox worker stopped". Close errors still fail
 the process. SIGINT ends with code 130; SIGTERM ends with 143. The host waits

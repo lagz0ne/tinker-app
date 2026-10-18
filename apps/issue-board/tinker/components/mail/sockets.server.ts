@@ -3,8 +3,8 @@ import type { Socket } from "node:net";
 import { resource } from "@tinker/core";
 import type { GetSocketCallback } from "nodemailer/lib/mailer";
 
-import { smtpUrl } from "./mail.server";
 import { smtpNet } from "./modules";
+import { smtpUrl } from "./settings";
 
 /** The SMTP pool owns protocol state; this resource owns its cancellable TCP sockets. */
 export const smtpSockets = resource({
@@ -32,7 +32,7 @@ export const smtpSockets = resource({
         });
       },
       abort() {
-        for (const socket of sockets) socket.destroy(new Error("Alert send total timeout"));
+        for (const socket of sockets) socket.destroy(new Error("Mail send total timeout"));
       },
     };
   },

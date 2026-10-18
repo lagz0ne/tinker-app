@@ -7,8 +7,8 @@ import {
   drizzleOrm,
   databaseConnectTimeout,
 } from "~/components/database/index.server";
+import { mail as alertMail } from "~/components/mail/index.server";
 
-import { alertMail } from "./alert-mail.server";
 import { mailOutbox } from "./board.schema.server";
 import { tickMailDigest } from "./digest.server";
 import { postgres } from "./modules";

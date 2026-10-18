@@ -30,7 +30,7 @@ const { database, leaseFrom } = await vite.ssrLoadModule(
 );
 
 const { smtpUrl, mailFrom } = await vite.ssrLoadModule("/tinker/components/mail/index.server.ts");
-const { smtp } = await vite.ssrLoadModule("/src/backend/modules.ts");
+const { smtp } = await vite.ssrLoadModule("/tinker/components/mail/modules.ts");
 const { tickMailDigest } = await vite.ssrLoadModule("/src/backend/digest.server.ts");
 const { runMailPass, mailWorkerStop } = await vite.ssrLoadModule("/src/backend/outbox.server.ts");
 const schema = "alert_grace_" + randomUUID().replaceAll("-", "");

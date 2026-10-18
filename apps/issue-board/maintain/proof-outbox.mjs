@@ -33,7 +33,7 @@ const { database, databaseUrl, leaseFrom } = await vite.ssrLoadModule(
 
 const dispatch = writeDispatch();
 
-const { alertMail } = await vite.ssrLoadModule("/src/backend/alert-mail.server.ts");
+const { mail: alertMail } = await vite.ssrLoadModule("/tinker/components/mail/index.server.ts");
 const connectionString = "postgres://issue_board@127.0.0.1:15433/postgres";
 // Intentionally fixed to the local Mailpit. No external SMTP is allowed in a proof.
 const smtp = nodemailer.createTransport({ host: "127.0.0.1", port: 11026, secure: false });

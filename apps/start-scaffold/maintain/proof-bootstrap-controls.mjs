@@ -16,6 +16,22 @@ writeFileSync(
 
 const cases = [
   {
+    name: "smtp-total-deadline",
+    target: "tinker/components/mail/mail.server.ts",
+    from: "clock.sleep(timeout, timer.signal)",
+    to: "new Promise(() => {})",
+    test: "tests/mail-deadline.test.ts",
+    reason: "mail total deadline must end slow-progress send",
+  },
+  {
+    name: "smtp-socket-not-aborted",
+    target: "tinker/components/mail/mail.server.ts",
+    from: "const deadline = clock.sleep(timeout, timer.signal).then(() => {\n            sockets.abort();",
+    to: "const deadline = clock.sleep(timeout, timer.signal).then(() => {\n            void sockets;",
+    test: "tests/mail-deadline.test.ts",
+    reason: "active SMTP socket must close at total deadline",
+  },
+  {
     name: "idle-handle-not-ended",
     target: "tinker/components/database/database.server.ts",
     from: 'if (state === "idle" || state === "open") {',

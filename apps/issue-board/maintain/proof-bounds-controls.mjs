@@ -6,10 +6,17 @@ import { join } from "node:path";
 
 const directory = mkdtempSync(join(tmpdir(), "board-bounds-controls-"));
 const sql = "tinker/components/database/database.server.ts";
-const mail = "src/backend/alert-mail.server.ts";
+const mail = "tinker/components/mail/mail.server.ts";
 
 try {
   for (const trial of [
+    {
+      name: "worker checkout unbounded",
+      target: sql,
+      script: "proof-worker-checkout.mjs",
+      reason: "worker blocked checkout must close before host hard stop",
+      replacements: [["connectionTimeoutMillis: timeout", "connectionTimeoutMillis: 0"]],
+    },
     {
       name: "blocked SQL unbounded",
       target: sql,

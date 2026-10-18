@@ -97,6 +97,7 @@ jobs:
           node maintain/proof-bootstrap-snapshot.mjs
           node maintain/proof-bootstrap-snapshot-controls.mjs
           node maintain/proof-sql-cancel.mjs
+          node maintain/proof-worker-checkout.mjs
           node maintain/proof-alert-grace.mjs
           node maintain/proof-bounds-controls.mjs
           node maintain/proof-checkout.mjs

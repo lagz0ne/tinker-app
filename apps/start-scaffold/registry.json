@@ -540,6 +540,11 @@
           "path": "tinker/components/mail/sockets.server.ts",
           "type": "registry:file",
           "target": "~/tinker/components/mail/sockets.server.ts"
+        },
+        {
+          "path": "tinker/components/mail/settings.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mail/settings.ts"
         }
       ],
       "meta": {
@@ -1449,6 +1454,11 @@
           "path": "maintain/proof-server-close.mjs",
           "type": "registry:file",
           "target": "~/maintain/proof-server-close.mjs"
+        },
+        {
+          "path": "tests/mail-deadline.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/mail-deadline.test.ts"
         }
       ],
       "meta": {

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Public mail sends have a total deadline (default/max 3000 ms), owned socket
+  cleanup, and an optional per-send abort signal. Worker checkout is bounded to
+  1000 ms; record/COMMIT retain their SQL bounds inside the 10 s host grace.
+
 - Board workers claim up to 20 mail rows in a short UPDATE/SKIP LOCKED call.
   OUTBOX_LEASE_MS defaults to 180000. Sends hold no row locks; acknowledgements
   require the matching lease token. Attempts survive crashes; exhausted rows

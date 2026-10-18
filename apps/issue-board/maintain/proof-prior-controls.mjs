@@ -37,7 +37,7 @@ const faults = [
   },
   {
     name: "smtp-auth",
-    file: "alert-mail.server.ts",
+    file: "../../tinker/components/mail/mail.server.ts",
     from: "auth: user ? { user, pass: decodeURIComponent(url.password) } : undefined,",
     to: "auth: undefined,",
     reason: /530|Authentication|authentication/,
@@ -48,7 +48,10 @@ const paths = [];
 
 try {
   for (const fault of faults) {
-    const source = readFileSync(`src/backend/${fault.file}`, "utf8");
+    const target = fault.file.startsWith("../")
+      ? "tinker/components/mail/mail.server.ts"
+      : `src/backend/${fault.file}`;
+    const source = readFileSync(target, "utf8");
     assert(source.includes(fault.from), `Missing fault site: ${fault.name}`);
     const sourcePath = "src/backend/prior-control.scratch.server.ts";
 
@@ -59,7 +62,7 @@ try {
       timeout: 60_000,
       env: {
         ...process.env,
-        BOARD_PROOF_FAULT_FILE: `src/backend/${fault.file}`,
+        BOARD_PROOF_FAULT_FILE: target,
         BOARD_PROOF_FAULT_COPY: sourcePath,
       },
     });

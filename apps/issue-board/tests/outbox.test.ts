@@ -5,8 +5,8 @@ import { afterEach, beforeEach, expect, test } from "vite-plus/test";
 import { user } from "~/components/auth/index.server";
 import { database, migrate, drizzleOrm } from "~/components/database/index.server";
 import { type Mail } from "~/components/mail/index.server";
+import { mail as alertMail } from "~/components/mail/index.server";
 
-import { alertMail } from "@/backend/alert-mail.server";
 import { team, teamMember, mailOutbox } from "@/backend/board.schema.server";
 import { addComment } from "@/backend/comments.server";
 import { changeIssue } from "@/backend/issues.server";

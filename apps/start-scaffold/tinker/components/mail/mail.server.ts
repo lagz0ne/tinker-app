@@ -1,38 +1,82 @@
-import { extension, operation, resource, tag } from "@tinker/core";
+import { extension, operation, resource } from "@tinker/core";
 import { z } from "zod";
 
 import { smtp } from "./modules";
+import { smtpUrl, mailFrom, mailSendTimeout } from "./settings";
+import { smtpSockets } from "./sockets.server";
+
+export { smtpUrl, mailFrom, mailSendTimeout } from "./settings";
 
 const message = z.strictObject({ to: z.string(), subject: z.string(), text: z.string() });
 
 export declare namespace Mail {
   type Message = z.infer<typeof message>;
-  type Sender = { send: (message: Message) => Promise<void> };
+  type Sender = { send: (message: Message, options?: { signal?: AbortSignal }) => Promise<void> };
 }
-
-/** Where the SMTP server is, with its user and password when it needs them. */
-export const smtpUrl = tag<URL>({ label: "mail.smtpUrl", parse: z.instanceof(URL) });
-
-/** The sender address on each message. */
-export const mailFrom = tag<string>({ label: "mail.from", parse: z.email() });
 
 export const mail = resource({
   label: "mail.sender",
-  depends: { url: smtpUrl, from: mailFrom, smtp },
-  factory: async ({ url, from, smtp }, { defer }): Promise<Mail.Sender> => {
-    const { default: nodemailer } = smtp;
+  depends: { url: smtpUrl, from: mailFrom, timeout: mailSendTimeout, smtp, sockets: smtpSockets },
+  factory: async (
+    { url, from, timeout, smtp, sockets },
+    { defer, clock },
+  ): Promise<Mail.Sender> => {
     const user = decodeURIComponent(url.username);
-    const transport = nodemailer.createTransport({
+    const optionsForTransport = {
       host: url.hostname.replace(/^\[(.*)\]$/, "$1"),
-      pool: true,
       port: url.port ? Number(url.port) : undefined,
       secure: url.protocol === "smtps:" || url.port === "465",
       auth: user ? { user, pass: decodeURIComponent(url.password) } : undefined,
-    });
+      pool: true,
+      maxConnections: 1,
+      getSocket: sockets.getSocket,
+      dnsTimeout: timeout,
+      connectionTimeout: timeout,
+      greetingTimeout: timeout,
+      socketTimeout: timeout,
+    };
+    let transport = smtp.default.createTransport(optionsForTransport);
     defer(() => transport.close());
+
     return {
-      send: async (message) => {
-        await transport.sendMail({ from, ...message });
+      async send(message, options) {
+        options?.signal?.throwIfAborted();
+
+        const cancelled = Promise.withResolvers<never>();
+
+        const abort = () => {
+          sockets.abort();
+
+          transport.close();
+
+          transport = smtp.default.createTransport(optionsForTransport);
+
+          cancelled.reject(options?.signal?.reason);
+        };
+
+        options?.signal?.addEventListener("abort", abort, { once: true });
+
+        const timer = new AbortController();
+
+        try {
+          const sent = transport.sendMail({ from, ...message });
+
+          const deadline = clock.sleep(timeout, timer.signal).then(() => {
+            sockets.abort();
+
+            transport.close();
+
+            transport = smtp.default.createTransport(optionsForTransport);
+
+            throw new Error("Mail send total timeout");
+          });
+
+          await Promise.race([sent, deadline, cancelled.promise]);
+        } finally {
+          timer.abort();
+
+          options?.signal?.removeEventListener("abort", abort);
+        }
       },
     };
   },
