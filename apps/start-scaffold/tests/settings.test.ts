@@ -1,3 +1,5 @@
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+
 import { createScope } from "@tinker/core";
 import type { Tag } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
@@ -79,3 +81,28 @@ for (const [name, contract, rejected, accepted] of [
     for (const value of accepted) expect(() => contract(value)).not.toThrow();
   });
 }
+
+test("env examples name only tags that tinker/ or cmds/ declares", () => {
+  const app = new URL("../", import.meta.url);
+  const declared = new Set<string>();
+  for (const folder of ["tinker", "cmds"]) {
+    const files = readdirSync(new URL(folder, app), { recursive: true, encoding: "utf8" });
+    for (const file of files.filter((name) => /\.tsx?$/.test(name))) {
+      const source = readFileSync(new URL(`${folder}/${file}`, app), "utf8");
+      for (const match of source.matchAll(/export const (\w+) = tag\b/g)) declared.add(match[1]);
+    }
+  }
+
+  for (const path of [".env.example", "templates/env.example"]) {
+    if (!existsSync(new URL(path, app))) continue;
+    const named = readFileSync(new URL(path, app), "utf8")
+      .split("\n")
+      .flatMap((line) => line.match(/^# Required [^:]*: (.+)$/)?.[1].split(",") ?? [])
+      .map((entry) => entry.trim().split(" ")[0]);
+    expect(named.length, path).toBeGreaterThan(0);
+    expect(
+      named.filter((name) => !declared.has(name)),
+      path,
+    ).toEqual([]);
+  }
+});
