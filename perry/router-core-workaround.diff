@@ -1,0 +1,21 @@
+880,889c880,888
+<   const stack: Array<Frame> = [
+<     {
+<       node: segmentTree,
+<       index: 1,
+<       skipped: 0,
+<       statics: 0,
+<       dynamics: 0,
+<       optionals: 0,
+<     },
+<   ]
+---
+>   const stack: Array<Frame> = []
+>   stack.push({
+>     node: segmentTree,
+>     index: 1,
+>     skipped: 0,
+>     statics: 0,
+>     dynamics: 0,
+>     optionals: 0,
+>   })
