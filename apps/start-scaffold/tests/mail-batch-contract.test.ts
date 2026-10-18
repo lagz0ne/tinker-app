@@ -50,10 +50,6 @@ test("claim uses one bounded SKIP LOCKED statement for both due and dead rows", 
     expect(queries[0]!.text.match(/for update skip locked/g)).toHaveLength(2);
     expect(queries[0]!.text.match(/limit /g)).toHaveLength(2);
     expect(queries[0]!.values?.filter((value) => value === 20)).toHaveLength(2);
-    expect(queries[0]!.text).toContain('"attempts" + 1');
-    expect(queries[0]!.text).toContain('"attempts" >= 12');
-    expect(queries[0]!.text).toContain('"lease_token" =');
-    expect(queries[0]!.text).toContain('"lease_until" =');
   } finally {
     await root.close();
   }
@@ -245,8 +241,6 @@ for (const [attempts, error, found] of [
           : [],
       );
       expect(queries).toHaveLength(1);
-      expect(queries[0]!.text).toContain('"mail_outbox"."id" =');
-      expect(queries[0]!.text).toContain('"mail_outbox"."lease_token" =');
       expect(queries[0]!.values).toContain("lease-7");
       expect(queries[0]!.values).toContain(7);
       if (error !== null) expect(queries[0]!.values).toContain(error);

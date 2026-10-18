@@ -115,6 +115,7 @@ test("auth owns direct hooks, keeps read options, and logs only the failed user 
 
   try {
     await root.ready;
+
     await root.resolve(auth);
 
     expect(config).toMatchObject({
@@ -126,27 +127,42 @@ test("auth owns direct hooks, keeps read options, and logs only the failed user 
       emailAndPassword: { enabled: true },
       emailVerification: { sendOnSignUp: true },
     });
+
     await config!.databaseHooks.user.create.after({ id: "created" });
+
     refuse = true;
+
     await config!.databaseHooks.user.create.after({ id: "failed" });
+
     expect(logs.filter((entry) => entry.message === "auth.accountStreamFailed")).toMatchObject([
       { attributes: { accountId: "failed", error: "Error: stream unavailable" } },
     ]);
+
     await expect(
       config!.databaseHooks.session.create.after({ userId: "repair-failed" }),
     ).rejects.toBe(error);
+
     refuse = false;
+
     await config!.databaseHooks.session.create.after({ userId: "repaired" });
+
     await config!.databaseHooks.session.delete.after({ userId: "signed-out" });
+
     expect(streams).toEqual(["created", "failed", "repair-failed", "repaired"]);
+
     expect(notices).toEqual(["signed-out"]);
+
     const mail = { user: { email: "account@example.test" }, url: "https://auth.example.test/link" };
+
     await config!.emailAndPassword.sendResetPassword(mail);
+
     await config!.emailVerification.sendVerificationEmail(mail);
+
     expect(messages).toEqual([
       { to: mail.user.email, subject: "Reset your password", text: mail.url },
       { to: mail.user.email, subject: "Check your email", text: mail.url },
     ]);
+
     const headers = new Headers({ cookie: "proof=old" });
     for (const signedIn of [true, false]) {
       user = signedIn ? { id: "account-1" } : null;
@@ -158,6 +174,7 @@ test("auth owns direct hooks, keeps read options, and logs only the failed user 
         await session.close({ graceful: true });
       }
     }
+
     expect(sessionCalls).toEqual(
       Array.from({ length: 4 }, () => ({
         headers,

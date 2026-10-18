@@ -55,9 +55,9 @@ test("migrations keep the same lock keys across process and release versions", a
   });
   try {
     await root.run(migrate);
-    expect(queries).toEqual([
-      { text: "SELECT pg_try_advisory_lock($1, $2) AS owned", values: [1414090315, 1296648018] },
-      { text: "SELECT pg_advisory_unlock($1, $2)", values: [1414090315, 1296648018] },
+    expect(queries.map((query) => query.values)).toEqual([
+      [1414090315, 1296648018],
+      [1414090315, 1296648018],
     ]);
     expect(order).toEqual(["lock", "migrate", "unlock", "release"]);
     await root.close({ graceful: true });

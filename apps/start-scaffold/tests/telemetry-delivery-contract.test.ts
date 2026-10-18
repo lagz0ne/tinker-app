@@ -38,9 +38,13 @@ for (const missing of ["traces", "logs"] as const) {
 for (const side of ["worker", "browser"] as const) {
   test(`${side} exports exact trace groups, log lines, and closes every response body`, async () => {
     const requests: { url: unknown; init: RequestInit | undefined }[] = [];
+
     let cancelled = 0;
+
     let status = 200;
+
     const signal = new AbortController().signal;
+
     const root = createScope({
       tags: [
         telemetryService("proof"),
@@ -60,6 +64,7 @@ for (const side of ["worker", "browser"] as const) {
         }),
       ],
     });
+
     const records: Telemetry.Record[] = [
       { kind: "trace", side: "worker", json: '{"name":"mail.worker"}', bytes: 22 },
       { kind: "trace", side: "browser", json: '{"name":"click"}', bytes: 16 },

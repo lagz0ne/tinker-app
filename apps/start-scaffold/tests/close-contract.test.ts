@@ -1,7 +1,7 @@
 import { createScope, type Scope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
-import { checkClosed, defineMain } from "~/base/main";
+import { checkClosed } from "~/base/main";
 import { observeServerPanics } from "~/base/panics.server";
 import { renderFrames, renderLifetime } from "~/components/requests/render-lifetime.server";
 
@@ -27,8 +27,6 @@ test("checkClosed keeps failure before teardown and accepts an empty teardown li
       teardownErrors: [cleanup, second],
     } as unknown as Scope.Result),
   ).toThrow(cleanup);
-  const main = async () => ({ closed: Promise.resolve() });
-  expect(defineMain(main)).toBe(main);
 });
 
 for (const phase of ["work", "close"] as const) {
