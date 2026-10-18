@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
 
+import { profile, pending, notice, authMode } from "@/demo/client";
+
 import { signIn, setAuthMode } from "./auth-actions";
 import { Counter } from "./Counter";
 import { errorText } from "./error-text";
-import { profile, pending, notice, authMode } from "./state";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Input } from "./ui/input";
@@ -16,6 +17,7 @@ function AccountForm() {
   const busy = useData(pending);
   return (
     <form
+      method="post"
       className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();

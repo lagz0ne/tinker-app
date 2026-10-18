@@ -1,12 +1,13 @@
 import { operation, resource } from "@tinker/core";
-import { syncClient, snapshotLoader } from "@tinker/start/client";
 import { z } from "zod";
 
-import { credentials } from "@/contracts/credentials";
-import { raise } from "@/errors";
+import { syncClient, snapshotLoader } from "~/components/sync";
+
+import { credentials } from "@/demo/client";
+import { raise } from "@/demo/client";
+import { pending, notice, authMode } from "@/demo/client";
 
 import { betterAuthReact } from "./modules";
-import { pending, notice, authMode } from "./state";
 
 const modeInput = z.enum(["signup", "signin"]);
 
@@ -15,7 +16,21 @@ export const authClient = resource({
   depends: { auth: betterAuthReact },
   factory: async ({ auth }) => {
     const { createAuthClient } = auth;
-    return createAuthClient();
+    return createAuthClient({
+      sessionOptions: { refetchInterval: 300 },
+      fetchOptions: {
+        onRequest(request) {
+          if (
+            request.method !== "POST" ||
+            !new URL(request.url).pathname.endsWith("/get-session")
+          ) {
+            return;
+          }
+          request.headers.set("content-type", "application/json");
+          request.body = "{}";
+        },
+      },
+    });
   },
 });
 

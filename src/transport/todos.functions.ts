@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
-import { startRequests } from "@tinker/start";
-import { readResult } from "@tinker/start/server";
 
-import { listTodos, changeTodo } from "@/backend/index.server";
-import { readTodoCommand } from "@/contracts/commands";
+import { startRequests } from "~/components/requests";
+import { readResult } from "~/components/requests/index.server";
+
+import { readTodoCommand } from "@/demo/client";
+import { listTodos, changeTodo } from "@/demo/index.server";
 
 import { readReceipt } from "./result.server";
 

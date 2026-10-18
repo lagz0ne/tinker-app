@@ -1,28 +1,38 @@
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { syncClient, loadSnapshot, checkAccount } from "@tinker/start/client";
-import { authSettings } from "@tinker/start/server";
-import {
-  accountOwner,
-  tabStop,
-  refreshAccount,
-  receiveMessage,
-  snapshotSource,
-} from "@tinker/start/testing";
-import { openSync, backendStop, requestStop } from "@tinker/start/testing";
 import { createAuthClient } from "better-auth/react";
 import { test, expect } from "vite-plus/test";
 
-import { readAccount } from "@/backend/auth.server";
-import { incrementCounter } from "@/backend/counter.server";
-import { migrate, databaseUrl } from "@/backend/database.server";
-import { bootstrap } from "@/backend/sync.server";
+import { authStartup } from "~/components/auth/index.server";
+import { authSettings } from "~/components/auth/index.server";
+import { openSync } from "~/components/auth/index.server";
+import { migrate, databaseUrl } from "~/components/database/index.server";
+import { backendStop as requestHostStop } from "~/components/requests";
+import { startRequests } from "~/components/requests";
+import { backendStop, requestStop } from "~/components/requests";
+import { loadSnapshot, checkAccount } from "~/components/sync/client/events";
+import { refreshAccount, receiveMessage } from "~/components/sync/client/events";
+import { syncClient } from "~/components/sync/client/sync";
+import { tabStop } from "~/components/sync/client/tab";
+import { snapshotSource } from "~/components/sync/functions";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+import { syncStartup } from "~/components/sync/slots";
+
+import { readAccount } from "@/demo/backend/auth.server";
+import { incrementCounter } from "@/demo/backend/counter.server";
+import { bootstrap } from "@/demo/backend/sync.server";
+import * as demo from "@/demo/index.server";
 import { authClient, signIn } from "@/frontend/actions";
 
+import { clientBindings } from "./presets";
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+import { write } from "./write-boundary";
+
+const requestBindings = requestHostStop(new AbortController().signal);
 
 const settings = [
+  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -33,12 +43,18 @@ const settings = [
 test("a stream checks the session once at open, and a save does not check it again", async () => {
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
     tags: [
-      settings,
-      backendStop(stop.signal),
-      requestStop(stop.signal),
-      requestHeaders(new Headers()),
+      requestBindings,
+      [
+        [
+          settings,
+          backendStop(stop.signal),
+          requestStop(stop.signal),
+          requestHeaders(new Headers()),
+        ],
+      ],
     ],
     presets: [proofDatabase, proofMail],
     observe: { history: 100 },
@@ -46,7 +62,7 @@ test("a stream checks the session once at open, and a save does not check it aga
   await root.ready;
   try {
     await root.run(migrate);
-    await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+    await write(root, incrementCounter, { input: { executionId: crypto.randomUUID() } });
 
     const response = await root.run(openSync, { input: { cursor: { public: 0, private: null } } });
     const reader = response.getReader();
@@ -54,7 +70,7 @@ test("a stream checks the session once at open, and a save does not check it aga
     await reader.read();
 
     const waiting = reader.read();
-    await root.run(incrementCounter, { input: { executionId: crypto.randomUUID() } });
+    await write(root, incrementCounter, { input: { executionId: crypto.randomUUID() } });
     await waiting;
 
     expect(root.spans().filter((span) => span.name === "sync.liveAccount")).toHaveLength(1);
@@ -81,14 +97,14 @@ test("a signed-out private redirect loads one snapshot across separate renders",
 
   const page = createScope({
     signal: stop.signal,
-    extensions: [accountOwner],
-    tags: tabStop(stop.signal),
+    extensions: [syncStartup],
+    tags: [clientBindings, tabStop(stop.signal)],
     presets: [source],
   });
   const redirected = createScope({
     signal: stop.signal,
-    extensions: [accountOwner],
-    tags: tabStop(stop.signal),
+    extensions: [syncStartup],
+    tags: [clientBindings, tabStop(stop.signal)],
     presets: [source],
   });
 
@@ -113,8 +129,9 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
   const allowed = Promise.withResolvers<void>();
 
   const server = createScope({
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: settings,
+    tags: [requestBindings, [settings]],
     presets: [proofDatabase, proofMail],
   });
   await server.ready;
@@ -122,8 +139,8 @@ test("sign-in, an old stream account event, and route loads fetch one signed-in 
 
   const browser = createScope({
     signal: stop.signal,
-    extensions: [accountOwner],
-    tags: tabStop(stop.signal),
+    extensions: [syncStartup],
+    tags: [clientBindings, tabStop(stop.signal)],
     presets: [
       preset(authClient, async () =>
         createAuthClient({
@@ -196,15 +213,16 @@ test("a private route check clears cached records after another tab signs out", 
   let cookie = "";
 
   const server = createScope({
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: settings,
+    tags: [requestBindings, [settings]],
     presets: [proofDatabase, proofMail],
   });
 
   const browser = createScope({
     signal: stop.signal,
-    extensions: [accountOwner],
-    tags: tabStop(stop.signal),
+    extensions: [syncStartup],
+    tags: [clientBindings, tabStop(stop.signal)],
     presets: [
       preset(snapshotSource, () => ({
         async load() {

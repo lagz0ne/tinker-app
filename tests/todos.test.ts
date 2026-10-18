@@ -1,15 +1,25 @@
 import { createScope, isError as isCoreError } from "@tinker/core";
-import { authSettings } from "@tinker/start/server";
 import { test, expect } from "vite-plus/test";
 
-import { migrate, databaseUrl } from "@/backend/database.server";
-import { listTodos, changeTodo } from "@/backend/todos.server";
-import { raise, isError } from "@/errors";
+import { authStartup } from "~/components/auth/index.server";
+import { authSettings } from "~/components/auth/index.server";
+import { migrate, databaseUrl } from "~/components/database/index.server";
+import { backendStop as requestHostStop } from "~/components/requests";
+import { startRequests } from "~/components/requests";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+
+import { listTodos, changeTodo } from "@/demo/backend/todos.server";
+import { raise, isError } from "@/demo/errors";
+import * as demo from "@/demo/index.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+import { write, settleWrite } from "./write-boundary";
+
+const requestBindings = requestHostStop(new AbortController().signal);
 
 const tags = [
+  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -36,7 +46,12 @@ function readHeaders(response: Response) {
 
 test("two real accounts can change only their own saved todos", async () => {
   const stop = new AbortController();
-  const root = createScope({ signal: stop.signal, tags, presets: [proofDatabase, proofMail] });
+  const root = createScope({
+    extensions: [startRequests, authStartup],
+    signal: stop.signal,
+    tags: [requestBindings, tags],
+    presets: [proofDatabase, proofMail],
+  });
   await root.ready;
   try {
     await root.run(migrate);
@@ -54,14 +69,14 @@ test("two real accounts can change only their own saved todos", async () => {
       }),
     );
 
-    await root.run(changeTodo, {
+    await write(root, changeTodo, {
       rawInput: {
         executionId: crypto.randomUUID(),
         change: { kind: "add", title: "  Write code  " },
       },
       tags: requestHeaders(ada),
     });
-    await root.run(changeTodo, {
+    await write(root, changeTodo, {
       input: { executionId: crypto.randomUUID(), change: { kind: "add", title: "Find a bug" } },
       tags: requestHeaders(grace),
     });
@@ -78,7 +93,7 @@ test("two real accounts can change only their own saved todos", async () => {
         { kind: "setDone", id, done: true } as const,
         { kind: "delete", id } as const,
       ]) {
-        const result = await root.settle(changeTodo, {
+        const result = await settleWrite(root, changeTodo, {
           input: { executionId: crypto.randomUUID(), change: input },
           tags: requestHeaders(grace),
         });
@@ -91,14 +106,14 @@ test("two real accounts can change only their own saved todos", async () => {
 
     expect(await root.run(listTodos, { tags: requestHeaders(ada) })).toEqual(adaRows);
 
-    await root.run(changeTodo, {
+    await write(root, changeTodo, {
       input: {
         executionId: crypto.randomUUID(),
         change: { kind: "setDone", id: adaTodo.id, done: true },
       },
       tags: requestHeaders(ada),
     });
-    await root.run(changeTodo, {
+    await write(root, changeTodo, {
       input: {
         executionId: crypto.randomUUID(),
         change: { kind: "setDone", id: adaTodo.id, done: true },
@@ -110,7 +125,7 @@ test("two real accounts can change only their own saved todos", async () => {
       { ...adaTodo, done: true },
     ]);
 
-    await root.run(changeTodo, {
+    await write(root, changeTodo, {
       input: { executionId: crypto.randomUUID(), change: { kind: "delete", id: adaTodo.id } },
       tags: requestHeaders(ada),
     });
@@ -126,8 +141,9 @@ test("two real accounts can change only their own saved todos", async () => {
 test("signed-out todo reads and writes are refused", async () => {
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags,
+    tags: [requestBindings, tags],
     presets: [proofDatabase, proofMail],
     observe: { history: 80 },
   });
@@ -135,7 +151,7 @@ test("signed-out todo reads and writes are refused", async () => {
   try {
     await root.run(migrate);
 
-    const result = await root.settle(changeTodo, {
+    const result = await settleWrite(root, changeTodo, {
       input: { executionId: crypto.randomUUID(), change: { kind: "add", title: "No account" } },
       tags: requestHeaders(new Headers()),
     });
@@ -153,7 +169,11 @@ test("signed-out todo reads and writes are refused", async () => {
 
 test("todo changes reject empty titles, long titles, and caller-selected owners", async () => {
   const stop = new AbortController();
-  const root = createScope({ signal: stop.signal });
+  const root = createScope({
+    tags: [requestBindings, tags],
+    extensions: [startRequests, authStartup],
+    signal: stop.signal,
+  });
   await root.ready;
   try {
     for (const rawInput of [
@@ -161,7 +181,7 @@ test("todo changes reject empty titles, long titles, and caller-selected owners"
       { kind: "add", title: "x".repeat(201) },
       { kind: "add", title: "Valid title", ownerId: "someone-else" },
     ]) {
-      const result = await root.settle(changeTodo, {
+      const result = await settleWrite(root, changeTodo, {
         rawInput: { executionId: crypto.randomUUID(), change: rawInput },
       });
       if (result.status !== "failed") raise("BadInput", { reason: "expected input refusal" });

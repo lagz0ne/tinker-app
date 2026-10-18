@@ -1,12 +1,12 @@
 import { Link, Navigate } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
 
-import type { Profile } from "@/contracts/profile-contract";
+import type { Profile } from "@/demo/client";
+import { profile, nameDraft, pending, notice, profileResult } from "@/demo/client";
 
 import { signOut } from "./auth-actions";
 import { errorText } from "./error-text";
 import { saveName, editName, retryMail } from "./profile-actions";
-import { profile, nameDraft, pending, notice, profileResult } from "./state";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";
 import { Input } from "./ui/input";

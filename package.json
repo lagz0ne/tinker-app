@@ -1,5 +1,5 @@
 {
-  "name": "tinker-app",
+  "name": "@tinker-start-scaffold",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,14 +8,17 @@
     "build": "vp build",
     "start": "tinker serve",
     "setup": "node scripts/setup.mjs",
-    "test": "vp test",
+    "test": "vp test --maxWorkers=1 --no-file-parallelism",
     "db:generate": "drizzle-kit generate",
     "test:schema": "node scripts/check-schema.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "check:plain": "node scripts/check-plain.mjs",
     "postinstall": "tinker prepare",
     "doctor": "tinker doctor",
-    "check": "vp check && vp run typecheck && vp run test && vp run check:plain && vp run test:schema && vp run doctor"
+    "check": "vp run gate:commands && vp check && vp run typecheck && vp run test && vp run test:proofs && vp run check:plain && vp run test:schema && vp run doctor",
+    "mutate": "stryker run",
+    "test:proofs": "node maintain/proof-server-close.mjs && node maintain/proof-exit-controls.mjs && node maintain/proof-bootstrap-controls.mjs",
+    "gate:commands": "node node_modules/@tinker/start/lib/command-gate.mjs"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",
@@ -24,7 +27,6 @@
     "@tanstack/react-start": "1.168.60",
     "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
     "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
-    "@tinker/start": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-start-0.8.0.tgz",
     "better-auth": "1.7.7",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -39,7 +41,10 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@tailwindcss/vite": "4.3.3",
+    "@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.10.0/tinker-start-0.10.0.tgz",
     "@types/node": "^24",
     "@types/nodemailer": "^7.0.11",
     "@types/pg": "^8.15.6",
@@ -54,6 +59,9 @@
     "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
     "vite-plus": "1.0.0"
   },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0"
+  },
   "intent": {
     "skills": [
       "@tanstack/react-start",
@@ -61,8 +69,5 @@
       "@tanstack/start-server-core",
       "@tanstack/router-core"
     ]
-  },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0"
   }
 }

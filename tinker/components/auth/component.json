@@ -1,0 +1,1 @@
+{ "requires": ["requests", "database", "sync", "mail", "errors"] }

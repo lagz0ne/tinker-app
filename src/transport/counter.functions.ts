@@ -1,8 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { startRequests } from "@tinker/start";
 
-import { incrementCounter } from "@/backend/index.server";
-import { readExecution } from "@/contracts/sync";
+import { startRequests } from "~/components/requests";
+import { readExecution } from "~/components/sync";
+
+import { incrementCounter } from "@/demo/index.server";
 
 import { readReceipt } from "./result.server";
 

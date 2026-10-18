@@ -2,5 +2,11 @@ import { tinker } from "@tinker/start/vite";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  plugins: [tinker({ auth: true, sync: true })],
+  plugins: [
+    tinker({
+      serverEntry: "cmds/server.ts",
+      routerEntry: "cmds/router.ts",
+      startEntry: "cmds/start.ts",
+    }),
+  ],
 });

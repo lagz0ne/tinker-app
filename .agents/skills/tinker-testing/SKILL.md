@@ -5,106 +5,23 @@ description: Prove app promises through small scopes.
 
 # Test through a scope
 
-Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
+Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md#http-and-tests) for the shared
+check rules. Tests stay serial with VITEST_MAX_WORKERS=1 and
+VP_RUN_CONCURRENCY_LIMIT=1. Never skip or quarantine a test.
 
-Use this when adding or fixing app behavior.
-Read `tests/todos.test.ts` for a full example.
-Import exported operations from the app's package seams.
-Bind raw request headers only through the testing entry:
+Read tests/todos.test.ts, bootstrap-read.test.ts, transaction.test.ts, and
+transaction-lease.test.ts. Tests bind typed tags and use native resource presets.
+proofDatabase runs real PGlite queries; proofMail records sends. Tests may import
+the private owner they prove. Never patch global fetch, clocks, or module state.
+Use Core's test clock and resource presets at those native boundaries.
 
-```ts
-import { requestHeaders } from "@tinker/start/testing";
-```
+New write tests use the same owned call as a transport: a signal opens a child
+session and joins defer before the result. Prove failed COMMIT, no early reply,
+rollback, idle no-checkout, and ended handles. Do not mirror each internal step.
+Keep command tests for input, startup, exit, and close; these are useful wiring
+contracts. Native host proofs stay outside feature scope tests.
 
-App code uses principal or currentUser.
-Do not import private source files.
-Do not boot Start to test an operation.
-
-`tests/presets.ts` replaces database and mail resources.
-The database runs real queries with PGlite.
-`proofMail` only records sends; it does not deliver mail.
-Held and refused mail use inline `preset(mail, ...)` fixtures.
-See `tests/sync.test.ts` for both.
-Use `preset` from `@tinker/core/testing` only in tests.
-Never import that entry from app source.
-Do not use mocks, spies, global patches, or sleep waits.
-
-```ts
-const stop = new AbortController();
-const app = createScope({
-  signal: stop.signal,
-  tags: settings,
-  presets: [proofDatabase, proofMail],
-});
-await app.ready;
-try {
-  await app.run(migrate);
-  expect(
-    await app.run(readProfile, {
-      tags: requestHeaders(new Headers()),
-    }),
-  ).toBeNull();
-} finally {
-  stop.abort();
-  expect((await app.closed).status).toBe("success");
-}
-```
-
-Fill each settings tag with a typed value.
-There is no `env` tag; bind the typed tag:
-
-```ts
-const settings = [
-  databaseUrl(new URL("postgres://proof")),
-  authSettings({
-    origin: "http://localhost:4318",
-    secret: "test-secret-with-32-letters-or-more",
-  }),
-];
-```
-
-`authSettings` comes from `@tinker/start/server`.
-The worked tests show their filled values.
-For outgoing HTTP, bind httpBackend through the base testing entry:
-
-```ts
-const stop = new AbortController();
-const app = createScope({
-  signal: stop.signal,
-  tags: [
-    httpBackend(
-      async () => new Response("saved", { status: 201 })
-    )
-  ],
-});
-await app.ready;
-try {
-  expect(
-    await app.run(httpRequest, {
-      rawInput: {
-        url: "https://no-network.invalid/notices",
-        method: "POST",
-        body: "The order is ready.",
-      },
-    }),
-  ).toEqual({
-    status: 201,
-    headers: {
-      "content-type": ["text/plain;charset=UTF-8"],
-    },
-    body: "saved",
-  });
-} finally {
-  stop.abort();
-  await app.closed;
-}
-```
-
-Import httpBackend from `@tinker/start/testing`.
-Import httpRequest from `@tinker/start/server`.
-Bind the fake in the test's scope; never replace global fetch.
-
-One test names one public cause and decisive outcome.
-A bug test must fail without the fix.
-Count calls or spans to prove less work; never time them.
-Run `npm run build` before types and tests.
+Old/expired-cookie page tests log all SQL writes. The browser refresh proof must
+show an aged login renews through successful POST, rather than manually sending
+the refresh from the test. A fault control must fail for its named cause.
+Run the app's AGENTS.md gates and live proofs. Build before type checks/tests.

@@ -1,62 +1,44 @@
 # Plain functions
 
-This list is checked against src.
+This list is checked against src, cmds, and tinker.
 Callers include direct calls and typed callback registrations.
 Repeated calls by one caller count once; self-calls do not count.
 Tests and generated files do not count.
 
-- **src/backend/settings.server.ts#settings**
-  - `env`: `Env.Values`. From the base's server entry; why: the keys to check and convert.
-  - Callers:
-    - `@tinker/start#serverEntry`
-
-- **src/contracts/commands.ts#readProfileCommand**
+- **src/demo/contracts/commands.ts#readProfileCommand**
   - `raw`: `unknown`. From the profile request body; why: read its execution ID and profile input.
   - Callers:
-    - `src/backend/profile.server.ts#saveProfile.input`
+    - `src/demo/backend/profile.server.ts#saveProfile.input`
     - `src/transport/profile.functions.ts#module`
 
-- **src/contracts/commands.ts#readTodoCommand**
+- **src/demo/contracts/commands.ts#readTodoCommand**
   - `raw`: `unknown`. From the todo request body; why: read its execution ID and todo change.
   - Callers:
-    - `src/backend/todos.server.ts#changeTodo.input`
+    - `src/demo/backend/todos.server.ts#changeTodo.input`
     - `src/transport/todos.functions.ts#module`
 
-- **src/contracts/profile-contract.ts#readProfileInput**
-  - `raw`: `unknown`. From the profile command or draft; why: validate only the saved name.
-  - Callers:
-    - `src/contracts/commands.ts#readProfileCommand`
-    - `src/frontend/profile-actions.ts#saveName.input`
-
-- **src/contracts/todos-contract.ts#readTodoChange**
-  - `raw`: `unknown`. From the todo command or form; why: validate one todo change.
-  - Callers:
-    - `src/contracts/commands.ts#readTodoCommand`
-    - `src/frontend/Todos.tsx#saveTodo.input`
-
-- **src/errors.ts#raise**
+- **src/demo/errors.ts#raise**
   - `kind`: `N`. From the failing caller; why: choose the managed error.
   - `payload`: `Errors.Payload<N>`. From the failing caller; why: keep facts for that error.
   - Callers:
-    - `src/backend/auth.server.ts#currentUser.factory`
-    - `src/backend/counter.server.ts#incrementCounter.run.callback1`
-    - `src/backend/profile.server.ts#notifyProfile.run`
-    - `src/backend/profile.server.ts#retryNotification.run.callback1`
-    - `src/backend/profile.server.ts#saveProfile.run.callback1`
-    - `src/backend/settings.server.ts#settings`
-    - `src/backend/sync.server.ts#bootstrapPrivate.run.callback1`
-    - `src/backend/sync.server.ts#replayPrivate.run`
-    - `src/backend/sync.server.ts#replayPublic.run`
-    - `src/backend/todos.server.ts#changeTodo.run.callback1`
-    - `src/contracts/profile-contract.ts#readProfileInput`
-    - `src/contracts/todos-contract.ts#readTodoChange`
+    - `src/demo/backend/auth.server.ts#currentUser.factory`
+    - `src/demo/backend/counter.server.ts#incrementCounter.run`
+    - `src/demo/backend/profile.server.ts#notifyProfile.run`
+    - `src/demo/backend/profile.server.ts#retryNotification.run.callback1`
+    - `src/demo/backend/profile.server.ts#saveProfile.run.callback1`
+    - `src/demo/backend/sync.server.ts#bootstrapPrivate.run.callback1`
+    - `src/demo/backend/sync.server.ts#replayPrivate.run`
+    - `src/demo/backend/sync.server.ts#replayPublic.run`
+    - `src/demo/backend/todos.server.ts#changeTodo.run`
+    - `src/demo/contracts/profile-contract.ts#module`
+    - `src/demo/contracts/todos-contract.ts#module`
     - `src/frontend/auth-actions.ts#signIn.input`
     - `src/frontend/auth-actions.ts#signIn.run`
     - `src/frontend/auth-actions.ts#signOut.run`
     - `src/frontend/profile-actions.ts#saveName.run`
     - `src/transport/result.server.ts#readReceipt`
 
-- **src/errors.ts#isError**
+- **src/demo/errors.ts#isError**
   - `error`: `unknown`. From a caught failure; why: narrow its payload.
   - `kind`: `N`. From the caller; why: select the expected error.
   - Callers:
@@ -90,3 +72,77 @@ Tests and generated files do not count.
     - `src/transport/profile.functions.ts#retryProfileNotification.callback`
     - `src/transport/profile.functions.ts#updateProfile.callback`
     - `src/transport/todos.functions.ts#updateTodo.callback`
+
+- **tinker/base/main.ts#checkClosed**
+  - `result`: `Scope.Result`. From a closed root; why: surface work and cleanup errors before exit.
+  - Callers:
+    - `cmds/server.ts#closed.closeRoots`
+    - `cmds/server.ts#module.callback1`
+
+- **tinker/components/errors/errors.ts#raise**
+  - `kind`: `N`. From a failed base action; why: choose the managed error.
+  - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
+  - Callers:
+    - `tinker/base/server-entry.ts#renderRequest.callback`
+    - `tinker/components/auth/stream.server.ts#lease.check`
+    - `tinker/components/auth/stream.server.ts#lease.open`
+    - `tinker/components/auth/stream.server.ts#lease.wait`
+    - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
+    - `tinker/components/requests/render-lifetime.server.ts#retain`
+    - `tinker/components/requests/start.ts#middleware.callback`
+    - `tinker/components/sync/client/sync.ts#client.execute`
+    - `tinker/components/sync/client/sync.ts#client.wait`
+    - `tinker/components/sync/client/sync.ts#syncClient.factory`
+    - `tinker/components/sync/history.server.ts#append`
+    - `tinker/components/sync/history.server.ts#find`
+    - `tinker/components/sync/history.server.ts#lock`
+    - `tinker/components/sync/history.server.ts#read`
+    - `tinker/components/sync/notifications.server.ts#subscribe`
+    - `tinker/components/telemetry/ingest.server.ts#receiveTelemetry.run`
+
+- **tinker/components/errors/errors.ts#fail**
+  - `kind`: `N`. From a failed base action; why: choose the managed error.
+  - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
+  - Callers:
+    - `tinker/components/database/database.server.ts#lease.begin`
+    - `tinker/components/database/database.server.ts#lease.check`
+    - `tinker/components/database/database.server.ts#tx.transaction`
+    - `tinker/components/errors/errors.ts#raise`
+    - `tinker/components/requests/result.server.ts#readResult`
+    - `tinker/components/sync/client/sync.ts#client.leave`
+    - `tinker/components/sync/client/sync.ts#stop.stop`
+    - `tinker/components/sync/client/sync.ts#syncClient.factory.callback1`
+
+- **tinker/components/errors/errors.ts#isError**
+  - `error`: `unknown`. From a caught failure; why: narrow its payload.
+  - `kind`: `N`. From the caller; why: select the expected error.
+  - Callers:
+    - `src/frontend/error-text.ts#errorText`
+    - `src/routes/api.sync.ts#Route.GET`
+    - `src/transport/result.server.ts#readReceipt`
+
+- **tinker/components/requests/result.server.ts#readResult**
+  - `result`: `RunResult<T>`. From a settled boundary call; why: return its value or raise its failure.
+  - Callers:
+    - `src/routes/api.auth.$.ts#Route.GET`
+    - `src/routes/api.auth.$.ts#Route.POST`
+    - `src/routes/api.health.ts#Route.GET`
+    - `src/routes/api.sync.ts#Route.GET`
+    - `src/routes/api.telemetry.ts#Route.POST`
+    - `src/transport/profile.functions.ts#getProfile.callback`
+    - `src/transport/todos.functions.ts#getTodos.callback`
+    - `tinker/components/sync/functions.ts#getAccount.callback`
+    - `tinker/components/sync/functions.ts#getBootstrap.callback`
+    - `tinker/components/sync/notifications.server.ts#share`
+
+- **tinker/components/sync/notice.ts#accountNotice**
+  - `accountId`: `string`. From the auth path; why: the account whose streams must re-read.
+  - Callers:
+    - `tinker/components/sync/notifications.server.ts#notifications.factory`
+    - `tinker/components/sync/publish.server.ts#publishAccountNotice.run`
+
+- **tinker/components/telemetry/records.ts#encodeValue**
+  - `value`: `unknown`. From a span or log attribute; why: bound and safely encode its wire value.
+  - Callers:
+    - `tinker/components/telemetry/observer.ts#export`
+    - `tinker/components/telemetry/observer.ts#log`

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -18,12 +18,21 @@ const base = dirname(
   createRequire(join(root, "package.json")).resolve("@tinker/start/package.json"),
 );
 
+const { commandImport, isolatedImport } = createRequire(join(base, "package.json"))(
+  "./lib/checks/imports.mjs",
+);
+
 const failures = [];
 const files = [];
 
 async function scan(folder) {
   for (const entry of await readdir(folder, { withFileTypes: true })) {
     const path = join(folder, entry.name);
+    if (!entry.isDirectory() && /^cmds\/[^/]+\//.test(relative(root, path))) {
+      failures.push(
+        `${relative(root, path)}:1: nested-command: commands must be files directly under cmds; move it to cmds/${entry.name}`,
+      );
+    }
     if (entry.isDirectory()) await scan(path);
     else if (/\.tsx?$/.test(entry.name) && !/\.(gen|generated|d)\.tsx?$/.test(entry.name)) {
       files.push(path);
@@ -32,6 +41,8 @@ async function scan(folder) {
 }
 
 await scan(join(root, "src"));
+await scan(join(root, "cmds"));
+await scan(join(root, "tinker"));
 const config = ts.readConfigFile(join(root, "tsconfig.json"), (path) => ts.sys.readFile(path));
 assert.equal(config.error, undefined, "tsconfig must be readable");
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root);
@@ -221,7 +232,7 @@ function assignedReturn(object, owner) {
   return (
     ts.isCallExpression(call) &&
     nameOf(call.expression) === "Object.assign" &&
-    directReturn(call, owner)
+    (directReturn(call, owner) || localReturn(call, owner))
   );
 }
 
@@ -354,6 +365,26 @@ function callbackType(signature, param, index, arg) {
   return type.flags & ts.TypeFlags.TypeParameter ? checker.getBaseConstraintOfType(type) : type;
 }
 
+/** A function has a name field, so Zod can select its data overload for {name: string}.
+ * It still invokes a callable fallback; check the actual callback overload too.
+ */
+function zodCatchCallback(call, arg) {
+  const signature = checker.getResolvedSignature(call);
+  const file = signature?.declaration?.getSourceFile().fileName ?? "";
+  if (!/\/zod\//.test(file) || declarationName(call) !== "catch") return false;
+
+  const argument = checker.getTypeAtLocation(arg);
+  return checker
+    .getTypeAtLocation(call.expression)
+    .getCallSignatures()
+    .some((candidate) => {
+      const parameter = candidate.parameters[0];
+      if (!parameter) return false;
+      const type = checker.getTypeOfSymbolAtLocation(parameter, arg);
+      return callable(type) && checker.isTypeAssignableTo(argument, type);
+    });
+}
+
 function callbackSlot(call, index) {
   const signature = checker.getResolvedSignature(call);
   const declaration = signature?.declaration ?? resolvedMethod(call);
@@ -366,7 +397,7 @@ function callbackIndex(call, arg) {
 }
 
 function callbackArgument(call, arg) {
-  if (tagArgument(call)) return true;
+  if (tagArgument(call) || zodCatchCallback(call, arg)) return true;
 
   const index = callbackIndex(call, arg);
   const { signature, param } = callbackSlot(call, index);
@@ -414,13 +445,22 @@ function externalDeclaration(call) {
   );
 }
 
+/** The native Start entry invokes and caches this exact callback argument. */
+function entryArgument(node, call) {
+  if (callbackIndex(call, node) !== 0) return false;
+  return symbolOf(call.expression)?.declarations?.some(
+    (declaration) =>
+      pathOf(declaration) === "tinker/base/start-entry.ts" &&
+      nameOf(declaration.name) === "createStartEntry",
+  );
+}
+
 function nativeArgument(node) {
   const call = node.parent;
   return (
     argumentOf(node, call) &&
-    externalCall(call) &&
-    externalDeclaration(call) &&
-    callbackArgument(call, node)
+    callbackArgument(call, node) &&
+    (entryArgument(node, call) || (externalCall(call) && externalDeclaration(call)))
   );
 }
 
@@ -437,7 +477,12 @@ function nativeOption(node) {
   }
 
   const call = object.parent;
-  return argumentOf(object, call) && externalCall(call) && externalDeclaration(call);
+  if (coreSymbol(call.expression, "namespace")) return false;
+  return (
+    argumentOf(object, call) &&
+    externalCall(call) &&
+    [externalDeclaration, resolvedMethod].some((rule) => !!rule(call))
+  );
 }
 
 function namedNativeCallback(node) {
@@ -465,7 +510,7 @@ function classifyNativeCallback(node) {
 
 function graphOwner(node) {
   for (let parent = enclosingFunction(node); parent; parent = enclosingFunction(parent)) {
-    if (optionsMember(parent) || factoryBody(parent)) return true;
+    if (optionsMember(parent) || factoryBody(parent) || entryFunction(parent)) return true;
   }
   return false;
 }
@@ -618,7 +663,12 @@ function checkScopeReference(node) {
   fail(node, "scope-entry-only");
 }
 
+function isCommand(node) {
+  return /^cmds\/[^/]+\.tsx?$/.test(pathOf(node));
+}
+
 function checkRoots(node) {
+  if (isCommand(node)) return;
   checkScopeReference(node);
   if (!moduleBinding(node) || !contains(checker.getTypeAtLocation(node.name), "holder")) return;
   fail(node, "module-handle");
@@ -659,6 +709,8 @@ function zodDeclaration(node, file) {
       "regex",
       "trim",
       "toUpperCase",
+      "pipe",
+      "omit",
       "brand",
       "optional",
       "nullable",
@@ -667,6 +719,7 @@ function zodDeclaration(node, file) {
       "default",
       "or",
       "refine",
+      "catch",
     ].includes(declarationName(node))
   );
 }
@@ -678,6 +731,9 @@ function schemaDeclaration(node, file) {
       "pgTable",
       "text",
       "timestamp",
+      "uuid",
+      "smallint",
+      "bigserial",
       "boolean",
       "integer",
       "jsonb",
@@ -751,8 +807,13 @@ function declarationFile(node) {
   return checker.getResolvedSignature(node)?.declaration?.getSourceFile().fileName ?? "";
 }
 
+/** Namespace and tag bindings are Core config; they grant no callback ownership. */
+function coreDeclaration(node) {
+  return coreCall(node) || coreSymbol(node.expression, "namespace") || tagArgument(node);
+}
+
 function moduleDeclarationCall(node) {
-  if (coreCall(node) || clientDeclaration(node)) return true;
+  if ([coreDeclaration, clientDeclaration, definedMainCall].some((read) => read(node))) return true;
   const file = declarationFile(node);
   return (
     zodDeclaration(node, file) ||
@@ -826,8 +887,26 @@ function nativeReference(node, declarations) {
   return referenceSymbol(node)?.declarations?.some((decl) => declarations.has(decl));
 }
 
+/** Only the HTTP backend tag's default supplies native fetch. */
+function backendDefault(node) {
+  if (pathOf(node) !== "tinker/components/http/backend.ts") return false;
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (!ts.isPropertyAssignment(parent) || nameOf(parent.name) !== "default") continue;
+    const call = parent.parent.parent;
+    return (
+      ts.isCallExpression(call) &&
+      coreSymbol(call.expression, "tag") &&
+      ts.isVariableDeclaration(call.parent) &&
+      nameOf(call.parent.name) === "httpBackend"
+    );
+  }
+  return false;
+}
+
 function checkFetch(node) {
-  if (typeReference(node) || !nativeReference(node, fetchDeclarations)) return;
+  if (typeReference(node) || backendDefault(node) || !nativeReference(node, fetchDeclarations)) {
+    return;
+  }
   fail(node, "http-request: use httpRequest.controller instead of built-in fetch");
 }
 
@@ -840,13 +919,28 @@ function checkBrowserHttp(node) {
 
 function checkHttpResource(node) {
   if (typeReference(node)) return;
-  if (protocolUnitReference(node, "src/backend/http.ts", "http")) {
+  if (
+    ["tinker/components/http/http.server.ts", "tinker/components/http/index.server.ts"].includes(
+      pathOf(node),
+    )
+  ) {
+    return;
+  }
+  if (protocolUnitReference(node, "tinker/components/http/http.server.ts", "http")) {
     fail(node, "http-resource: app code must depend on httpRequest.controller");
   }
 }
 
 function checkHttpBackend(node) {
-  if (protocolUnitReference(node, "src/backend/http-backend.ts", "httpBackend")) {
+  if (pathOf(node) === "tinker/components/telemetry/delivery.ts") return;
+  if (
+    ["backend.ts", "http.server.ts", "index.ts"].some(
+      (file) => pathOf(node) === `tinker/components/http/${file}`,
+    )
+  ) {
+    return;
+  }
+  if (protocolUnitReference(node, "tinker/components/http/backend.ts", "httpBackend")) {
     fail(node, "http-backend: app code must depend on httpRequest.controller");
   }
 }
@@ -865,15 +959,25 @@ function protocolUnitReference(node, file, name) {
   return target?.declarations?.some(
     (decl) =>
       ts.isVariableDeclaration(decl) &&
-      resolve(decl.getSourceFile().fileName) === join(base, file) &&
+      resolve(decl.getSourceFile().fileName) ===
+        join(file.startsWith("tinker/") ? root : base, file) &&
       nameOf(decl.name) === name,
   );
 }
 
 function checkRequestHeaders(node) {
   const file = pathOf(node);
-  if (file === "src/backend/auth.server.ts") return;
-  if (protocolUnitReference(node, "src/backend/headers.server.ts", "requestHeaders")) {
+  if (file === "tinker/components/auth/auth.server.ts") return;
+  if (
+    ["start.ts", "headers.server.ts", "index.server.ts"].some(
+      (name) => file === `tinker/components/requests/${name}`,
+    )
+  ) {
+    return;
+  }
+  if (
+    protocolUnitReference(node, "tinker/components/requests/headers.server.ts", "requestHeaders")
+  ) {
     fail(node, "protocol-headers: app code must use principal or currentUser");
   }
 }
@@ -885,13 +989,23 @@ const responseDeclarations = new Set(builtinResponse.declarations);
 function checkResponse(node) {
   const file = pathOf(node);
   if (file.startsWith("src/routes/")) return;
+  if (file === "tinker/components/requests/body.server.ts") return;
+  if (["tinker/base/server-entry.ts", "tinker/base/panics.tsx"].includes(file)) return;
   if (nativeReference(node, responseDeclarations)) {
     fail(node, "protocol-response: replies belong to routes or the base");
   }
 }
 
 function checkMountedAuth(node) {
-  if (protocolUnitReference(node, "src/parts/auth/handle.server.ts", "handleAuth")) {
+  if (
+    pathOf(node) === "tinker/components/auth/handle.server.ts" ||
+    pathOf(node) === "tinker/components/auth/index.server.ts" ||
+    pathOf(node) === "src/routes/api.auth.$.ts"
+  ) {
+    return;
+  }
+
+  if (protocolUnitReference(node, "tinker/components/auth/handle.server.ts", "handleAuth")) {
     fail(node, "protocol-auth: only the auth route may use the mounted handler");
   }
 }
@@ -978,6 +1092,17 @@ function createRequireReference(node) {
   );
 }
 
+// SMTP owns its native sockets; only its lazy net module may load TCP.
+function smtpNetModule(node, specifier) {
+  const owner = enclosingFunction(node);
+  return (
+    specifier.text === "node:net" &&
+    pathOf(node) === "tinker/components/mail/modules.ts" &&
+    owner &&
+    factoryBody(owner)
+  );
+}
+
 function checkHttpImport(node) {
   if (typeOnlyImport(node) || typeReference(node)) return;
   const specifier = importSpecifier(node);
@@ -992,6 +1117,8 @@ function checkHttpImport(node) {
     return;
   }
 
+  if (smtpNetModule(node, specifier)) return;
+
   if (
     httpClients.some(
       (client) => specifier.text === client || specifier.text.startsWith(`${client}/`),
@@ -1001,14 +1128,29 @@ function checkHttpImport(node) {
   }
 }
 
+/** These immutable native values keep the copied protocol's package contracts. */
+function staticProtocolValue(node) {
+  if (!ts.isNewExpression(node)) return false;
+  const constructors = {
+    "tinker/components/errors/errors.ts": "DOMException",
+  };
+  if (nameOf(node.expression) === constructors[pathOf(node)]) return true;
+  return false;
+}
+
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
-    if (!moduleDeclarationCall(node)) fail(node, "module-effect");
+    checkModuleEffect(node);
     return;
   }
   if (!serviceAllocation(node) || graphOwner(node)) return;
   fail(node, "service-owner");
+}
+
+function checkModuleEffect(node) {
+  if (isCommand(node) || staticProtocolValue(node)) return;
+  if (!moduleDeclarationCall(node)) fail(node, "module-effect");
 }
 
 function callerOf(use) {
@@ -1087,22 +1229,6 @@ function addCaller(use, name, symbol, node, source, callers) {
   if (caller === node) return;
 
   callers.set(caller ?? source, callerLabel(use, caller));
-}
-
-/**
- * The base calls the server seam's `settings` once, at start (ADR 0113): env becomes the app's
- * settings tags there. The function the seam exports as `settings` needs no second site.
- */
-function baseCallers(node, name) {
-  const seam = sources.find((source) => pathOf(source) === "src/lib/tinker.server.ts");
-  const module = seam && checker.getSymbolAtLocation(seam);
-  const exported =
-    module && checker.getExportsOfModule(module).find((item) => item.name === "settings");
-  if (!exported) return [];
-
-  const target =
-    exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
-  return target === symbolOf(name) ? ["@tinker/start#serverEntry"] : [];
 }
 
 function callSites(name, node) {
@@ -1207,18 +1333,134 @@ function checkPlainFunction(node) {
     return;
   }
 
-  const base = baseCallers(node, name);
-  const callers = [...callSites(name, node), ...base];
-  if (callers.length < 2 && base.length === 0) fail(node, "two-sites");
+  const callers = callSites(name, node);
+  if (callers.length < 2) fail(node, "two-sites");
 
   plain.push(
     `- **${pathOf(node)}#${nameOf(name)}**\n${params.join("\n")}\n  - Callers:\n${callers.map((caller) => `    - \`${caller}\``).join("\n")}`,
   );
 }
 
+/** Named copied entry helpers and the approved server and browser mains keep native contracts. */
+const entryHelpers = {
+  "tinker/components/database/database.server.ts": ["queryWithStop"],
+  "tinker/components/database/lease.server.ts": ["leaseFrom", "logQuery", "query", "release"],
+  "tinker/base/main.ts": ["defineMain"],
+  "tinker/base/panics.server.ts": [
+    // c55998e createServerEntry: register process panic cleanup without identity wrapping.
+    "observeServerPanics",
+  ],
+  "tinker/base/panics.tsx": [
+    // New: copied c55998e entry/dev-error devErrorPage: read a failed response and build its dev page.
+    "devErrorPage",
+  ],
+  "cmds/router.ts": [
+    // New: only the top-level named export owns the browser roots in plain view.
+    "getRouter",
+  ],
+  "tinker/base/router-entry.tsx": [
+    // Replacement for the copied observer callback: borrow the current render observer.
+    "readRenderObservation",
+    // Load the native route tree and bind its fallback views and React provider.
+    "createRouterEntry",
+  ],
+  "tinker/base/server-entry.ts": [
+    // New: bind Start's renderer to the command's request scope.
+    "createServerHandler",
+    "stoppedFetch",
+    // New: copied c55998e entry/server fetch: dispatch a request through Start or app fetch.
+    "fetch",
+    // New: copied c55998e entry/server next: render the request and map its dev error response.
+    "next",
+  ],
+  "tinker/base/start-entry.ts": [
+    // Configure Start's CSRF guard and cache the command's async options once.
+    "createStartEntry",
+  ],
+};
+
+function definedMainCall(node) {
+  return (
+    ts.isCallExpression(node) &&
+    isCommand(node) &&
+    node.parent &&
+    ts.isExportAssignment(node.parent) &&
+    nameOf(node.expression) === "defineMain" &&
+    declarationFile(node).endsWith("/tinker/base/main.ts")
+  );
+}
+
+// Every process default uses the real typed marker, including worker and CLI commands.
+function checkCommandMain(node) {
+  if (!isCommand(node)) return;
+  if (ts.isExportAssignment(node) && !node.isExportEquals) {
+    if (!definedMainCall(node.expression)) {
+      fail(node, "command-main: use defineMain from ~/base/main");
+    }
+    return;
+  }
+  if (
+    ts.canHaveModifiers(node) &&
+    ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)
+  ) {
+    fail(node, "command-main: use defineMain from ~/base/main");
+  }
+}
+
+function definedMainCallback(node) {
+  return (
+    (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+    node.parent &&
+    definedMainCall(node.parent) &&
+    node.parent.arguments[0] === node
+  );
+}
+
+function isEntryHelper(node) {
+  if (!node) return false;
+  const file = pathOf(node);
+  if (!entryHelpers[file]?.includes(nameOf(functionName(node)))) return false;
+  if (file !== "cmds/router.ts") return true;
+
+  return (
+    ts.isFunctionDeclaration(node) &&
+    node.parent === node.getSourceFile() &&
+    (ts.getCombinedModifierFlags(node) & (ts.ModifierFlags.Export | ts.ModifierFlags.Default)) ===
+      ts.ModifierFlags.Export
+  );
+}
+
+function commandModulePath(node) {
+  const parent = node.parent;
+  return (
+    [ts.isImportDeclaration, ts.isExportDeclaration].some((kind) => kind(parent)) ||
+    (ts.isCallExpression(parent) && parent.expression.kind === ts.SyntaxKind.ImportKeyword) ||
+    ts.isImportTypeNode(parent.parent)
+  );
+}
+
+function entryFunction(node) {
+  if (!node) return false;
+  return isEntryHelper(node) || definedMainCallback(node);
+}
+
+function checkCommandImport(node) {
+  if (!ts.isStringLiteral(node) || !commandModulePath(node)) return;
+
+  for (const message of isolatedImport(root, pathOf(node), node.text, 1)) {
+    fail(node, `base-import: ${message.slice(message.indexOf(" ") + 1)}`);
+  }
+  if (!isCommand(node)) return;
+
+  const message = commandImport(node.text);
+  if (message) fail(node, `command-import: ${message}`);
+}
+
 function checkFunction(node) {
   if (!isFunction(node) || !node.body) return;
   if (ts.isClassDeclaration(node.parent) || ts.isClassExpression(node.parent)) return;
+
+  if (entryFunction(node)) return;
 
   checkScopeReturn(node);
 
@@ -1350,8 +1592,17 @@ function checkOperationRun(run) {
   if (response) fail(run, "operation-wire-output: replies belong to the protocol layer");
 }
 
+function mountedAuthDeclaration(node) {
+  return (
+    pathOf(node) === "tinker/components/auth/handle.server.ts" &&
+    nameOf(node.parent.name) === "handleAuth"
+  );
+}
+
 function checkOperationWire(node) {
   if (!ts.isCallExpression(node) || !coreSymbol(node.expression, "operation")) return;
+  if (mountedAuthDeclaration(node)) return;
+
   const options = node.arguments[0];
   if (
     !options ||
@@ -1370,6 +1621,8 @@ for (const source of sources) {
     fail(source, ts.flattenDiagnosticMessageText(error.messageText, " "));
   }
   walk(source, (node) => {
+    checkCommandImport(node);
+    checkCommandMain(node);
     checkOperationWire(node);
     checkFetch(node);
     checkBrowserHttp(node);
@@ -1394,7 +1647,7 @@ if (plain.length > PLAIN_MAX) {
   );
 }
 
-const list = `# Plain functions\n\nThis list is checked against src.\nCallers include direct calls and typed callback registrations.\nRepeated calls by one caller count once; self-calls do not count.\nTests and generated files do not count.\n\n${plain.join("\n\n")}\n`;
+const list = `# Plain functions\n\nThis list is checked against src, cmds, and tinker.\nCallers include direct calls and typed callback registrations.\nRepeated calls by one caller count once; self-calls do not count.\nTests and generated files do not count.\n\n${plain.join("\n\n")}\n`;
 
 if (process.argv.includes("--list")) process.stdout.write(list);
 else {
@@ -1424,6 +1677,260 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    ...["worker", "cli"].map((role) => [
+      `${role}-defined-main-allowed`,
+      null,
+      'import {defineMain} from "~/base/main"; export default defineMain(async({exit})=>{exit(64);return {closed:Promise.resolve()};});',
+      `cmds/check-${role}.ts`,
+    ]),
+    [
+      "bare-process-main",
+      "command-main",
+      "export default async function main(){return {closed:Promise.resolve()};}",
+      "cmds/check-old-main.ts",
+    ],
+    [
+      "mail-net-static-import",
+      "http-client",
+      'import * as forbiddenNet from "node:net"; export { forbiddenNet };',
+      "tinker/components/mail/modules.ts",
+    ],
+    [
+      "mail-other-native-module",
+      "http-client",
+      'import {resource} from "@tinker/core"; export const forbiddenTls = resource({factory: () => import("node:tls")});',
+      "tinker/components/mail/modules.ts",
+    ],
+    [
+      "local-resource-return-allowed",
+      null,
+      'import {resource} from "@tinker/core"; export const probe=resource({label:"probe",factory:(_,{clock})=>{const handle=Object.assign({}, {read(){return clock.currentTimeMillis();}});return handle;}});',
+    ],
+    [
+      "local-operation-return-forbidden",
+      "plain-effect",
+      'import {operation} from "@tinker/core"; export const probe=operation({label:"probe",run:()=>{const handle=Object.assign({}, {read(){return Date.now();}});return handle.read();}});',
+    ],
+    [
+      "resource-method-options-allowed",
+      null,
+      'import {resource,operation} from "@tinker/core"; const sender=resource({label:"probe.sender",factory:()=>({send(options:{done:()=>number}){return options.done();}})});export const probe=operation({label:"probe",depends:{sender},run:({sender},{clock})=>sender.send({done:()=>clock.currentTimeMillis()})});',
+    ],
+    [
+      "real-main-marker-allowed",
+      null,
+      'import {defineMain} from "~/base/main"; export default defineMain(async({exit})=>{exit(0);return {closed:Promise.resolve()};});',
+      "cmds/plain-probe.ts",
+    ],
+    [
+      "fake-main-marker-forbidden",
+      "service-owner",
+      "const defineMain=(fn:()=>unknown)=>fn; export default defineMain(()=>new AbortController());",
+      "cmds/plain-probe.ts",
+    ],
+    [
+      "foreign-lease-name-forbidden",
+      "plain-effect",
+      "export function leaseFrom(){return Date.now();}",
+    ],
+
+    [
+      "zod-catch-name-callback-allowed",
+      null,
+      'import {z} from "zod"; export const probe = z.object({name: z.string()}).catch(() => ({name: "fallback"}));',
+    ],
+    [
+      "foreign-catch-builder",
+      "module-effect",
+      "export const probe = Promise.resolve(1).catch(() => 2);",
+    ],
+    [
+      "telemetry-extra-url",
+      "module-effect",
+      'const probe = new URL("https://extra.example");',
+      "tinker/components/telemetry/settings.ts",
+    ],
+    [
+      "src-url-default",
+      "module-effect",
+      'import {tag} from "@tinker/core"; const tracesUrl = tag<URL>({label: "probe", default: new URL("https://extra.example")});',
+    ],
+    [
+      "telemetry-raw-backend-foreign",
+      "http-backend",
+      'import {httpBackend} from "~/components/http"; export const probe = httpBackend;',
+      "tinker/components/telemetry/backend-probe.ts",
+    ],
+    [
+      "core-config-declarations-allowed",
+      null,
+      'import {namespace, tag} from "@tinker/core"; const setting = tag<number>({label: "probe"}); export const probe = namespace({tags: [setting(3)]});',
+    ],
+    [
+      "fake-tag-binding-module",
+      "module-effect",
+      "const tag = (value: number) => value; export const probe = tag(3);",
+    ],
+    [
+      "namespace-options-no-callback",
+      "plain-effect",
+      'import {namespace} from "@tinker/core"; export const probe = namespace({factory: async () => {await Promise.resolve(); return 1;}});',
+    ],
+
+    [
+      "auth-mount-other-operation",
+      "operation-wire-input",
+      "const probe = operation({input: z.instanceof(Request), run: () => true});",
+      "tinker/components/auth/handle.server.ts",
+    ],
+    [
+      "http-owner-extra-fetch",
+      "http-request",
+      "export const extraFetch = fetch;",
+      "tinker/components/http/backend.ts",
+    ],
+    [
+      "http-owner-other-tag-default",
+      "http-request",
+      'const otherBackend = tag<typeof fetch>({label: "other", default: (input, init) => fetch(input, init)});',
+      "tinker/components/http/backend.ts",
+    ],
+    [
+      "http-outside-default",
+      "http-request",
+      'import {tag} from "@tinker/core"; const httpBackend = tag<typeof fetch>({label: "http.backend", default: (input, init) => fetch(input, init)});',
+      "src/other-http-default.ts",
+    ],
+    ...[
+      ["component", "tinker/components/entry-probe/index.ts"],
+      ["src", "src/entry-probe.ts"],
+      ["unnamed-base", "tinker/base/entry-probe.ts"],
+      ["cmd", "cmds/entry-probe.ts"],
+    ].flatMap(([place, file]) => [
+      [
+        `${place}-entry-await`,
+        "plain-effect",
+        "export async function createStartEntry() { await Promise.resolve(); return {}; }",
+        file,
+      ],
+      [
+        `${place}-entry-handle`,
+        "plain-param",
+        'import type { Scope } from "@tinker/core"; export function createServerHandler(scope: Scope.Handle) { return scope.resolve; }',
+        file,
+      ],
+    ]),
+    [
+      "named-base-other-function",
+      "plain-effect",
+      "export async function unrelatedFeature() { await Promise.resolve(); }",
+      "tinker/base/start-entry.ts",
+    ],
+    ...[
+      [
+        "server-main-other-command",
+        "cmds/other-server.ts",
+        "export default async function main() { await Promise.resolve(); }",
+      ],
+      [
+        "server-main-component",
+        "tinker/components/entry-probe/index.ts",
+        "export default async function main() { await Promise.resolve(); }",
+      ],
+      [
+        "server-main-src",
+        "src/entry-probe.ts",
+        "export default async function main() { await Promise.resolve(); }",
+      ],
+      [
+        "server-main-shadowed",
+        "cmds/server.ts",
+        "function anotherEntry() { return async function main() { await Promise.resolve(); }; }",
+      ],
+      [
+        "server-other-function",
+        "cmds/server.ts",
+        "async function otherFeature() { await Promise.resolve(); }",
+      ],
+      [
+        "server-nested-host-callback",
+        "cmds/server.ts",
+        "const hidden = {start: async () => { await Promise.resolve(); }};",
+      ],
+      [
+        "server-private-main",
+        "cmds/server.ts",
+        "async function main() { await Promise.resolve(); }",
+      ],
+      [
+        "server-named-main",
+        "cmds/server.ts",
+        "export async function main() { await Promise.resolve(); }",
+      ],
+      ...["start", "fetch", "close"].map((name) => [
+        `server-removed-${name}`,
+        "cmds/server.ts",
+        `async function ${name}() { await Promise.resolve(); }`,
+      ]),
+    ].map(([name, file, code]) => [name, "plain-effect", code, file]),
+    [
+      "router-command-other-function",
+      "plain-effect",
+      "export async function unrelatedFeature() { await Promise.resolve(); }",
+      "cmds/router.ts",
+    ],
+    [
+      "router-command-shadowed-getRouter",
+      "plain-effect",
+      "function anotherEntry() { return async function getRouter() { await Promise.resolve(); }; }",
+      "cmds/router.ts",
+    ],
+    [
+      "router-name-other-command",
+      "plain-effect",
+      "export async function getRouter() { await Promise.resolve(); }",
+      "cmds/other-router.ts",
+    ],
+    [
+      "copied-router-cannot-open-root",
+      "scope-entry-only",
+      'import { createScope } from "@tinker/core"; export const hidden = resource({ factory: () => createScope() });',
+      "tinker/base/router-entry.tsx",
+    ],
+    [
+      "fake-start-entry-callback",
+      "plain-effect",
+      "function createStartEntry(read: () => Promise<void>) { return read; } export const hidden = createStartEntry(async () => { await Promise.resolve(); });",
+      "cmds/start-probe.ts",
+    ],
+    [
+      "fake-once-callback",
+      "plain-effect",
+      "function once(action: () => Promise<void>) { return action; } export const hidden = once(async () => { await Promise.resolve(); });",
+      "cmds/once-probe.ts",
+    ],
+    [
+      "unknown-base-root",
+      "scope-entry-only",
+      'import { createScope } from "@tinker/core"; export const root = createScope();',
+      "tinker/base/feature-probe.ts",
+    ],
+    [
+      "unknown-base-response",
+      "protocol-response",
+      'export const reply = new Response("wire");',
+      "tinker/base/feature-probe.ts",
+    ],
+    ["command-package-import", "command-import", 'import "node:fs";', "cmds/cli-import-probe.ts"],
+    ["src-base-import", "base-import", 'import "~/base/server";', "src/base-import-probe.ts"],
+    [
+      "component-base-import",
+      "base-import",
+      'import "../../base/server";',
+      "tinker/components/base-probe/index.ts",
+    ],
+    ["nested-command", "nested-command", 'import "node:fs";', "cmds/lib/nested-probe.ts"],
+
     [
       "operation-request-input-cast",
       "operation-wire-input",
@@ -1446,6 +1953,18 @@ if (process.argv.includes("--prove")) {
     ],
     ["response-type-reference", "protocol-response", "export type Probe = Response;"],
     [
+      "requests-extra-response",
+      "protocol-response",
+      "export type Probe = Response;",
+      "tinker/components/requests/plain-probe.ts",
+    ],
+    [
+      "requests-extra-headers",
+      "protocol-headers",
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "./headers.server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      "tinker/components/requests/plain-probe.ts",
+    ],
+    [
       "response-route-allowed",
       null,
       'import {createFileRoute} from "@tanstack/react-router"; export const Route = createFileRoute("/api/telemetry")({server: {handlers: {GET: () => new Response()}}}); export type Reply = Response;',
@@ -1465,13 +1984,13 @@ if (process.argv.includes("--prove")) {
     [
       "request-headers-constant-key",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import * as t from "@tinker/start/testing"; const key = "requestHeaders" as const; const probe = operation({depends: {headers: t[key]}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import * as t from "~/components/requests/index.server"; const key = "requestHeaders" as const; const probe = operation({depends: {headers: t[key]}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
     [
       "http-backend-constant-key",
       "http-backend",
-      'import {operation} from "@tinker/core"; import * as t from "@tinker/start/testing"; const key = "httpBackend" as const; const probe = operation({depends: {send: t[key]}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import * as t from "~/components/http"; const key = "httpBackend" as const; const probe = operation({depends: {send: t[key]}, run: () => 1});',
     ],
     [
       "operation-request-custom-reader",
@@ -1482,51 +2001,51 @@ if (process.argv.includes("--prove")) {
     [
       "mounted-auth-bracket",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import * as protocol from "@tinker/start/testing"; const probe = operation({depends: {mounted: protocol["handleAuth"].controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import * as protocol from "~/components/auth/index.server"; const probe = operation({depends: {mounted: protocol["handleAuth"].controller}, run: () => 1});',
       "src/backend/plain-probe.ts",
     ],
     [
       "request-headers-bracket",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import * as protocol from "@tinker/start/testing"; const probe = operation({depends: {headers: protocol["requestHeaders"]}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import * as protocol from "~/components/requests/index.server"; const probe = operation({depends: {headers: protocol["requestHeaders"]}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
 
     [
       "mounted-auth-testing",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker/start/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import {handleAuth} from "~/components/auth/index.server"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
       "src/backend/plain-probe.ts",
     ],
     [
       "mounted-auth-direct",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker/start/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import {handleAuth} from "~/components/auth/index.server"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
       "src/backend/plain-probe.ts",
     ],
     [
       "mounted-auth-userland",
       "protocol-auth",
-      'import {operation} from "@tinker/core"; import {handleAuth} from "@tinker/start/testing"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
+      'import {operation} from "@tinker/core"; import {handleAuth} from "~/components/auth/index.server"; const probe = operation({depends: {mounted: handleAuth.controller}, run: () => 1});',
       "src/plain-probe.ts",
     ],
 
     [
       "request-headers-testing",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker/start/testing"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "~/components/requests/index.server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
     [
       "request-headers-direct",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker/start/server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "~/components/requests/index.server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
       "src/backend/plain-probe.ts",
     ],
     [
       "request-headers-userland",
       "protocol-headers",
-      'import {operation} from "@tinker/core"; import {requestHeaders} from "@tinker/start/server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
+      'import {operation} from "@tinker/core"; import {requestHeaders} from "~/components/requests/index.server"; const probe = operation({depends: {headers: requestHeaders}, run: ({headers}) => headers.get("x")});',
       "src/plain-probe.ts",
     ],
 
@@ -1821,14 +2340,18 @@ if (process.argv.includes("--prove")) {
     [
       "http-backend-dependency",
       "http-backend",
-      'import {operation} from "@tinker/core"; import {httpBackend as backend} from "@tinker/start/testing"; const probe = operation({depends: {send: backend}, run: ({send}) => send("https://example.test/x")});',
+      'import {operation} from "@tinker/core"; import {httpBackend as backend} from "~/components/http"; const probe = operation({depends: {send: backend}, run: ({send}) => send("https://example.test/x")});',
     ],
     [
       "http-resource-dependency",
       "http-resource",
-      'import {operation} from "@tinker/core"; import {http as client} from "@tinker/start/testing"; const probe = operation({depends: {client}, run: ({client}) => client.send("https://example.test/x", {method: "GET", signal: new AbortController().signal})});',
+      'import {operation} from "@tinker/core"; import {http as client} from "~/components/http/index.server"; const probe = operation({depends: {client}, run: ({client}) => client.send("https://example.test/x", {method: "GET", signal: new AbortController().signal})});',
     ],
-    ["http-resource-export", "http-resource", 'export {http} from "@tinker/start/testing";'],
+    [
+      "http-resource-export",
+      "http-resource",
+      'export {http} from "~/components/http/index.server";',
+    ],
     [
       "fetch-tag-value",
       "http-request",
@@ -1945,6 +2468,12 @@ if (process.argv.includes("--prove")) {
       "function probe(a: number, b: number, c: number, d: number) { return a+b+c+d; } probe(1,2,3,4); probe(2,3,4,5);",
     ],
     ["one-site", "two-sites", "function probe(a: number) { return a; } probe(1);"],
+    [
+      "error-registry-one-caller",
+      "two-sites",
+      'import { operation } from "@tinker/core";\n/** @param value - From the operation; why: return its value. */\nexport function raise(value: number) { return value; }\nconst probe = operation({ run: () => raise(1) });',
+      "tinker/components/one-caller/errors.ts",
+    ],
     ["no-doc", "param-doc", "function probe(a: number) { return a; } probe(1); probe(2);"],
     [
       "scope-factory",
@@ -2051,6 +2580,30 @@ if (process.argv.includes("--prove")) {
       "non-call-use",
       "two-sites",
       "function probe(v: number) { return v; } String(probe); String(probe);",
+    ],
+    [
+      "cmd-cli-scope",
+      undefined,
+      'import { createScope } from "@tinker/core"; const root = createScope({}); await root.ready; await root.close({ graceful: true });',
+      "cmds/cli-probe.ts",
+    ],
+    [
+      "cmd-worker-scope",
+      undefined,
+      'import { createScope } from "@tinker/core"; const root = createScope({}); await root.ready; await root.close({ graceful: true });',
+      "cmds/worker-probe.ts",
+    ],
+    [
+      "component-scope",
+      "scope-entry-only",
+      'import { createScope } from "@tinker/core"; createScope({});',
+      "tinker/components/sync/scope-probe.ts",
+    ],
+    [
+      "nested-command-scope",
+      "scope-entry-only",
+      'import { createScope } from "@tinker/core"; createScope({});',
+      "cmds/nested/scope-probe.ts",
     ],
     [
       "scope-element",
@@ -2228,7 +2781,15 @@ if (process.argv.includes("--prove")) {
 
   try {
     await cp(join(root, "src"), join(planted, "src"), { recursive: true });
-    for (const file of ["tsconfig.json", "PLAIN.md", "package.json", ".tinker"]) {
+    for (const file of [
+      "tsconfig.json",
+      "vite.config.ts",
+      "cmds",
+      "tinker",
+      "PLAIN.md",
+      "package.json",
+      ".tinker",
+    ]) {
       await cp(join(root, file), join(planted, file), { recursive: true });
     }
     await cp(join(root, "tests"), join(planted, "tests"), { recursive: true });
@@ -2243,6 +2804,7 @@ if (process.argv.includes("--prove")) {
         if (error.code === "ENOENT") return "";
         throw error;
       });
+      await mkdir(dirname(path), { recursive: true });
       await writeFile(path, original + source + "\n");
       if (name === "list") await writeFile(join(planted, "PLAIN.md"), "wrong list\n");
 
@@ -2258,6 +2820,27 @@ if (process.argv.includes("--prove")) {
 
       assert.equal(red.status, rule ? 1 : 0, name);
       if (rule) assert.ok(red.stderr.includes(rule), `${name}: must fail by ${rule}`);
+      if (name === "error-registry-one-caller") {
+        assert.ok(
+          red.stderr.split("\n").includes("tinker/components/one-caller/errors.ts:3: two-sites"),
+        );
+      }
+      if (name === "src-base-import" || name === "component-base-import") {
+        const owner = name === "src-base-import" ? "src" : "components";
+        const specifier = name === "src-base-import" ? "~/base/server" : "../../base/server";
+        assert.ok(
+          red.stderr
+            .split("\n")
+            .includes(
+              `${file}:1: base-import: "${specifier}" imports copied base code; ${owner} must not import tinker/base`,
+            ),
+        );
+      }
+      if (name === "command-package-import") {
+        assert.ok(
+          red.stderr.split("\n").includes(`${file}:1: command-import: ${commandImport("node:fs")}`),
+        );
+      }
 
       if (original) await writeFile(path, original);
       else await rm(path);

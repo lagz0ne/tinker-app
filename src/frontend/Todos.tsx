@@ -1,14 +1,15 @@
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import { data, operation, isError as isCoreError } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
-import { syncClient } from "@tinker/start/client";
 import { z } from "zod";
 
-import { readTodoChange } from "@/contracts/todos-contract";
-import { isError } from "@/errors";
+import { syncClient } from "~/components/sync";
+
+import { readTodoChange } from "@/demo/client";
+import { isError } from "@/demo/client";
+import { todos, profile } from "@/demo/client";
 import { updateTodo } from "@/transport/todos.functions";
 
-import { todos, profile } from "./state";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";
 import { Input } from "./ui/input";

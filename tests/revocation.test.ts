@@ -1,16 +1,26 @@
 import { createScope } from "@tinker/core";
-import { authSettings, backendStop, requestStop } from "@tinker/start/server";
-import { openSync } from "@tinker/start/testing";
 import { test, expect } from "vite-plus/test";
 
-import { auth } from "@/backend/auth.server";
-import { migrate, databaseUrl } from "@/backend/database.server";
-import { saveProfile } from "@/backend/profile.server";
+import { authStartup } from "~/components/auth/index.server";
+import { authSettings } from "~/components/auth/index.server";
+import { auth } from "~/components/auth/index.server";
+import { openSync } from "~/components/auth/index.server";
+import { migrate, databaseUrl } from "~/components/database/index.server";
+import { backendStop as requestHostStop } from "~/components/requests";
+import { requestStop, startRequests } from "~/components/requests";
+import { backendStop } from "~/components/requests";
+import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
+
+import { saveProfile } from "@/demo/backend/profile.server";
+import * as demo from "@/demo/index.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
 
+const requestBindings = requestHostStop(new AbortController().signal);
+
 const tags = [
+  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",
@@ -82,8 +92,9 @@ const text = async (read: Promise<ReadableStreamReadResult<Uint8Array>>) => {
 async function withRoot(run: (root: ReturnType<typeof createScope>) => Promise<void>) {
   const stop = new AbortController();
   const root = createScope({
+    extensions: [startRequests, authStartup],
     signal: stop.signal,
-    tags: [tags, backendStop(stop.signal), requestStop(stop.signal)],
+    tags: [requestBindings, [[tags, backendStop(stop.signal), requestStop(stop.signal)]]],
     presets: [proofDatabase, proofMail],
   });
   await root.ready;

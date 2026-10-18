@@ -1,62 +1,35 @@
 ---
 name: tinker-seams
-description: Keep app wiring on the base's public entries.
+description: Keep wiring on the owner's public entries.
 ---
 
 # Keep the seams
 
-Omit `.ts`, `.tsx`, and `.mts` endings in imports and exports.
+Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) for the one-way imports,
+required bindings, defineMain/exit, auth hooks, and copied-update policy.
+Current Start commands are prepare, doctor, and serve. Add/update/check is
+planned; it will stop on local edits and replace whole owned components.
 
-Use this when changing imports or app wiring.
-The base lives in `node_modules/@tinker/start/`.
-Never edit it; update it with `tinker upgrade`.
+Inspect the actual server, router, and start commands before changing wiring.
+The command owns roots, config bindings, observers, and close order. Components
+declare direct requires and use each other's public entries. A test may use
+the private file it proves. Never forward a component through an app barrel
+just to hide its owner.
 
-App imports use only public entries:
+Useful public entries:
 
-- `@tinker/start`: startRequests and sync types.
-- `@tinker/start/server`: eventHistory, readResult,
-  httpRequest, Env, auth settings, and sync tables.
-- `@tinker/start/client`: syncClient and snapshotLoader.
-- `@tinker/start/testing`: test bindings only.
-- `@tinker/start/vite`: the tinker plugin.
+- requests: startRequests, backendStop, requestStop; index.server has protocol state.
+- database/index.server: database, transaction, databaseSetup, typed config, drizzleOrm.
+- auth/index.server: auth settings, principal, liveAccount, and openSync.
+- sync/index.server: eventHistory, account operations, notices, and server slots.
+- sync: browser sync APIs, Register, reader slots, and recordsSlot.
+- mail/index.server: mail, authMail, smtpUrl, mailFrom, and owned SMTP sockets.
+- http/index.server: httpRequest; tests get httpBackend from http.
 
-The base reads app values through two files:
+The stream implementation belongs to auth because it checks the live account.
+Page bootstrap never creates stream rows. Signup/sign-in and the migration do.
+Auth imports mandatory sync/mail work directly; there are no auth hook slots.
 
-- `src/lib/tinker.ts`: extensions, records, readers,
-  and the app's Register bodies.
-- `src/lib/tinker.server.ts`: extensions, settings,
-  database, auth, readAccount, and bootstrap.
-
-`settings(env)` turns env into the app's settings tags.
-The base calls it once, at start.
-App units depend on those tags, never on `env`.
-
-Doctor 5 checks these names.
-Doctor 6 refuses base paths and private alias imports.
-Doctor 10 reports the last build's import violations.
-
-Fill `Register` on `@tinker/start` in the client seam.
-See `src/contracts/sync.ts` for this app's bodies.
-Put raw-input readers in `src/contracts/`.
-
-Feature HTTP operations import httpRequest from
-`@tinker/start/server`.
-Tests bind httpBackend from `@tinker/start/testing`.
-App code never uses that tag or the raw http resource.
-Import feature operations directly from their files.
-A server seam that re-exports a feature can form a loop.
-
-The app owns its migrations and wake triggers.
-It imports sync tables from `@tinker/start/server`.
-Server imports belong in server functions and routes.
-Never import the server seam into a browser view.
-
-After changing wiring:
-
-```bash
-npm run build
-npm run typecheck
-node scripts/check-plain.mjs
-npm run doctor
-node scripts/check-schema.mjs
-```
+Follow src/routes/api.auth.$.ts and api.sync.ts for owned call dispatch. Bind
+request values at that boundary. Host config and app/cross-root slots are
+separate bindings. Follow the contract's checks after changing wiring.
