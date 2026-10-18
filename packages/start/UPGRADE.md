@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Worker is a telemetry side. Worker commands keep stdout/history by default;
+  setting either VICTORIA_TRACES_URL or VICTORIA_LOGS_URL enables export and
+  requires both. OTEL_SERVICE_NAME defaults to tinker-worker. Work closes before
+  the bounded telemetry flush; exporter failure cannot replace the work error.
+
 - test:migrations applies the actual chain to fresh local Postgres and checks
   notification trigger shape, empty inserts, rollback, and committed batches.
   Its controls show schema-only checks accept missing or changed trigger SQL.
@@ -19,7 +24,9 @@
 
 - Public mail sends have a total deadline (default/max 3000 ms), owned socket
   cleanup, and an optional per-send abort signal. Worker checkout is bounded to
-  1000 ms; record/COMMIT retain their SQL bounds inside the 10 s host grace.
+  500 ms; record and COMMIT each have a 750 ms statement bound. Sending,
+  acknowledgement, releasing unstarted leases, and the 1500 ms telemetry close
+  fit within the 10 s host grace.
 
 - Board workers claim up to 20 mail rows in a short UPDATE/SKIP LOCKED call.
   OUTBOX_LEASE_MS defaults to 180000. Sends hold no row locks; acknowledgements

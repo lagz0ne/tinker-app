@@ -11,7 +11,7 @@ import type { Database } from "./types";
 /** Where Postgres is. */
 export const databaseUrl = tag<URL>({ label: "database.url", parse: z.instanceof(URL) });
 
-/** Worker-only soft stop cancels pool reads, while in-flight write leases finish. */
+/** Worker-only stop cancels startup and pool reads; in-flight write leases finish. */
 export const databaseStop = tag<AbortSignal | undefined>({
   label: "database.stop",
   default: undefined,
@@ -265,7 +265,7 @@ export const databaseSetup = extension({
     async start({ resolve, next, scope }) {
       resolve(databaseUrl);
       await next();
-      await scope.run(migrate);
+      await scope.run(migrate, { signal: resolve(databaseStop) });
     },
   },
 });

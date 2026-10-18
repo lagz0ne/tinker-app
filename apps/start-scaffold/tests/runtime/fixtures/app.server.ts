@@ -85,7 +85,8 @@ export const database = resource({
     const client = await syncTemplate.clone();
     defer(() => client.close());
     return Object.assign(drizzle({ client }), {
-      listen: async (channel: string, wake: (payload: string) => void) => client.listen(channel, wake),
+      listen: async (channel: string, wake: (payload: string) => void) =>
+        client.listen(channel, wake),
     });
   },
 });

@@ -6,15 +6,10 @@ import { createScope, type Scope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { beforeEach, afterEach, expect, test } from "vite-plus/test";
 
-
-
-
-
-
 import { user } from "~/components/auth/index.server";
 import { database, migrate } from "~/components/database/index.server";
-import { event, execution } from "~/components/sync/index.server";
 import { mailOutbox } from "~/components/mail/index.server";
+import { event, execution } from "~/components/sync/index.server";
 
 import { team, teamMember, issue } from "@/backend/board.schema.server";
 import {

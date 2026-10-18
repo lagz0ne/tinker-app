@@ -31,9 +31,9 @@ const faults = [
   {
     name: "outbox",
     file: "../../tinker/components/mail/delivery.server.ts",
-    from: ".limit(20)",
-    to: ".limit(19)",
-    reason: /AssertionError/,
+    from: ".orderBy(asc(mailOutbox.nextAt), asc(mailOutbox.id))\n      .limit(20)",
+    to: ".orderBy(asc(mailOutbox.nextAt), asc(mailOutbox.id))\n      .limit(19)",
+    reason: /outbox claim must return batches of 20 and 1/,
   },
   {
     name: "smtp-auth",

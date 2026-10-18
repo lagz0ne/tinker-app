@@ -264,3 +264,8 @@ Both await the same migration lock. The worker uses DATABASE_URL, SMTP_URL, and
 SMTP_FROM from the local .env or host environment. It claims up to 20 rows, sends
 outside locks, and saves results by lease token. OUTBOX_LEASE_MS defaults to
 180000; OUTBOX_SMTP_TIMEOUT_MS defaults to 3000 and may only shorten it.
+
+Worker traces use side worker. Stdout and bounded history work without a
+collector. To enable export, bind both VICTORIA_TRACES_URL and VICTORIA_LOGS_URL;
+setting only one is a startup config error. OTEL_SERVICE_NAME defaults to
+tinker-worker. Work closes before the existing bounded telemetry flush.

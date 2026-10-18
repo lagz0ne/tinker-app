@@ -7,6 +7,7 @@ import { authStartup } from "~/components/auth/index.server";
 import { authSettings } from "~/components/auth/index.server";
 import { auth } from "~/components/auth/index.server";
 import { database, migrate, databaseUrl } from "~/components/database/index.server";
+import { deliverMailBatch } from "~/components/mail/index.server";
 import { mail, mailFrom, smtpUrl } from "~/components/mail/index.server";
 import type { Mail } from "~/components/mail/index.server";
 import { backendStop as requestHostStop } from "~/components/requests";
@@ -19,6 +20,7 @@ import * as demo from "@/demo/index.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
+import { write } from "./write-boundary";
 
 const requestBindings = requestHostStop(new AbortController().signal);
 
@@ -93,7 +95,8 @@ test("a real account can sign up, save its name, sign out and sign in", async ()
     expect(signup.status).toBe(200);
     const cookie = readCookie(signup);
 
-    await expect.poll(() => messages.at(0)?.subject).toBe("Check your email");
+    await write(root, deliverMailBatch);
+    expect(messages.at(0)?.subject).toBe("Check your email");
 
     const saved = await root.run(saveProfile, {
       input: {
@@ -278,9 +281,8 @@ test("email check and reset callbacks use the declared mail action", async () =>
       tags: requestHeaders(new Headers()),
     });
 
-    await expect
-      .poll(() => messages.some((message) => message.subject === "Check your email"))
-      .toBe(true);
+    await write(root, deliverMailBatch);
+    expect(messages.some((message) => message.subject === "Check your email")).toBe(true);
 
     const check = messages.find((message) => message.subject === "Check your email");
     if (!check) raise("BadInput", { reason: "missing check link" });
@@ -298,9 +300,8 @@ test("email check and reset callbacks use the declared mail action", async () =>
       tags: requestHeaders(new Headers()),
     });
 
-    await expect
-      .poll(() => messages.some((message) => message.subject === "Reset your password"))
-      .toBe(true);
+    await write(root, deliverMailBatch);
+    expect(messages.some((message) => message.subject === "Reset your password")).toBe(true);
 
     const reset = messages.find((message) => message.subject === "Reset your password");
     if (!reset) raise("BadInput", { reason: "missing reset link" });
@@ -333,7 +334,7 @@ test("two requests share the auth instance", async () => {
   }
 });
 
-test("sign-up replies before held mail and logs its failure", async () => {
+test("sign-up commits before held worker mail and records its failed delivery", async () => {
   const accepted = Promise.withResolvers<void>();
   const sending = Promise.withResolvers<void>();
   const failed = Promise.withResolvers<void>();
@@ -345,7 +346,7 @@ test("sign-up replies before held mail and logs its failure", async () => {
     tags: [requestBindings, tags],
     observe: {
       log: (entry) => {
-        if (entry.message === "mail.failed" && entry.level === 50) failed.resolve();
+        if (entry.message === "outbox.retry" && entry.level === 50) failed.resolve();
       },
     },
     presets: [
@@ -379,10 +380,12 @@ test("sign-up replies before held mail and logs its failure", async () => {
     tags: requestHeaders(new Headers()),
   });
 
-  await sending.promise;
   expect((await reply).status).toBe(200);
+  const delivery = write(root, deliverMailBatch);
+  await sending.promise;
 
   accepted.resolve();
+  expect(await delivery).toEqual({ claimed: 1, sent: 0, failed: 1 });
   await failed.promise;
 });
 

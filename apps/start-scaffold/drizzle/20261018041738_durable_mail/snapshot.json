@@ -2,9 +2,7 @@
   "version": "8",
   "dialect": "postgres",
   "id": "e49b4fb7-a6fc-4cab-b8e1-98b6ba1befcc",
-  "prevIds": [
-    "6221c2a2-5112-4702-a9b7-791ff61d2fa7"
-  ],
+  "prevIds": ["6221c2a2-5112-4702-a9b7-791ff61d2fa7"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -995,14 +993,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "userId"
-      ],
+      "columns": ["userId"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "account_userId_user_id_fkey",
@@ -1012,14 +1006,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "userId"
-      ],
+      "columns": ["userId"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "session_userId_user_id_fkey",
@@ -1029,14 +1019,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "ownerId"
-      ],
+      "columns": ["ownerId"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "todo_ownerId_user_id_fkey",
@@ -1045,10 +1031,7 @@
       "table": "todo"
     },
     {
-      "columns": [
-        "stream",
-        "revision"
-      ],
+      "columns": ["stream", "revision"],
       "nameExplicit": false,
       "name": "sync_event_pkey",
       "entityType": "pks",
@@ -1056,9 +1039,7 @@
       "table": "sync_event"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "mail_outbox_pkey",
       "schema": "public",
@@ -1066,9 +1047,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "account_pkey",
       "schema": "public",
@@ -1076,9 +1055,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_pkey",
       "schema": "public",
@@ -1086,9 +1063,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "user_pkey",
       "schema": "public",
@@ -1096,9 +1071,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "verification_pkey",
       "schema": "public",
@@ -1106,9 +1079,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "sync_execution_pkey",
       "schema": "public",
@@ -1116,9 +1087,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "sync_stream_pkey",
       "schema": "public",
@@ -1126,9 +1095,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "todo_pkey",
       "schema": "public",
@@ -1136,9 +1103,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "public_counter_pkey",
       "schema": "public",
@@ -1147,9 +1112,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "dedupe_key"
-      ],
+      "columns": ["dedupe_key"],
       "nullsNotDistinct": false,
       "name": "mail_outbox_dedupe_key_key",
       "schema": "public",
@@ -1158,9 +1121,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "token"
-      ],
+      "columns": ["token"],
       "nullsNotDistinct": false,
       "name": "session_token_key",
       "schema": "public",
@@ -1169,9 +1130,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "email"
-      ],
+      "columns": ["email"],
       "nullsNotDistinct": false,
       "name": "user_email_key",
       "schema": "public",

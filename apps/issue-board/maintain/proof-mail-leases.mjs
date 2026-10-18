@@ -189,6 +189,36 @@ try {
     "PASS mail leases: claimant backend death retains attempts; recovery works; twelve attempts persist dead-letter state.",
   );
 
+  await peer.query("UPDATE mail_outbox SET dead_at=NULL WHERE id=$1", [id]);
+  await peer.query(
+    `INSERT INTO mail_outbox(id,"to",subject,text,dedupe_key,next_at) VALUES(999,'proof@example.test','Fresh','No SMTP','fresh',to_timestamp(0))`,
+  );
+  await peer.query("BEGIN");
+  await peer.query("SELECT id FROM mail_outbox WHERE id=$1 FOR UPDATE", [id]);
+  try {
+    const result = await dispatch.run(roots[1], claimMailBatch).then(
+      (batch) => ({ status: "success", batch }),
+      () => ({ status: "failed" }),
+    );
+    assert.equal(result.status, "success", "claim must skip locked exhausted rows");
+    assert.deepEqual(
+      result.batch.rows.map((row) => row.id),
+      [999],
+    );
+  } finally {
+    await peer.query("ROLLBACK");
+  }
+  await dispatch.run(roots[1], claimMailBatch);
+  assert.equal(
+    (await peer.query("SELECT dead_at IS NOT NULL AS dead FROM mail_outbox WHERE id=$1", [id]))
+      .rows[0].dead,
+    true,
+  );
+  await peer.query("UPDATE mail_outbox SET sent_at=now() WHERE id=999");
+  console.log(
+    "PASS mail leases: dead-letter cleanup skips a locked exhausted row; fresh mail still claims; cleanup resumes after unlock.",
+  );
+
   await peer.query(
     "UPDATE mail_outbox SET attempts=0,sent_at=NULL,dead_at=NULL,lease_token=NULL,lease_until=NULL WHERE id=$1",
     [id],

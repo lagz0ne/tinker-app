@@ -12,8 +12,8 @@ try {
   for (const [name, from, to, reason] of [
     [
       "batch-size",
-      ".limit(20)",
-      ".limit(19)",
+      ".orderBy(asc(mailOutbox.nextAt), asc(mailOutbox.id))\n      .limit(20)",
+      ".orderBy(asc(mailOutbox.nextAt), asc(mailOutbox.id))\n      .limit(19)",
       /mail claim must return disjoint batches of 20 and 1/,
     ],
     [
@@ -27,6 +27,12 @@ try {
       "eq(mailOutbox.leaseToken, input.token)",
       "sql`true`",
       /old lease token must not acknowledge a new owner/,
+    ],
+    [
+      "exhausted-row-lock",
+      '.for("update", { skipLocked: true })',
+      '.for("update")',
+      /claim must skip locked exhausted rows/,
     ],
   ]) {
     assert(source.includes(from), name);

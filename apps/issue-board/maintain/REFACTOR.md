@@ -270,8 +270,8 @@ Page session GETs use Better Auth's deferSessionRefresh option and disable
 refresh/cache in the page lookup. Expired GETs do not delete sessions. Explicit
 POST /api/auth/get-session remains available for refresh and expiry cleanup.
 Old and expired cookies are checked against all SQL writes, including live
-account checks and bootstrap. The legacy auth/profile mail paths remain as
-described above; the board outbox is not a claim about all demo mail.
+account checks and bootstrap. Auth now uses the shared durable outbox below. Profile keeps the stored
+notification flow described above.
 
 The page shell mounts Better Auth's browser session hook. It checks on mount,
 focus, and every five minutes while signed in. An aged session returns
@@ -280,11 +280,11 @@ POST /api/auth/get-session and stores its renewed cookie. Page account and
 bootstrap reads still disable refresh and write no tables.
 
 The golden and minimal apps now share defineMain, exit, checkClosed and the
-new host. The golden app has one process main, so its startup code mapping
-stays inline instead of keeping a one-caller helper. Its base copy retains
+new host. The golden app keeps startup code mapping inline in its server and worker
+commands. Its base copy retains
 checkClosed; the board shares mainErrorCode across three process commands.
 The new scaffold data migration uses its own generated schema snapshot.
-No worker was added to the scaffold; board alert delivery keeps its send budget.
+The scaffold mail worker shares the board sender and its send budget.
 
 ## Write scope and remaining migration
 
@@ -306,7 +306,7 @@ The remaining legacy write list is short:
 Those three operations are a coupled mail/retry flow, not a small dependency
 swap. They already await their native COMMIT before reporting saved work. They
 are never called by page loaders or render. The old profile notification row
-and auth's owned mail queue are not the board outbox. Auth's SDK-owned writes
+is separate from the shared durable outbox. Auth's SDK-owned writes
 and idempotent account/notice pool calls remain intentional native boundaries.
 No afterCommit hook is added.
 

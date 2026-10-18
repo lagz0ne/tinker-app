@@ -25,7 +25,9 @@ const vite = await createServer({
   },
 });
 
-const { deliverMailBatch, outboxWake } = await vite.ssrLoadModule("/tinker/components/mail/index.server.ts");
+const { deliverMailBatch, outboxWake } = await vite.ssrLoadModule(
+  "/tinker/components/mail/index.server.ts",
+);
 
 const { database, databaseUrl, leaseFrom } = await vite.ssrLoadModule(
   "/tinker/components/database/index.server.ts",
@@ -118,6 +120,7 @@ try {
   assert.deepEqual(
     done.map((row) => row.claimed).sort((a, b) => a - b),
     [1, 20],
+    "outbox claim must return batches of 20 and 1",
   );
   assert(done.every((row) => row.sent === row.claimed && row.failed === 0));
   assert.equal(

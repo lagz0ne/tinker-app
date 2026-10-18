@@ -17,7 +17,7 @@ import {
   outboxWake,
 } from "~/components/mail/index.server";
 
-import { proofDatabase } from "./presets";
+import { proofDatabase, databaseQueries } from "./presets";
 import { write } from "./write-boundary";
 
 let root: Scope.Handle;
@@ -29,6 +29,7 @@ let stop: AbortController;
 let refuse: boolean;
 
 let sends: number;
+let senderAction: (() => Promise<void>) | undefined;
 
 beforeEach(async () => {
   stop = new AbortController();
@@ -38,6 +39,7 @@ beforeEach(async () => {
   refuse = false;
 
   sends = 0;
+  senderAction = undefined;
 
   root = createScope({
     clock,
@@ -47,6 +49,7 @@ beforeEach(async () => {
       preset(mail, async () => ({
         send: async () => {
           sends++;
+          await senderAction?.();
           if (refuse) throw new Error("refused");
         },
       })),
@@ -71,7 +74,12 @@ afterEach(async () => {
 });
 
 test("lease expiry, token fencing and explicit release preserve attempts", async () => {
+  databaseQueries.length = 0;
   const first = await write(root, claimMailBatch);
+  expect(
+    databaseQueries.filter((query) => /\bupdate\b/i.test(query)),
+    "one claim must use one SQL statement",
+  ).toHaveLength(1);
 
   expect(first.rows).toHaveLength(1);
 
@@ -206,6 +214,30 @@ test("failed twelfth send becomes dead; crash at twelfth claim also becomes dead
   });
 });
 
+test("dead-letter cleanup is bounded to twenty rows per claim", async () => {
+  const db = await root.resolve(database);
+
+  await db.insert(mailOutbox).values(
+    Array.from({ length: 20 }, (_, index) => ({
+      to: "proof@example.test",
+      subject: "Dead",
+      text: "Body",
+      dedupeKey: "dead:" + index,
+      nextAt: new Date(0),
+    })),
+  );
+
+  await db.execute(sql`UPDATE mail_outbox SET attempts=12`);
+
+  expect((await write(root, claimMailBatch)).rows).toEqual([]);
+
+  expect((await db.select().from(mailOutbox)).filter((row) => row.deadAt)).toHaveLength(20);
+
+  await write(root, claimMailBatch);
+
+  expect((await db.select().from(mailOutbox)).every((row) => row.deadAt)).toBe(true);
+});
+
 test("future rows stay untouched and send stops before a second leased row", async () => {
   const db = await root.resolve(database);
 
@@ -278,4 +310,33 @@ test("mail worker drains batches, reconnects, waits and stops without a hidden l
   } finally {
     expect((await worker.close({ graceful: true })).status).toBe("success");
   }
+});
+
+test("a batch does not start another SMTP send after its lease expires", async () => {
+  const db = await root.resolve(database);
+
+  await db.insert(mailOutbox).values({
+    to: "proof@example.test",
+    subject: "Second",
+    text: "Body",
+    dedupeKey: "second",
+    nextAt: new Date(0),
+  });
+
+  senderAction = async () => {
+    clock.advance(1000);
+  };
+
+  expect(
+    await write(root, deliverMailBatch),
+    "expired lease must not start another SMTP send",
+  ).toEqual({ claimed: 2, sent: 1, failed: 0 });
+
+  expect(sends).toBe(1);
+
+  const recovered = await write(root, claimMailBatch);
+
+  expect(recovered.rows).toHaveLength(1);
+
+  expect(recovered.rows[0]).toMatchObject({ attempts: 2, sentAt: null });
 });

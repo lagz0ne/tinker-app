@@ -31,6 +31,9 @@ the same command cannot enqueue another alert.
 Each worker claims up to 20 due rows with one UPDATE and FOR UPDATE SKIP LOCKED.
 The claim commits its token, expiry, and attempts before any send. SMTP holds no
 row locks. Each acknowledgement commits separately and requires the token.
+Dead-letter cleanup also uses SKIP LOCKED and a twenty-row bound, so a locked
+exhausted row does not block a fresh claim.
+
 OUTBOX_LEASE_MS defaults to 180000. Expired leases recover after a crash; twelve
 consumed claims leave dead_at. Soft stop finishes the current send and releases
 unstarted claims; their consumed attempts remain. SMTP can deliver twice after
@@ -47,8 +50,12 @@ transport has its owned TCP sockets destroyed, then is closed and replaced
 before the next attempt. Nodemailer gets these sockets through its public
 getSocket hook; pooling stays on. Transaction statements
 are bounded to 1000 ms by default, with a 500 ms lock wait. The typed limits cap
-statements at 2000 ms and lock waits at 1000 ms. The worker also fixes checkout to 1000 ms. Thus send + checkout + record + COMMIT uses
-at most 6 seconds with its configured bounds; even a final rollback fits inside the 10-second host grace.
+statements at 2000 ms and lock waits at 1000 ms. The worker fixes checkout to 500 ms and transaction statements to 750 ms.
+Send plus acknowledgement, releasing unstarted claims, and the 1500 ms
+telemetry close have an 8500 ms configured budget. A failed final COMMIT can
+add a 750 ms rollback: the resulting 9250 ms bound still fits inside the
+10-second host grace. An earlier acknowledgement failure ends the pass,
+leaving unsent leases to expire.
 A stop finishes the current send, commits its result, and releases the rest of
 the batch. A clean SIGTERM prints "outbox worker stopped". Close errors still fail
 the process. SIGINT ends with code 130; SIGTERM ends with 143. The host waits
@@ -146,3 +153,8 @@ Run `pnpm run test:migrations` with local Postgres. It applies the actual chain
 to a fresh database and checks the transition-table trigger and ordered wakes.
 The controls remove the trigger, change its channel, or drop the empty guard:
 each still passes schema generation but fails the live contract gate.
+
+Worker traces use side worker. Stdout and bounded history work without a
+collector. To enable export, bind both VICTORIA_TRACES_URL and VICTORIA_LOGS_URL;
+setting only one is a startup config error. OTEL_SERVICE_NAME defaults to
+tinker-worker. Work closes before the existing bounded telemetry flush.

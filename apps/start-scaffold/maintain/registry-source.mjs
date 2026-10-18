@@ -184,7 +184,8 @@ export async function registryItems(options = {}) {
   minimal.name = "tinker-app";
 
   const tasks = Object.keys(full.scripts).filter(
-    (name) => name.startsWith("test:") && !["test:schema", "test:proofs", "test:migrations"].includes(name),
+    (name) =>
+      name.startsWith("test:") && !["test:schema", "test:proofs", "test:migrations"].includes(name),
   );
   for (const name of ["registry:build", "check:commands", ...tasks]) delete full.scripts[name];
   full.scripts.check =

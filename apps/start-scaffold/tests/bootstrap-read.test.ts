@@ -378,7 +378,10 @@ test("direct auth hooks keep spans under scope resources and use the pool", asyn
     expect(signout.status).toBe("success");
     if (signout.status !== "success") throw signout;
     expect(signout.value.status).toBe(200);
-    expect(transactionQueries, "auth mail owns one separate committed enqueue").toEqual(["BEGIN", "COMMIT"]);
+    expect(transactionQueries, "auth mail owns one separate committed enqueue").toEqual([
+      "BEGIN",
+      "COMMIT",
+    ]);
   } finally {
     await root.close({ graceful: true });
   }

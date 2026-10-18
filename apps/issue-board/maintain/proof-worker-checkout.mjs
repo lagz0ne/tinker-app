@@ -51,7 +51,7 @@ try {
       root = createScope({
         tags: [
           databaseUrl(new URL("postgres://issue_board@127.0.0.1:15433/postgres")),
-          databaseConnectTimeout(1000),
+          databaseConnectTimeout(500),
           mailWorkerStop(signal),
         ],
         presets: [

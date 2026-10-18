@@ -1231,6 +1231,11 @@
           "target": "~/tests/database-adapter.test.ts"
         },
         {
+          "path": "tests/database-ownership.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/database-ownership.test.ts"
+        },
+        {
           "path": "tests/errors.test.ts",
           "type": "registry:file",
           "target": "~/tests/errors.test.ts"
@@ -1519,6 +1524,11 @@
           "path": "maintain/proof-migration-contract-controls.mjs",
           "type": "registry:file",
           "target": "~/maintain/proof-migration-contract-controls.mjs"
+        },
+        {
+          "path": "tests/worker-telemetry-command.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/worker-telemetry-command.test.ts"
         }
       ],
       "meta": {

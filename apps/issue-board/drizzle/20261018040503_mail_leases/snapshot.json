@@ -2,9 +2,7 @@
   "version": "8",
   "dialect": "postgres",
   "id": "9e14ee1d-a9a9-4b79-86c1-589cd7e0a101",
-  "prevIds": [
-    "8cc28773-a21b-4f3e-b1ce-49673bc9cef4"
-  ],
+  "prevIds": ["8cc28773-a21b-4f3e-b1ce-49673bc9cef4"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -1461,14 +1459,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "issue_id"
-      ],
+      "columns": ["issue_id"],
       "schemaTo": "public",
       "tableTo": "issue",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "comment_issue_id_issue_id_fkey",
@@ -1478,14 +1472,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "author_id"
-      ],
+      "columns": ["author_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "comment_author_id_user_id_fkey",
@@ -1495,14 +1485,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "team_id"
-      ],
+      "columns": ["team_id"],
       "schemaTo": "public",
       "tableTo": "team",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "issue_team_id_team_id_fkey",
@@ -1512,14 +1498,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "assignee_id"
-      ],
+      "columns": ["assignee_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "name": "issue_assignee_id_user_id_fkey",
@@ -1529,14 +1511,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "creator_id"
-      ],
+      "columns": ["creator_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "issue_creator_id_user_id_fkey",
@@ -1546,14 +1524,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "team_id"
-      ],
+      "columns": ["team_id"],
       "schemaTo": "public",
       "tableTo": "team",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "team_member_team_id_team_id_fkey",
@@ -1563,14 +1537,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "user_id"
-      ],
+      "columns": ["user_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "team_member_user_id_user_id_fkey",
@@ -1580,14 +1550,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "userId"
-      ],
+      "columns": ["userId"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "account_userId_user_id_fkey",
@@ -1597,14 +1563,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "userId"
-      ],
+      "columns": ["userId"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "session_userId_user_id_fkey",
@@ -1614,14 +1576,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "ownerId"
-      ],
+      "columns": ["ownerId"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "todo_ownerId_user_id_fkey",
@@ -1630,10 +1588,7 @@
       "table": "todo"
     },
     {
-      "columns": [
-        "team_id",
-        "user_id"
-      ],
+      "columns": ["team_id", "user_id"],
       "nameExplicit": false,
       "name": "team_member_pkey",
       "entityType": "pks",
@@ -1641,10 +1596,7 @@
       "table": "team_member"
     },
     {
-      "columns": [
-        "stream",
-        "revision"
-      ],
+      "columns": ["stream", "revision"],
       "nameExplicit": false,
       "name": "sync_event_pkey",
       "entityType": "pks",
@@ -1652,9 +1604,7 @@
       "table": "sync_event"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "comment_pkey",
       "schema": "public",
@@ -1662,9 +1612,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "issue_pkey",
       "schema": "public",
@@ -1672,9 +1620,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "mail_outbox_pkey",
       "schema": "public",
@@ -1682,9 +1628,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "team_pkey",
       "schema": "public",
@@ -1692,9 +1636,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "account_pkey",
       "schema": "public",
@@ -1702,9 +1644,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_pkey",
       "schema": "public",
@@ -1712,9 +1652,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "user_pkey",
       "schema": "public",
@@ -1722,9 +1660,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "verification_pkey",
       "schema": "public",
@@ -1732,9 +1668,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "sync_execution_pkey",
       "schema": "public",
@@ -1742,9 +1676,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "sync_stream_pkey",
       "schema": "public",
@@ -1752,9 +1684,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "todo_pkey",
       "schema": "public",
@@ -1762,9 +1692,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "public_counter_pkey",
       "schema": "public",
@@ -1773,9 +1701,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "dedupe_key"
-      ],
+      "columns": ["dedupe_key"],
       "nullsNotDistinct": false,
       "name": "mail_outbox_dedupe_key_key",
       "schema": "public",
@@ -1784,9 +1710,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "key"
-      ],
+      "columns": ["key"],
       "nullsNotDistinct": false,
       "name": "team_key_key",
       "schema": "public",
@@ -1795,9 +1719,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "token"
-      ],
+      "columns": ["token"],
       "nullsNotDistinct": false,
       "name": "session_token_key",
       "schema": "public",
@@ -1806,9 +1728,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "email"
-      ],
+      "columns": ["email"],
       "nullsNotDistinct": false,
       "name": "user_email_key",
       "schema": "public",

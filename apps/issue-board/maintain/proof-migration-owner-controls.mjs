@@ -9,31 +9,44 @@ const source = readFileSync("tinker/components/database/database.server.ts", "ut
 const directory = mkdtempSync(join(tmpdir(), "migration-control-"));
 
 try {
-  const from = "pg_try_advisory_lock(1414090315, 1296648018)";
+  for (const [name, from, to, reason] of [
+    [
+      "missing lock",
+      "pg_try_advisory_lock(1414090315, 1296648018)",
+      "true",
+      /migration owner must exclude concurrent migrators/,
+    ],
+    [
+      "ignored stop",
+      "scope.run(migrate, { signal: resolve(databaseStop) })",
+      "scope.run(migrate)",
+      /startup migration must settle on worker stop/,
+    ],
+  ]) {
+    assert(source.includes(from));
 
-  assert(source.includes(from));
+    const copy = join(directory, name + ".ts");
 
-  const copy = join(directory, "database.server.ts");
+    writeFileSync(copy, source.replace(from, to));
 
-  writeFileSync(copy, source.replace(from, "true"));
+    const bad = spawnSync(process.execPath, ["maintain/proof-migration-owner.mjs"], {
+      encoding: "utf8",
+      timeout: 30000,
+      env: {
+        ...process.env,
+        BOARD_PROOF_FAULT_FILE: "tinker/components/database/database.server.ts",
+        BOARD_PROOF_FAULT_COPY: copy,
+      },
+    });
 
-  const bad = spawnSync(process.execPath, ["maintain/proof-migration-owner.mjs"], {
-    encoding: "utf8",
-    timeout: 30000,
-    env: {
-      ...process.env,
-      BOARD_PROOF_FAULT_FILE: "tinker/components/database/database.server.ts",
-      BOARD_PROOF_FAULT_COPY: copy,
-    },
-  });
+    assert.equal(bad.error, undefined, bad.stdout + bad.stderr);
 
-  assert.equal(bad.error, undefined, bad.stdout + bad.stderr);
+    assert.equal(bad.status, 1, bad.stdout + bad.stderr);
 
-  assert.equal(bad.status, 1, bad.stdout + bad.stderr);
+    assert.match(bad.stderr, reason);
 
-  assert.match(bad.stderr, /migration owner must exclude concurrent migrators/);
-
-  console.log("PASS migration owner control: missing lock fails the overlap assertion.");
+    console.log("PASS migration owner control: " + name + " fails its named assertion.");
+  }
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }

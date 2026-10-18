@@ -26,9 +26,9 @@ export const claimMailBatch = operation({
     const { and, or, lt, lte, isNull, asc, inArray, sql } = orm;
     const now = new Date(clock.currentTimeMillis());
     const available = or(isNull(mailOutbox.leaseUntil), lte(mailOutbox.leaseUntil, now));
-    await tx
-      .update(mailOutbox)
-      .set({ deadAt: now, leaseToken: null, leaseUntil: null })
+    const exhaustedRows = tx
+      .select({ id: sql`${mailOutbox.id}` })
+      .from(mailOutbox)
       .where(
         and(
           isNull(mailOutbox.sentAt),
@@ -36,6 +36,17 @@ export const claimMailBatch = operation({
           available,
           sql`${mailOutbox.attempts} >= 12`,
         ),
+      )
+      .limit(20)
+      .for("update", { skipLocked: true });
+    const exhausted = tx
+      .$with("outbox_exhausted")
+      .as(
+        tx
+          .update(mailOutbox)
+          .set({ deadAt: now, leaseToken: null, leaseUntil: null })
+          .where(inArray(mailOutbox.id, exhaustedRows))
+          .returning({ id: mailOutbox.id }),
       );
 
     const token = random.uuid();
@@ -55,6 +66,7 @@ export const claimMailBatch = operation({
       .limit(20)
       .for("update", { skipLocked: true });
     const rows = await tx
+      .with(exhausted)
       .update(mailOutbox)
       .set({
         leaseToken: token,
@@ -124,14 +136,14 @@ export const deliverMailBatch = operation({
     mail: alertMail,
     stopping: mailWorkerStop,
   },
-  run: async ({ claim, ack, release, mail, stopping }, { signal: contextSignal }) => {
+  run: async ({ claim, ack, release, mail, stopping }, { signal: contextSignal, clock }) => {
     const signal = stopping ?? contextSignal;
     const { token, rows } = await claim.run({ signal: contextSignal });
 
     let sent = 0;
     let failed = 0;
     for (const row of rows) {
-      if (signal.aborted) break;
+      if (signal.aborted || row.leaseUntil!.getTime() <= clock.currentTimeMillis()) break;
 
       let error: string | null = null;
 
@@ -144,8 +156,8 @@ export const deliverMailBatch = operation({
 
       if (!saved.acknowledged) continue;
 
-      if (error === null) sent++;
-      else failed++;
+      sent += Number(error === null);
+      failed += Number(error !== null);
     }
     if (signal.aborted) {
       await release.run({ input: { token }, signal: contextSignal });

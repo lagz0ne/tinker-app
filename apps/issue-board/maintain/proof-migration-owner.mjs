@@ -22,8 +22,15 @@ const vite = await createServer({
   },
 });
 
-const { database, databaseSetup, databaseUrl, migrate, databaseMigrationTimeout, leaseFrom } =
-  await vite.ssrLoadModule("/tinker/components/database/index.server.ts");
+const {
+  database,
+  databaseSetup,
+  databaseUrl,
+  migrate,
+  databaseMigrationTimeout,
+  databaseStop,
+  leaseFrom,
+} = await vite.ssrLoadModule("/tinker/components/database/index.server.ts");
 
 const { drizzlePgCore } = await vite.ssrLoadModule("/tinker/components/database/modules.ts");
 
@@ -112,8 +119,19 @@ try {
 
   await entered.promise;
 
-  // Give all contenders a full poll interval to expose an unguarded migrator.
-  await new Promise((resolve) => setTimeout(resolve, 150));
+  // Observe each contender reaching the ownership query before checking overlap.
+  const contenders = AbortSignal.timeout(5000);
+  while (
+    (
+      await admin.query(
+        "SELECT count(*)::int AS count FROM pg_stat_activity WHERE pid=ANY($1::int[]) AND query ILIKE '% AS owned%'",
+        [clients.map((client) => client.processID)],
+      )
+    ).rows[0].count !== 3
+  ) {
+    contenders.throwIfAborted();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 
   const before = arrivals;
 
@@ -181,8 +199,63 @@ try {
   assert.equal((await recovered).status, "success", "migration owner death must allow recovery");
 
   console.log("PASS migration owner: backend death releases ownership; next caller recovers.");
+  await admin.query("SELECT pg_advisory_lock(1414090315,1296648018)");
+
+  const stop = new AbortController();
+
+  const cancelUrl = new URL(connectionString);
+
+  cancelUrl.searchParams.set("application_name", "migration-cancel-" + name);
+
+  const cancellable = createScope({
+    extensions: [databaseSetup],
+    tags: [databaseUrl(cancelUrl), databaseMigrationTimeout(60000), databaseStop(stop.signal)],
+  });
+
+  roots.push(cancellable);
+
+  const cancelled = cancellable.ready.then(
+    () => null,
+    (error) => error,
+  );
+
+  const deadline = AbortSignal.timeout(5000);
+
+  while (
+    !(
+      await admin.query(
+        "SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND query LIKE '%pg_try_advisory_lock%'",
+        ["migration-cancel-" + name],
+      )
+    ).rowCount
+  ) {
+    deadline.throwIfAborted();
+  }
+
+  const reason = Object.assign(new Error("startup migration cancelled"), { name: "AbortError" });
+
+  stop.abort(reason);
+
+  const joined = await Promise.race([
+    cancelled,
+    new Promise((resolve) => setTimeout(() => resolve("not-settled"), 1500)),
+  ]);
+
+  await admin.query("SELECT pg_advisory_unlock_all()");
+
+  assert.equal(
+    joined,
+    reason,
+    "startup migration must settle on worker stop instead of waiting for its long deadline",
+  );
+
+  console.log(
+    "PASS migration owner: worker stop interrupts the startup ownership wait and joins cleanup.",
+  );
 } finally {
   held.resolve();
+
+  await admin.query("SELECT pg_advisory_unlock_all()").catch(() => {});
 
   await Promise.all(roots.map((root) => root.close()));
 

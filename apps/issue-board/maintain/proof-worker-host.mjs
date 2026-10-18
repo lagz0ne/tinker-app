@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import pg from "pg";
@@ -52,6 +52,9 @@ try {
     ])
   ).rows;
   assert.equal(before.length, 1, "The proof owns a durable daily receipt for an eligible account");
+
+  // Startup owns migrations too; the deployment folder carries the actual chain.
+  await cp(new URL("../drizzle", import.meta.url), `${directory}/drizzle`, { recursive: true });
 
   child = spawn(process.execPath, [fileURLToPath(new URL("./worker.mjs", import.meta.url))], {
     cwd: directory,
