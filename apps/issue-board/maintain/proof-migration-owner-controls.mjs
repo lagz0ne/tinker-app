@@ -4,25 +4,40 @@ import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const source = readFileSync("tinker/components/database/database.server.ts", "utf8");
-
 const directory = mkdtempSync(join(tmpdir(), "migration-control-"));
 
 try {
-  for (const [name, from, to, reason] of [
+  for (const [name, target, from, to, reason] of [
     [
       "missing lock",
-      "pg_try_advisory_lock(1414090315, 1296648018)",
+      "tinker/components/database/database.server.ts",
+      "pg_try_advisory_lock(${migrationLockKey[0]}, ${migrationLockKey[1]})",
       "true",
       /migration owner must exclude concurrent migrators/,
     ],
     [
       "ignored stop",
+      "tinker/components/database/database.server.ts",
       "scope.run(migrate, { signal: resolve(databaseStop) })",
       "scope.run(migrate)",
       /startup migration must settle on worker stop/,
     ],
+    [
+      "worker setup removed",
+      "cmds/worker.ts",
+      "extensions: [databaseSetup, mailStartup]",
+      "extensions: [mailStartup]",
+      /worker command must await the held migration owner/,
+    ],
+    [
+      "CLI setup removed",
+      "cmds/cli.ts",
+      "extensions: [databaseSetup]",
+      "extensions: []",
+      /cli command must await the held migration owner/,
+    ],
   ]) {
+    const source = readFileSync(target, "utf8");
     assert(source.includes(from));
 
     const copy = join(directory, name + ".ts");
@@ -31,10 +46,10 @@ try {
 
     const bad = spawnSync(process.execPath, ["maintain/proof-migration-owner.mjs"], {
       encoding: "utf8",
-      timeout: 30000,
+      timeout: 60000,
       env: {
         ...process.env,
-        BOARD_PROOF_FAULT_FILE: "tinker/components/database/database.server.ts",
+        BOARD_PROOF_FAULT_FILE: target,
         BOARD_PROOF_FAULT_COPY: copy,
       },
     });

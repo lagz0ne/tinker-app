@@ -58,10 +58,18 @@ const cases = [
   {
     name: "expired-lease-send",
     target: "tinker/components/mail/delivery.server.ts",
-    from: "row.leaseUntil!.getTime() <= clock.currentTimeMillis()",
+    from: "row.leaseUntil!.getTime() - clock.currentTimeMillis() < budget",
     to: "false",
     test: "tests/mail-delivery.test.ts",
-    reason: "expired lease must not start another SMTP send",
+    reason: "remaining lease must cover send plus acknowledgement",
+  },
+  {
+    name: "unsent-attempts-not-refunded",
+    target: "tinker/components/mail/delivery.server.ts",
+    from: "attempts: orm.sql`${mailOutbox.attempts} - 1`",
+    to: "attempts: orm.sql`${mailOutbox.attempts}`",
+    test: "tests/mail-delivery.test.ts",
+    reason: "release refunds unsent claims",
   },
   {
     name: "claim-extra-statement",

@@ -1,10 +1,17 @@
 import { operation, resource, tag } from "@tinker/core";
 import { z } from "zod";
 
-import { transaction, database, drizzleOrm } from "~/components/database/index.server";
+import {
+  transaction,
+  database,
+  drizzleOrm,
+  databaseConnectTimeout,
+  databaseStatementTimeout,
+} from "~/components/database/index.server";
 
 import { mail as alertMail } from "./mail.server";
 import { mailOutbox } from "./schema.server";
+import { mailSendTimeout } from "./settings";
 
 /** Soft process stop: finish and commit the current SMTP send before closing the root. */
 export const mailWorkerStop = tag<AbortSignal | undefined>({
@@ -16,7 +23,7 @@ export const mailWorkerStop = tag<AbortSignal | undefined>({
 export const mailLeaseMs = tag<number>({
   label: "outbox.leaseMs",
   default: 180000,
-  parse: z.number().int().min(1000).max(3600000),
+  parse: z.number().int().min(120000).max(3600000),
 });
 
 export const claimMailBatch = operation({
@@ -121,7 +128,7 @@ export const releaseMailClaims = operation({
   run: async ({ tx, orm }, { input }) => {
     await tx
       .update(mailOutbox)
-      .set({ leaseToken: null, leaseUntil: null })
+      .set({ leaseToken: null, leaseUntil: null, attempts: orm.sql`${mailOutbox.attempts} - 1` })
       .where(orm.eq(mailOutbox.leaseToken, input.token));
   },
 });
@@ -135,15 +142,27 @@ export const deliverMailBatch = operation({
     release: releaseMailClaims.controller,
     mail: alertMail,
     stopping: mailWorkerStop,
+    sendTimeout: mailSendTimeout,
+    checkoutTimeout: databaseConnectTimeout,
+    statementTimeout: databaseStatementTimeout,
   },
-  run: async ({ claim, ack, release, mail, stopping }, { signal: contextSignal, clock }) => {
+  run: async (
+    { claim, ack, release, mail, stopping, sendTimeout, checkoutTimeout, statementTimeout },
+    { signal: contextSignal, clock },
+  ) => {
     const signal = stopping ?? contextSignal;
     const { token, rows } = await claim.run({ signal: contextSignal });
+
+    // Reserve checkout, UPDATE and COMMIT bounds, plus setup/dispatch margin.
+    const budget = sendTimeout + checkoutTimeout + 2 * statementTimeout + 1000;
 
     let sent = 0;
     let failed = 0;
     for (const row of rows) {
-      if (signal.aborted || row.leaseUntil!.getTime() <= clock.currentTimeMillis()) break;
+      if (signal.aborted || row.leaseUntil!.getTime() - clock.currentTimeMillis() < budget) {
+        await release.run({ input: { token }, signal: contextSignal });
+        break;
+      }
 
       let error: string | null = null;
 
@@ -158,9 +177,6 @@ export const deliverMailBatch = operation({
 
       sent += Number(error === null);
       failed += Number(error !== null);
-    }
-    if (signal.aborted) {
-      await release.run({ input: { token }, signal: contextSignal });
     }
     return { claimed: rows.length, sent, failed };
   },

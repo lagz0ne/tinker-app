@@ -30,6 +30,7 @@ const {
   databaseMigrationTimeout,
   databaseStop,
   leaseFrom,
+  migrationLockKey,
 } = await vite.ssrLoadModule("/tinker/components/database/index.server.ts");
 
 const { drizzlePgCore } = await vite.ssrLoadModule("/tinker/components/database/modules.ts");
@@ -160,7 +161,94 @@ try {
     "PASS migration owner: three callers; one active migrator; real journal and DDL once.",
   );
 
-  await admin.query("SELECT pg_advisory_lock(1414090315,1296648018)");
+  // Exercise the actual entries, not three replicas of their scope wiring.
+  await clients[0].query("SELECT pg_advisory_lock($1,$2)", [...migrationLockKey]);
+  const commands = [];
+  try {
+    for (const command of ["server", "worker", "cli"]) {
+      const { default: main } = await vite.ssrLoadModule(`/cmds/${command}.ts`);
+
+      const stop = new AbortController();
+
+      const url = new URL(connectionString);
+
+      url.pathname = "/" + name;
+
+      url.searchParams.set("application_name", `migration-${command}-${name}`);
+
+      const trial = { command, stop, returned: false };
+
+      trial.pending = main({
+        env: {
+          DATABASE_URL: url.href,
+          DATABASE_MIGRATION_TIMEOUT_MS: "60000",
+          OTEL_SERVICE_NAME: "proof-migration",
+          PUBLIC_ORIGIN: "http://localhost:4327",
+          AUTH_SECRET: "proof-secret-with-at-least-thirty-two-letters",
+          SMTP_URL: "smtp://127.0.0.1:11026",
+          SMTP_FROM: "proof@example.test",
+          VICTORIA_TRACES_URL: "http://127.0.0.1:11428",
+          VICTORIA_LOGS_URL: "http://127.0.0.1:19428",
+        },
+        args:
+          command === "cli"
+            ? ["--file", "missing-proof.csv", "--team", "ENG", "--actor", "proof@example.test"]
+            : [],
+        signal: stop.signal,
+        stdout: { write() {} },
+        stderr: { write() {} },
+        exit(_code, reason) {
+          trial.error = String(reason?.stack ?? reason);
+          stop.abort(reason);
+        },
+      }).then(
+        (app) => {
+          trial.returned = true;
+          return app;
+        },
+        (error) => {
+          trial.returned = true;
+          throw error;
+        },
+      );
+
+      void trial.pending.catch(() => {});
+
+      commands.push(trial);
+    }
+    for (const trial of commands) {
+      const deadline = AbortSignal.timeout(5000);
+      let waiting = false;
+      while (!trial.returned && !deadline.aborted) {
+        waiting = !!(
+          await admin.query(
+            "SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND query LIKE '%pg_try_advisory_lock%'",
+            [`migration-${trial.command}-${name}`],
+          )
+        ).rowCount;
+        if (waiting) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert(
+        waiting && !trial.returned,
+        `${trial.command} command must await the held migration owner before ready or work: ${trial.error ?? "no matching SQL"}`,
+      );
+    }
+    console.log(
+      "PASS migration owner: real server, worker and CLI entries all wait before ready or work.",
+    );
+  } finally {
+    await clients[0].query("SELECT pg_advisory_unlock($1,$2)", [...migrationLockKey]);
+    for (const trial of commands) trial.stop.abort();
+    await Promise.allSettled(
+      commands.map(async (trial) => {
+        const app = await trial.pending;
+        await app.closed;
+      }),
+    );
+  }
+
+  await admin.query("SELECT pg_advisory_lock($1,$2)", [...migrationLockKey]);
 
   const bounded = createScope({
     tags: [databaseUrl(new URL(connectionString)), databaseMigrationTimeout(100)],
@@ -176,7 +264,7 @@ try {
 
   assert.equal(refused.error.kind, "MigrationBusy", "migration wait deadline must be typed");
 
-  await admin.query("SELECT pg_advisory_unlock(1414090315,1296648018)");
+  await admin.query("SELECT pg_advisory_unlock($1,$2)", [...migrationLockKey]);
 
   console.log("PASS migration owner: typed bounded wait; no migration before ownership.");
 
@@ -186,7 +274,7 @@ try {
 
   clients.push(owner);
 
-  await owner.query("SELECT pg_advisory_lock(1414090315,1296648018)");
+  await owner.query("SELECT pg_advisory_lock($1,$2)", [...migrationLockKey]);
 
   const pid = (await owner.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
 
@@ -199,7 +287,7 @@ try {
   assert.equal((await recovered).status, "success", "migration owner death must allow recovery");
 
   console.log("PASS migration owner: backend death releases ownership; next caller recovers.");
-  await admin.query("SELECT pg_advisory_lock(1414090315,1296648018)");
+  await admin.query("SELECT pg_advisory_lock($1,$2)", [...migrationLockKey]);
 
   const stop = new AbortController();
 

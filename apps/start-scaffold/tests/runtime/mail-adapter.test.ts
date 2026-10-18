@@ -2,7 +2,7 @@ import { createScope, type Observe } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
-import { mail, mailFrom, smtpUrl, sendMail } from "~/components/mail/mail.server";
+import { mail, mailFrom, smtpUrl, sendMail } from "~/components/mail/index.server";
 import { smtp } from "~/components/mail/modules";
 
 for (const [url, expected] of [

@@ -208,6 +208,9 @@ export const databaseMigrationTimeout = tag<number>({
   parse: z.number().int().positive().max(60000),
 });
 
+/** Stable application schema lock: ASCII TINK / MIGR, shared by every process. */
+export const migrationLockKey = [1414090315, 1296648018] as const;
+
 export const migrate = operation({
   label: "migrate",
   depends: {
@@ -220,8 +223,7 @@ export const migrate = operation({
   run: async ({ database, pgCore, migrator, orm, timeout }, { clock, signal }) => {
     if (!database.checkout) throw new Error("Migration requires a dedicated connection");
     const lease = await database.checkout();
-    // Stable application schema lock: ASCII TINK / MIGR, shared by every process.
-    const lock = orm.sql`SELECT pg_try_advisory_lock(1414090315, 1296648018) AS owned`;
+    const lock = orm.sql`SELECT pg_try_advisory_lock(${migrationLockKey[0]}, ${migrationLockKey[1]}) AS owned`;
     const deadline = clock.currentTimeMillis() + timeout;
     let broken = true;
 
@@ -249,7 +251,9 @@ export const migrate = operation({
         migrationsFolder,
       });
 
-      await lease.db.execute(orm.sql`SELECT pg_advisory_unlock(1414090315, 1296648018)`);
+      await lease.db.execute(
+        orm.sql`SELECT pg_advisory_unlock(${migrationLockKey[0]}, ${migrationLockKey[1]})`,
+      );
       broken = false;
     } finally {
       signal.removeEventListener("abort", abort);

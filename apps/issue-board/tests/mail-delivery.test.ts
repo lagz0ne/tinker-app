@@ -43,7 +43,7 @@ beforeEach(async () => {
 
   root = createScope({
     clock,
-    tags: [mailWorkerStop(stop.signal), mailLeaseMs(1000)],
+    tags: [mailWorkerStop(stop.signal), mailLeaseMs(120000)],
     presets: [
       proofDatabase,
       preset(mail, async () => ({
@@ -73,7 +73,7 @@ afterEach(async () => {
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("lease expiry, token fencing and explicit release preserve attempts", async () => {
+test("lease expiry and token fencing preserve crash attempts; release refunds unsent claims", async () => {
   databaseQueries.length = 0;
   const first = await write(root, claimMailBatch);
   expect(
@@ -85,11 +85,11 @@ test("lease expiry, token fencing and explicit release preserve attempts", async
 
   expect(first.rows[0]).toMatchObject({ attempts: 1, leaseToken: first.token });
 
-  expect(first.rows[0]!.leaseUntil!.getTime()).toBe(clock.currentTimeMillis() + 1000);
+  expect(first.rows[0]!.leaseUntil!.getTime()).toBe(clock.currentTimeMillis() + 120000);
 
   expect((await write(root, claimMailBatch)).rows).toEqual([]);
 
-  clock.advance(999);
+  clock.advance(119999);
 
   expect((await write(root, claimMailBatch)).rows).toEqual([]);
 
@@ -111,7 +111,7 @@ test("lease expiry, token fencing and explicit release preserve attempts", async
 
   const third = await write(root, claimMailBatch);
 
-  expect(third.rows[0]!.attempts).toBe(3);
+  expect(third.rows[0]!.attempts).toBe(2);
 });
 
 test("delivery persists exponential retry and success without holding send locks", async () => {
@@ -202,7 +202,7 @@ test("failed twelfth send becomes dead; crash at twelfth claim also becomes dead
 
   expect((await write(root, claimMailBatch)).rows[0]!.attempts).toBe(12);
 
-  clock.advance(1000);
+  clock.advance(120000);
 
   expect((await write(root, claimMailBatch)).rows).toEqual([]);
 
@@ -256,7 +256,7 @@ test("future rows stay untouched and send stops before a second leased row", asy
   const rows = await db.select().from(mailOutbox);
 
   expect(rows.find((row) => row.dedupeKey === "one")).toMatchObject({
-    attempts: 1,
+    attempts: 0,
     leaseToken: null,
     leaseUntil: null,
     sentAt: null,
@@ -312,7 +312,7 @@ test("mail worker drains batches, reconnects, waits and stops without a hidden l
   }
 });
 
-test("a batch does not start another SMTP send after its lease expires", async () => {
+test("a batch leaves room for send plus acknowledgement before starting SMTP", async () => {
   const db = await root.resolve(database);
 
   await db.insert(mailOutbox).values({
@@ -324,12 +324,12 @@ test("a batch does not start another SMTP send after its lease expires", async (
   });
 
   senderAction = async () => {
-    clock.advance(1000);
+    clock.advance(109001);
   };
 
   expect(
     await write(root, deliverMailBatch),
-    "expired lease must not start another SMTP send",
+    "remaining lease must cover send plus acknowledgement",
   ).toEqual({ claimed: 2, sent: 1, failed: 0 });
 
   expect(sends).toBe(1);
@@ -338,5 +338,9 @@ test("a batch does not start another SMTP send after its lease expires", async (
 
   expect(recovered.rows).toHaveLength(1);
 
-  expect(recovered.rows[0]).toMatchObject({ attempts: 2, sentAt: null });
+  expect(recovered.rows[0]).toMatchObject({ attempts: 1, sentAt: null });
+});
+
+test("a lease shorter than the twenty-send budget is rejected", () => {
+  expect(() => mailLeaseMs(119999)).toThrow();
 });

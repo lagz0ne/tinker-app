@@ -8,8 +8,6 @@ import { mailOutbox } from "./schema.server";
 import { smtpUrl, mailFrom, mailSendTimeout } from "./settings";
 import { smtpSockets } from "./sockets.server";
 
-export { smtpUrl, mailFrom, mailSendTimeout } from "./settings";
-
 const message = z.strictObject({ to: z.string(), subject: z.string(), text: z.string() });
 
 export declare namespace Mail {
@@ -101,7 +99,7 @@ export const enqueueMail = operation({
   input: message,
   depends: { tx: transaction },
   run: async ({ tx }, { input, random }) => {
-    await tx.insert(mailOutbox).values({ ...input, dedupeKey: `auth:${random.uuid()}` });
+    await tx.insert(mailOutbox).values({ ...input, dedupeKey: `mail:${random.uuid()}` });
   },
 });
 

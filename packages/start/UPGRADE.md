@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Mail leases require at least 120000 ms. Before each send, the worker reserves
+  its send deadline, checkout, two SQL statement bounds, and a 1000 ms setup margin.
+  Unsent claims released on stop or a short remaining lease refund their attempt.
+- Migration proofs exercise all three command entries; the live SQL contract
+  also checks the sync event trigger and committed/rolled-back start_sync wakes.
+
 - Worker is a telemetry side. Worker commands keep stdout/history by default;
   setting either VICTORIA_TRACES_URL or VICTORIA_LOGS_URL enables export and
   requires both. OTEL_SERVICE_NAME defaults to tinker-worker. Work closes before

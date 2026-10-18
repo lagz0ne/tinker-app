@@ -42,6 +42,8 @@ let root;
 
 let count = 0;
 
+let syncCount = 0;
+
 let fenced = Promise.withResolvers();
 
 try {
@@ -93,10 +95,11 @@ try {
 
   listener.on("notification", (event) => {
     if (event.channel === "board_outbox") count++;
+    else if (event.channel === "start_sync") syncCount++;
     else fenced.resolve();
   });
 
-  await listener.query("LISTEN board_outbox; LISTEN migration_proof_fence");
+  await listener.query("LISTEN board_outbox; LISTEN start_sync; LISTEN migration_proof_fence");
 
   await publisher.query(
     "INSERT INTO mail_outbox(\"to\",subject,text,dedupe_key) SELECT 'proof@example.test','Empty','None','empty' WHERE false",
@@ -138,6 +141,50 @@ try {
   await fenced.promise;
 
   assert.equal(count, 1, "committed multi-row statement must publish one mail wake");
+
+  const syncTrigger = await publisher.query(
+    "SELECT pg_get_triggerdef(oid) AS definition FROM pg_trigger WHERE tgrelid='sync_event'::regclass AND tgname='sync_event_committed' AND tgenabled='O'",
+  );
+  assert.equal(syncTrigger.rowCount, 1, "sync migration must install its enabled event trigger");
+  assert.match(
+    syncTrigger.rows[0].definition,
+    /AFTER INSERT[\s\S]*FOR EACH STATEMENT[\s\S]*start_sync_wake/,
+    "sync trigger must wake after an insert statement",
+  );
+  const syncFunction = (
+    await publisher.query(
+      "SELECT pg_get_functiondef('start_sync_wake()'::regprocedure) AS definition",
+    )
+  ).rows[0].definition;
+  assert.match(
+    syncFunction,
+    /pg_notify\('start_sync'/,
+    "sync notification function must publish start_sync",
+  );
+
+  fenced = Promise.withResolvers();
+  await publisher.query("BEGIN");
+  await publisher.query(
+    `INSERT INTO sync_event(stream,revision,"executionId",payload) VALUES ('proof',1,'rollback','{}')`,
+  );
+  await publisher.query("ROLLBACK");
+  await publisher.query("SELECT pg_notify('migration_proof_fence','sync-rollback')");
+  await fenced.promise;
+  assert.equal(syncCount, 0, "rolled-back sync insert must publish no wake");
+
+  fenced = Promise.withResolvers();
+  await publisher.query("BEGIN");
+  await publisher.query(
+    `INSERT INTO sync_event(stream,revision,"executionId",payload) VALUES ('proof',1,'commit','{}'),('proof',2,'commit','{}')`,
+  );
+  assert.equal(syncCount, 0, "sync wake must wait for COMMIT");
+  await publisher.query("COMMIT");
+  await publisher.query("SELECT pg_notify('migration_proof_fence','sync-commit')");
+  await fenced.promise;
+  assert.equal(syncCount, 1, "committed sync batch must publish one start_sync wake");
+  console.log(
+    "PASS real sync migration: enabled event trigger; rollback silent; committed batch publishes one start_sync wake after COMMIT.",
+  );
 
   console.log(
     "PASS real migration contract: enabled transition-table trigger; empty and rollback silent; committed batch wakes once, ordered by a second-channel fence.",

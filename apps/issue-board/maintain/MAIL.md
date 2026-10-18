@@ -34,9 +34,12 @@ row locks. Each acknowledgement commits separately and requires the token.
 Dead-letter cleanup also uses SKIP LOCKED and a twenty-row bound, so a locked
 exhausted row does not block a fresh claim.
 
-OUTBOX_LEASE_MS defaults to 180000. Expired leases recover after a crash; twelve
-consumed claims leave dead_at. Soft stop finishes the current send and releases
-unstarted claims; their consumed attempts remain. SMTP can deliver twice after
+OUTBOX_LEASE_MS defaults to 180000 and must be at least 120000. Before each
+send the remaining lease must cover the configured send deadline, pool checkout,
+two statement deadlines (UPDATE and COMMIT), and a 1000 ms setup margin.
+Unsent rows are released with their claim attempt refunded. Expired leases
+recover after a crash; twelve consumed claims leave dead_at. Soft stop finishes
+the current send and releases unstarted claims without consuming their attempts. SMTP can deliver twice after
 acceptance followed by a lost acknowledgement.
 
 Delivery can repeat if the process dies after SMTP accepts a message but before

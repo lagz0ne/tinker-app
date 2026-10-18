@@ -71,7 +71,7 @@ test("tag contracts reject wrong typed values without an env converter", () => {
 
 for (const [name, contract, rejected, accepted] of [
   ["migration wait", databaseMigrationTimeout, [0, -1, 1.5, 60001], [1, 5000, 60000]],
-  ["mail lease", mailLeaseMs, [0, 999, 1.5, 3600001], [1000, 180000, 3600000]],
+  ["mail lease", mailLeaseMs, [0, 119999, 1.5, 3600001], [120000, 180000, 3600000]],
   ["mail total send", mailSendTimeout, [0, -1, 1.5, 3001], [1, 100, 3000]],
 ] as const) {
   test(`${name}: typed bounds reject unsafe budgets and accept their edges`, () => {

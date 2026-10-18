@@ -10,10 +10,15 @@ import {
   databaseLockTimeout,
   databaseStatementTimeout,
 } from "~/components/database/index.server";
-import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
-import { mailSendTimeout as alertMailTimeout } from "~/components/mail/index.server";
-import { mailWorkerStop, mailLeaseMs } from "~/components/mail/index.server";
-import { runMailWorker } from "~/components/mail/index.server";
+import {
+  mailStartup,
+  smtpUrl,
+  mailFrom,
+  mailSendTimeout as alertMailTimeout,
+  mailWorkerStop,
+  mailLeaseMs,
+  runMailWorker,
+} from "~/components/mail/index.server";
 import {
   observer,
   telemetryExport,

@@ -42,6 +42,8 @@ test("auth enqueue commits durable rows before returning and does not send", asy
 
     expect(new Set(rows.map((row) => row.dedupeKey)).size).toBe(2);
 
+    expect(rows.every((row) => row.dedupeKey.startsWith("mail:"))).toBe(true);
+
     expect(sends).toBe(0);
   } finally {
     expect((await root.close({ graceful: true })).status).toBe("success");

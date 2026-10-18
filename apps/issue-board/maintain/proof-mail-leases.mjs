@@ -73,7 +73,7 @@ try {
 
     const root = createScope({
       clock,
-      tags: [mailLeaseMs(1000)],
+      tags: [mailLeaseMs(120000)],
       presets: [
         preset(database, async () => writeDatabase(client, leaseFrom)),
         preset(alertMail, async () => ({
@@ -118,7 +118,7 @@ try {
     "active leases must not be reclaimed",
   );
 
-  clock.advance(1001);
+  clock.advance(120001);
 
   const renewed = await dispatch.run(roots[1], claimMailBatch);
 
@@ -147,7 +147,7 @@ try {
 
   await peer.query("SELECT pg_terminate_backend($1)", [pid]);
 
-  clock.advance(1001);
+  clock.advance(120001);
 
   const recovered = await dispatch.run(roots[1], claimMailBatch);
 

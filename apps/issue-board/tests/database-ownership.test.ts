@@ -201,7 +201,7 @@ for (const available of [true, false]) {
           state.queries.filter((query) => query.includes("pg_try_advisory_lock")),
         ).toHaveLength(3);
 
-        expect(state.queries.at(-1)).toContain("pg_advisory_unlock(1414090315, 1296648018)");
+        expect(state.queries.at(-1)).toContain("pg_advisory_unlock($1, $2)");
 
         expect(state.released).toEqual([false]);
       } else {

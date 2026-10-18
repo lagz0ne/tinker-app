@@ -1,12 +1,11 @@
-export { authMail, mail, mailFrom, sendMail, smtpUrl, mailStartup } from "./mail.server";
+export { authMail, mail, sendMail, mailStartup, enqueueMail } from "./mail.server";
 export type { Mail } from "./mail.server";
 
 export { smtpSockets } from "./sockets.server";
 
-export { mailSendTimeout } from "./settings";
+export { smtpUrl, mailFrom, mailSendTimeout } from "./settings";
 
 export { mailOutbox } from "./schema.server";
-export { enqueueMail } from "./mail.server";
 
 export {
   claimMailBatch,
@@ -16,6 +15,5 @@ export {
   outboxWake,
   mailWorkerStop,
   mailLeaseMs,
+  runMailWorker,
 } from "./delivery.server";
-
-export { runMailWorker } from "./delivery.server";

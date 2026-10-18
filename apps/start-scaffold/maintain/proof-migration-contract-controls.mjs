@@ -93,6 +93,57 @@ try {
         "; real migration gate rejects its named contract.",
     );
   }
+  await writeFile(target, source);
+
+  const syncTarget = join(
+    directory,
+    "drizzle",
+    "20261002110319_sync_notifications",
+    "migration.sql",
+  );
+
+  const syncSource = await readFile(syncTarget, "utf8");
+  for (const [name, broken, reason] of [
+    [
+      "sync trigger removed",
+      syncSource.replace(
+        /CREATE TRIGGER sync_event_committed[\s\S]*?EXECUTE FUNCTION start_sync_wake\(\);/,
+        "",
+      ),
+      /sync migration must install its enabled event trigger/,
+    ],
+    [
+      "sync channel changed",
+      syncSource.replaceAll("'start_sync'", "'wrong_sync'"),
+      /sync notification function must publish start_sync/,
+    ],
+  ]) {
+    assert.notEqual(broken, syncSource, name);
+
+    await writeFile(syncTarget, broken);
+
+    const schema = spawnSync(process.execPath, [join(directory, "scripts/check-schema.mjs")], {
+      cwd: directory,
+      encoding: "utf8",
+      timeout: 30000,
+    });
+    assert.equal(schema.status, 0, schema.stdout + schema.stderr);
+
+    const bad = spawnSync(process.execPath, ["maintain/proof-migration-contract.mjs"], {
+      encoding: "utf8",
+      timeout: 30000,
+      env: { ...process.env, BOARD_PROOF_MIGRATION_ROOT: directory },
+    });
+    assert.equal(bad.error, undefined, bad.stdout + bad.stderr);
+
+    assert.equal(bad.status, 1, bad.stdout + bad.stderr);
+
+    assert.match(bad.stderr, reason);
+
+    console.log(
+      "PASS migration contract control: " + name + " rejected by its named sync contract.",
+    );
+  }
 } finally {
   await rm(directory, { recursive: true, force: true });
 }
