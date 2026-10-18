@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Board workers claim up to 20 mail rows in a short UPDATE/SKIP LOCKED call.
+  OUTBOX_LEASE_MS defaults to 180000. Sends hold no row locks; acknowledgements
+  require the matching lease token. Attempts survive crashes; exhausted rows
+  have dead_at. SMTP remains at least once, including after a lost acknowledgement.
+
 - Server, worker, and CLI startup await one Postgres advisory-lock migration
   owner. DATABASE_MIGRATION_TIMEOUT_MS bounds the ownership wait (default 5000).
   Run every migration on the connection holding the stable TINK/MIGR lock.

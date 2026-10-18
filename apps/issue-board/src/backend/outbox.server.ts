@@ -1,4 +1,5 @@
 import { operation, resource, tag } from "@tinker/core";
+import { z } from "zod";
 
 import {
   transaction,
@@ -18,62 +19,143 @@ export const mailWorkerStop = tag<AbortSignal | undefined>({
   default: undefined,
 });
 
-/** SMTP runs while the row is locked; another worker skips this batch. */
-export const deliverMailBatch = operation({
-  label: "outbox.deliverBatch",
-  depends: { tx: transaction, orm: drizzleOrm, mail: alertMail, stopping: mailWorkerStop },
-  run: async ({ tx, orm, mail, stopping }, { clock, log, signal: contextSignal }) => {
-    const signal = stopping ?? contextSignal;
-    const { and, eq, lt, lte, isNull, asc } = orm;
-    const rows = await tx
-      .select()
+/** A batch lease covers all twenty bounded sends and their acknowledgements. */
+export const mailLeaseMs = tag<number>({
+  label: "outbox.leaseMs",
+  default: 180000,
+  parse: z.number().int().min(1000).max(3600000),
+});
+
+export const claimMailBatch = operation({
+  label: "outbox.claim",
+  depends: { tx: transaction, orm: drizzleOrm, lease: mailLeaseMs },
+  run: async ({ tx, orm, lease }, { clock, random }) => {
+    const { and, or, lt, lte, isNull, asc, inArray, sql } = orm;
+    const now = new Date(clock.currentTimeMillis());
+    const available = or(isNull(mailOutbox.leaseUntil), lte(mailOutbox.leaseUntil, now));
+    await tx
+      .update(mailOutbox)
+      .set({ deadAt: now, leaseToken: null, leaseUntil: null })
+      .where(
+        and(
+          isNull(mailOutbox.sentAt),
+          isNull(mailOutbox.deadAt),
+          available,
+          sql`${mailOutbox.attempts} >= 12`,
+        ),
+      );
+
+    const token = random.uuid();
+    const due = tx
+      .select({ id: sql`${mailOutbox.id}` })
       .from(mailOutbox)
       .where(
         and(
           isNull(mailOutbox.sentAt),
+          isNull(mailOutbox.deadAt),
+          available,
           lt(mailOutbox.attempts, 12),
-          lte(mailOutbox.nextAt, new Date(clock.currentTimeMillis())),
+          lte(mailOutbox.nextAt, now),
         ),
       )
       .orderBy(asc(mailOutbox.nextAt), asc(mailOutbox.id))
       .limit(20)
       .for("update", { skipLocked: true });
-    let sent = 0;
+    const rows = await tx
+      .update(mailOutbox)
+      .set({
+        leaseToken: token,
+        leaseUntil: new Date(now.getTime() + lease),
+        attempts: sql`${mailOutbox.attempts} + 1`,
+      })
+      .where(inArray(mailOutbox.id, due))
+      .returning();
+    return { token, rows };
+  },
+});
 
+export const acknowledgeMail = operation({
+  label: "outbox.acknowledge",
+  input: z.object({ id: z.number(), token: z.string(), error: z.string().nullable() }),
+  depends: { tx: transaction, orm: drizzleOrm },
+  run: async ({ tx, orm }, { input, clock, log }) => {
+    const { and, eq, sql } = orm;
+    const now = new Date(clock.currentTimeMillis());
+    const [row] = await tx
+      .update(mailOutbox)
+      .set({
+        leaseToken: null,
+        leaseUntil: null,
+        sentAt: input.error === null ? now : null,
+        lastError: input.error,
+        nextAt:
+          input.error === null
+            ? now
+            : sql`${now}::timestamptz + least(1800000, 1000 * power(2, least(${mailOutbox.attempts} - 1, 11))) * interval '1 millisecond'`,
+        deadAt:
+          input.error === null
+            ? null
+            : sql`CASE WHEN ${mailOutbox.attempts} >= 12 THEN ${now}::timestamptz ELSE NULL END`,
+      })
+      .where(and(eq(mailOutbox.id, input.id), eq(mailOutbox.leaseToken, input.token)))
+      .returning({ attempts: mailOutbox.attempts });
+    if (row && input.error !== null) {
+      log.error(row.attempts === 12 ? "outbox.dead" : "outbox.retry", {
+        id: input.id,
+        attempts: row.attempts,
+      });
+    }
+    return { acknowledged: !!row };
+  },
+});
+
+export const releaseMailClaims = operation({
+  label: "outbox.releaseClaims",
+  input: z.object({ token: z.string() }),
+  depends: { tx: transaction, orm: drizzleOrm },
+  run: async ({ tx, orm }, { input }) => {
+    await tx
+      .update(mailOutbox)
+      .set({ leaseToken: null, leaseUntil: null })
+      .where(orm.eq(mailOutbox.leaseToken, input.token));
+  },
+});
+
+/** Native delivery integration: claim and ack each close before the next step. */
+export const deliverMailBatch = operation({
+  label: "outbox.deliverBatch",
+  depends: {
+    claim: claimMailBatch.controller,
+    ack: acknowledgeMail.controller,
+    release: releaseMailClaims.controller,
+    mail: alertMail,
+    stopping: mailWorkerStop,
+  },
+  run: async ({ claim, ack, release, mail, stopping }, { signal: contextSignal }) => {
+    const signal = stopping ?? contextSignal;
+    const { token, rows } = await claim.run({ signal: contextSignal });
+
+    let sent = 0;
     let failed = 0;
     for (const row of rows) {
       if (signal.aborted) break;
 
+      let error: string | null = null;
+
       try {
         await mail.send({ to: row.to, subject: row.subject, text: row.text });
-      } catch (error) {
-        await tx
-          .update(mailOutbox)
-          .set({
-            attempts: row.attempts + 1,
-            nextAt: new Date(
-              clock.currentTimeMillis() +
-                Math.min(1_800_000, 1000 * 2 ** Math.min(row.attempts, 11)),
-            ),
-            lastError: String(error).slice(0, 1000),
-          })
-          .where(eq(mailOutbox.id, row.id));
-        failed += 1;
-        log.error(row.attempts + 1 === 12 ? "outbox.dead" : "outbox.retry", {
-          id: row.id,
-          attempts: row.attempts + 1,
-        });
-        continue;
+      } catch (cause) {
+        error = String(cause).slice(0, 1000);
       }
-      await tx
-        .update(mailOutbox)
-        .set({
-          attempts: row.attempts + 1,
-          sentAt: new Date(clock.currentTimeMillis()),
-          lastError: null,
-        })
-        .where(eq(mailOutbox.id, row.id));
-      sent += 1;
+      const saved = await ack.run({ input: { id: row.id, token, error }, signal: contextSignal });
+
+      if (!saved.acknowledged) continue;
+
+      if (error === null) sent++;
+      else failed++;
+    }
+    if (signal.aborted) {
+      await release.run({ input: { token }, signal: contextSignal });
     }
     return { claimed: rows.length, sent, failed };
   },

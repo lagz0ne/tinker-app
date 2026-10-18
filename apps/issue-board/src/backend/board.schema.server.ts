@@ -126,6 +126,9 @@ export const mailOutbox = pgTable(
     nextAt: timestamp("next_at", { withTimezone: true }).notNull().defaultNow(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     lastError: text("last_error"),
+    leaseToken: text("lease_token"),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    deadAt: timestamp("dead_at", { withTimezone: true }),
   },
   (row) => [
     index("mail_outbox_due")

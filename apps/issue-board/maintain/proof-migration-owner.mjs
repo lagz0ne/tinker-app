@@ -135,7 +135,7 @@ try {
   assert.equal(
     (await clients[0].query("SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations"))
       .rows[0].count,
-    13,
+    14,
   );
 
   console.log(

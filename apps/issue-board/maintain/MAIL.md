@@ -28,24 +28,18 @@ comments. The actor and non-members get no alert. A saved board change stores it
 alert rows in the same transaction. The key is executionId:recipientId. A retry of
 the same command cannot enqueue another alert.
 
-Each worker locks at most 20 due rows with FOR UPDATE SKIP LOCKED. It holds those
-locks until sending and updating the rows finish. Other workers skip those rows.
-The worker pass opens a child session for each batch. The session transaction
-commits before the pass reports a sent batch. A soft stop finishes the current
-send and commits its result before that child closes.
-SMTP failures record the error and retry after 1, 2, 4, 8 seconds, up to 30 minutes.
-After 12 failures, attempts=12 and sent_at=NULL mark the row dead. It stays in the
-table for inspection, logs outbox.dead, and is never claimed again.
-LISTEN board_outbox wakes the worker after inserts commit. A 30-second poll also
-finds retries and covers missed notifications. Failed connects use a separate
-backoff with jitter: 0.5–1 seconds initially, doubling to a 15–30 second cap.
-Old connection events cannot shorten this timer. Retry deadlines are lower bounds;
-a retry may wait for that next poll.
+Each worker claims up to 20 due rows with one UPDATE and FOR UPDATE SKIP LOCKED.
+The claim commits its token, expiry, and attempts before any send. SMTP holds no
+row locks. Each acknowledgement commits separately and requires the token.
+OUTBOX_LEASE_MS defaults to 180000. Expired leases recover after a crash; twelve
+consumed claims leave dead_at. Soft stop finishes the current send and releases
+unstarted claims; their consumed attempts remain. SMTP can deliver twice after
+acceptance followed by a lost acknowledgement.
 
 Delivery can repeat if the process dies after SMTP accepts a message but before
 Postgres commits sent_at. SMTP and Postgres cannot commit together. The unique
-key stops duplicate enqueue, not this crash case. A batch rollback can repeat its
-earlier accepted messages too. There is no claim of exactly-once delivery.
+key stops duplicate enqueue, not this crash case. A failed acknowledgement leaves
+the lease recoverable. There is no claim of exactly-once delivery.
 
 The board sender has a 3-second total send deadline, including all SMTP stages.
 OUTBOX_SMTP_TIMEOUT_MS may shorten it, but cannot exceed 3000 ms. A timed-out

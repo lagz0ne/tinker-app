@@ -304,7 +304,9 @@ test("stopping a batch finishes its current send and releases the remaining rows
 
   const rows = await db.select().from(mailOutbox);
   expect(rows.filter((row) => row.sentAt !== null)).toHaveLength(1);
-  expect(rows.filter((row) => row.sentAt === null)).toMatchObject([{ attempts: 0 }]);
+  expect(rows.filter((row) => row.sentAt === null)).toMatchObject([
+    { attempts: 1, leaseToken: null },
+  ]);
   expect(sent).toHaveLength(1);
 });
 

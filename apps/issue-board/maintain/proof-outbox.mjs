@@ -104,12 +104,13 @@ try {
       "SELECT pid FROM pg_stat_activity WHERE state = 'idle in transaction' AND query LIKE '%skip locked%' ",
     )
   ).rows;
-  assert.equal(pids.length, 2);
+  assert.equal(pids.length, 0, "SMTP must not keep a transaction open");
   await observer.query("BEGIN");
   const unclaimed = await observer.query(
-    "SELECT id FROM mail_outbox WHERE sent_at IS NULL AND next_at <= now() FOR UPDATE SKIP LOCKED",
+    "SELECT id FROM mail_outbox WHERE dedupe_key LIKE $1 FOR UPDATE NOWAIT",
+    [`${prefix}%`],
   );
-  assert.equal(unclaimed.rows.length, 0);
+  assert.equal(unclaimed.rows.length, 21, "committed batch leases must not hold row locks");
   await observer.query("ROLLBACK");
   release.resolve();
   const done = await Promise.all(batches);
@@ -130,7 +131,7 @@ try {
   );
   await coordinator.query("ROLLBACK");
   console.log(
-    "PASS live SKIP LOCKED: two separate connections hold disjoint batches of 20 and 1 at the SMTP barrier; zero unlocked due rows; all 21 sent once to local Mailpit.",
+    "PASS live SKIP LOCKED: two separate connections lease disjoint batches of 20 and 1 at the SMTP barrier; all 21 rows unlocked; all 21 sent once to local Mailpit.",
   );
 
   await coordinator.query("BEGIN");
@@ -155,7 +156,11 @@ try {
     ])
   ).rows[0];
   assert.equal(unsent.sent_at, null);
-  assert.equal(unsent.attempts, 0);
+  assert.equal(unsent.attempts, 1);
+  await observer.query(
+    "UPDATE mail_outbox SET lease_until=now()-interval '1 second' WHERE dedupe_key=$1",
+    [`${prefix}:crash`],
+  );
   assert.deepEqual(await dispatch.run(roots[1], deliverMailBatch), {
     claimed: 1,
     sent: 1,
@@ -163,7 +168,7 @@ try {
   });
   await coordinator.query("ROLLBACK");
   console.log(
-    "PASS crash recovery: killed the claiming worker backend PID before SMTP; transaction rolled back with attempts=0; another worker claims and sends its row once to local Mailpit.",
+    "PASS crash recovery: killed the claiming worker backend PID before SMTP; claim committed with attempts=1; expired lease recovers; another worker claims and sends its row once to local Mailpit.",
   );
 
   const clock = makeTestClock();

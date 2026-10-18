@@ -70,7 +70,7 @@ try {
   await client.query(`SET search_path TO ${schema},public`);
 
   await peer.query(
-    `CREATE FUNCTION ${schema}.hold_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(${key}); RETURN NEW; END $$; CREATE CONSTRAINT TRIGGER hold_commit AFTER UPDATE ON ${schema}.mail_outbox DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ${schema}.hold_commit()`,
+    `CREATE FUNCTION ${schema}.hold_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(${key}); RETURN NEW; END $$; CREATE CONSTRAINT TRIGGER hold_commit AFTER UPDATE ON ${schema}.mail_outbox DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.lease_token IS NULL) EXECUTE FUNCTION ${schema}.hold_commit()`,
   );
 
   await peer.query("SELECT pg_advisory_lock($1)", [key]);
@@ -129,11 +129,15 @@ try {
 
   assert.equal(result, 143);
 
-  assert.equal(commits, 1, "proof must reach the held COMMIT after recording the send failure");
+  assert.equal(commits, 2, "proof must reach the held COMMIT after recording the send failure");
 
   const row = (await peer.query(`SELECT attempts,sent_at FROM ${schema}.mail_outbox`)).rows[0];
 
-  assert.equal(row.attempts, 0, "held COMMIT must roll back the recorded failed send");
+  assert.equal(
+    row.attempts,
+    1,
+    "held acknowledgement COMMIT rolls back but retains committed claim",
+  );
 
   assert.equal(row.sent_at, null);
 

@@ -11,7 +11,7 @@ import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
 
 import { alertMailTimeout } from "@/backend/alert-mail.server";
 import { digestHourUTC } from "@/backend/digest.server";
-import { runMailWorker, mailWorkerStop } from "@/backend/outbox.server";
+import { runMailWorker, mailWorkerStop, mailLeaseMs } from "@/backend/outbox.server";
 
 /** All processes await the shared migration owner; the host owns stop and output. */
 // oxlint-disable-next-line complexity -- Native entry keeps each typed config binding inline, as the server does.
@@ -29,6 +29,7 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
         env.DATABASE_MIGRATION_TIMEOUT_MS !== undefined &&
           databaseMigrationTimeout(Number(env.DATABASE_MIGRATION_TIMEOUT_MS)),
         mailWorkerStop(signal),
+        env.OUTBOX_LEASE_MS !== undefined && mailLeaseMs(Number(env.OUTBOX_LEASE_MS)),
         databaseStop(signal),
         env.DIGEST_HOUR_UTC !== undefined &&
           digestHourUTC(env.DIGEST_HOUR_UTC.trim() === "" ? NaN : Number(env.DIGEST_HOUR_UTC)),
