@@ -32,6 +32,8 @@ async function writeRouteTree(root) {
  */
 async function serve(root) {
   if (existsSync(join(root, ".env"))) process.loadEnvFile(join(root, ".env"));
+  /** React and other deps pick their production build from this at load, as `next start` does. */
+  process.env.NODE_ENV ??= "production";
   const built = await import(pathToFileURL(join(root, "dist/server/server.js")).href);
   let server;
 
