@@ -4,18 +4,30 @@ import { parseArgs } from "node:util";
 
 import { mergeCheck, nextRound, readFindings, updateFindings } from "./findings.mjs";
 import { readConfig, runGates } from "./gates.mjs";
-import { findingList, summary } from "./report.mjs";
+import { findingList, ruleLines, summary } from "./report.mjs";
+import { readRules } from "./rules.mjs";
 import { changeDiff, scanBase, scanDiff, treeBefore } from "./scan.mjs";
 
 /** The exit code for each stop the bin passes on: 128 plus the signal's number. */
 const stopCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };
 
-const usage =
-  "usage: tinker-loop check [--app <dir>] [--base <ref>] | findings [--app <dir>] [--open]";
+const usage = [
+  "usage: tinker-loop check [--app <dir>] [--base <ref>]",
+  "       tinker-loop findings [--app <dir>] [--open] [--rules]",
+  "       tinker-loop rules [ID...] [--app <dir>]",
+].join("\n");
+
+/** Each command, called with the app folder and the parsed command line. */
+const commands = {
+  check: (app, { options, print, signal }) => check(app, { base: options.base, print, signal }),
+  findings: (app, { options, print }) => findings(app, options, print),
+  rules: (app, { positionals, print, stderr }) => rules(app, positionals, { print, stderr }),
+};
 
 /**
  * Run one tinker-loop command. Returns the exit code: 0 done, 1 a red gate,
- * 64 bad arguments, 78 a bad loop.json or findings file, 129, 130, or 143 when stopped.
+ * 64 bad arguments or an unknown rule, 78 a bad loop.json, findings file, or Start install,
+ * 129, 130, or 143 when stopped.
  * @param {{ args: readonly string[], cwd: string, stdout: { write(chunk: string): unknown },
  *   stderr: { write(chunk: string): unknown }, signal?: AbortSignal }} context - From the bin
  *   or a test; why: the command line, the folder it runs from, where to print, and the stop.
@@ -23,28 +35,37 @@ const usage =
 export async function main({ args, cwd, stdout, stderr, signal }) {
   const [command, ...rest] = args;
   const print = (line) => stdout.write(`${line}\n`);
-  let options;
+  let parsed;
   try {
-    options = parseArgs({
+    parsed = parseArgs({
       args: rest,
-      options: { app: { type: "string" }, base: { type: "string" }, open: { type: "boolean" } },
-    }).values;
+      allowPositionals: true,
+      options: {
+        app: { type: "string" },
+        base: { type: "string" },
+        open: { type: "boolean" },
+        rules: { type: "boolean" },
+      },
+    });
   } catch (error) {
     stderr.write(`${error.message}\n${usage}\n`);
     return 64;
   }
 
-  const app = resolve(cwd, options.app ?? ".");
+  const { values: options, positionals } = parsed;
+  const run = Object.hasOwn(commands, command) ? commands[command] : null;
+  if (!run || (positionals.length > 0 && command !== "rules")) {
+    stderr.write(`${usage}\n`);
+    return 64;
+  }
+
   try {
-    if (command === "check") return await check(app, { base: options.base, print, signal });
-    if (command === "findings") return findings(app, options.open, print);
+    const app = resolve(cwd, options.app ?? ".");
+    return await run(app, { options, positionals, print, stderr, signal });
   } catch (error) {
     stderr.write(`tinker-loop: ${error.message}\n`);
     return 78;
   }
-
-  stderr.write(`${usage}\n`);
-  return 64;
 }
 
 /**
@@ -103,14 +124,39 @@ function scanChange(app, { ref, wanted, untracked }, print) {
 }
 
 /**
- * Print the findings file as a list.
- * @param {string} app - From --app; why: whose findings.
- * @param {boolean | undefined} open - From --open; why: show only open findings.
+ * Print the findings file as a list, with each finding's rule text when asked.
+ * @param {string} app - From --app; why: whose findings, and whose Start rules.
+ * @param {{ open?: boolean, rules?: boolean }} options - From --open and --rules; why: show
+ *   only open findings, and add the rule text from the app's own Start.
  * @param {(line: string) => void} print - From main; why: where the list goes.
  */
-function findings(app, open, print) {
+function findings(app, options, print) {
+  const book = options.rules ? readRules(app).rules : null;
   const all = readFindings(app);
-  for (const line of findingList(open ? all.filter((f) => f.status === "open") : all)) print(line);
+  const shown = options.open ? all.filter((f) => f.status === "open") : all;
+  for (const line of findingList(shown, book)) print(line);
+  return 0;
+}
+
+/**
+ * Print the asked rules, or all of them, from the Start that the app resolves.
+ * @param {string} app - From --app; why: Node finds @tinker/start from here.
+ * @param {string[]} ids - From the command line; why: the rules to print; none means all.
+ * @param {{ print: (line: string) => void, stderr: { write(chunk: string): unknown } }} out -
+ *   From main; why: rules go to stdout, an unknown ID goes to stderr.
+ */
+function rules(app, ids, { print, stderr }) {
+  const book = readRules(app);
+  const wanted = ids.map((id) => id.toUpperCase());
+  const unknown = wanted.filter((id) => !book.rules.some((rule) => rule.id === id));
+  if (unknown.length > 0) {
+    const known = book.rules.map((rule) => rule.id).join(", ");
+    stderr.write(`tinker-loop: unknown rule ${unknown.join(", ")}; known rules: ${known}\n`);
+    return 64;
+  }
+
+  print(`@tinker/start ${book.version}: ${book.path}`);
+  for (const line of ruleLines(book.rules, wanted)) print(line);
   return 0;
 }
 

@@ -65,8 +65,11 @@ A stop before the write leaves the findings file as it was.
 ## Findings
 
 ```bash
-vp exec tinker-loop findings [--app <dir>] [--open]
+vp exec tinker-loop findings [--app <dir>] [--open] [--rules]
 ```
+
+`--open` shows only open findings.
+`--rules` adds each finding's rule text from the app's own Start.
 
 The findings file is `<app>/.loop/findings.jsonl`.
 It has one JSON object on each line. Each object has a string `id`.
@@ -97,6 +100,20 @@ A check finding that is gone becomes `fixed` at the current HEAD.
 An `answered` finding that is gone becomes `fixed` too, and keeps its `reason`.
 A `fixed` finding that comes back is `open` again.
 Check never changes `judge` or `review` findings.
+
+## Rules
+
+```bash
+vp exec tinker-loop rules [ID...] [--app <dir>]
+```
+
+The rule text ships in `@tinker/start`, in `docs/rules.md`.
+Node finds `@tinker/start` from the app, so each app reads the rules of its own Start version.
+With no ID, the command prints every rule. With IDs, it prints only those rules.
+An unknown ID exits 64 and lists the known IDs.
+An app without Start, or with a Start that has no `docs/rules.md`, exits 78.
+
+Other tools read the same file with `readRules` and `parseRules` from `@tinker/loop/rules`.
 
 ## Writing the file
 

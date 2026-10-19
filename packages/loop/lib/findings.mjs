@@ -13,6 +13,9 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
+/** The rule a red gate breaks. */
+export const gateRule = "G1";
+
 /** Severity order for lists: what blocks done comes first. */
 export const severities = ["important", "question", "nit", "old"];
 
@@ -261,7 +264,7 @@ function seenAgain(old, now, round) {
  *   mergeCheck; why: whether the scan ran, and where the fix is.
  */
 function gone(old, run) {
-  const checked = old.source === "check" && (old.rule === "G1" || run.scanned);
+  const checked = old.source === "check" && (old.rule === gateRule || run.scanned);
   if (!checked || old.status === "fixed") return old;
 
   const fixed = { ...old, round: run.round, status: "fixed", sha: run.sha };

@@ -3,7 +3,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:f
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { findingId, loopFolder } from "./findings.mjs";
+import { findingId, gateRule, loopFolder } from "./findings.mjs";
 
 const ansi = new RegExp(String.raw`\u001b\[[0-9;?]*[A-Za-z]`, "g");
 
@@ -115,7 +115,7 @@ export async function runGates(app, gates, { print, signal }) {
  */
 function redGate(app, gate, log, ending) {
   const finding = {
-    rule: "G1",
+    rule: gateRule,
     severity: "important",
     file: gate.name,
     line: null,
@@ -126,7 +126,7 @@ function redGate(app, gate, log, ending) {
     fix: `Make \`${gate.run}\` pass.`,
     source: "check",
   };
-  const id = findingId({ source: "check", rule: "G1", file: gate.name });
+  const id = findingId({ source: "check", rule: gateRule, file: gate.name });
   return { name: gate.name, green: false, finding: { id, ...finding } };
 }
 
