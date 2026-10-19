@@ -1,8 +1,8 @@
-import { spawnSync } from "node:child_process";
 import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { findingId } from "./findings.mjs";
+import { commitSha, git } from "./git.mjs";
 
 /**
  * The tinker-review quick-scan greps, one rule each. A hit points at a line to read; it is
@@ -69,7 +69,7 @@ export const scans = [
  *   the exact ref wins, the configured branch follows its remote.
  */
 export function scanBase(app, { base, config }) {
-  if (base) return resolves(app, base) ? base : null;
+  if (base) return commitSha(app, base) ? base : null;
   if (!config) return null;
 
   const upstream = git(app, [
@@ -79,7 +79,7 @@ export function scanBase(app, { base, config }) {
     `${config}@{upstream}`,
   ]);
   if (upstream) return upstream;
-  if (resolves(app, config)) return config;
+  if (commitSha(app, config)) return config;
   return remoteBranch(app, config);
 }
 
@@ -90,15 +90,7 @@ export function scanBase(app, { base, config }) {
 function remoteBranch(app, branch) {
   const remotes = (git(app, ["remote"]) ?? "").split("\n").filter(Boolean);
   const ref = remotes.length === 1 ? `${remotes[0]}/${branch}` : null;
-  return ref && resolves(app, ref) ? ref : null;
-}
-
-/**
- * @param {string} app - From scanBase; why: the repo to ask.
- * @param {string} ref - From --base or loop.json; why: the name to look up.
- */
-function resolves(app, ref) {
-  return git(app, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]) !== null;
+  return ref && commitSha(app, ref) ? ref : null;
 }
 
 /**
@@ -164,22 +156,6 @@ function addedFile(app, file) {
   return [`diff --git a/${file} b/${file}`, `+++ b/${file}`, `@@ -0,0 +1,${lines.length} @@`]
     .concat(lines.map((line) => `+${line}`))
     .join("\n");
-}
-
-/**
- * Git's output, or null when it fails or prints more than 256 MB. Trimmed unless `raw`.
- * @param {string} app - From the scan; why: git runs in the app folder.
- * @param {string[]} args - From the scan; why: the git command.
- * @param {{ raw?: boolean }} [options] - From the scan; why: `-z` lists keep every byte.
- */
-function git(app, args, { raw = false } = {}) {
-  const result = spawnSync("git", args, {
-    cwd: app,
-    encoding: "utf8",
-    maxBuffer: 256 * 1024 * 1024,
-  });
-  if (result.status !== 0) return null;
-  return raw ? result.stdout : result.stdout.trim();
 }
 
 /**

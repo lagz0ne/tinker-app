@@ -1,9 +1,9 @@
-import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { mergeCheck, nextRound, readFindings, updateFindings } from "./findings.mjs";
 import { readConfig, runGates } from "./gates.mjs";
+import { headSha } from "./git.mjs";
 import { findingList, ruleLines, summary } from "./report.mjs";
 import { readRules } from "./rules.mjs";
 import { changeDiff, scanBase, scanDiff, treeBefore } from "./scan.mjs";
@@ -192,10 +192,4 @@ function rules(app, ids, { print, stderr }) {
  */
 function stopCode(signal) {
   return signal?.aborted ? (stopCodes[signal.reason] ?? 130) : 0;
-}
-
-/** @param {string} app - From check; why: the commit where gone findings were fixed. */
-function headSha(app) {
-  const result = spawnSync("git", ["rev-parse", "HEAD"], { cwd: app, encoding: "utf8" });
-  return result.status === 0 ? result.stdout.trim() : null;
 }
