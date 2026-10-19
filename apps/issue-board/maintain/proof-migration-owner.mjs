@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import pg from "pg";
 import { createServer } from "vite-plus";
 
@@ -154,7 +155,7 @@ try {
   assert.equal(
     (await clients[0].query("SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations"))
       .rows[0].count,
-    14,
+    readMigrationFiles({ migrationsFolder: "drizzle" }).length,
   );
 
   console.log(
