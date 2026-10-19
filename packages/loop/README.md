@@ -99,6 +99,7 @@ The loop adds these fields:
 - `status`: `open`, `fixed`, or `answered`.
 - `sha`: the HEAD commit when a `fixed` finding went away.
 - `dirty`: `true` when that fix was only in the working tree.
+- `seenSha`: the HEAD commit when check last saw the finding.
 - `reason`: why an `answered` finding stays.
 
 The `id` is a hash of `source`, `rule`, `file`, and `summary`.
@@ -115,6 +116,55 @@ An `answered` finding that is gone becomes `fixed` too.
 It keeps its `reason`.
 A `fixed` finding that comes back is `open` again.
 Check never changes `judge` or `review` findings.
+
+Each check that runs to the end saves `.loop/last-check.json`.
+It holds the round, the HEAD commit, and each gate's result.
+`status` reads it.
+
+## Answer
+
+```bash
+vp exec tinker-loop answer <ID> --fixed [--sha <sha>] [--app <dir>]
+vp exec tinker-loop answer <ID> --reason "<text>" [--app <dir>]
+```
+
+`answer` takes one finding ID.
+It takes `--fixed` or `--reason`, not both.
+`--fixed` marks the finding `fixed` at a commit.
+`--sha` names that commit; the default is HEAD.
+The commit must be in HEAD's history.
+The commit must come after the finding's `seenSha`.
+So commit the fix first, then answer.
+A finding with no `seenSha` needs only a commit in HEAD's history.
+`--reason` marks the finding `answered` with that reason.
+An empty `--reason` exits 64.
+An unknown ID exits 64.
+A refused answer exits 64 and says why.
+`answer` writes under the findings lock, with `updateFindings`.
+A refused answer writes nothing.
+Answered and fixed findings stay in the file.
+A later check that finds a `fixed` finding again opens it again.
+A later check that finds an `answered` finding again keeps it `answered`.
+
+## Status
+
+```bash
+vp exec tinker-loop status [--app <dir>]
+```
+
+`status` applies the stop rule.
+Done means three things.
+The last check ran at the current HEAD.
+Every gate was green in that check.
+No `important` finding is `open`.
+`status` prints one line for each open important finding.
+Then it prints the verdict.
+Exit code 0 means done.
+Exit code 1 means not done.
+The verdict lists each reason.
+Exit code 2 means a person must check the work.
+That is when review ran in 3 or more rounds and an important finding is still open.
+The review rounds are the distinct `round` values of `review` findings.
 
 ## Rules
 

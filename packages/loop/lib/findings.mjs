@@ -99,6 +99,28 @@ function parseRow(path, number, line) {
 }
 
 /**
+ * What the last check run saw: its round, its HEAD, and each gate's result. Null before the
+ * first check.
+ * @param {string} app - From --app; why: whose loop state.
+ */
+export function readLastCheck(app) {
+  const path = join(app, ".loop", "last-check.json");
+  return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
+}
+
+/**
+ * Save what a check run saw, in one rename. Only a check that ran to the end saves it.
+ * @param {string} app - From --app; why: whose loop state.
+ * @param {{ round: number, sha: string | null, gates: { name: string, green: boolean }[] }}
+ *   run - From check; why: status reads it to decide done.
+ */
+export function writeLastCheck(app, run) {
+  const path = join(loopFolder(app), "last-check.json");
+  writeFileSync(`${path}.${process.pid}.tmp`, `${JSON.stringify(run)}\n`);
+  renameSync(`${path}.${process.pid}.tmp`, path);
+}
+
+/**
  * Replace the app's file in one rename, so a stopped run never leaves half a file.
  * Call it inside updateFindings, so no other tool's rows are lost.
  * @param {string} app - From --app; why: whose findings.
@@ -114,6 +136,7 @@ export function writeFindings(app, findings) {
 /**
  * Read, change, and write the findings file under `.loop/findings.lock`.
  * Every tool that writes the file uses this, so two tools never drop each other's rows.
+ * When `change` returns the list it was given, nothing is written.
  * @param {string} app - From --app; why: whose findings.
  * @param {(findings: object[]) => object[]} change - From the tool; why: the merge to make
  *   on the file as it is now.
@@ -121,8 +144,9 @@ export function writeFindings(app, findings) {
 export function updateFindings(app, change) {
   const release = lockFindings(app);
   try {
-    const next = change(readFindings(app));
-    writeFindings(app, next);
+    const previous = readFindings(app);
+    const next = change(previous);
+    if (next !== previous) writeFindings(app, next);
     return next;
   } finally {
     release();
@@ -234,11 +258,12 @@ export function mergeCheck(previous, current, run) {
   const merged = previous.map((old) => {
     const now = found.get(old.id);
     found.delete(old.id);
-    return now ? seenAgain(old, now, run.round) : gone(old, run);
+    return now ? seenAgain(old, now, run) : gone(old, run);
   });
 
   const added = [...found.values()].map((finding) => ({
     ...finding,
+    ...seenAt(run.sha),
     round: run.round,
     status: "open",
   }));
@@ -246,15 +271,24 @@ export function mergeCheck(previous, current, run) {
 }
 
 /**
+ * `seenSha`: the HEAD commit when check last saw the finding. A fix must come after it.
+ * @param {string | null} sha - From the run; why: none outside git.
+ */
+function seenAt(sha) {
+  return sha ? { seenSha: sha } : {};
+}
+
+/**
  * A finding this run found again: the latest fields, open unless answered.
  * @param {object} old - From the file; why: keeps its status and answer.
  * @param {object} now - From this run; why: the latest line, summary, and fix.
- * @param {number} round - From nextRound; why: the round that saw it.
+ * @param {{ round: number, sha: string | null }} run - From mergeCheck; why: the round and
+ *   the commit that saw it.
  */
-function seenAgain(old, now, round) {
-  const { sha: _sha, dirty: _dirty, ...kept } = old;
+function seenAgain(old, now, run) {
+  const { sha: _sha, dirty: _dirty, seenSha: _seen, ...kept } = old;
   const status = old.status === "answered" ? "answered" : "open";
-  return { ...kept, ...now, round, status };
+  return { ...kept, ...now, ...seenAt(run.sha), round: run.round, status };
 }
 
 /**
