@@ -26,7 +26,10 @@ Its summary is the first error line of the gate's output.
 
 Then it greps the added lines of `git diff <base>...HEAD`.
 The diff covers only the app folder.
-`--base` replaces the `base` in `loop.json`.
+If the `loop.json` base branch tracks a remote, the scan uses that remote branch.
+A local `next` is often old; `tinker-app/next` is not.
+`--base` replaces this and is used as it is.
+The run prints the base it used.
 Each hit gives a finding with severity `question`.
 A hit points at a line to read. It is not a verdict.
 

@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { expect, test } from "vite-plus/test";
+import { expect, onTestFinished, test } from "vite-plus/test";
 
 import {
   commit,
@@ -255,6 +256,22 @@ test("--base wins over loop.json; a base git cannot find skips the scan", async 
   expect(skipped.stdout).toContain("scan skipped: no git diff from missing");
   expect(scanned.stdout).not.toContain("scan skipped");
   expect(findingsOf(app).map((finding) => finding.rule)).toEqual(["B3"]);
+});
+
+test("a loop.json base that tracks a remote scans from the remote, not the old local copy", async () => {
+  const upstream = repo({ "loop.json": loopJson({ ok: pass }, "main") });
+  const app = realpathSync(mkdtempSync(join(tmpdir(), "tinker-loop-clone-")));
+  onTestFinished(() => rmSync(app, { recursive: true, force: true }));
+  git(app, "clone", "--quiet", upstream, ".");
+  commit(upstream, { "src/theirs.ts": "Date.now();\n" }, "theirs");
+  git(app, "fetch", "--quiet");
+  git(app, "checkout", "--quiet", "-b", "work", "origin/main");
+  commit(app, { "src/mine.ts": "Math.random();\n" }, "mine");
+
+  const run = await loop(app, "check");
+
+  expect(run.stdout).toContain("scan base: origin/main\n");
+  expect(findingsOf(app).map((finding) => finding.file)).toEqual(["src/mine.ts"]);
 });
 
 test("a missing or bad loop.json exits 78; an unknown command or flag exits 64", async () => {

@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 import { mergeCheck, nextRound, readFindings, writeFindings } from "./findings.mjs";
 import { readConfig, runGates } from "./gates.mjs";
 import { findingList, summary } from "./report.mjs";
-import { changeDiff, scanDiff } from "./scan.mjs";
+import { changeDiff, scanBase, scanDiff } from "./scan.mjs";
 
 const usage =
   "usage: tinker-loop check [--app <dir>] [--base <ref>] | findings [--app <dir>] [--open]";
@@ -56,9 +56,10 @@ function check(app, base, print) {
 
   const gates = runGates(app, config.gates, print);
   const red = gates.filter((gate) => !gate.green);
-  const ref = base ?? config.base;
+  const ref = scanBase(app, { base, config: config.base });
   const diff = ref ? changeDiff(app, ref) : null;
   if (diff === null) print(`scan skipped: ${ref ? `no git diff from ${ref}` : "no base ref"}`);
+  else print(`scan base: ${ref}`);
 
   const current = [...red.map((gate) => gate.finding), ...scanDiff(diff ?? "")];
   const round = nextRound(previous);

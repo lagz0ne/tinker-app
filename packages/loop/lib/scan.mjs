@@ -58,6 +58,24 @@ export const scans = [
 ];
 
 /**
+ * The ref the scan starts from. A loop.json branch that tracks a remote resolves to that
+ * remote branch, since a local copy such as `next` is often old. `--base` stays exact.
+ * @param {string} app - From --app; why: the repo to ask.
+ * @param {{ base?: string, config: string | null }} refs - From --base and loop.json; why:
+ *   the exact ref wins, the configured branch follows its remote.
+ */
+export function scanBase(app, { base, config }) {
+  if (base || !config) return base ?? null;
+
+  const result = spawnSync(
+    "git",
+    ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${config}@{upstream}`],
+    { cwd: app, encoding: "utf8" },
+  );
+  return result.status === 0 ? result.stdout.trim() : config;
+}
+
+/**
  * The change's diff, scoped to the app folder, with app-relative paths. Three dots: only
  * this branch's commits since it left `base`, so a moved base adds no stranger's lines.
  * Returns null when the folder is not in git or `base` does not resolve.
