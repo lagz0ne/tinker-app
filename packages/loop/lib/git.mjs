@@ -17,12 +17,13 @@ export function git(app, args, { raw = false } = {}) {
 }
 
 /**
- * The full sha of the commit `ref` names, or null when it names no commit.
+ * The full sha of the commit `ref` names, or null when it names no commit. A ref that looks
+ * like an option is still read as a ref.
  * @param {string} app - From a tool; why: the repo to ask.
  * @param {string} ref - From a tool or the command line; why: the name to look up.
  */
 export function commitSha(app, ref) {
-  return git(app, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+  return git(app, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`]);
 }
 
 /** @param {string} app - From a tool; why: the commit the app's tree is on, or null. */

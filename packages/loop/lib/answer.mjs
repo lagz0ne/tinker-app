@@ -6,8 +6,8 @@ import { commitSha, headSha, inHistory } from "./git.mjs";
  * The row stays in the file. Returns null when it is done, else why it was refused.
  * @param {string} app - From --app; why: whose findings, and the repo of the fix.
  * @param {string} id - From the command line; why: the finding to answer.
- * @param {{ fixed: string } | { reason: string }} answer - From the command line; why: the
- *   fix commit's full sha, or the reason the finding stays.
+ * @param {{ fixed: string, named?: boolean } | { reason: string }} answer - From the command
+ *   line; why: the fix commit's full sha and whether --sha named it, or the reason it stays.
  */
 export function answerFinding(app, id, answer) {
   let refused = null;
@@ -23,23 +23,47 @@ export function answerFinding(app, id, answer) {
 }
 
 /**
- * The fix commit must be in HEAD's history and come after the commit that saw the finding.
- * A row with no `seenSha` (one that check did not write) needs only the first.
+ * The fix commit must be in HEAD's history and come after `seenSha`, the HEAD commit when a
+ * tool last saw the finding. A row with no `seenSha` takes only a fix named with --sha, since
+ * no tool recorded where it was seen. A `seenSha` that left HEAD's history, after an amend or
+ * a rebase, needs the tool to see the finding again.
  * @param {string} app - From answerFinding; why: the repo to ask.
  * @param {{ id: string, seenSha?: string }} row - From the file; why: where it was seen.
- * @param {{ fixed?: string }} answer - From answerFinding; why: the fix commit, if any.
+ * @param {{ fixed?: string, named?: boolean }} answer - From answerFinding; why: the fix
+ *   commit, if any, and whether --sha named it.
  */
-function fixProblem(app, row, { fixed }) {
+function fixProblem(app, row, { fixed, named = false }) {
   if (!fixed) return null;
 
-  const short = (sha) => sha.slice(0, 12);
-  if (!inHistory(app, fixed, headSha(app) ?? "HEAD")) {
-    return `commit ${short(fixed)} is not in HEAD's history`;
+  const head = headSha(app) ?? "HEAD";
+  if (!inHistory(app, fixed, head)) return `commit ${short(fixed)} is not in HEAD's history`;
+  if (!row.seenSha) {
+    return named
+      ? null
+      : `finding ${row.id} has no seenSha, so no tool recorded where it was seen; name the fix commit with --sha`;
   }
-  if (row.seenSha && (fixed === row.seenSha || !inHistory(app, row.seenSha, fixed))) {
+  return seenProblem(app, row, fixed, head);
+}
+
+/**
+ * @param {string} app - From fixProblem; why: the repo to ask.
+ * @param {{ id: string, seenSha: string }} row - From fixProblem; why: where it was seen.
+ * @param {string} fixed - From fixProblem; why: the fix commit.
+ * @param {string} head - From fixProblem; why: the history the finding must still be in.
+ */
+function seenProblem(app, row, fixed, head) {
+  if (!inHistory(app, row.seenSha, head)) {
+    return `finding ${row.id} was seen at ${short(row.seenSha)}, which is no longer in HEAD's history (amended or rebased); run tinker-loop check, or the tool that saw it, again`;
+  }
+  if (fixed === row.seenSha || !inHistory(app, row.seenSha, fixed)) {
     return `finding ${row.id} was seen at ${short(row.seenSha)}; commit the fix after it, then answer`;
   }
   return null;
+}
+
+/** @param {string} sha - From git; why: shown short in a message. */
+function short(sha) {
+  return sha.slice(0, 12);
 }
 
 /**

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  appendFileSync,
   closeSync,
   existsSync,
   linkSync,
@@ -105,14 +106,76 @@ function parseRow(path, number, line) {
  */
 export function readLastCheck(app) {
   const path = join(app, ".loop", "last-check.json");
-  return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
+  if (!existsSync(path)) return null;
+
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw new Error(`${path}: ${error.message}`);
+  }
+}
+
+/**
+ * Each recorded review round in `.loop/rounds.jsonl`, in file order: one JSON object per line,
+ * `{ round, source, sha }`. A missing file has none.
+ * @param {string} app - From --app; why: whose loop state.
+ */
+export function readRounds(app) {
+  const path = join(app, ".loop", "rounds.jsonl");
+  if (!existsSync(path)) return [];
+
+  return readFileSync(path, "utf8")
+    .split(/\r?\n/)
+    .map((line, index) => [line.trim(), index + 1])
+    .filter(([line]) => line)
+    .map(([line, number]) => parseRound(path, number, line));
+}
+
+/**
+ * @param {string} path - From readRounds; why: names the bad file.
+ * @param {number} number - From readRounds; why: names the bad line.
+ * @param {string} line - From the file; why: the round to parse.
+ */
+function parseRound(path, number, line) {
+  let round = null;
+  try {
+    round = JSON.parse(line);
+  } catch {
+    // The check below names the line.
+  }
+  if (!Number.isSafeInteger(round?.round)) {
+    throw new Error(`${path}:${number} is not a round: one JSON object with a whole-number round`);
+  }
+  return round;
+}
+
+/**
+ * Record one review round in `.loop/rounds.jsonl` under the findings lock, and return its
+ * number. The review tool calls this once per review run, before it writes that round's
+ * findings with the same number. The number is one more than any round in the findings file,
+ * in rounds.jsonl, or in the last check. status counts these lines, so a finding that stays
+ * open across reviews still counts each round.
+ * @param {string} app - From --app; why: whose loop state.
+ * @param {{ sha: string | null }} review - From the review tool; why: the HEAD it reviewed.
+ */
+export function recordReviewRound(app, { sha }) {
+  const release = lockFindings(app);
+  try {
+    const round = nextRound([...readFindings(app), ...readRounds(app), readLastCheck(app) ?? {}]);
+    const line = JSON.stringify({ round, source: "review", sha });
+    appendFileSync(join(loopFolder(app), "rounds.jsonl"), `${line}\n`);
+    return round;
+  } finally {
+    release();
+  }
 }
 
 /**
  * Save what a check run saw, in one rename. Only a check that ran to the end saves it.
  * @param {string} app - From --app; why: whose loop state.
- * @param {{ round: number, sha: string | null, gates: { name: string, green: boolean }[] }}
- *   run - From check; why: status reads it to decide done.
+ * @param {{ round: number, sha: string | null, tree: string | null,
+ *   gates: { name: string, green: boolean }[] }} run - From check; why: status reads it to
+ *   decide done; `tree` is the work tree's fingerprint before the gates ran.
  */
 export function writeLastCheck(app, run) {
   const path = join(loopFolder(app), "last-check.json");
@@ -236,8 +299,9 @@ function releaseLock(path, token) {
 }
 
 /**
- * The next round number: one more than any round in the file, from any source.
- * @param {object[]} findings - From readFindings; why: rounds count up across tools.
+ * The next round number: one more than any round given, from any source.
+ * @param {{ round?: number }[]} findings - From readFindings and readRounds; why: rounds count
+ *   up across tools.
  */
 export function nextRound(findings) {
   return Math.max(0, ...findings.map((finding) => finding.round ?? 0)) + 1;

@@ -92,18 +92,49 @@ test("--sha names the fix: after the finding, and in HEAD's history", async () =
   expect(findingsOf(app)[0]).toEqual(expect.objectContaining({ status: "fixed", sha: fix }));
 });
 
-test("a row that check did not write needs only a commit in HEAD's history", async () => {
+test("a row with no seenSha takes --fixed only with --sha", async () => {
   const app = repo({ "readme.md": "" });
   const review = { id: "review-1", rule: "C3", severity: "important", source: "review" };
   mkdirSync(join(app, ".loop"));
   setFindings(app, [{ ...review, round: 1, status: "open" }]);
+  const head = git(app, "rev-parse", "HEAD");
 
-  const run = await loop(app, "answer", "review-1", "--fixed");
+  const bare = await loop(app, "answer", "review-1", "--fixed");
+  const named = await loop(app, "answer", "review-1", "--fixed", "--sha", "HEAD");
 
-  expect(run.code).toBe(0);
-  expect(findingsOf(app)[0]).toEqual(
-    expect.objectContaining({ status: "fixed", sha: git(app, "rev-parse", "HEAD") }),
+  expect(bare.code).toBe(64);
+  expect(bare.stderr).toContain(
+    "finding review-1 has no seenSha, so no tool recorded where it was seen; name the fix commit with --sha",
   );
+  expect(named.code).toBe(0);
+  expect(findingsOf(app)[0]).toEqual(expect.objectContaining({ status: "fixed", sha: head }));
+});
+
+test("a seenSha lost to an amend asks for a new check, then the fix is taken", async () => {
+  const { app, finding } = await redApp();
+  git(app, "commit", "--quiet", "--amend", "--allow-empty", "-m", "base, amended");
+  commit(app, { fix: "" }, "fix");
+
+  const lost = await loop(app, "answer", finding.id, "--fixed");
+  await loop(app, "check");
+  const sha = commit(app, { fix: "again" }, "fix again");
+  const run = await loop(app, "answer", finding.id, "--fixed");
+
+  expect(lost.code).toBe(64);
+  expect(lost.stderr).toContain(
+    `finding ${finding.id} was seen at ${finding.seenSha.slice(0, 12)}, which is no longer in HEAD's history (amended or rebased); run tinker-loop check, or the tool that saw it, again`,
+  );
+  expect(run.code).toBe(0);
+  expect(findingsOf(app)[0]).toEqual(expect.objectContaining({ status: "fixed", sha }));
+});
+
+test("a --sha that looks like an option is read as a ref", async () => {
+  const { app, finding } = await redApp();
+
+  const run = await loop(app, "answer", finding.id, "--fixed", "--sha=--git-dir");
+
+  expect(run.code).toBe(64);
+  expect(run.stderr).toContain("tinker-loop answer: --git-dir is not a commit");
 });
 
 test("answer takes one ID and one of --fixed or --reason", async () => {

@@ -1,25 +1,32 @@
-import { readFindings, readLastCheck } from "./findings.mjs";
+import { readFindings, readLastCheck, readRounds } from "./findings.mjs";
 import { headSha } from "./git.mjs";
 import { findingLine } from "./report.mjs";
+import { treeBefore } from "./scan.mjs";
 
-/** A person checks the work when important findings are still open after this many reviews. */
+/** A person checks the work when review findings are still open after this many reviews. */
 export const reviewRoundsForPerson = 3;
 
 /**
- * The stop rule. Done (0): the last check ran at HEAD with every gate green, and no important
- * finding is open. Needs a person (2): not done, important findings are open, and review has
- * run in 3 or more rounds. Else not done (1). Each open important finding gets one line,
- * then the verdict.
+ * The stop rule. Done (0): the last check ran at HEAD on the same work tree as now, every gate
+ * was green, and no important finding is open. Needs a person (2): not done, an important
+ * review finding is open, and `.loop/rounds.jsonl` records 3 or more review rounds. Else not
+ * done (1). Each open important finding gets one line, then the verdict.
  * @param {string} app - From --app; why: whose loop state.
  */
 export function loopStatus(app) {
   const findings = readFindings(app);
   const last = readLastCheck(app);
   const head = headSha(app);
+  const tree = last && last.sha === head ? treeBefore(app).fingerprint : null;
   const open = findings.filter((f) => f.status === "open" && f.severity === "important");
-  const reviews = new Set(findings.filter((f) => f.source === "review").map((f) => f.round));
+  const reviewOpen = open.filter((f) => f.source === "review");
+  const rounds = new Set(
+    readRounds(app)
+      .filter((r) => r.source === "review")
+      .map((r) => r.round),
+  );
 
-  const reasons = [...checkReasons(last, head)];
+  const reasons = [...checkReasons(last, { head, tree })];
   if (open.length > 0) reasons.push(`${count(open.length, "important finding")} open`);
   const lines = open.map((f) => `open important ${findingLine(f)}`);
   if (reasons.length === 0) {
@@ -29,27 +36,31 @@ export function loopStatus(app) {
     };
   }
 
-  const person = open.length > 0 && reviews.size >= reviewRoundsForPerson;
+  const person = reviewOpen.length > 0 && rounds.size >= reviewRoundsForPerson;
   const verdict = person
-    ? `needs a person: ${count(reviews.size, "review round")}, and ${count(open.length, "important finding")} still open`
+    ? `needs a person: ${count(rounds.size, "review round")}, and ${count(reviewOpen.length, "important review finding")} still open`
     : `not done: ${reasons.join("; ")}`;
   return { code: person ? 2 : 1, lines: [...lines, verdict] };
 }
 
 /**
- * Why the last check does not count as green at HEAD.
- * @param {{ sha: string | null, gates: { name: string, green: boolean }[] } | null} last -
- *   From readLastCheck; why: what the last check saw.
- * @param {string | null} head - From git; why: a check before the latest commit is stale.
+ * Why the last check does not count as green for the work tree as it is now.
+ * @param {{ sha: string | null, tree?: string | null,
+ *   gates: { name: string, green: boolean }[] } | null} last - From readLastCheck; why: what
+ *   the last check saw.
+ * @param {{ head: string | null, tree: string | null }} now - From git; why: a check before
+ *   the latest commit, or before later edits, is stale.
  */
-function* checkReasons(last, head) {
+function* checkReasons(last, now) {
   if (!last) {
     yield "no check has run; run tinker-loop check";
     return;
   }
 
-  if (last.sha !== head) {
-    yield `the last check ran at ${short(last.sha)}, but HEAD is ${short(head)}; run tinker-loop check`;
+  if (last.sha !== now.head) {
+    yield `the last check ran at ${short(last.sha)}, but HEAD is ${short(now.head)}; run tinker-loop check`;
+  } else if (last.tree !== now.tree) {
+    yield "the tree changed since the last check; run tinker-loop check";
   }
   const red = last.gates.filter((gate) => !gate.green).map((gate) => gate.name);
   if (red.length > 0) yield `${count(red.length, "gate")} red in the last check: ${red.join(", ")}`;

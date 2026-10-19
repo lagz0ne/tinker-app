@@ -1,6 +1,20 @@
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { expect, test } from "vite-plus/test";
 
-import { commit, fail, findingsOf, loop, loopJson, pass, repo, setFindings } from "./fixture.mjs";
+import { recordReviewRound } from "../lib/findings.mjs";
+import {
+  commit,
+  fail,
+  findingsOf,
+  git,
+  loop,
+  loopJson,
+  pass,
+  repo,
+  setFindings,
+} from "./fixture.mjs";
 
 /**
  * A finding row, as a tool writes it.
@@ -101,35 +115,105 @@ test("an open important review finding is not done", async () => {
   );
 });
 
-test("3 review rounds with an important finding still open needs a person", async () => {
+test("one review finding open across 3 recorded review rounds needs a person", async () => {
   const app = repo({ "loop.json": loopJson({ ok: pass }) });
   await loop(app, "check");
-  setFindings(app, [review(1, "fixed"), review(2, "answered"), review(3)]);
+  const sha = git(app, "rev-parse", "HEAD");
+  const rounds = [1, 2, 3].map(() => recordReviewRound(app, { sha }));
+  setFindings(app, [review(rounds[0])]);
 
   const run = await loop(app, "status");
 
+  expect(rounds).toEqual([2, 3, 4]);
   expect(run.code).toBe(2);
   expect(run.stdout).toContain(
-    "needs a person: 3 review rounds, and 1 important finding still open\n",
+    "needs a person: 3 review rounds, and 1 important review finding still open\n",
   );
 });
 
-test("review rounds are distinct round numbers, and a person is needed only while open", async () => {
+test("a red gate alone after 3 review rounds is not done, not a person", async () => {
+  const app = repo({ "loop.json": loopJson({ red: fail }) });
+  await loop(app, "check");
+  const sha = git(app, "rev-parse", "HEAD");
+  for (let round = 0; round < 3; round += 1) recordReviewRound(app, { sha });
+  setFindings(app, [
+    ...findingsOf(app),
+    review(2, "fixed"),
+    { ...review(3, "answered"), id: "r3" },
+  ]);
+
+  const run = await loop(app, "status");
+
+  expect(run.code).toBe(1);
+  expect(run.stdout).toContain(
+    "not done: 1 gate red in the last check: red; 1 important finding open\n",
+  );
+});
+
+test("fewer than 3 recorded rounds is not done; all closed after 3 rounds is done", async () => {
   const app = repo({ "loop.json": loopJson({ ok: pass }) });
   await loop(app, "check");
-  const sameRound = [
-    review(1),
-    { ...review(1), id: "review-1b" },
-    { ...review(1), id: "review-1c" },
-  ];
-  setFindings(app, sameRound);
-  const one = await loop(app, "status");
-  setFindings(app, [review(1), review(2)]);
+  const sha = git(app, "rev-parse", "HEAD");
+  recordReviewRound(app, { sha });
+  recordReviewRound(app, { sha });
+  setFindings(app, [review(2)]);
   const two = await loop(app, "status");
-  setFindings(app, [review(1, "fixed"), review(2, "fixed"), review(3, "answered")]);
+
+  recordReviewRound(app, { sha });
+  setFindings(app, [review(2, "fixed")]);
   const closed = await loop(app, "status");
 
-  expect([one.code, two.code, closed.code]).toEqual([1, 1, 0]);
+  expect([two.code, closed.code]).toEqual([1, 0]);
+});
+
+test("a check after a recorded review round takes the next round number", async () => {
+  const app = repo({ "loop.json": loopJson({ ok: pass }) });
+  await loop(app, "check");
+  recordReviewRound(app, { sha: null });
+
+  const run = await loop(app, "check");
+
+  expect(run.stdout).toContain("tinker-loop check, round 3:");
+  expect(readFileSync(join(app, ".loop/rounds.jsonl"), "utf8")).toBe(
+    '{"round":2,"source":"review","sha":null}\n',
+  );
+});
+
+test("an edit after a green check is not done until check runs again", async () => {
+  const app = repo({ "loop.json": loopJson({ ok: pass }), "src.txt": "one\n" });
+  await loop(app, "check");
+  const green = await loop(app, "status");
+
+  writeFileSync(join(app, "src.txt"), "one\ntwo\n");
+  const edited = await loop(app, "status");
+  writeFileSync(join(app, "src.txt"), "one\n");
+  writeFileSync(join(app, "new.txt"), "new\n");
+  const added = await loop(app, "status");
+  await loop(app, "check");
+  const checked = await loop(app, "status");
+
+  expect([green.code, edited.code, added.code, checked.code]).toEqual([0, 1, 1, 0]);
+  expect(edited.stdout).toBe(
+    "not done: the tree changed since the last check; run tinker-loop check\n",
+  );
+});
+
+test("a broken last-check.json or rounds.jsonl exits 78 and names the file", async () => {
+  const app = repo({ "loop.json": loopJson({ ok: pass }) });
+  await loop(app, "check");
+  writeFileSync(join(app, ".loop/last-check.json"), "{bad");
+  const last = await loop(app, "status");
+  const check = await loop(app, "check");
+  rmSync(join(app, ".loop/last-check.json"));
+  await loop(app, "check");
+  writeFileSync(join(app, ".loop/rounds.jsonl"), '{"round":1}\n{"round":"two"}\n');
+  const rounds = await loop(app, "status");
+
+  expect([last.code, check.code, rounds.code]).toEqual([78, 78, 78]);
+  expect(last.stderr).toMatch(/\.loop\/last-check\.json: /);
+  expect(rounds.stderr).toContain(
+    "rounds.jsonl:2 is not a round: one JSON object with a whole-number round",
+  );
 });
 
 test("status takes no IDs and no other flags", async () => {

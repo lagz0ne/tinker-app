@@ -99,7 +99,7 @@ The loop adds these fields:
 - `status`: `open`, `fixed`, or `answered`.
 - `sha`: the HEAD commit when a `fixed` finding went away.
 - `dirty`: `true` when that fix was only in the working tree.
-- `seenSha`: the HEAD commit when check last saw the finding.
+- `seenSha`: the HEAD commit when a tool last saw the finding.
 - `reason`: why an `answered` finding stays.
 
 The `id` is a hash of `source`, `rule`, `file`, and `summary`.
@@ -117,9 +117,25 @@ It keeps its `reason`.
 A `fixed` finding that comes back is `open` again.
 Check never changes `judge` or `review` findings.
 
+Every tool that writes a finding sets its `seenSha`.
+Check sets it on each finding it reports.
+The review and judge tools must set it too.
+
 Each check that runs to the end saves `.loop/last-check.json`.
-It holds the round, the HEAD commit, and each gate's result.
-`status` reads it.
+It holds the round, the HEAD commit, the tree fingerprint, and each gate's result.
+The tree fingerprint is a hash of `git diff HEAD` and the untracked files, names and bytes.
+Check takes the fingerprint before the gates run.
+`status` reads `last-check.json`.
+
+## Review rounds
+
+Each review round is one line in `.loop/rounds.jsonl`: `{ round, source, sha }`.
+The review tool calls `recordReviewRound` from `@tinker/loop/findings` once per review run.
+It writes the line under the findings lock and returns the round number.
+The review tool stamps that number on the findings of that round.
+A round number is one more than any round in the findings, in `rounds.jsonl`, or in the last check.
+`status` counts review rounds from `rounds.jsonl`.
+So a finding that stays open across 3 reviews counts 3 rounds.
 
 ## Answer
 
@@ -135,7 +151,10 @@ It takes `--fixed` or `--reason`, not both.
 The commit must be in HEAD's history.
 The commit must come after the finding's `seenSha`.
 So commit the fix first, then answer.
-A finding with no `seenSha` needs only a commit in HEAD's history.
+A finding with no `seenSha` takes `--fixed` only with `--sha`.
+No tool recorded where it was seen, so you name the fix commit.
+An amend or a rebase can drop the `seenSha` commit from HEAD's history.
+Then `answer --fixed` says so; run the tool that saw the finding again.
 `--reason` marks the finding `answered` with that reason.
 An empty `--reason` exits 64.
 An unknown ID exits 64.
@@ -153,8 +172,9 @@ vp exec tinker-loop status [--app <dir>]
 ```
 
 `status` applies the stop rule.
-Done means three things.
+Done means four things.
 The last check ran at the current HEAD.
+The work tree has not changed since that check, by the tree fingerprint.
 Every gate was green in that check.
 No `important` finding is `open`.
 `status` prints one line for each open important finding.
@@ -163,8 +183,8 @@ Exit code 0 means done.
 Exit code 1 means not done.
 The verdict lists each reason.
 Exit code 2 means a person must check the work.
-That is when review ran in 3 or more rounds and an important finding is still open.
-The review rounds are the distinct `round` values of `review` findings.
+That is when `rounds.jsonl` has 3 or more review rounds and an important `review` finding is still open.
+A red gate or another check finding alone never needs a person; it is not done.
 
 ## Rules
 

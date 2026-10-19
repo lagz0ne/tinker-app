@@ -1,4 +1,5 @@
-import { lstatSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
 
 import { findingId } from "./findings.mjs";
@@ -94,14 +95,45 @@ function remoteBranch(app, branch) {
 }
 
 /**
- * The app folder's untracked files and whether it is dirty, taken before the gates run, so
- * files the gates write are not part of the change. Untracked files are null outside git.
+ * The app folder's untracked files, whether it is dirty, and a fingerprint of its work tree.
+ * Check takes this before the gates run, so files the gates write are not part of the change.
+ * Untracked files are null outside git.
  * @param {string} app - From --app; why: the folder to look at.
  */
 export function treeBefore(app) {
   const listed = git(app, ["ls-files", "--others", "--exclude-standard", "-z"], { raw: true });
   const status = git(app, ["status", "--porcelain", "--untracked-files=all", "--", "."]);
-  return { untracked: listed?.split("\0").filter(Boolean) ?? null, dirty: Boolean(status) };
+  const untracked = listed?.split("\0").filter(Boolean) ?? null;
+  return { untracked, dirty: Boolean(status), fingerprint: treeFingerprint(app, untracked) };
+}
+
+/**
+ * A hash of the app folder's uncommitted work: `git diff HEAD` and each untracked file's
+ * name and bytes. Two equal fingerprints at the same HEAD mean the same work tree. Null
+ * outside git.
+ * @param {string} app - From treeBefore or status; why: the folder to hash.
+ * @param {string[] | null} untracked - From treeBefore; why: the new files to hash.
+ */
+export function treeFingerprint(app, untracked) {
+  const diff = git(app, ["diff", "--no-ext-diff", "--binary", "HEAD", "--", "."], { raw: true });
+  if (diff === null || untracked === null) return null;
+
+  const hash = createHash("sha256").update(diff);
+  for (const file of untracked.toSorted()) hash.update(`\0${file}\0`).update(fileBytes(app, file));
+  return hash.digest("hex");
+}
+
+/**
+ * @param {string} app - From treeFingerprint; why: the folder the path is relative to.
+ * @param {string} file - From git ls-files; why: a link hashes its target, a gone file nothing.
+ */
+function fileBytes(app, file) {
+  try {
+    const path = join(app, file);
+    return lstatSync(path).isSymbolicLink() ? readlinkSync(path) : readFileSync(path);
+  } catch {
+    return "";
+  }
 }
 
 /**

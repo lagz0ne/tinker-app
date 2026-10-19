@@ -6,6 +6,8 @@ import {
   mergeCheck,
   nextRound,
   readFindings,
+  readLastCheck,
+  readRounds,
   updateFindings,
   writeLastCheck,
 } from "./findings.mjs";
@@ -150,11 +152,11 @@ async function check(app, { base, print, signal }) {
 
   let round = 0;
   const merged = updateFindings(app, (previous) => {
-    round = nextRound(previous);
+    round = nextRound([...previous, ...readRounds(app), readLastCheck(app) ?? {}]);
     return mergeCheck(previous, current, { ...run, round });
   });
   const results = gates.map(({ name, green }) => ({ name, green }));
-  writeLastCheck(app, { round, sha: run.sha, gates: results });
+  writeLastCheck(app, { round, sha: run.sha, tree: before.fingerprint, gates: results });
 
   print(
     `tinker-loop check, round ${round}: ${gates.length - red.length} gates green, ${red.length} red`,
@@ -266,8 +268,9 @@ function recordAnswer(app, id, options) {
 
   const fixed = fixCommit(app, options.sha);
   if (!fixed) return { refused: `${options.sha ?? "HEAD"} is not a commit` };
+  const named = options.sha !== undefined;
   return {
-    refused: answerFinding(app, id, { fixed }),
+    refused: answerFinding(app, id, { fixed, named }),
     done: `fixed ${id} at ${fixed.slice(0, 12)}`,
   };
 }
