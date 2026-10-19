@@ -8,6 +8,11 @@ for (const signal of ["SIGHUP", "SIGINT", "SIGTERM"]) {
   process.once(signal, () => stop.abort(signal));
 }
 
+/** A reader that quits early, such as `head`, closes the pipe; the rest of the output is not needed. */
+process.stdout.on("error", (error) => {
+  if (error.code !== "EPIPE") throw error;
+});
+
 process.exitCode = await main({
   args: process.argv.slice(2),
   cwd: process.cwd(),

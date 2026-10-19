@@ -9,6 +9,7 @@
   "files": [
     "bin",
     "lib",
+    "docs",
     "vite.mjs",
     "vite.d.mts",
     "UPGRADE.md",

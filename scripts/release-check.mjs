@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { releaseUrls } from "../packages/start/lib/release.mjs";
+import { packageContract } from "../packages/start/scripts/copy-contract.mjs";
 
 /** The checks a tag passes before its release is published. Read-only; no GitHub client. */
 const registryPath = "apps/start-scaffold/public/r";
@@ -103,6 +104,26 @@ function registryProblems(root, version, packed) {
 }
 
 /**
+ * The contract Start ships must be the repo contract, copied for this version.
+ * @param {string} root - From releaseProblems; why: the committed files.
+ * @param {string} version - From releaseProblems; why: the copy's links name this tag.
+ */
+function contractProblems(root, version) {
+  const repo = join(root, "docs/decisions/start-decompose.md");
+  const shipped = join(root, "packages/start/docs/contract.md");
+  if (!existsSync(repo) || !existsSync(shipped)) {
+    return ["docs/decisions/start-decompose.md or packages/start/docs/contract.md is missing"];
+  }
+
+  const expected = packageContract(readFileSync(repo, "utf8"), version);
+  return readFileSync(shipped, "utf8") === expected
+    ? []
+    : [
+        `packages/start/docs/contract.md is not the contract for ${version} (fix: node packages/start/scripts/copy-contract.mjs)`,
+      ];
+}
+
+/**
  * Each way the tree at `root` is not release `version`.
  * The tag's own tree serves the registry from raw.githubusercontent.com,
  * so its committed registry must equal the one packed for this version.
@@ -126,6 +147,7 @@ export function releaseProblems(root, version, packed) {
     ...versions,
     ...notes,
     ...files,
+    ...contractProblems(root, version),
     ...linkProblems(root, version),
     ...registryProblems(root, version, packed),
   ];
