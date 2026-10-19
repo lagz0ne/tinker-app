@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { serve as listen } from "@hono/node-server";
+import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
 
 import { generatorBlocked, staleTree } from "../lib/checks/generated.mjs";
 import { serverProblems } from "../lib/checks/named.mjs";
@@ -66,6 +67,50 @@ function watchClose({ incoming, outgoing }) {
   return controller;
 }
 
+const jsonType = /^application\/(?:[\w.-]+\+)?json(?:;|$)/i;
+
+/**
+ * A JSON body is whole when the handler returns it (`Response.json`), so the host reads it to the
+ * end and writes it in one call, as hono does for a string body. HTML and other bodies keep
+ * hono's stream path.
+ * @param {Response} response - From the app, after compression; why: its type picks the path.
+ * @param {import("node:http").ServerResponse} outgoing - From hono; why: the one write.
+ */
+async function writeWhole(response, outgoing) {
+  if (response.body === null || !jsonType.test(response.headers.get("content-type") ?? "")) {
+    return response;
+  }
+
+  const body = await readWhole(response.body);
+  outgoing.writeHead(response.status, outgoingHeaders(response.headers, body.byteLength));
+  outgoing.end(body);
+  return RESPONSE_ALREADY_SENT;
+}
+
+/** @param {ReadableStream<Uint8Array>} stream - From a JSON response; why: its parts, joined. */
+async function readWhole(stream) {
+  const reader = stream.getReader();
+  const parts = [];
+  for (let part = await reader.read(); !part.done; part = await reader.read()) {
+    parts.push(part.value);
+  }
+  return parts.length === 1 ? parts[0] : Buffer.concat(parts);
+}
+
+/**
+ * @param {Headers} headers - From the app's response; why: Node takes a plain record.
+ * @param {number} length - From the read body; why: the exact length replaces chunked encoding.
+ */
+function outgoingHeaders(headers, length) {
+  const record = {};
+  for (const [name, value] of headers) if (name !== "set-cookie") record[name] = value;
+
+  const cookies = headers.getSetCookie();
+  if (cookies.length > 0) record["set-cookie"] = cookies;
+  record["content-length"] = length;
+  return record;
+}
+
 /**
  * The Node host starts the built entry before listening; the command owns config and shutdown.
  * @param {string} root - From tinker serve; why: the built app to serve.
@@ -93,7 +138,7 @@ async function serve(root) {
       /** Lend the Node response as srvx and h3 do, so the app ends its request on close. */
       const render = async (request, { incoming, outgoing }) => {
         request.runtime = { name: "node", node: { req: incoming, res: outgoing } };
-        return compressResponse(request, await app.fetch(request));
+        return writeWhole(await compressResponse(request, await app.fetch(request)), outgoing);
       };
       server = listen(
         {
