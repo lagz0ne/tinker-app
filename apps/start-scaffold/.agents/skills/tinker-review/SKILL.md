@@ -19,7 +19,8 @@ review: tinker-review
   v  findings
 fix, or answer with a reason
   |
-  v  review the new commits only
+  v  review the new commits,
+     and recheck open findings
 3 rounds with an important finding:
 a person checks the approach
 ```
@@ -30,6 +31,9 @@ a person checks the approach
 - A problem in code the change did not touch is `old`.
 - Read the contract before the diff.
 - Do not edit files. Report findings only.
+- On a later round, recheck each open finding from
+  earlier rounds at HEAD. It stays open until its code
+  is fixed or the writer answers it.
 
 ## Gates first
 
@@ -54,6 +58,10 @@ $D | grep -nE ' as unknown as |\.skip\('
 ```
 
 ## Rules
+
+### G: gates
+
+- `G1` Every gate in AGENTS.md passes.
 
 ### B: own the boundary
 
@@ -106,9 +114,12 @@ $D | grep -nE ' as unknown as |\.skip\('
 - `C2` Only the command picks the exit code.
   Its outer catch calls `exit`; it does not rethrow
   or print the error again.
-- `C3` A multi-step write is one owned child call.
-  Its steps use the session transaction only;
-  they never open a session or commit.
+- `C3` A new multi-step write, and the migrated board,
+  counter, and todos writes, are one owned child call.
+  Their steps use the session transaction only;
+  they never open a session or commit. Old profile
+  writes keep their awaited native transactions
+  until their listed migration.
 - `C4` The call closes before success, reply bytes,
   or progress output. A failed COMMIT fails the call.
 - `C5` Page, bootstrap, and account reads write nothing.
