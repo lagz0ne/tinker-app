@@ -128,13 +128,15 @@ test("a seenSha lost to an amend asks for a new check, then the fix is taken", a
   expect(findingsOf(app)[0]).toEqual(expect.objectContaining({ status: "fixed", sha }));
 });
 
-test("a --sha that looks like an option is read as a ref", async () => {
+test("a --sha ref that starts with a dash is read as a ref, not an option", async () => {
   const { app, finding } = await redApp();
+  const fix = commit(app, { fix: "" }, "fix");
+  git(app, "update-ref", "refs/heads/-x", "HEAD");
 
-  const run = await loop(app, "answer", finding.id, "--fixed", "--sha=--git-dir");
+  const run = await loop(app, "answer", finding.id, "--fixed", "--sha=-x");
 
-  expect(run.code).toBe(64);
-  expect(run.stderr).toContain("tinker-loop answer: --git-dir is not a commit");
+  expect(run.code).toBe(0);
+  expect(findingsOf(app)[0]).toEqual(expect.objectContaining({ status: "fixed", sha: fix }));
 });
 
 test("answer takes one ID and one of --fixed or --reason", async () => {

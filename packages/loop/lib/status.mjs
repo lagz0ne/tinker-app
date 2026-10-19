@@ -1,7 +1,7 @@
 import { readFindings, readLastCheck, readRounds } from "./findings.mjs";
 import { headSha } from "./git.mjs";
 import { findingLine } from "./report.mjs";
-import { treeBefore } from "./scan.mjs";
+import { treeState } from "./scan.mjs";
 
 /** A person checks the work when review findings are still open after this many reviews. */
 export const reviewRoundsForPerson = 3;
@@ -17,7 +17,7 @@ export function loopStatus(app) {
   const findings = readFindings(app);
   const last = readLastCheck(app);
   const head = headSha(app);
-  const tree = last && last.sha === head ? treeBefore(app).fingerprint : null;
+  const tree = last && last.sha === head ? treeState(app).fingerprint : null;
   const open = findings.filter((f) => f.status === "open" && f.severity === "important");
   const reviewOpen = open.filter((f) => f.source === "review");
   const rounds = new Set(

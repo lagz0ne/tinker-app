@@ -182,6 +182,7 @@ for (const [problem, text, message] of [
 test("text before the first group and after a ## heading is free prose", () => {
   const text = [
     "# Start rules",
+    "#1 note: prose, not a heading",
     "",
     "Each rule is a list item:",
     "  indented prose, - B9 not a rule",
@@ -193,6 +194,7 @@ test("text before the first group and after a ## heading is free prose", () => {
     "## Notes",
     "",
     "Free text again.",
+    "#tag is prose too",
     "\tand tabs.",
   ].join("\n");
 

@@ -1,4 +1,4 @@
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test } from "vite-plus/test";
@@ -198,21 +198,50 @@ test("an edit after a green check is not done until check runs again", async () 
   );
 });
 
-test("a broken last-check.json or rounds.jsonl exits 78 and names the file", async () => {
+test("files a gate writes do not block done", async () => {
+  const write = `node -e "require('fs').writeFileSync('report.txt', String(Date.now()))"`;
+  const app = repo({ "loop.json": loopJson({ write }) });
+
+  const run = await loop(app, "check");
+  const status = await loop(app, "status");
+
+  expect(run.code).toBe(0);
+  expect(status.code).toBe(0);
+  expect(status.stdout).toMatch(/^done: /);
+});
+
+test("a check on an unchanged dirty tree is done; a commit after it is not", async () => {
+  const app = repo({ "loop.json": loopJson({ ok: pass }), "src.txt": "one\n" });
+  writeFileSync(join(app, "src.txt"), "one\ntwo\n");
+  await loop(app, "check");
+  const dirty = await loop(app, "status");
+
+  commit(app, {}, "commit the checked edit");
+  const committed = await loop(app, "status");
+
+  expect(dirty.code).toBe(0);
+  expect(committed.code).toBe(1);
+  expect(committed.stdout).toMatch(
+    /^not done: the last check ran at [0-9a-f]{12}, but HEAD is [0-9a-f]{12}; run tinker-loop check\n$/,
+  );
+});
+
+test("check rewrites a broken last-check.json; a broken rounds.jsonl names the line to fix", async () => {
   const app = repo({ "loop.json": loopJson({ ok: pass }) });
   await loop(app, "check");
   writeFileSync(join(app, ".loop/last-check.json"), "{bad");
   const last = await loop(app, "status");
   const check = await loop(app, "check");
-  rmSync(join(app, ".loop/last-check.json"));
-  await loop(app, "check");
+  const repaired = await loop(app, "status");
   writeFileSync(join(app, ".loop/rounds.jsonl"), '{"round":1}\n{"round":"two"}\n');
   const rounds = await loop(app, "status");
 
-  expect([last.code, check.code, rounds.code]).toEqual([78, 78, 78]);
-  expect(last.stderr).toMatch(/\.loop\/last-check\.json: /);
+  expect([last.code, check.code, repaired.code, rounds.code]).toEqual([78, 0, 0, 78]);
+  expect(last.stderr).toMatch(
+    /\.loop\/last-check\.json: .*; run tinker-loop check to write it again\n$/,
+  );
   expect(rounds.stderr).toContain(
-    "rounds.jsonl:2 is not a round: one JSON object with a whole-number round",
+    "rounds.jsonl:2 is not a round: one JSON object with a whole-number round; fix or delete that line",
   );
 });
 

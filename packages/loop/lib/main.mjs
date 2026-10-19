@@ -15,7 +15,7 @@ import { readConfig, runGates } from "./gates.mjs";
 import { headSha } from "./git.mjs";
 import { findingList, ruleLines, summary } from "./report.mjs";
 import { readRules } from "./rules.mjs";
-import { changeDiff, scanBase, scanDiff, treeBefore } from "./scan.mjs";
+import { changeDiff, scanBase, scanDiff, treeState } from "./scan.mjs";
 import { loopStatus } from "./status.mjs";
 
 /** The exit code for each stop the bin passes on: 128 plus the signal's number. */
@@ -132,14 +132,15 @@ function idsProblem(command, ids, count) {
 /**
  * Run every gate, scan the change, merge into the findings file, and print the summary.
  * A run stopped before the write leaves the findings file as it was. Dirty state and untracked
- * files are read before the gates, so files the gates write are not part of the change.
+ * files are read before the gates, so files the gates write are not part of the change. The
+ * saved tree fingerprint is taken after the gates, so files they write do not block done.
  * @param {string} app - From --app; why: the app to check.
  * @param {{ base?: string, print: (line: string) => void, signal?: AbortSignal }} run - From
  *   main; why: --base overrides loop.json's base, print takes the summary, signal stops gates.
  */
 async function check(app, { base, print, signal }) {
   const config = readConfig(app);
-  const before = treeBefore(app);
+  const before = treeState(app);
   const gates = await runGates(app, config.gates, { print, signal });
   if (stopCode(signal)) return stopCode(signal);
 
@@ -148,15 +149,16 @@ async function check(app, { base, print, signal }) {
   const scan = scanChange(app, { ref, wanted: base, untracked: before.untracked }, print);
   const current = [...red.map((gate) => gate.finding), ...scan.hits];
   const run = { sha: headSha(app), scanned: scan.ran, dirty: before.dirty };
+  const after = treeState(app).fingerprint;
   if (stopCode(signal)) return stopCode(signal);
 
   let round = 0;
   const merged = updateFindings(app, (previous) => {
-    round = nextRound([...previous, ...readRounds(app), readLastCheck(app) ?? {}]);
+    round = nextRound([...previous, ...readRounds(app), lastCheckRound(app)]);
     return mergeCheck(previous, current, { ...run, round });
   });
   const results = gates.map(({ name, green }) => ({ name, green }));
-  writeLastCheck(app, { round, sha: run.sha, tree: before.fingerprint, gates: results });
+  writeLastCheck(app, { round, sha: run.sha, tree: after, gates: results });
 
   print(
     `tinker-loop check, round ${round}: ${gates.length - red.length} gates green, ${red.length} red`,
@@ -166,10 +168,23 @@ async function check(app, { base, print, signal }) {
 }
 
 /**
+ * The last check's round, for the next round number. A broken last-check.json counts as none,
+ * since this check writes it again.
+ * @param {string} app - From check; why: whose loop state.
+ */
+function lastCheckRound(app) {
+  try {
+    return readLastCheck(app) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Scan the change from `ref`. When it cannot run, it says why, and its rows stay as they are.
  * @param {string} app - From --app; why: the folder to scan.
  * @param {{ ref: string | null, wanted?: string, untracked: string[] | null }} base - From
- *   scanBase, --base, and treeBefore; why: where the change starts, the exact ref asked for
+ *   scanBase, --base, and treeState; why: where the change starts, the exact ref asked for
  *   when git could not find it, and the new files from before the gates.
  * @param {(line: string) => void} print - From check; why: the base used, or the skip reason.
  */

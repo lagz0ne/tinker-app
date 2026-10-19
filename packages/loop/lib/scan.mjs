@@ -96,11 +96,12 @@ function remoteBranch(app, branch) {
 
 /**
  * The app folder's untracked files, whether it is dirty, and a fingerprint of its work tree.
- * Check takes this before the gates run, so files the gates write are not part of the change.
- * Untracked files are null outside git.
+ * Check takes it before the gates, so files the gates write are not part of the scanned
+ * change, and again after the gates, so the saved fingerprint holds what the gates wrote.
+ * Status takes it to compare. Untracked files are null outside git.
  * @param {string} app - From --app; why: the folder to look at.
  */
-export function treeBefore(app) {
+export function treeState(app) {
   const listed = git(app, ["ls-files", "--others", "--exclude-standard", "-z"], { raw: true });
   const status = git(app, ["status", "--porcelain", "--untracked-files=all", "--", "."]);
   const untracked = listed?.split("\0").filter(Boolean) ?? null;
@@ -111,8 +112,8 @@ export function treeBefore(app) {
  * A hash of the app folder's uncommitted work: `git diff HEAD` and each untracked file's
  * name and bytes. Two equal fingerprints at the same HEAD mean the same work tree. Null
  * outside git.
- * @param {string} app - From treeBefore or status; why: the folder to hash.
- * @param {string[] | null} untracked - From treeBefore; why: the new files to hash.
+ * @param {string} app - From treeState; why: the folder to hash; only that folder counts.
+ * @param {string[] | null} untracked - From treeState; why: the new files to hash.
  */
 export function treeFingerprint(app, untracked) {
   const diff = git(app, ["diff", "--no-ext-diff", "--binary", "HEAD", "--", "."], { raw: true });
@@ -143,7 +144,7 @@ function fileBytes(app, file) {
  * Returns null when the folder is not in git or the diff is too large to read.
  * @param {string} app - From --app; why: the folder to diff.
  * @param {string} base - From scanBase; why: where the change starts.
- * @param {string[] | null} untracked - From treeBefore; why: the new files of the change.
+ * @param {string[] | null} untracked - From treeState; why: the new files of the change.
  */
 export function changeDiff(app, base, untracked) {
   const start = git(app, ["merge-base", base, "HEAD"]);

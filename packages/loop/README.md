@@ -124,8 +124,14 @@ The review and judge tools must set it too.
 Each check that runs to the end saves `.loop/last-check.json`.
 It holds the round, the HEAD commit, the tree fingerprint, and each gate's result.
 The tree fingerprint is a hash of `git diff HEAD` and the untracked files, names and bytes.
-Check takes the fingerprint before the gates run.
+The fingerprint covers only the app folder.
+Edits in other folders, such as a linked workspace package, do not change it.
+Check takes the fingerprint after the gates run.
+So files that the gates write do not block done.
 `status` reads `last-check.json`.
+A broken `last-check.json` makes `status` exit 78 and name the file.
+Check skips a broken `last-check.json` and writes it again.
+A broken `rounds.jsonl` line exits 78 and names the line to fix or delete.
 
 ## Review rounds
 

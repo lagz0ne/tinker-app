@@ -111,7 +111,7 @@ export function readLastCheck(app) {
   try {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch (error) {
-    throw new Error(`${path}: ${error.message}`);
+    throw new Error(`${path}: ${error.message}; run tinker-loop check to write it again`);
   }
 }
 
@@ -144,7 +144,9 @@ function parseRound(path, number, line) {
     // The check below names the line.
   }
   if (!Number.isSafeInteger(round?.round)) {
-    throw new Error(`${path}:${number} is not a round: one JSON object with a whole-number round`);
+    throw new Error(
+      `${path}:${number} is not a round: one JSON object with a whole-number round; fix or delete that line`,
+    );
   }
   return round;
 }
