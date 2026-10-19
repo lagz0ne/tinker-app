@@ -101,15 +101,33 @@ export function varyEncoding(headers) {
 }
 
 /**
+ * A plain body needs only the cache key, so the app's response is kept when its headers can change.
+ * @param {Request} request - From the host; why: HEAD still drops the body through a copy.
+ * @param {Response} response - From the app; why: immutable headers (fetch) fall back to the copy, which sets Vary again.
+ * @param {string | null} encoding - From negotiation; why: only identity keeps the original body.
+ */
+function varyPlain(request, response, encoding) {
+  if (encoding !== "identity" || request.method === "HEAD") return false;
+  try {
+    varyEncoding(response.headers);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Keep HTML streaming; the encoded stream owns errors and cancellation.
  * @param {Request} request - From the host; why: encoding and HEAD semantics.
  * @param {Response} response - From the app; why: retain its body until consumed or cancelled.
  */
 export async function compressResponse(request, response) {
   if (!mayCompress(response)) return response;
+  const encoding = readEncoding(request);
+  if (varyPlain(request, response, encoding)) return response;
+
   const headers = new Headers(response.headers);
   varyEncoding(headers);
-  const encoding = readEncoding(request);
 
   if (encoding === null) {
     await response.body?.cancel();
