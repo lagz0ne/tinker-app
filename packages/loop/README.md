@@ -133,10 +133,61 @@ A broken `last-check.json` makes `status` exit 78 and name the file.
 Check skips a broken `last-check.json` and writes it again.
 A broken `rounds.jsonl` line exits 78 and names the line to fix or delete.
 
+## Review
+
+```bash
+vp exec tinker-loop review [--app <dir>] [--base <ref>]
+```
+
+`review` runs a separate reviewer model on the change.
+The change is the same range as check's scan: from the merge base to the work tree.
+The reviewer gets the app's tinker-review skill: `.agents/skills/tinker-review/SKILL.md`.
+A missing skill exits 78.
+No base, from `--base` or `loop.json`, exits 78.
+An unknown `--base` exits 64.
+The default reviewer is Claude Opus 5.5, `claude-opus-5-5`, run headless with `claude -p`.
+It gets the tools Read, Grep, Glob, and Bash.
+Bash is held to `git diff`, `git log`, and `git show`.
+`--permission-mode dontAsk` denies every other tool.
+The reviewer runs in the app folder with no stdin.
+`loop.json` can set another reviewer: `"review": { "command": ["node", "reviewer.mjs", "{prompt}"] }`.
+Each `{prompt}` word becomes the prompt.
+With no `{prompt}` word, the prompt is the last word.
+`"review": { "timeout": 600000 }` sets its timeout in milliseconds.
+The default timeout is 20 minutes.
+A reviewer past its timeout, or stopped, is killed with its whole process group.
+
+The prompt is the skill, then the range, the new untracked files, and the open review findings.
+It asks for the skill's JSON lines only.
+It tells the reviewer not to run the gates and not to report `G1`.
+It asks the reviewer to recheck each open review finding.
+A finding that is still there comes back with the same `id`.
+A fixed one comes back as `{"id": "<its id>", "status": "fixed"}`.
+The prompt, the output, and the reviewer's stderr are saved in `.loop/review/`.
+
+Each finding line becomes a row with `source` `review`.
+Its `seenSha` is HEAD, and its `round` comes from `recordReviewRound`.
+A new finding gets the loop's id, a hash, like a check finding.
+A rechecked finding keeps its id.
+Blank lines, code fences, and a `clear` line are skipped.
+Any other line that is not a finding becomes one `question` row with rule `review-output`.
+That row names the line and says why it is not a finding.
+A bad line never stops the review.
+
+The review merges under the findings lock, with `updateFindings`.
+A finding reported again follows the check rules.
+An open finding stays open, an answered one stays answered, and a fixed one opens again.
+An open review finding rechecked as fixed becomes `fixed` at HEAD.
+An open review finding the reviewer does not mention stays open.
+
+Exit code 0 means the review ran; findings are advice.
+Exit code 1 means the reviewer failed or timed out.
+Then nothing is written and no round is recorded.
+
 ## Review rounds
 
 Each review round is one line in `.loop/rounds.jsonl`: `{ round, source, sha }`.
-The review tool calls `recordReviewRound` from `@tinker/loop/findings` once per review run.
+`tinker-loop review` calls `recordReviewRound` from `@tinker/loop/findings` once per review that runs.
 It writes the line under the findings lock and returns the round number.
 The review tool stamps that number on the findings of that round.
 A round number is one more than any round in the findings, in `rounds.jsonl`, or in the last check.
