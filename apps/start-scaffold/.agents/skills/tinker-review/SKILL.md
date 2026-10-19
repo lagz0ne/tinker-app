@@ -20,7 +20,7 @@ review: tinker-review
 fix, or answer with a reason
   |
   v  review the new commits only
-3 rounds with a blocking finding:
+3 rounds with an important finding:
 a person checks the approach
 ```
 
@@ -34,7 +34,7 @@ a person checks the approach
 ## Gates first
 
 Run the gates in AGENTS.md, in its order.
-A red gate is finding `G1`, severity blocking.
+A red gate is finding `G1`, severity important.
 Name the gate and its first error.
 
 ## Quick scan
@@ -144,11 +144,14 @@ $D | grep -nE ' as unknown as |\.skip\('
 
 Severity:
 
-- `blocking`: breaks a rule above on changed code,
+- `important`: breaks a rule above on changed code,
   or breaks behavior.
-- `nit`: style only. Never blocking.
+- `nit`: style only.
 - `old`: real, but the code was there before.
 - `question`: the contract does not decide it.
+
+All findings are advice. None blocks a merge.
+The writer still fixes or answers each one.
 
 ## Report
 
@@ -156,7 +159,7 @@ One JSON line per finding, no other text:
 
 ```json
 {"id":"slug","rule":"C3",
- "severity":"blocking",
+ "severity":"important",
  "file":"src/x.ts","line":12,
  "summary":"one sentence",
  "trigger":"the path that breaks",

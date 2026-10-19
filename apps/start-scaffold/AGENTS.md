@@ -50,8 +50,8 @@ Read the skill for the work you are doing:
   when reviewing a change; cite one contract rule per finding.
 
 Writers use the first five skills. A separate reviewer uses tinker-review.
-The writer fixes or answers each blocking finding, then the reviewer reads
-the new commits only. After three rounds, a person checks the approach.
+Findings are advice and never block a merge. The writer fixes or answers
+each important finding, then the reviewer reads the new commits only. After three rounds, a person checks the approach.
 
 Run the build before the type check and tests.
 Run the shipped checks before review:
