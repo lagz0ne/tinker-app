@@ -440,3 +440,34 @@ test("close flushes console-only work and aborts every delivery signal", async (
   expect(root.resolve(exportHealth)).toEqual({ kind: "idle", pending: 0, dropped: 0 });
   await root.close({ graceful: true });
 });
+
+test("under steady load the console mirror keeps writing while one flush drains batch after batch", async () => {
+  const writes: string[] = [];
+  const load = { rounds: 0, arrive: () => {} };
+  const root = createScope({
+    tags: [telemetrySide("ssr"), consoleOutput({ write: (text) => writes.push(text) })],
+    presets: [
+      preset(delivery, () => ({
+        send: async () => {
+          if (++load.rounds < 10) load.arrive();
+          return { traces: true, logs: true };
+        },
+      })),
+    ],
+  });
+  await root.ready;
+  const q = root.resolve(queue);
+  load.arrive = () => {
+    for (let index = 0; index < 64; index++) {
+      q.writeConsole(q.add("log", "ssr", log), log);
+      q.publishQueued();
+    }
+  };
+
+  load.arrive();
+  await q.flush();
+
+  expect(load.rounds).toBe(10);
+  expect(writes.join("").split("\n").filter(Boolean)).toHaveLength(640);
+  await root.close({ graceful: true });
+});

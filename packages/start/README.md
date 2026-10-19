@@ -51,6 +51,15 @@ The host aborts its signal on SIGINT or SIGTERM and waits for closed. Asset path
 requests remain covered by the tooling tests. The app must keep the host package installed
 where it runs `tinker serve`.
 
+On Node 22, the AsyncLocalStorage that TanStack Start uses hooks every promise.
+Node 24 keeps that context in a frame by default. To get the same on Node 22, run:
+
+```bash
+NODE_OPTIONS=--experimental-async-context-frame tinker serve
+```
+
+The flag is experimental on Node 22. Node 24 refuses it, so leave it out of shared scripts.
+
 ## Copied code
 
 ```text
