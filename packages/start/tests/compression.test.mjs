@@ -61,6 +61,20 @@ test("plain HTML still varies by encoding and refused encodings get 406", async 
   ).toBe(406);
 });
 
+test("plain HTML keeps the app's response, and a fetched one is copied to vary", async () => {
+  const app = html();
+  const fetched = await fetch("data:text/html,<p>Fetched</p>");
+
+  const kept = await compressResponse(new Request("http://app"), app);
+  const copied = await compressResponse(new Request("http://app"), fetched);
+
+  expect(kept).toBe(app);
+  expect(kept.headers.get("vary")).toBe("Cookie, Accept-Encoding");
+  expect(copied).not.toBe(fetched);
+  expect(copied.headers.get("vary")).toBe("Accept-Encoding");
+  expect(await copied.text()).toBe("<p>Fetched</p>");
+});
+
 test("encoded, partial, no-transform, and non-text responses pass through", async () => {
   for (const response of [
     new Response("png", { headers: { "content-type": "image/png" } }),
@@ -91,6 +105,24 @@ test("a refused encoding cancels HTML and drops its old length", async () => {
   );
   expect(cancelled).toBe(true);
   expect(response.headers.get("content-length")).toBeNull();
+});
+
+test("a plain HEAD still drops the HTML body and cancels its source", async () => {
+  let cancelled = false;
+  const source = new ReadableStream({
+    cancel() {
+      cancelled = true;
+    },
+  });
+
+  const response = await compressResponse(
+    new Request("http://app", { method: "HEAD" }),
+    new Response(source, { headers: { "content-type": "text/html" } }),
+  );
+
+  expect(cancelled).toBe(true);
+  expect(response.body).toBeNull();
+  expect(response.headers.get("vary")).toBe("Accept-Encoding");
 });
 
 test("HEAD cancels HTML and returns its negotiated encoding without a body", async () => {
