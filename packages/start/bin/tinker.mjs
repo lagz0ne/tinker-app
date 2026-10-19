@@ -26,6 +26,46 @@ async function writeRouteTree(root) {
   return "routeTree.gen.ts";
 }
 
+const hostKey = Symbol("tinker.host");
+const abortKey = Symbol("tinker.abort");
+
+/**
+ * Reading `signal` on hono's light Request builds a full undici Request. This one getter, shared by
+ * every request so they keep one shape, keeps hono's abort rule without that copy.
+ */
+const lazySignal = {
+  configurable: true,
+  get() {
+    this[abortKey] ??= watchClose(this[hostKey]);
+    return this[abortKey].signal;
+  },
+};
+
+/**
+ * @param {Request} request - From hono; why: an own `signal` shadows the prototype getter.
+ * @param {{ incoming: import("node:http").IncomingMessage, outgoing: import("node:http").ServerResponse }} env - From hono; why: the close that aborts.
+ */
+function withLazySignal(request, env) {
+  request[hostKey] = env;
+  return Object.defineProperty(request, "signal", lazySignal);
+}
+
+/**
+ * Hono's rule: an incoming error, or a close before the response finished, aborts.
+ * @param {{ incoming: import("node:http").IncomingMessage, outgoing: import("node:http").ServerResponse }} env - From hono; why: the request's two streams.
+ */
+function watchClose({ incoming, outgoing }) {
+  const controller = new AbortController();
+  const abort = () => {
+    if (incoming.errored) controller.abort(incoming.errored.toString());
+    else if (!outgoing.writableFinished) controller.abort("Client connection prematurely closed.");
+  };
+
+  if (outgoing.destroyed) abort();
+  else outgoing.once("close", abort);
+  return controller;
+}
+
 /**
  * The Node host starts the built entry before listening; the command owns config and shutdown.
  * @param {string} root - From tinker serve; why: the built app to serve.
@@ -60,7 +100,7 @@ async function serve(root) {
           overrideGlobalObjects: false,
           hostname: process.env.HOST ?? "127.0.0.1",
           port: Number(process.env.PORT ?? 4318),
-          fetch: (request, env) => asset(request) ?? render(request, env),
+          fetch: (request, env) => asset(request) ?? render(withLazySignal(request, env), env),
         },
         (info) =>
           console.log(`tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${info.port}`),
