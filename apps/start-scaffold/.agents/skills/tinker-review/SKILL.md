@@ -158,12 +158,16 @@ The writer still fixes or answers each one.
 One JSON line per finding, no other text:
 
 ```json
-{"id":"slug","rule":"C3",
- "severity":"important",
- "file":"src/x.ts","line":12,
- "summary":"one sentence",
- "trigger":"the path that breaks",
- "fix":"one sentence"}
+{
+  "id": "slug",
+  "rule": "C3",
+  "severity": "important",
+  "file": "src/x.ts",
+  "line": 12,
+  "summary": "one sentence",
+  "trigger": "the path that breaks",
+  "fix": "one sentence"
+}
 ```
 
 No finding: print `clear` and the gates you ran.
