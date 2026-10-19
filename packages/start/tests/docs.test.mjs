@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 
 import { expect, test } from "vite-plus/test";
 
@@ -22,4 +22,18 @@ test("docs/contract.md is the repo contract for this version; the repo points at
     packageContract(repo, version),
   );
   expect(read("docs/contract.md")).not.toContain("](../../");
+});
+
+test("each relative link in docs/contract.md points at a file Start ships", () => {
+  const { files } = JSON.parse(read("package.json"));
+  const links = [...read("docs/contract.md").matchAll(/\]\(([^)]+)\)/g)]
+    .map(([, link]) => link.split("#")[0])
+    .filter((link) => link && !/^[a-z]+:/.test(link));
+  const targets = links.map((link) => relative(start, resolve(start, "docs", link)));
+
+  expect(targets.length).toBeGreaterThan(0);
+  for (const target of targets) {
+    expect(files, target).toContain(target.split(sep)[0]);
+    expect(existsSync(join(start, target)), target).toBe(true);
+  }
 });

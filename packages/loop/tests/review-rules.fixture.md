@@ -1,3 +1,9 @@
+<!--
+Copied from branch claude/project-thread-donet0 (e528273),
+apps/start-scaffold/.agents/skills/tinker-review/SKILL.md, section "## Rules".
+Delete this fixture when that skill lands on next; the test then reads the skill itself.
+-->
+
 ### G: gates
 
 - `G1` Every gate in AGENTS.md passes.

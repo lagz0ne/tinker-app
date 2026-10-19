@@ -1,5 +1,7 @@
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vite-plus/test";
 
@@ -59,6 +61,23 @@ function appWithStart(files = {}) {
   return app;
 }
 
+/**
+ * An app whose node_modules holds a small @tinker/start of `version`.
+ * @param {string} version - From a test; why: the Start version the app installed.
+ * @param {string | null} rules - From a test; why: its docs/rules.md, or none.
+ * @param {object} [exports] - From a test; why: its package exports.
+ */
+function fakeStart(version, rules, exports = { "./package.json": "./package.json" }) {
+  return repo({
+    "node_modules/@tinker/start/package.json": JSON.stringify({
+      name: "@tinker/start",
+      version,
+      exports,
+    }),
+    ...(rules === null ? {} : { "node_modules/@tinker/start/docs/rules.md": rules }),
+  });
+}
+
 /** @param {string} text - From a test; why: the text from the first group heading on. */
 function groups(text) {
   return text.slice(text.indexOf("\n### ") + 1);
@@ -86,7 +105,8 @@ test("every rule the check tool gives exists in rules.md", () => {
 
 test("rules.md holds the review skill's rules word for word", () => {
   const skill = join(repoRoot, "apps/start-scaffold/.agents/skills/tinker-review/SKILL.md");
-  const copies = [readFileSync(join(import.meta.dirname, "review-rules.fixture.md"), "utf8")];
+  const fixture = readFileSync(join(import.meta.dirname, "review-rules.fixture.md"), "utf8");
+  const copies = [fixture.replace(/^<!--[\s\S]*?-->\n+/, "")];
   if (existsSync(skill)) {
     const text = readFileSync(skill, "utf8");
     copies.push(text.slice(text.indexOf("### G: gates"), text.indexOf("## Judge each finding")));
@@ -95,8 +115,60 @@ test("rules.md holds the review skill's rules word for word", () => {
   for (const copy of copies) expect(groups(shipped).trim()).toBe(copy.trim());
 });
 
-test("a repeated rule ID is an error, not a guess", () => {
-  expect(() => parseRules("- `B1` One.\n- `B1` Two.\n")).toThrow("rule B1 is listed twice");
+for (const [problem, text, message] of [
+  [
+    "a bad rule line",
+    "### B: own the boundary\n\n- `b1` Lower case.\n",
+    'line 3: a rule line reads "- `ID` text"',
+  ],
+  [
+    "a rule line with no text",
+    "### B: own the boundary\n\n- `B1`\n",
+    'line 3: a rule line reads "- `ID` text"',
+  ],
+  ["a rule with no group", "- `B1` Alone.\n", "line 1: rule B1 is not under a"],
+  [
+    "a rule after a ## heading",
+    "### B: own the boundary\n\n- `B1` One.\n\n## Judge\n\n- `B2` Two.\n",
+    "line 7: rule B2 is not under a",
+  ],
+  [
+    "a bad group heading",
+    "### Boundary\n\n- `B1` One.\n",
+    'line 1: a group heading reads "### <letter>: <title>"',
+  ],
+  [
+    "an ID in another letter's group",
+    "### B: own the boundary\n\n- `C1` One.\n",
+    "line 3: rule C1 is in group B; its ID must start B",
+  ],
+  [
+    "a repeated ID",
+    "### B: own the boundary\n\n- `B1` One.\n- `B1` Two.\n",
+    "line 4: rule B1 is listed twice; first at line 3",
+  ],
+  ["no rules", "# Start rules\n\nNothing yet.\n", "no rules found"],
+]) {
+  test(`the parser throws on ${problem}`, () => {
+    expect(() => parseRules(text)).toThrow(message);
+  });
+}
+
+test("the parser reads Windows line ends", () => {
+  const rules = parseRules("### B: own the boundary\r\n\r\n- `B1` One,\r\n  two.\r\n");
+
+  expect(rules).toEqual([
+    { id: "B1", group: "B: own the boundary", lines: ["- `B1` One,", "  two."] },
+  ]);
+});
+
+test("a broken rules.md in the app's Start exits 78 and names the file and line", async () => {
+  const app = fakeStart("1.0.0", "### B: own the boundary\n\n- `C1` Wrong group.\n");
+
+  const run = await loop(app, "rules");
+
+  expect(run.code).toBe(78);
+  expect(run.stderr).toMatch(/docs\/rules\.md: line 3: rule C1 is in group B/);
 });
 
 test("rules with no ID prints every rule from the Start the app resolves", async () => {
@@ -136,14 +208,7 @@ test("an unknown rule ID exits 64 and lists the known IDs", async () => {
 });
 
 test("each app reads the rules of its own Start version", async () => {
-  const app = repo({
-    "node_modules/@tinker/start/package.json": JSON.stringify({
-      name: "@tinker/start",
-      version: "9.9.9",
-      exports: { "./package.json": "./package.json" },
-    }),
-    "node_modules/@tinker/start/docs/rules.md": "### B: own the boundary\n\n- `B1` A newer rule.\n",
-  });
+  const app = fakeStart("9.9.9", "### B: own the boundary\n\n- `B1` A newer rule.\n");
 
   const run = await loop(app, "rules", "B1");
 
@@ -152,22 +217,26 @@ test("each app reads the rules of its own Start version", async () => {
 });
 
 test("an app without Start, or with a Start older than rules.md, exits 78", async () => {
-  const bare = repo({ "readme.md": "" });
-  const old = repo({
-    "node_modules/@tinker/start/package.json": JSON.stringify({
-      name: "@tinker/start",
-      version: "0.9.0",
-      exports: { "./package.json": "./package.json" },
-    }),
-  });
-
-  const none = await loop(bare, "rules");
-  const older = await loop(old, "rules");
+  const none = await loop(repo({ "readme.md": "" }), "rules");
+  const older = await loop(fakeStart("0.9.0", null), "rules");
 
   expect(none.code).toBe(78);
   expect(none.stderr).toContain("cannot find @tinker/start from");
+  expect(none.stderr).toContain("install it to read its rules");
   expect(older.code).toBe(78);
   expect(older.stderr).toContain("@tinker/start 0.9.0 has no docs/rules.md");
+});
+
+test("a Start that Node finds but cannot resolve names the error code, not install", async () => {
+  const app = fakeStart("1.0.0", null, { ".": "./index.js" });
+
+  const run = await loop(app, "rules");
+
+  expect(run.code).toBe(78);
+  expect(run.stderr).toContain(
+    "cannot resolve @tinker/start from " + app + ": ERR_PACKAGE_PATH_NOT_EXPORTED",
+  );
+  expect(run.stderr).not.toContain("install it");
 });
 
 test("findings --rules shows each finding's rule text", async () => {
@@ -187,11 +256,38 @@ test("findings --rules shows each finding's rule text", async () => {
   expect(withRules.stdout).toContain("  rule: not in this Start's rules.md\n");
 });
 
-test("only the rules command takes IDs", async () => {
+test("a repeated ID prints its rule once", async () => {
+  const run = await loop(appWithStart(), "rules", "B1", "b1");
+
+  expect(run.stdout.split("- `B1` ")).toHaveLength(2);
+});
+
+test("only the rules command takes IDs, and each command takes only its own flags", async () => {
   const app = appWithStart({ "loop.json": loopJson({ red: fail }) });
 
-  const run = await loop(app, "check", "B1");
+  const ids = await loop(app, "check", "B1");
+  const open = await loop(app, "check", "--open");
+  const base = await loop(app, "rules", "--base", "main");
+  const rules = await loop(app, "findings", "--rules", "--base", "main");
 
-  expect(run.code).toBe(64);
+  expect([ids.code, open.code, base.code, rules.code]).toEqual([64, 64, 64, 64]);
+  expect(ids.stderr).toContain("tinker-loop check takes no IDs");
+  expect(open.stderr).toContain("tinker-loop check does not take --open");
+  expect(base.stderr).toContain("tinker-loop rules does not take --base");
+  expect(rules.stderr).toContain("tinker-loop findings does not take --base");
   expect(existsSync(join(app, ".loop"))).toBe(false);
+});
+
+test("the bin ignores a reader that closes the pipe early", async () => {
+  const app = appWithStart();
+  const bin = fileURLToPath(new URL("../bin/tinker-loop.mjs", import.meta.url));
+  const child = spawn(process.execPath, [bin, "rules"], { cwd: app });
+  child.stdout.destroy();
+  const errors = [];
+  child.stderr.on("data", (chunk) => errors.push(chunk));
+
+  const code = await new Promise((resolve) => child.once("exit", resolve));
+
+  expect(code).toBe(0);
+  expect(Buffer.concat(errors).toString()).toBe("");
 });

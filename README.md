@@ -44,13 +44,17 @@ For each release, set the package version and add its released UPGRADE.md
 section. Keep that version, the release assets, and the registry in step. Then:
 
 ```bash
+node packages/start/scripts/copy-contract.mjs
 pnpm --dir apps/start-scaffold run registry:build
 node scripts/release.mjs 0.10.0
 node scripts/release-check.mjs 0.10.0 > .release/start-v0.10.0/notes.md
 ```
 
 `release.mjs` packs Start into `.release/start-v0.10.0/`.
+`copy-contract.mjs` writes the contract that Start ships, `packages/start/docs/contract.md`.
+Its links name this version's tag, so run it after you set the version.
 `release-check.mjs` checks the version, the UPGRADE.md section, and the registry links.
+It also fails when `packages/start/docs/contract.md` is not the copy for this version.
 Neither script publishes.
 
 ## Copied runtime and templates

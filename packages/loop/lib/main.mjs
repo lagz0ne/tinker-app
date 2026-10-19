@@ -17,11 +17,21 @@ const usage = [
   "       tinker-loop rules [ID...] [--app <dir>]",
 ].join("\n");
 
-/** Each command, called with the app folder and the parsed command line. */
+/** Each command: the flags it takes, and its call with the app folder and the command line. */
 const commands = {
-  check: (app, { options, print, signal }) => check(app, { base: options.base, print, signal }),
-  findings: (app, { options, print }) => findings(app, options, print),
-  rules: (app, { positionals, print, stderr }) => rules(app, positionals, { print, stderr }),
+  check: {
+    flags: ["app", "base"],
+    run: (app, { options, print, signal }) => check(app, { base: options.base, print, signal }),
+  },
+  findings: {
+    flags: ["app", "open", "rules"],
+    run: (app, { options, print }) => findings(app, options, print),
+  },
+  rules: {
+    flags: ["app"],
+    ids: true,
+    run: (app, { positionals, print, stderr }) => rules(app, positionals, { print, stderr }),
+  },
 };
 
 /**
@@ -53,19 +63,35 @@ export async function main({ args, cwd, stdout, stderr, signal }) {
   }
 
   const { values: options, positionals } = parsed;
-  const run = Object.hasOwn(commands, command) ? commands[command] : null;
-  if (!run || (positionals.length > 0 && command !== "rules")) {
-    stderr.write(`${usage}\n`);
+  const problem = commandProblem(command, Object.keys(options), positionals);
+  if (problem !== null) {
+    stderr.write(`${problem}${usage}\n`);
     return 64;
   }
 
   try {
     const app = resolve(cwd, options.app ?? ".");
-    return await run(app, { options, positionals, print, stderr, signal });
+    return await commands[command].run(app, { options, positionals, print, stderr, signal });
   } catch (error) {
     stderr.write(`tinker-loop: ${error.message}\n`);
     return 78;
   }
+}
+
+/**
+ * Why the command line does not fit the command: an empty string for an unknown command,
+ * a message for a flag or ID it does not take, or null when it fits.
+ * @param {string | undefined} command - From the command line; why: the command asked for.
+ * @param {string[]} flags - From parseArgs; why: the flags given.
+ * @param {string[]} positionals - From parseArgs; why: only rules takes IDs.
+ */
+function commandProblem(command, flags, positionals) {
+  if (!command || !Object.hasOwn(commands, command)) return "";
+
+  const { flags: takes, ids = false } = commands[command];
+  const extra = flags.find((flag) => !takes.includes(flag));
+  if (extra) return `tinker-loop ${command} does not take --${extra}\n`;
+  return positionals.length > 0 && !ids ? `tinker-loop ${command} takes no IDs\n` : null;
 }
 
 /**
@@ -147,7 +173,7 @@ function findings(app, options, print) {
  */
 function rules(app, ids, { print, stderr }) {
   const book = readRules(app);
-  const wanted = ids.map((id) => id.toUpperCase());
+  const wanted = [...new Set(ids.map((id) => id.toUpperCase()))];
   const unknown = wanted.filter((id) => !book.rules.some((rule) => rule.id === id));
   if (unknown.length > 0) {
     const known = book.rules.map((rule) => rule.id).join(", ");
