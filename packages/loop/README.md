@@ -24,7 +24,8 @@ It runs every gate, also after a red gate.
 Each gate's output goes to `.loop/gates/<name>.log`.
 Two gate names must not give the same log file name.
 A gate stops after its `timeout` in milliseconds. The default is 20 minutes.
-A stopped gate is killed with all of its child processes.
+The longest `timeout` is 2147483647 ms, about 24 days.
+A stopped gate's process group gets SIGTERM, then SIGKILL 5 seconds later.
 A red gate gives a `G1` finding with severity `important`.
 Its summary is the first error line of the gate's output.
 
@@ -32,6 +33,8 @@ Then it greps the added lines of the change in the app folder.
 The change starts where this branch left the base.
 It ends at the working tree, as the gates see it.
 Untracked files that git does not ignore count as added.
+Untracked files and the dirty state are read before the gates run.
+So files that the gates write are not part of the change.
 Each hit gives a finding with severity `question`.
 A hit points at a line to read. It is not a verdict.
 
@@ -56,7 +59,8 @@ Then earlier scan findings stay as they are.
 Exit code 1 means a gate is red. Grep hits never change the exit code.
 Exit code 64 means a bad command line.
 Exit code 78 means a bad `loop.json` or findings file.
-Exit code 130 or 143 means Ctrl-C or SIGTERM stopped the run. A stopped run writes no findings.
+Exit code 129, 130, or 143 means SIGHUP, Ctrl-C, or SIGTERM stopped the run.
+A stop before the write leaves the findings file as it was.
 
 ## Findings
 
@@ -98,5 +102,7 @@ Check never changes `judge` or `review` findings.
 
 Every tool that writes the file holds `.loop/findings.lock` around its read, merge, and write.
 Use `updateFindings` from `@tinker/loop/findings`; it takes the lock for you.
-The lock holds the owner's pid and time.
-A lock whose pid is gone, or that is older than 30 seconds, is stale and is removed.
+The lock holds a token that only its owner knows.
+The owner removes the lock only while it still holds that token.
+A lock older than 10 seconds is stale. A tool renames it to a unique name, then removes it.
+Age is the only rule, since a pid means nothing across the sandbox and the host.

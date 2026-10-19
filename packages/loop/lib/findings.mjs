@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   closeSync,
   existsSync,
+  linkSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -18,11 +19,14 @@ export const severities = ["important", "question", "nit", "old"];
 /** Status order for lists: open work comes first. */
 export const statuses = ["open", "answered", "fixed"];
 
-/** A lock older than this is stale: no tool holds it for more than one read, merge, and write. */
-const staleLockMs = 30_000;
+/**
+ * A lock older than this is stale: a tool holds it for one read, merge, and write, a few
+ * milliseconds. Age is the only rule; a pid means nothing across the sandbox and the host.
+ */
+const staleLockMs = 10_000;
 
 /** How long a tool waits for the lock. Longer than staleLockMs, so a stale lock always breaks. */
-const lockWaitMs = 40_000;
+const lockWaitMs = 15_000;
 
 /**
  * Make the app's `.loop` folder. It ignores itself, so git never commits loop state,
@@ -124,28 +128,33 @@ export function updateFindings(app, change) {
 
 /**
  * Take `.loop/findings.lock` and return the function that releases it. The file is made
- * with `wx`, so only one tool gets it. It holds the owner's pid and time. A lock whose pid is
- * gone, or that is older than 30 seconds, is stale and is removed. Throws after 40 seconds.
+ * with `wx`, so only one tool gets it. It holds a token only this call knows, and release
+ * removes the file only while it still holds that token. A lock older than 10 seconds is
+ * stale: it is renamed to a unique name, then removed. Throws after 15 seconds.
  * @param {string} app - From --app; why: whose findings.
  */
 export function lockFindings(app) {
   const path = join(loopFolder(app), "findings.lock");
+  const token = `${process.pid}-${Date.now()}-${randomUUID()}`;
   const deadline = Date.now() + lockWaitMs;
 
   for (;;) {
-    if (tryLock(path)) return () => rmSync(path, { force: true });
-    if (staleLock(path)) rmSync(path, { force: true });
+    if (tryLock(path, token)) return () => releaseLock(path, token);
+    if (lockAge(path) > staleLockMs) breakLock(path, token);
     else if (Date.now() > deadline) {
       throw new Error(`${path} is held by another tool; delete it if no tool is running`);
     } else Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
   }
 }
 
-/** @param {string} path - From lockFindings; why: the lock file to make. */
-function tryLock(path) {
+/**
+ * @param {string} path - From lockFindings; why: the lock file to make.
+ * @param {string} token - From lockFindings; why: marks this call as the owner.
+ */
+function tryLock(path, token) {
   try {
     const file = openSync(path, "wx");
-    writeFileSync(file, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
+    writeFileSync(file, token);
     closeSync(file);
     return true;
   } catch (error) {
@@ -154,15 +163,48 @@ function tryLock(path) {
   }
 }
 
-/** @param {string} path - From lockFindings; why: the lock file to judge. */
-function staleLock(path) {
+/** @param {string} path - From lockFindings; why: the lock to age; a gone lock is age 0. */
+function lockAge(path) {
   try {
-    if (Date.now() - statSync(path).mtimeMs > staleLockMs) return true;
-    const { pid } = JSON.parse(readFileSync(path, "utf8"));
-    process.kill(pid, 0);
-    return false;
-  } catch (error) {
-    return error.code === "ESRCH";
+    return Date.now() - statSync(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Move a stale lock aside under a unique name, then remove it. Only one tool's rename wins.
+ * If the moved lock turns out to be fresh, another tool took it meanwhile: link it back.
+ * @param {string} path - From lockFindings; why: the stale lock.
+ * @param {string} token - From lockFindings; why: makes the aside name unique.
+ */
+function breakLock(path, token) {
+  const aside = `${path}.${token}.stale`;
+  try {
+    renameSync(path, aside);
+  } catch {
+    return;
+  }
+
+  if (lockAge(aside) <= staleLockMs) {
+    try {
+      linkSync(aside, path);
+    } catch {
+      // A new lock already took the name; this one was released or broken.
+    }
+  }
+  rmSync(aside, { force: true });
+}
+
+/**
+ * @param {string} path - From lockFindings; why: the lock to release.
+ * @param {string} token - From lockFindings; why: release only a lock this call still owns.
+ */
+function releaseLock(path, token) {
+  try {
+    if (readFileSync(path, "utf8") === token) rmSync(path);
+  } catch {
+    // The lock was broken as stale; it is not ours to remove.
   }
 }
 

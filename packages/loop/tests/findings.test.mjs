@@ -1,9 +1,18 @@
-import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 import { expect, test } from "vite-plus/test";
 
+import { lockFindings } from "../lib/findings.mjs";
 import { fail, loop, loopJson, repo, setFindings } from "./fixture.mjs";
 
 const finding = (id, status, severity, extra = {}) => ({
@@ -82,24 +91,57 @@ for (const [kind, row] of [
   });
 }
 
-for (const { kind, lock } of [
-  {
-    kind: "whose tool is gone",
-    lock: () => ({ pid: spawnSync(process.execPath, ["-e", ""]).pid, old: false }),
-  },
-  { kind: "older than 30 seconds", lock: () => ({ pid: process.pid, old: true }) },
-]) {
-  test(`check breaks a findings lock ${kind}`, async () => {
-    const app = repo({ "loop.json": loopJson({ red: fail }) });
-    const path = join(app, ".loop/findings.lock");
-    const { pid, old } = lock();
-    mkdirSync(join(app, ".loop"), { recursive: true });
-    writeFileSync(path, JSON.stringify({ pid, at: "then" }));
-    if (old) utimesSync(path, new Date(0), new Date(0));
+test("check breaks a findings lock older than 10 seconds", async () => {
+  const app = repo({ "loop.json": loopJson({ red: fail }) });
+  const lock = join(app, ".loop/findings.lock");
+  mkdirSync(join(app, ".loop"), { recursive: true });
+  writeFileSync(lock, "someone else");
+  utimesSync(lock, new Date(0), new Date(0));
 
-    const run = await loop(app, "check");
+  const run = await loop(app, "check");
 
-    expect(run.code).toBe(1);
-    expect(existsSync(path)).toBe(false);
-  });
-}
+  expect(run.code).toBe(1);
+  expect(existsSync(lock)).toBe(false);
+});
+
+test("check waits for a fresh lock, then writes after its owner releases it", async () => {
+  const app = repo({ "loop.json": loopJson({ red: fail }) });
+  const lock = join(app, ".loop/findings.lock");
+  const released = join(app, "released");
+  mkdirSync(join(app, ".loop"), { recursive: true });
+  writeFileSync(lock, "someone else");
+  const owner = spawn(
+    process.execPath,
+    [
+      "-e",
+      "setTimeout(() => { const fs = require('fs'); fs.rmSync(process.argv[1]); fs.writeFileSync(process.argv[2], ''); }, 500)",
+      lock,
+      released,
+    ],
+    { stdio: "ignore" },
+  );
+
+  const run = await loop(app, "check");
+  await new Promise((resolve) =>
+    owner.exitCode === null ? owner.once("exit", resolve) : resolve(),
+  );
+
+  expect(run.code).toBe(1);
+  expect(statSync(join(app, ".loop/findings.jsonl")).mtimeMs).toBeGreaterThanOrEqual(
+    statSync(released).mtimeMs,
+  );
+});
+
+test("a lock is released only while it still holds its owner's token", () => {
+  const app = repo({ "readme.md": "" });
+  const lock = join(app, ".loop/findings.lock");
+
+  lockFindings(app)();
+  const gone = existsSync(lock);
+  const release = lockFindings(app);
+  writeFileSync(lock, "a tool that broke the lock as stale");
+  release();
+
+  expect(gone).toBe(false);
+  expect(readFileSync(lock, "utf8")).toBe("a tool that broke the lock as stale");
+});

@@ -1,6 +1,7 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vite-plus/test";
@@ -329,6 +330,19 @@ test("a gate past its timeout is red, and its whole process group is killed", as
   expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }));
 });
 
+test("a gate that ignores SIGTERM is killed 5 seconds later", async () => {
+  const stubborn = `node -e "process.on('SIGTERM', () => {}); require('fs').writeFileSync('pid', String(process.pid)); setInterval(() => {}, 1000)"`;
+  const app = repo({
+    "loop.json": JSON.stringify({ gates: [{ name: "stubborn", run: stubborn, timeout: 300 }] }),
+  });
+
+  await loop(app, "check");
+  const pid = Number(readFileSync(join(app, "pid"), "utf8"));
+
+  expect(findingsOf(app)[0].summary).toBe("timed out after 300 ms");
+  expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }));
+}, 15_000);
+
 test("a stop kills the running gate, writes nothing, and exits 130", async () => {
   const app = repo({ "loop.json": loopJson({ slow: 'node -e "setTimeout(() => {}, 30000)"' }) });
   const stop = new AbortController();
@@ -364,6 +378,8 @@ test("a missing or bad loop.json exits 78; an unknown command or flag exits 64",
   const logs = await loop(app, "check");
   commit(app, { "loop.json": '{"gates":[{"name":"a","run":"x","timeout":1.5}]}' }, "timeout");
   const timeout = await loop(app, "check");
+  commit(app, { "loop.json": '{"gates":[{"name":"a","run":"x","timeout":2147483648}]}' }, "long");
+  const long = await loop(app, "check");
   const unknown = await loop(app, "bogus");
   const flag = await loop(app, "check", "--nope");
 
@@ -375,6 +391,8 @@ test("a missing or bad loop.json exits 78; an unknown command or flag exits 64",
   expect(logs.stderr).toContain("since each names a log file");
   expect(timeout.code).toBe(78);
   expect(timeout.stderr).toContain('gate a: "timeout" must be a positive whole number');
+  expect(long.code).toBe(78);
+  expect(long.stderr).toContain('gate a: "timeout" must be at most 2147483647 ms');
   expect(unknown.code).toBe(64);
   expect(flag.code).toBe(64);
 });
@@ -387,4 +405,21 @@ test("the bin runs check and sets the exit code", () => {
 
   expect(run.status).toBe(1);
   expect(run.stdout).toContain("FAIL red");
+});
+
+test("SIGHUP stops the bin, kills the gate's whole group, and exits 129", async () => {
+  const sleeper = `node -e "const c = require('child_process').spawn('sleep', ['30'], { stdio: 'ignore' }); require('fs').writeFileSync('pid', String(c.pid)); setTimeout(() => {}, 30000)"`;
+  const app = repo({ "loop.json": loopJson({ slow: sleeper }) });
+  const bin = fileURLToPath(new URL("../bin/tinker-loop.mjs", import.meta.url));
+  const child = spawn(process.execPath, [bin, "check"], { cwd: app, stdio: "ignore" });
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+
+  while (!existsSync(join(app, "pid"))) await delay(50);
+  await delay(100);
+  child.kill("SIGHUP");
+  const code = await exited;
+  const pid = Number(readFileSync(join(app, "pid"), "utf8"));
+
+  expect(code).toBe(129);
+  expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }));
 });

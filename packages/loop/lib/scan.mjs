@@ -102,16 +102,28 @@ function resolves(app, ref) {
 }
 
 /**
+ * The app folder's untracked files and whether it is dirty, taken before the gates run, so
+ * files the gates write are not part of the change. Untracked files are null outside git.
+ * @param {string} app - From --app; why: the folder to look at.
+ */
+export function treeBefore(app) {
+  const listed = git(app, ["ls-files", "--others", "--exclude-standard", "-z"], { raw: true });
+  const status = git(app, ["status", "--porcelain", "--untracked-files=all", "--", "."]);
+  return { untracked: listed?.split("\0").filter(Boolean) ?? null, dirty: Boolean(status) };
+}
+
+/**
  * The change as a diff, scoped to the app folder, with app-relative paths. It starts where
  * the branch left `base`, so a base that moved on adds no other commits. It ends at the
- * working tree, as the gates see it; untracked files that git does not ignore are all added.
+ * working tree, as the gates see it; the untracked files from before the gates are all added.
  * Returns null when the folder is not in git or the diff is too large to read.
  * @param {string} app - From --app; why: the folder to diff.
  * @param {string} base - From scanBase; why: where the change starts.
+ * @param {string[] | null} untracked - From treeBefore; why: the new files of the change.
  */
-export function changeDiff(app, base) {
+export function changeDiff(app, base, untracked) {
   const start = git(app, ["merge-base", base, "HEAD"]);
-  if (!start) return null;
+  if (!start || !untracked) return null;
 
   const tracked = git(app, [
     "-c",
@@ -125,35 +137,27 @@ export function changeDiff(app, base) {
     "--relative",
     start,
   ]);
-  const untracked = git(app, ["ls-files", "--others", "--exclude-standard", "-z"]);
-  if (tracked === null || untracked === null) return null;
+  if (tracked === null) return null;
 
-  const added = untracked
-    .split("\0")
-    .filter(Boolean)
-    .map((file) => addedFile(app, file));
-  return [tracked, ...added].join("\n");
+  return [tracked, ...untracked.map((file) => addedFile(app, file))].join("\n");
 }
 
 /**
- * True when the app folder has changes git has not committed, untracked files included.
- * @param {string} app - From --app; why: a fix seen only in the working tree is marked dirty.
- */
-export function treeDirty(app) {
-  return Boolean(git(app, ["status", "--porcelain", "--untracked-files=all", "--", "."]));
-}
-
-/**
- * An untracked file as a diff that adds every line. Links, binary, and large files add nothing.
+ * An untracked file as a diff that adds every line. Links, binary, large, gone, and
+ * unreadable files add nothing.
  * @param {string} app - From changeDiff; why: the folder the path is relative to.
  * @param {string} file - From git ls-files; why: the file to read.
  */
 function addedFile(app, file) {
-  const path = join(app, file);
-  const stat = lstatSync(path);
-  if (!stat.isFile() || stat.size > 1024 * 1024) return "";
+  let text;
+  try {
+    const stat = lstatSync(join(app, file));
+    if (!stat.isFile() || stat.size > 1024 * 1024) return "";
+    text = readFileSync(join(app, file), "utf8");
+  } catch {
+    return "";
+  }
 
-  const text = readFileSync(path, "utf8");
   if (text.includes("\0")) return "";
   const lines = text.split("\n");
   if (lines.at(-1) === "") lines.pop();
@@ -163,17 +167,19 @@ function addedFile(app, file) {
 }
 
 /**
- * Git's trimmed output, or null when it fails or prints more than 256 MB.
+ * Git's output, or null when it fails or prints more than 256 MB. Trimmed unless `raw`.
  * @param {string} app - From the scan; why: git runs in the app folder.
  * @param {string[]} args - From the scan; why: the git command.
+ * @param {{ raw?: boolean }} [options] - From the scan; why: `-z` lists keep every byte.
  */
-function git(app, args) {
+function git(app, args, { raw = false } = {}) {
   const result = spawnSync("git", args, {
     cwd: app,
     encoding: "utf8",
     maxBuffer: 256 * 1024 * 1024,
   });
-  return result.status === 0 ? result.stdout.trim() : null;
+  if (result.status !== 0) return null;
+  return raw ? result.stdout : result.stdout.trim();
 }
 
 /**

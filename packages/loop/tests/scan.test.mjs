@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -96,4 +96,37 @@ test("file names with a space or other letters come through as they are", async 
   await loop(app, "check");
 
   expect(findingsOf(app).map((finding) => finding.file)).toEqual(["src/my file.ts", "src/ü.ts"]);
+});
+
+test("untracked files keep exact names; gone and unreadable ones are skipped", async () => {
+  const app = repo({
+    "loop.json": loopJson({ remove: `node -e "require('fs').rmSync('gone.ts')"` }, "main"),
+  });
+  git(app, "checkout", "--quiet", "-b", "work");
+  writeFileSync(join(app, " lead.ts"), "Date.now();\n");
+  writeFileSync(join(app, "gone.ts"), "Date.now();\n");
+  writeFileSync(join(app, "locked.ts"), "Date.now();\n");
+  chmodSync(join(app, "locked.ts"), 0o000);
+
+  const run = await loop(app, "check");
+
+  expect(run.code).toBe(0);
+  expect(findingsOf(app).map((finding) => finding.file)).toEqual([" lead.ts"]);
+});
+
+test("files the gates write are not part of the change, and do not make the tree dirty", async () => {
+  const write = `node -e "require('fs').writeFileSync('out.ts', 'Date.now();')"`;
+  const app = repo({ "loop.json": loopJson({ write }, "main") });
+  git(app, "checkout", "--quiet", "-b", "work");
+  commit(app, { "src/a.ts": "Math.random();\n" }, "change");
+  await loop(app, "check");
+  rmSync(join(app, "out.ts"));
+
+  const sha = commit(app, { "src/a.ts": "\n" }, "fix");
+  await loop(app, "check");
+
+  expect(findingsOf(app)).toEqual([
+    expect.objectContaining({ file: "src/a.ts", status: "fixed", sha }),
+  ]);
+  expect(findingsOf(app)[0]).not.toHaveProperty("dirty");
 });

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import { findingId, loopFolder } from "./findings.mjs";
 
@@ -8,6 +9,12 @@ const ansi = new RegExp(String.raw`\u001b\[[0-9;?]*[A-Za-z]`, "g");
 
 /** A gate with no `timeout` in loop.json stops after 20 minutes. */
 export const defaultTimeoutMs = 20 * 60 * 1000;
+
+/** The longest timer Node can set; a longer one fires at once. */
+const maxTimeoutMs = 2_147_483_647;
+
+/** After SIGTERM, a stopped gate's group has this long to end before SIGKILL. */
+const killGraceMs = 5000;
 
 /**
  * The app's loop.json, checked. Throws a plain message on a bad file.
@@ -43,10 +50,17 @@ function gateProblem(gate) {
     return 'each gate needs a "name" and a "run" string';
   }
 
-  const { timeout } = gate;
-  return timeout === undefined || (Number.isSafeInteger(timeout) && timeout > 0)
-    ? null
-    : `gate ${gate.name}: "timeout" must be a positive whole number of milliseconds`;
+  const problem = timeoutProblem(gate.timeout);
+  return problem ? `gate ${gate.name}: "timeout" ${problem}` : null;
+}
+
+/** @param {unknown} timeout - From loop.json; why: Node timers take whole ms up to 2^31 - 1. */
+function timeoutProblem(timeout) {
+  if (timeout === undefined) return null;
+  if (!Number.isSafeInteger(timeout) || timeout <= 0) {
+    return "must be a positive whole number of milliseconds";
+  }
+  return timeout > maxTimeoutMs ? `must be at most ${maxTimeoutMs} ms, about 24 days` : null;
 }
 
 /** @param {string} name - From loop.json; why: the gate's log file name. */
@@ -118,8 +132,8 @@ function redGate(app, gate, log, ending) {
 
 /**
  * Run one gate in a shell, in its own process group. On its timeout or on `signal`, the whole
- * group is killed, so no child of the gate lives on. Resolves null when it passed, else how
- * it ended.
+ * group gets SIGTERM, then SIGKILL after 5 seconds, so no child of the gate lives on.
+ * Resolves null when it passed, else how it ended.
  * @param {string} app - From runGates; why: the gate's working folder.
  * @param {{ run: string, timeout?: number }} gate - From loop.json; why: the command.
  * @param {string} log - From runGates; why: where its output goes.
@@ -131,6 +145,7 @@ function runGate(app, gate, log, signal) {
 
   return new Promise((resolve) => {
     let ending = null;
+    let stopped;
     const child = spawn(gate.run, {
       cwd: app,
       shell: true,
@@ -139,35 +154,63 @@ function runGate(app, gate, log, signal) {
     });
     const stop = (why) => {
       ending ??= why;
-      killGroup(child.pid);
+      stopped ??= stopGroup(child.pid);
     };
     const timer = setTimeout(() => stop(`timed out after ${timeout} ms`), timeout);
     const abort = () => stop("was stopped");
     signal?.addEventListener("abort", abort, { once: true });
 
     let finished = false;
-    const done = (end) => {
+    const done = async (end) => {
       if (finished) return;
 
       finished = true;
       clearTimeout(timer);
       signal?.removeEventListener("abort", abort);
+      await stopped;
       closeSync(out);
       resolve(ending ?? end);
     };
-    child.once("error", (error) => done(`could not start: ${error.message}`));
+    child.once("error", (error) => void done(`could not start: ${error.message}`));
     child.once("close", (code, killed) => {
-      if (code === 0) done(null);
-      else done(killed ? `was stopped by ${killed}` : `exited with code ${code}`);
+      if (code === 0) void done(null);
+      else void done(killed ? `was stopped by ${killed}` : `exited with code ${code}`);
     });
   });
 }
 
-/** @param {number | undefined} pid - From spawn; why: the group leader to kill. */
-function killGroup(pid) {
+/**
+ * SIGTERM the group, wait up to 5 seconds for it to end, then SIGKILL what is left and wait
+ * for it to be gone.
+ * @param {number | undefined} pid - From spawn; why: the group leader's pid names the group.
+ */
+async function stopGroup(pid) {
+  signalGroup(pid, "SIGTERM");
+  await groupGone(pid, killGraceMs);
+
+  signalGroup(pid, "SIGKILL");
+  await groupGone(pid, 1000);
+}
+
+/**
+ * Wait until the group has ended, or until `limit` passes.
+ * @param {number | undefined} pid - From spawn; why: the group leader's pid names the group.
+ * @param {number} limit - From stopGroup; why: how long to wait.
+ */
+async function groupGone(pid, limit) {
+  for (let waited = 0; waited < limit && signalGroup(pid, 0); waited += 50) await delay(50);
+}
+
+/**
+ * Send `signal` to the group. Returns false when the group is gone.
+ * @param {number | undefined} pid - From spawn; why: the group leader's pid names the group.
+ * @param {string | number} signal - From stopGroup; why: 0 only asks if the group lives.
+ */
+function signalGroup(pid, signal) {
   try {
-    if (pid) process.kill(-pid, "SIGKILL");
+    if (pid) process.kill(-pid, signal);
+    return Boolean(pid);
   } catch {
-    // The group already ended.
+    return false;
   }
 }
