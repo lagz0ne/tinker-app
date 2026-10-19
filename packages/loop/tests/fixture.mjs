@@ -23,6 +23,20 @@ export function repo(files) {
 }
 
 /**
+ * A temp folder outside git holding `files`, removed when the test ends.
+ * @param {Record<string, string>} files - From a test; why: path to text.
+ */
+export function tempFolder(files) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "tinker-loop-plain-")));
+  onTestFinished(() => rmSync(root, { recursive: true, force: true }));
+  for (const [file, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, file)), { recursive: true });
+    writeFileSync(join(root, file), text);
+  }
+  return root;
+}
+
+/**
  * Write `files` and commit them.
  * @param {string} root - From repo; why: the repo to commit in.
  * @param {Record<string, string>} files - From a test; why: path to text.

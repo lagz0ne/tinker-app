@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -9,6 +9,22 @@ import {
   templateHostVersion,
 } from "../../../apps/start-scaffold/maintain/registry-source.mjs";
 import { releaseProblems } from "../../../scripts/release-check.mjs";
+import { packageContract } from "../scripts/copy-contract.mjs";
+
+const repoContract = join(import.meta.dirname, "../../../docs/decisions/start-decompose.md");
+
+/**
+ * Write the repo contract and the copy Start ships for `version` into a scratch tree.
+ * @param {string} root - From a test; why: the scratch tree.
+ * @param {string} version - From a test; why: the version the shipped copy is made for.
+ */
+async function writeContract(root, version) {
+  const text = await readFile(repoContract, "utf8");
+  await mkdir(join(root, "docs/decisions"), { recursive: true });
+  await mkdir(join(root, "packages/start/docs"), { recursive: true });
+  await writeFile(join(root, "docs/decisions/start-decompose.md"), text);
+  await writeFile(join(root, "packages/start/docs/contract.md"), packageContract(text, version));
+}
 
 // Native release fixtures use the real generated registry and no release/publish command.
 test.each(["guides", "package object", "package array", "registry dependency", "embedded package"])(
@@ -59,7 +75,7 @@ test.each(["guides", "package object", "package array", "registry dependency", "
           await writeFile(join(base, path), JSON.stringify(content));
         }
       }
-      await mkdir(join(root, "packages/start"), { recursive: true });
+      await writeContract(root, templateHostVersion);
       await writeFile(
         join(root, "packages/start/package.json"),
         JSON.stringify({ version: templateHostVersion }),
@@ -89,3 +105,34 @@ test.each(["guides", "package object", "package array", "registry dependency", "
     }
   },
 );
+
+test("release check fails when docs/contract.md is not the copy for the version", async () => {
+  const root = await mkdtemp(join(tmpdir(), "start-release-contract-"));
+  try {
+    const version = templateHostVersion;
+    const files = {
+      "packages/start/package.json": { version },
+      "apps/start-scaffold/starter.package.json": {},
+      "apps/start-scaffold/app.package.json": {},
+      "manifest.json": { assets: [{ file: `tinker-start-${version}.tgz` }] },
+    };
+    for (const [path, content] of Object.entries(files)) {
+      await mkdir(dirname(join(root, path)), { recursive: true });
+      await writeFile(join(root, path), JSON.stringify(content));
+    }
+    await mkdir(join(root, "apps/start-scaffold/public/r"), { recursive: true });
+    await writeFile(join(root, "packages/start/UPGRADE.md"), `## ${version}\nNotes.\n`);
+    await writeContract(root, version);
+    const fresh = releaseProblems(root, version, root);
+
+    await writeContract(root, "0.9.0");
+    const stale = releaseProblems(root, version, root);
+
+    expect(fresh).toEqual([]);
+    expect(stale).toEqual([
+      `packages/start/docs/contract.md is not the contract for ${templateHostVersion} (fix: node packages/start/scripts/copy-contract.mjs)`,
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
