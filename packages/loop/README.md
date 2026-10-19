@@ -123,7 +123,12 @@ vp exec tinker-loop rules [ID...] [--app <dir>]
 ```
 
 The rule text ships in `@tinker/start`, in `docs/rules.md`.
-Node finds `@tinker/start` from the app.
+The command finds `@tinker/start` in the app's `node_modules` folders, as Node does.
+It looks in the app folder, then in each parent folder.
+It stops at the top folder of the app's git repo.
+Outside git, it goes up to the root folder.
+It never uses `NODE_PATH` or Node's global folders.
+Those belong to the tool's runner, not to the app: pnpm's bin shims set `NODE_PATH`.
 So each app reads the rules of its own Start version.
 The first output line names that Start and its rules file: `@tinker/start 0.10.0: <path>`.
 With no ID, the command prints every rule under its group heading.
@@ -132,6 +137,7 @@ IDs are not case sensitive: `b1` is `B1`.
 An ID asked twice prints once.
 An unknown ID exits 64 and lists the known IDs.
 An app without Start exits 78.
+A Start whose `package.json` cannot be read exits 78 and names the error code.
 A Start without `docs/rules.md` exits 78.
 A `docs/rules.md` that the parser cannot read exits 78 and names the line.
 

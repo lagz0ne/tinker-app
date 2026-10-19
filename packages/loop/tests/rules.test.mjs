@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,7 @@ import { expect, test } from "vite-plus/test";
 import { gateRule } from "../lib/findings.mjs";
 import { parseRules } from "../lib/rules.mjs";
 import { scans } from "../lib/scan.mjs";
-import { fail, loop, loopJson, repo, setFindings } from "./fixture.mjs";
+import { fail, git, loop, loopJson, repo, setFindings, tempFolder } from "./fixture.mjs";
 
 const repoRoot = join(import.meta.dirname, "../../..");
 const startPackage = join(repoRoot, "packages/start");
@@ -65,15 +65,10 @@ function appWithStart(files = {}) {
  * An app whose node_modules holds a small @tinker/start of `version`.
  * @param {string} version - From a test; why: the Start version the app installed.
  * @param {string | null} rules - From a test; why: its docs/rules.md, or none.
- * @param {object} [exports] - From a test; why: its package exports.
  */
-function fakeStart(version, rules, exports = { "./package.json": "./package.json" }) {
+function fakeStart(version, rules) {
   return repo({
-    "node_modules/@tinker/start/package.json": JSON.stringify({
-      name: "@tinker/start",
-      version,
-      exports,
-    }),
+    "node_modules/@tinker/start/package.json": JSON.stringify({ name: "@tinker/start", version }),
     ...(rules === null ? {} : { "node_modules/@tinker/start/docs/rules.md": rules }),
   });
 }
@@ -227,16 +222,65 @@ test("an app without Start, or with a Start older than rules.md, exits 78", asyn
   expect(older.stderr).toContain("@tinker/start 0.9.0 has no docs/rules.md");
 });
 
-test("a Start that Node finds but cannot resolve names the error code, not install", async () => {
-  const app = fakeStart("1.0.0", null, { ".": "./index.js" });
+test("a Start whose package.json cannot be read names the error code, not install", async () => {
+  const app = repo({ "node_modules/@tinker/start/package.json/readme.md": "a folder, not a file" });
 
   const run = await loop(app, "rules");
 
   expect(run.code).toBe(78);
-  expect(run.stderr).toContain(
-    "cannot resolve @tinker/start from " + app + ": ERR_PACKAGE_PATH_NOT_EXPORTED",
-  );
+  expect(run.stderr).toContain(`cannot read @tinker/start from ${app}: EISDIR`);
   expect(run.stderr).not.toContain("install it");
+});
+
+test("NODE_PATH from the tool's runner never stands in for the app's Start", async () => {
+  const runner = tempFolder({});
+  mkdirSync(join(runner, "@tinker"), { recursive: true });
+  symlinkSync(startPackage, join(runner, "@tinker/start"));
+  const app = repo({ "readme.md": "" });
+  const bin = fileURLToPath(new URL("../bin/tinker-loop.mjs", import.meta.url));
+
+  const run = spawnSync(process.execPath, [bin, "rules"], {
+    cwd: app,
+    encoding: "utf8",
+    env: { ...process.env, NODE_PATH: runner },
+  });
+
+  expect(run.status).toBe(78);
+  expect(run.stderr).toContain("cannot find @tinker/start from");
+});
+
+test("a Start above the app's git repo is not the app's Start", async () => {
+  const outside = tempFolder({});
+  mkdirSync(join(outside, "node_modules/@tinker"), { recursive: true });
+  symlinkSync(startPackage, join(outside, "node_modules/@tinker/start"));
+  mkdirSync(join(outside, "app"));
+  git(join(outside, "app"), "init", "--quiet");
+
+  const run = await loop(join(outside, "app"), "rules");
+
+  expect(run.code).toBe(78);
+  expect(run.stderr).toContain("cannot find @tinker/start from");
+});
+
+test("a Start at the repo's top is found from an app folder inside it", async () => {
+  const root = repo({ "apps/one/readme.md": "" });
+  mkdirSync(join(root, "node_modules/@tinker"), { recursive: true });
+  symlinkSync(startPackage, join(root, "node_modules/@tinker/start"));
+
+  const run = await loop(join(root, "apps/one"), "rules", "G1");
+
+  expect(run.code).toBe(0);
+  expect(run.stdout).toContain("- `G1` Every gate in AGENTS.md passes.");
+});
+
+test("outside git, the lookup goes up the folders as Node does", async () => {
+  const outside = tempFolder({ "app/readme.md": "" });
+  mkdirSync(join(outside, "node_modules/@tinker"), { recursive: true });
+  symlinkSync(startPackage, join(outside, "node_modules/@tinker/start"));
+
+  const run = await loop(join(outside, "app"), "rules", "G1");
+
+  expect(run.code).toBe(0);
 });
 
 test("findings --rules shows each finding's rule text", async () => {

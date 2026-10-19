@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const ruleStart = /^- `([A-Z][0-9]+)` \S/;
@@ -86,20 +86,25 @@ export function ruleText(rule) {
 }
 
 /**
- * The rules of the @tinker/start that the app itself resolves, so each app reads the rules
- * of its own Start version. Throws a plain message when there is no Start or no rules file.
- * @param {string} app - From --app; why: Node resolves @tinker/start from this folder.
+ * The rules of the app's own @tinker/start, so each app reads the rules of its own Start
+ * version. Throws a plain message when there is no Start or no rules file.
+ * @param {string} app - From --app; why: the lookup for @tinker/start starts in this folder.
  */
 export function readRules(app) {
-  const manifest = startManifest(app);
-  const { version } = JSON.parse(readFileSync(manifest, "utf8"));
-  const path = join(dirname(manifest), "docs", "rules.md");
+  const start = startFolder(app);
+  let version;
+  try {
+    ({ version } = JSON.parse(readFileSync(join(start, "package.json"), "utf8")));
+  } catch (error) {
+    throw new Error(`cannot read @tinker/start from ${app}: ${error.code ?? error.message}`);
+  }
+
+  const path = join(start, "docs", "rules.md");
   if (!existsSync(path)) {
     throw new Error(
       `@tinker/start ${version} has no docs/rules.md; it is older than the rules file`,
     );
   }
-
   try {
     return { version, path, rules: parseRules(readFileSync(path, "utf8")) };
   } catch (error) {
@@ -107,14 +112,22 @@ export function readRules(app) {
   }
 }
 
-/** @param {string} app - From readRules; why: Node resolves @tinker/start from this folder. */
-function startManifest(app) {
-  try {
-    return createRequire(join(app, "package.json")).resolve("@tinker/start/package.json");
-  } catch (error) {
-    if (error.code === "MODULE_NOT_FOUND") {
-      throw new Error(`cannot find @tinker/start from ${app}; install it to read its rules`);
-    }
-    throw new Error(`cannot resolve @tinker/start from ${app}: ${error.code ?? error.message}`);
+/**
+ * The app's own @tinker/start folder: Node's node_modules lookup, from the app folder up to
+ * the top folder of the app's git repo. NODE_PATH and Node's global folders are not used:
+ * they belong to whatever runs the tool, not to the app. pnpm's bin shims, for one, set
+ * NODE_PATH to the workspace's own packages. Outside git, the lookup goes up to the root.
+ * @param {string} app - From readRules; why: the folder the lookup starts in.
+ */
+function startFolder(app) {
+  const from = realpathSync(app);
+  const top = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: from, encoding: "utf8" });
+  const stop = top.status === 0 ? top.stdout.trim() : null;
+
+  for (let folder = from; ; folder = dirname(folder)) {
+    const start = join(folder, "node_modules", "@tinker", "start");
+    if (existsSync(join(start, "package.json"))) return start;
+    if (folder === stop || folder === dirname(folder)) break;
   }
+  throw new Error(`cannot find @tinker/start from ${app}; install it to read its rules`);
 }
