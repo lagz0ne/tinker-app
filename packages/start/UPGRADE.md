@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `mailMaxSenders` (`mail.maxSenders`, default 4) caps SMTP connections; extra sends wait without starting their send deadline.
+- An acknowledgement failure counts as a crash attempt; remaining claims keep their leases until expiry.
+- `MigrationBusy` exits 1; only migration-lock polling is bounded. DDL has no `lock_timeout`.
+- Mail leases use each worker's clock; keep worker hosts' clocks in sync.
+
 - Concurrent mail sends own separate connections; a timeout closes only its send.
   Healthy sends reuse idle connections. The auth mail example carries the outbox
   migrations without requiring starter; exhausted mail has its own partial index.

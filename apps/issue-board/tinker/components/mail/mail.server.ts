@@ -57,12 +57,12 @@ export const mail = resource({
     });
 
     return {
-      async send(message, { signal = closing } = {}) {
-        const stopped = AbortSignal.any([closing, signal]);
+      async send(message, { signal } = {}) {
+        const stopped = signal ? AbortSignal.any([closing, signal]) : closing;
 
         stopped.throwIfAborted();
 
-        while (idle.length === 0 && connections.size >= limit) {
+        while (connections.size - idle.length >= limit) {
           const available = Promise.withResolvers<void>();
           const abortWait = () => available.reject(stopped.reason);
 
@@ -92,6 +92,7 @@ export const mail = resource({
           };
           connections.add(sender);
         }
+
         const owned = sender;
         let reusable = false;
         const cancelled = Promise.withResolvers<never>();
@@ -99,10 +100,10 @@ export const mail = resource({
         const abort = () => {
           sockets.close(owned.connection, new Error("Mail send cancelled"));
 
-          cancelled.reject(signal.reason);
+          cancelled.reject(signal?.reason);
         };
 
-        signal.addEventListener("abort", abort, { once: true });
+        signal?.addEventListener("abort", abort, { once: true });
 
         const timer = new AbortController();
 
@@ -120,7 +121,7 @@ export const mail = resource({
         } finally {
           timer.abort();
 
-          signal.removeEventListener("abort", abort);
+          signal?.removeEventListener("abort", abort);
 
           if (reusable) idle.push(owned);
           else {
@@ -129,7 +130,7 @@ export const mail = resource({
             owned.transport.close();
           }
 
-          for (const wake of waiting) wake();
+          waiting.forEach((wake) => wake());
         }
       },
     };
