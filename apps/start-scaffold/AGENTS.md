@@ -46,6 +46,12 @@ Read the skill for the work you are doing:
   when saving or sharing state; use events and execution waits.
 - [tinker-testing](.agents/skills/tinker-testing/SKILL.md):
   when adding or fixing behavior; test through small scopes.
+- [tinker-review](.agents/skills/tinker-review/SKILL.md):
+  when reviewing a change; cite one contract rule per finding.
+
+Writers use the first five skills. A separate reviewer uses tinker-review.
+The writer fixes or answers each blocking finding, then the reviewer reads
+the new commits only. After three rounds, a person checks the approach.
 
 Run the build before the type check and tests.
 Run the shipped checks before review:

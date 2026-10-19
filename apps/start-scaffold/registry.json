@@ -1146,6 +1146,11 @@
           "target": "~/.agents/skills/tinker-testing/SKILL.md"
         },
         {
+          "path": ".agents/skills/tinker-review/SKILL.md",
+          "type": "registry:file",
+          "target": "~/.agents/skills/tinker-review/SKILL.md"
+        },
+        {
           "path": "AGENTS.md",
           "type": "registry:file",
           "target": "~/AGENTS.md"
