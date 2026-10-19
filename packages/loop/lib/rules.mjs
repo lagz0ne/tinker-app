@@ -7,10 +7,11 @@ const groupHeading = /^### [A-Z]: .+$/;
 
 /**
  * The rules in a `docs/rules.md` text, in file order. A `### <letter>: <title>` heading starts
- * a group, and a `## ` heading ends it. A rule is a list item "- `ID` text" inside a group whose
- * letter starts the ID; its next lines are indented by two spaces. Any other line ends the rule.
- * Throws, naming the line, on a bad rule line or heading, a rule outside a group, a wrong
- * letter, or a repeated ID. Throws when there is no rule at all.
+ * a group, and a `#` or `##` heading ends it. A rule is a list item "- `ID` text" inside a group
+ * whose letter starts the ID; its next lines are indented by two spaces. Inside a group, every
+ * other line is blank or a heading. Throws, naming the line, on any other line in a group, a
+ * bad rule line or heading, a rule outside a group, a wrong letter, or a repeated ID. Throws
+ * when there is no rule at all.
  * @param {string} text - From readRules or a test; why: the markdown to read.
  */
 export function parseRules(text) {
@@ -40,12 +41,26 @@ function readLine(read, line, number) {
   }
 
   read.open = null;
-  if (line.startsWith("## ")) read.group = null;
-  if (!line.startsWith("### ")) return;
+  if (line.startsWith("#")) read.group = headingGroup(line, number);
+  else if (read.group && line.trim()) {
+    throw new Error(
+      `line ${number}: in group ${read.group[0]}, a line is blank, a rule "- \`ID\` text", a two-space line right after a rule line, or a heading`,
+    );
+  }
+}
+
+/**
+ * The group a heading starts: a `### <letter>: <title>` heading names it, and a `#` or `##`
+ * heading ends the one before. Any other heading throws.
+ * @param {string} line - From readLine; why: the heading.
+ * @param {number} number - From parseRules; why: names the line in an error.
+ */
+function headingGroup(line, number) {
+  if (/^#{1,2} /.test(line)) return null;
   if (!groupHeading.test(line)) {
     throw new Error(`line ${number}: a group heading reads "### <letter>: <title>"`);
   }
-  read.group = line.slice(4);
+  return line.slice(4);
 }
 
 /**
