@@ -1,6 +1,7 @@
 import { createServer, get } from "node:http";
 
 import { getRequestListener } from "@hono/node-server";
+import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
 import { createScope, operation, resource } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
@@ -37,7 +38,7 @@ async function serveHosted(root, route) {
       context: { scope: root },
       next: async ({ context }) => ({ request, pathname: "/", context, ...route(context) }),
     });
-    return result.response;
+    return writeHosted(request, result.response, outgoing);
   });
   const server = createServer(listener).listen(0);
   await new Promise((done) => server.once("listening", done));
@@ -45,11 +46,23 @@ async function serveHosted(root, route) {
 }
 
 /**
- * Polls until the check holds; host events land on later turns.
- * @param check - From a test; why: the state the test waits for.
+ * The host's side of the join: write the body, await the lent `beforeEnd`, then end; a failed
+ * join destroys the reply.
+ * @param request - From serveHosted; why: the join the middleware lends.
+ * @param response - From the middleware; why: the reply to write.
+ * @param outgoing - From hono; why: the Node response.
  */
-async function until(check) {
-  while (!check()) await new Promise((done) => setImmediate(done));
+async function writeHosted(request, response, outgoing) {
+  outgoing.writeHead(response.status, Object.fromEntries(response.headers));
+  outgoing.flushHeaders();
+  try {
+    for await (const part of response.body ?? []) outgoing.write(part);
+    await request.runtime.beforeEnd?.();
+    outgoing.end();
+  } catch (error) {
+    outgoing.destroy(error);
+  }
+  return RESPONSE_ALREADY_SENT;
 }
 
 test("each request runs in its own session, with its headers and stop signal, until its body is read", async () => {
@@ -263,7 +276,7 @@ test.each(["end", "cancel", "error"])(
   },
 );
 
-test("a hosted request closes its session gracefully once the host finishes its response", async () => {
+test("a hosted request closes its session gracefully before the host ends its response", async () => {
   const root = createScope();
   const closing = Promise.withResolvers();
   const closed = [];
@@ -292,20 +305,32 @@ test("a hosted request closes its session gracefully once the host finishes its 
     return { response: new Response("hello") };
   });
 
-  expect(await (await fetch(url)).text()).toBe("hello");
+  const reply = fetch(url);
   await closing.promise;
   gate.resolve();
 
+  expect(await (await reply).text()).toBe("hello");
+  expect(closed).toEqual(["session"]);
   expect(await running.promise).toEqual({ status: "success", value: false });
-  await until(() => closed.length === 1);
   await new Promise((done) => server.close(done));
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("a client abort ends a hosted request session by force", async () => {
+test("a client abort ends a hosted request session by force, once", async () => {
   const root = createScope();
+  const closed = [];
+  const recorder = resource({
+    label: "test.recorder",
+    target: "session",
+    factory: (_deps, ctx) => {
+      ctx.defer(() => {
+        closed.push("session");
+      });
+    },
+  });
   const running = Promise.withResolvers();
   const { server, url } = await serveHosted(root, ({ session }) => {
+    session.resolve(recorder);
     running.resolve(session.settle(stoppable));
     return { response: new Response(new ReadableStream()) };
   });
@@ -315,6 +340,7 @@ test("a client abort ends a hosted request session by force", async () => {
   expect(await running.promise).toEqual({ status: "success", value: "stopped" });
   await new Promise((done) => server.close(done));
   expect((await root.close({ graceful: true })).status).toBe("success");
+  expect(closed).toEqual(["session"]);
 });
 
 test("closing the app destroys each open hosted response", async () => {
@@ -336,7 +362,7 @@ test("closing the app destroys each open hosted response", async () => {
   await new Promise((done) => server.close(done));
 });
 
-test("a request that cannot end after its host response closes fails the app close", async () => {
+test("a request that cannot close fails its hosted reply", async () => {
   const root = createScope();
   const lost = new Error("lost");
   const leaky = resource({
@@ -354,7 +380,34 @@ test("a request that cannot end after its host response closes fails the app clo
     return { response: new Response("hello") };
   });
 
-  expect(await (await fetch(url)).text()).toBe("hello");
+  await expect((await fetch(url)).text()).rejects.toThrow("terminated");
+  await new Promise((done) => server.close(done));
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a request that cannot end after a client abort fails the app close", async () => {
+  const root = createScope();
+  const lost = new Error("lost");
+  const ran = Promise.withResolvers();
+  const leaky = resource({
+    label: "test.leaky",
+    target: "session",
+    factory: (_deps, ctx) => {
+      ctx.defer(() => {
+        ran.resolve();
+        throw lost;
+      });
+      return 1;
+    },
+  });
+  const { server, url } = await serveHosted(root, ({ session }) => {
+    session.resolve(leaky);
+    return { response: new Response(new ReadableStream()) };
+  });
+
+  get(url, (res) => res.destroy()).on("error", () => {});
+  await ran.promise;
+  await new Promise((done) => setImmediate(done));
   await new Promise((done) => server.close(done));
 
   expect((await root.close({ graceful: true })).teardownErrors).toEqual([lost]);

@@ -9,10 +9,32 @@ import { fixture } from "./fixture.mjs";
 
 /**
  * A built server: `/wait` answers when its signal aborts; `/last` reports the previous signal;
- * `/json` is a whole JSON body; `/html` streams its second part late.
+ * `/json` is a whole JSON body; `/html` streams its second part late; `/lines`, a `+json`
+ * stream, stays open until `/release`; `/big` is 96 KiB of JSON in one part; `/failed` and
+ * `/failed-stream` lend a join that rejects.
  */
 const app = `
 let last;
+let release;
+const text = new TextEncoder();
+
+function lines() {
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(text.encode('{"n":1}\\n'));
+      release = () => {
+        controller.enqueue(text.encode('{"n":2}\\n'));
+        controller.close();
+      };
+    },
+  });
+  return new Response(body, { headers: { "content-type": "application/stream+json" } });
+}
+
+function failed(request, response) {
+  request.runtime.beforeEnd = () => Promise.reject(new Error("commit failed"));
+  return response;
+}
 
 function json() {
   const headers = new Headers({ "cache-control": "no-store" });
@@ -22,7 +44,6 @@ function json() {
 }
 
 function html() {
-  const text = new TextEncoder();
   const body = new ReadableStream({
     start(controller) {
       controller.enqueue(text.encode("<p>shell</p>"));
@@ -44,6 +65,14 @@ export default async function main({ signal }) {
       if (path === "/last") return new Response(String(last.aborted));
       if (path === "/json") return json();
       if (path === "/html") return html();
+      if (path === "/lines") return lines();
+      if (path === "/big") return Response.json("x".repeat(96 * 1024));
+      if (path === "/failed") return failed(request, new Response("hello"));
+      if (path === "/failed-stream") return failed(request, html());
+      if (path === "/release") {
+        release();
+        return new Response(null, { status: 204 });
+      }
 
       last = request.signal;
       if (path === "/wait") {
@@ -143,3 +172,53 @@ test("streamed HTML still goes out in parts", async () => {
   expect(headers["transfer-encoding"]).toBe("chunked");
   expect(body).toBe("<p>shell</p><p>late</p>");
 });
+
+test("a live JSON stream sends each line before the producer closes", async () => {
+  const { port } = await serve();
+  const parts = [];
+
+  await new Promise((resolve, reject) => {
+    request({ port, path: "/lines" }, (response) => {
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        parts.push(chunk);
+        if (parts.length === 1) void get(port, "/release");
+      });
+      response.on("end", resolve);
+    })
+      .on("error", reject)
+      .end();
+  });
+
+  expect(parts.join("")).toBe('{"n":1}\n{"n":2}\n');
+  expect(parts[0]).toBe('{"n":1}\n');
+});
+
+test("a body over 64 KiB streams rather than waiting for its length", async () => {
+  const { port } = await serve();
+
+  const { headers, body } = await read(port, "/big");
+
+  expect(headers["content-length"]).toBeUndefined();
+  expect(headers["transfer-encoding"]).toBe("chunked");
+  expect(body).toBe(JSON.stringify("x".repeat(96 * 1024)));
+});
+
+test.each(["/failed", "/failed-stream"])(
+  "a request that cannot close fails its reply at %s",
+  async (path) => {
+    const { port } = await serve();
+
+    const reply = new Promise((resolve) => {
+      request({ port, path }, (response) => {
+        response.on("error", () => resolve("broken"));
+        response.on("end", () => resolve(response.complete ? "complete" : "broken"));
+        response.resume();
+      })
+        .on("error", () => resolve("broken"))
+        .end();
+    });
+
+    expect(await reply).toBe("broken");
+  },
+);

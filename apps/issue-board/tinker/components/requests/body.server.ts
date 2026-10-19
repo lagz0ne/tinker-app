@@ -7,14 +7,20 @@ import { startServer } from "./modules.server";
 export declare namespace Requests {
   /** The Node response a host serves the request on. */
   type Outgoing = ServerResponse;
-  /** srvx and h3 read a Node host's response from `request.runtime.node.res`. */
-  type Hosted = Request & { runtime: { node?: { res: Outgoing } } };
+  /**
+   * srvx and h3 read a Node host's response from `request.runtime.node.res`; a host that awaits
+   * `beforeEnd` before its last write fails the reply when the request cannot close.
+   */
+  type Hosted = Request & {
+    runtime: { node?: { res: Outgoing }; beforeEnd?: () => Promise<void> };
+  };
 }
 
 /**
- * Ends each request when its host response closes, as Fastify's `onResponse` does: graceful
- * when the response finished, forced on a client abort. Scope close destroys the responses
- * still open and fails with any request that could not end.
+ * Ends each request before its host response ends, as the body read did: the returned join
+ * closes it gracefully, and a failed close fails the reply. A response that closes first, on a
+ * client abort, ends it by force. Scope close destroys the responses still open and fails with
+ * any request that could not end and had no reply left to fail.
  */
 export const hostResponses = resource({
   label: "start.hostResponses",
@@ -33,11 +39,12 @@ export const hostResponses = resource({
         return "runtime" in request;
       },
       endOnClose(outgoing: Requests.Outgoing, finish: (graceful: boolean) => Promise<void>) {
+        let joined: Promise<void> | undefined;
         const closed = outgoing.closed
           ? Promise.resolve()
           : new Promise<void>((resolve) => outgoing.once("close", resolve));
         const ending = closed
-          .then(() => finish(outgoing.writableFinished))
+          .then(() => (joined ? joined.then(noop, noop) : finish(outgoing.writableFinished)))
           .then(
             () => {
               open.delete(outgoing);
@@ -48,10 +55,14 @@ export const hostResponses = resource({
             },
           );
         open.set(outgoing, ending);
+        return () => (joined ??= finish(true));
       },
     };
   },
 });
+
+/** A joined close already failed its reply; the host owns that error. */
+function noop() {}
 
 /** Retains request work until the consumer ends, fails, or cancels the body. */
 export const responseBodies = resource({

@@ -39,12 +39,14 @@ export const requestLifetime = resource({
         request = value;
         owned = renders.open(value);
       },
-      /** The host's response close ends the request, with no body rewrap; false without a host. */
+      /**
+       * The host ends the request before its response ends, with no body rewrap: it awaits the
+       * lent `beforeEnd`, or its response close ends the request. False without a host.
+       */
       endOnHostClose(hosted: Request) {
-        const outgoing = responses.isHosted(hosted) ? hosted.runtime.node?.res : undefined;
-        if (outgoing === undefined) return false;
+        if (!responses.isHosted(hosted) || hosted.runtime.node === undefined) return false;
 
-        responses.endOnClose(outgoing, lifetime.finish);
+        hosted.runtime.beforeEnd = responses.endOnClose(hosted.runtime.node.res, lifetime.finish);
         return true;
       },
     };

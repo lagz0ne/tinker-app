@@ -188,7 +188,7 @@ async function compressBody(request, body, encoding, headers) {
  * Releasing the lock fails an open read but keeps its chunk queued, and a failed source fails again for the next reader.
  * @param {ReadableStreamDefaultReader<Uint8Array>} reader - From compressBody; why: the read parts move to the encoder.
  */
-async function readStart(reader) {
+export async function readStart(reader) {
   const parts = [];
   let size = 0;
   let timer;
