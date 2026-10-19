@@ -1,11 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { expect, onTestFinished, test } from "vite-plus/test";
+import { expect, test } from "vite-plus/test";
 
+import { main } from "../lib/main.mjs";
 import {
   commit,
   fail,
@@ -120,21 +120,21 @@ test("a gone check finding is fixed at HEAD, and opens again when it comes back"
   expect(again).not.toHaveProperty("sha");
 });
 
-test("an answered finding keeps its reason when seen again and when gone", async () => {
+test("an answered finding keeps its reason when seen again, and is fixed when gone", async () => {
   const app = repo({ "loop.json": loopJson({ ok: okGate }) });
   await loop(app, "check");
   setFindings(app, [{ ...findingsOf(app)[0], status: "answered", reason: "known flake" }]);
 
   await loop(app, "check");
   const [seen] = findingsOf(app);
-  commit(app, { ok: "" }, "fix");
+  const sha = commit(app, { ok: "" }, "fix");
   await loop(app, "check");
   const [gone] = findingsOf(app);
 
   expect(seen).toEqual(
     expect.objectContaining({ status: "answered", reason: "known flake", round: 2 }),
   );
-  expect(gone).toEqual(expect.objectContaining({ status: "answered", reason: "known flake" }));
+  expect(gone).toEqual(expect.objectContaining({ status: "fixed", sha, reason: "known flake" }));
 });
 
 test("judge and review findings stay as they are", async () => {
@@ -253,25 +253,97 @@ test("--base wins over loop.json; a base git cannot find skips the scan", async 
   const scanned = await loop(app, "check", "--base", base);
 
   expect(skipped.code).toBe(0);
-  expect(skipped.stdout).toContain("scan skipped: no git diff from missing");
+  expect(skipped.stdout).toContain("scan skipped: no base found; pass --base <ref>");
   expect(scanned.stdout).not.toContain("scan skipped");
   expect(findingsOf(app).map((finding) => finding.rule)).toEqual(["B3"]);
 });
 
-test("a loop.json base that tracks a remote scans from the remote, not the old local copy", async () => {
-  const upstream = repo({ "loop.json": loopJson({ ok: pass }, "main") });
-  const app = realpathSync(mkdtempSync(join(tmpdir(), "tinker-loop-clone-")));
-  onTestFinished(() => rmSync(app, { recursive: true, force: true }));
-  git(app, "clone", "--quiet", upstream, ".");
-  commit(upstream, { "src/theirs.ts": "Date.now();\n" }, "theirs");
-  git(app, "fetch", "--quiet");
-  git(app, "checkout", "--quiet", "-b", "work", "origin/main");
-  commit(app, { "src/mine.ts": "Math.random();\n" }, "mine");
+test("a red gate keeps one id when its message changes", async () => {
+  const app = repo({
+    "loop.json": loopJson({
+      types: `node -e "console.error('error: ' + require('fs').readFileSync('message', 'utf8')); process.exit(1)"`,
+    }),
+    message: "first",
+  });
+  await loop(app, "check");
+  const [first] = findingsOf(app);
+
+  commit(app, { message: "second" }, "new message");
+  await loop(app, "check");
+
+  expect(findingsOf(app)).toEqual([
+    expect.objectContaining({ id: first.id, summary: "error: second", status: "open" }),
+  ]);
+});
+
+test("a skipped scan leaves scan findings as they are; gate findings still change", async () => {
+  const app = repo({ "loop.json": loopJson({ ok: okGate }, "main") });
+  git(app, "checkout", "--quiet", "-b", "work");
+  commit(app, { "src/a.ts": "Date.now();\n" }, "change");
+  await loop(app, "check");
+
+  const sha = commit(app, { ok: "" }, "fix the gate");
+  const run = await loop(app, "check", "--base", "missing");
+  const rows = Object.fromEntries(findingsOf(app).map((row) => [row.rule, row]));
+
+  expect(run.stdout).toContain("scan skipped: git cannot find --base missing");
+  expect(rows.B3).toEqual(expect.objectContaining({ status: "open", round: 1 }));
+  expect(rows.G1).toEqual(expect.objectContaining({ status: "fixed", sha }));
+});
+
+test("rows another tool writes while the gates run are kept", async () => {
+  const review = { id: "review-1", rule: "C3", source: "review", round: 1, status: "open" };
+  const append = `node -e "require('fs').appendFileSync('.loop/findings.jsonl', process.argv[1] + '\\n')" '${JSON.stringify(review)}'`;
+  const app = repo({ "loop.json": loopJson({ write: append, red: fail }) });
+
+  await loop(app, "check");
+
+  expect(findingsOf(app)).toEqual([
+    review,
+    expect.objectContaining({ rule: "G1", file: "red", round: 2 }),
+  ]);
+});
+
+test("a check after a review at round 5 is round 6", async () => {
+  const app = repo({ "loop.json": loopJson({ red: fail }) });
+  await loop(app, "check");
+  setFindings(app, [{ id: "review-1", rule: "C3", source: "review", round: 5, status: "open" }]);
+
+  const { stdout } = await loop(app, "check");
+
+  expect(stdout).toContain("tinker-loop check, round 6:");
+  expect(findingsOf(app)[1]).toEqual(expect.objectContaining({ rule: "G1", round: 6 }));
+});
+
+test("a gate past its timeout is red, and its whole process group is killed", async () => {
+  const sleeper = `node -e "const c = require('child_process').spawn('sleep', ['30'], { stdio: 'ignore' }); require('fs').writeFileSync('pid', String(c.pid)); setTimeout(() => {}, 30000)"`;
+  const app = repo({
+    "loop.json": JSON.stringify({ gates: [{ name: "slow", run: sleeper, timeout: 1000 }] }),
+  });
 
   const run = await loop(app, "check");
+  const pid = Number(readFileSync(join(app, "pid"), "utf8"));
 
-  expect(run.stdout).toContain("scan base: origin/main\n");
-  expect(findingsOf(app).map((finding) => finding.file)).toEqual(["src/mine.ts"]);
+  expect(run.code).toBe(1);
+  expect(findingsOf(app)[0].summary).toBe("timed out after 1000 ms");
+  expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }));
+});
+
+test("a stop kills the running gate, writes nothing, and exits 130", async () => {
+  const app = repo({ "loop.json": loopJson({ slow: 'node -e "setTimeout(() => {}, 30000)"' }) });
+  const stop = new AbortController();
+  setTimeout(() => stop.abort("SIGINT"), 300);
+
+  const code = await main({
+    args: ["check"],
+    cwd: app,
+    stdout: { write: () => true },
+    stderr: { write: () => true },
+    signal: stop.signal,
+  });
+
+  expect(code).toBe(130);
+  expect(existsSync(join(app, ".loop/findings.jsonl"))).toBe(false);
 });
 
 test("a missing or bad loop.json exits 78; an unknown command or flag exits 64", async () => {
@@ -284,6 +356,14 @@ test("a missing or bad loop.json exits 78; an unknown command or flag exits 64",
     "twice",
   );
   const twice = await loop(app, "check");
+  commit(
+    app,
+    { "loop.json": '{"gates":[{"name":"a/b","run":"x"},{"name":"a-b","run":"y"}]}' },
+    "logs",
+  );
+  const logs = await loop(app, "check");
+  commit(app, { "loop.json": '{"gates":[{"name":"a","run":"x","timeout":1.5}]}' }, "timeout");
+  const timeout = await loop(app, "check");
   const unknown = await loop(app, "bogus");
   const flag = await loop(app, "check", "--nope");
 
@@ -291,6 +371,10 @@ test("a missing or bad loop.json exits 78; an unknown command or flag exits 64",
   expect(missing.stderr).toContain("loop.json is missing");
   expect(twice.code).toBe(78);
   expect(twice.stderr).toContain("loop.json: gate names must differ");
+  expect(logs.code).toBe(78);
+  expect(logs.stderr).toContain("since each names a log file");
+  expect(timeout.code).toBe(78);
+  expect(timeout.stderr).toContain('gate a: "timeout" must be a positive whole number');
   expect(unknown.code).toBe(64);
   expect(flag.code).toBe(64);
 });
