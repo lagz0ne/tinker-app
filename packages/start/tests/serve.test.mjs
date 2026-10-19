@@ -49,6 +49,26 @@ test("pages, dot paths, escapes, and writes pass on to the server entry", async 
   expect(await asset(new Request("http://app/robots.txt", { method: "POST" }))).toBeNull();
 });
 
+test("an escaped name, a query, and doubled slashes find the same built file", async () => {
+  const root = fixture({ "dist/client/a b.txt": "spaced", "dist/client/robots.txt": "robots" });
+  const asset = await createAssets(root);
+
+  const served = await Promise.all(
+    [
+      "http://app/a%20b.txt",
+      "http://app/a b.txt?x=1",
+      "https://app:8443//a%20b.txt",
+      "http://app/robots.txt?a/b#c",
+      "https://app///robots.txt",
+      "http://app/a%20b.txt#top",
+      "http://app/robots.txt#a?b",
+    ].map(async (url) => (await asset(new Request(url)))?.text()),
+  );
+
+  expect(served).toEqual(["spaced", "spaced", "spaced", "robots", "robots", "spaced", "robots"]);
+  expect(() => asset(new Request("http://app/%E0%A4%A"))).toThrow(URIError);
+});
+
 test("each built file type is served with its content type", async () => {
   const types = {
     "a.js": "text/javascript",

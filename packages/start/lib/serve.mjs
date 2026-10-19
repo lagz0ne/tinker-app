@@ -71,7 +71,11 @@ function addPages(paths) {
  */
 function asset(paths, files, cache, request) {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
-  const path = decodeURIComponent(new URL(request.url).pathname).replace(slashes, "/");
+
+  const raw = readPathname(request.url);
+  const decoded = raw.includes("%") ? decodeURIComponent(raw) : raw;
+  const path = decoded.includes("//") ? decoded.replace(slashes, "/") : decoded;
+
   const file = paths.get(path);
   if (!file) {
     return path.startsWith("/assets/") && !dotPath.test(path)
@@ -79,6 +83,21 @@ function asset(paths, files, cache, request) {
       : null;
   }
   return readStatic(files, cache, file, path, request);
+}
+
+/**
+ * A Request URL is already serialized by the URL parser, so its pathname is a slice of the string.
+ * @param {string} url - From the host's Request; why: skip a second URL parse on every request.
+ */
+function readPathname(url) {
+  const scheme = url.startsWith("http://") ? 7 : url.startsWith("https://") ? 8 : -1;
+  if (scheme < 0) return new URL(url).pathname;
+
+  const start = url.indexOf("/", scheme);
+  const query = url.indexOf("?", start);
+  const hash = url.indexOf("#", start);
+  const end = query < 0 ? hash : hash < 0 ? query : Math.min(query, hash);
+  return url.slice(start, end < 0 ? url.length : end);
 }
 
 /**
