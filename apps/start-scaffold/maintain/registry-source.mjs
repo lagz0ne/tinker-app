@@ -104,9 +104,42 @@ async function copiedFiles(prefix) {
   return files;
 }
 
+/**
+ * Drop each `workspace:*` dependency whose package.json is `private: true` and that has no
+ * release URL, such as @tinker/loop: a copied app cannot install it. Start is private too,
+ * but its release URL keeps it.
+ * @param {any} pkg - From the app's package.json; why: the manifest to copy.
+ * @param {string[]} released - From releaseUrls; why: the packages a release ships.
+ */
+async function withoutUnreleased(pkg, released) {
+  const copy = { ...pkg };
+  for (const field of ["dependencies", "devDependencies"]) {
+    if (!pkg[field]) continue;
+
+    const kept = {};
+    for (const [name, version] of Object.entries(pkg[field])) {
+      const local = version === "workspace:*" && !released.includes(name);
+      if (!local || !(await workspacePackage(name)).private) kept[name] = version;
+    }
+    copy[field] = kept;
+  }
+
+  return copy;
+}
+
+/** @param {string} name - From a `workspace:*` dependency; why: its package.json to read. */
+async function workspacePackage(name) {
+  return JSON.parse(
+    await readFile(join(root, "packages", name.split("/").at(1), "package.json"), "utf8"),
+  );
+}
+
 /** Release specs replace workspace and catalog names; local packs never enter a normal build. */
 async function releasePackage(path, packs, releaseVersion) {
-  const pkg = JSON.parse(await readFile(path, "utf8"));
+  const pkg = await withoutUnreleased(
+    JSON.parse(await readFile(path, "utf8")),
+    Object.keys(releaseUrls(releaseVersion)),
+  );
 
   const workspace = await readFile(join(root, "pnpm-workspace.yaml"), "utf8");
   const catalog = Object.fromEntries(
@@ -127,9 +160,7 @@ async function releasePackage(path, packs, releaseVersion) {
       }
       if (version === "catalog:") dependencies[name] = catalog[name];
       if (version === "workspace:*") {
-        const release = JSON.parse(
-          await readFile(join(root, "packages", name.split("/").at(1), "package.json"), "utf8"),
-        );
+        const release = await workspacePackage(name);
         dependencies[name] = packs
           ? `file:${join(resolve(packs), `${name.slice(1).replace("/", "-")}-${release.version}.tgz`)}`
           : releaseUrls(releaseVersion)[name];

@@ -476,6 +476,9 @@ importers:
       '@tailwindcss/vite':
         specifier: 4.3.3
         version: 4.3.3(@voidzero-dev/vite-plus-core@1.0.0(@types/node@24.19.2)(jiti@2.7.0)(typescript@7.0.2))
+      '@tinker/loop':
+        specifier: workspace:*
+        version: link:../../packages/loop
       '@tinker/start':
         specifier: workspace:*
         version: link:../../packages/start
@@ -518,6 +521,21 @@ importers:
       vite-plus:
         specifier: 'catalog:'
         version: 1.0.0(@types/node@24.19.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(typescript@7.0.2)
+
+  packages/loop:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.2
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite-plus:
+        specifier: 'catalog:'
+        version: 1.0.0(@types/node@24.19.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(typescript@7.0.2)
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.1(@types/node@24.19.2)(@vitest/browser-preview@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@24.19.2)(jiti@2.7.0)(typescript@7.0.2))
 
   packages/start:
     dependencies:

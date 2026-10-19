@@ -59,6 +59,7 @@
     "@stryker-mutator/core": "catalog:",
     "@stryker-mutator/vitest-runner": "catalog:",
     "@tailwindcss/vite": "4.3.3",
+    "@tinker/loop": "workspace:*",
     "@tinker/start": "workspace:*",
     "@types/node": "catalog:",
     "@types/nodemailer": "^7.0.11",
