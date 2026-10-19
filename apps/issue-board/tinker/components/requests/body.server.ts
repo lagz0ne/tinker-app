@@ -1,6 +1,57 @@
+import type { ServerResponse } from "node:http";
+
 import { resource } from "@tinker/core";
 
 import { startServer } from "./modules.server";
+
+export declare namespace Requests {
+  /** The Node response a host serves the request on. */
+  type Outgoing = ServerResponse;
+  /** srvx and h3 read a Node host's response from `request.runtime.node.res`. */
+  type Hosted = Request & { runtime: { node?: { res: Outgoing } } };
+}
+
+/**
+ * Ends each request when its host response closes, as Fastify's `onResponse` does: graceful
+ * when the response finished, forced on a client abort. Scope close destroys the responses
+ * still open and fails with any request that could not end.
+ */
+export const hostResponses = resource({
+  label: "start.hostResponses",
+  target: "scope",
+  factory: (_deps, ctx) => {
+    const open = new Map<Requests.Outgoing, Promise<void>>();
+    const failures: unknown[] = [];
+    ctx.defer(async () => {
+      for (const outgoing of open.keys()) outgoing.destroy();
+      await Promise.all(open.values());
+      if (failures.length) throw failures.at(0);
+    });
+
+    return {
+      isHosted(request: Request): request is Requests.Hosted {
+        return "runtime" in request;
+      },
+      endOnClose(outgoing: Requests.Outgoing, finish: (graceful: boolean) => Promise<void>) {
+        const closed = outgoing.closed
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => outgoing.once("close", resolve));
+        const ending = closed
+          .then(() => finish(outgoing.writableFinished))
+          .then(
+            () => {
+              open.delete(outgoing);
+            },
+            (error: unknown) => {
+              open.delete(outgoing);
+              failures.push(error);
+            },
+          );
+        open.set(outgoing, ending);
+      },
+    };
+  },
+});
 
 /** Retains request work until the consumer ends, fails, or cancels the body. */
 export const responseBodies = resource({

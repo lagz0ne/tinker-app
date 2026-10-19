@@ -50,13 +50,17 @@ async function serve(root) {
       const asset = await createAssets(root);
       if (signal.aborted) return;
 
-      const render = async (request) => compressResponse(request, await app.fetch(request));
+      /** Lend the Node response as srvx and h3 do, so the app ends its request on close. */
+      const render = async (request, { incoming, outgoing }) => {
+        request.runtime = { name: "node", node: { req: incoming, res: outgoing } };
+        return compressResponse(request, await app.fetch(request));
+      };
       server = listen(
         {
           overrideGlobalObjects: false,
           hostname: process.env.HOST ?? "127.0.0.1",
           port: Number(process.env.PORT ?? 4318),
-          fetch: (request) => asset(request) ?? render(request),
+          fetch: (request, env) => asset(request) ?? render(request, env),
         },
         (info) =>
           console.log(`tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${info.port}`),
