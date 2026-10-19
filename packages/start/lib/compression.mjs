@@ -186,7 +186,8 @@ async function compressBody(request, body, encoding, headers) {
 /**
  * Reads what the source has ready before the event loop turns; a later chunk means a streaming page.
  * Releasing the lock fails an open read but keeps its chunk queued, and a failed source fails again for the next reader.
- * @param {ReadableStreamDefaultReader<Uint8Array>} reader - From compressBody; why: the read parts move to the encoder.
+ * A reader that keeps the lock awaits `pending`, the read still open when the turn came.
+ * @param {ReadableStreamDefaultReader<Uint8Array>} reader - From compressBody or the host; why: the read parts go out first.
  */
 export async function readStart(reader) {
   const parts = [];
@@ -206,7 +207,7 @@ export async function readStart(reader) {
         return { done: false, parts };
       }
 
-      if (part === null) return { done: false, parts };
+      if (part === null) return { done: false, parts, pending };
       if (part.done) return { done: true, parts, size };
       parts.push(part.value);
       size += part.value.byteLength;

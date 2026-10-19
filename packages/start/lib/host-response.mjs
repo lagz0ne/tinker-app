@@ -45,36 +45,43 @@ async function writeBody(request, response, outgoing) {
     return;
   }
 
-  reader.releaseLock();
-  await writeStream(request, response, start.parts, outgoing);
+  await writeStream(request, reader, response, start, outgoing);
 }
 
 /**
  * A client that leaves cancels the body, so a stream that waits for its next part ends too. The
  * head goes out at once, so a stream with no part yet still answers.
  * @param {Hosted} request - From writeBody; why: the app's join.
- * @param {Response} response - From writeBody; why: the rest of the body.
- * @param {Uint8Array[]} parts - From readStart; why: the parts read in the first turn go first.
+ * @param {ReadableStreamDefaultReader<Uint8Array>} reader - From writeBody; why: the rest of the body.
+ * @param {Response} response - From writeBody; why: the head.
+ * @param {{ parts: Uint8Array[], pending?: Promise<ReadableStreamReadResult<Uint8Array>> }} start - From readStart; why: the first parts go first, then the open read.
  * @param {import("node:http").ServerResponse} outgoing - From writeBody; why: each part as it arrives.
  */
-async function writeStream(request, response, parts, outgoing) {
-  const reader = response.body.getReader();
-  const cancel = () => void reader.cancel().catch((error) => outgoing.destroy(error));
-  if (outgoing.destroyed) cancel();
-  else outgoing.once("close", cancel);
-
+async function writeStream(request, reader, response, { parts, pending }, outgoing) {
+  const unwatch = cancelOnClose(reader, outgoing);
   outgoing.writeHead(response.status, outgoingHeaders(response.headers));
   for (const part of parts) outgoing.write(part);
   if (parts.length === 0) outgoing.flushHeaders();
-  for (let part = await reader.read(); !part.done; part = await reader.read()) {
+  for (let part = await (pending ?? reader.read()); !part.done; part = await reader.read()) {
     if (!outgoing.write(part.value)) await drained(outgoing);
   }
 
-  outgoing.off("close", cancel);
+  unwatch();
   if (outgoing.destroyed) return;
 
   await request.runtime.beforeEnd?.();
   outgoing.end();
+}
+
+/**
+ * @param {ReadableStreamDefaultReader<Uint8Array>} reader - From writeStream; why: a client that leaves cancels it.
+ * @param {import("node:http").ServerResponse} outgoing - From writeStream; why: its close.
+ */
+function cancelOnClose(reader, outgoing) {
+  const cancel = () => void reader.cancel().catch((error) => outgoing.destroy(error));
+  if (outgoing.destroyed) cancel();
+  else outgoing.once("close", cancel);
+  return () => outgoing.off("close", cancel);
 }
 
 /** @param {import("node:http").ServerResponse} outgoing - From writeStream; why: wait for room, or for the client to leave. */
