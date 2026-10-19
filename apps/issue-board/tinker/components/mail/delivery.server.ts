@@ -256,21 +256,33 @@ export const outboxWake = resource({
   },
 });
 
+const drainMailBatches = operation({
+  label: "outbox.drain",
+  depends: { deliver: deliverMailBatch.controller, stopping: mailWorkerStop },
+  run: async ({ deliver, stopping }, { signal }) => {
+    const stop = stopping ?? signal;
+    let batch;
+
+    do {
+      const delivered = await deliver.settle({ signal });
+      if (delivered.status === "failed") throw delivered.error;
+      if (delivered.status === "cancelled") return;
+      batch = delivered.value;
+    } while (batch.claimed === 20 && !stop.aborted);
+  },
+});
+
 export const runMailWorker = operation({
   label: "mail.worker",
-  depends: { deliver: deliverMailBatch.controller, wake: outboxWake, stopping: mailWorkerStop },
-  run: async ({ deliver, wake, stopping }, { signal, log }) => {
+  depends: { drain: drainMailBatches.controller, wake: outboxWake, stopping: mailWorkerStop },
+  run: async ({ drain, wake, stopping }, { signal, log }) => {
     const stop = stopping ?? signal;
     while (!stop.aborted) {
       try {
         await wake.listen();
-        let batch;
-        do {
-          const delivered = await deliver.settle({ signal });
-          if (delivered.status === "failed") throw delivered.error;
-          if (delivered.status === "cancelled") return;
-          batch = delivered.value;
-        } while (batch.claimed === 20 && !stop.aborted);
+        const drained = await drain.settle({ signal });
+        if (drained.status === "failed") throw drained.error;
+        if (drained.status === "cancelled") return;
       } catch (error) {
         if (stop.aborted) return;
         log.error("outbox.unavailable", { error: String(error) });
