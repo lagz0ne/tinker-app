@@ -3,7 +3,7 @@ export type { Mail } from "./mail.server";
 
 export { smtpSockets } from "./sockets.server";
 
-export { smtpUrl, mailFrom, mailSendTimeout } from "./settings";
+export { smtpUrl, mailFrom, mailSendTimeout, mailMaxSenders } from "./settings";
 
 export { mailOutbox } from "./schema.server";
 

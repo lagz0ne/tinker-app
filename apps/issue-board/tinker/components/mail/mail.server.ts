@@ -5,7 +5,7 @@ import { transaction } from "~/components/database/index.server";
 
 import { smtp } from "./modules";
 import { mailOutbox } from "./schema.server";
-import { smtpUrl, mailFrom, mailSendTimeout } from "./settings";
+import { smtpUrl, mailFrom, mailSendTimeout, mailMaxSenders } from "./settings";
 import { smtpSockets } from "./sockets.server";
 
 const message = z.strictObject({ to: z.string(), subject: z.string(), text: z.string() });
@@ -17,10 +17,17 @@ export declare namespace Mail {
 
 export const mail = resource({
   label: "mail.sender",
-  depends: { url: smtpUrl, from: mailFrom, timeout: mailSendTimeout, smtp, sockets: smtpSockets },
+  depends: {
+    url: smtpUrl,
+    from: mailFrom,
+    timeout: mailSendTimeout,
+    limit: mailMaxSenders,
+    smtp,
+    sockets: smtpSockets,
+  },
   factory: async (
-    { url, from, timeout, smtp, sockets },
-    { defer, clock },
+    { url, from, timeout, limit, smtp, sockets },
+    { defer, clock, closing },
   ): Promise<Mail.Sender> => {
     const user = decodeURIComponent(url.username);
     const optionsForTransport = {
@@ -40,6 +47,8 @@ export const mail = resource({
       connection: ReturnType<typeof sockets.open>;
     }[] = [];
     const connections = new Set<(typeof idle)[number]>();
+    const waiting = new Set<() => void>();
+
     defer(() => {
       for (const sender of connections) {
         sockets.close(sender.connection);
@@ -48,8 +57,28 @@ export const mail = resource({
     });
 
     return {
-      async send(message, { signal } = {}) {
-        signal?.throwIfAborted();
+      async send(message, { signal = closing } = {}) {
+        const stopped = AbortSignal.any([closing, signal]);
+
+        stopped.throwIfAborted();
+
+        while (idle.length === 0 && connections.size >= limit) {
+          const available = Promise.withResolvers<void>();
+          const abortWait = () => available.reject(stopped.reason);
+
+          waiting.add(available.resolve);
+          stopped.addEventListener("abort", abortWait, { once: true });
+
+          try {
+            stopped.throwIfAborted();
+            await available.promise;
+          } finally {
+            waiting.delete(available.resolve);
+            stopped.removeEventListener("abort", abortWait);
+          }
+        }
+
+        stopped.throwIfAborted();
 
         let sender = idle.pop();
         if (!sender) {
@@ -70,10 +99,10 @@ export const mail = resource({
         const abort = () => {
           sockets.close(owned.connection, new Error("Mail send cancelled"));
 
-          cancelled.reject(signal?.reason);
+          cancelled.reject(signal.reason);
         };
 
-        signal?.addEventListener("abort", abort, { once: true });
+        signal.addEventListener("abort", abort, { once: true });
 
         const timer = new AbortController();
 
@@ -91,7 +120,7 @@ export const mail = resource({
         } finally {
           timer.abort();
 
-          signal?.removeEventListener("abort", abort);
+          signal.removeEventListener("abort", abort);
 
           if (reusable) idle.push(owned);
           else {
@@ -99,6 +128,8 @@ export const mail = resource({
             sockets.close(owned.connection);
             owned.transport.close();
           }
+
+          for (const wake of waiting) wake();
         }
       },
     };
