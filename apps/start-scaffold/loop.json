@@ -1,0 +1,13 @@
+{
+  "base": "next",
+  "gates": [
+    { "name": "commands", "run": "npm run gate:commands" },
+    { "name": "typecheck", "run": "npm run typecheck" },
+    { "name": "tests", "run": "vp test" },
+    { "name": "proofs", "run": "npm run test:proofs" },
+    { "name": "plain", "run": "node scripts/check-plain.mjs" },
+    { "name": "plain-prove", "run": "node scripts/check-plain.mjs --prove" },
+    { "name": "doctor", "run": "npm run doctor" },
+    { "name": "schema", "run": "node scripts/check-schema.mjs" }
+  ]
+}

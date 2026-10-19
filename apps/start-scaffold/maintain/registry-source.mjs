@@ -94,9 +94,17 @@ async function copiedFiles(prefix) {
   return files;
 }
 
+/** Workspace tools with no release yet. A copied app does not get them. */
+function withoutUnreleased(pkg) {
+  if (!pkg.devDependencies) return pkg;
+
+  const { "@tinker/loop": _loop, ...devDependencies } = pkg.devDependencies;
+  return { ...pkg, devDependencies };
+}
+
 /** Release specs replace workspace and catalog names; local packs never enter a normal build. */
 async function releasePackage(path, packs, releaseVersion) {
-  const pkg = JSON.parse(await readFile(path, "utf8"));
+  const pkg = withoutUnreleased(JSON.parse(await readFile(path, "utf8")));
 
   const workspace = await readFile(join(root, "pnpm-workspace.yaml"), "utf8");
   const catalog = Object.fromEntries(

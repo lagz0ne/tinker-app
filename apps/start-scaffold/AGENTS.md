@@ -61,6 +61,8 @@ npm run doctor
 node scripts/check-schema.mjs
 ```
 
+Run `vp exec tinker-loop check` before review.
+
 Run the repo's lint and strict style census when present.
 Config enters through typed tags; local services use `compose.yml`.
 Only cmds/server.ts reads app inputs and fills typed tags.
