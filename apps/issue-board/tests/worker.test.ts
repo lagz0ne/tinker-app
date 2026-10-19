@@ -299,7 +299,7 @@ test("failed digest waits thirty seconds across notification wakes while alerts 
   });
   await root.ready;
   await root.settle(runMailWorker, { signal: stop.signal });
-  expect(ticksBeforeDeadline).toBe(1);
+  expect(ticksBeforeDeadline, "failed digest must wait until its retry deadline").toBe(1);
   expect(batches).toBe(4);
   expect(ticks).toBe(2);
   expect((await root.closed).status).toBe("success");

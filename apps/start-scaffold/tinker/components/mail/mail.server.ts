@@ -30,53 +30,75 @@ export const mail = resource({
       auth: user ? { user, pass: decodeURIComponent(url.password) } : undefined,
       pool: true,
       maxConnections: 1,
-      getSocket: sockets.getSocket,
       dnsTimeout: timeout,
       connectionTimeout: timeout,
       greetingTimeout: timeout,
       socketTimeout: timeout,
     };
-    let transport = smtp.default.createTransport(optionsForTransport);
-    defer(() => transport.close());
+    const idle: {
+      transport: ReturnType<typeof smtp.default.createTransport>;
+      connection: ReturnType<typeof sockets.open>;
+    }[] = [];
+    const connections = new Set<(typeof idle)[number]>();
+    defer(() => {
+      for (const sender of connections) {
+        sockets.close(sender.connection);
+        sender.transport.close();
+      }
+    });
 
     return {
-      async send(message, options) {
-        options?.signal?.throwIfAborted();
+      async send(message, { signal } = {}) {
+        signal?.throwIfAborted();
 
+        let sender = idle.pop();
+        if (!sender) {
+          const connection = sockets.open();
+          sender = {
+            connection,
+            transport: smtp.default.createTransport({
+              ...optionsForTransport,
+              getSocket: sockets.getSocket.bind(undefined, connection),
+            }),
+          };
+          connections.add(sender);
+        }
+        const owned = sender;
+        let reusable = false;
         const cancelled = Promise.withResolvers<never>();
 
         const abort = () => {
-          sockets.abort();
+          sockets.close(owned.connection, new Error("Mail send cancelled"));
 
-          transport.close();
-
-          transport = smtp.default.createTransport(optionsForTransport);
-
-          cancelled.reject(options?.signal?.reason);
+          cancelled.reject(signal?.reason);
         };
 
-        options?.signal?.addEventListener("abort", abort, { once: true });
+        signal?.addEventListener("abort", abort, { once: true });
 
         const timer = new AbortController();
 
         try {
-          const sent = transport.sendMail({ from, ...message });
+          const sent = owned.transport.sendMail({ from, ...message });
 
           const deadline = clock.sleep(timeout, timer.signal).then(() => {
-            sockets.abort();
-
-            transport.close();
-
-            transport = smtp.default.createTransport(optionsForTransport);
+            sockets.close(owned.connection, new Error("Mail send total timeout"));
 
             throw new Error("Mail send total timeout");
           });
 
           await Promise.race([sent, deadline, cancelled.promise]);
+          reusable = true;
         } finally {
           timer.abort();
 
-          options?.signal?.removeEventListener("abort", abort);
+          signal?.removeEventListener("abort", abort);
+
+          if (reusable) idle.push(owned);
+          else {
+            connections.delete(owned);
+            sockets.close(owned.connection);
+            owned.transport.close();
+          }
         }
       },
     };

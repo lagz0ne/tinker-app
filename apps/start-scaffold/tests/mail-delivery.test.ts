@@ -111,7 +111,7 @@ test("lease expiry and token fencing preserve crash attempts; release refunds un
 
   const third = await write(root, claimMailBatch);
 
-  expect(third.rows[0]!.attempts).toBe(2);
+  expect(third.rows[0]!.attempts, "release must refund the unsent attempt").toBe(2);
 });
 
 test("delivery persists exponential retry and success without holding send locks", async () => {
@@ -343,4 +343,21 @@ test("a batch leaves room for send plus acknowledgement before starting SMTP", a
 
 test("a lease shorter than the twenty-send budget is rejected", () => {
   expect(() => mailLeaseMs(119999)).toThrow();
+});
+
+test("exhausted lookup uses its partial index instead of completed mail history", async () => {
+  const db = await root.resolve(database);
+  await db.execute(sql`INSERT INTO mail_outbox ("to", subject, text, dedupe_key, attempts, sent_at)
+    SELECT 'receiver@example.test', 'History', 'Body', 'history-' || value, 12, now()
+    FROM generate_series(1, 20000) AS value`);
+  await db.execute(sql`ANALYZE mail_outbox`);
+
+  const plan = await db.execute(sql`EXPLAIN SELECT id FROM mail_outbox
+    WHERE sent_at IS NULL AND dead_at IS NULL AND attempts >= 12
+      AND (lease_until IS NULL OR lease_until <= now())
+    LIMIT 20 FOR UPDATE SKIP LOCKED`);
+
+  expect(JSON.stringify(plan), "exhausted claims must use the partial index").toContain(
+    "mail_outbox_exhausted",
+  );
 });

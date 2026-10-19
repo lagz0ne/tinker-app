@@ -163,11 +163,20 @@ try {
   paths.push(config);
   writeFileSync(
     config,
-    `import config from "../../vite.config";import {proofFault} from "../../maintain/proof-fault.mjs";export default {...config,plugins:[proofFault(),...config.plugins]};\n`,
+    `import config from "../../vite.config";import tests from "../../vitest.config";import {proofFault} from "../../maintain/proof-fault.mjs";export default {...config,...tests,plugins:[proofFault(),...config.plugins]};\n`,
   );
   const backoff = spawnSync(
     "vp",
-    ["test", "tests/worker.test.ts", "--config", config, "--maxWorkers=1", "--no-file-parallelism"],
+    [
+      "test",
+      "tests/worker.test.ts",
+      "-t",
+      "failed digest waits thirty seconds",
+      "--config",
+      config,
+      "--maxWorkers=1",
+      "--no-file-parallelism",
+    ],
     {
       encoding: "utf8",
       timeout: 60_000,
@@ -184,7 +193,7 @@ try {
   writeFileSync(`${directory}/digest-backoff.log`, backoffOutput);
   assert.equal(backoff.error, undefined);
   assert.notEqual(backoff.status, 0);
-  assert.match(backoffOutput, /expected 2 to be 1/);
+  assert.match(backoffOutput, /AssertionError: failed digest must wait until its retry deadline:/);
   console.log(
     `PASS negative N8 backoff: repeated wakes run extra SQL ticks; ${directory}/digest-backoff.log`,
   );

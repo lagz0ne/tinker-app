@@ -124,7 +124,7 @@ test("database setup runs the real migrations before ready resolves", async () =
   const rows = await db.execute(
     sql`select count(*)::int as count from drizzle.__drizzle_migrations`,
   );
-  expect(rows).toMatchObject({ rows: [{ count: 14 }] });
+  expect(rows).toMatchObject({ rows: [{ count: 15 }] });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 

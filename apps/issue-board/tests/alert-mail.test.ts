@@ -101,7 +101,9 @@ test("SMTP URL options keep credentials, IPv6, TLS and no-auth settings", async 
     });
     try {
       await root.ready;
-      await root.resolve(alertMail);
+      const sender = await root.resolve(alertMail);
+      expect(options, "opening the sender must not create an idle transport").toEqual([]);
+      await sender.send({ to: "receiver@example.test", subject: "Options", text: "Body" });
       expect(options).toEqual([expect.objectContaining(expected)]);
     } finally {
       stop.abort();

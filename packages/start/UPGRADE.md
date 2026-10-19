@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Concurrent mail sends own separate connections; a timeout closes only its send.
+  Healthy sends reuse idle connections. The auth mail example carries the outbox
+  migrations without requiring starter; exhausted mail has its own partial index.
+
 - Mail leases require at least 120000 ms. Before each send, the worker reserves
   its send deadline, checkout, two SQL statement bounds, and a 1000 ms setup margin.
   Unsent claims released on stop or a short remaining lease refund their attempt.

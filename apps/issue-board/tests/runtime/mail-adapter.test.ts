@@ -133,5 +133,5 @@ test("public sender abort closes transport and rejects with the caller reason", 
   await expect(sender.send(message, { signal: stop.signal })).rejects.toBe(reason);
   expect(starts).toBe(1);
   expect((await root.close({ graceful: true })).status).toBe("success");
-  expect(closes).toBe(2);
+  expect(closes, "an aborted sender must not leave an idle replacement to close").toBe(1);
 });

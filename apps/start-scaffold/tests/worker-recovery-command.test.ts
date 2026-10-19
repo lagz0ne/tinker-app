@@ -1,79 +1,69 @@
-import { type Scope } from "@tinker/core";
+import { createScope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
-import { expect, test, vi } from "vite-plus/test";
+import { expect, test } from "vite-plus/test";
 
-import { migrate } from "~/components/database/index.server";
-import { deliverMailBatch, outboxWake } from "~/components/mail/index.server";
+import {
+  deliverMailBatch,
+  outboxWake,
+  mailWorkerStop,
+  runMailWorker,
+} from "~/components/mail/index.server";
 
-// oxlint-disable-next-line import/no-relative-parent-imports -- Exercise the actual command lifecycle.
+// oxlint-disable-next-line import/no-relative-parent-imports -- Test native command inputs, exit and close with real Core.
 import main from "../cmds/worker";
 
-const injected = vi.hoisted(() => ({ presets: [] as Scope.Options["presets"] }));
-
-vi.mock("@tinker/core", async (original) => {
-  const core = await original<typeof import("@tinker/core")>();
-  return {
-    ...core,
-    createScope: (options: Scope.Options) =>
-      core.createScope({ ...options, presets: injected.presets }),
-  };
-});
-
-test("worker command exits zero after a plain delivery error then SIGTERM", async () => {
+test("real Core worker recovers a plain delivery error before its clean stop", async () => {
   const stop = new AbortController();
-  const waiting = Promise.withResolvers<void>();
-  const codes: number[] = [];
-  let output = "";
+  const messages: string[] = [];
   let attempts = 0;
-  injected.presets = [
-    preset(migrate, async () => {}),
-    preset(deliverMailBatch, async () => {
-      if (++attempts === 1) throw new Error("temporary database failure");
-      return { claimed: 0, sent: 0, failed: 0 };
-    }),
-    preset(outboxWake, async () => ({
-      listen: async () => {},
-      retry: async () => {},
-      wait: async () => {
-        waiting.resolve();
-        await new Promise<void>((resolve) =>
-          stop.signal.addEventListener("abort", () => resolve(), { once: true }),
-        );
-      },
-    })),
-  ];
+  const root = createScope({
+    observe: { log: (entry) => messages.push(entry.message) },
+    presets: [
+      preset(deliverMailBatch, async () => {
+        if (++attempts === 1) throw new Error("temporary database failure");
+        return { claimed: 0, sent: 0, failed: 0 };
+      }),
+      preset(outboxWake, async () => ({
+        listen: async () => {},
+        retry: async () => {},
+        wait: async () => {
+          stop.abort(new Error("SIGTERM"));
+        },
+      })),
+    ],
+  });
 
   try {
-    const worker = await main({
-      env: {
-        DATABASE_URL: "postgres://proof",
-        SMTP_URL: "smtp://127.0.0.1:11026",
-        SMTP_FROM: "proof@example.test",
-      },
-      args: [],
-      signal: stop.signal,
-      stdout: {
-        write: (text) => {
-          output += text;
-        },
-      },
-      stderr: { write() {} },
-      exit: (code) => {
-        codes.push(code);
-      },
-    });
-    await waiting.promise;
-
-    stop.abort(new Error("SIGTERM"));
-    await worker.closed;
-
+    await expect(
+      root.run(runMailWorker, { tags: [mailWorkerStop(stop.signal)] }),
+    ).resolves.toBeUndefined();
     expect(attempts).toBe(2);
-    expect(output).toContain("outbox.unavailable");
-    expect(codes).toEqual([]);
-    expect(output).toContain("outbox worker stopped");
-    expect(codes[0] ?? 0).toBe(0);
+    expect(messages.filter((message) => message === "outbox.unavailable")).toHaveLength(1);
+    expect((await root.close({ graceful: true })).status).toBe("success");
   } finally {
-    injected.presets = [];
     stop.abort();
+    await root.close();
   }
 });
+
+for (const [args, code] of [
+  [[], 78],
+  [["extra"], 64],
+] as const) {
+  test(`worker command closes after real input exit ${code}`, async () => {
+    const exits: number[] = [];
+    const worker = await main({
+      env: {},
+      args,
+      signal: new AbortController().signal,
+      stdout: { write() {} },
+      stderr: { write() {} },
+      exit: (value) => {
+        exits.push(value);
+      },
+    });
+
+    await worker.closed;
+    expect(exits).toEqual([code]);
+  });
+}

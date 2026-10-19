@@ -18,6 +18,9 @@ export const mailOutbox = pgTable(
     deadAt: timestamp("dead_at", { withTimezone: true }),
   },
   (row) => [
+    index("mail_outbox_exhausted")
+      .on(row.id)
+      .where(sql`${row.sentAt} is null and ${row.deadAt} is null and ${row.attempts} >= 12`),
     index("mail_outbox_due")
       .on(row.nextAt, row.id)
       .where(sql`${row.sentAt} is null and ${row.attempts} < 12`),

@@ -16,23 +16,34 @@ export const smtpSockets = resource({
       for (const socket of sockets) socket.destroy();
     });
     return {
-      getSocket(this: void, _options: unknown, callback: GetSocketCallback) {
+      open() {
+        return new Set<Socket>();
+      },
+      getSocket(this: void, owned: Set<Socket>, _options: unknown, callback: GetSocketCallback) {
         const socket = net.createConnection({
           host: url.hostname.replace(/^\[(.*)\]$/, "$1"),
           port: url.port ? Number(url.port) : url.protocol === "smtps:" ? 465 : 587,
         });
 
+        owned.add(socket);
         sockets.add(socket);
         socket.on("error", () => {});
-        socket.once("close", () => sockets.delete(socket));
+        socket.once("close", () => {
+          owned.delete(socket);
+          sockets.delete(socket);
+        });
         socket.once("error", callback);
         socket.once("connect", () => {
           socket.removeListener("error", callback);
           callback(null, { connection: socket });
         });
       },
-      abort() {
-        for (const socket of sockets) socket.destroy(new Error("Mail send total timeout"));
+      close(owned: Set<Socket>, error?: Error) {
+        for (const socket of owned) {
+          owned.delete(socket);
+          sockets.delete(socket);
+          socket.destroy(error);
+        }
       },
     };
   },

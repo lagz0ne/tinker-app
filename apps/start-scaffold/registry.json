@@ -1112,6 +1112,26 @@
           "path": "src/routes/api.sync.ts",
           "type": "registry:file",
           "target": "~/src/routes/api.sync.ts"
+        },
+        {
+          "path": "drizzle/20261018041738_durable_mail/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261018041738_durable_mail/migration.sql"
+        },
+        {
+          "path": "drizzle/20261018041738_durable_mail/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261018041738_durable_mail/snapshot.json"
+        },
+        {
+          "path": "drizzle/20261019093400_mail_exhausted/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261019093400_mail_exhausted/migration.sql"
+        },
+        {
+          "path": "drizzle/20261019093400_mail_exhausted/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261019093400_mail_exhausted/snapshot.json"
         }
       ],
       "meta": {
@@ -1489,16 +1509,6 @@
           "path": "maintain/worker.mjs",
           "type": "registry:file",
           "target": "~/maintain/worker.mjs"
-        },
-        {
-          "path": "drizzle/20261018041738_durable_mail/migration.sql",
-          "type": "registry:file",
-          "target": "~/drizzle/20261018041738_durable_mail/migration.sql"
-        },
-        {
-          "path": "drizzle/20261018041738_durable_mail/snapshot.json",
-          "type": "registry:file",
-          "target": "~/drizzle/20261018041738_durable_mail/snapshot.json"
         },
         {
           "path": "tests/mail-queue.test.ts",

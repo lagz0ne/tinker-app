@@ -1,4 +1,5 @@
 import { EventEmitter, getEventListeners } from "node:events";
+import type { Socket } from "node:net";
 
 import { createScope } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
@@ -39,12 +40,13 @@ for (const [url, host, port] of [
       ],
     });
     try {
-      const owned = await root.resolve(smtpSockets);
+      const owner = await root.resolve(smtpSockets);
+      const owned = owner.open();
       const callbacks: unknown[][] = [];
       const callback: GetSocketCallback = (...args) => {
         callbacks.push(args);
       };
-      owned.getSocket({}, callback);
+      owner.getSocket(owned, {}, callback);
       expect(sockets[0]!.listenerCount("connect")).toBe(1);
       expect(sockets[0]!.listenerCount("close")).toBe(1);
       expect(sockets[0]!.listenerCount("error")).toBe(2);
@@ -55,18 +57,19 @@ for (const [url, host, port] of [
       sockets[0]!.emit("error", new Error("late transport error"));
       expect(callbacks).toHaveLength(1);
       sockets[0]!.emit("close");
-      owned.abort();
+      owner.close(owned, new Error("Mail send total timeout"));
       expect(destroyed).toEqual([]);
 
-      owned.getSocket({}, callback);
+      owner.getSocket(owned, {}, callback);
       const refused = new Error("TCP refused");
       sockets[1]!.emit("error", refused);
       expect(callbacks[1]).toEqual([refused]);
       sockets[1]!.emit("error", new Error("second error"));
       expect(callbacks).toHaveLength(2);
-      owned.abort();
+      owner.close(owned, new Error("Mail send total timeout"));
       expect(destroyed).toHaveLength(1);
       expect(destroyed[0]?.message).toBe("Mail send total timeout");
+      owner.getSocket(owned, {}, callback);
       await root.close({ graceful: true });
       expect(destroyed).toHaveLength(2);
       expect(destroyed[1]).toBeUndefined();
@@ -101,9 +104,10 @@ for (const stopped of ["abort", "deadline"] as const) {
       ],
       presets: [
         preset(smtpSockets, async () => ({
-          getSocket: (_options: unknown, _callback: GetSocketCallback) => {},
-          abort: () => {
-            aborted++;
+          open: () => new Set<Socket>(),
+          getSocket: (_owned: Set<Socket>, _options: unknown, _callback: GetSocketCallback) => {},
+          close: (_owned: Set<Socket>, error?: Error) => {
+            if (error) aborted++;
           },
         })),
         preset(
@@ -145,7 +149,7 @@ for (const stopped of ["abort", "deadline"] as const) {
       else expect(result).toMatchObject({ message: "Mail send total timeout" });
       expect(aborted).toBe(1);
       expect(closed).toEqual([1]);
-      expect(transports).toBe(2);
+      expect(transports).toBe(1);
       expect(getEventListeners(stop.signal, "abort")).toEqual([]);
       expect(timers.every((timer) => timer.aborted)).toBe(true);
       await sender.send(message);
@@ -162,3 +166,73 @@ for (const stopped of ["abort", "deadline"] as const) {
     }
   });
 }
+
+test("one SMTP deadline leaves the other send alive and reuses its healthy transport", async () => {
+  const clock = makeTestClock();
+  const pending: { transport: number; finish: ReturnType<typeof Promise.withResolvers<void>> }[] =
+    [];
+  let created = 0;
+  const root = createScope({
+    clock,
+    tags: [
+      smtpUrl(new URL("smtp://relay.test")),
+      mailFrom("sender@example.test"),
+      mailSendTimeout(100),
+    ],
+    presets: [
+      preset(smtpSockets, async () => ({
+        open: () => new Set<Socket>(),
+        getSocket: (_owned: Set<Socket>, _options: unknown, _callback: GetSocketCallback) => {},
+        close() {},
+        abort() {},
+      })),
+      preset(
+        smtp,
+        async () =>
+          ({
+            default: {
+              createTransport: () => {
+                const transport = ++created;
+                return {
+                  sendMail: () => {
+                    const finish = Promise.withResolvers<void>();
+                    pending.push({ transport, finish });
+                    return finish.promise;
+                  },
+                  close: () => {
+                    for (const call of pending.filter((call) => call.transport === transport)) {
+                      call.finish.reject(new Error("transport closed"));
+                    }
+                  },
+                };
+              },
+            },
+          }) as unknown as typeof import("nodemailer"),
+      ),
+    ],
+  });
+
+  try {
+    const sender = await root.resolve(mail);
+    const message = { to: "receiver@example.test", subject: "Send", text: "Body" };
+    const first = sender.send(message).catch((error) => error);
+    clock.advance(50);
+    const second = sender.send(message).then(
+      () => "sent",
+      (error) => error,
+    );
+
+    clock.advance(50);
+    expect(await first).toBeInstanceOf(Error);
+    pending[1]!.finish.resolve();
+    expect(await second, "send timeout must leave other sends running").toBe("sent");
+
+    const third = sender.send(message);
+    pending[2]!.finish.resolve();
+    await third;
+    expect(created, "successful sends reuse their healthy transport").toBe(2);
+    expect(pending.map((call) => call.transport)).toEqual([1, 2, 2]);
+  } finally {
+    await root.close();
+  }
+});

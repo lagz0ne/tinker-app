@@ -11,7 +11,7 @@ const config = resolve(directory, "vite.config.ts");
 
 writeFileSync(
   config,
-  `import config from "../../vite.config";import {proofFault} from "../../maintain/proof-fault.mjs";export default {...config,plugins:[proofFault(),...config.plugins]};\n`,
+  `import config from "../../vite.config";import tests from "../../vitest.config";import {proofFault} from "../../maintain/proof-fault.mjs";export default {...config,...tests,plugins:[proofFault(),...config.plugins]};\n`,
 );
 
 const cases = [
@@ -69,7 +69,7 @@ const cases = [
     from: "attempts: orm.sql`${mailOutbox.attempts} - 1`",
     to: "attempts: orm.sql`${mailOutbox.attempts}`",
     test: "tests/mail-delivery.test.ts",
-    reason: "release refunds unsent claims",
+    reason: "AssertionError: release must refund the unsent attempt:",
   },
   {
     name: "claim-extra-statement",
@@ -78,6 +78,30 @@ const cases = [
     to: "await tx.update(mailOutbox).set({ leaseToken: null }).where(sql`false`);\n    const token = random.uuid();",
     test: "tests/mail-delivery.test.ts",
     reason: "one claim must use one SQL statement",
+  },
+  {
+    name: "exhausted-mail-index-missing",
+    target: "tinker/components/database/database.server.ts",
+    from: "migrator.readMigrationFiles({ migrationsFolder })",
+    to: `migrator.readMigrationFiles({ migrationsFolder }).filter((migration) => !migration.sql.some((statement) => statement.includes('CREATE INDEX "mail_outbox_exhausted"')))`,
+    test: "tests/mail-delivery.test.ts",
+    reason: "AssertionError: exhausted claims must use the partial index:",
+  },
+  {
+    name: "mail-commit-error-swallowed",
+    target: "tinker/components/database/database.server.ts",
+    from: '.then(() => lease.query("COMMIT"))',
+    to: '.then(() => lease.query("COMMIT").catch(() => {}))',
+    test: "tests/mail-commit-contract.test.ts",
+    reason: "AssertionError: failed mail COMMIT must fail its call without reporting success:",
+  },
+  {
+    name: "smtp-deadline-closes-other-sends",
+    target: "tinker/components/mail/mail.server.ts",
+    from: 'sockets.close(owned.connection, new Error("Mail send total timeout"));',
+    to: "for (const sender of connections) { sockets.close(sender.connection); sender.transport.close(); }",
+    test: "tests/mail-native-contract.test.ts",
+    reason: "AssertionError: send timeout must leave other sends running:",
   },
   {
     name: "smtp-total-deadline",
@@ -89,9 +113,9 @@ const cases = [
   },
   {
     name: "smtp-socket-not-aborted",
-    target: "tinker/components/mail/mail.server.ts",
-    from: "const deadline = clock.sleep(timeout, timer.signal).then(() => {\n            sockets.abort();",
-    to: "const deadline = clock.sleep(timeout, timer.signal).then(() => {\n            void sockets;",
+    target: "tinker/components/mail/sockets.server.ts",
+    from: "socket.destroy(error);",
+    to: "void socket;",
     test: "tests/mail-deadline.test.ts",
     reason: "active SMTP socket must close at total deadline",
   },
