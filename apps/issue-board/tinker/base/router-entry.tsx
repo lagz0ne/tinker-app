@@ -55,7 +55,8 @@ export const tabLifetime = resource({
   },
 });
 
-/** The route tree loads on the first router and is shared after that; a module keeps one copy. */
+/** Outside dev the route tree loads on the first router and is shared after that. Dev imports it
+ * on each router, so a route edit shows without a restart. */
 let routes: Promise<typeof import("#tinker/routes")> | undefined;
 
 /** Load Start's route tree lazily and attach its fallback views and provider. */
@@ -72,7 +73,9 @@ export async function createRouterEntry({
   dev: boolean;
   server: boolean;
 }) {
-  const { routeTree } = await (routes ??= import("#tinker/routes"));
+  const { routeTree } = await (dev
+    ? import("#tinker/routes")
+    : (routes ??= import("#tinker/routes")));
   return Object.assign(
     createRouter({
       scrollRestoration: true,
