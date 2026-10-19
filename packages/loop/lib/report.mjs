@@ -14,7 +14,7 @@ export function summary(findings) {
     `severity: ${count("severity", severities)}`,
     `status: ${count("status", statuses)}`,
     ...(important.length > 0
-      ? ["open important:", ...important.map((f) => `  ${oneLine(f)}`)]
+      ? ["open important:", ...important.map((f) => `  ${findingLine(f)}`)]
       : []),
   ];
 }
@@ -35,7 +35,7 @@ export function findingList(findings, rules = null) {
     return rule ? ruleText(rule) : "not in this Start's rules.md";
   };
   return sorted.flatMap((f) => [
-    `${f.status} ${f.severity} ${oneLine(f)} (round ${f.round})`,
+    `${f.status} ${f.severity} ${findingLine(f)} (round ${f.round})`,
     ...(rules ? [`  rule: ${textOf(f.rule)}`] : []),
     ...(f.status === "answered" ? [`  reason: ${f.reason}`] : []),
     ...(f.status === "fixed" && f.sha ? [`  fixed at ${f.sha.slice(0, 12)}`] : []),
@@ -60,7 +60,7 @@ export function ruleLines(rules, ids) {
 }
 
 /** @param {object} f - From the findings file; why: one finding to show on one line. */
-function oneLine(f) {
+export function findingLine(f) {
   const where = f.line ? `${f.file}:${f.line}` : f.file;
   return `${f.rule} ${where}: ${f.summary} [${f.id}]`;
 }

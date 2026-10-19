@@ -7,10 +7,11 @@ const groupHeading = /^### [A-Z]: .+$/;
 
 /**
  * The rules in a `docs/rules.md` text, in file order. A `### <letter>: <title>` heading starts
- * a group, and a `## ` heading ends it. A rule is a list item "- `ID` text" inside a group whose
- * letter starts the ID; its next lines are indented by two spaces. Any other line ends the rule.
- * Throws, naming the line, on a bad rule line or heading, a rule outside a group, a wrong
- * letter, or a repeated ID. Throws when there is no rule at all.
+ * a group, and a `#` or `##` heading ends it. A rule is a list item "- `ID` text" inside a group
+ * whose letter starts the ID; its next lines are indented by two spaces. Inside a group, every
+ * other line is blank or a heading. Throws, naming the line, on any other line in a group, a
+ * bad rule line or heading, a rule outside a group, a wrong letter, or a repeated ID. Throws
+ * when there is no rule at all.
  * @param {string} text - From readRules or a test; why: the markdown to read.
  */
 export function parseRules(text) {
@@ -40,12 +41,41 @@ function readLine(read, line, number) {
   }
 
   read.open = null;
-  if (line.startsWith("## ")) read.group = null;
-  if (!line.startsWith("### ")) return;
+  if (/^#{1,6} /.test(line)) read.group = headingGroup(line, number);
+  else if (read.group) groupLine(read.group, line, number);
+}
+
+/**
+ * A line in a group that is not a rule or a heading must be blank. A `#` line there is a
+ * broken heading. Outside a group, such lines are free prose.
+ * @param {string} group - From readLine; why: names the group in an error.
+ * @param {string} line - From the text; why: the line to judge.
+ * @param {number} number - From parseRules; why: names the line in an error.
+ */
+function groupLine(group, line, number) {
+  if (line.startsWith("#")) {
+    throw new Error(`line ${number}: a group heading reads "### <letter>: <title>"`);
+  }
+  if (line.trim()) {
+    throw new Error(
+      `line ${number}: in group ${group[0]}, a line is blank, a rule "- \`ID\` text", a two-space line right after a rule line, or a heading`,
+    );
+  }
+}
+
+/**
+ * The group a heading starts: a `### <letter>: <title>` heading names it, and a `#` or `##`
+ * heading ends the one before. Any other heading, `####` to `######` or a bad `###`, throws.
+ * Only lines that start with one to six `#` and a space are headings.
+ * @param {string} line - From readLine; why: the heading.
+ * @param {number} number - From parseRules; why: names the line in an error.
+ */
+function headingGroup(line, number) {
+  if (/^#{1,2} /.test(line)) return null;
   if (!groupHeading.test(line)) {
     throw new Error(`line ${number}: a group heading reads "### <letter>: <title>"`);
   }
-  read.group = line.slice(4);
+  return line.slice(4);
 }
 
 /**

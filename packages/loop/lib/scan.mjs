@@ -1,8 +1,9 @@
-import { spawnSync } from "node:child_process";
-import { lstatSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
 
 import { findingId } from "./findings.mjs";
+import { commitSha, git } from "./git.mjs";
 
 /**
  * The tinker-review quick-scan greps, one rule each. A hit points at a line to read; it is
@@ -69,7 +70,7 @@ export const scans = [
  *   the exact ref wins, the configured branch follows its remote.
  */
 export function scanBase(app, { base, config }) {
-  if (base) return resolves(app, base) ? base : null;
+  if (base) return commitSha(app, base) ? base : null;
   if (!config) return null;
 
   const upstream = git(app, [
@@ -79,7 +80,7 @@ export function scanBase(app, { base, config }) {
     `${config}@{upstream}`,
   ]);
   if (upstream) return upstream;
-  if (resolves(app, config)) return config;
+  if (commitSha(app, config)) return config;
   return remoteBranch(app, config);
 }
 
@@ -90,26 +91,50 @@ export function scanBase(app, { base, config }) {
 function remoteBranch(app, branch) {
   const remotes = (git(app, ["remote"]) ?? "").split("\n").filter(Boolean);
   const ref = remotes.length === 1 ? `${remotes[0]}/${branch}` : null;
-  return ref && resolves(app, ref) ? ref : null;
+  return ref && commitSha(app, ref) ? ref : null;
 }
 
 /**
- * @param {string} app - From scanBase; why: the repo to ask.
- * @param {string} ref - From --base or loop.json; why: the name to look up.
- */
-function resolves(app, ref) {
-  return git(app, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]) !== null;
-}
-
-/**
- * The app folder's untracked files and whether it is dirty, taken before the gates run, so
- * files the gates write are not part of the change. Untracked files are null outside git.
+ * The app folder's untracked files, whether it is dirty, and a fingerprint of its work tree.
+ * Check takes it before the gates, so files the gates write are not part of the scanned
+ * change, and again after the gates, so the saved fingerprint holds what the gates wrote.
+ * Status takes it to compare. Untracked files are null outside git.
  * @param {string} app - From --app; why: the folder to look at.
  */
-export function treeBefore(app) {
+export function treeState(app) {
   const listed = git(app, ["ls-files", "--others", "--exclude-standard", "-z"], { raw: true });
   const status = git(app, ["status", "--porcelain", "--untracked-files=all", "--", "."]);
-  return { untracked: listed?.split("\0").filter(Boolean) ?? null, dirty: Boolean(status) };
+  const untracked = listed?.split("\0").filter(Boolean) ?? null;
+  return { untracked, dirty: Boolean(status), fingerprint: treeFingerprint(app, untracked) };
+}
+
+/**
+ * A hash of the app folder's uncommitted work: `git diff HEAD` and each untracked file's
+ * name and bytes. Two equal fingerprints at the same HEAD mean the same work tree. Null
+ * outside git.
+ * @param {string} app - From treeState; why: the folder to hash; only that folder counts.
+ * @param {string[] | null} untracked - From treeState; why: the new files to hash.
+ */
+export function treeFingerprint(app, untracked) {
+  const diff = git(app, ["diff", "--no-ext-diff", "--binary", "HEAD", "--", "."], { raw: true });
+  if (diff === null || untracked === null) return null;
+
+  const hash = createHash("sha256").update(diff);
+  for (const file of untracked.toSorted()) hash.update(`\0${file}\0`).update(fileBytes(app, file));
+  return hash.digest("hex");
+}
+
+/**
+ * @param {string} app - From treeFingerprint; why: the folder the path is relative to.
+ * @param {string} file - From git ls-files; why: a link hashes its target, a gone file nothing.
+ */
+function fileBytes(app, file) {
+  try {
+    const path = join(app, file);
+    return lstatSync(path).isSymbolicLink() ? readlinkSync(path) : readFileSync(path);
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -119,7 +144,7 @@ export function treeBefore(app) {
  * Returns null when the folder is not in git or the diff is too large to read.
  * @param {string} app - From --app; why: the folder to diff.
  * @param {string} base - From scanBase; why: where the change starts.
- * @param {string[] | null} untracked - From treeBefore; why: the new files of the change.
+ * @param {string[] | null} untracked - From treeState; why: the new files of the change.
  */
 export function changeDiff(app, base, untracked) {
   const start = git(app, ["merge-base", base, "HEAD"]);
@@ -164,22 +189,6 @@ function addedFile(app, file) {
   return [`diff --git a/${file} b/${file}`, `+++ b/${file}`, `@@ -0,0 +1,${lines.length} @@`]
     .concat(lines.map((line) => `+${line}`))
     .join("\n");
-}
-
-/**
- * Git's output, or null when it fails or prints more than 256 MB. Trimmed unless `raw`.
- * @param {string} app - From the scan; why: git runs in the app folder.
- * @param {string[]} args - From the scan; why: the git command.
- * @param {{ raw?: boolean }} [options] - From the scan; why: `-z` lists keep every byte.
- */
-function git(app, args, { raw = false } = {}) {
-  const result = spawnSync("git", args, {
-    cwd: app,
-    encoding: "utf8",
-    maxBuffer: 256 * 1024 * 1024,
-  });
-  if (result.status !== 0) return null;
-  return raw ? result.stdout : result.stdout.trim();
 }
 
 /**
