@@ -109,17 +109,11 @@ const rules = [
     reason: "arid: timeout constant",
     match(path) {
       if (!path.isNumericLiteral()) return false;
-      const owner = path.findParent((current) =>
-        [
-          "VariableDeclarator",
-          "ArrowFunctionExpression",
-          "FunctionExpression",
-          "CallExpression",
-        ].includes(current.node.type),
-      );
+      const owner = path.parentPath;
       return (
         owner?.isVariableDeclarator() &&
-        /timeout|deadline|grace|budget/i.test(owner.node.id.name ?? "")
+        owner.node.init === path.node &&
+        /timeout|deadline|grace/i.test(owner.node.id.name ?? "")
       );
     },
   },
