@@ -434,6 +434,20 @@ Duke's rule, 2026-10-20:
 normally the 'need' comes from what are parameters,
 and that reflect the graph".
 
+Why, in Duke's words (2026-10-20 08:07):
+"the value of this is surely less type transfer.
+Type can almost always can infer from the graph
+rather than redeclare, especially to those pure
+function".
+
+- Types flow from the tags and resources.
+  Code inside a unit gets them by inference.
+- A separate pure function must redeclare its
+  parameter types.
+  That copy is the type transfer we avoid.
+
+The method:
+
 - Start from each operation and resource,
   and its parameters.
 - Write the body inline in that unit.
@@ -445,6 +459,16 @@ and that reflect the graph".
   dependencies into another unit:
   an operation or a resource in the graph.
   Do not split it into a pure helper.
+- Write no type by hand for a value that comes
+  from the graph: a tag value, a resource value,
+  or an operation input.
+- Declare a type only at its source:
+  the tag, or the Data schema.
+  TypeScript infers it everywhere else.
+- An extracted helper takes its types from that
+  source too, such as the tag's value type
+  (`Tag.Handle<T>` carries it).
+  It never declares a new copy.
 - The cap of 17 stays a check, not a target.
   `check-plain` runs it.
   `docs/decisions/start-decompose.md:48-55`
@@ -592,6 +616,9 @@ In order. Each ticket is one commit or PR.
    `check-plain` passes.
    Each plain helper in `PLAIN.md` names its
    two units.
+   Types are declared only at tags and Data
+   schemas; graph values carry no hand-written
+   type, and review checks it.
 9. **Clean up** — `lib/` removed, CI runs the
    loop's doctor and gates
    Mutation follows Duke's rule for apps
