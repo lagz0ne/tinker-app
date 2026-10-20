@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 
 import { answerFinding, fixCommit } from "./answer.mjs";
 import {
+  loopFolder,
   mergeCheck,
   nextRound,
   readFindings,
@@ -147,6 +148,7 @@ function idsProblem(command, ids, count) {
  */
 async function check(app, { base, print, signal }) {
   const config = readConfig(app);
+  loopFolder(app);
   const before = treeState(app);
   const gates = await runGates(app, config.gates, { print, signal });
   if (stopCode(signal)) return stopCode(signal);

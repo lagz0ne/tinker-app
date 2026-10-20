@@ -146,30 +146,42 @@ A missing skill exits 78.
 No base, from `--base` or `loop.json`, exits 78.
 An unknown `--base` exits 64.
 The default reviewer is Claude Opus 5.5, `claude-opus-5-5`, run headless with `claude -p`.
-It gets the tools Read, Grep, Glob, and Bash.
-Bash is held to `git diff`, `git log`, and `git show`.
+It gets the tools Read, Grep, and Glob, and nothing that runs commands.
+`--restricted` removes every tool that runs commands or code.
+`--restricted` also ignores user, project, and local settings, so no setting can widen the tools.
 `--permission-mode dontAsk` denies every other tool.
-The reviewer runs in the app folder with no stdin.
-`loop.json` can set another reviewer: `"review": { "command": ["node", "reviewer.mjs", "{prompt}"] }`.
-Each `{prompt}` word becomes the prompt.
-With no `{prompt}` word, the prompt is the last word.
+The reviewer runs in the app folder.
+Its prompt goes on stdin.
+`loop.json` can set another reviewer: `"review": { "command": ["node", "reviewer.mjs"] }`.
+The prompt goes on its stdin too.
+A `{prompt}` word in the command takes the prompt instead, and stdin is empty.
 `"review": { "timeout": 600000 }` sets its timeout in milliseconds.
 The default timeout is 20 minutes.
 A reviewer past its timeout, or stopped, is killed with its whole process group.
 
+Before the run, review writes the change to files, since the reviewer runs no commands.
+`.loop/review/change.patch` holds the git diff from the merge base to the work tree, for the app folder.
+`.loop/review/untracked.txt` lists the new files git does not know yet, one per line.
+So the prompt stays small, however large the change is.
 The prompt starts with a plain title line, so it never starts with `-` and never reads as an option.
-Then come the skill, the range, the new untracked files, and the open review findings.
+Then come the skill, the range, the open review findings, and the answered review findings.
+The prompt tells the reviewer to read the two files.
 It asks for the skill's JSON lines only.
 It tells the reviewer not to run the gates and not to report `G1`.
+A `G1` line from the reviewer becomes a `question` row: gates belong to check.
 It asks the reviewer to recheck each open review finding.
 A finding that is still there comes back with the same `id`.
 A fixed one comes back as `{"id": "<its id>", "status": "fixed"}`.
+Answered review findings go in the prompt with their id, rule, and reason.
+A reworded repeat of an answered finding comes back with the same `id`.
+So it updates that row, which stays answered, and adds no new open row.
+`review-output` rows are never sent back, for recheck or as answered.
 The prompt, the output, and the reviewer's stderr are saved in `.loop/review/`.
 
 Each finding line becomes a row with `source` `review`.
 Its `seenSha` is HEAD, and its `round` comes from `recordReviewRound`.
 A new finding gets the loop's id, a hash, like a check finding.
-A rechecked finding keeps its id.
+A finding with an id from the prompt keeps that id.
 Blank lines, code fences, and a `clear` line are skipped.
 Any other line that is not a finding becomes one `question` row with rule `review-output`.
 That row names the line and says why it is not a finding.

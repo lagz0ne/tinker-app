@@ -114,8 +114,13 @@ test("the prompt holds the skill, the range, the new files, and the open finding
   expect(called(app).argv).toEqual([prompt]);
   expect(prompt.startsWith(`${promptTitle}\n\n${skill.trimEnd()}`)).toBe(true);
   expect(prompt).toContain(`The change starts at ${start}, where this branch left main.`);
-  expect(prompt).toContain(`See it with \`git diff ${start} -- .\``);
-  expect(prompt).toContain("- src/new.ts\n");
+  expect(prompt).toContain("Read the change in .loop/review/change.patch");
+  expect(prompt).toContain("1 new files not yet in git are listed in .loop/review/untracked.txt");
+  expect(prompt).toContain("You can use Read, Grep, and Glob. You cannot run commands.");
+  expect(readFileSync(join(app, ".loop/review/change.patch"), "utf8")).toBe(
+    git(app, "diff", "--no-color", "--relative", start) + "\n",
+  );
+  expect(readFileSync(join(app, ".loop/review/untracked.txt"), "utf8")).toBe("src/new.ts\n");
   expect(prompt).toContain(`{"id":"${open.id}","rule":"C3"`);
   expect(prompt).toContain('If it is fixed, print only {"id": "<its id>", "status": "fixed"}.');
   expect(prompt).toContain("Print only JSON lines");
@@ -297,7 +302,7 @@ test("a stop kills the reviewer, writes nothing, and exits 130", async () => {
   expect(rounds(app)).toEqual([]);
 });
 
-test("the default reviewer is Claude Opus 5.5, headless, with read-only tools", () => {
+test("the default reviewer is Claude Opus 5.5, restricted to Read, Grep, and Glob, prompt on stdin", () => {
   const app = reviewApp(null);
   const tools = tempFolder({});
   writeFileSync(join(tools, "claude"), `#!/bin/sh\nexec node ${fake} "$@"\n`);
@@ -312,24 +317,115 @@ test("the default reviewer is Claude Opus 5.5, headless, with read-only tools", 
   const prompt = readFileSync(join(app, ".loop/review/prompt.md"), "utf8");
 
   expect(run.status).toBe(0);
+  expect(called(app).argv).toEqual([
+    "-p",
+    "--model",
+    "claude-opus-5-5",
+    "--restricted",
+    "--tools",
+    "Read,Grep,Glob",
+    "--allowedTools",
+    "Read,Grep,Glob",
+    "--permission-mode",
+    "dontAsk",
+    "--strict-mcp-config",
+    "--no-session-persistence",
+  ]);
+  expect(called(app).argv.join(" ")).not.toContain("Bash");
+  expect(readFileSync(join(app, ".loop/stdin.txt"), "utf8")).toBe(prompt);
   expect(prompt.startsWith("-")).toBe(false);
-  expect(called(app)).toEqual({
-    argv: [
-      "-p",
-      prompt,
-      "--model",
-      "claude-opus-5-5",
-      "--tools",
-      "Read,Grep,Glob,Bash",
-      "--allowedTools",
-      "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)",
-      "--permission-mode",
-      "dontAsk",
-      "--strict-mcp-config",
-      "--no-session-persistence",
-    ],
-    stdin: 0,
+});
+
+test("a big change keeps the prompt small: the file list goes to untracked.txt", () => {
+  const app = reviewApp(null);
+  const tools = tempFolder({});
+  writeFileSync(join(tools, "claude"), `#!/bin/sh\nexec node ${fake} "$@"\n`);
+  chmodSync(join(tools, "claude"), 0o755);
+  mkdirSync(join(app, "src/many"), { recursive: true });
+  const names = Array.from(
+    { length: 3000 },
+    (_, n) => `src/many/file-${String(n).padStart(4, "0")}-${"x".repeat(40)}.ts`,
+  );
+  for (const name of names) writeFileSync(join(app, name), "export {};\n");
+  reply(app, []);
+
+  const run = spawnSync(process.execPath, [bin, "review"], {
+    cwd: app,
+    encoding: "utf8",
+    env: { ...process.env, PATH: `${tools}:${process.env.PATH}` },
   });
+  const prompt = readFileSync(join(app, ".loop/review/prompt.md"), "utf8");
+  const listed = readFileSync(join(app, ".loop/review/untracked.txt"), "utf8").trim().split("\n");
+
+  expect(run.status).toBe(0);
+  expect(names.join("\n").length).toBeGreaterThan(128 * 1024);
+  expect(Buffer.byteLength(prompt)).toBeLessThan(16 * 1024);
+  expect(listed.toSorted()).toEqual(names.toSorted());
+  expect(called(app).argv.every((word) => word.length < 1024)).toBe(true);
+});
+
+test("an answered finding is in the prompt, and a reworded repeat updates it", async () => {
+  const app = reviewApp();
+  reply(app, [finding("C3", "src/a.ts", "a write opens its own session")]);
+  await loop(app, "review");
+  const [row] = findingsOf(app);
+  await loop(app, "answer", row.id, "--reason", "the old profile write keeps its transaction");
+  reply(app, [
+    { ...finding("C3", "src/a.ts", "the write opens a session of its own"), id: row.id },
+  ]);
+
+  await loop(app, "review");
+  const prompt = readFileSync(join(app, ".loop/review/prompt.md"), "utf8");
+
+  expect(prompt).toContain(
+    JSON.stringify({
+      id: row.id,
+      rule: "C3",
+      reason: "the old profile write keeps its transaction",
+    }),
+  );
+  expect(findingsOf(app)).toEqual([
+    expect.objectContaining({
+      id: row.id,
+      status: "answered",
+      summary: "the write opens a session of its own",
+      reason: "the old profile write keeps its transaction",
+      round: 2,
+    }),
+  ]);
+});
+
+test("review-output rows are not sent back for recheck or as answered", async () => {
+  const app = reviewApp();
+  reply(app, ["not a finding"]);
+  await loop(app, "review");
+  const [question] = findingsOf(app);
+  reply(app, []);
+
+  await loop(app, "review");
+  const prompt = readFileSync(join(app, ".loop/review/prompt.md"), "utf8");
+
+  expect(question.rule).toBe("review-output");
+  expect(prompt).not.toContain(question.id);
+  expect(prompt).toContain("None: this is the first review, or all earlier findings are closed.");
+});
+
+test("a G1 line from the reviewer is not a finding: gates belong to check", async () => {
+  const app = reviewApp();
+  reply(app, [finding("G1", "typecheck", "the typecheck gate is red")]);
+
+  await loop(app, "review");
+  const rows = findingsOf(app);
+
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toEqual(
+    expect.objectContaining({
+      rule: "review-output",
+      severity: "question",
+      trigger:
+        'Line 1 of the reviewer\'s output: "G1" belongs to tinker-loop check; the reviewer does not report gates.',
+    }),
+  );
 });
 
 test("review exits 78 with no skill, a bad review block, or no base; 64 for an unknown --base", async () => {

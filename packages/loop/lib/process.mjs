@@ -24,17 +24,18 @@ export function timeoutProblem(timeout) {
 }
 
 /**
- * Run one command in its own process group, with no stdin. A string runs in a shell; an
- * array runs as is, without a shell. On its timeout or on `signal`, the whole group gets
+ * Run one command in its own process group. Its stdin is the `input` file, or empty when
+ * there is none. A string runs in a shell; an array runs as is, without a shell. On its timeout or on `signal`, the whole group gets
  * SIGTERM, then SIGKILL after 5 seconds, so no child of it lives on. Resolves null when it
  * exited 0, else how it ended.
  * @param {string} app - From a tool; why: the command's working folder.
- * @param {{ command: string | string[], timeout?: number, out: string, err?: string }} job -
- *   From a tool; why: what to run, its timeout (20 minutes when none), and the files for
- *   stdout and stderr (one file when `err` is left out).
+ * @param {{ command: string | string[], timeout?: number, input?: string, out: string,
+ *   err?: string }} job - From a tool; why: what to run, its timeout (20 minutes when none),
+ *   the file for stdin, and the files for stdout and stderr (one file when `err` is left out).
  * @param {AbortSignal | undefined} signal - From main; why: a stop kills the command.
  */
 export function runProcess(app, job, signal) {
+  const input = job.input ? openSync(job.input, "r") : "ignore";
   const out = openSync(job.out, "w");
   const err = job.err ? openSync(job.err, "w") : out;
   const timeout = job.timeout ?? defaultTimeoutMs;
@@ -42,7 +43,7 @@ export function runProcess(app, job, signal) {
   return new Promise((resolve) => {
     let ending = null;
     let stopped;
-    const options = { cwd: app, detached: true, stdio: ["ignore", out, err] };
+    const options = { cwd: app, detached: true, stdio: [input, out, err] };
     const child = Array.isArray(job.command)
       ? spawn(job.command[0], job.command.slice(1), options)
       : spawn(job.command, { ...options, shell: true });
@@ -64,6 +65,7 @@ export function runProcess(app, job, signal) {
       await stopped;
       closeSync(out);
       if (err !== out) closeSync(err);
+      if (input !== "ignore") closeSync(input);
       resolve(ending ?? end);
     };
     child.once("error", (error) => void done(`could not start: ${error.message}`));

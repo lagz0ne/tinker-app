@@ -20,20 +20,21 @@ export const reviewModel = "claude-opus-5-5";
 
 /**
  * The reviewer command when loop.json has no `review.command`: Claude Code, headless, with
- * read-only tools. `--tools` limits the tools that exist, `--allowedTools` approves them with
- * Bash held to git diff, log, and show, and `dontAsk` denies the rest. `{prompt}` is replaced
- * by the prompt; it sits before the tool lists, which take every word after them.
+ * Read, Grep, and Glob only. `--restricted` removes every tool that runs commands or code,
+ * ignores user, project, and local settings, so no app or user setting can widen the tools,
+ * and keeps file tools in the app folder. `--tools` limits the tools that exist,
+ * `--allowedTools` approves them, and `dontAsk` denies the rest. The prompt goes on stdin.
  */
 export const defaultReviewCommand = [
   "claude",
   "-p",
-  "{prompt}",
   "--model",
   reviewModel,
+  "--restricted",
   "--tools",
-  "Read,Grep,Glob,Bash",
+  "Read,Grep,Glob",
   "--allowedTools",
-  "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)",
+  "Read,Grep,Glob",
   "--permission-mode",
   "dontAsk",
   "--strict-mcp-config",
@@ -41,8 +42,8 @@ export const defaultReviewCommand = [
 ];
 
 /**
- * The prompt's first line. The prompt is one argv word, and a word that starts with `-` reads
- * as an option: the skill's own front matter starts with `---`. So the prompt starts here.
+ * The prompt's first line. When a reviewer takes the prompt as one argv word, a word that
+ * starts with `-` reads as an option, and the skill's front matter starts with `---`.
  */
 export const promptTitle = "Review one change in this app with the tinker-review skill below.";
 
@@ -71,10 +72,21 @@ export async function runReview(app, { base, config, print, stderr, signal }) {
     return 64;
   }
 
+  loopFolder(app);
   const tree = treeState(app);
   const head = headSha(app);
-  const open = readFindings(app).filter((f) => f.source === "review" && f.status === "open");
-  const prompt = reviewPrompt({ skill: readFileSync(skill, "utf8"), ...range, head, tree, open });
+  const earlier = readFindings(app).filter((f) => f.source === "review" && f.rule !== outputRule);
+  const open = earlier.filter((f) => f.status === "open");
+  const answered = earlier.filter((f) => f.status === "answered");
+  writeChange(app, range.start, tree.untracked ?? []);
+  const prompt = reviewPrompt({
+    skill: readFileSync(skill, "utf8"),
+    ...range,
+    head,
+    tree,
+    open,
+    answered,
+  });
   const ending = await askReviewer(app, { review: config.review, prompt, signal });
   if (signal?.aborted) return 130;
   if (ending) {
@@ -83,7 +95,10 @@ export async function runReview(app, { base, config, print, stderr, signal }) {
   }
 
   const output = readFileSync(join(app, ".loop", "review", "output.txt"), "utf8");
-  const reported = parseReview(output, new Set(open.map((f) => f.id)));
+  const reported = parseReview(output, {
+    recheck: new Set(open.map((f) => f.id)),
+    known: new Set([...open, ...answered].map((f) => f.id)),
+  });
   const round = recordReviewRound(app, { sha: head });
   const merged = updateFindings(app, (previous) =>
     mergeReview(previous, reported, { round, sha: head, dirty: tree.dirty }),
@@ -114,50 +129,73 @@ function reviewRange(app, base, configured) {
 }
 
 /**
- * Run the reviewer command with the prompt, no stdin, and the gates' process-group timeout.
- * The prompt, stdout, and stderr are saved in `.loop/review/`. Resolves null when it ran.
+ * Write the change for the reviewer, who runs no commands: `.loop/review/change.patch`, the
+ * git diff from `start` to the work tree for the app folder, and `untracked.txt`, the new
+ * files git does not know yet, one per line.
+ * @param {string} app - From runReview; why: the folder to diff.
+ * @param {string} start - From reviewRange; why: where the change starts.
+ * @param {string[]} untracked - From treeState; why: the new files to list.
+ */
+function writeChange(app, start, untracked) {
+  const folder = join(loopFolder(app), "review");
+  mkdirSync(folder, { recursive: true });
+
+  const patch = git(
+    app,
+    ["-c", "core.quotePath=false", "diff", "--no-color", "--no-ext-diff", "--relative", start],
+    {
+      raw: true,
+    },
+  );
+  writeFileSync(join(folder, "change.patch"), patch ?? "");
+  writeFileSync(join(folder, "untracked.txt"), untracked.map((file) => `${file}\n`).join(""));
+}
+
+/**
+ * Run the reviewer with the gates' process-group timeout. The prompt goes on its stdin, or
+ * into a `{prompt}` word when loop.json asks for one. The prompt, stdout, and stderr are saved
+ * in `.loop/review/`. Resolves null when it ran.
  * @param {string} app - From runReview; why: the reviewer runs in the app folder.
  * @param {{ review: { command?: string[], timeout?: number }, prompt: string,
  *   signal?: AbortSignal }} ask - From runReview; why: the command, the prompt, and the stop.
  */
 async function askReviewer(app, { review, prompt, signal }) {
   const folder = join(loopFolder(app), "review");
-  mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, "prompt.md"), prompt);
+  const promptFile = join(folder, "prompt.md");
+  writeFileSync(promptFile, prompt);
 
-  const command = reviewArgv(review.command ?? defaultReviewCommand, prompt);
+  const words = review.command ?? defaultReviewCommand;
+  const inline = words.includes("{prompt}");
+  const command = inline ? words.map((word) => (word === "{prompt}" ? prompt : word)) : words;
   const out = join(folder, "output.txt");
   const err = join(folder, "stderr.log");
-  return runProcess(app, { command, timeout: review.timeout, out, err }, signal);
-}
-
-/**
- * The reviewer's argv: each `{prompt}` word becomes the prompt; with none, the prompt is the
- * last word.
- * @param {string[]} command - From loop.json or defaultReviewCommand; why: the program and
- *   its arguments.
- * @param {string} prompt - From reviewPrompt; why: what the reviewer reads.
- */
-export function reviewArgv(command, prompt) {
-  return command.includes("{prompt}")
-    ? command.map((word) => (word === "{prompt}" ? prompt : word))
-    : [...command, prompt];
+  const input = inline ? undefined : promptFile;
+  return runProcess(app, { command, timeout: review.timeout, input, out, err }, signal);
 }
 
 /**
  * The reviewer's prompt: a plain title line, the skill, then this review's range, the open
- * findings to recheck, and the output it must print.
+ * findings to recheck, the answered findings, and the output it must print. The change itself
+ * is in files, so the prompt stays small however large the change is.
  * @param {{ skill: string, ref: string, start: string, head: string | null,
- *   tree: { untracked: string[] | null }, open: object[] }} review - From runReview; why: the
- *   rules, the change, and the findings still open from earlier rounds.
+ *   tree: { untracked: string[] | null }, open: object[], answered: object[] }} review - From
+ *   runReview; why: the rules, the change, and the earlier findings, open and answered.
  */
-export function reviewPrompt({ skill, ref, start, head, tree, open }) {
-  const untracked = tree.untracked?.length
+export function reviewPrompt({ skill, ref, start, head, tree, open, answered }) {
+  const count = tree.untracked?.length ?? 0;
+  const untracked = count
+    ? `${count} new files not yet in git are listed in .loop/review/untracked.txt; read each one whole.`
+    : "There are no new untracked files in the change.";
+  const known = answered.length
     ? [
-        "New files in the change, not yet in git; read each one whole:",
-        ...tree.untracked.map((f) => `- ${f}`),
+        "## Answered findings",
+        "",
+        "The writer answered these with a reason. Do not report them as new findings.",
+        'If you find the same problem again, print it as a finding line with the same "id".',
+        "",
+        ...answered.map((f) => JSON.stringify({ id: f.id, rule: f.rule, reason: f.reason })),
       ]
-    : ["There are no new untracked files in the change."];
+    : ["## Answered findings", "", "None."];
   const recheck = open.length
     ? [
         "## Open findings to recheck",
@@ -195,16 +233,21 @@ export function reviewPrompt({ skill, ref, start, head, tree, open }) {
     "You run in the app folder. Do not edit files.",
     `The change starts at ${start}, where this branch left ${ref}.`,
     `It ends at the work tree, uncommitted edits included. HEAD is ${head ?? "not a commit"}.`,
-    `See it with \`git diff ${start} -- .\`; this replaces the skill's \`git diff <base>..HEAD\`.`,
-    ...untracked,
-    "You can use Read, Grep, Glob, and git diff, git log, and git show.",
+    "Read the change in .loop/review/change.patch: the git diff from that commit to the work tree,",
+    "for this app folder only. It replaces the skill's `git diff <base>..HEAD`.",
+    untracked,
+    "You can use Read, Grep, and Glob. You cannot run commands.",
+    "Run the skill's quick scan with Grep on .loop/review/change.patch.",
     "Do not run the gates: tinker-loop check runs them. Skip the skill's gates step and do not report G1.",
     "",
     ...recheck,
     "",
+    ...known,
+    "",
     "## Output",
     "",
     "Print only JSON lines: one line for each finding, in the skill's Report shape, and the recheck lines above.",
+    "Do not report G1.",
     'For a new finding, "id" may be any short slug.',
     "Print no other text and no code fences. With no findings, print nothing.",
     "",
@@ -215,11 +258,13 @@ export function reviewPrompt({ skill, ref, start, head, tree, open }) {
  * The reviewer's report: its findings as review rows, and the open ids it rechecked as fixed.
  * Blank lines, code fences, and a `clear` line are skipped. Any other line that is not a
  * finding becomes one question row that names it, so nothing the reviewer said is lost.
- * A reported id from the recheck list keeps that id; any other finding gets the loop's id.
+ * A reported id from the open or answered list keeps that id, so a reworded repeat updates
+ * that row; any other finding gets the loop's id. Only an open id may be marked fixed.
  * @param {string} text - From the reviewer's stdout; why: the report to read.
- * @param {Set<string>} openIds - From runReview; why: the ids sent for recheck.
+ * @param {{ recheck: Set<string>, known: Set<string> }} ids - From runReview; why: the open
+ *   ids sent for recheck, and every id sent, open or answered.
  */
-export function parseReview(text, openIds) {
+export function parseReview(text, ids) {
   const found = new Map();
   const fixed = new Set();
 
@@ -227,7 +272,7 @@ export function parseReview(text, openIds) {
     const line = raw.trim();
     if (!line || line.startsWith("```") || /^clear\b/i.test(line)) return;
 
-    const read = readReviewLine(line, openIds);
+    const read = readReviewLine(line, ids);
     if (read.fixed) fixed.add(read.fixed);
     else {
       const row = read.row ?? badLine(line, index + 1, read.problem);
@@ -239,9 +284,10 @@ export function parseReview(text, openIds) {
 
 /**
  * @param {string} line - From parseReview; why: one line of the report.
- * @param {Set<string>} openIds - From parseReview; why: only these may be marked fixed.
+ * @param {{ recheck: Set<string>, known: Set<string> }} ids - From parseReview; why: only a
+ *   recheck id may be marked fixed, and a known id keeps its row.
  */
-function readReviewLine(line, openIds) {
+function readReviewLine(line, ids) {
   let value;
   try {
     value = JSON.parse(line);
@@ -253,12 +299,12 @@ function readReviewLine(line, openIds) {
     return { problem: "it is not a JSON object" };
   }
   if (value.status === "fixed") {
-    return openIds.has(value.id)
+    return ids.recheck.has(value.id)
       ? { fixed: value.id }
       : { problem: "it marks a finding fixed that was not sent for recheck" };
   }
   const problem = findingProblem(value);
-  return problem ? { problem } : { row: reviewRow(value, openIds) };
+  return problem ? { problem } : { row: reviewRow(value, ids.known) };
 }
 
 /** @param {Record<string, unknown>} value - From readReviewLine; why: the fields to check. */
@@ -271,6 +317,7 @@ function findingProblem(value) {
       typeof value.rule === "string" && /^[A-Z][0-9]+$/.test(value.rule),
       '"rule" must be a rule ID such as C3',
     ],
+    [value.rule !== "G1", '"G1" belongs to tinker-loop check; the reviewer does not report gates'],
     [severities.includes(value.severity), `"severity" must be one of ${severities.join(", ")}`],
     [text("file"), '"file" must name a file'],
     [text("summary"), '"summary" must say what is wrong'],
@@ -282,9 +329,9 @@ function findingProblem(value) {
 
 /**
  * @param {Record<string, any>} value - From readReviewLine; why: a checked finding.
- * @param {Set<string>} openIds - From readReviewLine; why: a rechecked id keeps its row.
+ * @param {Set<string>} known - From readReviewLine; why: an id sent in the prompt keeps its row.
  */
-function reviewRow(value, openIds) {
+function reviewRow(value, known) {
   const row = {
     rule: value.rule,
     severity: value.severity,
@@ -295,7 +342,7 @@ function reviewRow(value, openIds) {
     fix: value.fix ?? "",
     source: "review",
   };
-  return { id: openIds.has(value.id) ? value.id : findingId(row), ...row };
+  return { id: known.has(value.id) ? value.id : findingId(row), ...row };
 }
 
 /**
