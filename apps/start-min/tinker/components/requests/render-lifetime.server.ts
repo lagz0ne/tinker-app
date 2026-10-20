@@ -2,7 +2,7 @@ import { resource } from "@tinker/core";
 
 import { raise } from "~/components/errors";
 
-/** The app owns the lookup; each request session owns its render close. */
+/** The app owns the lookup; each request session owns its render close (`requestLifetime`). */
 export const renderFrames = resource({
   label: "request.renders",
   target: "scope",
@@ -22,31 +22,6 @@ export const renderFrames = resource({
         const owned = renders.get(request);
         if (owned === undefined) raise("StartScopeMissing", {});
         owned.close = close;
-      },
-    };
-  },
-});
-
-/** The request retains render work until its body ends. */
-export const renderLifetime = resource({
-  label: "request.renderLifetime",
-  target: "session",
-  depends: { renders: renderFrames },
-  factory: ({ renders }, ctx) => {
-    let owned: { close: (() => Promise<void>) | undefined } | undefined;
-    let request: Request | undefined;
-    ctx.defer(() => {
-      if (request) renders.release(request);
-      request = undefined;
-      const close = owned?.close;
-      if (owned) owned.close = undefined;
-      return close?.();
-    });
-
-    return {
-      open(value: Request) {
-        request = value;
-        owned = renders.open(value);
       },
     };
   },

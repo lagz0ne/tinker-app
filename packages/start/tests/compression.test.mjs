@@ -30,21 +30,52 @@ test("encoding weights, exclusions, wildcard, and identity are honored", () => {
   }
 });
 
-test("streamed HTML is compressed and keeps existing Vary fields", async () => {
+test("finished short HTML is compressed whole with its new length and existing Vary fields", async () => {
   for (const encoding of ["gzip", "br"]) {
     const response = await compressResponse(
       new Request("http://app", { headers: { "accept-encoding": encoding } }),
       html(),
     );
     expect(response.headers.get("content-encoding")).toBe(encoding);
-    expect(response.headers.get("content-length")).toBeNull();
     expect(response.headers.get("vary")).toBe("Cookie, Accept-Encoding");
 
     const bytes = Buffer.from(await response.arrayBuffer());
+    expect(response.headers.get("content-length")).toBe(String(bytes.length));
     expect((encoding === "br" ? brotliDecompressSync(bytes) : gunzipSync(bytes)).toString()).toBe(
       "<p>Hello</p>",
     );
   }
+});
+
+test.each(["gzip", "br"])("%s joins the ready chunks of a finished body", async (encoding) => {
+  const parts = ["<!DOCTYPE html>", "<body>", "</body>"];
+  const body = new ReadableStream({
+    start(controller) {
+      for (const part of parts) controller.enqueue(new TextEncoder().encode(part));
+      controller.close();
+    },
+  });
+  const response = await compressResponse(
+    new Request("http://app", { headers: { "accept-encoding": encoding } }),
+    new Response(body, { headers: { "content-type": "text/html" } }),
+  );
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+  expect(response.headers.get("content-length")).toBe(String(bytes.length));
+  expect((encoding === "br" ? brotliDecompressSync(bytes) : gunzipSync(bytes)).toString()).toBe(
+    parts.join(""),
+  );
+});
+
+test("a finished body over 64 KiB keeps the stream without a length", async () => {
+  const page = "<p>" + "x".repeat(70000) + "</p>";
+  const response = await compressResponse(
+    new Request("http://app", { headers: { "accept-encoding": "br" } }),
+    new Response(page, { headers: { "content-type": "text/html" } }),
+  );
+
+  expect(response.headers.get("content-length")).toBeNull();
+  expect(brotliDecompressSync(Buffer.from(await response.arrayBuffer())).toString()).toBe(page);
 });
 
 test("plain HTML still varies by encoding and refused encodings get 406", async () => {
