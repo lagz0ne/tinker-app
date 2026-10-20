@@ -10,6 +10,7 @@ import { generatorBlocked, staleTree } from "../lib/checks/generated.mjs";
 import { serverProblems } from "../lib/checks/named.mjs";
 import { compressResponse } from "../lib/compression.mjs";
 import { doctor } from "../lib/doctor.mjs";
+import { writeResponse } from "../lib/host-response.mjs";
 import { createMainHost } from "../lib/main-host.mjs";
 import { prepare, prepareExitCode } from "../lib/prepare.mjs";
 import { createAssets } from "../lib/serve.mjs";
@@ -24,6 +25,46 @@ async function writeRouteTree(root) {
   const vite = await import(pathToFileURL(require.resolve("vite")).href);
   await vite.resolveConfig({ root, logLevel: "silent" }, "serve");
   return "routeTree.gen.ts";
+}
+
+const hostKey = Symbol("tinker.host");
+const abortKey = Symbol("tinker.abort");
+
+/**
+ * Reading `signal` on hono's light Request builds a full undici Request. This one getter, shared by
+ * every request so they keep one shape, keeps hono's abort rule without that copy.
+ */
+const lazySignal = {
+  configurable: true,
+  get() {
+    this[abortKey] ??= watchClose(this[hostKey]);
+    return this[abortKey].signal;
+  },
+};
+
+/**
+ * @param {Request} request - From hono; why: an own `signal` shadows the prototype getter.
+ * @param {{ incoming: import("node:http").IncomingMessage, outgoing: import("node:http").ServerResponse }} env - From hono; why: the close that aborts.
+ */
+function withLazySignal(request, env) {
+  request[hostKey] = env;
+  return Object.defineProperty(request, "signal", lazySignal);
+}
+
+/**
+ * Hono's rule: an incoming error, or a close before the response finished, aborts.
+ * @param {{ incoming: import("node:http").IncomingMessage, outgoing: import("node:http").ServerResponse }} env - From hono; why: the request's two streams.
+ */
+function watchClose({ incoming, outgoing }) {
+  const controller = new AbortController();
+  const abort = () => {
+    if (incoming.errored) controller.abort(incoming.errored.toString());
+    else if (!outgoing.writableFinished) controller.abort("Client connection prematurely closed.");
+  };
+
+  if (outgoing.destroyed) abort();
+  else outgoing.once("close", abort);
+  return controller;
 }
 
 /**
@@ -50,13 +91,18 @@ async function serve(root) {
       const asset = await createAssets(root);
       if (signal.aborted) return;
 
-      const render = async (request) => compressResponse(request, await app.fetch(request));
+      /** Lend the Node response as srvx and h3 do; the app ends its request before the reply ends. */
+      const render = async (request, { incoming, outgoing }) => {
+        request.runtime = { name: "node", node: { req: incoming, res: outgoing } };
+        const response = await compressResponse(request, await app.fetch(request));
+        return writeResponse(request, response, outgoing);
+      };
       server = listen(
         {
           overrideGlobalObjects: false,
           hostname: process.env.HOST ?? "127.0.0.1",
           port: Number(process.env.PORT ?? 4318),
-          fetch: (request) => asset(request) ?? render(request),
+          fetch: (request, env) => asset(request) ?? render(withLazySignal(request, env), env),
         },
         (info) =>
           console.log(`tinker serve: http://${process.env.HOST ?? "127.0.0.1"}:${info.port}`),
