@@ -3,6 +3,8 @@
 Date: 2026-10-20. Status: proposed.
 Builds on: [start-decompose.md](start-decompose.md), loop T1 to T4.
 Decided by: Duke picked "full app".
+Duke, 2026-10-20: the port is graph-first;
+pure helpers only when the graph needs them.
 Start's CLI gaps are fixed first.
 Then tinker-loop is rebuilt as a real Tinker app.
 
@@ -134,7 +136,7 @@ unless a branch is named.
   `@tinker/start` and `@tinker/core`.
   Both are runtime `dependencies` of the tool:
   the bin imports `main-host`, and the app needs Core.
-- Other workspace packages, such as a pure kit,
+- Other linked workspace packages
   are inlined into `dist-cli`.
   They stay dev dependencies.
 - Who builds `dist-cli`:
@@ -388,8 +390,6 @@ packages/loop
     store      findings, rounds,
                last check, the lock
     git        rev-parse, diff, merge-base
-    kit        lazy module:
-               @tinker/loop-kit
     startRules finds the app's Start
     reviewer   argv, runs on processes
   src/operations/
@@ -399,6 +399,9 @@ packages/loop
     runMain host (S2)
 ```
 
+- Each unit lists its parameters: the tags and
+  resources it depends on.
+  Those are the edges of the graph.
 - Tags hold what `cmds/cli.ts` reads:
   the app folder (from `cwd` and `--app`),
   `--base`, the checked `loop.json`,
@@ -424,49 +427,46 @@ packages/loop
   "tinker-loop review: the reviewer exited
   with code 3" stay as they are.
 
-### The plain-helper cap
+### Graph first
 
-The count, by this rule: a top-level function is pure
-when it is not async, its body has no file, process,
-spawn, time, random, or Atomics call,
-and it calls no function that has one.
+Duke's rule, 2026-10-20:
+"if no need to do pure function, then don't do it.
+normally the 'need' comes from what are parameters,
+and that reflect the graph".
 
-- `7321d6c`: 86 top-level functions, 39 pure.
-- `loop/t3-review` (`ac35e5d`): 101 functions, 50 pure.
+- Start from each operation and resource,
+  and its parameters.
+- Write the body inline in that unit.
+- Extract a plain helper only when the graph
+  shows the need: two units take the same
+  parameters for the same work.
+- When a body hits the complexity limit of 8
+  (`vite.config.ts:31`), split it by its
+  dependencies into another unit:
+  an operation or a resource in the graph.
+  Do not split it into a pure helper.
+- The cap of 17 stays a check, not a target.
+  `check-plain` runs it.
+  `docs/decisions/start-decompose.md:48-55`
 
-The cap is 17 per app, and a helper needs
-two real callers.
-`docs/decisions/start-decompose.md:48-55`
-The complexity limit of 8 also applies
-(`vite.config.ts:31`), so long parsers cannot
-fold into one body.
+Precedent:
 
-Precedent: functional core, imperative shell
-(Gary Bernhardt).
-In this repo, outside libraries enter unit
-bodies through lazy module resources.
-`docs/decisions/start-decompose.md:16-17`
-`apps/issue-board/src/backend/modules.ts:28-30`
+- Dependency injection: a unit's parameters
+  are the graph's edges, so the graph shows
+  who needs what.
+- YAGNI for extraction: no helper before a
+  second unit needs the same work.
+  The contract's two-caller rule sets that bar.
 
-Pick: split the kit.
+Rejected:
 
-- A new plain package, `@tinker/loop-kit`,
-  holds only pure code.
-  No IO, no clock, no random, no pid.
-- That is the findings format, ids, the merges,
-  the rules parser, the diff scan,
-  the review parser and prompt, and the report text.
-- It is plain Node, with its own unit tests.
-- The app loads it through the `kit` resource.
-- The file store, the lock, the clock, and random
-  are app resources, so Core's rules reach them.
-- App code keeps only its own plain helpers,
-  listed in `PLAIN.md`, at most 17.
-
-Rejected: a cap exception for private tools.
-The contract says "Do not raise the cap" and
-"Do not use … wrappers to evade it".
-`docs/decisions/start-decompose.md:52-54`
+- A pure kit package beside the app.
+  It moves code out of the graph, so the
+  graph no longer shows the need.
+- A cap exception for tools.
+  The contract says "Do not raise the cap" and
+  "Do not use … wrappers to evade it".
+  `docs/decisions/start-decompose.md:52-54`
 
 ### The tests stay the acceptance suite
 
@@ -474,35 +474,42 @@ Precedent: characterization tests
 (Michael Feathers), and the strangler fig
 (Martin Fowler).
 
-The freeze ticket (P0) runs on today's code.
+The freeze ticket (ticket 5) runs on today's code.
 
 - Every test imports from one file,
   `tests/api.mjs`.
-  It re-exports `main`, `gateRule`, `scans`,
-  `parseRules`, `lockFindings`, and
+  It re-exports `main`, `lockFindings`, and
   `recordReviewRound`.
+- Tests that import `parseRules`, `gateRule`, or
+  `scans` move to the CLI seam first.
+  Parser cases write a fake Start's `rules.md`
+  and run `tinker-loop rules`.
+  The rule-coverage test runs `check` and then
+  `findings --rules`.
+  Graph-first bodies are inline, so those
+  functions may not exist after the port.
 - Calls to `lockFindings` and `recordReviewRound`
   get `await`, so the same test bodies pass when
   those become async store methods.
 - The S4 stop test is added.
-- The suite is then 111 tests:
+- The suite stays 111 tests:
   99, plus T3's 11, plus the stop test.
-- After P0, the `*.test.mjs` files freeze.
+- After ticket 5, the `*.test.mjs` files freeze.
   Later tickets change only `tests/api.mjs`,
   `tests/fixture.mjs`, and test setup files.
 
-Through P1 to P3, the old code keeps serving.
+Through tickets 6 and 7, the old code keeps serving.
 
 - The bin and `tests/api.mjs` point at `lib/`
-  until P4.
-- P2 and P3 add the app beside `lib/`.
-- P4 switches the bin to `runMain` and
+  until ticket 8.
+- Tickets 6 and 7 add the app beside `lib/`.
+- Ticket 8 switches the bin to `runMain` and
   `tests/api.mjs` to the app in one ticket.
 - `main` then becomes an in-process host
   around the CLI command, with `cwd`.
   The store helpers open a scope test root
   with the store resource.
-- Every P ticket checks two things:
+- Every port ticket checks two things:
   the 111 frozen tests pass, and
   `git diff <freeze> -- 'packages/loop/tests/*.test.mjs'`
   is empty.
@@ -525,84 +532,78 @@ Through P1 to P3, the old code keeps serving.
 
 - One command file, not one per subcommand.
 - No new Core API.
-- The kit is private, like the loop.
+- No new package: the loop stays one app.
 
 ## Tickets
 
 In order. Each ticket is one commit or PR.
 
-- **T3 land** — fix the `---` prompt, merge T3
-  Verify: 110 loop tests pass.
-  One real `claude` review prints findings
-  (manual, paid, not CI).
-- **S3+S7 host** — SIGHUP 129, EPIPE, and `cwd`
-  Includes the copied base, `registry:build`,
-  start-min and issue-board sync, UPGRADE.md,
-  and the contract lines for S3, S4, S5, S7.
-  Verify: main-host tests for 129, EPIPE, and
-  `ctx.cwd`. All Start tests pass.
-  Template and registry proofs pass.
-  `pnpm --dir packages/start run mutate` is
-  at least 85.
-- **S1 CLI-only app** — Start without web entries
-  Includes optional peers, the `base-main` item,
-  the contract at `start-decompose.md:131-133`,
-  and `README.md:93` set to 85.
-  Verify: a fixture app with only `cmds/cli.ts`
-  and no React or TanStack installed passes
-  prepare, doctor, build, and `gate:commands`.
-  All Start tests and registry checks pass.
-  `pnpm --dir packages/start run mutate` is
-  at least 85.
-- **S2 bin pattern** — bin, files, `ssr.external`,
-  doctor check
-  Verify: the fixture app packs with its bin and
-  `dist-cli`. Another workspace app runs it with
-  `vp exec`. `dist-cli` holds no copy of
-  `@tinker/start` or `@tinker/core`.
-- **P0 freeze** — `tests/api.mjs`, `await`,
-  and the S4 stop test
-  Verify: 111 tests pass. Test bodies change
-  only in imports and `await`.
-- **P1 kit** — pure code to `@tinker/loop-kit`
-  Verify: kit unit tests pass.
-  The kit imports no `node:fs` or
-  `node:child_process`, and uses no `process`,
-  `Date`, or `Math.random`.
-  The 111 frozen tests pass.
-- **P2 skeleton** — the app beside `lib/`
-  CLI-only files, `base-main`, `check-plain.mjs`
-  copied, and the `globalSetup` build.
-  Verify: doctor, `gate:commands`,
-  `check-plain`, and `check-plain --prove` pass.
-  The 111 frozen tests pass.
-- **P3 resources** — processes, store, git,
-  kit, startRules, reviewer
-  Verify: a scope test closes the root while a
-  child ignores SIGTERM, and finds its group
-  gone within 6 seconds.
-  The 111 frozen tests pass.
-- **P4 operations** — all six commands on Core,
-  then the switch
-  Verify: the 111 frozen tests pass,
-  serial and the CI way.
-  The test-body diff since P0 is empty.
-  `PLAIN.md` lists at most 17.
-  `check-plain` passes.
-- **P5 clean up** — `lib/` removed, a stryker
-  config with floor 85, CI runs the loop's
-  doctor and gates
-  Verify: CI is green.
-  `pnpm --dir packages/loop run mutate` is
-  at least 85.
-  A real `tinker-loop check` runs in the scaffold.
+1. **T3 land** — fix the `---` prompt, merge T3
+   Verify: 110 loop tests pass.
+   One real `claude` review prints findings
+   (manual, paid, not CI).
+2. **S3+S7 host** — SIGHUP 129, EPIPE, and `cwd`
+   Includes the copied base, `registry:build`,
+   start-min and issue-board sync, UPGRADE.md,
+   and the contract lines for S3, S4, S5, S7.
+   Verify: main-host tests for 129, EPIPE, and
+   `ctx.cwd`. All Start tests pass.
+   Template and registry proofs pass.
+   `pnpm --dir packages/start run mutate` is
+   at least 85.
+3. **S1 CLI-only app** — Start without web entries
+   Includes optional peers, the `base-main` item,
+   the contract at `start-decompose.md:131-133`,
+   and `README.md:93` set to 85.
+   Verify: a fixture app with only `cmds/cli.ts`
+   and no React or TanStack installed passes
+   prepare, doctor, build, and `gate:commands`.
+   All Start tests and registry checks pass.
+   `pnpm --dir packages/start run mutate` is
+   at least 85.
+4. **S2 bin pattern** — bin, files, `ssr.external`,
+   doctor check
+   Verify: the fixture app packs with its bin and
+   `dist-cli`. Another workspace app runs it with
+   `vp exec`. `dist-cli` holds no copy of
+   `@tinker/start` or `@tinker/core`.
+5. **Freeze** — `tests/api.mjs`, `await`,
+   internals moved to the CLI seam,
+   and the S4 stop test
+   Verify: 111 tests pass. After this ticket,
+   the `*.test.mjs` files do not change.
+6. **Skeleton** — the app beside `lib/`
+   CLI-only files, `base-main`, `check-plain.mjs`
+   copied, and the `globalSetup` build.
+   Verify: doctor, `gate:commands`,
+   `check-plain`, and `check-plain --prove` pass.
+   The 111 frozen tests pass.
+7. **Resources** — processes, store, git,
+   startRules, reviewer, each with its parameters
+   Verify: a scope test closes the root while a
+   child ignores SIGTERM, and finds its group
+   gone within 6 seconds.
+   The 111 frozen tests pass.
+8. **Operations** — all six commands on Core,
+   bodies inline, then the switch
+   Verify: the 111 frozen tests pass,
+   serial and the CI way.
+   The test-body diff since ticket 5 is empty.
+   `check-plain` passes.
+   Each plain helper in `PLAIN.md` names its
+   two units.
+9. **Clean up** — `lib/` removed, CI runs the
+   loop's doctor and gates
+   Mutation follows Duke's rule for apps
+   (2026-10-19 19:34): a diff gate on changed
+   lines, through the Core graph, and a full run
+   as a scheduled report with floor 60.
+   Start stays at 85.
+   Verify: CI is green. The diff gate passes.
+   The scheduled full run reports at least 60.
+   A real `tinker-loop check` runs in the scaffold.
 
-## Open question for Duke
+## Decided
 
-- Split the kit, or allow a cap exception?
-  The default is the split:
-  `@tinker/loop-kit` holds only pure code,
-  and the store, lock, clock, and random are
-  app resources.
-  The exception is the rejected option
-  (`start-decompose.md:52-54`).
+- Helpers (Duke, 2026-10-20): graph first.
+  No kit package and no cap exception.
