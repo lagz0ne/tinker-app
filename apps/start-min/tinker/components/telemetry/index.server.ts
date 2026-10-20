@@ -29,3 +29,16 @@ export {
   logLevel,
   spanHistory,
 } from "./settings";
+
+export {
+  telemetryWorker,
+  telemetryThread,
+  threadRing,
+  threadExport,
+  threadObserver,
+  threadRenderObserve,
+  threadIngest,
+} from "./thread.server";
+
+export type { ThreadSettings, ThreadMessage, ThreadRing, ThreadWorker } from "./thread.server";
+export { threadDrain } from "./drain.server";
