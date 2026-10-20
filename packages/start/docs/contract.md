@@ -192,10 +192,17 @@ weekly full app run, also available through workflow_dispatch, is a report and
 never a pull-request merge gate. `packages/start` keeps floor **85**; Core does
 not change.
 
+Both apps mutate tinker, src/demo, src/backend, src/transport, src/contracts,
+and cmds TypeScript. Command mains stay in: input, startup, exit, and close have
+contract tests. No cmd file is exempted as untested wiring. Board src/frontend
+views remain outside this backend scope. Existing exclusions keep native base
+entries/fallbacks, route glue, and sync/functions binding declarations out.
+
 Both apps ignore static mutants and keep the one-worker default. An instrumented
 baseline of 533 tests exceeded five minutes on one CPU, so its startup deadline
 is ten minutes; configured `timeoutMS` stays 15000. One shared arid-node ignorer suppresses log
-calls, span labels, attribute names, and timeout constants. These rules follow
+calls, span labels, attribute names, and whole numeric initializers named for
+timeout, deadline, or grace. Budget expressions stay eligible for mutation. These rules follow
 [Google's arid-node approach](https://testing.googleblog.com/2021/04/mutation-testing.html).
 They do not suppress attempt bounds, status values, or other business rules.
 
@@ -206,14 +213,18 @@ node scripts/mutation/span-map.mjs apps/issue-board
 node scripts/mutation/diff.mjs --app apps/issue-board --base origin/next --head HEAD
 ```
 
-The first command runs every app test once. A test-only Vite transform observes
+The first command runs every app test once with both vite.config and
+vitest.config, including the app test timeout and mock settings. A test-only Vite transform observes
 Core's public span export at scope creation; it preserves existing observers
 and logs. `reports/mutation/span-map.json` lists handles, reverse dependencies,
 tests, and gaps: operation/resource handles with no observed test span.
 
-The second command reads Git's changed lines, finds their handles, and follows
+The second command finds the PR merge base with the base branch, then reads
+Git's changed lines, finds their handles, and follows
 reverse `.depends` edges to command main or scope. It mutates only those line
-ranges. Vitest selects the mapped test files; Stryker's per-test coverage then
+ranges. Test-only edits add their covered source spans; an unobserved or deleted
+test falls back to all mutable source nodes. Removed-only hunks select the
+surviving lines on both sides, clamped at the file ends. Vitest selects the mapped test files; Stryker's per-test coverage then
 selects tests for each mutant. Native helpers and unobserved handles fall back
 to the map's complete test inventory, and the plan says when that happens.
 No missing span can silently remove a changed line from the gate. The script
@@ -226,7 +237,12 @@ The serial checks in `start-gates.yml` stay unchanged.
 The app matrix jobs run in parallel on separate GitHub runners; they share no
 services or writable files. One app failure does not cancel the other matrix
 job. Each job still uses one mutation worker and a
-180-minute total deadline. There is no whole-diff mutant cap or weekly fallback.
+180-minute total deadline. New pushes cancel the older run for that ref.
+The plan counts unique source lines and selects at most 400 by SHA-256 of
+relative file and line. It records every omitted line in diff-plan.json; use
+workflow_dispatch for an uncapped full report. Weekly full runs do not use this
+line budget. The diff job always runs the tool contracts, including config-only
+PRs. Third-party actions are pinned to commit SHAs.
 Diff runs alone load `scripts/mutation/line-cap.mjs`: at most one eligible mutant
 per changed line. A SHA-256 ordering of relative file, changed line, location,
 operator, and replacement makes the choice repeatable, independent of candidate

@@ -26,11 +26,11 @@ jobs:
       VITEST_MAX_WORKERS: "1"
       VP_RUN_CONCURRENCY_LIMIT: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
       - name: Install pinned tools
@@ -40,7 +40,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Check mutation tooling style
         run: pnpm exec vp check scripts/mutation
-      - name: Check mutation gate contracts
+      - name: Check mutation gate contracts, including config-only changes
         working-directory: apps/issue-board
         run: node --test --test-concurrency=1 ../../scripts/mutation/*.test.mjs
       - name: Build app commands before tests
@@ -52,7 +52,7 @@ jobs:
           node scripts/mutation/diff.mjs --app apps/${{ matrix.app }}
           --base ${{ github.event.pull_request.base.sha }}
           --head ${{ github.event.pull_request.head.sha }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: mutation-diff-${{ matrix.app }}
@@ -70,8 +70,8 @@ jobs:
       VITEST_MAX_WORKERS: "1"
       VP_RUN_CONCURRENCY_LIMIT: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
       - name: Install pinned tools
@@ -82,7 +82,7 @@ jobs:
       - run: pnpm --dir apps/${{ matrix.app }} run gate:commands
       - name: Full app report at floor 60
         run: pnpm --dir apps/${{ matrix.app }} exec stryker run
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: mutation-full-${{ matrix.app }}

@@ -364,3 +364,18 @@ test("whole-diff line sampling is bounded, deterministic, and reports every omit
     omittedLines: [],
   });
 });
+
+test("config-only PRs run unconditional gate contracts and actions are immutable", () => {
+  const workflow = readFileSync(
+    join(import.meta.dirname, "../../.github/workflows/mutation.yml"),
+    "utf8",
+  );
+  assert.match(
+    workflow,
+    /name: Check mutation gate contracts, including config-only changes\n        working-directory: apps\/issue-board\n        run: node --test --test-concurrency=1 ..\/..\/scripts\/mutation\/\*\.test\.mjs/,
+  );
+  for (const match of workflow.matchAll(/uses: actions\/[^@]+@([^\s]+)/g)) {
+    assert.match(match[1], /^[a-f0-9]{40}$/);
+  }
+  assert.match(workflow, /group: mutation-\$\{\{ github.ref \}\}\n  cancel-in-progress: true/);
+});
