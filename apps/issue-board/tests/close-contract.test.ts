@@ -3,7 +3,8 @@ import { expect, test } from "vite-plus/test";
 
 import { checkClosed } from "~/base/main";
 import { observeServerPanics } from "~/base/panics.server";
-import { renderFrames, renderLifetime } from "~/components/requests/render-lifetime.server";
+import { requestClose, requestLifetime } from "~/components/requests/lifetime.server";
+import { renderFrames } from "~/components/requests/render-lifetime.server";
 
 test("checkClosed keeps failure before teardown and accepts an empty teardown list", () => {
   const failed = new Error("work failed");
@@ -70,7 +71,9 @@ for (const phase of ["work", "close"] as const) {
 
 test("render close stays joined, removes its lookup, and runs once", async () => {
   const root = createScope();
-  const session = root.createSession();
+  const session = root.createSession({
+    tags: [requestClose((graceful) => session.close({ graceful }))],
+  });
   const finish = Promise.withResolvers<void>();
   const request = new Request("https://page.test/");
   let closes = 0;
@@ -81,7 +84,7 @@ test("render close stays joined, removes its lookup, and runs once", async () =>
     expect(() => frames.retain(request, async () => {})).toThrow(
       expect.objectContaining({ kind: "StartScopeMissing", payload: {} }),
     );
-    const lifetime = session.resolve(renderLifetime);
+    const lifetime = session.resolve(requestLifetime);
     lifetime.open(request);
     frames.retain(request, async () => {
       closes++;
@@ -109,11 +112,13 @@ test("render close stays joined, removes its lookup, and runs once", async () =>
   }
 });
 
-test("an unused render lifetime closes without a request or retained work", async () => {
+test("an unused request lifetime closes without a request or retained work", async () => {
   const root = createScope();
-  const session = root.createSession();
+  const session = root.createSession({
+    tags: [requestClose((graceful) => session.close({ graceful }))],
+  });
   try {
-    session.resolve(renderLifetime);
+    session.resolve(requestLifetime);
     expect((await session.close({ graceful: true })).status).toBe("success");
   } finally {
     await session.close();
