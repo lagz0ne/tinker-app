@@ -14,9 +14,15 @@ Start keeps its own version and URL.
 
 - An extension's `start` hook now has a time limit: 10 s by default.
   The whole start chain counts: the database connect, the migration-owner
-  wait (`DATABASE_MIGRATION_TIMEOUT_MS`, default 5000), and the migrations. On timeout `ready` rejects with an error naming the
-  extension, and the scope closes. A command whose startup can take
-  longer passes `createScope({ startTimeout: 60_000 })`; `0` turns it off.
+  wait (`DATABASE_MIGRATION_TIMEOUT_MS`, default 5000, max 60000), and the
+  migrations. On timeout `ready` rejects with `StartTimeout`, naming the
+  extension, and the scope closes.
+- Every command root that runs `databaseSetup` now passes
+  `startTimeout: 70_000`: the 60 s max owner wait plus 10 s for connect
+  and DDL. In issue-board that is `cmds/server.ts`, `cmds/worker.ts` and
+  `cmds/cli.ts`; in the scaffold, `cmds/server.ts` and `cmds/worker.ts`.
+  An app with its own copies adds the same line to each such root.
+  `0` turns the timer off.
 - The timer sleeps on the scope's clock. A test that counts a test
   clock's sleeps also sees one 10 000 ms sleep at start; pass
   `startTimeout: 0` there (the copied sync and database-ownership tests do).
