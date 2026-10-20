@@ -1,10 +1,7 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "testRunner": "vitest",
-  "plugins": [
-    "@stryker-mutator/vitest-runner",
-    "../../scripts/mutation/arid.mjs"
-  ],
+  "plugins": ["@stryker-mutator/vitest-runner", "../../scripts/mutation/arid.mjs"],
   "mutate": [
     "tinker/**/*.ts",
     "tinker/**/*.tsx",
@@ -17,17 +14,8 @@
     "!src/routes/**",
     "!tinker/components/sync/functions.ts"
   ],
-  "ignorePatterns": [
-    "tsconfig.json",
-    "dist",
-    "node_modules",
-    ".tinker"
-  ],
-  "reporters": [
-    "clear-text",
-    "progress",
-    "json"
-  ],
+  "ignorePatterns": ["tsconfig.json", "dist", "node_modules", ".tinker"],
+  "reporters": ["clear-text", "progress", "json"],
   "thresholds": {
     "high": 90,
     "low": 60,
@@ -40,7 +28,5 @@
     "related": false
   },
   "ignoreStatic": true,
-  "ignorers": [
-    "arid"
-  ]
+  "ignorers": ["arid"]
 }

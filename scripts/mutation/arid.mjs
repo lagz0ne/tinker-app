@@ -14,24 +14,42 @@ export function shouldIgnore(path) {
       const name = callee.type === "MemberExpression" ? callee.property.name : callee.name;
       const receiver = callee.object;
       if (
-        name === "log" ||
+        (name === "log" && receiver?.name !== "Math") ||
         (["debug", "info", "warn", "error"].includes(name) &&
-          (receiver?.name === "console" || receiver?.name === "log" ||
-            receiver?.name === "logger" || receiver?.property?.name === "log"))
-      ) return "arid: log call";
-      if (name === "child" && node.arguments[0] === path.node && path.node.type === "StringLiteral") {
+          (receiver?.name === "console" ||
+            receiver?.name === "log" ||
+            receiver?.name === "logger" ||
+            receiver?.property?.name === "log"))
+      )
+        return "arid: log call";
+      if (
+        name === "child" &&
+        node.arguments[0] === path.node &&
+        path.node.type === "StringLiteral"
+      ) {
         return "arid: span name";
       }
     }
   }
   const parent = path.parentPath?.node;
+  if (
+    path.node.type === "StringLiteral" &&
+    parent?.type === "CallExpression" &&
+    parent.arguments[0] === path.node &&
+    ["attr", "setAttribute"].includes(parent.callee.property?.name)
+  ) {
+    return "arid: attribute name";
+  }
   if (path.node.type === "StringLiteral" && parent?.type === "ObjectProperty") {
     if (parent.key.name === "label" && parent.value === path.node) return "arid: span label";
     if (parent.key === path.node) {
       const object = path.parentPath?.parentPath;
       const owner = object?.parentPath?.node;
-      if (owner?.key?.name === "attributes" ||
-          (owner?.type === "CallExpression" && ["attr", "attributes", "setAttribute"].includes(owner.callee.property?.name))) {
+      if (
+        owner?.key?.name === "attributes" ||
+        (owner?.type === "CallExpression" &&
+          ["attr", "attributes", "setAttribute"].includes(owner.callee.property?.name))
+      ) {
         return "arid: attribute name";
       }
     }
@@ -44,7 +62,12 @@ export function shouldIgnore(path) {
         }
         break;
       }
-      if (["ArrowFunctionExpression", "FunctionExpression", "CallExpression"].includes(current.node.type)) break;
+      if (
+        ["ArrowFunctionExpression", "FunctionExpression", "CallExpression"].includes(
+          current.node.type,
+        )
+      )
+        break;
     }
   }
   return undefined;

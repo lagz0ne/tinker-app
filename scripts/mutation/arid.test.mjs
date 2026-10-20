@@ -15,16 +15,21 @@ for (const [source, ignored] of [
   ['ctx.log.error("failed", { attempt: 2 })', true],
   ['ctx.obs.child("mail.send", () => send())', true],
   ['operation({ label: "mail.send", run: () => 12 })', true],
-  ['const sendTimeout = 7500', true],
+  ["const sendTimeout = 7500", true],
   ['({ attributes: { "mail.kind": "smtp" } })', true],
   ['if (attempts >= 12) throw new Error("dead")', false],
   ['({ "status": "sent" })', false],
-  ['const limit = 20', false],
+  ["const limit = 20", false],
+  ["Math.log(value)", false],
   ['sender.error("must not vanish")', false],
 ]) {
   test(`arid selection: ${source}`, () => {
     const reasons = [];
-    traverse(parse(source), { enter(path) { if (shouldIgnore(path)) reasons.push(shouldIgnore(path)); } });
+    traverse(parse(source), {
+      enter(path) {
+        if (shouldIgnore(path)) reasons.push(shouldIgnore(path));
+      },
+    });
     assert.equal(reasons.length > 0, ignored);
   });
 }

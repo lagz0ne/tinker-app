@@ -1,0 +1,83 @@
+name: App mutation reports
+
+on:
+  pull_request:
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diff:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      max-parallel: 1
+      matrix:
+        app: [issue-board, start-scaffold]
+    env:
+      VITEST_MAX_WORKERS: "1"
+      VP_RUN_CONCURRENCY_LIMIT: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install pinned tools
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: Check mutation gate contracts
+        working-directory: apps/issue-board
+        run: node --test ../../scripts/mutation/*.test.mjs
+      - name: Build app commands before tests
+        run: pnpm --dir apps/${{ matrix.app }} run gate:commands
+      - name: Map spans to tests
+        run: node scripts/mutation/span-map.mjs apps/${{ matrix.app }}
+      - name: Mutate changed lines at app floor 60
+        run: >-
+          node scripts/mutation/diff.mjs --app apps/${{ matrix.app }}
+          --base ${{ github.event.pull_request.base.sha }}
+          --head ${{ github.event.pull_request.head.sha }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-diff-${{ matrix.app }}
+          path: apps/${{ matrix.app }}/reports/mutation/
+
+  full:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      max-parallel: 1
+      matrix:
+        app: [issue-board, start-scaffold]
+    env:
+      VITEST_MAX_WORKERS: "1"
+      VP_RUN_CONCURRENCY_LIMIT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install pinned tools
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir apps/${{ matrix.app }} run gate:commands
+      - name: Full app report at floor 60
+        run: pnpm --dir apps/${{ matrix.app }} exec stryker run --concurrency 4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-full-${{ matrix.app }}
+          path: apps/${{ matrix.app }}/reports/mutation/

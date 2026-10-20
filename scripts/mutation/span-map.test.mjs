@@ -9,7 +9,8 @@ import { handleGraph, spanRecorder, writeSpanMap } from "./span-map.mjs";
 const app = resolve(".");
 test("caller instrumentation keeps real Core and chains the observer", () => {
   const plugin = spanRecorder({ app, events: "/tmp/mutation-map-test.jsonl" });
-  const code = 'import { operation, createScope as scope } from "@tinker/core"; const root = scope();';
+  const code =
+    'import { operation, createScope as scope } from "@tinker/core"; const root = scope();';
   const result = plugin.transform(code, `${app}/tests/example.test.ts`);
   assert.match(result.code, /operation/);
   assert.match(result.code, /tracedScope as scope/);
@@ -27,8 +28,12 @@ test("real graph follows shorthand/controller/barrel dependencies back to the cm
   const deliver = nodes.find((node) => node.name === "deliverMailBatch");
   assert(claim.depends.includes(tx.id));
   assert(claim.callers.includes(deliver.id));
-  assert(nodes.find((node) => node.id === "cmds/worker.ts#main").depends.includes(deliver.id) ||
-    nodes.find((node) => node.id === "cmds/worker.ts#main").depends.some((id) => id.includes("runMail")));
+  assert(
+    nodes.find((node) => node.id === "cmds/worker.ts#main").depends.includes(deliver.id) ||
+      nodes
+        .find((node) => node.id === "cmds/worker.ts#main")
+        .depends.some((id) => id.includes("runMail")),
+  );
 });
 
 test("map deduplicates test names and names unobserved handles as gaps", () => {
@@ -36,11 +41,17 @@ test("map deduplicates test names and names unobserved handles as gaps", () => {
   try {
     mkdirSync(resolve(directory, "report"));
     const events = resolve(directory, "events.jsonl");
-    const row = { file: resolve(app, "tests/mail-delivery.test.ts"), name: "sends mail", span: "outbox.claim" };
+    const row = {
+      file: resolve(app, "tests/mail-delivery.test.ts"),
+      name: "sends mail",
+      span: "outbox.claim",
+    };
     writeFileSync(events, `${JSON.stringify(row)}\n${JSON.stringify(row)}\n`);
     const map = writeSpanMap(app, events, resolve(directory, "report/map.json"));
     assert.equal(map.nodes.find((node) => node.name === "claimMailBatch").tests.length, 1);
     assert(map.gaps.some((id) => id.endsWith("#transaction")));
     assert.equal(map.tests.length, 1);
-  } finally { rmSync(directory, { recursive: true, force: true }); }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
