@@ -171,7 +171,7 @@ From the workspace root, copy both templates into a new empty output folder:
 node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
-Default exports pin the released Start 0.10.0 host and its matching registry.
+Default exports pin the released Start 0.11.0 host and its matching registry.
 Start 0.9.0 cannot run these templates. Local proofs pass an explicit current
 host pack; the export carries it in vendor and checks its host files against
 this source. Nothing is published.
@@ -241,7 +241,33 @@ Their resources own and close the connection.
 
 `npm start` uses the `tinker serve` host from the `@tinker/start` dev dependency.
 Keep dev dependencies installed on the server; an `npm install --omit=dev` install cannot start it.
-Templates use the Start 0.10.0 contract. Default installs use its released host
+Templates use the Start 0.11.0 contract. Default installs use its released host
 and registry.
 Local registry proofs use a packed Start through `TINKER_PACKAGE_DIR`.
 The standalone export proof supplies a current host pack explicitly.
+
+## Durable mail worker
+
+Auth callbacks await a saved mail row. Better Auth writes through its own pool
+adapter, outside the session transaction, so auth enqueue is a separate call.
+App writes can call enqueueMail in their own transaction. SMTP can deliver more
+than once after acceptance followed by a lost acknowledgement.
+
+Build and run the starter's worker beside its server:
+
+```bash
+npm run build:worker
+npm run worker
+```
+
+Both await the same migration lock. The worker uses DATABASE_URL, SMTP_URL, and
+SMTP_FROM from the local .env or host environment. It claims up to 20 rows, sends
+outside locks, and saves results by lease token. OUTBOX_LEASE_MS defaults to
+180000 and must be at least 120000. A send starts only while its send and ack
+budgets fit in the remaining lease. Released unsent claims refund their attempt.
+OUTBOX_SMTP_TIMEOUT_MS defaults to 3000 and may only shorten it.
+
+Worker traces use side worker. Stdout and bounded history work without a
+collector. To enable export, bind both VICTORIA_TRACES_URL and VICTORIA_LOGS_URL;
+setting only one is a startup config error. OTEL_SERVICE_NAME defaults to
+tinker-worker. Work closes before the existing bounded telemetry flush.

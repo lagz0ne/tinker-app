@@ -157,8 +157,8 @@ export const queue = resource({
         }
         return (pending ??= Promise.resolve().then(async () => {
           try {
-            owned.flushConsole();
             do {
+              owned.flushConsole();
               if (!records.length || stopRequests.signal.aborted) return;
               await owned.sendBatch();
             } while (draining && records.length && !failed);

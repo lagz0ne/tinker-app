@@ -1,6 +1,80 @@
+import type { ServerResponse } from "node:http";
+
 import { resource } from "@tinker/core";
 
 import { startServer } from "./modules.server";
+
+export declare namespace Requests {
+  /** The Node response a host serves the request on. */
+  type Outgoing = ServerResponse;
+  /**
+   * srvx and h3 read a Node host's response from `request.runtime.node.res`; a host that awaits
+   * `beforeEnd` before its last write fails the reply when the request cannot close.
+   */
+  type Hosted = Request & {
+    runtime: { node?: { res: Outgoing }; beforeEnd?: () => Promise<void> };
+  };
+}
+
+/**
+ * Ends each request before its host response ends, as the body read did: `join` closes it
+ * gracefully, and a failed close fails the reply. A response that closes first, on a
+ * client abort, ends it by force. Scope close destroys the responses still open and fails with
+ * any request that could not end and had no reply left to fail.
+ */
+export const hostResponses = resource({
+  label: "start.hostResponses",
+  target: "scope",
+  factory: (_deps, ctx) => {
+    const open = new Map<Requests.Outgoing, Promise<void>>();
+    const failures: unknown[] = [];
+    const joins = new Map<
+      Requests.Outgoing,
+      { finish: (graceful: boolean) => Promise<void>; joined?: Promise<void> }
+    >();
+    ctx.defer(async () => {
+      for (const outgoing of open.keys()) outgoing.destroy();
+      await Promise.all(open.values());
+      if (failures.length) throw failures.at(0);
+    });
+
+    return {
+      isHosted(request: Request): request is Requests.Hosted {
+        return "runtime" in request;
+      },
+      endOnClose(outgoing: Requests.Outgoing, finish: (graceful: boolean) => Promise<void>) {
+        const owned: { finish: typeof finish; joined?: Promise<void> } = { finish };
+        joins.set(outgoing, owned);
+        const closed = outgoing.closed
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => outgoing.once("close", resolve));
+        const ending = closed
+          .then(() =>
+            owned.joined ? owned.joined.catch(() => {}) : finish(outgoing.writableFinished),
+          )
+          .then(
+            () => {
+              open.delete(outgoing);
+              joins.delete(outgoing);
+            },
+            (error: unknown) => {
+              open.delete(outgoing);
+              joins.delete(outgoing);
+              failures.push(error);
+            },
+          );
+        open.set(outgoing, ending);
+      },
+      /** The host awaits this before its last write; a failed close fails the reply. */
+      join(outgoing: Requests.Outgoing): Promise<void> {
+        const owned = joins.get(outgoing);
+        if (owned === undefined) return Promise.resolve();
+
+        return (owned.joined ??= owned.finish(true));
+      },
+    };
+  },
+});
 
 /** Retains request work until the consumer ends, fails, or cancels the body. */
 export const responseBodies = resource({

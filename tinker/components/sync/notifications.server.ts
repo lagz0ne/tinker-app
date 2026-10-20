@@ -196,7 +196,7 @@ export const notifications = resource({
             try {
               return {
                 kind: "connected" as const,
-                close: await database.listen(heard, listenerFailed),
+                close: await database.listen("start_sync", heard, listenerFailed),
               };
             } catch (error) {
               broken = true;

@@ -5,7 +5,11 @@ import { renderObservation } from "~/base/observe";
 import { observeServerPanics } from "~/base/panics.server";
 import { createServerHandler, stoppedFetch } from "~/base/server-entry";
 import { authStartup, authSettings } from "~/components/auth/index.server";
-import { databaseSetup, databaseUrl } from "~/components/database/index.server";
+import {
+  databaseSetup,
+  databaseMigrationTimeout,
+  databaseUrl,
+} from "~/components/database/index.server";
 import { abortReasons } from "~/components/errors";
 import * as mail from "~/components/mail/index.server";
 import { startRequests, backendStop } from "~/components/requests";
@@ -29,6 +33,11 @@ import {
   renderNs,
   browserIngest,
   browserTelemetry,
+  telemetryWorker,
+  threadExport,
+  threadObserver,
+  threadRenderObserve,
+  threadIngest,
 } from "~/components/telemetry/index.server";
 
 import { readAccount } from "@/demo/backend/auth.server";
@@ -45,10 +54,13 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
   try {
     const stop = { tools: new AbortController(), app: new AbortController() };
     const appStop = AbortSignal.any([signal, stop.app.signal]);
+    /** A built server sends telemetry from a worker thread; dev and tests keep it on this thread. */
+    const threaded = !import.meta.env.DEV;
     const tools = createScope({
       signal: stop.tools.signal,
-      extensions: [telemetryExport],
+      extensions: [threaded ? threadExport : telemetryExport],
       tags: [
+        threaded && telemetryWorker(new URL("./telemetry-worker.js", import.meta.url)),
         telemetrySide("server"),
         consoleOutput(stdout),
         env.OTEL_SERVICE_NAME !== undefined && telemetryService(env.OTEL_SERVICE_NAME),
@@ -64,8 +76,10 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
     try {
       const app = createScope({
         signal: appStop,
-        observe: tools.resolve(observer),
+        observe: tools.resolve(threaded ? threadObserver : observer),
         extensions: [startRequests, authStartup, databaseSetup, mail.mailStartup, syncStartup],
+        // Room for the 60 s max migration-owner wait, plus connect and DDL.
+        startTimeout: 70_000,
         tags: [
           backendStop(appStop),
           syncSide("server"),
@@ -74,11 +88,17 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
           env.PUBLIC_ORIGIN !== undefined &&
             env.AUTH_SECRET !== undefined &&
             authSettings({ origin: env.PUBLIC_ORIGIN, secret: env.AUTH_SECRET }),
+          env.DATABASE_MIGRATION_TIMEOUT_MS !== undefined &&
+            databaseMigrationTimeout(Number(env.DATABASE_MIGRATION_TIMEOUT_MS)),
           env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
           env.SMTP_URL !== undefined && mail.smtpUrl(new URL(env.SMTP_URL)),
           env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM),
-          renderObservation(tools.resolve(renderObserve, { ns: renderNs })),
-          browserTelemetry(tools.resolve(browserIngest).ingest),
+          renderObservation(
+            threaded
+              ? tools.resolve(threadRenderObserve, { ns: renderNs })
+              : tools.resolve(renderObserve, { ns: renderNs }),
+          ),
+          browserTelemetry(tools.resolve(threaded ? threadIngest : browserIngest).ingest),
         ],
       });
 
