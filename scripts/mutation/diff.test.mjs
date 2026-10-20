@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, matchesGlob } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -238,5 +238,34 @@ test("CLI rejects missing or mismatched cap results, clears stale files, and rec
     assert.match(mismatched.stderr, /refusing an uncapped result/);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("both app scopes include write steps, transports, contracts, and tested commands", () => {
+  for (const app of ["issue-board", "start-scaffold"]) {
+    const config = JSON.parse(
+      readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), "../../apps", app, "stryker.config.json"),
+      ),
+    );
+    for (const file of [
+      "src/backend/issues.server.ts",
+      "src/transport/call.server.ts",
+      "src/contracts/issue.ts",
+      "cmds/server.ts",
+      "cmds/worker.ts",
+      "cmds/cli.ts",
+    ]) {
+      assert(
+        config.mutate.some((pattern) => !pattern.startsWith("!") && matchesGlob(file, pattern)),
+        `${app}: ${file}`,
+      );
+      assert(
+        !config.mutate.some(
+          (pattern) => pattern.startsWith("!") && matchesGlob(file, pattern.slice(1)),
+        ),
+        `${app}: ${file} excluded`,
+      );
+    }
   }
 });
