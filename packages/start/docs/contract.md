@@ -223,9 +223,9 @@ The second command finds the PR merge base with the base branch, then reads
 Git's changed lines, finds their handles, and follows
 reverse `.depends` edges to command main or scope. It mutates only those line
 ranges. Test-only edits add their covered source spans; an unobserved or deleted
-test falls back to all mutable source nodes. Removed-only hunks select the
+test falls back to all tracked mutable source files, including plain helpers. Removed-only hunks select the
 surviving lines on both sides, clamped at the file ends. A whole-file deletion
-falls back to surviving mutable handles, and fails if none are mapped. Vitest selects the mapped test files; Stryker's per-test coverage then
+falls back to surviving mutable source files, and fails if none remain. Vitest selects the mapped test files; Stryker's per-test coverage then
 selects tests for each mutant. Native helpers and unobserved handles fall back
 to the map's complete test inventory, and the plan says when that happens.
 No missing span can silently remove a changed line from the gate. The script
@@ -245,7 +245,7 @@ workflow_dispatch for an uncapped full report. Weekly full runs do not use this
 line budget. The diff job always runs the tool contracts, including config-only
 PRs. Third-party actions are pinned to commit SHAs.
 Diff runs alone load `scripts/mutation/line-cap.mjs`: at most one eligible mutant
-per changed line. A SHA-256 ordering of relative file, changed line, location,
+per selected source line. A SHA-256 ordering of relative file, changed line, location,
 operator, and replacement makes the choice repeatable, independent of candidate
 IDs or arrival order. Multiline nodes belong to their first changed line.
 Git lines are one-based and native plan positions are zero-based; the cap converts

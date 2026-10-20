@@ -188,6 +188,10 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
       "delete-only hunk must mutate both surviving neighbors",
     );
 
+    writeFileSync(join(app, "tinker/plain.ts"), "export const plain = 1;\n");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Add an untraced native helper");
+
     const removedTestBase = git("rev-parse", "HEAD");
     rmSync(join(app, "tests/value.test.ts"));
     git("add", ".");
@@ -207,7 +211,8 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
       true,
       "deleted tests cannot be silently dropped from the gate",
     );
-    assert.deepEqual(removedTest.mutate, ["tinker/value.ts:1-1"]);
+    assert.deepEqual(removedTest.mutate, ["tinker/plain.ts:1-1", "tinker/value.ts:1-2"]);
+    assert.deepEqual(removedTest.broadFiles, ["tinker/plain.ts", "tinker/value.ts"]);
 
     writeFileSync(join(app, "tinker/remaining.ts"), "export const remaining = true;\n");
     git("add", ".");
@@ -227,7 +232,7 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
       },
     });
     assert.deepEqual(deletedSource.deletedSources, ["tinker/value.ts"]);
-    assert.deepEqual(deletedSource.mutate, ["tinker/remaining.ts:1-1"]);
+    assert.deepEqual(deletedSource.mutate, ["tinker/plain.ts:1-1", "tinker/remaining.ts:1-1"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

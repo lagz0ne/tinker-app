@@ -163,6 +163,16 @@ export function planDiff({ app, base, head, map }) {
     map.nodes.flatMap((node) => node.tests ?? []).map((test) => test.file),
   );
   const testFallback = changedTests.some((file) => !observedTests.has(file));
+  const broadFiles = [testFallback, deletedSources.length > 0]
+    .filter(Boolean)
+    .slice(0, 1)
+    .flatMap(() =>
+      git("ls-tree", "-r", "--name-only", "-z", head, "--", prefix)
+        .split("\0")
+        .filter(Boolean)
+        .map((file) => file.slice(prefix.length))
+        .filter(canMutate),
+    );
   const testedNodes = map.nodes.filter(
     (node) =>
       canMutate(node.file) &&
@@ -171,7 +181,10 @@ export function planDiff({ app, base, head, map }) {
           (testFallback || node.tests?.some((test) => changedTests.includes(test.file))))),
   );
 
-  if (changedTests.length + deletedSources.length > 0 && !testedNodes.length) {
+  if (
+    changedTests.length + deletedSources.length > 0 &&
+    !(testedNodes.length + broadFiles.length)
+  ) {
     throw new Error(
       "Changed tests or deleted sources have no surviving source spans; collect a complete span map before mutation.",
     );
@@ -194,6 +207,11 @@ export function planDiff({ app, base, head, map }) {
       file: range.file.slice(prefix.length),
     })),
     ...testedNodes.map(({ file, start, end }) => ({ file, start, end })),
+    ...broadFiles.map((file) => ({
+      file,
+      start: 1,
+      end: readFileSync(resolve(app, file), "utf8").trimEnd().split("\n").length,
+    })),
   ].map((range) => {
     const lines = readFileSync(resolve(app, range.file), "utf8").trimEnd().split("\n").length;
     return { ...range, start: Math.min(range.start, lines), end: Math.min(range.end, lines) };
@@ -225,6 +243,7 @@ export function planDiff({ app, base, head, map }) {
     requestedBase: base,
     changedTests,
     deletedSources,
+    broadFiles,
     testFallback,
     head,
     ...budget,
