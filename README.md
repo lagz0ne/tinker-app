@@ -12,11 +12,11 @@ The history of these folders came from `lagz0ne/tinkered` (`main` at `fef10e46`)
 The paths are the same as in tinkered, so tinkered commits on them apply here as they are.
 
 `@tinker/core` and `@tinker/react` are not in this workspace. They come from the
-tinkered GitHub release `start-v0.8.0` as tarball URLs:
+tinkered GitHub release `start-v0.9.0` as tarball URLs:
 
 ```json
-"@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
-"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz"
+"@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz"
 ```
 
 To move to a newer core or react, change both URLs in each `package.json` and run `pnpm install`.
@@ -34,7 +34,7 @@ vp check
 ## Release
 
 A tag `start-vX.Y.Z` on `next` holds one asset: the Start tarball.
-Core and React keep their tinkered `start-v0.8.0` tarball URLs.
+Core and React keep their tinkered `start-v0.9.0` tarball URLs.
 The registry is read from the tag's own `apps/start-scaffold/public/r`.
 
 Start 0.10.0 is released from tag `start-v0.10.0`. It ships the current main contract.

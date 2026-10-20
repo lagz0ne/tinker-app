@@ -5,7 +5,7 @@
   "title": "health",
   "description": "Copied health component. You own its files.",
   "dependencies": [
-    "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+    "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
     "@tanstack/react-router@1.170.41",
     "react@^19.3.0"
   ],

@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+Core and React move to 0.9.0, from the tinkered `start-v0.9.0` release:
+
+```json
+"@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz"
+```
+
+Change both URLs in your `package.json`, then run `pnpm install`.
+Start keeps its own version and URL.
+
+- An extension's `start` hook now has a time limit: 10 s by default.
+  The whole start chain counts, so slow migrations or a slow database
+  connect count. On timeout `ready` rejects with an error naming the
+  extension, and the scope closes. A command whose startup can take
+  longer passes `createScope({ startTimeout: 60_000 })`; `0` turns it off.
+- The timer sleeps on the scope's clock. A test that counts a test
+  clock's sleeps also sees one 10 000 ms sleep at start; pass
+  `startTimeout: 0` there (the copied sync tests do).
+- New, no edit needed: `event.tap(config)` in a `start` hook adds a
+  telemetry sink; `namespace({ observe: false })` keeps a tool's own
+  work untraced; faster runs, sessions, writes, and React server renders.
+  See the tinkered `start-v0.9.0` release notes for the numbers.
+
 - `mailMaxSenders` (`mail.maxSenders`, default 4) caps SMTP connections; extra sends wait without starting their send deadline.
 - An acknowledgement failure counts as a crash attempt; remaining claims keep their leases until expiry.
 - `MigrationBusy` exits 1; only migration-lock polling is bounded. DDL has no `lock_timeout`.
