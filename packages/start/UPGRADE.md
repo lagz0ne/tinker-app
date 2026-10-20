@@ -13,13 +13,13 @@ Change both URLs in your `package.json`, then run `pnpm install`.
 Start keeps its own version and URL.
 
 - An extension's `start` hook now has a time limit: 10 s by default.
-  The whole start chain counts, so slow migrations or a slow database
-  connect count. On timeout `ready` rejects with an error naming the
+  The whole start chain counts: the database connect, the migration-owner
+  wait (`DATABASE_MIGRATION_TIMEOUT_MS`, default 5000), and the migrations. On timeout `ready` rejects with an error naming the
   extension, and the scope closes. A command whose startup can take
   longer passes `createScope({ startTimeout: 60_000 })`; `0` turns it off.
 - The timer sleeps on the scope's clock. A test that counts a test
   clock's sleeps also sees one 10 000 ms sleep at start; pass
-  `startTimeout: 0` there (the copied sync tests do).
+  `startTimeout: 0` there (the copied sync and database-ownership tests do).
 - New, no edit needed: `event.tap(config)` in a `start` hook adds a
   telemetry sink; `namespace({ observe: false })` keeps a tool's own
   work untraced; faster runs, sessions, writes, and React server renders.
