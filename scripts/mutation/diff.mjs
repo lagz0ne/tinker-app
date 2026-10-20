@@ -6,22 +6,25 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-/** Git's new-side ranges; removed-only hunks have no remaining line to mutate. */
+/** Git new-side ranges; deletions include both surviving neighbors. */
 export function changedRanges(diff) {
   let file;
 
   const ranges = [];
 
   for (const line of diff.split("\n")) {
-    if (line.startsWith("+++ b/")) file = line.slice(6);
+    if (line.startsWith("+++ ")) file = line.startsWith("+++ b/") ? line.slice(6) : undefined;
 
     const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
 
-    if (file && hunk && hunk[2] !== "0") {
+    if (file && hunk) {
       ranges.push({
         file,
-        start: Number(hunk[1]),
-        end: Number(hunk[1]) + Number(hunk[2] ?? 1) - 1,
+        start: Math.max(1, Number(hunk[1])),
+        end:
+          hunk[2] === "0"
+            ? Math.max(1, Number(hunk[1]) + 1)
+            : Number(hunk[1]) + Number(hunk[2] ?? 1) - 1,
       });
     }
   }
@@ -99,7 +102,7 @@ export function planDiff({ app, base, head, map }) {
   const config = JSON.parse(readFileSync(resolve(app, "stryker.config.json"), "utf8"));
 
   // Select names first: generated registry JSON can exceed spawnSync's buffer.
-  const paths = git(
+  const changedFiles = git(
     "diff",
     "--no-ext-diff",
     "--no-renames",
@@ -111,14 +114,31 @@ export function planDiff({ app, base, head, map }) {
   )
     .split("\0")
     .filter(Boolean)
-    .map((file) => file.slice(prefix.length))
-    .filter(
-      (file) =>
-        config.mutate.some((pattern) => !pattern.startsWith("!") && matchesGlob(file, pattern)) &&
-        !config.mutate.some(
-          (pattern) => pattern.startsWith("!") && matchesGlob(file, pattern.slice(1)),
-        ),
+    .map((file) => file.slice(prefix.length));
+
+  const canMutate = (file) =>
+    config.mutate.some((pattern) => !pattern.startsWith("!") && matchesGlob(file, pattern)) &&
+    !config.mutate.some(
+      (pattern) => pattern.startsWith("!") && matchesGlob(file, pattern.slice(1)),
     );
+  const paths = changedFiles.filter((file) => canMutate(file) && existsSync(resolve(app, file)));
+  const changedTests = changedFiles.filter((file) => /^tests\/.*\.(?:[cm]?[jt]sx?)$/.test(file));
+  const observedTests = new Set(
+    map.nodes.flatMap((node) => node.tests ?? []).map((test) => test.file),
+  );
+  const testFallback = changedTests.some((file) => !observedTests.has(file));
+  const testedNodes = map.nodes.filter(
+    (node) =>
+      changedTests.length > 0 &&
+      canMutate(node.file) &&
+      (testFallback || node.tests?.some((test) => changedTests.includes(test.file))),
+  );
+
+  if (changedTests.length && !testedNodes.length) {
+    throw new Error(
+      "Changed tests have no source spans; collect a complete span map before mutation.",
+    );
+  }
 
   const diff = paths.length
     ? git(
@@ -131,10 +151,16 @@ export function planDiff({ app, base, head, map }) {
         ...paths.map((file) => prefix + file),
       )
     : "";
-  const ranges = changedRanges(diff).map((range) => ({
-    ...range,
-    file: range.file.slice(prefix.length),
-  }));
+  const ranges = [
+    ...changedRanges(diff).map((range) => ({
+      ...range,
+      file: range.file.slice(prefix.length),
+    })),
+    ...testedNodes.map(({ file, start, end }) => ({ file, start, end })),
+  ].map((range) => {
+    const lines = readFileSync(resolve(app, range.file), "utf8").trimEnd().split("\n").length;
+    return { ...range, start: Math.min(range.start, lines), end: Math.min(range.end, lines) };
+  });
 
   for (const file of new Set(ranges.map((range) => range.file))) {
     if (git("show", `${head}:${prefix}${file}`) !== readFileSync(resolve(app, file), "utf8")) {
@@ -158,6 +184,8 @@ export function planDiff({ app, base, head, map }) {
     app: prefix.slice(0, -1),
     base: mergeBase,
     requestedBase: base,
+    changedTests,
+    testFallback,
     head,
     ranges,
     mutate: ranges.map(({ file, start, end }) => `${file}:${start}-${end}`),

@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { changedRanges, selectTests } from "./diff.mjs";
 
-test("new-side diff ranges include additions, not deleted-only hunks", () => {
+test("new-side diff ranges include additions and surviving deletion neighbors", () => {
   assert.deepEqual(
     changedRanges(
       "+++ b/tinker/example.ts\n@@ -2,3 +2,4 @@\n+x\n@@ -9 +10 @@\n+y\n@@ -15,2 +16,0 @@",
@@ -24,6 +24,7 @@ test("new-side diff ranges include additions, not deleted-only hunks", () => {
     [
       { file: "tinker/example.ts", start: 2, end: 5 },
       { file: "tinker/example.ts", start: 10, end: 10 },
+      { file: "tinker/example.ts", start: 16, end: 17 },
     ],
   );
 });
@@ -135,6 +136,78 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
     assert.equal(plan.base, base, "upstream edits must not become PR edits");
     assert.deepEqual(plan.mutate, ["tinker/value.ts:1-1"]);
     assert.deepEqual(plan.testFiles, ["tests/value.test.ts"]);
+
+    mkdirSync(join(app, "tests"), { recursive: true });
+    writeFileSync(join(app, "tests/value.test.ts"), "assert(value);\n");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Add source coverage fixture");
+    const testBase = git("rev-parse", "HEAD");
+    writeFileSync(join(app, "tests/value.test.ts"), "assert(true);\n");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Weaken only a test");
+    const covered = {
+      id: "value",
+      file: "tinker/value.ts",
+      start: 1,
+      end: 1,
+      callers: [],
+      tests: [{ file: "tests/value.test.ts", name: "value" }],
+    };
+    const testPlan = planDiff({
+      app,
+      base: testBase,
+      head: "HEAD",
+      map: { nodes: [covered], gaps: [], tests: covered.tests },
+    });
+    assert.deepEqual(
+      testPlan.mutate,
+      ["tinker/value.ts:1-1"],
+      "test-only edits must mutate their covered source",
+    );
+    assert.deepEqual(testPlan.changedTests, ["tests/value.test.ts"]);
+
+    writeFileSync(
+      join(app, "tinker/value.ts"),
+      "const first = 1;\nif (!first) throw new Error();\nexport const value = first;\n",
+    );
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Add deletion fixture");
+    const deleteBase = git("rev-parse", "HEAD");
+    writeFileSync(join(app, "tinker/value.ts"), "const first = 1;\nexport const value = first;\n");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Remove only the guard");
+    const deletePlan = planDiff({
+      app,
+      base: deleteBase,
+      head: "HEAD",
+      map: { nodes: [], gaps: [], tests: covered.tests },
+    });
+    assert.deepEqual(
+      deletePlan.mutate,
+      ["tinker/value.ts:1-2"],
+      "delete-only hunk must mutate both surviving neighbors",
+    );
+
+    const removedTestBase = git("rev-parse", "HEAD");
+    rmSync(join(app, "tests/value.test.ts"));
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Remove a test fixture");
+    const removedTest = planDiff({
+      app,
+      base: removedTestBase,
+      head: "HEAD",
+      map: {
+        nodes: [{ ...covered, tests: [] }],
+        gaps: [],
+        tests: [{ file: "tests/other.test.ts", name: "other" }],
+      },
+    });
+    assert.equal(
+      removedTest.testFallback,
+      true,
+      "deleted tests cannot be silently dropped from the gate",
+    );
+    assert.deepEqual(removedTest.mutate, ["tinker/value.ts:1-1"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
