@@ -30,7 +30,7 @@ const { database, databaseUrl } = await vite.ssrLoadModule(
   "/tinker/components/database/index.server.ts",
 );
 
-const { outboxWake } = await vite.ssrLoadModule("/src/backend/outbox.server.ts");
+const { outboxWake } = await vite.ssrLoadModule("/tinker/components/mail/index.server.ts");
 const prefix = `digest-proof-${randomUUID()}`;
 const connectionString = "postgres://issue_board@127.0.0.1:15433/postgres";
 const coordinator = new pg.Client({ connectionString });

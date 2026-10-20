@@ -90,12 +90,18 @@ jobs:
       - name: Live PostgreSQL and local Mailpit proofs and fault controls, serially
         working-directory: apps/issue-board
         run: |
+          node maintain/proof-migration-contract.mjs
+          node maintain/proof-migration-contract-controls.mjs
+          (cd ../start-scaffold && pnpm run test:migrations)
+          node maintain/proof-migration-owner.mjs
+          node maintain/proof-migration-owner-controls.mjs
           node maintain/proof-transaction-resource.mjs
           node maintain/proof-transaction.mjs
           node maintain/proof-transaction-controls.mjs
           node maintain/proof-bootstrap-snapshot.mjs
           node maintain/proof-bootstrap-snapshot-controls.mjs
           node maintain/proof-sql-cancel.mjs
+          node maintain/proof-worker-checkout.mjs
           node maintain/proof-alert-grace.mjs
           node maintain/proof-bounds-controls.mjs
           node maintain/proof-checkout.mjs
@@ -105,7 +111,15 @@ jobs:
           node maintain/proof-issues.mjs
           node maintain/proof-lock-order.mjs
           node maintain/proof-comments.mjs
+          node maintain/proof-auth-mail.mjs
+          node maintain/proof-auth-mail-controls.mjs
+          node maintain/proof-mail-leases.mjs
+          node maintain/proof-mail-leases-controls.mjs
+          node maintain/proof-database-channel.mjs
+          node maintain/proof-database-channel-controls.mjs
           node maintain/proof-outbox.mjs
+          node maintain/proof-worker-telemetry.mjs
+          node maintain/proof-worker-telemetry-controls.mjs
           node maintain/proof-worker-host.mjs
           node maintain/proof-digest.mjs
           node maintain/proof-smtp-auth.mjs

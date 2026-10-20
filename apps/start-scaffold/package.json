@@ -30,7 +30,10 @@
     "test:export": "node maintain/proof-export.mjs",
     "check:commands": "node maintain/check-commands.mjs",
     "test:proofs": "node maintain/proof-server-close.mjs && node maintain/proof-exit-controls.mjs && node maintain/proof-bootstrap-controls.mjs",
-    "gate:commands": "node node_modules/@tinker/start/lib/command-gate.mjs"
+    "gate:commands": "node node_modules/@tinker/start/lib/command-gate.mjs",
+    "build:worker": "vp build --config vite.worker.config.ts",
+    "worker": "node maintain/worker.mjs",
+    "test:migrations": "node maintain/proof-migration-contract.mjs && node maintain/proof-migration-contract-controls.mjs"
   },
   "dependencies": {
     "@hono/node-server": "1.19.17",

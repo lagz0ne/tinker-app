@@ -1,14 +1,23 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import pg from "pg";
 import { createServer } from "vite-plus";
 
 import { proofFault } from "./proof-fault.mjs";
 
 const directory = mkdtempSync(join(tmpdir(), "board-command-controls-"));
+
+const url = new URL(
+  process.env.BOARD_DATABASE_URL ?? "postgres://issue_board@127.0.0.1:15433/postgres",
+);
+
+const admin = new pg.Client({ connectionString: url.href });
+const database = "command_exits_" + randomUUID().replaceAll("-", "");
 
 const cases = [
   { name: "membership race", command: "cli", kind: "TeamChanged", code: 75 },
@@ -18,6 +27,9 @@ const cases = [
 ];
 
 try {
+  await admin.connect();
+  await admin.query(`CREATE DATABASE ${database}`);
+  url.pathname = "/" + database;
   for (const trial of cases) {
     const target =
       trial.command === "worker"
@@ -34,7 +46,7 @@ try {
 
     writeFileSync(
       copy,
-      `import {operation,tag} from "@tinker/core"; export const mailWorkerStop=tag({label:"proof.stop"}); export const ${name}=operation({label:"proof.command",depends:${trial.command === "worker" ? "{stopping:mailWorkerStop}" : "{}"},run:async(deps,{signal,raise,log})=>{const stopping=${trial.command === "worker" ? "deps.stopping" : "signal"};${body}}});`,
+      `import {operation} from "@tinker/core"; import {mailWorkerStop} from "~/components/mail/index.server"; export const ${name}=operation({label:"proof.command",depends:${trial.command === "worker" ? "{stopping:mailWorkerStop}" : "{}"},run:async(deps,{signal,raise,log})=>{const stopping=${trial.command === "worker" ? "deps.stopping" : "signal"};${body}}});`,
     );
 
     process.env.BOARD_PROOF_FAULT_FILE = target;
@@ -67,7 +79,7 @@ try {
 
       const app = await main({
         env: {
-          DATABASE_URL: "postgres://proof@localhost/proof",
+          DATABASE_URL: url.href,
           SMTP_URL: "smtp://localhost:11026",
           SMTP_FROM: "proof@example.test",
         },
@@ -107,6 +119,8 @@ try {
     }
   }
 } finally {
+  await admin.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
+  await admin.end();
   delete process.env.BOARD_PROOF_FAULT_FILE;
 
   delete process.env.BOARD_PROOF_FAULT_COPY;

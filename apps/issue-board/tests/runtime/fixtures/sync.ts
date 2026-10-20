@@ -11,7 +11,7 @@ export function handWoken(logQuery?: (query: string) => void) {
     const client = await syncTemplate.clone();
     defer(() => client.close());
     return Object.assign(drizzle({ client, logger: logQuery ? { logQuery } : undefined }), {
-      listen: async (wake: (payload: string) => void) => {
+      listen: async (_channel: string, wake: (payload: string) => void) => {
         wakes.push(wake);
         return () => undefined;
       },

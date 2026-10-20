@@ -514,7 +514,7 @@
         "nodemailer@10.0.13",
         "zod@catalog:"
       ],
-      "registryDependencies": [],
+      "registryDependencies": ["@tinker-start/database"],
       "files": [
         {
           "path": "tinker/components/mail/component.json",
@@ -540,6 +540,41 @@
           "path": "tinker/components/mail/sockets.server.ts",
           "type": "registry:file",
           "target": "~/tinker/components/mail/sockets.server.ts"
+        },
+        {
+          "path": "tinker/components/mail/settings.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mail/settings.ts"
+        },
+        {
+          "path": "tinker/components/mail/schema.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mail/schema.server.ts"
+        },
+        {
+          "path": "tinker/components/mail/delivery.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mail/delivery.server.ts"
+        },
+        {
+          "path": "drizzle/20261018041738_durable_mail/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261018041738_durable_mail/migration.sql"
+        },
+        {
+          "path": "drizzle/20261018041738_durable_mail/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261018041738_durable_mail/snapshot.json"
+        },
+        {
+          "path": "drizzle/20261019093400_mail_exhausted/migration.sql",
+          "type": "registry:file",
+          "target": "~/drizzle/20261019093400_mail_exhausted/migration.sql"
+        },
+        {
+          "path": "drizzle/20261019093400_mail_exhausted/snapshot.json",
+          "type": "registry:file",
+          "target": "~/drizzle/20261019093400_mail_exhausted/snapshot.json"
         }
       ],
       "meta": {
@@ -1221,6 +1256,11 @@
           "target": "~/tests/database-adapter.test.ts"
         },
         {
+          "path": "tests/database-ownership.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/database-ownership.test.ts"
+        },
+        {
           "path": "tests/errors.test.ts",
           "type": "registry:file",
           "target": "~/tests/errors.test.ts"
@@ -1454,6 +1494,56 @@
           "path": "maintain/proof-server-close.mjs",
           "type": "registry:file",
           "target": "~/maintain/proof-server-close.mjs"
+        },
+        {
+          "path": "tests/mail-deadline.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/mail-deadline.test.ts"
+        },
+        {
+          "path": "cmds/worker.ts",
+          "type": "registry:file",
+          "target": "~/cmds/worker.ts"
+        },
+        {
+          "path": "vite.worker.config.ts",
+          "type": "registry:file",
+          "target": "~/vite.worker.config.ts"
+        },
+        {
+          "path": "maintain/worker.mjs",
+          "type": "registry:file",
+          "target": "~/maintain/worker.mjs"
+        },
+        {
+          "path": "tests/mail-queue.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/mail-queue.test.ts"
+        },
+        {
+          "path": "tests/mail-delivery.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/mail-delivery.test.ts"
+        },
+        {
+          "path": "tests/mail-listen.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/mail-listen.test.ts"
+        },
+        {
+          "path": "maintain/proof-migration-contract.mjs",
+          "type": "registry:file",
+          "target": "~/maintain/proof-migration-contract.mjs"
+        },
+        {
+          "path": "maintain/proof-migration-contract-controls.mjs",
+          "type": "registry:file",
+          "target": "~/maintain/proof-migration-contract-controls.mjs"
+        },
+        {
+          "path": "tests/worker-telemetry-command.test.ts",
+          "type": "registry:file",
+          "target": "~/tests/worker-telemetry-command.test.ts"
         }
       ],
       "meta": {

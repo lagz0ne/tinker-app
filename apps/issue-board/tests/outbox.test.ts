@@ -5,12 +5,13 @@ import { afterEach, beforeEach, expect, test } from "vite-plus/test";
 import { user } from "~/components/auth/index.server";
 import { database, migrate, drizzleOrm } from "~/components/database/index.server";
 import { type Mail } from "~/components/mail/index.server";
+import { mail as alertMail } from "~/components/mail/index.server";
+import { mailOutbox } from "~/components/mail/index.server";
+import { deliverMailBatch, mailWorkerStop } from "~/components/mail/index.server";
 
-import { alertMail } from "@/backend/alert-mail.server";
-import { team, teamMember, mailOutbox } from "@/backend/board.schema.server";
+import { team, teamMember } from "@/backend/board.schema.server";
 import { addComment } from "@/backend/comments.server";
 import { changeIssue } from "@/backend/issues.server";
-import { deliverMailBatch, mailWorkerStop } from "@/backend/outbox.server";
 import { currentUser } from "@/demo/backend/auth.server";
 import { bootstrapPrivate } from "@/demo/backend/sync.server";
 
@@ -113,8 +114,8 @@ test("issue and comment alerts commit once, only for other team members", async 
   expect(new Set(rows.map((row) => row.dedupeKey)).size).toBe(2);
   expect(rows.map((row) => row.subject)).toEqual(["ENG-1: Mail alert", "New comment on ENG-1"]);
   expect(sent).toEqual([]);
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 2, sent: 2, failed: 0 });
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 2, dead: 0, sent: 2, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, dead: 0, sent: 0, failed: 0 });
   expect(sent).toHaveLength(2);
   expect(
     (await db.select().from(mailOutbox)).every((row) => row.sentAt !== null && row.attempts === 1),
@@ -162,7 +163,7 @@ test("worker retries with exponential backoff and leaves future mail alone", asy
   });
 
   refuse = true;
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, dead: 0, sent: 0, failed: 1 });
   const [first] = await db.select().from(mailOutbox);
   expect(first).toMatchObject({
     attempts: 1,
@@ -170,9 +171,9 @@ test("worker retries with exponential backoff and leaves future mail alone", asy
     lastError: "Error: local SMTP refused",
   });
   expect(first!.nextAt.getTime()).toBe(clock.currentTimeMillis() + 1000);
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, dead: 0, sent: 0, failed: 0 });
   clock.advance(1000);
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, dead: 0, sent: 0, failed: 1 });
   const [second] = await db.select().from(mailOutbox);
   expect(second!.attempts).toBe(2);
   // The next failure doubles the one-second retry delay.
@@ -180,7 +181,7 @@ test("worker retries with exponential backoff and leaves future mail alone", asy
 
   refuse = false;
   clock.advance(2000);
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 1, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, dead: 0, sent: 1, failed: 0 });
   expect((await db.select().from(mailOutbox))[0]).toMatchObject({ attempts: 3, lastError: null });
   expect(sent).toHaveLength(1);
 });
@@ -204,8 +205,13 @@ test("a batch is limited to twenty and dedupe keys reject duplicate rows", async
     }),
   ).rejects.toMatchObject({ cause: { code: "23505" } });
 
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 20, sent: 20, failed: 0 });
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 1, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({
+    claimed: 20,
+    dead: 0,
+    sent: 20,
+    failed: 0,
+  });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, dead: 0, sent: 1, failed: 0 });
   expect(sent).toHaveLength(21);
 });
 
@@ -220,7 +226,12 @@ test("twelve failures keep a dead row, log it, and stop claiming it", async () =
 
   refuse = true;
   for (let attempt = 1; attempt <= 12; attempt += 1) {
-    expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+    expect(await write(root, deliverMailBatch)).toEqual({
+      claimed: 1,
+      dead: 0,
+      sent: 0,
+      failed: 1,
+    });
     const [row] = await db.select().from(mailOutbox);
     expect(row!.attempts).toBe(attempt);
 
@@ -231,7 +242,7 @@ test("twelve failures keep a dead row, log it, and stop claiming it", async () =
 
   refuse = false;
   clock.advance(86_400_000);
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, dead: 0, sent: 0, failed: 0 });
   expect(await db.select().from(mailOutbox)).toMatchObject([
     { attempts: 12, sentAt: null, lastError: "Error: local SMTP refused" },
   ]);
@@ -304,13 +315,15 @@ test("stopping a batch finishes its current send and releases the remaining rows
 
   const rows = await db.select().from(mailOutbox);
   expect(rows.filter((row) => row.sentAt !== null)).toHaveLength(1);
-  expect(rows.filter((row) => row.sentAt === null)).toMatchObject([{ attempts: 0 }]);
+  expect(rows.filter((row) => row.sentAt === null)).toMatchObject([
+    { attempts: 0, leaseToken: null },
+  ]);
   expect(sent).toHaveLength(1);
 });
 
 test("the real claim SQL keeps the attempts cap for the partial index", async () => {
   databaseQueries.length = 0;
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, dead: 0, sent: 0, failed: 0 });
   const claim = databaseQueries.find((query) => query.includes("skip locked"));
   expect(claim).toMatch(/"attempts" < \$/);
 });

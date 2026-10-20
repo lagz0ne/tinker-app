@@ -3,12 +3,13 @@ import { z } from "zod";
 
 import { user } from "~/components/auth/index.server";
 import { transaction, drizzleOrm } from "~/components/database/index.server";
+import { mailOutbox } from "~/components/mail/index.server";
 import type { Sync } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
 
 import { raise } from "@/demo/errors";
 
-import { team, teamMember, mailOutbox } from "./board.schema.server";
+import { team, teamMember } from "./board.schema.server";
 
 export const executionSeen = operation({
   label: "execution.seen",

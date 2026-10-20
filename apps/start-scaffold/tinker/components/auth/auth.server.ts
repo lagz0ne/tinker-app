@@ -10,7 +10,8 @@ import * as schema from "./schema.server";
 import { authSettings } from "./settings.server";
 
 /**
- * The root tracks each mail action; auth callbacks return before delivery.
+ * Auth callbacks await durable enqueue before delivery by the mail worker.
+ * Better Auth owns the pool adapter below, outside our session transaction.
  * A session delete sends the account notice after its commit: sign-out, a revoked or deleted
  * session, and a deleted user (its sessions go through the same delete) all end here.
  */

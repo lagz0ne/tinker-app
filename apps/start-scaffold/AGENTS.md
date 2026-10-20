@@ -25,8 +25,9 @@ local checklist; each release's changes stay in UPGRADE.md.
    Board writes and the migrated counter/todos use the session transaction. New
    multi-step writes follow that pattern. Page reads write no tables; the browser
    renews sessions through explicit auth POST. Old profile writes keep their
-   awaited native transactions until their listed migration. Board mail uses its
-   transaction's outbox; auth/profile mail remain separate flows.
+   awaited native transactions until their listed migration. Board and auth mail
+   use the durable outbox; auth's pool adapter needs a separate committed enqueue.
+   Profile keeps its stored notification flow.
 
 Keep imports at the top in the formatter's groups and use blank lines between
 steps. Read the shared contract for named native boundaries, request bindings,
@@ -114,3 +115,7 @@ Use `vp dlx -- @tanstack/intent@0.5.0 list` to find other installed guides.
 The app's `intent.skills` list selects Start and Router packages.
 The guides stay in their packages and update with those packages.
 <!-- intent-skills:end -->
+
+With local Postgres running, also run `npm run test:migrations`. It checks the
+actual migration chain and rejects broken trigger SQL that schema snapshots
+cannot express. This live gate requires a local role that can create a test DB.

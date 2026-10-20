@@ -1,0 +1,1 @@
+CREATE INDEX "mail_outbox_exhausted" ON "mail_outbox" ("id") WHERE "sent_at" is null and "dead_at" is null and "attempts" >= 12;

@@ -5,7 +5,11 @@ import { renderObservation } from "~/base/observe";
 import { observeServerPanics } from "~/base/panics.server";
 import { createServerHandler, stoppedFetch } from "~/base/server-entry";
 import { authStartup, authSettings } from "~/components/auth/index.server";
-import { databaseSetup, databaseUrl } from "~/components/database/index.server";
+import {
+  databaseSetup,
+  databaseMigrationTimeout,
+  databaseUrl,
+} from "~/components/database/index.server";
 import { abortReasons } from "~/components/errors";
 import * as mail from "~/components/mail/index.server";
 import { startRequests, backendStop } from "~/components/requests";
@@ -74,6 +78,8 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
           env.PUBLIC_ORIGIN !== undefined &&
             env.AUTH_SECRET !== undefined &&
             authSettings({ origin: env.PUBLIC_ORIGIN, secret: env.AUTH_SECRET }),
+          env.DATABASE_MIGRATION_TIMEOUT_MS !== undefined &&
+            databaseMigrationTimeout(Number(env.DATABASE_MIGRATION_TIMEOUT_MS)),
           env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
           env.SMTP_URL !== undefined && mail.smtpUrl(new URL(env.SMTP_URL)),
           env.SMTP_FROM !== undefined && mail.mailFrom(env.SMTP_FROM),

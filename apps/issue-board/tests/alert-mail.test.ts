@@ -6,11 +6,13 @@ import { expect, test } from "vite-plus/test";
 
 import { database, migrate } from "~/components/database/index.server";
 import { smtpUrl, mailFrom } from "~/components/mail/index.server";
-
-import { alertMail, alertMailTimeout } from "@/backend/alert-mail.server";
-import { mailOutbox } from "@/backend/board.schema.server";
-import { smtp } from "@/backend/modules";
-import { deliverMailBatch } from "@/backend/outbox.server";
+import {
+  mail as alertMail,
+  mailSendTimeout as alertMailTimeout,
+} from "~/components/mail/index.server";
+import { mailOutbox } from "~/components/mail/index.server";
+import { deliverMailBatch } from "~/components/mail/index.server";
+import { smtp } from "~/components/mail/modules";
 
 import { proofDatabase } from "./presets";
 import { write } from "./write-boundary";
@@ -54,7 +56,12 @@ test("a local endpoint that never greets times out and releases the claim", asyn
       nextAt: new Date(0),
     });
 
-    expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+    expect(await write(root, deliverMailBatch)).toEqual({
+      claimed: 1,
+      dead: 0,
+      sent: 0,
+      failed: 1,
+    });
     const [row] = await db.select().from(mailOutbox);
     expect(row).toMatchObject({ attempts: 1, sentAt: null });
     expect(row!.lastError).toMatch(/timeout|greeting/i);
@@ -99,7 +106,9 @@ test("SMTP URL options keep credentials, IPv6, TLS and no-auth settings", async 
     });
     try {
       await root.ready;
-      await root.resolve(alertMail);
+      const sender = await root.resolve(alertMail);
+      expect(options, "opening the sender must not create an idle transport").toEqual([]);
+      await sender.send({ to: "receiver@example.test", subject: "Options", text: "Body" });
       expect(options).toEqual([expect.objectContaining(expected)]);
     } finally {
       stop.abort();
