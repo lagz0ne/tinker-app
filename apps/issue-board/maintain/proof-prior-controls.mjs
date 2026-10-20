@@ -1,7 +1,7 @@
 // Recheck the inherited live proofs with faults in copies only.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 
 const directory = process.env.BOARD_PROOF_LOG_DIR ?? ".tinker/prior-controls";
 mkdirSync(directory, { recursive: true });
@@ -55,8 +55,8 @@ try {
     assert(source.includes(fault.from), `Missing fault site: ${fault.name}`);
     const sourcePath = "src/backend/prior-control.scratch.server.ts";
 
-    paths.push(sourcePath);
     writeFileSync(sourcePath, source.replace(fault.from, fault.to));
+    paths.push(sourcePath);
     const result = spawnSync(process.execPath, [`maintain/proof-${fault.name}.mjs`], {
       encoding: "utf8",
       timeout: 60_000,
@@ -74,16 +74,24 @@ try {
     console.log(
       `PASS negative inherited ${fault.name}: broken scratch source exits ${result.status}; ${directory}/${fault.name}.log`,
     );
-    unlinkSync(paths.pop());
+    rmSync(paths.pop(), { force: true });
   }
 
+  // The broken host copy has no SIGTERM stop, so SIGTERM kills the worker instead of exit 143.
   const hostPath = ".bench/main-host-control.scratch.mjs";
-  paths.push(hostPath);
   const host = readFileSync("../../packages/start/lib/main-host.mjs", "utf8");
-  assert(host.includes('process.on("SIGTERM", terminate);'));
-  writeFileSync(hostPath, host.replace('process.on("SIGTERM", terminate);', ""));
+  const signals = "const signalCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };";
+  assert(
+    host.includes(signals),
+    "main-host.mjs no longer names its signal table; update this control",
+  );
+  mkdirSync(".bench", { recursive: true });
+  writeFileSync(
+    hostPath,
+    host.replace(signals, "const signalCodes = { SIGHUP: 129, SIGINT: 130 };"),
+  );
+  paths.push(hostPath);
   const runnerPath = "maintain/worker-control.scratch.mjs";
-  paths.push(runnerPath);
   writeFileSync(
     runnerPath,
     readFileSync("maintain/worker.mjs", "utf8").replace(
@@ -91,8 +99,8 @@ try {
       '"../.bench/main-host-control.scratch.mjs"',
     ),
   );
+  paths.push(runnerPath);
   const proofPath = "maintain/proof-worker-host.scratch.mjs";
-  paths.push(proofPath);
   writeFileSync(
     proofPath,
     readFileSync("maintain/proof-worker-host.mjs", "utf8").replace(
@@ -100,14 +108,16 @@ try {
       '"./worker-control.scratch.mjs"',
     ),
   );
+  paths.push(proofPath);
   const result = spawnSync(process.execPath, [proofPath], { encoding: "utf8", timeout: 30_000 });
   writeFileSync(`${directory}/worker-host.log`, result.stdout + result.stderr);
   assert.equal(result.error, undefined);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /null !== 143/);
   console.log(
-    `PASS negative inherited worker-host: missing SIGTERM handler exits by signal; ${directory}/worker-host.log`,
+    `PASS negative inherited worker-host: no SIGTERM stop exits by signal; ${directory}/worker-host.log`,
   );
 } finally {
-  for (const path of paths.reverse()) unlinkSync(path);
+  // Only written files are listed, and a missing one is fine, so cleanup never hides the real error.
+  for (const path of paths.reverse()) rmSync(path, { force: true });
 }
