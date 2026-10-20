@@ -246,6 +246,7 @@ test("blank digest hour maps startup to bad-config exit 78", async () => {
         SMTP_FROM: "board@example.test",
       },
       args: [],
+      cwd: import.meta.dirname,
       signal: stop.signal,
       stdout: { write: () => {} },
       stderr: { write: () => {} },

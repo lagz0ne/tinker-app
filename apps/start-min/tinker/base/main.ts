@@ -4,6 +4,8 @@ import type { Scope } from "@tinker/core";
 export type MainContext = {
   env: Readonly<Record<string, string | undefined>>;
   args: readonly string[];
+  /** The folder the process runs in; the host reads it, so commands read no process global. */
+  cwd: string;
   signal: AbortSignal;
   stdout: { write(chunk: string): unknown };
   stderr: { write(chunk: string): unknown };

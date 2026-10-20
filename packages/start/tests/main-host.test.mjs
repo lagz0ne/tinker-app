@@ -1,9 +1,11 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { Writable } from "node:stream";
 
 import { expect, test, vi } from "vite-plus/test";
 
-import { createMainHost } from "../lib/main-host.mjs";
+import { createMainHost, runMain } from "../lib/main-host.mjs";
 
 const quiet = { write() {} };
 
@@ -238,6 +240,245 @@ test("repeated OS signals after exit cannot cut off cleanup or change its first 
 
   expect(result.stdout).toContain("cleanup finished");
 });
+
+test("SIGHUP stops runMain with 129 and still joins cleanup", () => {
+  const url = new URL("../lib/main-host.mjs", import.meta.url).href;
+
+  const script = `
+    import { runMain } from ${JSON.stringify(url)};
+
+    await runMain(async ({ signal, stdout }) => {
+      const alive = setInterval(() => {}, 1000);
+      setTimeout(() => process.kill(process.pid, "SIGHUP"), 5);
+      return { closed: new Promise((resolve) => signal.addEventListener("abort", () => {
+        clearInterval(alive);
+        stdout.write("cleanup after " + signal.reason.message + "\\n");
+        resolve();
+      })) };
+    });
+  `;
+
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+    encoding: "utf8",
+    timeout: 5000,
+  });
+
+  expect(result.signal).toBeNull();
+  expect(result.status).toBe(129);
+  expect(result.stdout).toBe("cleanup after SIGHUP\n");
+  expect(result.stderr).toBe("");
+});
+
+for (const code of [0, 3]) {
+  test(`a reader that closes stdout early leaves exit ${code} as it is`, async () => {
+    const url = new URL("../lib/main-host.mjs", import.meta.url).href;
+    const script = `
+      import { runMain } from ${JSON.stringify(url)};
+
+      await runMain(async ({ exit, stdout }) => {
+        for (let line = 0; line < 4000; line += 1) stdout.write("x".repeat(80) + "\\n");
+        exit(${code});
+        return { closed: new Promise((resolve) => setTimeout(resolve, 100)) };
+      });
+    `;
+    const child = spawn(process.execPath, ["--input-type=module", "-e", script]);
+    child.stdout.destroy();
+    const errors = [];
+    child.stderr.on("data", (chunk) => errors.push(chunk));
+
+    const [status, signal] = await new Promise((resolve) =>
+      child.once("exit", (exitCode, exitSignal) => resolve([exitCode, exitSignal])),
+    );
+
+    expect(signal).toBeNull();
+    expect(status).toBe(code);
+    expect(Buffer.concat(errors).toString()).toBe("");
+  });
+}
+
+test("the command gets the host's cwd; it defaults to the process folder", async () => {
+  const seen = [];
+  const main = async ({ cwd, exit }) => {
+    seen.push(cwd);
+    exit(0);
+    return { closed: Promise.resolve() };
+  };
+
+  await createMainHost(main, { env: {}, cwd: "/app/folder", stdout: quiet, stderr: quiet }).closed;
+  await createMainHost(main, { env: {}, stdout: quiet, stderr: quiet }).closed;
+
+  expect(seen).toEqual(["/app/folder", process.cwd()]);
+});
+
+test("runMain fills cwd from the folder the process runs in", () => {
+  const url = new URL("../lib/main-host.mjs", import.meta.url).href;
+  const folder = realpathSync(tmpdir());
+  const script = `
+    import { runMain } from ${JSON.stringify(url)};
+
+    await runMain(async ({ cwd, exit, stdout }) => {
+      stdout.write(cwd);
+      exit(0);
+      return { closed: Promise.resolve() };
+    });
+  `;
+
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+    cwd: folder,
+    encoding: "utf8",
+    timeout: 5000,
+  });
+
+  expect(result.status).toBe(0);
+  expect(result.stdout).toBe(folder);
+});
+
+/** A writable stdout for in-process runMain tests: it keeps what is written. */
+function capture() {
+  const chunks = [];
+  const stream = new Writable({
+    write(chunk, _encoding, done) {
+      chunks.push(String(chunk));
+      done();
+    },
+  });
+  return { stream, text: () => chunks.join("") };
+}
+
+test("runMain, in this process: SIGHUP stops with 129, quietly, with cwd and its listeners", async () => {
+  const before = {
+    hangup: process.listenerCount("SIGHUP"),
+    interrupt: process.listenerCount("SIGINT"),
+    terminate: process.listenerCount("SIGTERM"),
+  };
+  const out = capture();
+  const errors = capture();
+  const seen = {};
+  try {
+    const code = await runMain(
+      async ({ cwd, signal }) => {
+        seen.cwd = cwd;
+        seen.listening = {
+          hangup: process.listenerCount("SIGHUP") - before.hangup,
+          stdout: out.stream.listenerCount("error"),
+        };
+        setTimeout(() => process.emit("SIGHUP", "SIGHUP"), 5);
+        return {
+          closed: new Promise((resolve) =>
+            signal.addEventListener("abort", () => {
+              seen.reason = signal.reason.message;
+              resolve();
+            }),
+          ),
+        };
+      },
+      { args: [], stdout: out.stream, stderr: errors.stream },
+    );
+
+    expect(code).toBe(129);
+  } finally {
+    process.exitCode = undefined;
+  }
+
+  expect(seen).toEqual({
+    cwd: process.cwd(),
+    listening: { hangup: 1, stdout: 1 },
+    reason: "SIGHUP",
+  });
+  expect(errors.text()).toBe("");
+  expect(out.stream.listenerCount("error")).toBe(0);
+  expect({
+    hangup: process.listenerCount("SIGHUP"),
+    interrupt: process.listenerCount("SIGINT"),
+    terminate: process.listenerCount("SIGTERM"),
+  }).toEqual(before);
+});
+
+test("runMain's stdout ignores EPIPE and still throws any other error", async () => {
+  const out = capture();
+  const caught = {};
+  try {
+    const code = await runMain(
+      async ({ exit }) => {
+        out.stream.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }));
+        try {
+          out.stream.emit("error", new Error("disk gone"));
+        } catch (error) {
+          caught.other = error.message;
+        }
+        try {
+          out.stream.emit("error", undefined);
+        } catch (error) {
+          caught.empty = { error };
+        }
+        exit(0);
+        return { closed: Promise.resolve() };
+      },
+      { args: [], stdout: out.stream, stderr: quiet },
+    );
+
+    expect(code).toBe(0);
+  } finally {
+    process.exitCode = undefined;
+  }
+
+  expect(caught).toEqual({ other: "disk gone", empty: { error: undefined } });
+});
+
+test("runMain takes a plain { write } stdout with no event methods", async () => {
+  try {
+    const code = await runMain(
+      async ({ exit }) => {
+        exit(0);
+        return { closed: Promise.resolve() };
+      },
+      { args: [], stdout: quiet, stderr: quiet },
+    );
+
+    expect(code).toBe(0);
+  } finally {
+    process.exitCode = undefined;
+  }
+});
+
+test("a flush error on stdout that is not EPIPE still fails the run", async () => {
+  const broken = new Writable({
+    write(_chunk, _encoding, done) {
+      done(Object.assign(new Error("write EIO"), { code: "EIO" }));
+    },
+  });
+  broken.on("error", () => {});
+
+  const host = createMainHost(async () => ({ closed: Promise.resolve() }), {
+    env: {},
+    stdout: broken,
+    stderr: quiet,
+  });
+
+  expect(await host.closed).toBe(1);
+});
+
+for (const [stream, expected] of [
+  ["stdout", 0],
+  ["stderr", 1],
+]) {
+  test(`EPIPE while flushing ${stream} gives exit ${expected}`, async () => {
+    const epipe = new Writable({
+      write(_chunk, _encoding, done) {
+        done(Object.assign(new Error("write EPIPE"), { code: "EPIPE" }));
+      },
+    });
+    epipe.on("error", () => {});
+    const streams = { stdout: quiet, stderr: quiet, [stream]: epipe };
+
+    const host = createMainHost(async () => ({ closed: Promise.resolve() }), {
+      env: {},
+      ...streams,
+    });
+
+    expect(await host.closed).toBe(expected);
+  });
+}
 
 test("graceMs is a full delay before hardStop", async () => {
   vi.useFakeTimers();

@@ -2,12 +2,14 @@
  * Host-owned command lifetime. Only the command receives exit; OS signals use stop.
  * First clean stop wins. A late thrown error is logged without changing that code.
  * @param {function} main - The app command.
- * @param {object} options - Host inputs, start/stop hooks, and the hard-stop deadline.
+ * @param {object} options - Host inputs (env, args, and cwd, which defaults to the process
+ *   folder), start/stop hooks, and the hard-stop deadline.
  */
 export function createMainHost(main, options) {
   const {
     env,
     args = [],
+    cwd = process.cwd(),
     stdout,
     stderr,
     graceMs = 10_000,
@@ -67,6 +69,7 @@ export function createMainHost(main, options) {
     main({
       env,
       args,
+      cwd,
       signal: controller.signal,
       stdout,
       stderr,
@@ -82,7 +85,7 @@ export function createMainHost(main, options) {
       stderr.write(`host close failed: ${String(error)}\n`);
     }
 
-    await flushOutput([stdout, stderr]).catch(() => {
+    await flushOutput(stdout, stderr).catch(() => {
       failed = true;
     });
     finished = true;
@@ -153,40 +156,62 @@ async function failedMain(error, app, signal, stop) {
   return failed;
 }
 
+/**
+ * Fence stdout, then stderr. A reader that closed stdout early, such as `head`, is gone:
+ * its EPIPE does not fail the command. EPIPE on stderr is not special.
+ */
+async function flushOutput(stdout, stderr) {
+  await fenceStream(stdout).catch((error) => {
+    if (error?.code !== "EPIPE") throw error;
+  });
+  await fenceStream(stderr);
+}
+
 /** A callback after an empty write fences all prior writes on that stream. */
-async function flushOutput(streams) {
-  for (const stream of streams) {
-    if (typeof stream.writable === "boolean" && !stream.destroyed) {
-      await new Promise((resolve, reject) =>
-        stream.write("", (error) => (error ? reject(error) : resolve())),
-      );
-    }
+async function fenceStream(stream) {
+  if (typeof stream.writable === "boolean" && !stream.destroyed) {
+    await new Promise((resolve, reject) =>
+      stream.write("", (error) => (error ? reject(error) : resolve())),
+    );
   }
 }
 
-/** Run a process command with host-owned OS signals and flushed output. */
+/** POSIX exit codes for a stop by signal: 128 plus the signal's number. */
+const signalCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };
+
+/**
+ * Run a process command with host-owned OS signals and flushed output. A closed terminal
+ * (SIGHUP) stops it like Ctrl-C. A reader that closes stdout early (EPIPE) does not change
+ * the command's exit code.
+ */
 export async function runMain(main, options = {}) {
-  const host = createMainHost(main, {
+  const inputs = {
     env: process.env,
     args: process.argv.slice(2),
+    cwd: process.cwd(),
     stdout: process.stdout,
     stderr: process.stderr,
     ...options,
-  });
+  };
+  const host = createMainHost(main, inputs);
 
-  const interrupt = () => host.stop(130, new DOMException("SIGINT", "AbortError"));
+  const stops = Object.entries(signalCodes).map(([name, code]) => [
+    name,
+    () => host.stop(code, new DOMException(name, "AbortError")),
+  ]);
+  const quietEpipe = (error) => {
+    if (error?.code !== "EPIPE") throw error;
+  };
 
-  const terminate = () => host.stop(143, new DOMException("SIGTERM", "AbortError"));
-
-  process.on("SIGINT", interrupt);
-  process.on("SIGTERM", terminate);
+  for (const [name, stop] of stops) process.on(name, stop);
+  inputs.stdout.on?.("error", quietEpipe);
   try {
     process.exitCode = await host.closed;
 
     return process.exitCode;
   } finally {
-    process.off("SIGINT", interrupt);
-    process.off("SIGTERM", terminate);
+    for (const [name, stop] of stops) process.off(name, stop);
+    inputs.stdout.off?.("error", quietEpipe);
   }
 }
 

@@ -1,5 +1,21 @@
 # Upgrade
 
+## Unreleased
+
+These changes are in current source, not the released 0.10.0 tarball.
+
+- `MainContext` gets `cwd`, the folder the process runs in. The host fills it:
+  `runMain` and `tinker serve` read the process folder, and `createMainHost`
+  takes a `cwd` option that defaults to it. Commands read `cwd` from the
+  context, not `process.cwd()`. Copy the new `tinker/base/main.ts`. A test that
+  builds a context by hand adds `cwd`, such as `cwd: import.meta.dirname`.
+- `runMain` and `tinker serve` stop on SIGHUP with exit 129, as they stop on
+  SIGINT (130) and SIGTERM (143).
+- A reader that closes stdout early, such as `head`, no longer fails the run:
+  `runMain` ignores EPIPE on stdout, and the command's exit code stands.
+- The contract adds two rules. A command that owns child processes ends them
+  inside the 10-second grace. A command may give exit 2 one documented meaning.
+
 ## 0.10.0
 
 Start 0.10.0 is released from `lagz0ne/tinker-app`, tag `start-v0.10.0`.

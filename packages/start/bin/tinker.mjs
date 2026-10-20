@@ -82,6 +82,7 @@ async function serve(root) {
   const host = createMainHost(built.default, {
     env: process.env,
     args: rest,
+    cwd: root,
     stdout: process.stdout,
     stderr: process.stderr,
     validate: (app) => {
@@ -126,13 +127,16 @@ async function serve(root) {
       await stopped;
     },
   });
+  const hangup = () => host.stop(129, new DOMException("SIGHUP", "AbortError"));
   const interrupt = () => host.stop(130, new DOMException("SIGINT", "AbortError"));
   const terminate = () => host.stop(143, new DOMException("SIGTERM", "AbortError"));
+  process.on("SIGHUP", hangup);
   process.on("SIGINT", interrupt);
   process.on("SIGTERM", terminate);
   try {
     return await host.closed;
   } finally {
+    process.off("SIGHUP", hangup);
     process.off("SIGINT", interrupt);
     process.off("SIGTERM", terminate);
   }
