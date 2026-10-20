@@ -14,7 +14,7 @@ import { dirname, join, matchesGlob } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { changedRanges, selectTests } from "./diff.mjs";
+import { budgetRanges, changedRanges, selectTests } from "./diff.mjs";
 
 test("new-side diff ranges include additions and surviving deletion neighbors", () => {
   assert.deepEqual(
@@ -341,4 +341,26 @@ test("both app scopes include write steps, transports, contracts, and tested com
       );
     }
   }
+});
+
+test("whole-diff line sampling is bounded, deterministic, and reports every omitted line", () => {
+  const ranges = [
+    { file: "tinker/a.ts", start: 1, end: 300 },
+    { file: "tinker/b.ts", start: 1, end: 300 },
+  ];
+  const result = budgetRanges(ranges);
+
+  assert.deepEqual(result, budgetRanges([...ranges].reverse()));
+  assert.equal(result.plannedLines, 600);
+  assert.equal(result.omittedLines.length, 200);
+
+  assert.equal(
+    result.ranges.reduce((count, range) => count + range.end - range.start + 1, 0),
+    400,
+  );
+  assert.deepEqual(budgetRanges([{ file: "small.ts", start: 1, end: 2 }]), {
+    ranges: [{ file: "small.ts", start: 1, end: 2 }],
+    plannedLines: 2,
+    omittedLines: [],
+  });
 });

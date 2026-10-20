@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, matchesGlob, relative, resolve } from "node:path";
@@ -77,6 +78,38 @@ export function selectTests(nodes, changed, inventory) {
     nodes: [...visited],
     seams,
     fallback: fallback || !touched.length,
+  };
+}
+
+/** Bound diff work to 400 stable source lines; weekly full reports do not use this plan. */
+export function budgetRanges(ranges, budget = 400) {
+  const lines = new Map();
+
+  for (const { file, start, end } of ranges) {
+    for (let line = start; line <= end; line++) {
+      const key = `${file}:${line}`;
+      lines.set(key, { file, line, key, rank: createHash("sha256").update(key).digest("hex") });
+    }
+  }
+
+  const ranked = [...lines.values()].sort((a, b) =>
+    a.rank < b.rank ? -1 : Number(a.rank > b.rank),
+  );
+  const selected = ranked
+    .slice(0, budget)
+    .sort((a, b) => (a.file === b.file ? a.line - b.line : a.file < b.file ? -1 : 1));
+  const sampled = [];
+
+  for (const { file, line } of selected) {
+    const previous = sampled.at(-1);
+    if (previous?.file === file && previous.end + 1 === line) previous.end = line;
+    else sampled.push({ file, start: line, end: line });
+  }
+
+  return {
+    ranges: sampled,
+    plannedLines: lines.size,
+    omittedLines: ranked.slice(budget).map(({ key }) => key),
   };
 }
 
@@ -170,7 +203,9 @@ export function planDiff({ app, base, head, map }) {
     }
   }
 
-  const selection = selectTests(map.nodes, ranges, map.tests);
+  const budget = budgetRanges(ranges);
+
+  const selection = selectTests(map.nodes, budget.ranges, map.tests);
 
   const files = [...new Set(selection.tests.map((test) => test.file))].sort((a, b) =>
     a.localeCompare(b),
@@ -187,8 +222,8 @@ export function planDiff({ app, base, head, map }) {
     changedTests,
     testFallback,
     head,
-    ranges,
-    mutate: ranges.map(({ file, start, end }) => `${file}:${start}-${end}`),
+    ...budget,
+    mutate: budget.ranges.map(({ file, start, end }) => `${file}:${start}-${end}`),
     ...selection,
     testFiles: files,
     gaps: map.gaps,
@@ -224,6 +259,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   );
 
   console.log(`Gaps:\n${plan.gaps.join("\n")}`);
+  console.log(
+    `Line budget: ${plan.plannedLines} planned; ${plan.omittedLines.length} omitted; at most 400 selected. Full coverage: workflow_dispatch.`,
+  );
 
   if (!args.includes("--plan-only") && plan.mutate.length) {
     const config = JSON.parse(readFileSync(resolve(app, "stryker.config.json"), "utf8"));
