@@ -78,8 +78,8 @@ Tests and generated files do not count.
   - Callers:
     - `cmds/server.ts#closed.closeRoots`
     - `cmds/server.ts#module.callback1`
-    - `cmds/worker.ts#module.callback1`
     - `cmds/telemetry-worker.ts#module`
+    - `cmds/worker.ts#module.callback1`
 
 - **tinker/components/errors/errors.ts#raise**
   - `kind`: `N`. From a failed base action; why: choose the managed error.
