@@ -24,6 +24,7 @@ The command reads `<app>/loop.json`:
 
 It runs each gate in order, in the app folder.
 It runs every gate, also after a red gate.
+Check prints the folder it covers: `checked: apps/issue-board only`.
 Each gate's output goes to `.loop/gates/<name>.log`.
 Two gate names must not give the same log file name.
 A gate stops after its `timeout` in milliseconds.
@@ -142,7 +143,11 @@ vp exec tinker-loop review [--app <dir>] [--base <ref>]
 `review` runs a separate reviewer model on the change.
 The change is the same range as check's scan: from the merge base to the work tree.
 The reviewer gets the app's tinker-review skill: `.agents/skills/tinker-review/SKILL.md`.
-A missing skill exits 78.
+With no skill, it gets the review rules of the app's own Start, `docs/rules.md`.
+Then review prints which rules it used.
+With neither, review exits 78.
+Review prints the folder it covers: `reviewed: apps/issue-board only`.
+Changes in other folders of the repo are not reviewed.
 No base, from `--base` or `loop.json`, exits 78.
 An unknown `--base` exits 64.
 The default reviewer is Claude Opus 5.5, `claude-opus-5-5`, run headless with `claude -p`.
@@ -182,6 +187,8 @@ Each finding line becomes a row with `source` `review`.
 Its `seenSha` is HEAD, and its `round` comes from `recordReviewRound`.
 A new finding gets the loop's id, a hash, like a check finding.
 A finding with an id from the prompt keeps that id.
+A finding's `line` is a line in the file at the work tree.
+A line past the end of its file becomes line 0, and its `trigger` gets a note with the given line.
 Blank lines, code fences, and a `clear` line are skipped.
 Any other line that is not a finding becomes one `question` row with rule `review-output`.
 That row names the line and says why it is not a finding.

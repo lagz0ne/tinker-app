@@ -240,8 +240,9 @@ test("the scan covers only the app folder and names files from it", async () => 
   git(root, "checkout", "--quiet", "-b", "work");
   commit(root, { "apps/one/src/a.ts": "Date.now();\n", "other/b.ts": "Date.now();\n" }, "change");
 
-  await loop(root, "check", "--app", "apps/one");
+  const run = await loop(root, "check", "--app", "apps/one");
 
+  expect(run.stdout).toContain("checked: apps/one only\n");
   expect(findingsOf(join(root, "apps/one")).map((finding) => finding.file)).toEqual(["src/a.ts"]);
 });
 

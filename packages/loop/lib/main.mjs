@@ -13,7 +13,7 @@ import {
   writeLastCheck,
 } from "./findings.mjs";
 import { readConfig, runGates } from "./gates.mjs";
-import { headSha } from "./git.mjs";
+import { appScope, headSha } from "./git.mjs";
 import { findingList, ruleLines, summary } from "./report.mjs";
 import { runReview } from "./review.mjs";
 import { readRules } from "./rules.mjs";
@@ -169,6 +169,7 @@ async function check(app, { base, print, signal }) {
   const results = gates.map(({ name, green }) => ({ name, green }));
   writeLastCheck(app, { round, sha: run.sha, tree: after, gates: results });
 
+  print(`checked: ${appScope(app)} only`);
   print(
     `tinker-loop check, round ${round}: ${gates.length - red.length} gates green, ${red.length} red`,
   );

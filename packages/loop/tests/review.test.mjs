@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -65,7 +65,7 @@ const finding = (rule, file, summary) => ({
   rule,
   severity: "important",
   file,
-  line: 3,
+  line: 1,
   summary,
   trigger: "the path that breaks",
   fix: "one sentence",
@@ -86,7 +86,7 @@ test("review runs the reviewer on the change and adds its findings as one review
       rule: "C3",
       severity: "important",
       file: "src/a.ts",
-      line: 3,
+      line: 1,
       summary: "a write opens its own session",
       trigger: "the path that breaks",
       fix: "one sentence",
@@ -383,7 +383,7 @@ test("an answered finding is in the prompt, and a reworded repeat updates it", a
       rule: "C3",
       severity: "important",
       file: "src/a.ts",
-      line: 3,
+      line: 1,
       summary: "a write opens its own session",
       reason: "the old profile write keeps its transaction",
     }),
@@ -470,4 +470,68 @@ test("review takes only --app and --base", async () => {
 
   expect([ids.code, flag.code]).toEqual([64, 64]);
   expect(flag.stderr).toContain("tinker-loop review does not take --open");
+});
+
+test("an app with no review skill uses its Start's rules.md, and says so", async () => {
+  const app = reviewApp();
+  rmSync(join(app, ".agents"), { recursive: true });
+  const rules = "### C: close before success\n\n- `C3` One owned call.\n";
+  mkdirSync(join(app, "node_modules/@tinker/start/docs"), { recursive: true });
+  writeFileSync(
+    join(app, "node_modules/@tinker/start/package.json"),
+    JSON.stringify({ name: "@tinker/start", version: "1.2.3" }),
+  );
+  writeFileSync(join(app, "node_modules/@tinker/start/docs/rules.md"), rules);
+  reply(app, []);
+
+  const run = await loop(app, "review");
+  const prompt = readFileSync(join(app, ".loop/review/prompt.md"), "utf8");
+
+  expect(run.code).toBe(0);
+  expect(run.stdout).toContain(
+    "review: no tinker-review skill in this app; using @tinker/start 1.2.3 docs/rules.md\n",
+  );
+  expect(prompt).toContain(rules.trimEnd());
+  expect(prompt).toContain('A finding line has the fields "id", "rule", "severity"');
+});
+
+test("an app with neither a review skill nor Start rules exits 78 and says both", async () => {
+  const app = reviewApp();
+  rmSync(join(app, ".agents"), { recursive: true });
+
+  const run = await loop(app, "review");
+
+  expect(run.code).toBe(78);
+  expect(run.stderr).toContain(".agents/skills/tinker-review/SKILL.md is missing");
+  expect(run.stderr).toContain("the Start rules cannot be read");
+});
+
+test("a line past the end of its file becomes line 0 with a note", async () => {
+  const app = reviewApp();
+  reply(app, [
+    { ...finding("C3", "src/a.ts", "past the end"), line: 1145 },
+    { ...finding("C4", "src/a.ts", "a real line"), line: 1 },
+  ]);
+
+  await loop(app, "review");
+  const rows = Object.fromEntries(findingsOf(app).map((row) => [row.rule, row]));
+
+  expect(rows.C3).toEqual(
+    expect.objectContaining({
+      line: 0,
+      trigger: "the path that breaks (The reviewer gave line 1145; the file has 1 line.)",
+    }),
+  );
+  expect(rows.C4.line).toBe(1);
+});
+
+test("review and check print the folder they cover", async () => {
+  const app = reviewApp();
+  reply(app, []);
+
+  const review = await loop(app, "review");
+  const check = await loop(app, "check");
+
+  expect(review.stdout).toContain("reviewed: . only\n");
+  expect(check.stdout).toContain("checked: . only\n");
 });

@@ -10,9 +10,10 @@ import {
   severities,
   updateFindings,
 } from "./findings.mjs";
-import { git, headSha } from "./git.mjs";
+import { appScope, git, headSha } from "./git.mjs";
 import { runProcess } from "./process.mjs";
 import { summary } from "./report.mjs";
+import { readRules } from "./rules.mjs";
 import { scanBase, treeState } from "./scan.mjs";
 
 /** The reviewer model Duke picked. */
@@ -53,8 +54,8 @@ export const outputRule = "review-output";
 /**
  * Run the reviewer on the change, then merge its findings as one review round. Returns the
  * exit code: 0 when the review ran, since findings are advice; 1 when the reviewer failed or
- * timed out, with nothing written; 64 for an unknown --base. Throws (exit 78) when the skill,
- * loop.json, or a base is missing.
+ * timed out, with nothing written; 64 for an unknown --base. Throws (exit 78) when the app has
+ * neither a review skill nor Start rules, or loop.json or a base is missing.
  * @param {string} app - From --app; why: the app to review.
  * @param {{ base?: string, config: { base: string | null, review: { command?: string[],
  *   timeout?: number } }, print: (line: string) => void,
@@ -62,10 +63,7 @@ export const outputRule = "review-output";
  *   the range, the reviewer command, where to print, and the stop.
  */
 export async function runReview(app, { base, config, print, stderr, signal }) {
-  const skill = join(app, ".agents", "skills", "tinker-review", "SKILL.md");
-  if (!existsSync(skill)) {
-    throw new Error(`${skill} is missing; review needs the app's tinker-review skill`);
-  }
+  const rules = reviewRules(app);
   const range = reviewRange(app, base, config.base);
   if (!range) {
     stderr.write(`tinker-loop review: git cannot find --base ${base}\n`);
@@ -79,8 +77,10 @@ export async function runReview(app, { base, config, print, stderr, signal }) {
   const open = earlier.filter((f) => f.status === "open");
   const answered = earlier.filter((f) => f.status === "answered");
   writeChange(app, range.start, tree.untracked ?? []);
+  if (rules.from) print(`review: no tinker-review skill in this app; using ${rules.from}`);
+  print(`reviewed: ${appScope(app)} only`);
   const prompt = reviewPrompt({
-    skill: readFileSync(skill, "utf8"),
+    skill: rules.text,
     ...range,
     head,
     tree,
@@ -95,10 +95,11 @@ export async function runReview(app, { base, config, print, stderr, signal }) {
   }
 
   const output = readFileSync(join(app, ".loop", "review", "output.txt"), "utf8");
-  const reported = parseReview(output, {
+  const parsed = parseReview(output, {
     recheck: new Set(open.map((f) => f.id)),
     known: new Set([...open, ...answered].map((f) => f.id)),
   });
+  const reported = { ...parsed, found: parsed.found.map((row) => placeLine(app, row)) };
   const round = recordReviewRound(app, { sha: head });
   const merged = updateFindings(app, (previous) =>
     mergeReview(previous, reported, { round, sha: head, dirty: tree.dirty }),
@@ -108,6 +109,57 @@ export async function runReview(app, { base, config, print, stderr, signal }) {
   );
   for (const line of summary(merged)) print(line);
   return 0;
+}
+
+/**
+ * The rules the reviewer gets: the app's tinker-review skill, or else the review rules of the
+ * app's own Start (`docs/rules.md`), with `from` naming that fallback. Throws (exit 78) when
+ * the app has neither.
+ * @param {string} app - From runReview; why: the skill and the Start live in the app.
+ */
+function reviewRules(app) {
+  const skill = join(app, ".agents", "skills", "tinker-review", "SKILL.md");
+  if (existsSync(skill)) return { text: readFileSync(skill, "utf8"), from: null };
+
+  let start;
+  try {
+    start = readRules(app);
+  } catch (error) {
+    throw new Error(
+      `${skill} is missing, and the Start rules cannot be read (${error.message}); review needs one of them`,
+    );
+  }
+  const text = [
+    "# Review a change",
+    "",
+    "This app has no tinker-review skill, so these are the review rules of its Start.",
+    "Each finding names one rule ID from the list below.",
+    "",
+    readFileSync(start.path, "utf8").trimEnd(),
+  ].join("\n");
+  return { text, from: `@tinker/start ${start.version} docs/rules.md` };
+}
+
+/**
+ * A finding whose line is past the end of its file gets line 0 and a note, so no fake
+ * location is shown. A file the loop cannot read keeps its line.
+ * @param {string} app - From runReview; why: the files are in the app folder.
+ * @param {{ file: string, line: number | null, trigger: string }} row - From parseReview;
+ *   why: the line to check.
+ */
+function placeLine(app, row) {
+  if (!row.line) return row;
+
+  let text;
+  try {
+    text = readFileSync(join(app, row.file), "utf8");
+  } catch {
+    return row;
+  }
+  const count = text === "" ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+  if (row.line <= count) return row;
+  const note = `The reviewer gave line ${row.line}; the file has ${count} line${count === 1 ? "" : "s"}.`;
+  return { ...row, line: 0, trigger: row.trigger ? `${row.trigger} (${note})` : note };
 }
 
 /**
@@ -257,7 +309,9 @@ export function reviewPrompt({ skill, ref, start, head, tree, open, answered }) 
     "",
     "## Output",
     "",
-    "Print only JSON lines: one line for each finding, in the skill's Report shape, and the recheck lines above.",
+    "Print only JSON lines: one line for each finding, and the recheck lines above.",
+    'A finding line has the fields "id", "rule", "severity", "file", "line", "summary", "trigger", and "fix".',
+    '"line" is the line number in the file at the work tree, not a line in the patch.',
     "Do not report G1.",
     'For a new finding, "id" may be any short slug.',
     "Print no other text and no code fences. With no findings, print nothing.",
