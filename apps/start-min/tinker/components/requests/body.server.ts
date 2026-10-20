@@ -17,8 +17,8 @@ export declare namespace Requests {
 }
 
 /**
- * Ends each request before its host response ends, as the body read did: the returned join
- * closes it gracefully, and a failed close fails the reply. A response that closes first, on a
+ * Ends each request before its host response ends, as the body read did: `join` closes it
+ * gracefully, and a failed close fails the reply. A response that closes first, on a
  * client abort, ends it by force. Scope close destroys the responses still open and fails with
  * any request that could not end and had no reply left to fail.
  */
@@ -28,6 +28,10 @@ export const hostResponses = resource({
   factory: (_deps, ctx) => {
     const open = new Map<Requests.Outgoing, Promise<void>>();
     const failures: unknown[] = [];
+    const joins = new Map<
+      Requests.Outgoing,
+      { finish: (graceful: boolean) => Promise<void>; joined?: Promise<void> }
+    >();
     ctx.defer(async () => {
       for (const outgoing of open.keys()) outgoing.destroy();
       await Promise.all(open.values());
@@ -39,30 +43,38 @@ export const hostResponses = resource({
         return "runtime" in request;
       },
       endOnClose(outgoing: Requests.Outgoing, finish: (graceful: boolean) => Promise<void>) {
-        let joined: Promise<void> | undefined;
+        const owned: { finish: typeof finish; joined?: Promise<void> } = { finish };
+        joins.set(outgoing, owned);
         const closed = outgoing.closed
           ? Promise.resolve()
           : new Promise<void>((resolve) => outgoing.once("close", resolve));
         const ending = closed
-          .then(() => (joined ? joined.then(noop, noop) : finish(outgoing.writableFinished)))
+          .then(() =>
+            owned.joined ? owned.joined.catch(() => {}) : finish(outgoing.writableFinished),
+          )
           .then(
             () => {
               open.delete(outgoing);
+              joins.delete(outgoing);
             },
             (error: unknown) => {
               open.delete(outgoing);
+              joins.delete(outgoing);
               failures.push(error);
             },
           );
         open.set(outgoing, ending);
-        return () => (joined ??= finish(true));
+      },
+      /** The host awaits this before its last write; a failed close fails the reply. */
+      join(outgoing: Requests.Outgoing): Promise<void> {
+        const owned = joins.get(outgoing);
+        if (owned === undefined) return Promise.resolve();
+
+        return (owned.joined ??= owned.finish(true));
       },
     };
   },
 });
-
-/** A joined close already failed its reply; the host owns that error. */
-function noop() {}
 
 /** Retains request work until the consumer ends, fails, or cancels the body. */
 export const responseBodies = resource({

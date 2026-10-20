@@ -46,7 +46,9 @@ export const requestLifetime = resource({
       endOnHostClose(hosted: Request) {
         if (!responses.isHosted(hosted) || hosted.runtime.node === undefined) return false;
 
-        hosted.runtime.beforeEnd = responses.endOnClose(hosted.runtime.node.res, lifetime.finish);
+        const outgoing = hosted.runtime.node.res;
+        responses.endOnClose(outgoing, lifetime.finish);
+        hosted.runtime.beforeEnd = responses.join.bind(undefined, outgoing);
         return true;
       },
     };
