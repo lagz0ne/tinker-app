@@ -143,11 +143,63 @@ for (const [problem, text, message] of [
     "line 4: rule B1 is listed twice; first at line 3",
   ],
   ["no rules", "# Start rules\n\nNothing yet.\n", "no rules found"],
+  [
+    "a list item without a backticked ID after a valid rule",
+    "### B: own the boundary\n\n- `B1` One.\n- B2 Text\n",
+    "line 4: in group B, a line is blank, a rule",
+  ],
+  [
+    "a rule line with a leading space",
+    "### B: own the boundary\n\n- `B1` One.\n - `B2` x\n",
+    "line 4: in group B, a line is blank, a rule",
+  ],
+  [
+    "a tab-indented line",
+    "### B: own the boundary\n\n- `B1` One,\n\ttwo.\n",
+    "line 4: in group B, a line is blank, a rule",
+  ],
+  [
+    "an indented line after a blank line",
+    "### B: own the boundary\n\n- `B1` One.\n\n  two.\n",
+    "line 5: in group B, a line is blank, a rule",
+  ],
+  [
+    "a ### heading with no space",
+    "### B: own the boundary\n\n- `B1` One.\n\n###C: close\n",
+    'line 5: a group heading reads "### <letter>: <title>"',
+  ],
+  [
+    "a #### heading",
+    "### B: own the boundary\n\n- `B1` One.\n\n#### C: close\n",
+    'line 5: a group heading reads "### <letter>: <title>"',
+  ],
 ]) {
   test(`the parser throws on ${problem}`, () => {
     expect(() => parseRules(text)).toThrow(message);
   });
 }
+
+test("text before the first group and after a ## heading is free prose", () => {
+  const text = [
+    "# Start rules",
+    "#1 note: prose, not a heading",
+    "",
+    "Each rule is a list item:",
+    "  indented prose, - B9 not a rule",
+    "### B: own the boundary",
+    "",
+    "- `B1` One,",
+    "  two.",
+    "",
+    "## Notes",
+    "",
+    "Free text again.",
+    "#tag is prose too",
+    "\tand tabs.",
+  ].join("\n");
+
+  expect(parseRules(text).map((rule) => rule.lines)).toEqual([["- `B1` One,", "  two."]]);
+});
 
 test("the parser reads Windows line ends", () => {
   const rules = parseRules("### B: own the boundary\r\n\r\n- `B1` One,\r\n  two.\r\n");
