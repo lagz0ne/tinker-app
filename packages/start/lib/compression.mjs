@@ -18,6 +18,9 @@ const encodings = new Map();
 
 const encoders = { br: promisify(brotliCompress), gzip: promisify(gzip) };
 
+/** Up to this many bytes a finished body is compressed whole, the way nginx buffers a short proxied reply. */
+const shortBody = 65536;
+
 /**
  * Explicit q=0 wins over a wildcard; ties prefer Brotli.
  * @param {string} accepted - From the header; why: validate outside encoding weights once.
@@ -142,16 +145,19 @@ export async function compressResponse(request, response) {
     headers.delete("etag");
   }
 
-  const body = await compressBody(request, response.body, encoding);
+  const body = await compressBody(request, response.body, encoding, headers);
   return new Response(body, { status: response.status, statusText: response.statusText, headers });
 }
 
 /**
+ * A finished short body is compressed in one call; a body still open after one turn of the event
+ * loop keeps streaming, so the HTML shell is not held back.
  * @param {Request} request - From the host; why: HEAD cancels rather than reading the body.
- * @param {ReadableStream | null} body - From the response; why: ownership transfers to the encoded stream.
+ * @param {ReadableStream | null} body - From the response; why: ownership transfers to the encoded body.
  * @param {string} encoding - From negotiation; why: identity keeps the original stream.
+ * @param {Headers} headers - From compressResponse; why: a body compressed whole gets its length.
  */
-async function compressBody(request, body, encoding) {
+async function compressBody(request, body, encoding, headers) {
   if (request.method === "HEAD") {
     await body?.cancel();
     return null;
@@ -159,9 +165,69 @@ async function compressBody(request, body, encoding) {
 
   if (encoding === "identity" || body === null) return body;
 
-  const source = Readable.fromWeb(body);
+  const reader = body.getReader();
+  const start = await readStart(reader);
+  if (start.done) {
+    const whole = await compressWhole(start.parts, start.size, encoding);
+    headers.set("content-length", String(whole.byteLength));
+    return whole;
+  }
+
+  reader.releaseLock();
   const zip = streams[encoding]();
+  for (const part of start.parts) zip.write(part);
+
+  const source = Readable.fromWeb(body);
   source.once("error", (error) => zip.destroy(error));
   zip.once("close", () => source.destroy());
   return Readable.toWeb(source.pipe(zip));
+}
+
+/**
+ * Reads what the source has ready before the event loop turns; a later chunk means a streaming page.
+ * Releasing the lock fails an open read but keeps its chunk queued, and a failed source fails again for the next reader.
+ * A reader that keeps the lock awaits `pending`, the read still open when the turn came.
+ * @param {ReadableStreamDefaultReader<Uint8Array>} reader - From compressBody or the host; why: the read parts go out first.
+ */
+export async function readStart(reader) {
+  const parts = [];
+  let size = 0;
+  let timer;
+  const turn = new Promise((resolve) => {
+    timer = setImmediate(resolve, null);
+  });
+
+  try {
+    while (size <= shortBody) {
+      const pending = reader.read();
+      let part;
+      try {
+        part = await Promise.race([pending, turn]);
+      } catch {
+        return { done: false, parts };
+      }
+
+      if (part === null) return { done: false, parts, pending };
+      if (part.done) return { done: true, parts, size };
+      parts.push(part.value);
+      size += part.value.byteLength;
+    }
+    return { done: false, parts };
+  } finally {
+    clearImmediate(timer);
+  }
+}
+
+/**
+ * @param {Uint8Array[]} parts - From readStart; why: the whole body.
+ * @param {number} size - From readStart; why: joins the parts and sizes the Brotli window.
+ * @param {"br" | "gzip"} encoding - From negotiation; why: the wire format.
+ */
+function compressWhole(parts, size, encoding) {
+  const whole = parts.length === 1 ? parts[0] : Buffer.concat(parts, size);
+  return encoding === "br"
+    ? encoders.br(whole, {
+        params: { [constants.BROTLI_PARAM_QUALITY]: 4, [constants.BROTLI_PARAM_SIZE_HINT]: size },
+      })
+    : encoders.gzip(whole);
 }

@@ -8,7 +8,6 @@ import { responseBodies } from "./body.server";
 import { requestHeaders } from "./headers.server";
 import { backendStop, requestStop } from "./lifetime";
 import { requestClose, requestLifetime } from "./lifetime.server";
-import { renderLifetime } from "./render-lifetime.server";
 
 /** Start merges this registry to type the context supplied by the server entry. */
 declare module "@tanstack/react-start" {
@@ -26,17 +25,18 @@ const middleware = createMiddleware().server(async ({ context, request, next }) 
 
   const session = scope.createSession({
     tags: [
-      requestHeaders(new Headers(request.headers)),
+      requestHeaders(request.headers),
       requestStop(request.signal),
       requestClose((graceful) => session.close({ graceful })),
     ],
   });
-  session.resolve(renderLifetime).open(request);
-
   const lifetime = session.resolve(requestLifetime);
+  lifetime.open(request);
 
   try {
     const result = await next({ context: { session, signal: request.signal } });
+    if (lifetime.endOnHostClose(request)) return result;
+
     return {
       ...result,
       response: await (
