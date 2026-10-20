@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Writable } from "node:stream";
 
 import { expect, test, vi } from "vite-plus/test";
@@ -394,15 +395,20 @@ test("runMain, in this process: SIGHUP stops with 129, quietly, with cwd and its
   }).toEqual(before);
 });
 
-test("runMain's stdout ignores EPIPE and still throws any other error", async () => {
+test("runMain ignores EPIPE and EIO on stdout and stderr, and throws any other error", async () => {
   const out = capture();
+  const errors = capture();
   const caught = {};
   try {
     const code = await runMain(
       async ({ exit }) => {
-        out.stream.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }));
+        for (const stream of [out.stream, errors.stream]) {
+          for (const gone of ["EPIPE", "EIO"]) {
+            stream.emit("error", Object.assign(new Error(`write ${gone}`), { code: gone }));
+          }
+        }
         try {
-          out.stream.emit("error", new Error("disk gone"));
+          errors.stream.emit("error", new Error("disk gone"));
         } catch (error) {
           caught.other = error.message;
         }
@@ -414,7 +420,7 @@ test("runMain's stdout ignores EPIPE and still throws any other error", async ()
         exit(0);
         return { closed: Promise.resolve() };
       },
-      { args: [], stdout: out.stream, stderr: quiet },
+      { args: [], stdout: out.stream, stderr: errors.stream },
     );
 
     expect(code).toBe(0);
@@ -423,9 +429,10 @@ test("runMain's stdout ignores EPIPE and still throws any other error", async ()
   }
 
   expect(caught).toEqual({ other: "disk gone", empty: { error: undefined } });
+  expect(errors.stream.listenerCount("error")).toBe(0);
 });
 
-test("runMain takes a plain { write } stdout with no event methods", async () => {
+test("runMain takes plain { write } streams with no event methods", async () => {
   try {
     const code = await runMain(
       async ({ exit }) => {
@@ -441,42 +448,95 @@ test("runMain takes a plain { write } stdout with no event methods", async () =>
   }
 });
 
-test("a flush error on stdout that is not EPIPE still fails the run", async () => {
-  const broken = new Writable({
+/** @param {string} code - From a test; why: every write fails with this error code. */
+function failing(code) {
+  const stream = new Writable({
     write(_chunk, _encoding, done) {
-      done(Object.assign(new Error("write EIO"), { code: "EIO" }));
+      done(Object.assign(new Error(`write ${code}`), { code }));
     },
   });
-  broken.on("error", () => {});
+  stream.on("error", () => {});
+  return stream;
+}
 
-  const host = createMainHost(async () => ({ closed: Promise.resolve() }), {
-    env: {},
-    stdout: broken,
-    stderr: quiet,
-  });
-
-  expect(await host.closed).toBe(1);
-});
-
-for (const [stream, expected] of [
-  ["stdout", 0],
-  ["stderr", 1],
-]) {
-  test(`EPIPE while flushing ${stream} gives exit ${expected}`, async () => {
-    const epipe = new Writable({
-      write(_chunk, _encoding, done) {
-        done(Object.assign(new Error("write EPIPE"), { code: "EPIPE" }));
-      },
-    });
-    epipe.on("error", () => {});
-    const streams = { stdout: quiet, stderr: quiet, [stream]: epipe };
-
+for (const stream of ["stdout", "stderr"]) {
+  test(`a flush error on ${stream} that is not EPIPE or EIO still fails the run`, async () => {
     const host = createMainHost(async () => ({ closed: Promise.resolve() }), {
       env: {},
-      ...streams,
+      stdout: quiet,
+      stderr: quiet,
+      [stream]: failing("ENOSPC"),
     });
 
-    expect(await host.closed).toBe(expected);
+    expect(await host.closed).toBe(1);
+  });
+
+  for (const gone of ["EPIPE", "EIO"]) {
+    test(`${gone} while flushing ${stream} does not fail the run`, async () => {
+      const host = createMainHost(async () => ({ closed: Promise.resolve() }), {
+        env: {},
+        stdout: quiet,
+        stderr: quiet,
+        [stream]: failing(gone),
+      });
+
+      expect(await host.closed).toBe(0);
+    });
+  }
+}
+
+for (const [kind, onStop] of [
+  ["prints during its stop", 'stdout.write("stopping\\n"); stderr.write("stop note\\n");'],
+  ["prints nothing", ""],
+]) {
+  test(`a real terminal hangup stops a command that ${kind} with 129 and finishes cleanup`, () => {
+    const folder = mkdtempSync(join(tmpdir(), "host-hangup-"));
+    try {
+      const url = new URL("../lib/main-host.mjs", import.meta.url).href;
+      const command = join(folder, "command.mjs");
+      writeFileSync(
+        command,
+        `
+          import { writeFileSync } from "node:fs";
+          import { runMain } from ${JSON.stringify(url)};
+
+          const code = await runMain(async ({ signal, stdout, stderr }) => {
+            const tick = setInterval(() => stdout.write("tick\\n"), 50);
+            return { closed: new Promise((resolve) => signal.addEventListener("abort", () => {
+              clearInterval(tick);
+              setTimeout(() => {
+                ${onStop}
+                writeFileSync(${JSON.stringify(join(folder, "cleanup"))}, "done");
+                resolve();
+              }, 200);
+            })) };
+          });
+          writeFileSync(${JSON.stringify(join(folder, "code"))}, String(code));
+        `,
+      );
+      const terminal = [
+        "import os, pty, select, signal, sys",
+        "signal.alarm(20)",
+        "pid, fd = pty.fork()",
+        "if pid == 0:",
+        "    os.execv(sys.argv[1], [sys.argv[1], sys.argv[2]])",
+        "select.select([fd], [], [], 1.0)",
+        "os.close(fd)",
+        "_, status = os.waitpid(pid, 0)",
+        "print(os.WEXITSTATUS(status) if os.WIFEXITED(status) else -os.WTERMSIG(status))",
+      ].join("\n");
+
+      const result = spawnSync("python3", ["-I", "-c", terminal, process.execPath, command], {
+        encoding: "utf8",
+        timeout: 30000,
+      });
+
+      expect(result.stdout.trim()).toBe("129");
+      expect(readFileSync(join(folder, "cleanup"), "utf8")).toBe("done");
+      expect(readFileSync(join(folder, "code"), "utf8")).toBe("129");
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
   });
 }
 

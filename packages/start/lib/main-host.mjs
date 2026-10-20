@@ -157,14 +157,33 @@ async function failedMain(error, app, signal, stop) {
 }
 
 /**
- * Fence stdout, then stderr. A reader that closed stdout early, such as `head`, is gone:
- * its EPIPE does not fail the command. EPIPE on stderr is not special.
+ * Fence stdout, then stderr. Output whose reader is gone, a closed pipe or a closed terminal,
+ * does not fail the command; any other write error does.
  */
 async function flushOutput(stdout, stderr) {
-  await fenceStream(stdout).catch((error) => {
-    if (error?.code !== "EPIPE") throw error;
-  });
-  await fenceStream(stderr);
+  await fenceStream(stdout).catch(ignoreGone);
+  await fenceStream(stderr).catch(ignoreGone);
+}
+
+/** Write errors that mean the reader is gone: a closed pipe (EPIPE) or a closed terminal (EIO). */
+const goneCodes = new Set(["EPIPE", "EIO"]);
+
+/** @param {unknown} error - From a stream; why: gone output is quiet, any other error throws. */
+function ignoreGone(error) {
+  if (!goneCodes.has(error?.code)) throw error;
+}
+
+/**
+ * Keep a command running, and its exit code, when its output goes away: a reader such as
+ * `head` closes the pipe, or a hangup closes the terminal. Listens on each stream that can
+ * listen. Returns the function that removes the listeners.
+ * @param {...{ on?: Function, off?: Function }} streams - From a host; why: the output streams.
+ */
+export function quietGoneOutput(...streams) {
+  for (const stream of streams) stream.on?.("error", ignoreGone);
+  return () => {
+    for (const stream of streams) stream.off?.("error", ignoreGone);
+  };
 }
 
 /** A callback after an empty write fences all prior writes on that stream. */
@@ -181,8 +200,8 @@ const signalCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };
 
 /**
  * Run a process command with host-owned OS signals and flushed output. A closed terminal
- * (SIGHUP) stops it like Ctrl-C. A reader that closes stdout early (EPIPE) does not change
- * the command's exit code.
+ * (SIGHUP) stops it like Ctrl-C. Output that goes away (EPIPE or EIO, on stdout or stderr)
+ * does not change the command's exit code.
  */
 export async function runMain(main, options = {}) {
   const inputs = {
@@ -199,19 +218,15 @@ export async function runMain(main, options = {}) {
     name,
     () => host.stop(code, new DOMException(name, "AbortError")),
   ]);
-  const quietEpipe = (error) => {
-    if (error?.code !== "EPIPE") throw error;
-  };
-
   for (const [name, stop] of stops) process.on(name, stop);
-  inputs.stdout.on?.("error", quietEpipe);
+  const loud = quietGoneOutput(inputs.stdout, inputs.stderr);
   try {
     process.exitCode = await host.closed;
 
     return process.exitCode;
   } finally {
     for (const [name, stop] of stops) process.off(name, stop);
-    inputs.stdout.off?.("error", quietEpipe);
+    loud();
   }
 }
 

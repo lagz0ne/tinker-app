@@ -11,7 +11,7 @@ import { serverProblems } from "../lib/checks/named.mjs";
 import { compressResponse } from "../lib/compression.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { writeResponse } from "../lib/host-response.mjs";
-import { createMainHost } from "../lib/main-host.mjs";
+import { createMainHost, quietGoneOutput } from "../lib/main-host.mjs";
 import { prepare, prepareExitCode } from "../lib/prepare.mjs";
 import { createAssets } from "../lib/serve.mjs";
 
@@ -133,9 +133,11 @@ async function serve(root) {
   process.on("SIGHUP", hangup);
   process.on("SIGINT", interrupt);
   process.on("SIGTERM", terminate);
+  const loud = quietGoneOutput(process.stdout, process.stderr);
   try {
     return await host.closed;
   } finally {
+    loud();
     process.off("SIGHUP", hangup);
     process.off("SIGINT", interrupt);
     process.off("SIGTERM", terminate);
