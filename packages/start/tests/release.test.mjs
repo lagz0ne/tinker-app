@@ -12,12 +12,12 @@ import {
 import { copyTemplates } from "../../../apps/start-scaffold/maintain/template-sync.mjs";
 import { releaseUrls } from "../lib/release.mjs";
 
-test("release URLs name Start under tinker-app and Core/React under tinkered 0.8.0", () => {
+test("release URLs name Start under tinker-app and Core/React under tinkered 0.9.0", () => {
   expect(releaseUrls("0.7.0")).toEqual({
     "@tinker/core":
-      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
     "@tinker/react":
-      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz",
     "@tinker/start":
       "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.7.0/tinker-start-0.7.0.tgz",
   });
