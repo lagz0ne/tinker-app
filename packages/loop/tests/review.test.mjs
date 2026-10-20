@@ -6,11 +6,12 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vite-plus/test";
 
 import { main } from "../lib/main.mjs";
+import { promptTitle } from "../lib/review.mjs";
 import { commit, findingsOf, git, loop, pass, repo, setFindings, tempFolder } from "./fixture.mjs";
 
 const fake = fileURLToPath(new URL("./fake-reviewer.mjs", import.meta.url));
 const bin = fileURLToPath(new URL("../bin/tinker-loop.mjs", import.meta.url));
-const skill = "# Review a change\n\nSKILL TEXT: the rules.\n";
+const skill = "---\nname: tinker-review\n---\n\n# Review a change\n\nSKILL TEXT: the rules.\n";
 
 /**
  * A repo on branch `work`, one commit past `main`, with the review skill and a loop.json
@@ -111,7 +112,7 @@ test("the prompt holds the skill, the range, the new files, and the open finding
   const prompt = readFileSync(join(app, ".loop/review/prompt.md"), "utf8");
 
   expect(called(app).argv).toEqual([prompt]);
-  expect(prompt.startsWith(skill.trimEnd())).toBe(true);
+  expect(prompt.startsWith(`${promptTitle}\n\n${skill.trimEnd()}`)).toBe(true);
   expect(prompt).toContain(`The change starts at ${start}, where this branch left main.`);
   expect(prompt).toContain(`See it with \`git diff ${start} -- .\``);
   expect(prompt).toContain("- src/new.ts\n");
@@ -311,6 +312,7 @@ test("the default reviewer is Claude Opus 5.5, headless, with read-only tools", 
   const prompt = readFileSync(join(app, ".loop/review/prompt.md"), "utf8");
 
   expect(run.status).toBe(0);
+  expect(prompt.startsWith("-")).toBe(false);
   expect(called(app)).toEqual({
     argv: [
       "-p",

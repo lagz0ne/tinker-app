@@ -157,7 +157,8 @@ With no `{prompt}` word, the prompt is the last word.
 The default timeout is 20 minutes.
 A reviewer past its timeout, or stopped, is killed with its whole process group.
 
-The prompt is the skill, then the range, the new untracked files, and the open review findings.
+The prompt starts with a plain title line, so it never starts with `-` and never reads as an option.
+Then come the skill, the range, the new untracked files, and the open review findings.
 It asks for the skill's JSON lines only.
 It tells the reviewer not to run the gates and not to report `G1`.
 It asks the reviewer to recheck each open review finding.

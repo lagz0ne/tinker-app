@@ -40,6 +40,12 @@ export const defaultReviewCommand = [
   "--no-session-persistence",
 ];
 
+/**
+ * The prompt's first line. The prompt is one argv word, and a word that starts with `-` reads
+ * as an option: the skill's own front matter starts with `---`. So the prompt starts here.
+ */
+export const promptTitle = "Review one change in this app with the tinker-review skill below.";
+
 /** The rule of a question row made from a reviewer line that is not a finding. */
 export const outputRule = "review-output";
 
@@ -139,8 +145,8 @@ export function reviewArgv(command, prompt) {
 }
 
 /**
- * The reviewer's prompt: the skill, then this review's range, the open findings to recheck,
- * and the output it must print.
+ * The reviewer's prompt: a plain title line, the skill, then this review's range, the open
+ * findings to recheck, and the output it must print.
  * @param {{ skill: string, ref: string, start: string, head: string | null,
  *   tree: { untracked: string[] | null }, open: object[] }} review - From runReview; why: the
  *   rules, the change, and the findings still open from earlier rounds.
@@ -178,6 +184,8 @@ export function reviewPrompt({ skill, ref, start, head, tree, open }) {
       ];
 
   return [
+    promptTitle,
+    "",
     skill.trimEnd(),
     "",
     "---",
