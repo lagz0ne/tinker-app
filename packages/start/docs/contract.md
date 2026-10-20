@@ -171,7 +171,9 @@ SQL limits bound waits on a working database, not arbitrary network loss.
 Counter and todos now use the same owned transaction call. Old profile writes
 still await native transactions.
 They are migration work, not examples of the new session transaction. Auth's
-single pool hooks and its mail queue are also separate from the board outbox.
+pool hooks stay outside that session transaction. Auth callbacks await a separate
+committed enqueue in the shared mail outbox; board enqueue stays in its write
+transaction. Workers claim batches before SMTP and acknowledge by lease token.
 See [the migration list](https://github.com/lagz0ne/tinker-app/blob/start-v0.10.0/apps/issue-board/maintain/REFACTOR.md).
 
 ## HTTP and tests

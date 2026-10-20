@@ -11,10 +11,62 @@ These changes are in current source, not the released 0.10.0 tarball.
   builds a context by hand adds `cwd`, such as `cwd: import.meta.dirname`.
 - `runMain` and `tinker serve` stop on SIGHUP with exit 129, as they stop on
   SIGINT (130) and SIGTERM (143).
-- A reader that closes stdout early, such as `head`, no longer fails the run:
-  `runMain` ignores EPIPE on stdout, and the command's exit code stands.
+- Output that goes away no longer fails the run: a reader that closes stdout
+  early, such as `head` (EPIPE), or a closed terminal (EIO). `runMain` ignores
+  EPIPE and EIO on stdout and stderr, and the command's exit code stands, such
+  as 129 after a hangup.
 - The contract adds two rules. A command that owns child processes ends them
   inside the 10-second grace. A command may give exit 2 one documented meaning.
+
+- `mailMaxSenders` (`mail.maxSenders`, default 4) caps SMTP connections; extra sends wait without starting their send deadline.
+- An acknowledgement failure counts as a crash attempt; remaining claims keep their leases until expiry.
+- `MigrationBusy` exits 1; only migration-lock polling is bounded. DDL has no `lock_timeout`.
+- Mail leases use each worker's clock; keep worker hosts' clocks in sync.
+
+- Concurrent mail sends own separate connections; a timeout closes only its send.
+  Healthy sends reuse idle connections. The auth mail example carries the outbox
+  migrations without requiring starter; exhausted mail has its own partial index.
+
+- Mail leases require at least 120000 ms. Before each send, the worker reserves
+  its send deadline, checkout, two SQL statement bounds, and a 1000 ms setup margin.
+  Unsent claims released on stop or a short remaining lease refund their attempt.
+- Migration proofs exercise all three command entries; the live SQL contract
+  also checks the sync event trigger and committed/rolled-back start_sync wakes.
+
+- Worker is a telemetry side. Worker commands keep stdout/history by default;
+  setting either VICTORIA_TRACES_URL or VICTORIA_LOGS_URL enables export and
+  requires both. OTEL_SERVICE_NAME defaults to tinker-worker. Work closes before
+  the bounded telemetry flush; exporter failure cannot replace the work error.
+
+- test:migrations applies the actual chain to fresh local Postgres and checks
+  notification trigger shape, empty inserts, rollback, and committed batches.
+  Its controls show schema-only checks accept missing or changed trigger SQL.
+  CI runs this live gate for both copied apps; no Drizzle trigger claim is made.
+
+- database.listen takes a validated lowercase channel name before its callbacks,
+  plus an optional abort signal. Sync passes start_sync; mail passes board_outbox.
+  Mail keeps its existing reconnect/backoff and poll using this shared listener.
+
+- Auth mail callbacks await durable enqueue. Better Auth uses its own pool
+  adapter, so enqueue has a separate committed call; app writes may enqueue in
+  their existing session transaction. Mail owns its table and batch delivery.
+  Run the scaffold mail worker beside its server; old in-memory pending sends
+  are not migrated. Existing board rows keep their table and dedupe keys.
+
+- Public mail sends have a total deadline (default/max 3000 ms), owned socket
+  cleanup, and an optional per-send abort signal. Worker checkout is bounded to
+  500 ms; record and COMMIT each have a 750 ms statement bound. Sending,
+  acknowledgement, releasing unstarted leases, and the 1500 ms telemetry close
+  fit within the 10 s host grace.
+
+- Board workers claim up to 20 mail rows in a short UPDATE/SKIP LOCKED call.
+  OUTBOX_LEASE_MS defaults to 180000. Sends hold no row locks; acknowledgements
+  require the matching lease token. Attempts survive crashes; exhausted rows
+  have dead_at. SMTP remains at least once, including after a lost acknowledgement.
+
+- Server, worker, and CLI startup await one Postgres advisory-lock migration
+  owner. DATABASE_MIGRATION_TIMEOUT_MS bounds the ownership wait (default 5000).
+  Run every migration on the connection holding the stable TINK/MIGR lock.
 
 ## 0.10.0
 

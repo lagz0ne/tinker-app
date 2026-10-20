@@ -58,7 +58,7 @@ test("dev restarts when the shell, a named file, or a seam file comes or goes, a
 });
 
 test.each(["added", "removed", "changed"])("a component manifest %s restarts dev", (verb) => {
-  const root = goodApp({ "tinker/components/mail/component.json": '{"requires":[]}' });
+  const root = goodApp({ "tinker/components/mail/component.json": '{"requires":["database"]}' });
 
   const note = restartNote(root, join(root, "tinker/components/mail/component.json"), verb);
 

@@ -38,6 +38,16 @@ function checkTargets(registry) {
       owners.set(file.target, item.name);
     }
   }
+
+  const mail = registry.items.find((item) => item.name === "mail");
+  for (const migration of ["20261018041738_durable_mail", "20261019093400_mail_exhausted"]) {
+    for (const file of ["migration.sql", "snapshot.json"]) {
+      assert.ok(
+        mail.files.some((entry) => entry.target === `~/drizzle/${migration}/${file}`),
+        `mail component must ship ${migration}/${file}`,
+      );
+    }
+  }
 }
 
 /** All copied runtime files come from the golden app, with one item per owner. */
@@ -215,7 +225,8 @@ export async function registryItems(options = {}) {
   minimal.name = "tinker-app";
 
   const tasks = Object.keys(full.scripts).filter(
-    (name) => name.startsWith("test:") && !["test:schema", "test:proofs"].includes(name),
+    (name) =>
+      name.startsWith("test:") && !["test:schema", "test:proofs", "test:migrations"].includes(name),
   );
   for (const name of ["registry:build", "check:commands", ...tasks]) delete full.scripts[name];
   full.scripts.check =

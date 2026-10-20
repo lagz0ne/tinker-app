@@ -12,7 +12,7 @@ import { goodApp, write } from "./fixture.mjs";
 
 test("components keep src and commands out, through aliases and relative paths", () => {
   const root = goodApp({
-    "tinker/components/mail/component.json": '{"requires":[]}',
+    "tinker/components/mail/component.json": '{"requires":["database"]}',
     "tinker/components/mail/index.ts":
       'import "@/user";\nexport * from "../../../cmds/server";\nimport "../../base/server";',
     "src/user.ts": 'import "../cmds/server";\nimport "~/base/server";',
@@ -29,7 +29,7 @@ test("components keep src and commands out, through aliases and relative paths",
 
 test("component public entries and direct requires apply to all source zones", () => {
   const root = goodApp({
-    "tinker/components/mail/component.json": '{"requires":[]}',
+    "tinker/components/mail/component.json": '{"requires":["database"]}',
     "tinker/components/mail/index.ts": 'export * from "~/components/db";',
     "tinker/components/db/component.json": '{"requires":[]}',
     "tinker/components/db/index.ts": "export const value = 1;",
@@ -90,7 +90,7 @@ test("the app can name both aliases while keeping every generated private alias"
 });
 
 test("absolute paths obey the command and component boundaries too", () => {
-  const root = goodApp({ "tinker/components/mail/component.json": '{"requires":[]}' });
+  const root = goodApp({ "tinker/components/mail/component.json": '{"requires":["database"]}' });
   write(root, {
     "src/user.ts": `import "${root}/cmds/server";`,
     "tinker/components/mail/index.ts": `import "${root}/src/user";`,
@@ -106,7 +106,7 @@ test("every command has the same base import and component public entry checks",
   const root = goodApp({
     "cmds/cli.ts": 'import "#tinker/server";',
     "cmds/worker.ts": 'import "~/components/mail/private";',
-    "tinker/components/mail/component.json": '{"requires":[]}',
+    "tinker/components/mail/component.json": '{"requires":["database"]}',
     "tinker/components/mail/index.ts": "export const value = 1;",
   });
 

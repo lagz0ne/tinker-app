@@ -12,12 +12,6 @@ export const postgres = resource({
   factory: () => import("pg"),
 });
 
-export const smtp = resource({
-  label: "module:nodemailer",
-  target: "scope",
-  factory: () => import("nodemailer"),
-});
-
 export const files = resource({
   label: "module:node:fs/promises",
   target: "scope",

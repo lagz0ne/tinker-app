@@ -5,7 +5,9 @@ import type { Tag } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { authSettings, authStartup } from "~/components/auth/index.server";
+import { databaseMigrationTimeout } from "~/components/database/index.server";
 import { databaseSetup, databaseUrl } from "~/components/database/index.server";
+import { mailLeaseMs, mailSendTimeout } from "~/components/mail/index.server";
 import { mailStartup, smtpUrl, mailFrom } from "~/components/mail/index.server";
 import { backendStop, startRequests } from "~/components/requests";
 import { syncSide, syncStartup } from "~/components/sync";
@@ -68,6 +70,17 @@ test("tag contracts reject wrong typed values without an env converter", () => {
     expect.objectContaining({ kind: "DataValidationFailed" }),
   );
 });
+
+for (const [name, contract, rejected, accepted] of [
+  ["migration wait", databaseMigrationTimeout, [0, -1, 1.5, 60001], [1, 5000, 60000]],
+  ["mail lease", mailLeaseMs, [0, 119999, 1.5, 3600001], [120000, 180000, 3600000]],
+  ["mail total send", mailSendTimeout, [0, -1, 1.5, 3001], [1, 100, 3000]],
+] as const) {
+  test(`${name}: typed bounds reject unsafe budgets and accept their edges`, () => {
+    for (const value of rejected) expect(() => contract(value)).toThrow();
+    for (const value of accepted) expect(() => contract(value)).not.toThrow();
+  });
+}
 
 test("env examples name only tags that tinker/ or cmds/ declares", () => {
   const app = new URL("../", import.meta.url);

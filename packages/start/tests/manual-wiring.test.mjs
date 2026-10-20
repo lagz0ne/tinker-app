@@ -89,7 +89,7 @@ test("a copied component stays unconfigured until the app binds its required tag
         readFileSync(join(baseDir, "../../apps/start-scaffold/tinker/base", file), "utf8"),
       ]),
     ),
-    "tinker/components/mail/component.json": '{"requires":[]}',
+    "tinker/components/mail/component.json": '{"requires":["database"]}',
     "tinker/components/mail/index.server.ts": `import { tag, operation, extension } from "@tinker/core";
 export const recipient = tag({ label: "mail.recipient" });
 export const greet = operation({ depends: { recipient }, run: ({recipient}) => recipient });

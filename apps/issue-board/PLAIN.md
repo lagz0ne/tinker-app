@@ -145,6 +145,7 @@ Tests and generated files do not count.
   - Callers:
     - `tinker/components/database/database.server.ts#lease.begin`
     - `tinker/components/database/database.server.ts#lease.check`
+    - `tinker/components/database/database.server.ts#migrate.run`
     - `tinker/components/database/database.server.ts#tx.transaction`
     - `tinker/components/errors/errors.ts#raise`
     - `tinker/components/requests/result.server.ts#readResult`

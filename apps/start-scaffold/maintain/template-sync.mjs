@@ -75,6 +75,8 @@ async function copyDemoFiles(target) {
     "maintain/proof-server-close.mjs",
     "maintain/proof-exit-controls.mjs",
     "maintain/proof-bootstrap-controls.mjs",
+    "maintain/proof-migration-contract.mjs",
+    "maintain/proof-migration-contract-controls.mjs",
     "maintain/proof-fault.mjs",
     "scripts/check-plain.mjs",
     "scripts/check-schema.mjs",
@@ -88,6 +90,8 @@ async function copyDemoFiles(target) {
     "README.md",
     ".agents",
     "vitest.config.ts",
+    "vite.worker.config.ts",
+    "maintain/worker.mjs",
     "stryker.config.json",
   ]) {
     await mkdir(dirname(join(target, path)), { recursive: true });

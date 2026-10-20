@@ -378,7 +378,10 @@ test("direct auth hooks keep spans under scope resources and use the pool", asyn
     expect(signout.status).toBe("success");
     if (signout.status !== "success") throw signout;
     expect(signout.value.status).toBe(200);
-    expect(transactionQueries, "auth hooks must not resolve the session transaction").toEqual([]);
+    expect(transactionQueries, "auth mail owns one separate committed enqueue").toEqual([
+      "BEGIN",
+      "COMMIT",
+    ]);
   } finally {
     await root.close({ graceful: true });
   }
@@ -392,9 +395,9 @@ test("direct auth hooks keep spans under scope resources and use the pool", asyn
   expect([...created, ...deleted].every((span) => span.parentId === owner.id)).toBe(true);
 
   const mailOwner = spans.find((span) => span.name === "mail.authWork")!;
-  expect(spans.find((span) => span.name === "sendMail")!.parentId).toBe(mailOwner.id);
+  expect(spans.find((span) => span.name === "mail.enqueue")!.parentId).toBe(mailOwner.id);
   console.log(
-    "TRACE auth -> sync.accountCreated (user + session), sync.accountNotice; mail.authWork -> sendMail",
+    "TRACE auth -> sync.accountCreated (user + session), sync.accountNotice; mail.authWork -> mail.enqueue",
   );
 });
 

@@ -3,7 +3,7 @@
 Start the local Postgres and Mailpit used by the board demo. Mailpit uses SMTP
 127.0.0.1:11026 and HTTP 127.0.0.1:18026. Never use a real mail server for this trial.
 
-Run these commands from apps/issue-board. The server applies migrations on its first request:
+Run these commands from apps/issue-board. Every process awaits the shared migration lock before doing work:
 
 ```bash
 PORT=4327 HOST=127.0.0.1 vp dev
@@ -19,7 +19,8 @@ SMTP_URL=smtp://127.0.0.1:11026 SMTP_FROM=board@example.test \
 pnpm run worker
 ```
 
-The worker does not run migrations. Start the server first. Stop the worker with
+Server, worker, and CLI may start together. One connection owns migration; the
+others wait up to DATABASE_MIGRATION_TIMEOUT_MS (default 5000). Stop the worker with
 Ctrl-C, or send SIGTERM to its Node PID.
 
 Other team members get alerts for issue creation, edits, moves, removal, and new
@@ -27,40 +28,46 @@ comments. The actor and non-members get no alert. A saved board change stores it
 alert rows in the same transaction. The key is executionId:recipientId. A retry of
 the same command cannot enqueue another alert.
 
-Each worker locks at most 20 due rows with FOR UPDATE SKIP LOCKED. It holds those
-locks until sending and updating the rows finish. Other workers skip those rows.
-The worker pass opens a child session for each batch. The session transaction
-commits before the pass reports a sent batch. A soft stop finishes the current
-send and commits its result before that child closes.
-SMTP failures record the error and retry after 1, 2, 4, 8 seconds, up to 30 minutes.
-After 12 failures, attempts=12 and sent_at=NULL mark the row dead. It stays in the
-table for inspection, logs outbox.dead, and is never claimed again.
-LISTEN board_outbox wakes the worker after inserts commit. A 30-second poll also
-finds retries and covers missed notifications. Failed connects use a separate
-backoff with jitter: 0.5–1 seconds initially, doubling to a 15–30 second cap.
-Old connection events cannot shorten this timer. Retry deadlines are lower bounds;
-a retry may wait for that next poll.
+Each worker claims up to 20 due rows with one UPDATE and FOR UPDATE SKIP LOCKED.
+The claim commits its token, expiry, and attempts before any send. SMTP holds no
+row locks. Each acknowledgement commits separately and requires the token.
+Dead-letter cleanup also uses SKIP LOCKED and a twenty-row bound, so a locked
+exhausted row does not block a fresh claim.
+
+OUTBOX_LEASE_MS defaults to 180000 and must be at least 120000. Before each
+send the remaining lease must cover the configured send deadline, pool checkout,
+two statement deadlines (UPDATE and COMMIT), and a 1000 ms setup margin.
+Unsent rows are released with their claim attempt refunded. Expired leases
+recover after a crash; twelve consumed claims leave dead_at. Soft stop finishes
+the current send and releases unstarted claims without consuming their attempts. SMTP can deliver twice after
+acceptance followed by a lost acknowledgement.
 
 Delivery can repeat if the process dies after SMTP accepts a message but before
 Postgres commits sent_at. SMTP and Postgres cannot commit together. The unique
-key stops duplicate enqueue, not this crash case. A batch rollback can repeat its
-earlier accepted messages too. There is no claim of exactly-once delivery.
+key stops duplicate enqueue, not this crash case. A failed acknowledgement leaves
+the lease recoverable. There is no claim of exactly-once delivery.
 
-The board sender has a 3-second total send deadline, including all SMTP stages.
+The public sender has a 3-second total send deadline, including all SMTP stages.
 OUTBOX_SMTP_TIMEOUT_MS may shorten it, but cannot exceed 3000 ms. A timed-out
 transport has its owned TCP sockets destroyed, then is closed and replaced
 before the next attempt. Nodemailer gets these sockets through its public
 getSocket hook; pooling stays on. Transaction statements
 are bounded to 1000 ms by default, with a 500 ms lock wait. The typed limits cap
-statements at 2000 ms and lock waits at 1000 ms. Thus send + record + COMMIT uses
-at most 7 seconds; even a final rollback fits inside the 10-second host grace.
+statements at 2000 ms and lock waits at 1000 ms. The worker fixes checkout to 500 ms and transaction statements to 750 ms.
+Send plus acknowledgement, releasing unstarted claims, and the 1500 ms
+telemetry close have an 8500 ms configured budget. A failed final COMMIT can
+add a 750 ms rollback: the resulting 9250 ms bound still fits inside the
+10-second host grace. An earlier acknowledgement failure ends the pass,
+leaving unsent leases to expire.
 A stop finishes the current send, commits its result, and releases the rest of
 the batch. A clean SIGTERM prints "outbox worker stopped". Close errors still fail
 the process. SIGINT ends with code 130; SIGTERM ends with 143. The host waits
 for cleanup and flushes output before setting its code. A 10-second host
 deadline is the only hard stop. The host also works with only environment values and no .env file.
 
-The existing auth/profile demo mail still uses the starter sender. This outbox
+Auth verification/reset mail now uses this same durable mail queue. Better Auth
+writes through its own pool adapter, so its callback awaits a separate committed
+enqueue. Profile retains its stored notification/result flow. This outbox
 owns board alerts and daily digests. No import or new registry component is added.
 
 Run the scripted demo and real-Postgres proofs after building the worker:
@@ -140,3 +147,17 @@ node maintain/proof-bounds-controls.mjs
 The controls remove SQL bounds or the total send deadline in scratch modules.
 Each must fail its named deadline check. They are live proofs, so test:proofs
 does not run them without Postgres.
+
+Mail and sync use database.listen with explicit channel names. A listener still
+needs a dedicated pool connection; its owner closes it on stop or reconnect.
+The mail wait loop retains its capped reconnect backoff, jitter, and poll.
+
+Run `pnpm run test:migrations` with local Postgres. It applies the actual chain
+to a fresh database and checks the transition-table trigger and ordered wakes.
+The controls remove the trigger, change its channel, or drop the empty guard:
+each still passes schema generation but fails the live contract gate.
+
+Worker traces use side worker. Stdout and bounded history work without a
+collector. To enable export, bind both VICTORIA_TRACES_URL and VICTORIA_LOGS_URL;
+setting only one is a startup config error. OTEL_SERVICE_NAME defaults to
+tinker-worker. Work closes before the existing bounded telemetry flush.

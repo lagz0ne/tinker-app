@@ -10,7 +10,6 @@ import {
   smallint,
   uniqueIndex,
   index,
-  bigserial,
 } from "drizzle-orm/pg-core";
 
 import { user } from "~/components/auth/index.server";
@@ -111,25 +110,5 @@ export const comment = pgTable(
       sql`char_length(${row.body}) between 1 and 5000 and ${row.body} = btrim(${row.body}, U&'\\0009\\000A\\000B\\000C\\000D\\0020\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000\\FEFF')`,
     ),
     index("comment_issue_created").on(row.issueId, row.createdAt, row.id),
-  ],
-);
-
-export const mailOutbox = pgTable(
-  "mail_outbox",
-  {
-    id: bigserial({ mode: "number" }).primaryKey(),
-    to: text().notNull(),
-    subject: text().notNull(),
-    text: text().notNull(),
-    dedupeKey: text("dedupe_key").notNull().unique(),
-    attempts: integer().notNull().default(0),
-    nextAt: timestamp("next_at", { withTimezone: true }).notNull().defaultNow(),
-    sentAt: timestamp("sent_at", { withTimezone: true }),
-    lastError: text("last_error"),
-  },
-  (row) => [
-    index("mail_outbox_due")
-      .on(row.nextAt, row.id)
-      .where(sql`${row.sentAt} is null and ${row.attempts} < 12`),
   ],
 );

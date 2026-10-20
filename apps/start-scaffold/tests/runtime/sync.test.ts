@@ -158,7 +158,11 @@ test("a wait on a broken listener returns at once", async () => {
         const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
-          listen: async (_wake: (payload: string) => void, failed: () => void) => {
+          listen: async (
+            _channel: string,
+            _wake: (payload: string) => void,
+            failed: () => void,
+          ) => {
             failures.push(failed);
             return () => undefined;
           },
@@ -494,7 +498,7 @@ test("a listener that cannot start fails the subscribe; one that breaks ends its
         const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
-          listen: async (wake: (payload: string) => void, failed: () => void) => {
+          listen: async (_channel: string, wake: (payload: string) => void, failed: () => void) => {
             if (listens.length === 0) {
               listens.push({ wake, failed, stopped: true });
               throw refused;
@@ -1687,7 +1691,11 @@ test("a listener that breaks while it connects fails the subscribe as disconnect
         const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
-          listen: async (_wake: (payload: string) => void, failed: () => void) => {
+          listen: async (
+            _channel: string,
+            _wake: (payload: string) => void,
+            failed: () => void,
+          ) => {
             failed();
             return () => undefined;
           },
@@ -1714,7 +1722,11 @@ test("a subscribe whose listener is replaced while it connects fails as disconne
         const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
-          listen: async (_wake: (payload: string) => void, failed: () => void) => {
+          listen: async (
+            _channel: string,
+            _wake: (payload: string) => void,
+            failed: () => void,
+          ) => {
             if (replacing === undefined) {
               failed();
               replacing = feed?.subscribe();
@@ -1745,7 +1757,11 @@ test("a closed subscriber is not told when the listener breaks", async () => {
         const client = await syncTemplate.clone();
         defer(() => client.close());
         return Object.assign(drizzle({ client }), {
-          listen: async (_wake: (payload: string) => void, failed: () => void) => {
+          listen: async (
+            _channel: string,
+            _wake: (payload: string) => void,
+            failed: () => void,
+          ) => {
             failures.push(failed);
             return () => undefined;
           },

@@ -967,3 +967,37 @@ test("closing a tab never sends a batch over 32,000 UTF-8 bytes", async () => {
     ...Array.from({ length: 40 }, () => log),
   ]);
 });
+
+test("worker side exports final work spans and logs before its telemetry root closes", async () => {
+  const saved = storage();
+  const tools = createScope({
+    clock: makeTestClock(),
+    extensions: [telemetryExport],
+    tags: [storageTags, telemetrySide("worker"), httpBackend(saved.backend)],
+  });
+
+  await tools.ready;
+  const worker = createScope({ observe: tools.resolve(observer) });
+  worker.run(parent);
+  expect((await worker.close({ graceful: true })).status).toBe("success");
+  expect((await tools.close({ graceful: true })).status).toBe("success");
+  const traces = JSON.parse(saved.bodyOf("http://storage.test/traces"));
+  expect(traces.resourceSpans).toHaveLength(1);
+  expect(traces.resourceSpans[0].resource.attributes).toContainEqual({
+    key: "tinker.side",
+    value: { stringValue: "worker" },
+  });
+  const names = traces.resourceSpans[0].scopeSpans[0].spans.map(
+    (span: { name: string }) => span.name,
+  );
+  expect(names).toContain("test.telemetry.parent");
+  expect(names).toContain("test.telemetry.child");
+  const logs = saved
+    .bodyOf("http://storage.test/logs")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(logs).toContainEqual(
+    expect.objectContaining({ side: "worker", service: "test-start", msg: "saved record" }),
+  );
+});

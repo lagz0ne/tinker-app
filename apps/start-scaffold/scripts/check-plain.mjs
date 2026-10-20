@@ -455,12 +455,27 @@ function entryArgument(node, call) {
   );
 }
 
+/** The shared database owns these notification callbacks until its listener closes. */
+function databaseListenerArgument(node, call) {
+  const index = callbackIndex(call, node);
+  if (index !== 1 && index !== 2) return false;
+  const declaration = checker.getResolvedSignature(call)?.declaration;
+  return (
+    declaration &&
+    pathOf(declaration) === "tinker/components/database/types.ts" &&
+    ts.isPropertySignature(declaration.parent) &&
+    nameOf(declaration.parent.name) === "listen"
+  );
+}
+
 function nativeArgument(node) {
   const call = node.parent;
   return (
     argumentOf(node, call) &&
     callbackArgument(call, node) &&
-    (entryArgument(node, call) || (externalCall(call) && externalDeclaration(call)))
+    (entryArgument(node, call) ||
+      databaseListenerArgument(node, call) ||
+      (externalCall(call) && externalDeclaration(call)))
   );
 }
 
@@ -1677,6 +1692,16 @@ if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
 
   const cases = [
+    [
+      "database-owned-listener-allowed",
+      null,
+      'import {resource} from "@tinker/core"; import {database} from "~/components/database/index.server"; export const probe=resource({depends:{database},factory:({database},{clock})=>database.listen("probe",()=>{clock.currentTimeMillis();},()=>{clock.currentTimeMillis();})});',
+    ],
+    [
+      "unowned-listener-forbidden",
+      "unnamed-plain",
+      'import {resource} from "@tinker/core"; const local={listen(_channel:string,heard:()=>void){heard();}}; export const probe=resource({factory:()=>local.listen("probe",()=>{})});',
+    ],
     ...["worker", "cli"].map((role) => [
       `${role}-defined-main-allowed`,
       null,
