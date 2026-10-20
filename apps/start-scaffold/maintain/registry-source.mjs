@@ -39,12 +39,12 @@ function checkTargets(registry) {
     }
   }
 
-  const authMail = registry.items.find((item) => item.name === "postgres-auth-mail-example");
+  const mail = registry.items.find((item) => item.name === "mail");
   for (const migration of ["20261018041738_durable_mail", "20261019093400_mail_exhausted"]) {
     for (const file of ["migration.sql", "snapshot.json"]) {
       assert.ok(
-        authMail.files.some((entry) => entry.target === `~/drizzle/${migration}/${file}`),
-        `auth mail example must ship ${migration}/${file}`,
+        mail.files.some((entry) => entry.target === `~/drizzle/${migration}/${file}`),
+        `mail component must ship ${migration}/${file}`,
       );
     }
   }

@@ -117,7 +117,7 @@ test("lease expiry and token fencing preserve crash attempts; release refunds un
 test("delivery persists exponential retry and success without holding send locks", async () => {
   refuse = true;
 
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, dead: 0, sent: 0, failed: 1 });
 
   const db = await root.resolve(database);
 
@@ -133,7 +133,7 @@ test("delivery persists exponential retry and success without holding send locks
 
   expect(row!.nextAt.getTime()).toBe(clock.currentTimeMillis() + 1000);
 
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, sent: 0, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 0, dead: 0, sent: 0, failed: 0 });
 
   clock.advance(1000);
 
@@ -147,7 +147,7 @@ test("delivery persists exponential retry and success without holding send locks
 
   refuse = false;
 
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 1, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, dead: 0, sent: 1, failed: 0 });
 
   [row] = await db.select().from(mailOutbox);
 
@@ -189,7 +189,7 @@ test("failed twelfth send becomes dead; crash at twelfth claim also becomes dead
 
   refuse = true;
 
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, dead: 0, sent: 0, failed: 1 });
 
   expect((await db.select().from(mailOutbox))[0]).toMatchObject({
     attempts: 12,
@@ -251,7 +251,7 @@ test("future rows stay untouched and send stops before a second leased row", asy
 
   stop.abort();
 
-  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 0 });
+  expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, dead: 0, sent: 0, failed: 0 });
 
   const rows = await db.select().from(mailOutbox);
 
@@ -297,6 +297,7 @@ test("mail worker drains batches, reconnects, waits and stops without a hidden l
       })),
       preset(deliverMailBatch, async () => ({
         claimed: ++batches === 1 ? 20 : 1,
+        dead: 0,
         sent: 0,
         failed: 0,
       })),
@@ -330,7 +331,7 @@ test("a batch leaves room for send plus acknowledgement before starting SMTP", a
   expect(
     await write(root, deliverMailBatch),
     "remaining lease must cover send plus acknowledgement",
-  ).toEqual({ claimed: 2, sent: 1, failed: 0 });
+  ).toEqual({ claimed: 2, dead: 0, sent: 1, failed: 0 });
 
   expect(sends).toBe(1);
 
@@ -361,3 +362,61 @@ test("exhausted lookup uses its partial index instead of completed mail history"
     "mail_outbox_exhausted",
   );
 });
+
+for (const count of [19, 40]) {
+  test(`one worker drain clears ${count} exhausted rows before waiting`, async () => {
+    const stopping = new AbortController();
+    let waits = 0;
+    let attemptedSends = 0;
+    const worker = createScope({
+      tags: [mailWorkerStop(stopping.signal)],
+      presets: [
+        proofDatabase,
+        preset(mail, async () => ({
+          send: async () => {
+            attemptedSends++;
+          },
+        })),
+        preset(outboxWake, async () => ({
+          listen: async () => {},
+          retry: async () => {
+            throw new Error("unexpected worker retry");
+          },
+          wait: async () => {
+            waits++;
+            stopping.abort();
+          },
+        })),
+      ],
+    });
+
+    try {
+      await worker.ready;
+      await worker.run(migrate);
+      const db = await worker.resolve(database);
+      await db.insert(mailOutbox).values(
+        Array.from({ length: count }, (_, index) => ({
+          to: "proof@example.test",
+          subject: "Exhausted",
+          text: "Body",
+          dedupeKey: "exhausted:" + index,
+          attempts: 12,
+        })),
+      );
+      databaseQueries.length = 0;
+      await worker.run(runMailWorker, { signal: new AbortController().signal });
+
+      expect(
+        (await db.select().from(mailOutbox)).filter((row) => row.deadAt),
+        `one drain must clear all ${count} exhausted rows before waiting`,
+      ).toHaveLength(count);
+      expect(databaseQueries.filter((query) => query.includes('"outbox_exhausted"'))).toHaveLength(
+        Math.floor(count / 20) + 1,
+      );
+      expect(waits).toBe(1);
+      expect(attemptedSends).toBe(0);
+    } finally {
+      expect((await worker.close({ graceful: true })).status).toBe("success");
+    }
+  });
+}

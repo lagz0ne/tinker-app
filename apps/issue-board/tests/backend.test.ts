@@ -385,7 +385,7 @@ test("sign-up commits before held worker mail and records its failed delivery", 
   await sending.promise;
 
   accepted.resolve();
-  expect(await delivery).toEqual({ claimed: 1, sent: 0, failed: 1 });
+  expect(await delivery).toEqual({ claimed: 1, dead: 0, sent: 0, failed: 1 });
   await failed.promise;
 });
 

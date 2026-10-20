@@ -21,7 +21,7 @@ test("real Core worker recovers a plain delivery error before its clean stop", a
     presets: [
       preset(deliverMailBatch, async () => {
         if (++attempts === 1) throw new Error("temporary database failure");
-        return { claimed: 0, sent: 0, failed: 0 };
+        return { claimed: 0, dead: 0, sent: 0, failed: 0 };
       }),
       preset(outboxWake, async () => ({
         listen: async () => {},

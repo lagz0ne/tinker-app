@@ -14,10 +14,10 @@ const { registry, items, files } = await checkRegistryIndex();
 
 for (const migration of ["20261018041738_durable_mail", "20261019093400_mail_exhausted"]) {
   const missing = structuredClone(registry);
-  const example = missing.items.find((item) => item.name === "postgres-auth-mail-example");
+  const example = missing.items.find((item) => item.name === "mail");
   example.files = example.files.filter((file) => !file.path.includes(migration));
-  await assert.rejects(registryItems({ registry: missing }), /auth mail example must ship/);
-  console.log(`PASS: auth mail example rejects missing ${migration}.`);
+  await assert.rejects(registryItems({ registry: missing }), /mail component must ship/);
+  console.log(`PASS: mail component rejects missing ${migration}.`);
 }
 
 for (const target of new Set([
@@ -144,11 +144,18 @@ for (const composition of [
       }
     }
 
-    if (composition.includes("postgres-auth-mail-example")) {
+    if (
+      composition.includes("mail-example") ||
+      composition.includes("postgres-auth-mail-example")
+    ) {
       const client = await PGlite.create();
 
       try {
-        for (const migration of (await readdir(join(consumer, "drizzle"))).sort()) {
+        const migrations = await readdir(join(consumer, "drizzle")).catch((error) => {
+          assert.equal(error.code, "ENOENT");
+          return [];
+        });
+        for (const migration of migrations.sort()) {
           await client.exec(
             await readFile(join(consumer, "drizzle", migration, "migration.sql"), "utf8"),
           );
@@ -157,12 +164,12 @@ for (const composition of [
           `INSERT INTO mail_outbox ("to", subject, text, dedupe_key)
            VALUES ('receiver@example.test', 'Exported mail', 'Body', 'registry-proof') RETURNING id`,
         );
-        assert.equal(result.rows.length, 1, "standalone auth mail example must durably enqueue");
+        assert.equal(result.rows.length, 1, "standalone mail example must durably enqueue");
       } finally {
         await client.close();
       }
       console.log(
-        "PASS: standalone auth mail example migrates and durably enqueues without starter.",
+        `PASS: ${composition.join(" + ")} migrates and durably enqueues without starter.`,
       );
     }
 

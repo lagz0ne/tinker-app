@@ -56,7 +56,12 @@ test("a local endpoint that never greets times out and releases the claim", asyn
       nextAt: new Date(0),
     });
 
-    expect(await write(root, deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 1 });
+    expect(await write(root, deliverMailBatch)).toEqual({
+      claimed: 1,
+      dead: 0,
+      sent: 0,
+      failed: 1,
+    });
     const [row] = await db.select().from(mailOutbox);
     expect(row).toMatchObject({ attempts: 1, sentAt: null });
     expect(row!.lastError).toMatch(/timeout|greeting/i);

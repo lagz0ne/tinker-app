@@ -94,7 +94,12 @@ test("worker drains a full batch before waiting and stops while idle", async () 
       }),
       preset(deliverMailBatch, async () => {
         batches += 1;
-        return { claimed: batches === 1 ? 20 : 1, sent: batches === 1 ? 20 : 1, failed: 0 };
+        return {
+          claimed: batches === 1 ? 20 : 1,
+          dead: 0,
+          sent: batches === 1 ? 20 : 1,
+          failed: 0,
+        };
       }),
       preset(outboxWake, async (_deps, { closing }) => ({
         listen: async () => {},
@@ -137,7 +142,7 @@ test("worker command prints a clean stop and surfaces real teardown errors", asy
       signal: stop.signal,
       presets: [
         preset(queueDailyDigests, async () => ({ queued: 0 })),
-        preset(deliverMailBatch, async () => ({ claimed: 0, sent: 0, failed: 0 })),
+        preset(deliverMailBatch, async () => ({ claimed: 0, dead: 0, sent: 0, failed: 0 })),
         preset(outboxWake, async (_deps, { closing, defer }) => {
           defer(() => {
             if (failClose) throw closeError;
@@ -205,7 +210,7 @@ test("digest failure logs its own event and still delivers alerts", async () => 
       }),
       preset(deliverMailBatch, async () => {
         batches += 1;
-        return { claimed: 0, sent: 0, failed: 0 };
+        return { claimed: 0, dead: 0, sent: 0, failed: 0 };
       }),
       preset(outboxWake, async (_deps, { closing }) => ({
         listen: async () => {},
@@ -279,7 +284,7 @@ test("failed digest waits thirty seconds across notification wakes while alerts 
       }),
       preset(deliverMailBatch, async () => {
         batches += 1;
-        return { claimed: 0, sent: 0, failed: 0 };
+        return { claimed: 0, dead: 0, sent: 0, failed: 0 };
       }),
       preset(outboxWake, async () => ({
         listen: async () => {},
@@ -445,7 +450,7 @@ test("board worker recovers a plain delivery error before SIGTERM", async () => 
       preset(queueDailyDigests, async () => ({ queued: 0 })),
       preset(deliverMailBatch, async () => {
         if (++attempts === 1) throw new Error("temporary database failure");
-        return { claimed: 0, sent: 0, failed: 0 };
+        return { claimed: 0, dead: 0, sent: 0, failed: 0 };
       }),
       preset(outboxWake, async () => ({
         listen: async () => {},

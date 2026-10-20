@@ -1,5 +1,6 @@
 import { createScope, type Observe } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
+import { getTableColumns } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { PoolClient } from "pg";
 import { expect, test } from "vite-plus/test";
@@ -33,7 +34,9 @@ test("claim uses one bounded SKIP LOCKED statement for both due and dead rows", 
               client: {
                 query: async (config: { text: string; values?: unknown[] }, values?: unknown[]) => {
                   queries.push({ ...config, values });
-                  return { rows: [] };
+                  return {
+                    rows: [[0, ...Object.keys(getTableColumns(mailOutbox)).map(() => null)]],
+                  };
                 },
               } as unknown as PoolClient,
             }),
@@ -72,7 +75,7 @@ for (const remaining of [5999, 6000, 6001]) {
       clock,
       tags: [mailSendTimeout(3000), databaseConnectTimeout(500), databaseStatementTimeout(750)],
       presets: [
-        preset(claimMailBatch, async () => ({ token: "lease-7", rows: [row] })),
+        preset(claimMailBatch, async () => ({ dead: 0, token: "lease-7", rows: [row] })),
         preset(acknowledgeMail, async (_deps, { input }) => {
           acks.push(input);
           return { acknowledged: true };
@@ -91,6 +94,7 @@ for (const remaining of [5999, 6000, 6001]) {
     try {
       expect(await root.run(deliverMailBatch)).toEqual({
         claimed: 1,
+        dead: 0,
         sent: remaining >= 6000 ? 1 : 0,
         failed: 0,
       });
@@ -123,7 +127,7 @@ for (const acknowledged of [true, false]) {
     const root = createScope({
       clock: makeTestClock(),
       presets: [
-        preset(claimMailBatch, async () => ({ token: "lease", rows })),
+        preset(claimMailBatch, async () => ({ dead: 0, token: "lease", rows })),
         preset(acknowledgeMail, async (_deps, { input }) => {
           acks.push(input);
           return { acknowledged };
@@ -142,6 +146,7 @@ for (const acknowledged of [true, false]) {
     try {
       expect(await root.run(deliverMailBatch)).toEqual({
         claimed: 2,
+        dead: 0,
         sent: Number(acknowledged),
         failed: Number(acknowledged),
       });
@@ -166,7 +171,7 @@ test("a pre-stopped soft worker refunds its full batch without sends or acknowle
     clock: makeTestClock(),
     tags: [mailWorkerStop(stop.signal)],
     presets: [
-      preset(claimMailBatch, async () => ({ token: "refund", rows: [row] })),
+      preset(claimMailBatch, async () => ({ dead: 0, token: "refund", rows: [row] })),
       preset(acknowledgeMail, async () => {
         acks++;
         return { acknowledged: true };
@@ -183,7 +188,7 @@ test("a pre-stopped soft worker refunds its full batch without sends or acknowle
   });
 
   try {
-    expect(await root.run(deliverMailBatch)).toEqual({ claimed: 1, sent: 0, failed: 0 });
+    expect(await root.run(deliverMailBatch)).toEqual({ claimed: 1, dead: 0, sent: 0, failed: 0 });
     expect(releases).toEqual([{ token: "refund" }]);
     expect(sends).toBe(0);
     expect(acks).toBe(0);

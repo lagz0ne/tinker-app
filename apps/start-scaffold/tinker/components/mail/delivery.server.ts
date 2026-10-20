@@ -30,7 +30,7 @@ export const claimMailBatch = operation({
   label: "outbox.claim",
   depends: { tx: transaction, orm: drizzleOrm, lease: mailLeaseMs },
   run: async ({ tx, orm, lease }, { clock, random }) => {
-    const { and, or, lt, lte, isNull, asc, inArray, sql } = orm;
+    const { and, or, lt, lte, isNull, asc, inArray, sql, getColumns } = orm;
     const now = new Date(clock.currentTimeMillis());
     const available = or(isNull(mailOutbox.leaseUntil), lte(mailOutbox.leaseUntil, now));
     const exhaustedRows = tx
@@ -72,17 +72,30 @@ export const claimMailBatch = operation({
       .orderBy(asc(mailOutbox.nextAt), asc(mailOutbox.id))
       .limit(20)
       .for("update", { skipLocked: true });
-    const rows = await tx
-      .with(exhausted)
-      .update(mailOutbox)
-      .set({
-        leaseToken: token,
-        leaseUntil: new Date(now.getTime() + lease),
-        attempts: sql`${mailOutbox.attempts} + 1`,
-      })
-      .where(inArray(mailOutbox.id, due))
-      .returning();
-    return { token, rows };
+    const claimed = tx.$with("outbox_claimed").as(
+      tx
+        .update(mailOutbox)
+        .set({
+          leaseToken: token,
+          leaseUntil: new Date(now.getTime() + lease),
+          attempts: sql`${mailOutbox.attempts} + 1`,
+        })
+        .where(inArray(mailOutbox.id, due))
+        .returning(),
+    );
+    const deadCount = tx
+      .$with("outbox_dead_count")
+      .as(tx.select({ dead: sql<number>`count(*)::int`.as("dead") }).from(exhausted));
+    const result = await tx
+      .with(exhausted, claimed, deadCount)
+      .select({ dead: deadCount.dead, row: getColumns(claimed) })
+      .from(deadCount)
+      .leftJoin(claimed, sql`true`);
+    return {
+      token,
+      dead: result[0]!.dead,
+      rows: result.flatMap(({ row }) => (row === null ? [] : [row])),
+    };
   },
 });
 
@@ -151,7 +164,7 @@ export const deliverMailBatch = operation({
     { signal: contextSignal, clock },
   ) => {
     const signal = stopping ?? contextSignal;
-    const { token, rows } = await claim.run({ signal: contextSignal });
+    const { token, rows, dead } = await claim.run({ signal: contextSignal });
 
     // Reserve checkout, UPDATE and COMMIT bounds, plus setup/dispatch margin.
     const budget = sendTimeout + checkoutTimeout + 2 * statementTimeout + 1000;
@@ -178,7 +191,7 @@ export const deliverMailBatch = operation({
       sent += Number(error === null);
       failed += Number(error !== null);
     }
-    return { claimed: rows.length, sent, failed };
+    return { claimed: rows.length, dead, sent, failed };
   },
 });
 
@@ -268,7 +281,7 @@ const drainMailBatches = operation({
       if (delivered.status === "failed") throw delivered.error;
       if (delivered.status === "cancelled") return;
       batch = delivered.value;
-    } while (batch.claimed === 20 && !stop.aborted);
+    } while ((batch.claimed === 20 || batch.dead === 20) && !stop.aborted);
   },
 });
 

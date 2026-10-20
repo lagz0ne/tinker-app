@@ -1,6 +1,7 @@
 import { createScope, operation } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
 import { sql } from "drizzle-orm";
+import { getTableColumns } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { PoolClient } from "pg";
 import { expect, test } from "vite-plus/test";
@@ -50,6 +51,7 @@ for (const refused of [false, true]) {
 
       expect(await root.run(deliverMailBatch, { signal: new AbortController().signal })).toEqual({
         claimed: 1,
+        dead: 0,
         sent: refused ? 0 : 1,
         failed: refused ? 1 : 0,
       });
@@ -83,7 +85,14 @@ for (const kind of ["claim", "acknowledge", "release", "enqueue", "delivery"] as
         const text = typeof config === "string" ? config : config.text;
         queries.push(text);
         if (text === "COMMIT") throw error;
-        return { rows: text.includes('returning "attempts"') ? [[1]] : [], rowCount: 0 };
+        return {
+          rows: text.includes('"outbox_dead_count"')
+            ? [[0, ...Object.keys(getTableColumns(mailOutbox)).map(() => null)]]
+            : text.includes('returning "attempts"')
+              ? [[1]]
+              : [],
+          rowCount: 0,
+        };
       },
       release: (broken?: boolean) => {
         releases.push(broken);
@@ -116,6 +125,7 @@ for (const kind of ["claim", "acknowledge", "release", "enqueue", "delivery"] as
         ...(kind === "delivery"
           ? [
               preset(claimMailBatch, async () => ({
+                dead: 0,
                 token: "lease",
                 rows: [
                   {

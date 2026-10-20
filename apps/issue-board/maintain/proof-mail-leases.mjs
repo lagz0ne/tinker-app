@@ -241,7 +241,7 @@ try {
   }
   released.resolve();
 
-  assert.deepEqual(await sending, { claimed: 1, sent: 1, failed: 0 });
+  assert.deepEqual(await sending, { claimed: 1, dead: 0, sent: 1, failed: 0 });
 
   await observed;
 

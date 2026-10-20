@@ -284,7 +284,7 @@ for (const fail of ["listen", "deliver", "none"] as const) {
             refused = true;
             throw new Error("database down");
           }
-          return { claimed: ++claims === 1 ? 20 : 1, sent: 0, failed: 0 };
+          return { claimed: ++claims === 1 ? 20 : 1, dead: 0, sent: 0, failed: 0 };
         }),
       ],
     });
@@ -339,7 +339,7 @@ test("worker stops during a full batch without draining or waiting again", async
       preset(deliverMailBatch, async () => {
         order.push("deliver");
         stop.abort();
-        return { claimed: 20, sent: 1, failed: 0 };
+        return { claimed: 20, dead: 0, sent: 1, failed: 0 };
       }),
     ],
   });

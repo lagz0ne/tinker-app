@@ -164,6 +164,7 @@ if (process.argv.includes("--server")) {
 
     assert.deepEqual(await writeDispatch().run(worker, deliverMailBatch), {
       claimed: 1,
+      dead: 0,
       sent: 1,
       failed: 0,
     });

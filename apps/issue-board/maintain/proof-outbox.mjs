@@ -166,6 +166,7 @@ try {
   );
   assert.deepEqual(await dispatch.run(roots[1], deliverMailBatch), {
     claimed: 1,
+    dead: 0,
     sent: 1,
     failed: 0,
   });
