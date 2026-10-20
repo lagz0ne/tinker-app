@@ -119,6 +119,7 @@ function migrationHarness(
             default: {
               Pool: function Pool() {
                 return {
+                  on: () => {},
                   connect: async () => {
                     checkouts++;
 
@@ -365,6 +366,7 @@ for (const phase of ["query", "connect"]) {
               default: {
                 Pool: function Pool() {
                   return {
+                    on: () => {},
                     connect: async () => {
                       checkouts++;
 
@@ -461,7 +463,7 @@ for (const refused of [false, true]) {
             ({
               default: {
                 Pool: function Pool() {
-                  return { connect: async () => client, end: async () => {} };
+                  return { on: () => {}, connect: async () => client, end: async () => {} };
                 },
               },
             }) as unknown as typeof import("pg"),
