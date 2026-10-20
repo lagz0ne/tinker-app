@@ -139,14 +139,25 @@ unless a branch is named.
 - Other linked workspace packages
   are inlined into `dist-cli`.
   They stay dev dependencies.
-- Who builds `dist-cli`:
-  - the tool's own tests, in a vitest
-    `globalSetup`, so `vp test` builds first;
-  - the root `vp run -r build` for local use;
-  - any CI job that runs the tool runs
-    `pnpm --dir <tool> run build` first.
+- `dist-cli` is built only to publish:
+  the pack step runs `pnpm --dir <tool> run build`.
 - Doctor checks that each `bin` file exists,
   is in `files`, and imports the built CLI.
+
+### Runner in the repo (Duke, 2026-10-20)
+
+- In the repo, the tool's TypeScript source runs
+  with tsx, a devDependency of the tool.
+  Not `pnpm dlx`.
+- Tests and `vp exec` run `cmds/cli.ts` through tsx.
+  There is no `dist-cli` build before tests.
+- The published bin ships built JS: `dist-cli`,
+  run with plain node.
+- Why tsx: Node 24 strips types, but it ignores
+  tsconfig `paths`. So plain node cannot load
+  `~/` and `@/` imports (checked 2026-10-20).
+  tsx resolves them; so does bun, which the
+  repo does not use.
 
 ### Keep simpler
 
@@ -598,7 +609,7 @@ In order. Each ticket is one commit or PR.
    the `*.test.mjs` files do not change.
 6. **Skeleton** — the app beside `lib/`
    CLI-only files, `base-main`, `check-plain.mjs`
-   copied, and the `globalSetup` build.
+   copied, and tsx as a devDependency.
    Verify: doctor, `gate:commands`,
    `check-plain`, and `check-plain --prove` pass.
    The 111 frozen tests pass.
