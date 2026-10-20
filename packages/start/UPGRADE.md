@@ -1,16 +1,29 @@
 # Upgrade
 
-## Unreleased
+## 0.11.0
 
+Start 0.11.0 is released from `lagz0ne/tinker-app`, tag `start-v0.11.0`.
+The tag holds the Start tarball only.
 Core and React move to 0.9.0, from the tinkered `start-v0.9.0` release:
 
 ```json
 "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
-"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz"
+"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz",
+"@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.11.0/tinker-start-0.11.0.tgz"
 ```
 
-Change both URLs in your `package.json`, then run `pnpm install`.
-Start keeps its own version and URL.
+Change the three URLs in your `package.json`, then run `pnpm install`.
+The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.11.0.
+
+- Server telemetry leaves the request thread (ADR `docs/decisions/telemetry-worker.md`,
+  option B). The request thread writes span and log records to a shared ring;
+  `cmds/telemetry-worker.ts` drains it on its own worker thread and exports.
+  On start-min, telemetry costs 43 µs per SSR request instead of 127 µs, and
+  the sink got 30,002 of 30,002 spans at 10,000 requests under load.
+  Apps with their own `cmds/server.ts` take the new `cmds/telemetry-worker.ts`
+  and the server wiring from the `app` registry item.
 
 - An extension's `start` hook now has a time limit: 10 s by default.
   The whole start chain counts: the database connect, the migration-owner

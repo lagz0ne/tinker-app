@@ -47,7 +47,7 @@ try {
   const releasedPkg = JSON.parse(await readFile(join(released, "demo/package.json"), "utf8"));
   assert.equal(
     releasedPkg.devDependencies["@tinker/start"],
-    releaseUrls("0.10.0")["@tinker/start"],
+    releaseUrls("0.11.0")["@tinker/start"],
   );
   run(process.execPath, [join(root, "packages/start/scripts/pack.mjs"), packs], root);
   await copyTemplates(out, { packs });
