@@ -9,8 +9,8 @@
     "zod@^4.0.0"
   ],
   "registryDependencies": [
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.10.0/apps/start-scaffold/public/r/errors.json",
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.10.0/apps/start-scaffold/public/r/requests.json"
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r/errors.json",
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r/requests.json"
   ],
   "files": [
     {
