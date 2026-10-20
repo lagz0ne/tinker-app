@@ -3,16 +3,45 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
+import { createScope } from "@tinker/core";
 import pg from "pg";
+import { createServer as createViteServer } from "vite-plus";
+
+const connectionString = "postgres://issue_board@127.0.0.1:15433/postgres";
+
+const vite = await createViteServer({
+  configFile: false,
+  server: { middlewareMode: true, hmr: false },
+  resolve: {
+    alias: { "~": fileURLToPath(new URL("../tinker", import.meta.url)) },
+  },
+});
+
+// Apply pending DDL before this proof deliberately holds table locks.
+try {
+  const { databaseUrl, migrate } = await vite.ssrLoadModule(
+    "/tinker/components/database/index.server.ts",
+  );
+  const root = createScope({ tags: [databaseUrl(new URL(connectionString))] });
+
+  try {
+    await root.ready;
+    await root.run(migrate, { signal: new AbortController().signal });
+  } finally {
+    await root.close({ graceful: true });
+  }
+} finally {
+  await vite.close();
+}
 
 const directory = await mkdtemp(
   fileURLToPath(new URL("../.bench/worker-no-env-", import.meta.url)),
 );
 
-const db = new pg.Client({ connectionString: "postgres://issue_board@127.0.0.1:15433/postgres" });
+const db = new pg.Client({ connectionString });
 const account = "worker-host-" + randomUUID();
 const team = randomUUID();
 const issue = randomUUID();
@@ -52,6 +81,9 @@ try {
     ])
   ).rows;
   assert.equal(before.length, 1, "The proof owns a durable daily receipt for an eligible account");
+
+  // Startup owns migrations too; the deployment folder carries the actual chain.
+  await cp(new URL("../drizzle", import.meta.url), `${directory}/drizzle`, { recursive: true });
 
   child = spawn(process.execPath, [fileURLToPath(new URL("./worker.mjs", import.meta.url))], {
     cwd: directory,

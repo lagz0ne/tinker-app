@@ -63,7 +63,7 @@
       "path": "templates/gitignore",
       "type": "registry:file",
       "target": "~/.gitignore",
-      "content": "node_modules/\n.env\n.env.*\n!.env.example\n.tinker/\n.tanstack/\ndist/\n\n.bench/\n"
+      "content": "node_modules/\n.env\n.env.*\n!.env.example\n.tinker/\n.tanstack/\ndist/\n\n.bench/\n\n/dist-worker/\n"
     },
     {
       "path": "components.json",

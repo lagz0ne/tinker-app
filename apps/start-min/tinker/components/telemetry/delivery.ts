@@ -48,7 +48,7 @@ export const delivery = resource({
             },
           ];
         } else {
-          const groups = ["server", "browser", "ssr"].flatMap((side) => {
+          const groups = ["server", "browser", "ssr", "worker"].flatMap((side) => {
             const spans = records
               .filter((record) => record.kind === "trace" && record.side === side)
               .map((record) => record.json);

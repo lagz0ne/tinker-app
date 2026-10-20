@@ -5,13 +5,13 @@ import { z } from "zod";
 import { fail } from "~/components/errors";
 
 import { leaseFrom } from "./lease.server";
-import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator } from "./modules";
+import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator, drizzleOrm } from "./modules";
 import type { Database } from "./types";
 
 /** Where Postgres is. */
 export const databaseUrl = tag<URL>({ label: "database.url", parse: z.instanceof(URL) });
 
-/** Worker-only soft stop cancels pool reads, while in-flight write leases finish. */
+/** Worker-only stop cancels startup and pool reads; in-flight write leases finish. */
 export const databaseStop = tag<AbortSignal | undefined>({
   label: "database.stop",
   default: undefined,
@@ -119,33 +119,81 @@ export const database = resource({
         // The lease is only a handle. Its first BEGIN checks out the pool client.
         return leaseFrom<PoolClient>(client.connect.bind(client), drizzle, guard);
       },
-      async listen(heard: (payload: string) => void, disconnected: () => void) {
-        const listener = await client.connect();
-        const notified = (message: { payload?: string }) => heard(message.payload ?? "");
-        listener.on("notification", notified);
-        listener.on("error", disconnected);
-        listener.on("end", disconnected);
+      async listen(
+        channel: string,
+        heard: (payload: string) => void,
+        disconnected: () => void,
+        signal?: AbortSignal,
+      ) {
+        const topic = z
+          .string()
+          .regex(/^[a-z_][a-z0-9_]{0,62}$/)
+          .parse(channel);
+
+        signal?.throwIfAborted();
 
         const stop = new AbortController();
+
+        const cancelled = Promise.withResolvers<never>();
+
+        let listener: PoolClient | undefined;
+
+        const notified = (message: { payload?: string }) => heard(message.payload ?? "");
+
+        const abort = () => stop.abort(signal?.reason);
+
         listeners.add(stop);
 
         stop.signal.addEventListener(
           "abort",
           () => {
             listeners.delete(stop);
-            listener.removeListener("notification", notified);
-            listener.removeListener("error", disconnected);
-            listener.removeListener("end", disconnected);
-            listener.release(true);
+
+            signal?.removeEventListener("abort", abort);
+
+            listener?.removeListener("notification", notified);
+
+            listener?.removeListener("error", disconnected);
+
+            listener?.removeListener("end", disconnected);
+
+            listener?.release(true);
+
+            cancelled.reject(stop.signal.reason);
           },
           { once: true },
         );
 
+        signal?.addEventListener("abort", abort, { once: true });
+
+        const pending = client.connect().then((connection) => {
+          if (stop.signal.aborted) {
+            connection.release(true);
+
+            throw stop.signal.reason;
+          }
+          listener = connection;
+
+          return connection;
+        });
+
         try {
-          await listener.query("LISTEN start_sync");
+          await Promise.race([pending, cancelled.promise]);
+
+          stop.signal.throwIfAborted();
+
+          listener!.on("notification", notified);
+
+          listener!.on("error", disconnected);
+
+          listener!.on("end", disconnected);
+
+          await Promise.race([listener!.query(`LISTEN ${topic}`), cancelled.promise]);
+
           return stop.abort.bind(stop);
         } catch (error) {
-          stop.abort();
+          stop.abort(error);
+
           throw error;
         }
       },
@@ -153,17 +201,65 @@ export const database = resource({
   },
 });
 
+/** Bound how long another process may own schema migration at startup. */
+export const databaseMigrationTimeout = tag<number>({
+  label: "database.migrationTimeout",
+  default: 5000,
+  parse: z.number().int().positive().max(60000),
+});
+
+/** Stable application schema lock: ASCII TINK / MIGR, shared by every process. */
+export const migrationLockKey = [1414090315, 1296648018] as const;
+
 export const migrate = operation({
   label: "migrate",
   depends: {
     database,
     pgCore: drizzlePgCore,
     migrator: drizzleMigrator,
+    orm: drizzleOrm,
+    timeout: databaseMigrationTimeout,
   },
-  run: async ({ database, pgCore, migrator }) => {
-    const { migrate } = pgCore;
-    const { readMigrationFiles } = migrator;
-    await migrate(readMigrationFiles({ migrationsFolder }), database, { migrationsFolder });
+  run: async ({ database, pgCore, migrator, orm, timeout }, { clock, signal }) => {
+    if (!database.checkout) throw new Error("Migration requires a dedicated connection");
+    const lease = await database.checkout();
+    const lock = orm.sql`SELECT pg_try_advisory_lock(${migrationLockKey[0]}, ${migrationLockKey[1]}) AS owned`;
+    const deadline = clock.currentTimeMillis() + timeout;
+    let broken = true;
+
+    let released = false;
+
+    const abort = () => {
+      released = true;
+      lease.release(true);
+    };
+
+    try {
+      while (true) {
+        signal.throwIfAborted();
+        const result = z
+          .object({ rows: z.array(z.object({ owned: z.boolean() })) })
+          .parse(await lease.db.execute(lock));
+        if (result.rows[0]!.owned) break;
+        if (clock.currentTimeMillis() >= deadline) throw fail("MigrationBusy", { timeout });
+        await clock.sleep(Math.min(50, deadline - clock.currentTimeMillis()), signal);
+      }
+      // Checkout has completed. An abort can now destroy this exact connection.
+      signal.addEventListener("abort", abort, { once: true });
+      signal.throwIfAborted();
+      await pgCore.migrate(migrator.readMigrationFiles({ migrationsFolder }), lease.db, {
+        migrationsFolder,
+      });
+
+      await lease.db.execute(
+        orm.sql`SELECT pg_advisory_unlock(${migrationLockKey[0]}, ${migrationLockKey[1]})`,
+      );
+      broken = false;
+    } finally {
+      signal.removeEventListener("abort", abort);
+      // Any failed migration/unlock destroys the connection and releases its lock.
+      if (!released) lease.release(broken);
+    }
   },
 });
 
@@ -173,7 +269,7 @@ export const databaseSetup = extension({
     async start({ resolve, next, scope }) {
       resolve(databaseUrl);
       await next();
-      await scope.run(migrate);
+      await scope.run(migrate, { signal: resolve(databaseStop) });
     },
   },
 });

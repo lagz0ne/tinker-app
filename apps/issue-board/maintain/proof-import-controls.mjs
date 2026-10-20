@@ -151,46 +151,49 @@ try {
   unlinkSync(paths.pop());
   unlinkSync(paths.pop());
 
-  const backoffPath = "src/backend/digest-backoff.scratch.server.ts";
+  const backoffPath = ".tinker/digest-backoff.scratch.server.ts";
   paths.push(backoffPath);
+  assert(digest.includes("retry.at = clock.currentTimeMillis() + 30_000"));
   writeFileSync(
     backoffPath,
     digest.replace("retry.at = clock.currentTimeMillis() + 30_000", "retry.at = 0"),
   );
-  const outboxPath = "src/backend/outbox-backoff.scratch.server.ts";
-  paths.push(outboxPath);
+  const config = ".bench/import-backoff/vite.config.ts";
+  mkdirSync(".bench/import-backoff", { recursive: true });
+  paths.push(config);
   writeFileSync(
-    outboxPath,
-    readFileSync("src/backend/outbox.server.ts", "utf8").replace(
-      '"./digest.server"',
-      '"./digest-backoff.scratch.server"',
-    ),
+    config,
+    `import config from "../../vite.config";import tests from "../../vitest.config";import {proofFault} from "../../maintain/proof-fault.mjs";export default {...config,...tests,plugins:[proofFault(),...config.plugins]};\n`,
   );
-  const testPath = "tests/backoff-control.scratch.test.ts";
-  paths.push(testPath);
-  writeFileSync(
-    testPath,
-    `
-import { createScope } from "@tinker/core";
-import { preset, makeTestClock } from "@tinker/core/testing";
-import { expect, test } from "vite-plus/test";
-import { queueDailyDigests } from "@/backend/digest-backoff.scratch.server";
-import { deliverMailBatch, outboxWake, runMailWorker } from "@/backend/outbox-backoff.scratch.server";
-` +
-      readFileSync("tests/worker.test.ts", "utf8")
-        .split('test("failed digest waits')[1]
-        .replace(/^/, 'test("failed digest waits'),
+  const backoff = spawnSync(
+    "vp",
+    [
+      "test",
+      "tests/worker.test.ts",
+      "-t",
+      "failed digest waits thirty seconds",
+      "--config",
+      config,
+      "--maxWorkers=1",
+      "--no-file-parallelism",
+    ],
+    {
+      encoding: "utf8",
+      timeout: 60_000,
+      env: {
+        ...process.env,
+        VITEST_MAX_WORKERS: "1",
+        VP_RUN_CONCURRENCY_LIMIT: "1",
+        BOARD_PROOF_FAULT_FILE: "src/backend/digest.server.ts",
+        BOARD_PROOF_FAULT_COPY: backoffPath,
+      },
+    },
   );
-  const backoff = spawnSync("vp", ["test", testPath, "--maxWorkers=1", "--no-file-parallelism"], {
-    encoding: "utf8",
-    timeout: 60_000,
-    env: { ...process.env, VITEST_MAX_WORKERS: "1", VP_RUN_CONCURRENCY_LIMIT: "1" },
-  });
   const backoffOutput = backoff.stdout + backoff.stderr;
   writeFileSync(`${directory}/digest-backoff.log`, backoffOutput);
   assert.equal(backoff.error, undefined);
   assert.notEqual(backoff.status, 0);
-  assert.match(backoffOutput, /expected 2 to be 1/);
+  assert.match(backoffOutput, /AssertionError: failed digest must wait until its retry deadline:/);
   console.log(
     `PASS negative N8 backoff: repeated wakes run extra SQL ticks; ${directory}/digest-backoff.log`,
   );

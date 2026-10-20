@@ -49,7 +49,7 @@ test("an old failed read cannot clear a newer wake's successful cached frame", a
         database,
         async () =>
           ({
-            listen: async (wake: typeof heard) => {
+            listen: async (_channel: string, wake: typeof heard) => {
               heard = wake;
               return () => {};
             },
@@ -88,7 +88,7 @@ test("account notices affect only that account and preserve the shared public wa
         database,
         async () =>
           ({
-            listen: async (wake: typeof heard) => {
+            listen: async (_channel: string, wake: typeof heard) => {
               heard = wake;
               return () => {};
             },
@@ -213,7 +213,7 @@ test("a failed listener is replaced once, disconnects its old subscribers, and c
         database,
         async () =>
           ({
-            listen: async (_heard: (text: string) => void, fail: () => void) => {
+            listen: async (_channel: string, _heard: (text: string) => void, fail: () => void) => {
               const id = broken.push(fail);
               return () => {
                 closed.push(id);

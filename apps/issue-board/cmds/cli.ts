@@ -1,7 +1,11 @@
 import { createScope } from "@tinker/core";
 
 import { defineMain, mainErrorCode, checkClosed } from "~/base/main";
-import { databaseUrl } from "~/components/database/index.server";
+import {
+  databaseSetup,
+  databaseMigrationTimeout,
+  databaseUrl,
+} from "~/components/database/index.server";
 
 import { importFile, importTeam, importActor } from "@/backend/import.server";
 import { runImport } from "@/transport/import-runner.server";
@@ -29,8 +33,11 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
   try {
     const root = createScope({
       signal,
+      extensions: [databaseSetup],
       observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
       tags: [
+        env.DATABASE_MIGRATION_TIMEOUT_MS !== undefined &&
+          databaseMigrationTimeout(Number(env.DATABASE_MIGRATION_TIMEOUT_MS)),
         env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
         importFile(options["--file"]!),
         importTeam(options["--team"]!),

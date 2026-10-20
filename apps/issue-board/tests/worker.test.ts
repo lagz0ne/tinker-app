@@ -5,9 +5,10 @@ import { preset, makeTestClock, makeTestRandom } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
 import { databaseUrl, databaseConnectTimeout } from "~/components/database/index.server";
+import { deliverMailBatch, outboxWake } from "~/components/mail/index.server";
 
 import { queueDailyDigests } from "@/backend/digest.server";
-import { deliverMailBatch, outboxWake, runMailWorker } from "@/backend/outbox.server";
+import { runMailWorker } from "@/backend/outbox.server";
 
 // oxlint-disable-next-line import/no-relative-parent-imports -- Test the native command seam; app source aliases intentionally exclude cmds.
 import main from "../cmds/worker";
@@ -93,7 +94,12 @@ test("worker drains a full batch before waiting and stops while idle", async () 
       }),
       preset(deliverMailBatch, async () => {
         batches += 1;
-        return { claimed: batches === 1 ? 20 : 1, sent: batches === 1 ? 20 : 1, failed: 0 };
+        return {
+          claimed: batches === 1 ? 20 : 1,
+          dead: 0,
+          sent: batches === 1 ? 20 : 1,
+          failed: 0,
+        };
       }),
       preset(outboxWake, async (_deps, { closing }) => ({
         listen: async () => {},
@@ -136,7 +142,7 @@ test("worker command prints a clean stop and surfaces real teardown errors", asy
       signal: stop.signal,
       presets: [
         preset(queueDailyDigests, async () => ({ queued: 0 })),
-        preset(deliverMailBatch, async () => ({ claimed: 0, sent: 0, failed: 0 })),
+        preset(deliverMailBatch, async () => ({ claimed: 0, dead: 0, sent: 0, failed: 0 })),
         preset(outboxWake, async (_deps, { closing, defer }) => {
           defer(() => {
             if (failClose) throw closeError;
@@ -204,7 +210,7 @@ test("digest failure logs its own event and still delivers alerts", async () => 
       }),
       preset(deliverMailBatch, async () => {
         batches += 1;
-        return { claimed: 0, sent: 0, failed: 0 };
+        return { claimed: 0, dead: 0, sent: 0, failed: 0 };
       }),
       preset(outboxWake, async (_deps, { closing }) => ({
         listen: async () => {},
@@ -278,7 +284,7 @@ test("failed digest waits thirty seconds across notification wakes while alerts 
       }),
       preset(deliverMailBatch, async () => {
         batches += 1;
-        return { claimed: 0, sent: 0, failed: 0 };
+        return { claimed: 0, dead: 0, sent: 0, failed: 0 };
       }),
       preset(outboxWake, async () => ({
         listen: async () => {},
@@ -298,7 +304,7 @@ test("failed digest waits thirty seconds across notification wakes while alerts 
   });
   await root.ready;
   await root.settle(runMailWorker, { signal: stop.signal });
-  expect(ticksBeforeDeadline).toBe(1);
+  expect(ticksBeforeDeadline, "failed digest must wait until its retry deadline").toBe(1);
   expect(batches).toBe(4);
   expect(ticks).toBe(2);
   expect((await root.closed).status).toBe("success");
@@ -323,7 +329,7 @@ test("stop interrupts a black-holed LISTEN handshake", async () => {
 
   if (!address || typeof address === "string") throw new Error("Expected TCP endpoint");
 
-  const { mailWorkerStop } = await import("@/backend/outbox.server");
+  const { mailWorkerStop } = await import("~/components/mail/index.server");
 
   const stopping = new AbortController();
 
@@ -431,5 +437,41 @@ test("worker pool reads stop during a black-holed digest connection", async () =
     await root.close();
 
     await new Promise<void>((done) => server.close(() => done()));
+  }
+});
+
+test("board worker recovers a plain delivery error before SIGTERM", async () => {
+  const stop = new AbortController();
+  const messages: string[] = [];
+  let attempts = 0;
+  const root = createScope({
+    observe: { log: (entry) => messages.push(entry.message) },
+    presets: [
+      preset(queueDailyDigests, async () => ({ queued: 0 })),
+      preset(deliverMailBatch, async () => {
+        if (++attempts === 1) throw new Error("temporary database failure");
+        return { claimed: 0, dead: 0, sent: 0, failed: 0 };
+      }),
+      preset(outboxWake, async () => ({
+        listen: async () => {},
+        retry: async () => {},
+        wait: async () => {
+          stop.abort(new Error("SIGTERM"));
+        },
+      })),
+    ],
+    tags: [(await import("~/components/mail/index.server")).mailWorkerStop(stop.signal)],
+  });
+
+  try {
+    const result = await root.settle(runMailWorker, {
+      tags: [(await import("~/components/mail/index.server")).mailWorkerStop(stop.signal)],
+    });
+
+    expect(attempts).toBe(2);
+    expect(messages.filter((message) => message === "outbox.unavailable")).toHaveLength(1);
+    expect(result.status).toBe("success");
+  } finally {
+    await root.close();
   }
 });

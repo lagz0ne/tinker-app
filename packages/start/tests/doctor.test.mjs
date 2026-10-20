@@ -74,7 +74,7 @@ for (const statement of [
 ]) {
   test(`doctor blocks private item paths in ${statement}`, () => {
     const root = preparedApp({
-      "tinker/components/mail/component.json": '{"requires":[]}',
+      "tinker/components/mail/component.json": '{"requires":["database"]}',
       "tinker/components/mail/index.ts": "export const mail = 1;",
       "tinker/components/mail/secret.ts": "export const secret = 1;",
       "src/consumer.ts": `\n${statement}\n`,
@@ -120,7 +120,7 @@ for (const { file, name, symbol, messages } of [
   test(`doctor checks the relative item import ${name} in ${file}`, () => {
     const root = preparedApp({
       "tinker/components/inbox/component.json": '{"requires":[]}',
-      "tinker/components/mail/component.json": '{"requires":[]}',
+      "tinker/components/mail/component.json": '{"requires":["database"]}',
       "tinker/components/mail/index.ts": "export const m = 1;",
       "tinker/components/mail/secret.ts": "export const s = 1;",
       [file]: `import { ${symbol} } from "${name}";`,
@@ -137,7 +137,7 @@ for (const { file, name, symbol, messages } of [
 
 test("doctor requires a direct dependency for another item's public API", () => {
   const root = preparedApp({
-    "tinker/components/mail/component.json": '{"requires":[]}',
+    "tinker/components/mail/component.json": '{"requires":["database"]}',
     "tinker/components/mail/index.ts":
       'import { db } from "~/components/postgres"; export const mail = db;',
     "tinker/components/postgres/component.json": '{"requires":[]}',
@@ -154,7 +154,7 @@ test("doctor requires a direct dependency for another item's public API", () => 
 
 test("doctor allows declared public imports, own private files, and private test imports", () => {
   const root = preparedApp({
-    "tinker/components/mail/component.json": '{"requires":["postgres"]}',
+    "tinker/components/mail/component.json": '{"requires":["database","postgres"]}',
     "tinker/components/mail/index.ts":
       'import { db } from "../postgres/index"; import { secret } from "./secret"; export const mail = db + secret;',
     "tinker/components/mail/secret.ts": "export const secret = 1;",
@@ -193,7 +193,7 @@ for (const name of ["~/components/postgres", "~/components/mail/../postgres"]) {
 
 test("a graph error elsewhere does not make declared imports undeclared", () => {
   const root = preparedApp({
-    "tinker/components/mail/component.json": '{"requires":["postgres"]}',
+    "tinker/components/mail/component.json": '{"requires":["database","postgres"]}',
     "tinker/components/mail/index.ts":
       'import { db } from "~/components/postgres"; export const mail = db;',
     "tinker/components/postgres/component.json": '{"requires":[]}',
@@ -208,7 +208,7 @@ test("a graph error elsewhere does not make declared imports undeclared", () => 
 
 test("doctor includes the server public entry for a private server import", () => {
   const root = preparedApp({
-    "tinker/components/mail/component.json": '{"requires":[]}',
+    "tinker/components/mail/component.json": '{"requires":["database"]}',
     "tinker/components/mail/index.server.ts": "export const mail = 1;",
     "tinker/components/mail/secret.server.ts": "export const secret = 1;",
     "src/consumer.server.ts": 'import { secret } from "../tinker/components/mail/secret.server";',
@@ -225,7 +225,7 @@ test("item tests can use private relative paths only with a declared dependency"
   const root = preparedApp({
     "tinker/components/inbox/component.json": '{"requires":[]}',
     "tinker/components/inbox/x.test.ts": 'import { secret } from "../mail/secret";',
-    "tinker/components/mail/component.json": '{"requires":[]}',
+    "tinker/components/mail/component.json": '{"requires":["database"]}',
     "tinker/components/mail/secret.ts": "export const secret = 1;",
   });
 

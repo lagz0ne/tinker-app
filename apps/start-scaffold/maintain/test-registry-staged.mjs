@@ -55,7 +55,13 @@ await test("the commit hook checks the staged registry", async (t) => {
     console.log(result.output);
   }
 
-  ok("git", ["worktree", "add", "--detach", scratch, "HEAD"], root);
+  const tree = ok("git", ["write-tree"], root).trim();
+  const candidate = ok(
+    "git",
+    ["commit-tree", tree, "-p", "HEAD", "-m", "test: staged registry hook baseline"],
+    root,
+  ).trim();
+  ok("git", ["worktree", "add", "--detach", scratch, candidate], root);
 
   try {
     hooks = await mkdtemp(join(tmpdir(), "registry-hook-dispatch-"));

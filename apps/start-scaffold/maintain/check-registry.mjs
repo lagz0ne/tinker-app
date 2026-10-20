@@ -1,14 +1,24 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+
+import { PGlite } from "@electric-sql/pglite";
 
 import { checkRegistryIndex } from "./check-registry-index.mjs";
 import { app, registryItems } from "./registry-source.mjs";
 
 /** Match every built item to source, then build the two supported compositions. */
 const { registry, items, files } = await checkRegistryIndex();
+
+for (const migration of ["20261018041738_durable_mail", "20261019093400_mail_exhausted"]) {
+  const missing = structuredClone(registry);
+  const example = missing.items.find((item) => item.name === "mail");
+  example.files = example.files.filter((file) => !file.path.includes(migration));
+  await assert.rejects(registryItems({ registry: missing }), /mail component must ship/);
+  console.log(`PASS: mail component rejects missing ${migration}.`);
+}
 
 for (const target of new Set([
   ...registry.items.find((item) => item.name === "app").files.map((file) => file.target),
@@ -69,7 +79,12 @@ for (const name of [
   await assert.rejects(registryItems({ registry: missing }), /files must cover its golden source/);
 }
 
-for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]) {
+for (const composition of [
+  ["app"],
+  ["app", "mail-example"],
+  ["app", "postgres-auth-mail-example"],
+  ["app", "starter"],
+]) {
   const consumer = await mkdtemp(join(tmpdir(), "start-registry-consumer-"));
   try {
     const copied = new Set();
@@ -105,10 +120,13 @@ for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]
 
     await symlink(join(app, "node_modules"), join(consumer, "node_modules"), "dir");
 
-    if (composition.includes("starter")) {
+    if (composition.includes("starter") || composition.includes("postgres-auth-mail-example")) {
+      const config = await readFile(join(app, "vite.config.ts"), "utf8");
       await writeFile(
         join(consumer, "vite.config.ts"),
-        await readFile(join(app, "vite.config.ts")),
+        composition.includes("starter")
+          ? config
+          : config.replace('      workerEntry: "cmds/worker.ts",\n', ""),
       );
       await mkdir(join(consumer, "cmds"), { recursive: true });
       for (const entry of ["server.ts", "router.ts"]) {
@@ -124,6 +142,35 @@ for (const composition of [["app"], ["app", "mail-example"], ["app", "starter"]]
           await readFile(join(consumer, "examples", example)),
         );
       }
+    }
+
+    if (
+      composition.includes("mail-example") ||
+      composition.includes("postgres-auth-mail-example")
+    ) {
+      const client = await PGlite.create();
+
+      try {
+        const migrations = await readdir(join(consumer, "drizzle")).catch((error) => {
+          assert.equal(error.code, "ENOENT");
+          return [];
+        });
+        for (const migration of migrations.sort()) {
+          await client.exec(
+            await readFile(join(consumer, "drizzle", migration, "migration.sql"), "utf8"),
+          );
+        }
+        const result = await client.query(
+          `INSERT INTO mail_outbox ("to", subject, text, dedupe_key)
+           VALUES ('receiver@example.test', 'Exported mail', 'Body', 'registry-proof') RETURNING id`,
+        );
+        assert.equal(result.rows.length, 1, "standalone mail example must durably enqueue");
+      } finally {
+        await client.close();
+      }
+      console.log(
+        `PASS: ${composition.join(" + ")} migrates and durably enqueues without starter.`,
+      );
     }
 
     const build = spawnSync("vp", ["build"], { cwd: consumer, encoding: "utf8", timeout: 120000 });
