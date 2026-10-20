@@ -92,6 +92,8 @@ export function planDiff({ app, base, head, map }) {
     return result.stdout;
   };
 
+  const mergeBase = git("merge-base", base, head).trim();
+
   const prefix = relative(root, app).replaceAll("\\", "/") + "/";
 
   const config = JSON.parse(readFileSync(resolve(app, "stryker.config.json"), "utf8"));
@@ -103,7 +105,7 @@ export function planDiff({ app, base, head, map }) {
     "--no-renames",
     "--name-only",
     "-z",
-    `${base}..${head}`,
+    `${mergeBase}..${head}`,
     "--",
     prefix,
   )
@@ -124,7 +126,7 @@ export function planDiff({ app, base, head, map }) {
         "--no-ext-diff",
         "--no-renames",
         "--unified=0",
-        `${base}..${head}`,
+        `${mergeBase}..${head}`,
         "--",
         ...paths.map((file) => prefix + file),
       )
@@ -154,7 +156,8 @@ export function planDiff({ app, base, head, map }) {
 
   return {
     app: prefix.slice(0, -1),
-    base,
+    base: mergeBase,
+    requestedBase: base,
     head,
     ranges,
     mutate: ranges.map(({ file, start, end }) => `${file}:${start}-${end}`),

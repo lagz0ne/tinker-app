@@ -119,14 +119,20 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
       "ENOBUFS",
       "the broad broken boundary must fail for the real buffer limit",
     );
+    git("checkout", "--quiet", "-b", "next", base);
+    writeFileSync(join(app, "tinker/upstream.ts"), "export const upstream = true;\n");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Advance next independently");
+    git("checkout", "--quiet", head);
     const { planDiff } = await import(pathToFileURL(join(root, "scripts/mutation/diff.mjs")).href);
     const plan = planDiff({
       app,
-      base,
+      base: "next",
       head,
       map: { nodes: [], gaps: [], tests: [{ file: "tests/value.test.ts", name: "value" }] },
     });
 
+    assert.equal(plan.base, base, "upstream edits must not become PR edits");
     assert.deepEqual(plan.mutate, ["tinker/value.ts:1-1"]);
     assert.deepEqual(plan.testFiles, ["tests/value.test.ts"]);
   } finally {
