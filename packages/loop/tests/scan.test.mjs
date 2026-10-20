@@ -1,4 +1,12 @@
-import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -129,4 +137,15 @@ test("files the gates write are not part of the change, and do not make the tree
     expect.objectContaining({ file: "src/a.ts", status: "fixed", sha }),
   ]);
   expect(findingsOf(app)[0]).not.toHaveProperty("dirty");
+});
+
+test("files already in .loop before the first check are not part of the change", async () => {
+  const app = repo({ "loop.json": loopJson({ ok: pass }, "main") });
+  git(app, "checkout", "--quiet", "-b", "work");
+  mkdirSync(join(app, ".loop"));
+  writeFileSync(join(app, ".loop/notes.ts"), "Date.now();\n");
+
+  await loop(app, "check");
+
+  expect(readFileSync(join(app, ".loop/findings.jsonl"), "utf8")).toBe("");
 });

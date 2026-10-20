@@ -36,6 +36,13 @@ try {
       "extensions: []",
       /cli command must await the held migration owner/,
     ],
+    ...["server", "worker", "cli"].map((command) => [
+      `${command} start budget removed`,
+      `cmds/${command}.ts`,
+      "startTimeout: 70_000,",
+      "",
+      new RegExp(`${command} command must outlast Core's 10 s start limit`),
+    ]),
   ]) {
     const source = readFileSync(target, "utf8");
     assert(source.includes(from));
@@ -46,7 +53,7 @@ try {
 
     const bad = spawnSync(process.execPath, ["maintain/proof-migration-owner.mjs"], {
       encoding: "utf8",
-      timeout: 60000,
+      timeout: 120000,
       env: {
         ...process.env,
         BOARD_PROOF_FAULT_FILE: target,
