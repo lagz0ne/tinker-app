@@ -8,7 +8,7 @@ const attribute = z.strictObject({
 });
 
 export const span = z.strictObject({
-  side: z.enum(["server", "browser", "ssr"]),
+  side: z.enum(["server", "browser", "ssr", "worker"]),
   traceId: z
     .string()
     .regex(/^[0-9a-f]{32}$/)
@@ -47,7 +47,7 @@ export const logRecord = z.strictObject({
   level: z.number().int().min(10).max(60),
   msg: z.string().max(2048),
   service: z.string().min(1).max(128),
-  side: z.enum(["server", "browser", "ssr"]),
+  side: z.enum(["server", "browser", "ssr", "worker"]),
   traceId: z
     .string()
     .regex(/^[0-9a-f]{32}$/)

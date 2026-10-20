@@ -6,7 +6,7 @@ import type { Telemetry } from "./records";
 
 export const telemetrySide = tag<Telemetry.Side>({
   label: "telemetry.side",
-  parse: z.enum(["server", "browser", "ssr"]),
+  parse: z.enum(["server", "browser", "ssr", "worker"]),
 });
 
 export const telemetryService = tag<string>({
