@@ -172,7 +172,7 @@ A `G1` line from the reviewer becomes a `question` row: gates belong to check.
 It asks the reviewer to recheck each open review finding.
 A finding that is still there comes back with the same `id`.
 A fixed one comes back as `{"id": "<its id>", "status": "fixed"}`.
-Answered review findings go in the prompt with their id, rule, and reason.
+Answered review findings go in the prompt with the same fields as open ones, plus the reason.
 A reworded repeat of an answered finding comes back with the same `id`.
 So it updates that row, which stays answered, and adds no new open row.
 `review-output` rows are never sent back, for recheck or as answered.

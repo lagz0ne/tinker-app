@@ -381,6 +381,10 @@ test("an answered finding is in the prompt, and a reworded repeat updates it", a
     JSON.stringify({
       id: row.id,
       rule: "C3",
+      severity: "important",
+      file: "src/a.ts",
+      line: 3,
+      summary: "a write opens its own session",
       reason: "the old profile write keeps its transaction",
     }),
   );

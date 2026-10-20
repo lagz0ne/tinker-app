@@ -175,7 +175,8 @@ async function askReviewer(app, { review, prompt, signal }) {
 
 /**
  * The reviewer's prompt: a plain title line, the skill, then this review's range, the open
- * findings to recheck, the answered findings, and the output it must print. The change itself
+ * findings to recheck, the answered findings with the same fields plus their reason, and the
+ * output it must print. The change itself
  * is in files, so the prompt stays small however large the change is.
  * @param {{ skill: string, ref: string, start: string, head: string | null,
  *   tree: { untracked: string[] | null }, open: object[], answered: object[] }} review - From
@@ -193,7 +194,17 @@ export function reviewPrompt({ skill, ref, start, head, tree, open, answered }) 
         "The writer answered these with a reason. Do not report them as new findings.",
         'If you find the same problem again, print it as a finding line with the same "id".',
         "",
-        ...answered.map((f) => JSON.stringify({ id: f.id, rule: f.rule, reason: f.reason })),
+        ...answered.map((f) =>
+          JSON.stringify({
+            id: f.id,
+            rule: f.rule,
+            severity: f.severity,
+            file: f.file,
+            line: f.line,
+            summary: f.summary,
+            reason: f.reason,
+          }),
+        ),
       ]
     : ["## Answered findings", "", "None."];
   const recheck = open.length
