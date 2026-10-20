@@ -40,3 +40,14 @@ export function headSha(app) {
 export function inHistory(app, older, newer) {
   return git(app, ["merge-base", "--is-ancestor", older, newer]) !== null;
 }
+
+/**
+ * The app folder as a path from the top of its repo, such as `apps/issue-board`, or `.` for
+ * the top itself. Outside git it is the folder as given.
+ * @param {string} app - From --app; why: tools print which folder they cover.
+ */
+export function appScope(app) {
+  const prefix = git(app, ["rev-parse", "--show-prefix"]);
+  if (prefix === null) return app;
+  return prefix.replace(/\/$/, "") || ".";
+}
