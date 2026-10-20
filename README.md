@@ -90,4 +90,5 @@ The real registry proof packs local Start and uses the existing Core/React relea
 Its HTTP server stays on loopback. Nothing is published.
 
 The original prose lint and CI workflows are not in this checkout.
-The lander runs mutations: 85 for the golden copied runtime, 75 for tooling.
+App pull requests run a changed-line mutation gate at floor 60. A weekly full
+app run is a report, not a merge gate. `packages/start` keeps floor 85.

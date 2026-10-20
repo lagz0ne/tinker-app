@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { test } from "node:test";
 
-import { shouldIgnore } from "./arid.mjs";
+import { shouldIgnore } from "../../apps/start-scaffold/scripts/mutation-arid.mjs";
 
 const app = createRequire(resolve("package.json"));
 const core = createRequire(app.resolve("@stryker-mutator/core"));
@@ -21,15 +21,20 @@ for (const [source, ignored] of [
   ['({ "status": "sent" })', false],
   ["const limit = 20", false],
   ["Math.log(value)", false],
+  ['span.attributes["http.response.status_code"] = response.status', true],
+  ['console.info("hello")', true],
+  ['span.setAttribute("mail.kind", state)', true],
   ['sender.error("must not vanish")', false],
 ]) {
   test(`arid selection: ${source}`, () => {
     const reasons = [];
+
     traverse(parse(source), {
       enter(path) {
         if (shouldIgnore(path)) reasons.push(shouldIgnore(path));
       },
     });
+
     assert.equal(reasons.length > 0, ignored);
   });
 }

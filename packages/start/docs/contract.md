@@ -183,8 +183,45 @@ Test through small scopes with typed bindings and native resource presets.
 Keep command and host contract tests. Run tests serially with
 VITEST_MAX_WORKERS=1 and VP_RUN_CONCURRENCY_LIMIT=1. Never skip or quarantine a
 test. A fault control must fail for its named cause. Run the app's listed gates,
-including check-plain --prove after changing its rules. The copied runtime's
-mutation floor stays 85; the lander runs mutation checks.
+including check-plain --prove after changing its rules.
+
+### App mutation diff gate
+
+App pull requests use `.github/workflows/mutation.yml` at floor **60**. The
+weekly full app run, also available through workflow_dispatch, is a report and
+never a pull-request merge gate. `packages/start` keeps floor **85**; Core does
+not change.
+
+Both apps ignore static mutants and keep the one-worker default. An instrumented
+baseline of 533 tests exceeded five minutes on one CPU, so its startup deadline
+is ten minutes; configured `timeoutMS` stays 15000. One shared arid-node ignorer suppresses log
+calls, span labels, attribute names, and timeout constants. These rules follow
+[Google's arid-node approach](https://testing.googleblog.com/2021/04/mutation-testing.html).
+They do not suppress attempt bounds, status values, or other business rules.
+
+Run this from the repo root after building the app:
+
+```bash
+node scripts/mutation/span-map.mjs apps/issue-board
+node scripts/mutation/diff.mjs --app apps/issue-board --base origin/next --head HEAD
+```
+
+The first command runs every app test once. A test-only Vite transform observes
+Core's public span export at scope creation; it preserves existing observers
+and logs. `reports/mutation/span-map.json` lists handles, reverse dependencies,
+tests, and gaps: operation/resource handles with no observed test span.
+
+The second command reads Git's changed lines, finds their handles, and follows
+reverse `.depends` edges to command main or scope. It mutates only those line
+ranges. Vitest selects the mapped test files; Stryker's per-test coverage then
+selects tests for each mutant. Native helpers and unobserved handles fall back
+to the map's complete test inventory, and the plan says when that happens.
+No missing span can silently remove a changed line from the gate. The script
+rejects a checkout whose changed source differs from the requested head.
+
+Both commands write their report under the app's `reports/mutation/`. CI uploads
+the map, gap list, diff plan, elapsed run time, and mutant results, even on failure.
+The serial checks in `start-gates.yml` stay unchanged.
 
 ## D1: app inputs and direct dependencies
 

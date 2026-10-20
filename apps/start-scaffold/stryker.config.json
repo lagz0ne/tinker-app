@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "testRunner": "vitest",
-  "plugins": ["@stryker-mutator/vitest-runner", "../../scripts/mutation/arid.mjs"],
+  "plugins": ["@stryker-mutator/vitest-runner", "./scripts/mutation-arid.mjs"],
   "mutate": [
     "tinker/**/*.ts",
     "tinker/**/*.tsx",
@@ -28,5 +28,6 @@
     "related": false
   },
   "ignoreStatic": true,
-  "ignorers": ["arid"]
+  "ignorers": ["arid"],
+  "dryRunTimeoutMinutes": 10
 }

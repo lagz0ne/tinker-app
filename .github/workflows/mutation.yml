@@ -34,9 +34,11 @@ jobs:
           npm install --global --prefix "$HOME/.local" pnpm@12.4.1
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
+      - name: Check mutation tooling style
+        run: pnpm exec vp check scripts/mutation
       - name: Check mutation gate contracts
         working-directory: apps/issue-board
-        run: node --test ../../scripts/mutation/*.test.mjs
+        run: node --test --test-concurrency=1 ../../scripts/mutation/*.test.mjs
       - name: Build app commands before tests
         run: pnpm --dir apps/${{ matrix.app }} run gate:commands
       - name: Map spans to tests
@@ -75,7 +77,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --dir apps/${{ matrix.app }} run gate:commands
       - name: Full app report at floor 60
-        run: pnpm --dir apps/${{ matrix.app }} exec stryker run --concurrency 4
+        run: pnpm --dir apps/${{ matrix.app }} exec stryker run
       - uses: actions/upload-artifact@v4
         if: always()
         with:

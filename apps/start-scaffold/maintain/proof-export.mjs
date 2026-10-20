@@ -58,6 +58,25 @@ try {
   assert.match(pkg.devDependencies["@tinker/start"], /^file:\.\/vendor\//);
   assert(!/workspace:|catalog:/.test(JSON.stringify(pkg)));
   run("npm", ["install", "--no-audit", "--no-fund"], app, { env });
+  run(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `
+    import { readFile } from "node:fs/promises";
+    import assert from "node:assert/strict";
+    const config = JSON.parse(await readFile("stryker.config.json", "utf8"));
+    const path = config.plugins.find((path) => path.endsWith("/mutation-arid.mjs"));
+    assert.equal(path, "./scripts/mutation-arid.mjs");
+    const { strykerPlugins } = await import(path);
+    assert.equal(strykerPlugins[0].name, "arid");
+    console.log("PASS standalone mutation ignorer: configured plugin loads without repo paths.");
+  `,
+    ],
+    app,
+    { env },
+  );
   run("npm", ["run", "test:proofs"], app, { env });
   run("npm", ["run", "check"], app, { env });
   console.log(
