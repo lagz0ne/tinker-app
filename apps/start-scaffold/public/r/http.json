@@ -5,7 +5,7 @@
   "title": "http",
   "description": "Copied http component. You own its files.",
   "dependencies": [
-    "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+    "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
     "zod@^4.0.0"
   ],
   "registryDependencies": [

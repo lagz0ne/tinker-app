@@ -1404,6 +1404,7 @@ test("a wait with no lease sleeps the wheel for nothing", async () => {
     extensions: [startRequests],
     tags: [requestBindings, bindings],
     clock,
+    startTimeout: 0, // Core's start timer would also sleep on this clock.
     presets: [...proofServices((): Scope.Handle => root), db],
   });
   await root.ready;
@@ -1435,6 +1436,7 @@ test("the wheel sleeps until a stream's heartbeat, not for zero time", async () 
     extensions: [startRequests],
     tags: [requestBindings, bindings],
     clock,
+    startTimeout: 0, // Core's start timer would also sleep on this clock.
     presets: [...proofServices((): Scope.Handle => root), db],
   });
   await root.ready;
@@ -1466,6 +1468,7 @@ test("a heartbeat takes its stream off the wheel, so the wheel sleeps no more", 
     extensions: [startRequests],
     tags: [requestBindings, bindings],
     clock,
+    startTimeout: 0, // Core's start timer would also sleep on this clock.
     presets: [...proofServices((): Scope.Handle => root), db],
   });
   await root.ready;

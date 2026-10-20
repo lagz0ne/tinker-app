@@ -62,6 +62,8 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
           },
         },
         extensions: [databaseSetup, mailStartup],
+        // Room for the 60 s max migration-owner wait, plus connect and DDL.
+        startTimeout: 70_000,
         tags: [
           env.DATABASE_MIGRATION_TIMEOUT_MS !== undefined &&
             databaseMigrationTimeout(Number(env.DATABASE_MIGRATION_TIMEOUT_MS)),

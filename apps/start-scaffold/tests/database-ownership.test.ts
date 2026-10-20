@@ -87,6 +87,7 @@ function migrationHarness(
   };
 
   const root = createScope({
+    startTimeout: 0, // Core's start timer would also sleep on this clock.
     clock: {
       ...clock,
       async sleep(ms, signal) {
