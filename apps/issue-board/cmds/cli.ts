@@ -34,6 +34,8 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
     const root = createScope({
       signal,
       extensions: [databaseSetup],
+      // Room for the 60 s max migration-owner wait, plus connect and DDL.
+      startTimeout: 70_000,
       observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
       tags: [
         env.DATABASE_MIGRATION_TIMEOUT_MS !== undefined &&

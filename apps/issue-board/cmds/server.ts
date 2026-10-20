@@ -70,6 +70,8 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
         signal: appStop,
         observe: tools.resolve(observer),
         extensions: [startRequests, authStartup, databaseSetup, mail.mailStartup, syncStartup],
+        // Room for the 60 s max migration-owner wait, plus connect and DDL.
+        startTimeout: 70_000,
         tags: [
           backendStop(appStop),
           syncSide("server"),

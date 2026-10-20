@@ -116,7 +116,7 @@
       "title": "Start entry helpers",
       "description": "Entry, close, panic, and observer hand-off code copied from the app.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "@tanstack/react-start@1.168.60",
         "@tanstack/react-router@1.170.41",
         "react@catalog:"
@@ -174,7 +174,7 @@
       "title": "auth",
       "description": "Copied auth component. You own its files.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "better-auth@1.7.7",
         "drizzle-orm@catalog:",
         "zod@catalog:"
@@ -239,7 +239,7 @@
       "title": "database",
       "description": "Copied database component. You own its files.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "drizzle-orm@catalog:",
         "pg@8.20.0",
         "zod@catalog:"
@@ -294,8 +294,8 @@
       "title": "demo",
       "description": "App-owned example business code in src/demo; components stay generic.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
-        "@tinker/react@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+        "@tinker/react@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz",
         "drizzle-orm@catalog:",
         "zod@catalog:"
       ],
@@ -404,7 +404,7 @@
       "title": "errors",
       "description": "Copied errors component. You own its files.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz"
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz"
       ],
       "registryDependencies": [],
       "files": [
@@ -435,7 +435,7 @@
       "title": "health",
       "description": "Copied health component. You own its files.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "@tanstack/react-router@1.170.41",
         "react@catalog:"
       ],
@@ -468,7 +468,7 @@
       "title": "http",
       "description": "Copied http component. You own its files.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "zod@catalog:"
       ],
       "registryDependencies": ["@tinker-start/errors", "@tinker-start/requests"],
@@ -510,7 +510,7 @@
       "title": "mail",
       "description": "Copied mail component. You own its files.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "nodemailer@10.0.13",
         "zod@catalog:"
       ],
@@ -589,7 +589,7 @@
       "title": "requests",
       "description": "Copied requests component. You own its files.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "@tanstack/react-start@1.168.60"
       ],
       "registryDependencies": ["@tinker-start/errors"],
@@ -666,7 +666,7 @@
       "title": "sync",
       "description": "Copied sync component. You own its files.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "@tanstack/react-start@1.168.60",
         "@tanstack/react-router@1.170.41",
         "drizzle-orm@catalog:",
@@ -780,7 +780,7 @@
       "title": "telemetry",
       "description": "Copied telemetry component. You own its files.",
       "dependencies": [
-        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "zod@catalog:"
       ],
       "registryDependencies": [

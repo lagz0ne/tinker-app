@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+Core and React move to 0.9.0, from the tinkered `start-v0.9.0` release:
+
+```json
+"@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz"
+```
+
+Change both URLs in your `package.json`, then run `pnpm install`.
+Start keeps its own version and URL.
+
+- An extension's `start` hook now has a time limit: 10 s by default.
+  The whole start chain counts: the database connect, the migration-owner
+  wait (`DATABASE_MIGRATION_TIMEOUT_MS`, default 5000, max 60000), and the
+  migrations. On timeout `ready` rejects with `StartTimeout`, naming the
+  extension, and the scope closes.
+- Every command root that runs `databaseSetup` now passes
+  `startTimeout: 70_000`: the 60 s max owner wait plus 10 s for connect
+  and DDL. In issue-board that is `cmds/server.ts`, `cmds/worker.ts` and
+  `cmds/cli.ts`; in the scaffold, `cmds/server.ts` and `cmds/worker.ts`.
+  An app with its own copies adds the same line to each such root.
+  `0` turns the timer off.
+- The timer sleeps on the scope's clock. A test that counts a test
+  clock's sleeps also sees one 10 000 ms sleep at start; pass
+  `startTimeout: 0` there (the copied sync and database-ownership tests do).
+- New, no edit needed: `event.tap(config)` in a `start` hook adds a
+  telemetry sink; `namespace({ observe: false })` keeps a tool's own
+  work untraced; faster runs, sessions, writes, and React server renders.
+  See the tinkered `start-v0.9.0` release notes for the numbers.
+
 - `mailMaxSenders` (`mail.maxSenders`, default 4) caps SMTP connections; extra sends wait without starting their send deadline.
 - An acknowledgement failure counts as a crash attempt; remaining claims keep their leases until expiry.
 - `MigrationBusy` exits 1; only migration-lock polling is bounded. DDL has no `lock_timeout`.
