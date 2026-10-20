@@ -3,7 +3,7 @@ import type { Observe } from "@tinker/core";
 
 import { logConsole } from "./console";
 import { queue } from "./queue";
-import { encodeValue } from "./records";
+import { encodeValue, spanBody } from "./records";
 import type { Telemetry } from "./records";
 import {
   logLevel,
@@ -70,47 +70,7 @@ export const observer = resource({
     history,
     level,
     export(span) {
-      const [startTimeUnixNano, endTimeUnixNano] = [span.start, span.end ?? span.start].map(
-        (time) => {
-          const millis = Math.trunc(time);
-          return millis === 0 ? "0" : `${millis}000000`;
-        },
-      );
-      const attributes = Object.entries(span.attributes)
-        .slice(0, 31)
-        .map(([key, value]) => ({
-          key: key.slice(0, 256),
-          value: { stringValue: encodeValue(value) },
-        }));
-      attributes.push({ key: "tinker.kind", value: { stringValue: span.kind } });
-      queue.add("trace", side, {
-        traceId: span.traceId,
-        spanId: span.spanId,
-        parentSpanId: span.parentSpanId,
-        flags: span.sampled ? 1 : 0,
-        name: span.name.slice(0, 256),
-        kind: 1,
-        startTimeUnixNano: startTimeUnixNano!,
-        endTimeUnixNano: endTimeUnixNano!,
-        attributes,
-        events: span.events.slice(0, 32).map((event) => {
-          const millis = Math.trunc(event.time);
-          return {
-            name: event.name.slice(0, 256),
-            timeUnixNano: millis === 0 ? "0" : `${millis}000000`,
-            attributes: Object.entries(event.attributes)
-              .slice(0, 31)
-              .map(([key, value]) => ({
-                key: key.slice(0, 256),
-                value: { stringValue: encodeValue(value) },
-              })),
-          };
-        }),
-        status:
-          span.status === "failed"
-            ? { code: 2, message: String(span.error).slice(0, 2048) }
-            : { code: 1 },
-      });
+      queue.add("trace", side, spanBody(span, false));
 
       const record: Telemetry.Log = {
         level: LEVELS.info,

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 
@@ -39,11 +40,21 @@ export function clientOutput(hints = true) {
   };
 }
 
-/** Keep Start's request code out of TanStack's large module context in server builds. */
-export function serverOutput() {
+/**
+ * Keep Start's request code out of TanStack's large module context in server builds.
+ * An app's `cmds/telemetry-worker.ts` becomes `dist/server/telemetry-worker.js`, next to
+ * `server.js`, so the server command finds it with `new URL(..., import.meta.url)`.
+ * @param {string} [root] - From tinker(); why: find the app's worker command.
+ */
+export function serverOutput(root) {
+  const worker = root === undefined ? null : join(root, "cmds/telemetry-worker.ts");
   return {
     name: "tinker:server-output",
     apply: "build",
+    buildStart() {
+      if (this.environment?.name !== "ssr" || !worker || !existsSync(worker)) return;
+      this.emitFile({ type: "chunk", id: worker, fileName: "telemetry-worker.js" });
+    },
     configEnvironment(name) {
       if (name !== "ssr") return;
       return {
