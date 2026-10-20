@@ -8,6 +8,7 @@ import { createScope, operation } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { consoleOutput } from "~/components/telemetry/console";
+import type { ConsoleOutput } from "~/components/telemetry/console";
 import { exportHealth } from "~/components/telemetry/health";
 import {
   logsUrl,
@@ -29,10 +30,11 @@ const built = new URL("../../dist/server/telemetry-worker.js", import.meta.url);
 async function storage(stuck = false) {
   const bodies: { url: string; body: string }[] = [];
   const server = createServer((request, response) => {
-    let body = "";
-    request.on("data", (chunk: Buffer) => (body += chunk.toString()));
+    // A body can arrive in several reads, cut inside a character: decode it once, whole.
+    const chunks: Buffer[] = [];
+    request.on("data", (chunk: Buffer) => chunks.push(chunk));
     request.on("end", () => {
-      bodies.push({ url: request.url ?? "", body });
+      bodies.push({ url: request.url ?? "", body: Buffer.concat(chunks).toString() });
       if (!stuck) response.writeHead(204).end();
     });
   });
@@ -49,8 +51,8 @@ async function storage(stuck = false) {
   };
 }
 
-/** The server command's request-side telemetry root, with the console mirror on a file. */
-function requestRoot(module: URL, origin: string, fd: number) {
+/** The server command's request-side telemetry root; a number puts the console mirror on that file. */
+function requestRoot(module: URL, origin: string, output: number | ConsoleOutput.Sink) {
   const tools = createScope({
     extensions: [threadExport],
     tags: [
@@ -59,7 +61,7 @@ function requestRoot(module: URL, origin: string, fd: number) {
       telemetryService("proof"),
       tracesUrl(new URL(`${origin}/traces`)),
       logsUrl(new URL(`${origin}/logs`)),
-      consoleOutput({ fd, write: () => undefined }),
+      consoleOutput(typeof output === "number" ? { fd: output, write: () => undefined } : output),
     ],
   });
   const health = { last: tools.resolve(exportHealth) };
@@ -169,6 +171,8 @@ test("a turn larger than the ring is dropped and counted, and later turns still 
     const app = createScope({ observe: tools.resolve(threadObserver) });
     for (let index = 0; index < 3500; index++) app.run(wide);
     await (await tools.resolve(telemetryThread)).flush();
+    // The worker saw nothing, so only the request side can report this drop.
+    expect(health.last).toEqual({ kind: "idle", pending: 0, dropped: 3500 });
     app.run(wide);
 
     expect((await app.close({ graceful: true })).status).toBe("success");
@@ -178,6 +182,33 @@ test("a turn larger than the ring is dropped and counted, and later turns still 
   } finally {
     closeSync(fd);
     rmSync(join(tmpdir(), `telemetry-full-${process.pid}.log`), { force: true });
+    sink.close();
+  }
+});
+
+test("a host sink with no descriptor still gets every console line", async () => {
+  expect(existsSync(built), "run `vp build` before this test").toBe(true);
+  const sink = await storage();
+  let text = "";
+
+  try {
+    const { tools, health } = requestRoot(built, sink.origin, {
+      write: (chunk: string) => void (text += chunk),
+    });
+    await tools.ready;
+
+    const app = createScope({ observe: tools.resolve(threadObserver) });
+    for (let index = 0; index < 100; index++) expect(app.run(saved)).toBe("saved");
+    await (await tools.resolve(telemetryThread)).flush();
+
+    expect((await app.close({ graceful: true })).status).toBe("success");
+    expect((await tools.close({ graceful: true })).status).toBe("success");
+    expect(health.last).toEqual({ kind: "idle", pending: 0, dropped: 0 });
+
+    const mirror = text.split("\n").filter(Boolean);
+    expect(mirror).toHaveLength(200);
+    expect(mirror.filter((line) => line.includes('"msg":"core.span"'))).toHaveLength(100);
+  } finally {
     sink.close();
   }
 });

@@ -30,11 +30,14 @@ export type ThreadSettings = {
   traces: string;
   logs: string;
   fd: number | null;
+  /** True when the host's sink has no descriptor: the worker posts its console text back. */
+  relay: boolean;
 };
 
-/** What the worker posts back: ready, a health report, a flush answer, or its final health. */
+/** What the worker posts back: ready, a health report, a flush answer, console text, or its final health. */
 export type ThreadMessage =
   | { ready: true }
+  | { console: string }
   | { health: Telemetry.Health }
   | { flushed: number }
   | { final: Telemetry.Health };
@@ -47,6 +50,8 @@ export type ThreadRing = {
   push(): void;
   stop(): void;
   dropped(): number;
+  /** Called after a turn is dropped, so the owner can publish the count at once. */
+  watch(listener: () => void): void;
 };
 
 /** What the telemetry root uses of the worker: its start, a flush, and its close. */
@@ -76,6 +81,7 @@ export const threadRing = resource({
     let scheduled = false;
     let dropped = 0;
     let open = true;
+    let dropping: (() => void) | undefined;
 
     const owned = {
       data,
@@ -100,12 +106,15 @@ export const threadRing = resource({
         if (!lines) return;
 
         const { read, written } = encoder.encodeInto(text, scratch);
+        // The indexes are Int32 and wrap after 2 GiB; the unsigned difference stays right.
         const at = Atomics.load(state, 0);
-        const unread = at - Atomics.load(state, 1);
+        const unread = (at - Atomics.load(state, 1)) >>> 0;
         const free = size - unread;
 
-        if (read < text.length || written > free) dropped += lines;
-        else {
+        if (read < text.length || written > free) {
+          dropped += lines;
+          dropping?.();
+        } else {
           const start = at & mask;
           const first = Math.min(written, size - start);
           data.set(scratch.subarray(0, first), start);
@@ -125,6 +134,9 @@ export const threadRing = resource({
         open = false;
       },
       dropped: () => dropped,
+      watch(listener: () => void) {
+        dropping = listener;
+      },
     };
     return owned;
   },
@@ -152,7 +164,14 @@ export const telemetryThread = resource({
     ctx,
   ): Promise<ThreadWorker> => {
     const fd = typeof console?.fd === "number" ? console.fd : null;
-    const settings: ThreadSettings = { service, traces: tracesUrl.href, logs: logsUrl.href, fd };
+    const relay = console !== null && fd === null;
+    const settings: ThreadSettings = {
+      service,
+      traces: tracesUrl.href,
+      logs: logsUrl.href,
+      fd,
+      relay,
+    };
     const worker = new threads.Worker(module, {
       name: "telemetry",
       // The worker inherits Node's flags, but a worker file rejects `--input-type` (from `node -e`).
@@ -166,6 +185,7 @@ export const telemetryThread = resource({
     let open = true;
     let publishing = true;
     let final: Telemetry.Health | undefined;
+    let last: Telemetry.Health = { kind: "idle", pending: 0, dropped: 0 };
     let closing: Promise<void> | undefined;
     const flushes = new Map<number, () => void>();
     let flushId = 0;
@@ -181,14 +201,19 @@ export const telemetryThread = resource({
           ready.resolve();
         } else if ("health" in message) {
           owned.publish(message.health);
+        } else if ("console" in message) {
+          console?.write(message.console);
         } else if ("flushed" in message) {
           flushes.get(message.flushed)?.();
           flushes.delete(message.flushed);
         } else final = message.final;
       },
       publish(next: Telemetry.Health) {
+        last = next;
         if (publishing) health.set({ ...next, dropped: next.dropped + ring.dropped() });
       },
+      /** A drop on the request side: the last report again, with the new count. */
+      republish: () => owned.publish(last),
       stopped(failure: string) {
         open = false;
         ring.stop();
@@ -240,6 +265,7 @@ export const telemetryThread = resource({
       },
     };
 
+    ring.watch(owned.republish);
     worker.on("message", (message: ThreadMessage) => owned.receive(message));
     worker.on("error", (error) => {
       ready.reject(error);

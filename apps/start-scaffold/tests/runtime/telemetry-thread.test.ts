@@ -135,3 +135,35 @@ test("a span through the wire line reaches storage and console as the same recor
     expect((await owner.close({ graceful: true })).status).toBe("success");
   }
 });
+
+test("ring indexes past the signed 32-bit wrap still count unread bytes", async () => {
+  const scope = createScope({});
+  const ring = scope.resolve(threadRing);
+  // 2 GiB of writes in: both indexes sit 100 bytes before the Int32 wrap.
+  const near = 2 ** 31 - 100;
+  ring.state[0] = near;
+  ring.state[1] = near;
+
+  const first = "ü".repeat(3 << 19);
+  ring.write(first);
+  ring.push();
+  const at = Atomics.load(ring.state, 0);
+  expect(at).toBeLessThan(0);
+  expect(ring.dropped()).toBe(0);
+
+  // Read the first turn as the worker does: from the read index, around the buffer's end.
+  const mask = ring.data.length - 1;
+  const bytes = new Uint8Array([
+    ...ring.data.subarray(near & mask),
+    ...ring.data.subarray(0, at & mask),
+  ]);
+  expect(new TextDecoder().decode(bytes)).toBe(`${first}\n`);
+
+  // 3 MiB stay unread, so a 2 MiB turn does not fit and must not overwrite them.
+  ring.write("y".repeat(2 << 20));
+  ring.push();
+  expect(ring.dropped()).toBe(1);
+  expect(Atomics.load(ring.state, 0)).toBe(at);
+
+  expect((await scope.close({ graceful: true })).status).toBe("success");
+});

@@ -5,8 +5,14 @@ import { parentPort, workerData } from "node:worker_threads";
 export declare namespace TelemetryWorker {
   type Health = { kind: string; pending: number; dropped: number };
   /** What the request side resolved and sent in `workerData`. */
-  type Settings = { service: string; traces: string; logs: string; fd: number | null };
-  /** The console mirror's sink: lines go straight to the descriptor. */
+  type Settings = {
+    service: string;
+    traces: string;
+    logs: string;
+    fd: number | null;
+    relay: boolean;
+  };
+  /** The console mirror's sink: the descriptor, or posts back when the host's sink has none. */
   type Output = { writableNeedDrain: boolean; write(text: string): void };
   /** What the command binds inline: the request side's settings and the descriptor sink. */
   type Input = { settings: Settings; console: Output | null };
@@ -26,7 +32,15 @@ type Shared = { data: Uint8Array; state: Int32Array; settings: TelemetryWorker.S
 /** The worker's inputs, as the request side sent them; the command binds them inline. */
 export function telemetryWorkerInput(): TelemetryWorker.Input {
   const { settings } = workerData as Shared;
-  if (settings.fd === null) return { settings, console: null };
+  if (settings.fd === null) {
+    if (!settings.relay) return { settings, console: null };
+    // A host sink with no descriptor writes on the request thread, as the in-process path did.
+    const port = parentPort!;
+    return {
+      settings,
+      console: { writableNeedDrain: false, write: (text) => port.postMessage({ console: text }) },
+    };
+  }
 
   const fd = settings.fd;
   const held: Buffer[] = [];
