@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { test } from "node:test";
@@ -75,6 +76,51 @@ test("map deduplicates test names and names unobserved handles as gaps", () => {
     assert(map.gaps.some((id) => id.endsWith("#transaction")));
 
     assert.equal(map.tests.length, 1);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("map CLI preserves vitest config timeout and mock settings", () => {
+  const directory = mkdtempSync(resolve(tmpdir(), "mutation-config-"));
+  try {
+    mkdirSync(resolve(directory, "tests"));
+    symlinkSync(resolve(app, "node_modules"), resolve(directory, "node_modules"), "dir");
+
+    writeFileSync(resolve(directory, "package.json"), '{"type":"module"}');
+    writeFileSync(resolve(directory, "tsconfig.json"), '{"include":["tests/**/*.ts"]}');
+    writeFileSync(
+      resolve(directory, "vite.config.ts"),
+      "export default {test:{testTimeout:1,clearMocks:true}}",
+    );
+
+    writeFileSync(
+      resolve(directory, "vitest.config.ts"),
+      "export default {test:{testTimeout:30000,clearMocks:false}}",
+    );
+    writeFileSync(
+      resolve(directory, "tests/config.test.ts"),
+      `import {test,expect,vi} from "vite-plus/test";
+      const called = vi.fn(); called();
+      test("keeps mock history", () => { expect(called).toHaveBeenCalledOnce(); });
+      test("keeps test timeout", async () => { await new Promise(resolve => setTimeout(resolve, 30)); });`,
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [resolve(import.meta.dirname, "span-map.mjs"), directory],
+      { cwd: app, encoding: "utf8" },
+    );
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+
+    const map = JSON.parse(
+      readFileSync(resolve(directory, "reports/mutation/span-map.json"), "utf8"),
+    );
+    assert.equal(map.tests.length, 2);
+    assert.deepEqual(
+      map.tests.map((test) => test.name),
+      ["keeps mock history", "keeps test timeout"],
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

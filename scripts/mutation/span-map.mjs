@@ -306,8 +306,9 @@ afterEach(() => { const state = expect.getState(); appendFileSync(${JSON.stringi
     config,
     `import { mergeConfig } from "vite-plus";
 import base from ${JSON.stringify("./" + relative(dirname(config), resolve(app, "vite.config")).replaceAll("\\", "/"))};
+import tests from ${JSON.stringify("./" + relative(dirname(config), resolve(app, "vitest.config.ts")).replaceAll("\\", "/"))};
 import { spanRecorder } from ${JSON.stringify(import.meta.url)};
-export default mergeConfig(base, { plugins: [spanRecorder(${JSON.stringify({ app, events })})], test: { setupFiles: [${JSON.stringify(setup)}], include: ["tests/**/*.test.{ts,tsx,mjs,js}"], maxWorkers: 1, fileParallelism: false } });\n`,
+export default mergeConfig(mergeConfig(base, tests), { plugins: [spanRecorder(${JSON.stringify({ app, events })})], test: { setupFiles: [${JSON.stringify(setup)}], include: ["tests/**/*.test.{ts,tsx,mjs,js}"], maxWorkers: 1, fileParallelism: false } });\n`,
   );
 
   const result = spawnSync(
