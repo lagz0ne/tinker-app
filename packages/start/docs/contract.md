@@ -223,6 +223,30 @@ Both commands write their report under the app's `reports/mutation/`. CI uploads
 the map, gap list, diff plan, elapsed run time, and mutant results, even on failure.
 The serial checks in `start-gates.yml` stay unchanged.
 
+The app matrix jobs run in parallel on separate GitHub runners; they share no
+services or writable files. One app failure does not cancel the other matrix
+job. Each job still uses one mutation worker and a
+180-minute total deadline. There is no whole-diff mutant cap or weekly fallback.
+Diff runs alone load `scripts/mutation/line-cap.mjs`: at most one eligible mutant
+per changed line. A SHA-256 ordering of relative file, changed line, location,
+operator, and replacement makes the choice repeatable, independent of candidate
+IDs or arrival order. Multiline nodes belong to their first changed line.
+Git lines are one-based and native plan positions are zero-based; the cap converts
+both bounds and respects an exclusive end at column zero. The public Stryker
+plan event marks other candidates Ignored before execution;
+`diff-line-cap.json` records the choices. A cap error suppresses execution and
+the diff script rejects a missing selection, error artifact, or report whose
+mutant IDs differ from the selection, since Stryker
+otherwise logs reporter errors and continues. Weekly full runs do not load this plugin.
+This follows the line sampling in
+[State of Mutation Testing at Google (2018)](https://research.google/pubs/state-of-mutation-testing-at-google/).
+
+No incremental CI cache is enabled. It can reuse unchanged mutant/test results
+on repeat pushes, but a base-SHA key alone does not cover changes in imported
+helpers, dependencies, or tooling. Stryker does not detect all those changes,
+and its coverage baseline still runs. Safe reuse needs broader cache invalidation;
+it does not remove the cost of a first large diff.
+
 ## D1: app inputs and direct dependencies
 
 Sync keeps one required tag per app reader, records descriptor, or operation.

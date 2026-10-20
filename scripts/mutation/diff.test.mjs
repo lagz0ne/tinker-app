@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -121,6 +129,107 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
 
     assert.deepEqual(plan.mutate, ["tinker/value.ts:1-1"]);
     assert.deepEqual(plan.testFiles, ["tests/value.test.ts"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI rejects missing or mismatched cap results, clears stale files, and records exit codes", () => {
+  const root = mkdtempSync(join(tmpdir(), "diff-cap-cli-"));
+  const app = join(root, "apps/example");
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "Duke Dao",
+    GIT_COMMITTER_NAME: "Duke Dao",
+    GIT_AUTHOR_EMAIL: "15101444+lagz0ne@users.noreply.github.com",
+    GIT_COMMITTER_EMAIL: "15101444+lagz0ne@users.noreply.github.com",
+  };
+  const git = (...args) => {
+    const result = spawnSync("git", args, { cwd: root, encoding: "utf8", env });
+
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+
+  try {
+    mkdirSync(join(app, "tinker"), { recursive: true });
+    mkdirSync(join(root, "scripts/mutation"), { recursive: true });
+    mkdirSync(join(app, "node_modules/@stryker-mutator/core/bin"), { recursive: true });
+    copyFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "diff.mjs"),
+      join(root, "scripts/mutation/diff.mjs"),
+    );
+    writeFileSync(join(app, "package.json"), "{}");
+    writeFileSync(join(app, "node_modules/@stryker-mutator/core/package.json"), "{}");
+    // Fault at the native process boundary: exit zero without running the cap.
+    writeFileSync(
+      join(app, "node_modules/@stryker-mutator/core/bin/stryker.js"),
+      "process.exitCode = 0;\n",
+    );
+    writeFileSync(
+      join(app, "stryker.config.json"),
+      JSON.stringify({ mutate: ["tinker/**/*.ts"], plugins: [], reporters: [] }),
+    );
+    writeFileSync(join(app, "tinker/value.ts"), "export const value = 1;\n");
+    git("init", "--quiet");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Initial gate fixture");
+    const base = git("rev-parse", "HEAD");
+
+    writeFileSync(join(app, "tinker/value.ts"), "export const value = 2;\n");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Change gate fixture");
+    const directory = join(app, "reports/mutation");
+
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      join(directory, "span-map.json"),
+      JSON.stringify({
+        nodes: [],
+        gaps: [],
+        tests: [{ file: "tests/value.test.ts", name: "value" }],
+      }),
+    );
+    writeFileSync(join(directory, "diff-line-cap.json"), "[]");
+    const run = () =>
+      spawnSync(
+        process.execPath,
+        [join(root, "scripts/mutation/diff.mjs"), "--app", app, "--base", base, "--head", "HEAD"],
+        { cwd: root, encoding: "utf8" },
+      );
+
+    const result = run();
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /refusing an uncapped result/);
+    assert.equal(existsSync(join(directory, "diff-line-cap.json")), false);
+    const summary = JSON.parse(readFileSync(join(directory, "diff-run.json")));
+
+    assert.equal(summary.childExitCode, 0);
+    assert.equal(summary.exitCode, 1);
+
+    writeFileSync(
+      join(app, "node_modules/@stryker-mutator/core/bin/stryker.js"),
+      `
+      const {writeFileSync} = require("node:fs");
+      writeFileSync("reports/mutation/diff-line-cap.json", JSON.stringify([{line:"tinker/value.ts:1",id:"0"}]));
+      writeFileSync("reports/mutation/diff.json", JSON.stringify({files:{"tinker/value.ts":{mutants:[{id:"0",status:"Killed"},{id:"1",status:"Ignored"}]}}}));
+    `,
+    );
+    assert.equal(run().status, 0, "a real matching selection/report pair is accepted");
+
+    writeFileSync(
+      join(app, "node_modules/@stryker-mutator/core/bin/stryker.js"),
+      `
+      const {writeFileSync} = require("node:fs");
+      writeFileSync("reports/mutation/diff-line-cap.json", JSON.stringify([{line:"tinker/value.ts:1",id:"0"}]));
+      writeFileSync("reports/mutation/diff.json", JSON.stringify({files:{"tinker/value.ts":{mutants:[{id:"99",status:"Killed"}]}}}));
+    `,
+    );
+    const mismatched = run();
+
+    assert.equal(mismatched.status, 1);
+    assert.match(mismatched.stderr, /refusing an uncapped result/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

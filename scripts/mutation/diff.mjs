@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -201,6 +201,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     // config importing the checkout by absolute path would test unmutated code.
     config.testFiles = plan.testFiles;
 
+    // Only diff runs load this reporter; weekly full runs keep every candidate.
+    config.plugins.push("../../scripts/mutation/line-cap.mjs");
+    config.reporters.push("diff-line-cap");
+
     config.jsonReporter = { fileName: "reports/mutation/diff.json" };
 
     const path = resolve(directory, "diff.stryker.json");
@@ -214,6 +218,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       "bin/stryker.js",
     );
 
+    for (const name of ["diff-line-cap.json", "diff-line-cap-error.json", "diff.json"]) {
+      const previous = resolve(directory, name);
+
+      if (existsSync(previous)) unlinkSync(previous);
+    }
+
     const started = Date.now();
 
     const result = spawnSync(
@@ -226,15 +236,47 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       },
     );
 
+    const hasCap =
+      existsSync(resolve(directory, "diff-line-cap.json")) &&
+      !existsSync(resolve(directory, "diff-line-cap-error.json"));
+    const selected = hasCap
+      ? JSON.parse(readFileSync(resolve(directory, "diff-line-cap.json"), "utf8"))
+      : [];
+    const expected = new Set(selected.map(({ line, id }) => `${line.replace(/:\d+$/, "")}:${id}`));
+    const hasReport = existsSync(resolve(directory, "diff.json"));
+    const actual = hasReport
+      ? Object.entries(
+          JSON.parse(readFileSync(resolve(directory, "diff.json"), "utf8")).files,
+        ).flatMap(([file, { mutants }]) =>
+          mutants
+            .filter((mutant) => mutant.status !== "Ignored")
+            .map((mutant) => `${file}:${mutant.id}`),
+        )
+      : [];
+    const capValid =
+      hasCap &&
+      hasReport &&
+      expected.size === selected.length &&
+      new Set(selected.map(({ line }) => line)).size === selected.length &&
+      actual.length === expected.size &&
+      new Set(actual).size === actual.length &&
+      actual.every((id) => expected.has(id));
+
     const summary = {
       elapsedMs: Date.now() - started,
-      exitCode: result.status,
+      exitCode: capValid ? (result.status ?? 1) : 1,
+      childExitCode: result.status,
+      capValid,
       base: plan.base,
       head: plan.head,
     };
 
     writeFileSync(resolve(directory, "diff-run.json"), JSON.stringify(summary, null, 2) + "\n");
 
-    process.exitCode = result.status ?? 1;
+    process.exitCode = summary.exitCode;
+
+    if (!capValid) {
+      console.error("Diff line cap did not finish; refusing an uncapped result.");
+    }
   } else if (!plan.mutate.length) console.log("No app mutation lines changed.");
 }
