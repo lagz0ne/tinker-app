@@ -224,7 +224,8 @@ Git's changed lines, finds their handles, and follows
 reverse `.depends` edges to command main or scope. It mutates only those line
 ranges. Test-only edits add their covered source spans; an unobserved or deleted
 test falls back to all mutable source nodes. Removed-only hunks select the
-surviving lines on both sides, clamped at the file ends. Vitest selects the mapped test files; Stryker's per-test coverage then
+surviving lines on both sides, clamped at the file ends. A whole-file deletion
+falls back to surviving mutable handles, and fails if none are mapped. Vitest selects the mapped test files; Stryker's per-test coverage then
 selects tests for each mutant. Native helpers and unobserved handles fall back
 to the map's complete test inventory, and the plan says when that happens.
 No missing span can silently remove a changed line from the gate. The script

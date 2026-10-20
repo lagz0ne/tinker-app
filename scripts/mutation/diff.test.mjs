@@ -208,6 +208,26 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
       "deleted tests cannot be silently dropped from the gate",
     );
     assert.deepEqual(removedTest.mutate, ["tinker/value.ts:1-1"]);
+
+    writeFileSync(join(app, "tinker/remaining.ts"), "export const remaining = true;\n");
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Add surviving source fixture");
+    const deletedSourceBase = git("rev-parse", "HEAD");
+    rmSync(join(app, "tinker/value.ts"));
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Delete a whole source file");
+    const deletedSource = planDiff({
+      app,
+      base: deletedSourceBase,
+      head: "HEAD",
+      map: {
+        nodes: [{ ...covered, file: "tinker/remaining.ts", tests: [] }],
+        gaps: [],
+        tests: [{ file: "tests/other.test.ts", name: "other" }],
+      },
+    });
+    assert.deepEqual(deletedSource.deletedSources, ["tinker/value.ts"]);
+    assert.deepEqual(deletedSource.mutate, ["tinker/remaining.ts:1-1"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

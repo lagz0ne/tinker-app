@@ -155,6 +155,9 @@ export function planDiff({ app, base, head, map }) {
       (pattern) => pattern.startsWith("!") && matchesGlob(file, pattern.slice(1)),
     );
   const paths = changedFiles.filter((file) => canMutate(file) && existsSync(resolve(app, file)));
+  const deletedSources = changedFiles.filter(
+    (file) => canMutate(file) && !existsSync(resolve(app, file)),
+  );
   const changedTests = changedFiles.filter((file) => /^tests\/.*\.(?:[cm]?[jt]sx?)$/.test(file));
   const observedTests = new Set(
     map.nodes.flatMap((node) => node.tests ?? []).map((test) => test.file),
@@ -162,14 +165,15 @@ export function planDiff({ app, base, head, map }) {
   const testFallback = changedTests.some((file) => !observedTests.has(file));
   const testedNodes = map.nodes.filter(
     (node) =>
-      changedTests.length > 0 &&
       canMutate(node.file) &&
-      (testFallback || node.tests?.some((test) => changedTests.includes(test.file))),
+      (deletedSources.length > 0 ||
+        (changedTests.length > 0 &&
+          (testFallback || node.tests?.some((test) => changedTests.includes(test.file))))),
   );
 
-  if (changedTests.length && !testedNodes.length) {
+  if (changedTests.length + deletedSources.length > 0 && !testedNodes.length) {
     throw new Error(
-      "Changed tests have no source spans; collect a complete span map before mutation.",
+      "Changed tests or deleted sources have no surviving source spans; collect a complete span map before mutation.",
     );
   }
 
@@ -220,6 +224,7 @@ export function planDiff({ app, base, head, map }) {
     base: mergeBase,
     requestedBase: base,
     changedTests,
+    deletedSources,
     testFallback,
     head,
     ...budget,
