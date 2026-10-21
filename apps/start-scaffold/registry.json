@@ -35,6 +35,11 @@
           "target": "~/cmds/router.ts"
         },
         {
+          "path": "../start-min/cmds/telemetry-worker.ts",
+          "type": "registry:file",
+          "target": "~/cmds/telemetry-worker.ts"
+        },
+        {
           "path": "../start-min/src/backend/greet.ts",
           "type": "registry:file",
           "target": "~/src/backend/greet.ts"
@@ -162,6 +167,11 @@
           "path": "tinker/base/start-entry.ts",
           "type": "registry:file",
           "target": "~/tinker/base/start-entry.ts"
+        },
+        {
+          "path": "tinker/base/telemetry-worker.ts",
+          "type": "registry:file",
+          "target": "~/tinker/base/telemetry-worker.ts"
         }
       ],
       "meta": {
@@ -805,6 +815,11 @@
           "target": "~/tinker/components/telemetry/delivery.ts"
         },
         {
+          "path": "tinker/components/telemetry/drain.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/drain.server.ts"
+        },
+        {
           "path": "tinker/components/telemetry/health.ts",
           "type": "registry:file",
           "target": "~/tinker/components/telemetry/health.ts"
@@ -823,6 +838,11 @@
           "path": "tinker/components/telemetry/ingest.server.ts",
           "type": "registry:file",
           "target": "~/tinker/components/telemetry/ingest.server.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/modules.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/modules.server.ts"
         },
         {
           "path": "tinker/components/telemetry/observer.ts",
@@ -848,6 +868,11 @@
           "path": "tinker/components/telemetry/settings.ts",
           "type": "registry:file",
           "target": "~/tinker/components/telemetry/settings.ts"
+        },
+        {
+          "path": "tinker/components/telemetry/thread.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/telemetry/thread.server.ts"
         }
       ],
       "meta": {

@@ -10,7 +10,8 @@
     "low": 85,
     "break": 85
   },
-  "tempDirName": ".stryker-tmp",
+  "tempDirName": "../../.stryker-tmp",
+  "disableTypeChecks": false,
   "concurrency": 1,
   "timeoutMS": 15000,
   "vitest": {

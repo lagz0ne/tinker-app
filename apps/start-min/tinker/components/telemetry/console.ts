@@ -1,7 +1,8 @@
 import { tag } from "@tinker/core";
 
 export declare namespace ConsoleOutput {
-  type Sink = { writableNeedDrain?: boolean; write(text: string): unknown };
+  /** `fd` lets a telemetry worker write the same lines straight to the descriptor. */
+  type Sink = { writableNeedDrain?: boolean; fd?: number; write(text: string): unknown };
   type Methods = {
     error(value: unknown): void;
     warn(value: unknown): void;

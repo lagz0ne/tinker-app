@@ -1,6 +1,6 @@
 # Current Start authoring contract
 
-This is the contract for the current source, released as Start 0.10.0.
+This is the contract for the current source, released as Start 0.11.0.
 Each released change set stays in [UPGRADE.md](../UPGRADE.md#0100).
 The golden copied source is `apps/start-scaffold/tinker/`; the small app shares
 its base and selected components. Core and React stay at 0.9.0. Do not patch Core.
@@ -103,6 +103,7 @@ defineMain. The host calls it once with this complete context:
 export type MainContext = {
   env: Readonly<Record<string, string | undefined>>;
   args: readonly string[];
+  cwd: string;
   signal: AbortSignal;
   stdout: { write(chunk: string): unknown };
   stderr: { write(chunk: string): unknown };
@@ -112,20 +113,25 @@ export type MainContext = {
 
 Main returns a closed promise; a server also returns fetch. Importing a command
 starts nothing. Commands read no process globals and load no env file. The host
-owns those inputs. Follow the actual [small server](https://github.com/lagz0ne/tinker-app/blob/start-v0.10.0/apps/start-min/cmds/server.ts)
-or [board commands](https://github.com/lagz0ne/tinker-app/blob/start-v0.10.0/apps/issue-board/cmds) for complete wiring.
+owns those inputs, including cwd, the folder the process runs in. Follow the actual [small server](https://github.com/lagz0ne/tinker-app/blob/start-v0.11.0/apps/start-min/cmds/server.ts)
+or [board commands](https://github.com/lagz0ne/tinker-app/blob/start-v0.11.0/apps/issue-board/cmds) for complete wiring.
 
 Only the command chooses its error code: operations return results or raise
 errors. An outer catch calls exit(code, error), then returns a stopped result.
 It does not rethrow or print that error again. Internal catches may rethrow to
 join cleanup. Close the app before telemetry; use checkClosed for root results.
 
-Exit is a clean stop. The host keeps the first code, aborts signal, joins closed,
-flushes stdout/stderr, and sets process.exitCode. It never calls process.exit.
-It prints a saved failure immediately and each distinct late failure once.
-A grace deadline of 10 seconds is the only hard stop. SIGINT is 130; SIGTERM is
-143, even if a later error asks for 1. Other codes are 0 success, 1 unexpected
-error, 64 bad args, 65 bad data, 75 temporary failure, and 78 bad startup config.
+Exit is a clean stop. The host keeps the first code, aborts signal, joins
+closed, flushes stdout/stderr, and sets process.exitCode. It never calls
+process.exit. It prints a saved failure immediately and each distinct late
+failure once. Output that goes away, a closed pipe or terminal, does not change
+the code. After a stop, the host waits a grace deadline of 10 seconds, then
+kills its own process. A command that owns child processes ends them inside that
+grace; the host's kill is the last resort and does not reach them. SIGHUP is
+129, SIGINT is 130, and SIGTERM is 143, even if a later error asks for 1. Other
+codes are 0 success, 1 unexpected error, 64 bad args, 65 bad data, 75 temporary
+failure, and 78 bad startup config. A command may give 2 one documented meaning
+of its own, as grep and diff shape their codes; it says so in its usage.
 
 Vite names serverEntry, routerEntry, and startEntry. Apps with a worker or CLI
 also name workerEntry and cliEntry and provide matching vite.worker.config.ts
@@ -168,7 +174,7 @@ They are migration work, not examples of the new session transaction. Auth's
 pool hooks stay outside that session transaction. Auth callbacks await a separate
 committed enqueue in the shared mail outbox; board enqueue stays in its write
 transaction. Workers claim batches before SMTP and acknowledge by lease token.
-See [the migration list](https://github.com/lagz0ne/tinker-app/blob/start-v0.10.0/apps/issue-board/maintain/REFACTOR.md).
+See [the migration list](https://github.com/lagz0ne/tinker-app/blob/start-v0.11.0/apps/issue-board/maintain/REFACTOR.md).
 
 ## HTTP and tests
 

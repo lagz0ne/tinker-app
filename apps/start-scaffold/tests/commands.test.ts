@@ -15,6 +15,7 @@ for (const [args, expected] of [
     const app = await serverMain({
       env: {},
       args,
+      cwd: import.meta.dirname,
       signal: stop.signal,
       stdout: { write() {} },
       stderr: {

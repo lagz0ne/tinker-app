@@ -54,6 +54,7 @@ for (const [args, code] of [
     const worker = await main({
       env: {},
       args,
+      cwd: import.meta.dirname,
       signal: new AbortController().signal,
       stdout: { write() {} },
       stderr: { write() {} },

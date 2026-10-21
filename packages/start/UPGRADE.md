@@ -2,15 +2,47 @@
 
 ## Unreleased
 
+These changes are in current source, not the released 0.11.0 tarball.
+
+- `MainContext` gets `cwd`, the folder the process runs in. The host fills it:
+  `runMain` and `tinker serve` read the process folder, and `createMainHost`
+  takes a `cwd` option that defaults to it. Commands read `cwd` from the
+  context, not `process.cwd()`. Copy the new `tinker/base/main.ts`. A test that
+  builds a context by hand adds `cwd`, such as `cwd: import.meta.dirname`.
+- `runMain` and `tinker serve` stop on SIGHUP with exit 129, as they stop on
+  SIGINT (130) and SIGTERM (143).
+- Output that goes away no longer fails the run: a reader that closes the
+  pipe early, such as `head` (EPIPE), or a closed terminal (EIO on a terminal
+  stream). `runMain` and `tinker serve` ignore those on stdout and stderr, and
+  the command's exit code stands, such as 129 after a hangup. EIO on a file or
+  a pipe is a real write error, and still fails the run.
+- The contract adds two rules. A command that owns child processes ends them
+  inside the 10-second grace. A command may give exit 2 one documented meaning.
+
+## 0.11.0
+
+Start 0.11.0 is released from `lagz0ne/tinker-app`, tag `start-v0.11.0`.
+The tag holds the Start tarball only.
 Core and React move to 0.9.0, from the tinkered `start-v0.9.0` release:
 
 ```json
 "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
-"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz"
+"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz",
+"@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.11.0/tinker-start-0.11.0.tgz"
 ```
 
-Change both URLs in your `package.json`, then run `pnpm install`.
-Start keeps its own version and URL.
+Change the three URLs in your `package.json`, then run `pnpm install`.
+The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.11.0.
+
+- Server telemetry leaves the request thread (ADR `docs/decisions/telemetry-worker.md`,
+  option B). The request thread writes span and log records to a shared ring;
+  `cmds/telemetry-worker.ts` drains it on its own worker thread and exports.
+  On start-min, telemetry costs 43 µs per SSR request instead of 127 µs, and
+  the sink got 30,002 of 30,002 spans at 10,000 requests under load.
+  Apps with their own `cmds/server.ts` take the new `cmds/telemetry-worker.ts`
+  and the server wiring from the `app` registry item.
 
 - An extension's `start` hook now has a time limit: 10 s by default.
   The whole start chain counts: the database connect, the migration-owner

@@ -78,6 +78,7 @@ Tests and generated files do not count.
   - Callers:
     - `cmds/server.ts#closed.closeRoots`
     - `cmds/server.ts#module.callback1`
+    - `cmds/telemetry-worker.ts#module`
     - `cmds/worker.ts#module.callback1`
 
 - **tinker/components/errors/errors.ts#raise**
@@ -146,5 +147,14 @@ Tests and generated files do not count.
 - **tinker/components/telemetry/records.ts#encodeValue**
   - `value`: `unknown`. From a span or log attribute; why: bound and safely encode its wire value.
   - Callers:
-    - `tinker/components/telemetry/observer.ts#export`
+    - `tinker/components/telemetry/drain.server.ts#owned.log`
     - `tinker/components/telemetry/observer.ts#log`
+    - `tinker/components/telemetry/records.ts#spanBody`
+    - `tinker/components/telemetry/thread.server.ts#owned.encodeAll`
+
+- **tinker/components/telemetry/records.ts#spanBody**
+  - `span`: `Telemetry.SpanFields`. From Core's export callback or a worker line; why: the fields to shape.
+  - `encoded`: `boolean`. From a worker line's flag; why: its values are already `encodeValue` output.
+  - Callers:
+    - `tinker/components/telemetry/drain.server.ts#owned.span`
+    - `tinker/components/telemetry/observer.ts#export`

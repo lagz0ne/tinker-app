@@ -147,6 +147,6 @@ export function tinker(options = {}) {
     react(),
     tailwind(root),
     clientOutput(options.compileHints ?? true),
-    serverOutput(),
+    serverOutput(root),
   ];
 }
