@@ -397,11 +397,14 @@ test("doctor checks each package.json bin: the file exists, files lists it, and 
       "bin/hello.mjs": binFile("../dist-cli/cli.js"),
     }),
     folder: cliApp({
-      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["./bin/"] }),
+      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["./bin/", "dist-cli/"] }),
       "bin/hello.mjs": binFile("../dist-cli/cli.js"),
     }),
     exact: cliApp({
-      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["bin/hello.mjs"] }),
+      "package.json": pkg({
+        bin: { hello: "./bin/hello.mjs" },
+        files: ["bin/hello.mjs", "dist-cli/cli.js"],
+      }),
       "bin/hello.mjs": binFile("../dist-cli/cli.js"),
     }),
     noOutDir: cliApp({
@@ -412,12 +415,16 @@ test("doctor checks each package.json bin: the file exists, files lists it, and 
     missing: cliApp({
       "package.json": pkg({ name: "hello", bin: "./bin/hello.mjs", files: ["bin"] }),
     }),
+    unlistedEntry: cliApp({
+      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["bin"] }),
+      "bin/hello.mjs": binFile("../dist-cli/cli.js"),
+    }),
     unlisted: cliApp({
       "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["dist-cli"] }),
       "bin/hello.mjs": binFile("../dist-cli/cli.js"),
     }),
     hardCoded: cliApp({
-      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["bin/*.mjs"] }),
+      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["bin/*.mjs", "build-cli"] }),
       "vite.cli.config.ts": buildCli,
       "bin/hello.mjs": binFile("../dist-cli/cli.js"),
     }),
@@ -442,6 +449,9 @@ test("doctor checks each package.json bin: the file exists, files lists it, and 
   ]);
   expect(checked.unlisted.lines).toEqual([
     "package.json: files does not list bin/hello.mjs, so a pack leaves out bin hello",
+  ]);
+  expect(checked.unlistedEntry.lines).toEqual([
+    "package.json: files does not list dist-cli/cli.js, so a pack leaves out the CLI bin hello imports",
   ]);
   expect(checked.hardCoded.lines).toEqual([
     "bin/hello.mjs:1 does not import ../build-cli/cli.js, the built CLI entry; import main from it",

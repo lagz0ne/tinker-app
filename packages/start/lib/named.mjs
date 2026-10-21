@@ -129,16 +129,20 @@ export function binProblems(root) {
   const pkg = existsSync(path) ? readJson(path) : {};
   const bins = typeof pkg.bin === "string" ? { [pkg.name]: pkg.bin } : (pkg.bin ?? {});
   const cli = commandFiles(root).find((entry) => entry.role === "cli");
+
+  /** @param {string} kept - From a bin; why: a file the pack must keep. No `files` keeps all. */
+  const packed = (kept) =>
+    !pkg.files ||
+    pkg.files.some((entry) => {
+      const pattern = normalize(entry).replace(/\/$/, "");
+      return kept.startsWith(`${pattern}/`) || matchesGlob(kept, pattern);
+    });
   return Object.entries(bins).flatMap(([name, named]) => {
     const file = normalize(named);
     if (!existsSync(join(root, file))) {
       return [`${file}:1 is missing; package.json bin ${name} names it`];
     }
-    const listed = (entry) => {
-      const pattern = normalize(entry).replace(/\/$/, "");
-      return file.startsWith(`${pattern}/`) || matchesGlob(file, pattern);
-    };
-    if (pkg.files && !pkg.files.some(listed)) {
+    if (!packed(file)) {
       return [`package.json: files does not list ${file}, so a pack leaves out bin ${name}`];
     }
 
@@ -146,7 +150,14 @@ export function binProblems(root) {
       return [`package.json: bin ${name} runs a built CLI; name cliEntry in tinker()`];
     }
     if (!cli.output) return [];
-    const built = resolve(root, cli.output);
+    const output = normalize(cli.output);
+    if (!packed(output)) {
+      return [
+        `package.json: files does not list ${output}, so a pack leaves out the CLI bin ${name} imports`,
+      ];
+    }
+
+    const built = resolve(root, output);
     const names = specifiers(parseSource(join(root, file))).map(({ name: spec }) => spec);
     if (names.some((spec) => resolve(root, dirname(file), spec) === built)) return [];
     const entry = relative(dirname(join(root, file)), built);

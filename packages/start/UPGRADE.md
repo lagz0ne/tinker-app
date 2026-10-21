@@ -47,8 +47,8 @@ These changes are in current source, not the released 0.11.0 tarball.
 
   Its `vp build` keeps `@tinker/start` and `@tinker/core` as imports, so
   `dist-cli` holds no copy of them. Doctor checks each bin: the file exists,
-  `files` lists it, and it imports the built CLI entry, which is the
-  `build.outDir` in `vite.cli.config.ts` plus the entry's name.
+  it imports the built CLI entry, which is the `build.outDir` in
+  `vite.cli.config.ts` plus the entry's name, and `files` lists both.
 
 ## 0.11.0
 
