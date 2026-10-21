@@ -2,17 +2,46 @@
 
 ## Unreleased
 
-These changes are in current source, not the released 0.10.0 tarball.
+These changes are in current source, not the released 0.11.0 tarball.
 
+- `MainContext` gets `cwd`, the folder the process runs in. The host fills it:
+  `runMain` and `tinker serve` read the process folder, and `createMainHost`
+  takes a `cwd` option that defaults to it. Commands read `cwd` from the
+  context, not `process.cwd()`. Copy the new `tinker/base/main.ts`. A test that
+  builds a context by hand adds `cwd`, such as `cwd: import.meta.dirname`.
+- `runMain` and `tinker serve` stop on SIGHUP with exit 129, as they stop on
+  SIGINT (130) and SIGTERM (143).
+- Output that goes away no longer fails the run: a reader that closes stdout
+  early, such as `head` (EPIPE), or a closed terminal (EIO). `runMain` ignores
+  EPIPE and EIO on stdout and stderr, and the command's exit code stands, such
+  as 129 after a hangup.
+- The contract adds two rules. A command that owns child processes ends them
+  inside the 10-second grace. A command may give exit 2 one documented meaning.
+
+## 0.11.0
+
+Start 0.11.0 is released from `lagz0ne/tinker-app`, tag `start-v0.11.0`.
+The tag holds the Start tarball only.
 Core and React move to 0.9.0, from the tinkered `start-v0.9.0` release:
 
 ```json
 "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
-"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz"
+"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz",
+"@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.11.0/tinker-start-0.11.0.tgz"
 ```
 
-Change both URLs in your `package.json`, then run `pnpm install`.
-Start keeps its own version and URL.
+Change the three URLs in your `package.json`, then run `pnpm install`.
+The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.11.0.
+
+- Server telemetry leaves the request thread (ADR `docs/decisions/telemetry-worker.md`,
+  option B). The request thread writes span and log records to a shared ring;
+  `cmds/telemetry-worker.ts` drains it on its own worker thread and exports.
+  On start-min, telemetry costs 43 µs per SSR request instead of 127 µs, and
+  the sink got 30,002 of 30,002 spans at 10,000 requests under load.
+  Apps with their own `cmds/server.ts` take the new `cmds/telemetry-worker.ts`
+  and the server wiring from the `app` registry item.
 
 - An extension's `start` hook now has a time limit: 10 s by default.
   The whole start chain counts: the database connect, the migration-owner
@@ -32,20 +61,6 @@ Start keeps its own version and URL.
   telemetry sink; `namespace({ observe: false })` keeps a tool's own
   work untraced; faster runs, sessions, writes, and React server renders.
   See the tinkered `start-v0.9.0` release notes for the numbers.
-
-- `MainContext` gets `cwd`, the folder the process runs in. The host fills it:
-  `runMain` and `tinker serve` read the process folder, and `createMainHost`
-  takes a `cwd` option that defaults to it. Commands read `cwd` from the
-  context, not `process.cwd()`. Copy the new `tinker/base/main.ts`. A test that
-  builds a context by hand adds `cwd`, such as `cwd: import.meta.dirname`.
-- `runMain` and `tinker serve` stop on SIGHUP with exit 129, as they stop on
-  SIGINT (130) and SIGTERM (143).
-- Output that goes away no longer fails the run: a reader that closes stdout
-  early, such as `head` (EPIPE), or a closed terminal (EIO). `runMain` ignores
-  EPIPE and EIO on stdout and stderr, and the command's exit code stands, such
-  as 129 after a hangup.
-- The contract adds two rules. A command that owns child processes ends them
-  inside the 10-second grace. A command may give exit 2 one documented meaning.
 
 - `mailMaxSenders` (`mail.maxSenders`, default 4) caps SMTP connections; extra sends wait without starting their send deadline.
 - An acknowledgement failure counts as a crash attempt; remaining claims keep their leases until expiry.
