@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  diff:
+  plan:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 180
@@ -47,16 +47,123 @@ jobs:
         run: pnpm --dir apps/${{ matrix.app }} run gate:commands
       - name: Map spans to tests
         run: node scripts/mutation/span-map.mjs apps/${{ matrix.app }}
-      - name: Mutate changed lines at app floor 60
+      - name: Plan changed lines without starting mutation
+        run: >-
+          node scripts/mutation/diff.mjs --app apps/${{ matrix.app }}
+          --base ${{ github.event.pull_request.base.sha }}
+          --head ${{ github.event.pull_request.head.sha }} --plan-only
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: mutation-plan-${{ matrix.app }}
+          path: apps/${{ matrix.app }}/reports/mutation/
+
+  matrix:
+    if: github.event_name == 'pull_request'
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: mutation-plan-*
+          path: mutation-plans
+      - name: Split whole files into jobs aimed at 60 minutes
+        id: matrix
+        run: node scripts/mutation/shards.mjs matrix mutation-plans mutation-manifest.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutation-manifest
+          path: mutation-manifest.json
+
+  diff:
+    if: github.event_name == 'pull_request'
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    env:
+      VITEST_MAX_WORKERS: "1"
+      VP_RUN_CONCURRENCY_LIMIT: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install pinned tools
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: mutation-plan-${{ matrix.app }}
+          path: apps/${{ matrix.app }}/reports/mutation/
+      - name: Build app commands before tests
+        run: pnpm --dir apps/${{ matrix.app }} run gate:commands
+      - name: Mutate this shard at concurrency 1
         run: >-
           node scripts/mutation/diff.mjs --app apps/${{ matrix.app }}
           --base ${{ github.event.pull_request.base.sha }}
           --head ${{ github.event.pull_request.head.sha }}
+          --shard ${{ matrix.shard }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: mutation-diff-${{ matrix.app }}
-          path: apps/${{ matrix.app }}/reports/mutation/
+          name: mutation-diff-${{ matrix.app }}-${{ matrix.shard }}
+          path: |
+            apps/${{ matrix.app }}/reports/mutation/diff*.json
+            apps/${{ matrix.app }}/reports/mutation/diff-summary.md
+
+  diff-gate:
+    if: always() && github.event_name == 'pull_request'
+    needs: [plan, matrix, diff]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require every planned shard to finish
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          MATRIX_RESULT: ${{ needs.matrix.result }}
+          DIFF_RESULT: ${{ needs.diff.result }}
+        run: |
+          test "$PLAN_RESULT" = success
+          test "$MATRIX_RESULT" = success
+          test "$DIFF_RESULT" = success
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: mutation-manifest
+          path: mutation-manifest
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: mutation-diff-*
+          path: mutation-results
+      - name: Check combined app scores against 60
+        run: node scripts/mutation/shards.mjs aggregate mutation-manifest/mutation-manifest.json mutation-results
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: mutation-combined
+          path: reports/mutation/combined.json
 
   full:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

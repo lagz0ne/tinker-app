@@ -85,7 +85,7 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
     mkdirSync(join(app, "tinker"), { recursive: true });
     mkdirSync(join(app, "public/r"), { recursive: true });
     mkdirSync(join(root, "scripts/mutation"), { recursive: true });
-    for (const file of ["diff.mjs", "span-map.mjs"]) {
+    for (const file of ["diff.mjs", "span-map.mjs", "shards.mjs"]) {
       copyFileSync(join(import.meta.dirname, file), join(root, "scripts/mutation", file));
     }
 
@@ -301,7 +301,7 @@ test("CLI rejects missing or mismatched cap results, clears stale files, and rec
     mkdirSync(join(app, "tinker"), { recursive: true });
     mkdirSync(join(root, "scripts/mutation"), { recursive: true });
     mkdirSync(join(app, "node_modules/@stryker-mutator/core/bin"), { recursive: true });
-    for (const file of ["diff.mjs", "span-map.mjs"]) {
+    for (const file of ["diff.mjs", "span-map.mjs", "shards.mjs"]) {
       copyFileSync(join(import.meta.dirname, file), join(root, "scripts/mutation", file));
     }
     writeFileSync(join(app, "package.json"), "{}");
@@ -336,10 +336,19 @@ test("CLI rejects missing or mismatched cap results, clears stale files, and rec
       }),
     );
     writeFileSync(join(directory, "diff-line-cap.json"), "[]");
-    const run = () =>
+    const run = (extra = [], from = base) =>
       spawnSync(
         process.execPath,
-        [join(root, "scripts/mutation/diff.mjs"), "--app", app, "--base", base, "--head", "HEAD"],
+        [
+          join(root, "scripts/mutation/diff.mjs"),
+          "--app",
+          app,
+          "--base",
+          from,
+          "--head",
+          "HEAD",
+          ...extra,
+        ],
         {
           cwd: root,
           encoding: "utf8",
@@ -372,6 +381,17 @@ test("CLI rejects missing or mismatched cap results, clears stale files, and rec
     );
     assert.equal(run().status, 0, "a real matching selection/report pair is accepted");
 
+    assert.equal(run(["--shard", "1"]).status, 0);
+    const shardedConfig = JSON.parse(readFileSync(join(directory, "diff.stryker.json")));
+    assert.equal(shardedConfig.thresholds.break, 0, "only the combined gate enforces 60 on shards");
+    const shardedRun = JSON.parse(readFileSync(join(directory, "diff-run.json")));
+    assert.equal(shardedRun.shardId, "1");
+    assert.deepEqual(shardedRun.mutate, ["tinker/value.ts:1-1"]);
+    assert.equal(shardedRun.score, 100);
+    const unknown = run(["--shard", "2"]);
+    assert.equal(unknown.status, 1);
+    assert.match(unknown.stderr, /Unknown shard/);
+
     writeFileSync(
       join(app, "node_modules/@stryker-mutator/core/bin/stryker.js"),
       `
@@ -384,6 +404,17 @@ test("CLI rejects missing or mismatched cap results, clears stale files, and rec
 
     assert.equal(mismatched.status, 1);
     assert.match(mismatched.stderr, /refusing an uncapped result/);
+
+    writeFileSync(
+      join(app, "node_modules/@stryker-mutator/core/bin/stryker.js"),
+      'throw new Error("must not run Stryker for an empty shard");',
+    );
+    const empty = run(["--shard", "1"], "HEAD");
+    assert.equal(empty.status, 0, empty.stderr);
+    const emptyRun = JSON.parse(readFileSync(join(directory, "diff-run.json")));
+    assert.deepEqual(emptyRun.mutate, []);
+    assert.equal(emptyRun.capValid, true);
+    assert.deepEqual(JSON.parse(readFileSync(join(directory, "diff.json"))), { files: {} });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

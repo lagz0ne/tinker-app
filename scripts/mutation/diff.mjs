@@ -11,6 +11,7 @@ import { createRequire } from "node:module";
 import { dirname, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { capMatches, mutationCounts, score, splitPlan } from "./shards.mjs";
 import { importGraph } from "./span-map.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -331,12 +332,25 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     readFileSync(resolve(value("--map", resolve(directory, "span-map.json"))), "utf8"),
   );
 
-  const plan = planDiff({
+  const fullPlan = planDiff({
     app,
     base: value("--base", "origin/next"),
     head: value("--head", "HEAD"),
     map,
   });
+
+  const shardId = value("--shard");
+  const shard = shardId && splitPlan(fullPlan).find(({ id }) => id === shardId);
+  if (shardId && !shard) throw new Error(`Unknown shard ${shardId}`);
+  const plan = shard
+    ? {
+        ...fullPlan,
+        ...shard,
+        shardId,
+        fullPlannedLines: fullPlan.plannedLines,
+        mutate: shard.ranges.map(({ file, start, end }) => `${file}:${start}-${end}`),
+      }
+    : fullPlan;
 
   writeFileSync(resolve(directory, "diff-plan.json"), JSON.stringify(plan, null, 2) + "\n");
 
@@ -345,7 +359,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   );
 
   console.log(`Gaps:\n${plan.gaps.join("\n")}`);
-  const summary = planSummary(plan);
+  const summary =
+    planSummary(plan) +
+    (shardId
+      ? `\nAssigned shard ${shardId}: ${plan.plannedLines}/${fullPlan.plannedLines} source lines. Other planned files run in their own shards; they are not omitted.\n`
+      : "");
   writeFileSync(resolve(directory, "diff-summary.md"), summary);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   console.log(summary);
@@ -356,6 +374,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     // Stryker's public testFiles option selects files inside its sandbox. A
     // config importing the checkout by absolute path would test unmutated code.
     config.testFiles = plan.testFiles;
+    // A weak shard must not fail on its own: the gate sums all shard counts.
+    // Startup/test/reporter failures still fail this job and the combined gate.
+    if (shardId) config.thresholds = { ...config.thresholds, break: 0 };
 
     // Only diff runs load this reporter; weekly full runs keep every candidate.
     config.plugins.push("../../scripts/mutation/line-cap.mjs");
@@ -398,25 +419,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const selected = hasCap
       ? JSON.parse(readFileSync(resolve(directory, "diff-line-cap.json"), "utf8"))
       : [];
-    const expected = new Set(selected.map(({ line, id }) => `${line.replace(/:\d+$/, "")}:${id}`));
     const hasReport = existsSync(resolve(directory, "diff.json"));
-    const actual = hasReport
-      ? Object.entries(
-          JSON.parse(readFileSync(resolve(directory, "diff.json"), "utf8")).files,
-        ).flatMap(([file, { mutants }]) =>
-          mutants
-            .filter((mutant) => mutant.status !== "Ignored")
-            .map((mutant) => `${file}:${mutant.id}`),
-        )
-      : [];
-    const capValid =
-      hasCap &&
-      hasReport &&
-      expected.size === selected.length &&
-      new Set(selected.map(({ line }) => line)).size === selected.length &&
-      actual.length === expected.size &&
-      new Set(actual).size === actual.length &&
-      actual.every((id) => expected.has(id));
+    const report = hasReport
+      ? JSON.parse(readFileSync(resolve(directory, "diff.json"), "utf8"))
+      : { files: {} };
+    const capValid = hasCap && hasReport && capMatches(report, selected);
+    const counts = mutationCounts(report);
 
     const summary = {
       elapsedMs: Date.now() - started,
@@ -425,14 +433,50 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       capValid,
       base: plan.base,
       head: plan.head,
+      app: plan.app,
+      shardId,
+      mutate: plan.mutate,
+      counts,
+      score: score(counts),
     };
 
     writeFileSync(resolve(directory, "diff-run.json"), JSON.stringify(summary, null, 2) + "\n");
 
+    console.log(
+      `Mutation result${shardId ? ` (shard ${shardId})` : ""}: ${summary.score.toFixed(2)}%`,
+    );
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      appendFileSync(
+        process.env.GITHUB_STEP_SUMMARY,
+        `\nMutation result${shardId ? ` (shard ${shardId})` : ""}: **${summary.score.toFixed(2)}%**. Shards use the combined app floor of 60.\n`,
+      );
+    }
     process.exitCode = summary.exitCode;
 
     if (!capValid) {
       console.error("Diff line cap did not finish; refusing an uncapped result.");
     }
-  } else if (!plan.mutate.length) console.log("No app mutation lines changed.");
+  } else if (!plan.mutate.length) {
+    console.log("No app mutation lines changed.");
+    writeFileSync(resolve(directory, "diff.json"), JSON.stringify({ files: {} }) + "\n");
+    writeFileSync(resolve(directory, "diff-line-cap.json"), "[]\n");
+    writeFileSync(
+      resolve(directory, "diff-run.json"),
+      JSON.stringify(
+        {
+          app: plan.app,
+          shardId,
+          base: plan.base,
+          head: plan.head,
+          mutate: [],
+          capValid: true,
+          exitCode: 0,
+          counts: mutationCounts({ files: {} }),
+          score: 100,
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+  }
 }

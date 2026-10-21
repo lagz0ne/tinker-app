@@ -244,19 +244,35 @@ and every omitted range with its reason. Counts are exclusive: changed lines own
 overlaps before adjacent lines and test-mapped spans.
 The serial checks in `start-gates.yml` stay unchanged.
 
-The app matrix jobs run in parallel on separate GitHub runners; they share no
-services or writable files. One app failure does not cancel the other matrix
-job. Each job still uses one mutation worker and a
-180-minute total deadline. New pushes cancel the older run for that ref.
+CI first builds each app's span map and full diff plan. It then splits the
+planned ranges by whole file into parallel matrix jobs, with no shared services
+or writable files. Largest files go first to the least-loaded shard, with stable
+file-name ties. Every file and planned line belongs to exactly one shard.
+Each mutation job uses one worker and a 180-minute deadline. New pushes cancel
+the older run for that ref. A failed shard does not cancel its siblings.
+
+Shard count comes from plan size, aimed at about 60 minutes per shard. The
+calibration is PR #3 at concurrency one: 1,814 tested mutants, 220.29 minutes,
+7.29 seconds per tested mutant including baseline. Sizing counts every planned
+line as one possible mutant and reserves another 200 seconds for each baseline.
+The 1,000-line plan splits into three jobs of 334, 333, and 333 lines. These are
+estimates, not a time guarantee. A single large file stays whole; its estimate
+remains visible. Plans above GitHub's 256-job limit fail rather than drop lines.
+
+Each shard reports its score but has no individual score floor. The always-run
+`diff-gate` job requires every shard to succeed, rejects missing, duplicate,
+foreign or incomplete results, and sums mutant counts separately for each app.
+Each app's combined score must reach 60; averaging percentages could hide a
+weak result. App configuration floors stay at 60, and unsharded local runs keep
+that floor. Weekly full reports and Start's floor are unchanged.
 Every changed line stays planned; there is no total line budget or random
 source-line sample. Arid/static filtering happens in Stryker. The per-line mutant
 cap then applies to all planned sources, with changed-line ranges first. Extra
 test-mapped lines have a separate 200-line budget, picked in stable file-and-line
 order after changed and adjacent lines own overlaps. Every range left out is
 listed in the GitHub summary. The budget never removes changed or adjacent
-lines. If the measured plan cannot
-fit the deadline, split by file into deterministic matrix shards; never drop
-changed lines to make it fit. Weekly full reports stay uncapped.
+lines. Sharding never drops changed lines to make a deadline. Weekly full
+reports stay uncapped.
 The diff job always runs the tool contracts, including config-only
 PRs. Third-party actions are pinned to commit SHAs.
 Diff runs alone load `scripts/mutation/line-cap.mjs`: at most one eligible mutant
