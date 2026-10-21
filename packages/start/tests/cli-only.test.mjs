@@ -184,6 +184,11 @@ test("a CLI-only app's entries, named check, and routes check need no web files"
   expect(serverProblems(fixture({ "vite.config.ts": "export default {};\n" }))).toEqual([
     say.noEntry,
   ]);
+  const noEntry = fixture({
+    "vite.config.ts": "export default {};\n",
+    "src/routeTree.gen.ts": "export {};\n",
+  });
+  expect(named(noEntry)).toEqual({ status: "fail", lines: [say.noEntry], fix: undefined });
 });
 
 test("a CLI-only app's generated folder has no route tree to check", () => {
