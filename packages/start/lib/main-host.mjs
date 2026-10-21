@@ -2,12 +2,14 @@
  * Host-owned command lifetime. Only the command receives exit; OS signals use stop.
  * First clean stop wins. A late thrown error is logged without changing that code.
  * @param {function} main - The app command.
- * @param {object} options - Host inputs, start/stop hooks, and the hard-stop deadline.
+ * @param {object} options - Host inputs (env, args, and cwd, which defaults to the process
+ *   folder), start/stop hooks, and the hard-stop deadline.
  */
 export function createMainHost(main, options) {
   const {
     env,
     args = [],
+    cwd = process.cwd(),
     stdout,
     stderr,
     graceMs = 10_000,
@@ -67,6 +69,7 @@ export function createMainHost(main, options) {
     main({
       env,
       args,
+      cwd,
       signal: controller.signal,
       stdout,
       stderr,
@@ -82,7 +85,7 @@ export function createMainHost(main, options) {
       stderr.write(`host close failed: ${String(error)}\n`);
     }
 
-    await flushOutput([stdout, stderr]).catch(() => {
+    await flushOutput(stdout, stderr).catch(() => {
       failed = true;
     });
     finished = true;
@@ -153,40 +156,90 @@ async function failedMain(error, app, signal, stop) {
   return failed;
 }
 
-/** A callback after an empty write fences all prior writes on that stream. */
-async function flushOutput(streams) {
-  for (const stream of streams) {
-    if (typeof stream.writable === "boolean" && !stream.destroyed) {
-      await new Promise((resolve, reject) =>
-        stream.write("", (error) => (error ? reject(error) : resolve())),
-      );
-    }
+/**
+ * Fence stdout, then stderr. Output whose reader is gone, a closed pipe or a closed terminal,
+ * does not fail the command; any other write error does.
+ */
+async function flushOutput(stdout, stderr) {
+  for (const stream of [stdout, stderr]) {
+    await fenceStream(stream).catch((error) => {
+      if (!readerGone(stream, error)) throw error;
+    });
   }
 }
 
-/** Run a process command with host-owned OS signals and flushed output. */
+/**
+ * True when a write error means the stream's reader is gone: a closed pipe (EPIPE) on any
+ * stream, or a closed terminal (EIO) on a terminal stream. On a file or a pipe, EIO is a real
+ * write failure, such as a disk error, and the output is lost, so it still fails the run.
+ * @param {{ isTTY?: boolean }} stream - From the host; why: EIO is quiet only on a terminal.
+ * @param {unknown} error - From that stream; why: the code to judge.
+ */
+function readerGone(stream, error) {
+  return error?.code === "EPIPE" || (error?.code === "EIO" && stream.isTTY === true);
+}
+
+/**
+ * Keep a command running, and its exit code, when its output goes away: a reader such as
+ * `head` closes the pipe (EPIPE), or a hangup closes the terminal (EIO on a terminal stream).
+ * Any other error, EIO on a file included, still throws. Listens on each stream that can
+ * listen. Returns the function that removes the listeners.
+ * @param {...{ on?: Function, off?: Function }} streams - From a host; why: the output streams.
+ */
+export function quietGoneOutput(...streams) {
+  const listeners = streams.map((stream) => [
+    stream,
+    (error) => {
+      if (!readerGone(stream, error)) throw error;
+    },
+  ]);
+  for (const [stream, listener] of listeners) stream.on?.("error", listener);
+  return () => {
+    for (const [stream, listener] of listeners) stream.off?.("error", listener);
+  };
+}
+
+/** A callback after an empty write fences all prior writes on that stream. */
+async function fenceStream(stream) {
+  if (typeof stream.writable === "boolean" && !stream.destroyed) {
+    await new Promise((resolve, reject) =>
+      stream.write("", (error) => (error ? reject(error) : resolve())),
+    );
+  }
+}
+
+/** POSIX exit codes for a stop by signal: 128 plus the signal's number. */
+const signalCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };
+
+/**
+ * Run a process command with host-owned OS signals and flushed output. A closed terminal
+ * (SIGHUP) stops it like Ctrl-C. Output that goes away, a closed pipe (EPIPE) or a closed
+ * terminal (EIO on a terminal), on stdout or stderr, does not change the command's exit code.
+ */
 export async function runMain(main, options = {}) {
-  const host = createMainHost(main, {
+  const inputs = {
     env: process.env,
     args: process.argv.slice(2),
+    cwd: process.cwd(),
     stdout: process.stdout,
     stderr: process.stderr,
     ...options,
-  });
+  };
+  const host = createMainHost(main, inputs);
 
-  const interrupt = () => host.stop(130, new DOMException("SIGINT", "AbortError"));
-
-  const terminate = () => host.stop(143, new DOMException("SIGTERM", "AbortError"));
-
-  process.on("SIGINT", interrupt);
-  process.on("SIGTERM", terminate);
+  const stops = Object.entries(signalCodes).map(([name, code]) => [
+    name,
+    () => host.stop(code, new DOMException(name, "AbortError")),
+  ]);
+  for (const [name, stop] of stops) process.on(name, stop);
+  const loud = quietGoneOutput(inputs.stdout, inputs.stderr);
   try {
     process.exitCode = await host.closed;
 
     return process.exitCode;
   } finally {
-    process.off("SIGINT", interrupt);
-    process.off("SIGTERM", terminate);
+    for (const [name, stop] of stops) process.off(name, stop);
+    loud();
   }
 }
 

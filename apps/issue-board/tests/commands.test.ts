@@ -23,6 +23,7 @@ test("server missing database startup tag exits 78 before any generic close code
       VICTORIA_LOGS_URL: "http://localhost:19428",
     },
     args: [],
+    cwd: import.meta.dirname,
     signal: new AbortController().signal,
     stdout: { write() {} },
     stderr: {
@@ -51,6 +52,7 @@ test("CLI missing database startup tag exits 78", async () => {
   const app = await cliMain({
     env: {},
     args: ["--file", "proof.csv", "--team", "ENG", "--actor", "proof@example.test"],
+    cwd: import.meta.dirname,
     signal: new AbortController().signal,
     stdout: { write() {} },
     stderr: { write() {} },
