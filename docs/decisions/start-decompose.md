@@ -254,7 +254,9 @@ file-name ties. Files over the 60-minute target split into bounded range pieces.
 line belongs to exactly one shard. Multiline mutants keep their global owner
 line, so a file split cannot count one mutant twice.
 Each mutation job uses one worker and a 180-minute deadline. New pushes cancel
-the older run for that ref. A failed shard does not cancel its siblings.
+the older PR run for that ref. Manual and weekly runs have separate concurrency
+groups, so a manual run cannot cancel the weekly report. A failed shard does not
+cancel its siblings.
 
 Shard count comes from plan size, aimed at about 60 minutes per shard. The
 calibration is PR #3 at concurrency one: 1,814 tested mutants, 220.29 minutes,

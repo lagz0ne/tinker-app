@@ -532,7 +532,10 @@ test("config-only PRs run unconditional gate contracts and actions are immutable
   for (const match of workflow.matchAll(/uses: actions\/[^@]+@([^\s]+)/g)) {
     assert.match(match[1], /^[a-f0-9]{40}$/);
   }
-  assert.match(workflow, /group: mutation-\$\{\{ github.ref \}\}\n  cancel-in-progress: true/);
+  assert.match(
+    workflow,
+    /group: mutation-\$\{\{ github.event_name \}\}-\$\{\{ github.ref \}\}\n  cancel-in-progress: true/,
+  );
 });
 
 test("test targets require both a direct import and a span observed by that test file", () => {
