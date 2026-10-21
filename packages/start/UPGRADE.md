@@ -19,11 +19,14 @@ These changes are in current source, not the released 0.11.0 tarball.
 - The contract adds two rules. A command that owns child processes ends them
   inside the 10-second grace. A command may give exit 2 one documented meaning.
 - An app may be CLI-only: `tinker({ cliEntry: "cmds/cli.ts" })` with no
-  `serverEntry`. It needs no router, start, or server entry, no `src/routes`,
-  and no React or TanStack: those are now optional peers, and `tinker()` loads
-  them only for a web app. `tinker prepare` writes no route tree for it, and
-  doctor skips the routes check and does not ask for `.tanstack/` in
-  `.gitignore`. The registry's new `base-main` item copies only
+  router, start, or server entry. An app that names any of those three stays a
+  web app, and doctor reports the ones it lacks. A CLI-only app needs no
+  `src/routes`, and no React or TanStack: those are now optional peers, and
+  `tinker()` loads them only for a web app. `tinker prepare` writes no route
+  tree for it, and deletes an old one. Doctor skips the routes check and does
+  not ask for `.tanstack/` in `.gitignore`. Its `vp build` runs the named check
+  and tsc, then builds `cmds/cli.ts` to the `build.outDir` that
+  `vite.cli.config.ts` names. The registry's new `base-main` item copies only
   `tinker/base/main.ts`; the web `base` item requires it.
 
 ## 0.11.0

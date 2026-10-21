@@ -27,16 +27,15 @@ function namedFile(root, entry) {
 }
 
 /**
- * A CLI-only app names `cliEntry` and no `serverEntry` in tinker(). It has no web entries,
- * no routes, and needs no React or TanStack.
+ * A CLI-only app names `cliEntry` and none of the three web entries in tinker(). It has no
+ * routes, and needs no React or TanStack. An app that names any web entry stays a web app,
+ * so a missing one is reported.
  * @param {string} root - From a check, prepare, or tinker(); why: the app to read.
  */
 export function cliOnly(root) {
-  const cli = namedFile(
-    root,
-    namedFiles.find((entry) => entry.option === "cliEntry"),
-  );
-  return Boolean(cli.file) && !serverFile(root).file;
+  const named = (entry) => Boolean(namedFile(root, entry).file);
+  const cli = namedFiles.find((entry) => entry.option === "cliEntry");
+  return named(cli) && !namedFiles.filter((entry) => entry.required).some(named);
 }
 
 export function serverFile(root) {

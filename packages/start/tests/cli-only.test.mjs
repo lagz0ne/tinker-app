@@ -62,8 +62,12 @@ registerHooks({
   return { ...process.env, NODE_OPTIONS: `--import=${pathToFileURL(hook).href}` };
 }
 
-/** An app with only cmds/cli.ts: no web entries, no routes, no React. */
-function cliApp() {
+/**
+ * An app with only cmds/cli.ts: no web entries, no routes, no React. It links Start, Core, and
+ * the packages tsc reads, so its build can check types.
+ * @param {Record<string, string>} [files] - From a test; why: files that replace the defaults.
+ */
+function cliApp(files = {}) {
   const root = fixture({
     "package.json": JSON.stringify({ type: "module", scripts: { postinstall: "tinker prepare" } }),
     "vite.config.ts":
@@ -91,16 +95,27 @@ function cliApp() {
       "});",
       "",
     ].join("\n"),
+    ...files,
   });
+
   mkdirSync(join(root, "node_modules/@tinker"), { recursive: true });
-  symlinkSync(baseDir, join(root, "node_modules/@tinker/start"), "dir");
-  symlinkSync(core, join(root, "node_modules/@tinker/core"), "dir");
+  mkdirSync(join(root, "node_modules/@types"));
+  const links = {
+    "@tinker/start": baseDir,
+    "@tinker/core": core,
+    typescript: join(baseDir, "node_modules/typescript"),
+    "@types/node": join(baseDir, "node_modules/@types/node"),
+    vite: join(baseDir, "../../node_modules/vite"),
+  };
+  for (const [name, from] of Object.entries(links)) {
+    symlinkSync(realpathSync(from), join(root, "node_modules", name), "dir");
+  }
   return root;
 }
 
 /**
  * A CLI-only app with Start copied in, as an install leaves it, instead of linked to this repo,
- * where TanStack sits beside it. Only the packages its types read are linked.
+ * where TanStack sits beside it. vite-plus is linked too, for Start's own types.
  */
 function installedCliApp() {
   const root = cliApp();
@@ -111,15 +126,8 @@ function installedCliApp() {
     cpSync(join(baseDir, name), join(start, name), { recursive: true });
   }
 
-  mkdirSync(join(root, "node_modules/@types"));
-  const links = {
-    "vite-plus": join(baseDir, "node_modules/vite-plus"),
-    "@types/node": join(baseDir, "node_modules/@types/node"),
-    vite: join(baseDir, "../../node_modules/vite"),
-  };
-  for (const [name, from] of Object.entries(links)) {
-    symlinkSync(realpathSync(from), join(root, "node_modules", name), "dir");
-  }
+  const vitePlus = realpathSync(join(baseDir, "node_modules/vite-plus"));
+  symlinkSync(vitePlus, join(root, "node_modules/vite-plus"), "dir");
   return root;
 }
 
@@ -205,6 +213,10 @@ test("cliOnly: cliEntry without serverEntry; a web app, an app with both, and on
       'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({ serverEntry: "cmds/server.ts", routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts", cliEntry: "cmds/cli.ts" })] };\n',
   });
   const neither = fixture({ "vite.config.ts": "export default { plugins: [] };\n" });
+  const partial = goodApp({
+    "vite.config.ts":
+      'import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({ routerEntry: "cmds/router.ts", startEntry: "cmds/start.ts", cliEntry: "cmds/cli.ts" })] };\n',
+  });
 
   expect([cliOnly(cliApp()), cliOnly(goodApp()), cliOnly(both), cliOnly(neither)]).toEqual([
     true,
@@ -212,6 +224,17 @@ test("cliOnly: cliEntry without serverEntry; a web app, an app with both, and on
     false,
     false,
   ]);
+  expect(cliOnly(partial)).toBe(false);
+  expect(serverProblems(partial)).toEqual([say.noEntry]);
+});
+
+test("cliOnly needs no web entry at all: router or start alone keeps the app on the web path", () => {
+  const entries = (named) =>
+    `import { tinker } from "@tinker/start/vite";\nexport default { plugins: [tinker({ ${named}, cliEntry: "cmds/cli.ts" })] };\n`;
+  const router = cliApp({ "vite.config.ts": entries('routerEntry: "cmds/router.ts"') });
+  const start = cliApp({ "vite.config.ts": entries('startEntry: "cmds/start.ts"') });
+
+  expect([cliOnly(router), cliOnly(start)]).toEqual([false, false]);
 });
 
 test("a CLI-only app's entries, named check, and routes check need no web files", () => {
@@ -249,6 +272,58 @@ test("a CLI-only app's generated folder has no route tree to check", () => {
 
   expect(generated(root).status).toBe("ok");
   expect(generated(web).lines.join("\n")).toContain(".tinker/routeTree.gen.ts is missing");
+});
+
+test("prepare drops a web app's old route tree when the app turns CLI-only; a web app keeps it", () => {
+  const root = cliApp({ ".tinker/routeTree.gen.ts": 'import "../src/routes/index.tsx";\n' });
+  const web = goodApp();
+  prepare(root);
+  prepare(web);
+  const include = (app) =>
+    JSON.parse(readFileSync(join(app, ".tinker/tsconfig.json"), "utf8")).include;
+
+  expect(existsSync(join(root, ".tinker/routeTree.gen.ts"))).toBe(false);
+  expect(include(root)).toEqual([
+    "../src",
+    "../cmds",
+    "../tinker",
+    "../tests",
+    "../vite.config.ts",
+    "../vite.config.mts",
+  ]);
+  expect(include(web)).toContain("./routeTree.gen.ts");
+});
+
+test("a CLI-only app's vp build runs the named check and tsc, then builds cmds/cli.ts", () => {
+  const apps = {
+    good: cliApp(),
+    noDefault: cliApp({ "cmds/cli.ts": "export const main = 1;\n" }),
+    wrongSsr: cliApp({
+      "vite.cli.config.ts":
+        'export default { build: { ssr: "cmds/other.ts", outDir: "dist-cli" } };\n',
+    }),
+    badType: cliApp({ "cmds/cli.ts": 'const count: number = "one";\nexport default count;\n' }),
+  };
+
+  const built = Object.fromEntries(
+    Object.entries(apps).map(([name, root]) => {
+      const done = run(root, blockWeb(root), "vp", ["build"]);
+      return [name, { status: done.status, output: done.stdout + done.stderr }];
+    }),
+  );
+
+  expect(built.good.status, built.good.output).toBe(0);
+  expect(existsSync(join(apps.good, "dist-cli/cli.js"))).toBe(true);
+  expect(built.noDefault.status).not.toBe(0);
+  expect(built.noDefault.output).toContain(
+    "tinker doctor, named files: cmds/cli.ts:1 does not export default",
+  );
+  expect(built.wrongSsr.status).not.toBe(0);
+  expect(built.wrongSsr.output).toContain(
+    "tinker doctor, named files: vite.cli.config.ts:1 build.ssr must name cmds/cli.ts",
+  );
+  expect(built.badType.status).not.toBe(0);
+  expect(built.badType.output).toContain("TS2322");
 });
 
 test("a CLI-only app's .gitignore needs only .tinker/; a web app's also needs .tanstack/", () => {

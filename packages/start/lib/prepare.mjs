@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { appFiles } from "./named.mjs";
+import { appFiles, cliOnly } from "./named.mjs";
 
 const compilerOptions = {
   target: "esnext",
@@ -51,7 +51,7 @@ export function render(root) {
         "../tests",
         "../vite.config.ts",
         "../vite.config.mts",
-        "./routeTree.gen.ts",
+        ...(cliOnly(root) ? [] : ["./routeTree.gen.ts"]),
       ],
       exclude: ["../tests/runtime", "../dist", "../node_modules"],
     }),
@@ -59,12 +59,15 @@ export function render(root) {
 }
 
 /**
+ * Write `.tinker/` and drop files an older base or app shape left there. A CLI-only app has no
+ * route tree, so an old one from its web days goes too.
  * @param {string} root - From the plugin or the CLI; why: write `.tinker/` in that app.
  */
 export function prepare(root) {
   const dir = join(root, ".tinker");
   mkdirSync(dir, { recursive: true });
-  for (const name of ["base.json", "parts.ts", "parts.server.ts", "telemetry-env.ts"]) {
+  const old = ["base.json", "parts.ts", "parts.server.ts", "telemetry-env.ts"];
+  for (const name of cliOnly(root) ? [...old, "routeTree.gen.ts"] : old) {
     rmSync(join(dir, name), { force: true });
   }
 
