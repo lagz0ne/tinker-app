@@ -17,6 +17,12 @@ try {
       /mail claim must return disjoint batches of 20 and 1/,
     ],
     [
+      "claim-skip-locked",
+      '.limit(20)\n      .for("update", { skipLocked: true });\n    const claimed',
+      '.limit(20)\n      .for("update");\n    const claimed',
+      /second claim must skip rows the first claim holds/,
+    ],
+    [
       "claim-not-committed",
       "claim.run({ signal: contextSignal })",
       "claim.run()",

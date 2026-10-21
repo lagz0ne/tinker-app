@@ -17,10 +17,14 @@ for (const refuse of [false, true]) {
     const queries: string[] = [];
     const options: unknown[] = [];
     const order: string[] = [];
+    const logged: unknown[] = [];
+    const pools: EventEmitter[] = [];
     const error = new Error("LISTEN refused");
-    class Pool {
+    class Pool extends EventEmitter {
       constructor(config: unknown) {
+        super();
         options.push(config);
+        pools.push(this);
       }
       async query(config: { text: string }) {
         expect(config.text).toBe("select 42 as value");
@@ -49,11 +53,19 @@ for (const refuse of [false, true]) {
       presets: [
         preset(postgres, async () => ({ default: { Pool } }) as unknown as typeof import("pg")),
       ],
+      observe: { log: ({ message, attributes }) => logged.push({ message, attributes }) },
     });
 
     await root.ready;
     const db = await root.resolve(database);
     expect(await db.execute(sql`select 42 as value`)).toMatchObject({ rows: [{ value: 42 }] });
+    pools[0]!.emit("error", new Error("terminating connection due to administrator command"));
+    expect(logged).toEqual([
+      {
+        message: "database.idleLost",
+        attributes: { error: "Error: terminating connection due to administrator command" },
+      },
+    ]);
     const heard: string[] = [];
     let failures = 0;
     if (refuse) {
@@ -141,6 +153,7 @@ test("listener rejects unsafe channel names and an already-aborted call before c
             default: {
               Pool: function Pool() {
                 return {
+                  on: () => {},
                   connect: async () => {
                     checkouts++;
                     throw new Error("no checkout");
@@ -214,7 +227,7 @@ test("cancelled listener releases a late checkout once without running LISTEN", 
           ({
             default: {
               Pool: function Pool() {
-                return { connect: () => connecting.promise, end: async () => {} };
+                return { on: () => {}, connect: () => connecting.promise, end: async () => {} };
               },
             },
           }) as unknown as typeof import("pg"),

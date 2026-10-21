@@ -50,12 +50,15 @@ export const database = resource({
   },
   factory: async (
     { url, postgres, orm, stopping, timeout },
-    { defer },
+    { defer, log },
   ): Promise<Database.Handle> => {
     const { default: pg } = postgres;
     const { drizzle } = orm;
 
     const client = new pg.Pool({ connectionString: url.href, connectionTimeoutMillis: timeout });
+
+    // An idle client lost to Postgres is already dropped by the pool; queries still reject.
+    client.on("error", (error) => log.error("database.idleLost", { error: String(error) }));
 
     const listeners = new Set<AbortController>();
 
