@@ -5,7 +5,7 @@ import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Resolve literal app imports with the app compiler paths; keep external packages out. */
-export function importGraph(app, entries) {
+export function importGraph(app, entries, { reExportsOnly = false } = {}) {
   if (!entries.length) return {};
 
   const require = createRequire(resolve(app, "package.json"));
@@ -17,7 +17,10 @@ export function importGraph(app, entries) {
     entries.map(({ file, text }) => {
       const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
       const names = source.statements
-        .filter((node) => ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
+        .filter(
+          (node) =>
+            ts.isExportDeclaration(node) || (!reExportsOnly && ts.isImportDeclaration(node)),
+        )
         .filter((node) => !node.isTypeOnly && !node.importClause?.isTypeOnly)
         .filter((node) => {
           const clause = node.importClause;
@@ -39,7 +42,7 @@ export function importGraph(app, entries) {
         }
         ts.forEachChild(node, visit);
       };
-      visit(source);
+      if (!reExportsOnly) visit(source);
 
       const files = names
         .map(

@@ -224,8 +224,9 @@ The second command finds the PR merge base with the base branch, then reads
 Git's changed lines, finds their handles, and follows
 reverse `.depends` edges to command main or scope. It mutates only those line
 ranges. A changed test selects its direct app imports only (depth one), then
-intersects those files with spans that test file actually observed in the span
-map. Indirect imports, type-only imports, unobserved spans, and plain helpers
+follows named/star re-exports to the declaring files, then intersects those
+files with spans that test file actually observed in the span map. Ordinary
+indirect imports, type-only imports, unobserved spans, and plain helpers
 without spans add no test-mapped targets. A test with no matching span plans
 nothing, and the summary says why. Deleted tests use their base-revision imports
 and any coverage still present in the current map. There is no fallback to all

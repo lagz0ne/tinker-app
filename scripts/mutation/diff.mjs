@@ -154,7 +154,16 @@ export function testImportSpans(app, entries, map) {
   const testSources = {};
 
   entries.forEach((entry) => {
-    const files = (imports[entry.file] ?? [])
+    const imported = new Set(imports[entry.file] ?? []);
+    for (const file of imported) {
+      if (!existsSync(resolve(app, file))) continue;
+      const exports = importGraph(app, [{ file, text: readFileSync(resolve(app, file), "utf8") }], {
+        reExportsOnly: true,
+      });
+      exports[file].forEach((source) => imported.add(source));
+    }
+
+    const files = [...imported]
       .filter((file) => inScope(config, file))
       .sort((a, b) => a.localeCompare(b));
     testSources[entry.file] = files;

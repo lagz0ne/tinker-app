@@ -520,7 +520,7 @@ test("test targets require both a direct import and a span observed by that test
     symlinkSync(join(process.cwd(), "node_modules"), join(app, "node_modules"), "dir");
     writeFileSync(join(app, "package.json"), "{}");
     writeFileSync(join(app, "stryker.config.json"), JSON.stringify({ mutate: ["tinker/**/*.ts"] }));
-    writeFileSync(join(app, "tinker/direct.ts"), 'export * from "./indirect";\n');
+    writeFileSync(join(app, "tinker/direct.ts"), 'import "./indirect";\n');
     writeFileSync(join(app, "tinker/indirect.ts"), "export const indirect = 1;\n");
 
     const entry = { file: "tests/unit.test.ts", text: 'import {value} from "../tinker/direct";\n' };
@@ -588,4 +588,67 @@ test("test-mapped budget is stable, reports omissions, and never spends changed-
   const summary = planSummary({ ...plan, app: "apps/example" });
   assert(summary.includes("Test-mapped budget: **4**"));
   assert(summary.includes("b.ts:2-3"));
+});
+
+test("mail-delivery test resolves real public re-exports and retains only its covered spans", () => {
+  const app = join(import.meta.dirname, "../../apps/issue-board");
+  const entry = {
+    file: "tests/mail-delivery.test.ts",
+    text: readFileSync(join(app, "tests/mail-delivery.test.ts"), "utf8"),
+  };
+  const own = {
+    file: "tinker/components/mail/delivery.server.ts",
+    start: 10,
+    end: 20,
+    tests: [{ file: entry.file, name: "delivery" }],
+  };
+  const other = { ...own, file: "tinker/components/telemetry/queue.ts" };
+
+  const result = testImportSpans(app, [entry], {
+    nodes: [
+      own,
+      { ...own, start: 30, end: 40, tests: [{ file: "tests/other.test.ts", name: "other" }] },
+      other,
+    ],
+  });
+  assert.deepEqual(result.ranges, [{ file: own.file, start: 10, end: 20 }]);
+  assert(result.testSources[entry.file].includes(own.file));
+  assert(!result.testSources[entry.file].includes(other.file));
+});
+
+test("named and star re-exports follow cycles without following ordinary imports", () => {
+  const app = mkdtempSync(join(tmpdir(), "mutation-re-export-"));
+  try {
+    mkdirSync(join(app, "tinker"));
+    symlinkSync(join(process.cwd(), "node_modules"), join(app, "node_modules"), "dir");
+    writeFileSync(join(app, "package.json"), "{}");
+    writeFileSync(join(app, "stryker.config.json"), JSON.stringify({ mutate: ["tinker/**/*.ts"] }));
+    writeFileSync(
+      join(app, "tinker/index.server.ts"),
+      'export * from "./named"; import "./unrelated";',
+    );
+    writeFileSync(
+      join(app, "tinker/named.ts"),
+      'export {value} from "./source"; export * from "./index.server";',
+    );
+    writeFileSync(join(app, "tinker/source.ts"), "export const value = 1;");
+    writeFileSync(join(app, "tinker/unrelated.ts"), "export const other = 1;");
+
+    const entry = {
+      file: "tests/value.test.ts",
+      text: 'import {value} from "../tinker/index.server";',
+    };
+    const covered = {
+      file: "tinker/source.ts",
+      start: 1,
+      end: 1,
+      tests: [{ file: entry.file, name: "value" }],
+    };
+    const result = testImportSpans(app, [entry], {
+      nodes: [covered, { ...covered, file: "tinker/unrelated.ts" }],
+    });
+    assert.deepEqual(result.ranges, [{ file: covered.file, start: 1, end: 1 }]);
+  } finally {
+    rmSync(app, { recursive: true, force: true });
+  }
 });
