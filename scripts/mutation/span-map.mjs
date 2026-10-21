@@ -4,6 +4,60 @@ import { createRequire } from "node:module";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+/** Resolve literal app imports with the app compiler paths; keep external packages out. */
+export function importGraph(app, entries) {
+  if (!entries.length) return {};
+
+  const require = createRequire(resolve(app, "package.json"));
+  const ts = require("typescript-api");
+  const config = ts.readConfigFile(resolve(app, "tsconfig.json"), ts.sys.readFile);
+  const options = ts.parseJsonConfigFileContent(config.config ?? {}, ts.sys, app).options;
+
+  return Object.fromEntries(
+    entries.map(({ file, text }) => {
+      const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+      const names = source.statements
+        .filter((node) => ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
+        .filter((node) => !node.isTypeOnly && !node.importClause?.isTypeOnly)
+        .filter((node) => {
+          const clause = node.importClause;
+          const bindings = clause?.namedBindings ?? node.exportClause;
+          if (clause?.name || !bindings?.elements?.length) return true;
+
+          return bindings.elements.some((element) => !element.isTypeOnly);
+        })
+        .map((node) => node.moduleSpecifier?.text)
+        .filter(Boolean);
+
+      const visit = (node) => {
+        if (
+          ts.isCallExpression(node) &&
+          ts.isStringLiteralLike(node.arguments[0] ?? source) &&
+          ["import", "require"].includes(node.expression.getText(source))
+        ) {
+          names.push(node.arguments[0].text);
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+
+      const files = names
+        .map(
+          (name) =>
+            ts.resolveModuleName(name, resolve(app, file), options, ts.sys).resolvedModule
+              ?.resolvedFileName,
+        )
+        .filter(Boolean)
+        .map((path) => relative(app, path).replaceAll("\\", "/"))
+        .filter(
+          (path) =>
+            !path.startsWith("../") && !path.includes("node_modules/") && !path.endsWith(".d.ts"),
+        );
+      return [file, [...new Set(files)].sort((a, b) => a.localeCompare(b))];
+    }),
+  );
+}
+
 /** Test-only caller instrumentation; Core and its module exports stay untouched. */
 export function spanRecorder({ app, events }) {
   const require = createRequire(resolve(app, "package.json"));
@@ -91,7 +145,7 @@ export function tracedScope(options = {}) {
 }
 
 /** Parse the checked-out graph, including imported/barrel handles, without loading live clients. */
-export function handleGraph(app) {
+export function handleGraph(app, imports = {}) {
   const require = createRequire(resolve(app, "package.json"));
 
   const ts = require("typescript-api");
@@ -103,6 +157,23 @@ export function handleGraph(app) {
   const program = ts.createProgram(parsed.fileNames, parsed.options);
 
   const checker = program.getTypeChecker();
+
+  Object.assign(
+    imports,
+    importGraph(
+      app,
+      program
+        .getSourceFiles()
+        .map((source) => ({
+          file: relative(app, source.fileName).replaceAll("\\", "/"),
+          text: source.text,
+        }))
+        .filter(
+          ({ file }) =>
+            !file.startsWith("../") && !file.includes("node_modules/") && !file.endsWith(".d.ts"),
+        ),
+    ),
+  );
 
   const nodes = [];
 
@@ -241,7 +312,8 @@ export function writeSpanMap(app, events, output) {
     .filter(Boolean)
     .map((line) => JSON.parse(line));
 
-  const nodes = handleGraph(app);
+  const imports = {};
+  const nodes = handleGraph(app, imports);
 
   for (const node of nodes) {
     node.tests = [
@@ -271,7 +343,7 @@ export function writeSpanMap(app, events, output) {
     ).values(),
   ];
 
-  const result = { version: 1, nodes, gaps, tests };
+  const result = { version: 2, nodes, gaps, tests, imports };
 
   writeFileSync(output, JSON.stringify(result, null, 2) + "\n");
 

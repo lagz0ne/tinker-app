@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
+  symlinkSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -14,7 +15,7 @@ import { dirname, join, matchesGlob } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { budgetRanges, changedRanges, selectTests } from "./diff.mjs";
+import { planRanges, planSummary, changedRanges, selectTests } from "./diff.mjs";
 
 test("new-side diff ranges include additions and surviving deletion neighbors", () => {
   assert.deepEqual(
@@ -22,9 +23,9 @@ test("new-side diff ranges include additions and surviving deletion neighbors", 
       "+++ b/tinker/example.ts\n@@ -2,3 +2,4 @@\n+x\n@@ -9 +10 @@\n+y\n@@ -15,2 +16,0 @@",
     ),
     [
-      { file: "tinker/example.ts", start: 2, end: 5 },
-      { file: "tinker/example.ts", start: 10, end: 10 },
-      { file: "tinker/example.ts", start: 16, end: 17 },
+      { file: "tinker/example.ts", start: 2, end: 5, source: "changed" },
+      { file: "tinker/example.ts", start: 10, end: 10, source: "changed" },
+      { file: "tinker/example.ts", start: 15, end: 18, source: "adjacent" },
     ],
   );
 });
@@ -84,10 +85,9 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
     mkdirSync(join(app, "tinker"), { recursive: true });
     mkdirSync(join(app, "public/r"), { recursive: true });
     mkdirSync(join(root, "scripts/mutation"), { recursive: true });
-    copyFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "diff.mjs"),
-      join(root, "scripts/mutation/diff.mjs"),
-    );
+    for (const file of ["diff.mjs", "span-map.mjs"]) {
+      copyFileSync(join(import.meta.dirname, file), join(root, "scripts/mutation", file));
+    }
 
     writeFileSync(join(app, "stryker.config.json"), JSON.stringify({ mutate: ["tinker/**/*.ts"] }));
     writeFileSync(join(app, "tinker/value.ts"), "export const value = 1;\n");
@@ -138,11 +138,34 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
     assert.deepEqual(plan.testFiles, ["tests/value.test.ts"]);
 
     mkdirSync(join(app, "tests"), { recursive: true });
-    writeFileSync(join(app, "tests/value.test.ts"), "assert(value);\n");
+    symlinkSync(join(process.cwd(), "node_modules"), join(app, "node_modules"), "dir");
+    writeFileSync(
+      join(app, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          moduleResolution: "bundler",
+          baseUrl: ".",
+          paths: { "@/*": ["./tinker/*"] },
+        },
+      }),
+    );
+    writeFileSync(join(app, "tests/middle.ts"), 'export * from "./middle2";\n');
+    writeFileSync(
+      join(app, "tests/middle2.ts"),
+      'export {value} from "@/value"; export * from "./middle";\n',
+    );
+
+    writeFileSync(
+      join(app, "tests/value.test.ts"),
+      'import {value} from "./middle"; assert(value);\n',
+    );
     git("add", ".");
     git("commit", "--quiet", "-m", "Add source coverage fixture");
     const testBase = git("rev-parse", "HEAD");
-    writeFileSync(join(app, "tests/value.test.ts"), "assert(true);\n");
+    writeFileSync(
+      join(app, "tests/value.test.ts"),
+      'import {value} from "./middle"; assert(true);\n',
+    );
     git("add", ".");
     git("commit", "--quiet", "-m", "Weaken only a test");
     const covered = {
@@ -206,13 +229,12 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
         tests: [{ file: "tests/other.test.ts", name: "other" }],
       },
     });
-    assert.equal(
-      removedTest.testFallback,
-      true,
-      "deleted tests cannot be silently dropped from the gate",
+    assert.deepEqual(removedTest.mutate, ["tinker/value.ts:1-1"]);
+    assert.deepEqual(removedTest.testSources["tests/value.test.ts"], ["tinker/value.ts"]);
+    assert(
+      !removedTest.mutate.some((range) => range.startsWith("tinker/plain.ts")),
+      "unimported source stays out",
     );
-    assert.deepEqual(removedTest.mutate, ["tinker/plain.ts:1-1", "tinker/value.ts:1-2"]);
-    assert.deepEqual(removedTest.broadFiles, ["tinker/plain.ts", "tinker/value.ts"]);
 
     writeFileSync(join(app, "tinker/remaining.ts"), "export const remaining = true;\n");
     git("add", ".");
@@ -232,7 +254,27 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
       },
     });
     assert.deepEqual(deletedSource.deletedSources, ["tinker/value.ts"]);
-    assert.deepEqual(deletedSource.mutate, ["tinker/plain.ts:1-1", "tinker/remaining.ts:1-1"]);
+    assert.deepEqual(deletedSource.mutate, []);
+    assert.equal(
+      deletedSource.omittedRanges[0].reason,
+      "file deleted; no surviving adjacent lines",
+    );
+
+    const externalBase = git("rev-parse", "HEAD");
+    writeFileSync(
+      join(app, "tests/external.test.ts"),
+      'import {test} from "vite-plus/test"; import type {plain} from "@/plain"; import {type remaining} from "@/remaining"; test("nothing",()=>{});\n',
+    );
+    git("add", ".");
+    git("commit", "--quiet", "-m", "Add a test without mutable imports");
+    const external = planDiff({
+      app,
+      base: externalBase,
+      head: "HEAD",
+      map: { nodes: [], gaps: [], tests: [{ file: "tests/external.test.ts", name: "nothing" }] },
+    });
+    assert.deepEqual(external.mutate, []);
+    assert.equal(external.omittedRanges[0].reason, "test imports no mutable app source");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -259,10 +301,9 @@ test("CLI rejects missing or mismatched cap results, clears stale files, and rec
     mkdirSync(join(app, "tinker"), { recursive: true });
     mkdirSync(join(root, "scripts/mutation"), { recursive: true });
     mkdirSync(join(app, "node_modules/@stryker-mutator/core/bin"), { recursive: true });
-    copyFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "diff.mjs"),
-      join(root, "scripts/mutation/diff.mjs"),
-    );
+    for (const file of ["diff.mjs", "span-map.mjs"]) {
+      copyFileSync(join(import.meta.dirname, file), join(root, "scripts/mutation", file));
+    }
     writeFileSync(join(app, "package.json"), "{}");
     writeFileSync(join(app, "node_modules/@stryker-mutator/core/package.json"), "{}");
     // Fault at the native process boundary: exit zero without running the cap.
@@ -299,7 +340,11 @@ test("CLI rejects missing or mismatched cap results, clears stale files, and rec
       spawnSync(
         process.execPath,
         [join(root, "scripts/mutation/diff.mjs"), "--app", app, "--base", base, "--head", "HEAD"],
-        { cwd: root, encoding: "utf8" },
+        {
+          cwd: root,
+          encoding: "utf8",
+          env: { ...process.env, GITHUB_STEP_SUMMARY: join(root, "job-summary.md") },
+        },
       );
 
     const result = run();
@@ -308,6 +353,11 @@ test("CLI rejects missing or mismatched cap results, clears stale files, and rec
     assert.match(result.stderr, /refusing an uncapped result/);
     assert.equal(existsSync(join(directory, "diff-line-cap.json")), false);
     const summary = JSON.parse(readFileSync(join(directory, "diff-run.json")));
+
+    assert(readFileSync(join(root, "job-summary.md"), "utf8").includes("| Changed | 1 |"));
+    assert(
+      readFileSync(join(directory, "diff-summary.md"), "utf8").includes("Every omitted range"),
+    );
 
     assert.equal(summary.childExitCode, 0);
     assert.equal(summary.exitCode, 1);
@@ -368,26 +418,43 @@ test("both app scopes include write steps, transports, contracts, and tested com
   }
 });
 
-test("whole-diff line sampling is bounded, deterministic, and reports every omitted line", () => {
-  const ranges = [
-    { file: "tinker/a.ts", start: 1, end: 300 },
-    { file: "tinker/b.ts", start: 1, end: 300 },
-  ];
-  const result = budgetRanges(ranges);
-
-  assert.deepEqual(result, budgetRanges([...ranges].reverse()));
-  assert.equal(result.plannedLines, 600);
-  assert.equal(result.omittedLines.length, 200);
-
-  assert.equal(
-    result.ranges.reduce((count, range) => count + range.end - range.start + 1, 0),
-    400,
-  );
-  assert.deepEqual(budgetRanges([{ file: "small.ts", start: 1, end: 2 }]), {
-    ranges: [{ file: "small.ts", start: 1, end: 2 }],
-    plannedLines: 2,
-    omittedLines: [],
+test("changed lines have no total budget and own every overlap", () => {
+  const plan = planRanges({
+    changed: [{ file: "a.ts", start: 1, end: 700 }],
+    adjacent: [{ file: "a.ts", start: 699, end: 702 }],
+    testMapped: [{ file: "a.ts", start: 300, end: 1000 }],
   });
+  assert.equal(plan.plannedLines, 1000);
+  assert.deepEqual(plan.counts, { changed: 700, adjacent: 2, testMapped: 298 });
+  assert.deepEqual(plan.ranges[0], { file: "a.ts", start: 1, end: 700, source: "changed" });
+  assert.equal(
+    plan.ranges.reduce((count, range) => count + range.end - range.start + 1, 0),
+    1000,
+  );
+});
+
+test("job summary shows plan size, source counts, and every omitted range", () => {
+  const plan = {
+    app: "apps/example",
+    plannedLines: 705,
+    counts: { changed: 700, testMapped: 3, adjacent: 2 },
+    omittedRanges: [
+      { file: "tests/external.ts", start: 1, end: 4, reason: "test imports no mutable app source" },
+      { file: "a.ts", start: 1, end: 10, reason: "file deleted; no surviving adjacent lines" },
+    ],
+  };
+  const summary = planSummary(plan);
+  for (const part of [
+    "**705**",
+    "| Changed | 700 |",
+    "| Test-mapped | 3 |",
+    "| Adjacent | 2 |",
+    "tests/external.ts:1-4",
+    "a.ts:1-10",
+    "No total line cap",
+  ]) {
+    assert(summary.includes(part), part);
+  }
 });
 
 test("config-only PRs run unconditional gate contracts and actions are immutable", () => {

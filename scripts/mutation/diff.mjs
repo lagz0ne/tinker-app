@@ -1,9 +1,17 @@
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { importGraph } from "./span-map.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -13,7 +21,7 @@ export function changedRanges(diff) {
 
   const ranges = [];
 
-  for (const line of diff.split("\n")) {
+  diff.split("\n").forEach((line) => {
     if (line.startsWith("+++ ")) file = line.startsWith("+++ b/") ? line.slice(6) : undefined;
 
     const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
@@ -21,14 +29,15 @@ export function changedRanges(diff) {
     if (file && hunk) {
       ranges.push({
         file,
-        start: Math.max(1, Number(hunk[1])),
+        source: hunk[2] === "0" ? "adjacent" : "changed",
+        start: Math.max(1, Number(hunk[1]) - Number(hunk[2] === "0")),
         end:
           hunk[2] === "0"
-            ? Math.max(1, Number(hunk[1]) + 1)
+            ? Math.max(1, Number(hunk[1]) + 2)
             : Number(hunk[1]) + Number(hunk[2] ?? 1) - 1,
       });
     }
-  }
+  });
 
   return ranges;
 }
@@ -81,60 +90,123 @@ export function selectTests(nodes, changed, inventory) {
   };
 }
 
-/** Bound diff work to 400 stable source lines; weekly full reports do not use this plan. */
-export function budgetRanges(ranges, budget = 400) {
+/** Merge overlapping ranges without dropping lines; changed lines own overlaps first. */
+export function planRanges(sources) {
+  const order = ["changed", "adjacent", "testMapped"];
   const lines = new Map();
 
-  for (const { file, start, end } of ranges) {
-    for (let line = start; line <= end; line++) {
-      const key = `${file}:${line}`;
-      lines.set(key, { file, line, key, rank: createHash("sha256").update(key).digest("hex") });
+  order.forEach((source) => {
+    for (const { file, start, end } of sources[source]) {
+      for (let line = start; line <= end; line++) {
+        const key = `${file}:${line}`;
+        if (!lines.has(key)) lines.set(key, { file, line, source });
+      }
     }
-  }
+  });
 
-  const ranked = [...lines.values()].sort((a, b) =>
-    a.rank < b.rank ? -1 : Number(a.rank > b.rank),
+  const sorted = [...lines.values()].sort(
+    (a, b) =>
+      order.indexOf(a.source) - order.indexOf(b.source) ||
+      (a.file === b.file ? a.line - b.line : a.file < b.file ? -1 : 1),
   );
-  const selected = ranked
-    .slice(0, budget)
-    .sort((a, b) => (a.file === b.file ? a.line - b.line : a.file < b.file ? -1 : 1));
-  const sampled = [];
+  const ranges = [];
+  const counts = { changed: 0, adjacent: 0, testMapped: 0 };
 
-  for (const { file, line } of selected) {
-    const previous = sampled.at(-1);
-    if (previous?.file === file && previous.end + 1 === line) previous.end = line;
-    else sampled.push({ file, start: line, end: line });
+  for (const { file, line, source } of sorted) {
+    counts[source]++;
+    const previous = ranges.at(-1);
+    if (previous?.file === file && previous.source === source && previous.end + 1 === line) {
+      previous.end = line;
+    } else ranges.push({ file, start: line, end: line, source });
   }
 
-  return {
-    ranges: sampled,
-    plannedLines: lines.size,
-    omittedLines: ranked.slice(budget).map(({ key }) => key),
-  };
+  return { ranges, counts, plannedLines: lines.size };
+}
+
+/** Follow only each test's literal app imports, then select the spans those files own. */
+export function testImportSpans(app, entries, map) {
+  const config = JSON.parse(readFileSync(resolve(app, "stryker.config.json"), "utf8"));
+  const imports = { ...map.imports, ...importGraph(app, entries) };
+  const ranges = [];
+  const omittedRanges = [];
+  const testSources = {};
+
+  entries.forEach((entry) => {
+    const visited = new Set([entry.file]);
+    for (const file of visited) {
+      if (!imports[file] && existsSync(resolve(app, file))) {
+        Object.assign(
+          imports,
+          importGraph(app, [{ file, text: readFileSync(resolve(app, file), "utf8") }]),
+        );
+      }
+      (imports[file] ?? []).forEach((imported) => visited.add(imported));
+    }
+
+    const files = [...visited]
+      .filter((file) => inScope(config, file))
+      .sort((a, b) => a.localeCompare(b));
+    testSources[entry.file] = files;
+    if (!files.length) {
+      omittedRanges.push({
+        file: entry.file,
+        start: 1,
+        end: entry.text.split("\n").length,
+        source: "testMapped",
+        reason: "test imports no mutable app source",
+      });
+    }
+
+    for (const file of files) {
+      const owned = map.nodes.filter((node) => node.file === file);
+      const spans = owned.length
+        ? owned
+        : [
+            {
+              file,
+              start: 1,
+              end: readFileSync(resolve(app, file), "utf8").trimEnd().split("\n").length,
+            },
+          ];
+      ranges.push(...spans.map(({ file, start, end }) => ({ file, start, end })));
+    }
+  });
+
+  return { ranges, omittedRanges, testSources };
+}
+
+/** Both direct source changes and imported test targets use the same declared scope. */
+function inScope(config, file) {
+  return (
+    config.mutate.some((pattern) => !pattern.startsWith("!") && matchesGlob(file, pattern)) &&
+    !config.mutate.some((pattern) => pattern.startsWith("!") && matchesGlob(file, pattern.slice(1)))
+  );
+}
+
+/** GitHub shows the complete plan, not a hidden sample in an artifact. */
+export function planSummary(plan) {
+  const omitted = plan.omittedRanges
+    .map(({ file, start, end, reason }) => `| ${file}:${start}-${end} | ${reason} |`)
+    .join("\n");
+  return `## Mutation plan: ${plan.app}\n\nPlanned source lines: **${plan.plannedLines}**. No total line cap. Counts are exclusive; overlaps belong to changed, then adjacent, then test-mapped.\n\n| Source | Lines |\n| --- | ---: |\n| Changed | ${plan.counts.changed} |\n| Test-mapped | ${plan.counts.testMapped} |\n| Adjacent | ${plan.counts.adjacent} |\n\n### Every omitted range\n\n${omitted ? `| Range | Reason |\n| --- | --- |\n${omitted}` : "None."}\n\nArid/static filtering and one mutant per planned source line happen after this plan.\n`;
 }
 
 export function planDiff({ app, base, head, map }) {
   const git = (...args) => {
     const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
-
     if (result.error) throw result.error;
-
     if (result.status !== 0) {
       throw new Error(
         `git ${args[0]} failed (${result.signal ?? result.status}): ${result.stderr}`,
       );
     }
-
     return result.stdout;
   };
-
   const mergeBase = git("merge-base", base, head).trim();
-
   const prefix = relative(root, app).replaceAll("\\", "/") + "/";
-
   const config = JSON.parse(readFileSync(resolve(app, "stryker.config.json"), "utf8"));
 
-  // Select names first: generated registry JSON can exceed spawnSync's buffer.
+  // Select names first: generated registry JSON can exceed Git's capture buffer.
   const changedFiles = git(
     "diff",
     "--no-ext-diff",
@@ -148,47 +220,20 @@ export function planDiff({ app, base, head, map }) {
     .split("\0")
     .filter(Boolean)
     .map((file) => file.slice(prefix.length));
-
-  const canMutate = (file) =>
-    config.mutate.some((pattern) => !pattern.startsWith("!") && matchesGlob(file, pattern)) &&
-    !config.mutate.some(
-      (pattern) => pattern.startsWith("!") && matchesGlob(file, pattern.slice(1)),
-    );
-  const paths = changedFiles.filter((file) => canMutate(file) && existsSync(resolve(app, file)));
+  const paths = changedFiles.filter(
+    (file) => inScope(config, file) && existsSync(resolve(app, file)),
+  );
   const deletedSources = changedFiles.filter(
-    (file) => canMutate(file) && !existsSync(resolve(app, file)),
+    (file) => inScope(config, file) && !existsSync(resolve(app, file)),
   );
   const changedTests = changedFiles.filter((file) => /^tests\/.*\.(?:[cm]?[jt]sx?)$/.test(file));
-  const observedTests = new Set(
-    map.nodes.flatMap((node) => node.tests ?? []).map((test) => test.file),
-  );
-  const testFallback = changedTests.some((file) => !observedTests.has(file));
-  const broadFiles = [testFallback, deletedSources.length > 0]
-    .filter(Boolean)
-    .slice(0, 1)
-    .flatMap(() =>
-      git("ls-tree", "-r", "--name-only", "-z", head, "--", prefix)
-        .split("\0")
-        .filter(Boolean)
-        .map((file) => file.slice(prefix.length))
-        .filter(canMutate),
-    );
-  const testedNodes = map.nodes.filter(
-    (node) =>
-      canMutate(node.file) &&
-      (deletedSources.length > 0 ||
-        (changedTests.length > 0 &&
-          (testFallback || node.tests?.some((test) => changedTests.includes(test.file))))),
-  );
-
-  if (
-    changedTests.length + deletedSources.length > 0 &&
-    !(testedNodes.length + broadFiles.length)
-  ) {
-    throw new Error(
-      "Changed tests or deleted sources have no surviving source spans; collect a complete span map before mutation.",
-    );
-  }
+  const tests = changedTests.map((file) => ({
+    file,
+    text: existsSync(resolve(app, file))
+      ? readFileSync(resolve(app, file), "utf8")
+      : git("show", `${mergeBase}:${prefix}${file}`),
+  }));
+  const mapped = testImportSpans(app, tests, map);
 
   const diff = paths.length
     ? git(
@@ -201,39 +246,51 @@ export function planDiff({ app, base, head, map }) {
         ...paths.map((file) => prefix + file),
       )
     : "";
-  const ranges = [
-    ...changedRanges(diff).map((range) => ({
-      ...range,
-      file: range.file.slice(prefix.length),
-    })),
-    ...testedNodes.map(({ file, start, end }) => ({ file, start, end })),
-    ...broadFiles.map((file) => ({
+  const raw = changedRanges(diff).map((range) => ({
+    ...range,
+    file: range.file.slice(prefix.length),
+  }));
+  const sources = {
+    changed: raw.filter((range) => range.source === "changed"),
+    adjacent: raw.filter((range) => range.source === "adjacent"),
+    testMapped: mapped.ranges,
+  };
+  for (const ranges of Object.values(sources)) {
+    for (const range of ranges) {
+      const lines = readFileSync(resolve(app, range.file), "utf8").trimEnd().split("\n").length;
+      range.start = Math.min(range.start, lines);
+      range.end = Math.min(range.end, lines);
+    }
+  }
+  const planned = planRanges(sources);
+  const omittedRanges = [
+    ...mapped.omittedRanges,
+    ...deletedSources.map((file) => ({
       file,
       start: 1,
-      end: readFileSync(resolve(app, file), "utf8").trimEnd().split("\n").length,
+      end: git("show", `${mergeBase}:${prefix}${file}`).split("\n").length,
+      source: "adjacent",
+      reason: "file deleted; no surviving adjacent lines",
     })),
-  ].map((range) => {
-    const lines = readFileSync(resolve(app, range.file), "utf8").trimEnd().split("\n").length;
-    return { ...range, start: Math.min(range.start, lines), end: Math.min(range.end, lines) };
-  });
+  ];
 
-  for (const file of new Set(ranges.map((range) => range.file))) {
+  for (const file of new Set(planned.ranges.map((range) => range.file))) {
     if (git("show", `${head}:${prefix}${file}`) !== readFileSync(resolve(app, file), "utf8")) {
       throw new Error(
         `Checked-out ${file} differs from ${head}; measure the requested code, not another revision.`,
       );
     }
   }
-
-  const budget = budgetRanges(ranges);
-
-  const selection = selectTests(map.nodes, budget.ranges, map.tests);
-
-  const files = [...new Set(selection.tests.map((test) => test.file))].sort((a, b) =>
+  const selection = selectTests(map.nodes, planned.ranges, map.tests);
+  const selected = new Map(
+    [...selection.tests, ...map.tests.filter((test) => changedTests.includes(test.file))].map(
+      (test) => [JSON.stringify(test), test],
+    ),
+  );
+  const files = [...new Set([...selected.values()].map((test) => test.file))].sort((a, b) =>
     a.localeCompare(b),
   );
-
-  if (ranges.length && !files.length) {
+  if (planned.ranges.length && !files.length) {
     throw new Error("No mapped tests for the diff; collect a complete span map first.");
   }
 
@@ -241,14 +298,16 @@ export function planDiff({ app, base, head, map }) {
     app: prefix.slice(0, -1),
     base: mergeBase,
     requestedBase: base,
+    head,
     changedTests,
     deletedSources,
-    broadFiles,
-    testFallback,
-    head,
-    ...budget,
-    mutate: budget.ranges.map(({ file, start, end }) => `${file}:${start}-${end}`),
+    ...planned,
+    sources,
+    omittedRanges,
+    testSources: mapped.testSources,
+    mutate: planned.ranges.map(({ file, start, end }) => `${file}:${start}-${end}`),
     ...selection,
+    tests: [...selected.values()],
     testFiles: files,
     gaps: map.gaps,
   };
@@ -283,9 +342,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   );
 
   console.log(`Gaps:\n${plan.gaps.join("\n")}`);
-  console.log(
-    `Line budget: ${plan.plannedLines} planned; ${plan.omittedLines.length} omitted; at most 400 selected. Full coverage: workflow_dispatch.`,
-  );
+  const summary = planSummary(plan);
+  writeFileSync(resolve(directory, "diff-summary.md"), summary);
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+  console.log(summary);
 
   if (!args.includes("--plan-only") && plan.mutate.length) {
     const config = JSON.parse(readFileSync(resolve(app, "stryker.config.json"), "utf8"));

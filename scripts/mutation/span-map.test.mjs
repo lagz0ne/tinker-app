@@ -33,7 +33,10 @@ test("caller instrumentation keeps real Core and chains the observer", () => {
 });
 
 test("real graph follows shorthand/controller/barrel dependencies back to the cmd", () => {
-  const nodes = handleGraph(app);
+  const imports = {};
+  const nodes = handleGraph(app, imports);
+
+  assert(imports["tests/mail-delivery.test.ts"].includes("tinker/components/mail/index.server.ts"));
 
   const claim = nodes.find((node) => node.name === "claimMailBatch");
 

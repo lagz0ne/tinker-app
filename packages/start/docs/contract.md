@@ -222,10 +222,13 @@ tests, and gaps: operation/resource handles with no observed test span.
 The second command finds the PR merge base with the base branch, then reads
 Git's changed lines, finds their handles, and follows
 reverse `.depends` edges to command main or scope. It mutates only those line
-ranges. Test-only edits add their covered source spans; an unobserved or deleted
-test falls back to all tracked mutable source files, including plain helpers. Removed-only hunks select the
-surviving lines on both sides, clamped at the file ends. A whole-file deletion
-falls back to surviving mutable source files, and fails if none remain. Vitest selects the mapped test files; Stryker's per-test coverage then
+ranges. A changed test selects only source files it imports, transitively, inside
+the app, then the spans owned by those files. Plain helper files without Core
+handles use their own file span. Type-only imports do not add targets. A test
+with no mutable app imports plans nothing, and the summary says so. Deleted
+tests use their base-revision imports. There is no fallback to all source files.
+Removed-only hunks select two surviving lines on each side, clamped at file ends.
+A deleted file has no adjacent surviving lines; its omission is reported. Vitest selects the mapped test files; Stryker's per-test coverage then
 selects tests for each mutant. Native helpers and unobserved handles fall back
 to the map's complete test inventory, and the plan says when that happens.
 No missing span can silently remove a changed line from the gate. The script
@@ -233,16 +236,22 @@ rejects a checkout whose changed source differs from the requested head.
 
 Both commands write their report under the app's `reports/mutation/`. CI uploads
 the map, gap list, diff plan, elapsed run time, and mutant results, even on failure.
+The GitHub job summary shows plan size, changed/test-mapped/adjacent line counts,
+and every omitted range with its reason. Counts are exclusive: changed lines own
+overlaps before adjacent lines and test-mapped spans.
 The serial checks in `start-gates.yml` stay unchanged.
 
 The app matrix jobs run in parallel on separate GitHub runners; they share no
 services or writable files. One app failure does not cancel the other matrix
 job. Each job still uses one mutation worker and a
 180-minute total deadline. New pushes cancel the older run for that ref.
-The plan counts unique source lines and selects at most 400 by SHA-256 of
-relative file and line. It records every omitted line in diff-plan.json; use
-workflow_dispatch for an uncapped full report. Weekly full runs do not use this
-line budget. The diff job always runs the tool contracts, including config-only
+Every changed line stays planned; there is no total line budget or random
+source-line sample. Arid/static filtering happens in Stryker. The per-line mutant
+cap then applies to all planned sources, with changed-line ranges first. Extra
+test-mapped spans currently have no budget either. If the measured plan cannot
+fit the deadline, split by file into deterministic matrix shards; never drop
+changed lines to make it fit. Weekly full reports stay uncapped.
+The diff job always runs the tool contracts, including config-only
 PRs. Third-party actions are pinned to commit SHAs.
 Diff runs alone load `scripts/mutation/line-cap.mjs`: at most one eligible mutant
 per selected source line. A SHA-256 ordering of relative file, changed line, location,
