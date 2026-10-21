@@ -3,15 +3,13 @@ import { createRequire } from "node:module";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-import react from "@vitejs/plugin-react";
-
 import { clientOutput, serverOutput } from "./lib/build-output.mjs";
 import { say as routeSay } from "./lib/checks/routes.mjs";
 import { buildChecks } from "./lib/doctor.mjs";
 import { aliases, passThrough, startOptions } from "./lib/glue.mjs";
 import { recordViolation, restartNote, startViolations } from "./lib/hooks.mjs";
 import { installDevServer } from "./lib/main-host.mjs";
+import { cliOnly } from "./lib/named.mjs";
 import { baseDir } from "./lib/paths.mjs";
 import { prepare } from "./lib/prepare.mjs";
 import { checkTypes } from "./lib/typecheck.mjs";
@@ -103,11 +101,17 @@ async function tailwind(root) {
 
 /**
  * The glue: one call in the app's vite.config.ts joins the app to the base (ADR 0106).
+ * An app that names `cliEntry` and no `serverEntry` is CLI-only: it gets the aliases and the
+ * generated tsconfig, and no web plugins, routes, React, or TanStack Start.
  * @param {{ root?: string, serverEntry: string, routerEntry: string, startEntry: string, compileHints?: boolean, prerender?: object, pages?: object[], spa?: object, sitemap?: object }} [options] - From vite.config.ts; why: the app folder (default cwd), the app-owned native command entries, and Start's static output options.
  */
 export function tinker(options = {}) {
   const passed = passThrough(options);
   const root = resolve(options.root ?? process.cwd());
+  if (cliOnly(root)) {
+    prepare(root);
+    return [{ name: "tinker:glue", enforce: "pre", config: () => glueConfig(root) }];
+  }
 
   if (!existsSync(join(root, "src/routes"))) throw new Error(`tinker: ${routeSay.missing}`);
   prepare(root);
@@ -131,11 +135,14 @@ export function tinker(options = {}) {
     if (record.found) recordViolation(root, record.found, info);
   };
 
-  const start = tanstackStart({
-    ...own,
-    ...passed,
-    importProtection: { ...own.importProtection, onViolation },
-  });
+  // A web app loads TanStack Start and React here, so a CLI-only app never needs them.
+  const start = import("@tanstack/react-start/plugin/vite").then(({ tanstackStart }) =>
+    tanstackStart({
+      ...own,
+      ...passed,
+      importProtection: { ...own.importProtection, onViolation },
+    }),
+  );
 
   if (process.env.VITEST) return [glue, start];
 
@@ -144,7 +151,7 @@ export function tinker(options = {}) {
     verify(root, record),
     restartOn(root),
     start,
-    react(),
+    import("@vitejs/plugin-react").then(({ default: react }) => react()),
     tailwind(root),
     clientOutput(options.compileHints ?? true),
     serverOutput(),

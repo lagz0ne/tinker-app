@@ -90,4 +90,4 @@ The real registry proof packs local Start and uses the existing Core/React relea
 Its HTTP server stays on loopback. Nothing is published.
 
 The original prose lint and CI workflows are not in this checkout.
-The lander runs mutations: 85 for the golden copied runtime, 75 for tooling.
+The lander runs mutations: 85 for the golden copied runtime, 85 for tooling.

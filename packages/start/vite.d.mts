@@ -6,10 +6,11 @@ type StartOptions = NonNullable<Parameters<typeof tanstackStart>[0]>;
 /** The glue: one call in the app's vite.config.ts joins the app to the base (ADR 0106). */
 export declare function tinker(
   options: {
-    /** The app-owned command file, relative to the app folder. */
-    serverEntry: string;
-    routerEntry: string;
-    startEntry: string;
+    /** The app-owned command files, relative to the app folder. A CLI-only app leaves
+     * these three out and names only `cliEntry`. */
+    serverEntry?: string;
+    routerEntry?: string;
+    startEntry?: string;
     /** Optional process commands, each with its matching vite.<role>.config file. */
     workerEntry?: string;
     cliEntry?: string;

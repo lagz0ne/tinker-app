@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+import { cliOnly } from "../named.mjs";
 import {
   baseDir,
   basePackage,
@@ -181,7 +182,7 @@ function folderProblems(root) {
         !existsSync(join(dir, name)) || readFileSync(join(dir, name), "utf8") !== text,
     )
     .map(([name]) => say.stale(name));
-  return [...stale, ...treeProblems(root)];
+  return cliOnly(root) ? stale : [...stale, ...treeProblems(root)];
 }
 
 /**

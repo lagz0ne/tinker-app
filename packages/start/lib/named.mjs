@@ -26,6 +26,19 @@ function namedFile(root, entry) {
   };
 }
 
+/**
+ * A CLI-only app names `cliEntry` and no `serverEntry` in tinker(). It has no web entries,
+ * no routes, and needs no React or TanStack.
+ * @param {string} root - From a check, prepare, or tinker(); why: the app to read.
+ */
+export function cliOnly(root) {
+  const cli = namedFile(
+    root,
+    namedFiles.find((entry) => entry.option === "cliEntry"),
+  );
+  return Boolean(cli.file) && !serverFile(root).file;
+}
+
 export function serverFile(root) {
   return namedFile(
     root,
@@ -44,10 +57,12 @@ function entryPath(node, option) {
     .find(Boolean);
 }
 
+/** The app's entries: the three web entries are required unless the app is CLI-only. */
 export function appFiles(root) {
+  const web = !cliOnly(root);
   return namedFiles
     .map((entry) => namedFile(root, entry))
-    .filter((entry) => entry.required || entry.present);
+    .filter((entry) => (entry.required && web) || entry.present);
 }
 
 /** Process entries share one host contract; optional entries keep their own SSR build config. */

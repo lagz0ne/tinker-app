@@ -59,7 +59,16 @@ async function checkCopiedItems(registry) {
     await checkCopiedItem(registry, folder.name, prefix, manifest.requires);
   }
 
-  await checkCopiedItem(registry, "base", "tinker/base", ["errors", "requests"]);
+  const base = await copiedFiles("tinker/base");
+  const main = "tinker/base/main.ts";
+  await checkCopiedItem(registry, "base-main", "tinker/base", [], [main]);
+  await checkCopiedItem(
+    registry,
+    "base",
+    "tinker/base",
+    ["base-main", "errors", "requests"],
+    base.filter((file) => file !== main),
+  );
   const business = await copiedFiles("src/demo");
   const requires = new Set();
   for (const file of business) {
@@ -71,8 +80,11 @@ async function checkCopiedItems(registry) {
   await checkCopiedItem(registry, "demo", "src/demo", [...requires]);
 }
 
-/** Dependencies are direct requires, and source paths cover that owner exactly. */
-async function checkCopiedItem(registry, name, prefix, requires) {
+/**
+ * Dependencies are direct requires, and source paths cover that owner exactly: every file in
+ * its folder, or the `expected` files when two items split one folder (base-main and base).
+ */
+async function checkCopiedItem(registry, name, prefix, requires, expected) {
   const item = registry.items.find((entry) => entry.name === name);
   assert.ok(item, `missing copied item ${name}`);
   assert.deepEqual(
@@ -84,7 +96,7 @@ async function checkCopiedItem(registry, name, prefix, requires) {
   const files = item.files.filter((file) => file.target.startsWith(`~/${prefix}/`));
   assert.deepEqual(
     files.map((file) => file.path).sort(),
-    (await copiedFiles(prefix)).sort(),
+    (expected ?? (await copiedFiles(prefix))).sort(),
     `${name}: files must cover its golden source`,
   );
   for (const file of files) {

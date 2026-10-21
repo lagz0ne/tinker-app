@@ -17,6 +17,12 @@ These changes are in current source, not the released 0.10.0 tarball.
   as 129 after a hangup.
 - The contract adds two rules. A command that owns child processes ends them
   inside the 10-second grace. A command may give exit 2 one documented meaning.
+- An app may be CLI-only: `tinker({ cliEntry: "cmds/cli.ts" })` with no
+  `serverEntry`. It needs no router, start, or server entry, no `src/routes`,
+  and no React or TanStack: those are now optional peers, and `tinker()` loads
+  them only for a web app. `tinker prepare` writes no route tree for it, and
+  doctor skips the routes check. The registry's new `base-main` item copies only
+  `tinker/base/main.ts`; the web `base` item requires it.
 
 - `mailMaxSenders` (`mail.maxSenders`, default 4) caps SMTP connections; extra sends wait without starting their send deadline.
 - An acknowledgement failure counts as a crash attempt; remaining claims keep their leases until expiry.
