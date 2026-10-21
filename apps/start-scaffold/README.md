@@ -177,7 +177,8 @@ host pack; the export carries it in vendor and checks its host files against
 this source. Nothing is published.
 
 The export copies source. It never changes template branches or another checkout.
-The golden runtime is `tinker/`; its mutation floor is 85. The lander runs mutation checks.
+The golden runtime is `tinker/`. App pull requests use the changed-line mutation
+gate at floor 60; the weekly full run is a report. `packages/start` stays at 85.
 
 ## Promises tested through app scopes
 

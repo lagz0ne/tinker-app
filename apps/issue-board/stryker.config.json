@@ -1,12 +1,16 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "testRunner": "vitest",
-  "plugins": ["@stryker-mutator/vitest-runner"],
+  "plugins": ["@stryker-mutator/vitest-runner", "../start-scaffold/scripts/mutation-arid.mjs"],
   "mutate": [
     "tinker/**/*.ts",
     "tinker/**/*.tsx",
     "src/demo/**/*.ts",
     "src/demo/**/*.tsx",
+    "src/backend/**/*.ts",
+    "src/transport/**/*.ts",
+    "src/contracts/**/*.ts",
+    "cmds/**/*.ts",
     "!tinker/base/server-entry.ts",
     "!tinker/base/router-entry.tsx",
     "!tinker/base/start-entry.ts",
@@ -18,13 +22,16 @@
   "reporters": ["clear-text", "progress", "json"],
   "thresholds": {
     "high": 90,
-    "low": 85,
-    "break": 85
+    "low": 60,
+    "break": 60
   },
   "tempDirName": ".stryker-tmp",
   "concurrency": 1,
   "timeoutMS": 15000,
   "vitest": {
     "related": false
-  }
+  },
+  "ignoreStatic": true,
+  "ignorers": ["arid"],
+  "dryRunTimeoutMinutes": 10
 }

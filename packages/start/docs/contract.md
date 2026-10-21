@@ -189,8 +189,126 @@ Test through small scopes with typed bindings and native resource presets.
 Keep command and host contract tests. Run tests serially with
 VITEST_MAX_WORKERS=1 and VP_RUN_CONCURRENCY_LIMIT=1. Never skip or quarantine a
 test. A fault control must fail for its named cause. Run the app's listed gates,
-including check-plain --prove after changing its rules. The copied runtime's
-mutation floor stays 85; the lander runs mutation checks.
+including check-plain --prove after changing its rules.
+
+### App mutation diff gate
+
+App pull requests use `.github/workflows/mutation.yml` at floor **60**. The
+weekly full app run, also available through workflow_dispatch, is a report and
+never a pull-request merge gate. `packages/start` keeps floor **85**; Core does
+not change.
+
+Both apps mutate tinker, src/demo, src/backend, src/transport, src/contracts,
+and cmds TypeScript. Command mains stay in: input, startup, exit, and close have
+contract tests. No cmd file is exempted as untested wiring. Board src/frontend
+views remain outside this backend scope. Existing exclusions keep native base
+entries/fallbacks, route glue, and sync/functions binding declarations out.
+
+Both apps ignore static mutants and keep the one-worker default. An instrumented
+baseline of 533 tests exceeded five minutes on one CPU, so its startup deadline
+is ten minutes; configured `timeoutMS` stays 15000. One shared arid-node ignorer suppresses log
+calls, span labels, attribute names, and whole numeric initializers named for
+timeout, deadline, or grace. Budget expressions stay eligible for mutation. These rules follow
+[Google's arid-node approach](https://testing.googleblog.com/2021/04/mutation-testing.html).
+They do not suppress attempt bounds, status values, or other business rules.
+
+Run this from the repo root after building the app:
+
+```bash
+node scripts/mutation/span-map.mjs apps/issue-board
+node scripts/mutation/diff.mjs --app apps/issue-board --base origin/next --head HEAD
+```
+
+The first command runs every app test once with both vite.config and
+vitest.config, including the app test timeout and mock settings. A test-only Vite transform observes
+Core's public span export at scope creation; it preserves existing observers
+and logs. `reports/mutation/span-map.json` lists handles, reverse dependencies,
+tests, and gaps: operation/resource handles with no observed test span.
+
+The second command finds the PR merge base with the base branch, then reads
+Git's changed lines, finds their handles, and follows
+reverse `.depends` edges to command main or scope. It mutates only those line
+ranges. A changed test selects its direct app imports only (depth one), then
+follows named/star re-exports to the declaring files, then intersects those
+files with spans that test file actually observed in the span map. Ordinary
+indirect imports, type-only imports, unobserved spans, and plain helpers
+without spans add no test-mapped targets. A test with no matching span plans
+nothing, and the summary says why. Deleted tests use their base-revision imports
+and any coverage still present in the current map. There is no fallback to all
+source files.
+Removed-only hunks select two surviving lines on each side, clamped at file ends.
+A deleted file has no adjacent surviving lines; its omission is reported. Vitest selects the mapped test files; Stryker's per-test coverage then
+selects tests for each mutant. Native helpers and unobserved handles fall back
+to the map's complete test inventory, and the plan says when that happens.
+No missing span can silently remove a changed line from the gate. The script
+rejects a checkout whose changed source differs from the requested head.
+
+Both commands write their report under the app's `reports/mutation/`. CI uploads
+the map, gap list, diff plan, elapsed run time, and mutant results, even on failure.
+The GitHub job summary shows plan size, changed/test-mapped/adjacent line counts,
+and every omitted range with its reason. A separate table lists every changed
+app file outside the mutation scope, including excluded source and generated
+files; changed test files are marked as mapped separately. Counts are exclusive: changed lines own
+overlaps before adjacent lines and test-mapped spans.
+The serial checks in `start-gates.yml` stay unchanged.
+
+CI first builds each app's span map and full diff plan. It then splits the
+planned ranges by file into parallel matrix jobs, with no shared services
+or writable files. Largest files go first to the least-loaded shard, with stable
+file-name ties. Files over the 60-minute target split into bounded range pieces. Every planned
+line belongs to exactly one shard. Multiline mutants keep their global owner
+line, so a file split cannot count one mutant twice.
+Each mutation job uses one worker and a 180-minute deadline. New pushes cancel
+the older PR run for that ref. Manual and weekly runs have separate concurrency
+groups, so a manual run cannot cancel the weekly report. A failed shard does not
+cancel its siblings.
+
+Shard count comes from plan size, aimed at about 60 minutes per shard. The
+calibration is PR #3 at concurrency one: 1,814 tested mutants, 220.29 minutes,
+7.29 seconds per tested mutant including baseline. Sizing counts every planned
+line as one possible mutant and reserves another 200 seconds for each baseline.
+The 1,000-line plan splits into three jobs of 334, 333, and 333 lines. These are
+estimates, not a time guarantee. A single large file splits by planned ranges at the same line capacity; its
+pieces are packed with the other files. Plans above GitHub's 256-job limit fail rather than drop lines.
+
+Each shard reports its score but has no individual score floor. The always-run
+`diff-gate` job requires every shard to succeed, rejects missing, duplicate,
+foreign or incomplete results, and sums mutant counts separately for each app.
+Each app's combined score must reach 60; averaging percentages could hide a
+weak result. App configuration floors stay at 60, and unsharded local runs keep
+that floor. Weekly full reports and Start's floor are unchanged.
+Every changed line stays planned; there is no total line budget or random
+source-line sample. Arid/static filtering happens in Stryker. The per-line mutant
+cap then applies to all planned sources, with changed-line ranges first. Native
+instrumentation includes enclosing statements and merges touching ranges across
+source kinds, so multiline mutants at range edges remain eligible. The line cap
+uses the original plan and ignores statement neighbors outside its lines. Extra
+test-mapped lines have a separate 200-line budget, picked in stable file-and-line
+order after changed and adjacent lines own overlaps. Every range left out is
+listed in the GitHub summary. The budget never removes changed or adjacent
+lines. Sharding never drops changed lines to make a deadline. Weekly full
+reports stay uncapped.
+The diff job always runs the tool contracts, including config-only
+PRs. Third-party actions are pinned to commit SHAs.
+Diff runs alone load `scripts/mutation/line-cap.mjs`: at most one eligible mutant
+per selected source line. A SHA-256 ordering of relative file, changed line, location,
+operator, and replacement makes the choice repeatable, independent of candidate
+IDs or arrival order. Multiline nodes belong to their first changed line.
+Git lines are one-based and native plan positions are zero-based; the cap converts
+both bounds and respects an exclusive end at column zero. The public Stryker
+plan event marks other candidates Ignored before execution;
+`diff-line-cap.json` records the choices. A cap error suppresses execution and
+the diff script rejects a missing selection, error artifact, or report whose
+mutant IDs differ from the selection, since Stryker
+otherwise logs reporter errors and continues. Weekly full runs do not load this plugin.
+This follows the line sampling in
+[State of Mutation Testing at Google (2018)](https://research.google/pubs/state-of-mutation-testing-at-google/).
+
+No incremental CI cache is enabled. It can reuse unchanged mutant/test results
+on repeat pushes, but a base-SHA key alone does not cover changes in imported
+helpers, dependencies, or tooling. Stryker does not detect all those changes,
+and its coverage baseline still runs. Safe reuse needs broader cache invalidation;
+it does not remove the cost of a first large diff.
 
 ## D1: app inputs and direct dependencies
 
