@@ -139,7 +139,9 @@ cliEntry: it has no web entries or routes and needs no React or TanStack, and it
 copies only the base-main item. Apps with a worker or CLI also name workerEntry
 and cliEntry and provide matching vite.worker.config.ts or vite.cli.config.ts
 with literal build.ssr and build.outDir. Doctor and build check those
-exports/configs. gate:commands builds and runs each process entry serially,
+exports/configs. A CLI may ship as a package bin that imports the built CLI
+entry and passes it to runMain; doctor checks that each bin file exists, is in
+files, and imports that entry. gate:commands builds and runs each process entry serially,
 proving its unknown-input exit and joined close without live services. The real
 app tests and live proofs exercise configured startup and work paths.
 

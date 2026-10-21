@@ -103,13 +103,16 @@ async function tailwind(root) {
 /**
  * A CLI-only app's plugins: the glue, which builds cmds/cli.ts the way its vite.cli.config.ts
  * names, so `vp build` is its build; and the checks, before anything is built.
+ * Start and Core stay imports: the app's bin loads them from its own dependencies, so the built
+ * CLI holds no copy, even when a workspace links them and Vite would inline them.
  * @param {string} root - From tinker(); why: the app being built.
  */
 function cliPlugins(root) {
   const cli = commandFiles(root).find((entry) => entry.role === "cli");
   const build = { ssr: cli.file, outDir: cli.outDir };
+  const ssr = { external: ["@tinker/start", "@tinker/core"] };
   return [
-    { name: "tinker:glue", enforce: "pre", config: () => ({ ...glueConfig(root), build }) },
+    { name: "tinker:glue", enforce: "pre", config: () => ({ ...glueConfig(root), build, ssr }) },
     verify(root),
   ];
 }

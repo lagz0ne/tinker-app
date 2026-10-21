@@ -1,7 +1,17 @@
 import { existsSync } from "node:fs";
-import { join, basename, extname, resolve } from "node:path";
+import {
+  join,
+  basename,
+  dirname,
+  extname,
+  matchesGlob,
+  normalize,
+  relative,
+  resolve,
+} from "node:path";
 
-import { parseSource } from "./source.mjs";
+import { readJson } from "./paths.mjs";
+import { parseSource, specifiers } from "./source.mjs";
 
 /** Required command exports read by Start; the app owns its shell and styles. */
 const namedFiles = [
@@ -106,6 +116,42 @@ export function commandProblems(root) {
       if (!entry.outDir) return [`${entry.config}:1 name a literal build.outDir for ${entry.file}`];
       return [];
     });
+}
+
+/**
+ * Each package.json bin runs the built CLI: its file exists, `files` lists it so a pack keeps
+ * it, and it imports the entry the CLI build writes, read from vite.cli.config.ts. An app with no
+ * bin has nothing to check; the exec bit is the package manager's job.
+ * @param {string} root - From the named check; why: the app's package.json and bin files.
+ */
+export function binProblems(root) {
+  const path = join(root, "package.json");
+  const pkg = existsSync(path) ? readJson(path) : {};
+  const bins = typeof pkg.bin === "string" ? { [pkg.name]: pkg.bin } : (pkg.bin ?? {});
+  const cli = commandFiles(root).find((entry) => entry.role === "cli");
+  return Object.entries(bins).flatMap(([name, named]) => {
+    const file = normalize(named);
+    if (!existsSync(join(root, file))) {
+      return [`${file}:1 is missing; package.json bin ${name} names it`];
+    }
+    const listed = (entry) => {
+      const pattern = normalize(entry).replace(/\/$/, "");
+      return file.startsWith(`${pattern}/`) || matchesGlob(file, pattern);
+    };
+    if (pkg.files && !pkg.files.some(listed)) {
+      return [`package.json: files does not list ${file}, so a pack leaves out bin ${name}`];
+    }
+
+    if (!cli?.file) {
+      return [`package.json: bin ${name} runs a built CLI; name cliEntry in tinker()`];
+    }
+    if (!cli.output) return [];
+    const built = resolve(root, cli.output);
+    const names = specifiers(parseSource(join(root, file))).map(({ name: spec }) => spec);
+    if (names.some((spec) => resolve(root, dirname(file), spec) === built)) return [];
+    const entry = relative(dirname(join(root, file)), built);
+    return [`${file}:1 does not import ${entry}, the built CLI entry; import main from it`];
+  });
 }
 
 /** The page shell: when it exists, it replaces the base's root route. */
