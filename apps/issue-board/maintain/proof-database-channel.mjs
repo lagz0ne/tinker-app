@@ -29,7 +29,16 @@ const url = new URL(connectionString);
 const name = "channel_" + randomUUID();
 url.searchParams.set("application_name", name);
 
-const root = createScope({ tags: [databaseUrl(url)] });
+const lost = Promise.withResolvers();
+
+const root = createScope({
+  tags: [databaseUrl(url)],
+  observe: {
+    log: (entry) => {
+      if (entry.message === "database.idleLost") lost.resolve(entry);
+    },
+  },
+});
 
 let close;
 
@@ -95,6 +104,39 @@ try {
 
   console.log(
     "PASS database channel: requested board_outbox, rollback silent, committed wake, backend PID drop, new listener receives next wake.",
+  );
+
+  const lease = await db.checkout();
+
+  const idle = (await lease.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
+
+  lease.release();
+
+  await peer.query("SELECT pg_terminate_backend($1)", [idle]);
+
+  const logged = await Promise.race([
+    lost.promise,
+    new Promise((resolve) => setTimeout(resolve, 5000)),
+  ]);
+
+  assert.match(
+    logged?.attributes.error ?? "",
+    /terminating connection due to administrator command/,
+    "idle pool client loss must be logged, not crash the process",
+  );
+
+  const fresh = await db.checkout();
+
+  assert.notEqual(
+    (await fresh.query("SELECT pg_backend_pid() AS pid")).rows[0].pid,
+    idle,
+    "pool must replace a lost idle client",
+  );
+
+  fresh.release();
+
+  console.log(
+    "PASS database pool: terminated idle client is logged as database.idleLost; process lives; next checkout gets a new backend PID.",
   );
 } finally {
   await close?.();

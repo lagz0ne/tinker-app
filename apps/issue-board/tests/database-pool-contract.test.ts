@@ -37,6 +37,7 @@ for (const failed of [false, true]) {
               default: {
                 Pool: function Pool() {
                   return {
+                    on: () => {},
                     connect: async () => {
                       connections++;
                       return client;
@@ -97,7 +98,7 @@ test("caller abort interrupts an established LISTEN and removes every listener",
           ({
             default: {
               Pool: function Pool() {
-                return { connect: async () => client, end: async () => {} };
+                return { on: () => {}, connect: async () => client, end: async () => {} };
               },
             },
           }) as unknown as typeof import("pg"),
@@ -146,6 +147,7 @@ test("named listeners accept one-character and full-length Postgres identifiers"
             default: {
               Pool: function Pool() {
                 return {
+                  on: () => {},
                   connect: async () =>
                     Object.assign(new EventEmitter(), {
                       query: async (text: string) => {

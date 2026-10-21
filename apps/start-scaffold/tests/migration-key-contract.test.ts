@@ -18,6 +18,7 @@ test("migrations keep the same lock keys across process and release versions", a
             default: {
               Pool: function Pool() {
                 return {
+                  on: () => {},
                   connect: async () => ({
                     query: async (config: { text: string }, values: unknown[]) => {
                       queries.push({ text: config.text, values });

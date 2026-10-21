@@ -53,6 +53,27 @@ const released = Promise.withResolvers();
 
 let sending;
 
+/** The first claimant's COMMIT waits here, so the second claim runs while its row locks are held. */
+let commitHold;
+
+const holdCommit = (client) =>
+  new Proxy(client, {
+    get(target, key) {
+      if (key !== "query") return Reflect.get(target, key, target);
+
+      return (text, ...rest) => {
+        const hold = text === "COMMIT" ? commitHold : undefined;
+
+        if (!hold) return target.query(text, ...rest);
+
+        commitHold = undefined;
+        hold.reached.resolve();
+
+        return hold.release.promise.then(() => target.query(text, ...rest));
+      };
+    },
+  });
+
 try {
   await peer.connect();
 
@@ -75,7 +96,9 @@ try {
       clock,
       tags: [mailLeaseMs(120000)],
       presets: [
-        preset(database, async () => writeDatabase(client, leaseFrom)),
+        preset(database, async () =>
+          writeDatabase(index === 0 ? holdCommit(client) : client, leaseFrom),
+        ),
         preset(alertMail, async () => ({
           send: async () => {
             entered.resolve();
@@ -92,7 +115,25 @@ try {
     `INSERT INTO mail_outbox(id,"to",subject,text,dedupe_key,next_at) SELECT n,'proof@example.test','Lease','No SMTP',n::text,to_timestamp(0) FROM generate_series(1,21) n`,
   );
 
-  const first = await Promise.all(roots.map((root) => dispatch.run(root, claimMailBatch)));
+  commitHold = { reached: Promise.withResolvers(), release: Promise.withResolvers() };
+
+  const hold = commitHold;
+
+  const holding = dispatch.run(roots[0], claimMailBatch);
+
+  await Promise.race([hold.reached.promise, holding]);
+
+  const second = await dispatch
+    .run(roots[1], claimMailBatch)
+    .then(
+      (batch) => ({ status: "success", batch }),
+      () => ({ status: "failed" }),
+    )
+    .finally(() => hold.release.resolve());
+
+  assert.equal(second.status, "success", "second claim must skip rows the first claim holds");
+
+  const first = [await holding, second.batch];
 
   assert.deepEqual(
     first.map((batch) => batch.rows.length).sort((a, b) => a - b),
@@ -140,7 +181,7 @@ try {
   );
 
   console.log(
-    "PASS mail leases: disjoint 20/1 atomic claims; no locks after commit; active lease protected; expired lease reclaimed; stale ack refused.",
+    "PASS mail leases: second claim runs while the first holds its uncommitted row locks; disjoint 20/1 atomic claims; no locks after commit; active lease protected; expired lease reclaimed; stale ack refused.",
   );
 
   const pid = (await clients[0].query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
@@ -249,6 +290,8 @@ try {
     "PASS mail leases: real delivery waits outside claim locks and acknowledges by token after send.",
   );
 } finally {
+  commitHold?.release.resolve();
+
   released.resolve();
 
   if (sending) await Promise.allSettled([sending]);
