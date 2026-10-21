@@ -15,7 +15,7 @@ import { dirname, join, matchesGlob } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { planRanges, planSummary, changedRanges, selectTests } from "./diff.mjs";
+import { planRanges, planSummary, changedRanges, selectTests, testImportSpans } from "./diff.mjs";
 
 test("new-side diff ranges include additions and surviving deletion neighbors", () => {
   assert.deepEqual(
@@ -157,14 +157,14 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
 
     writeFileSync(
       join(app, "tests/value.test.ts"),
-      'import {value} from "./middle"; assert(value);\n',
+      'import {value} from "@/value"; assert(value);\n',
     );
     git("add", ".");
     git("commit", "--quiet", "-m", "Add source coverage fixture");
     const testBase = git("rev-parse", "HEAD");
     writeFileSync(
       join(app, "tests/value.test.ts"),
-      'import {value} from "./middle"; assert(true);\n',
+      'import {value} from "@/value"; assert(true);\n',
     );
     git("add", ".");
     git("commit", "--quiet", "-m", "Weaken only a test");
@@ -224,7 +224,7 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
       base: removedTestBase,
       head: "HEAD",
       map: {
-        nodes: [{ ...covered, tests: [] }],
+        nodes: [covered],
         gaps: [],
         tests: [{ file: "tests/other.test.ts", name: "other" }],
       },
@@ -274,7 +274,7 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
       map: { nodes: [], gaps: [], tests: [{ file: "tests/external.test.ts", name: "nothing" }] },
     });
     assert.deepEqual(external.mutate, []);
-    assert.equal(external.omittedRanges[0].reason, "test imports no mutable app source");
+    assert.equal(external.omittedRanges[0].reason, "test imports no mutable app source directly");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -424,13 +424,23 @@ test("changed lines have no total budget and own every overlap", () => {
     adjacent: [{ file: "a.ts", start: 699, end: 702 }],
     testMapped: [{ file: "a.ts", start: 300, end: 1000 }],
   });
-  assert.equal(plan.plannedLines, 1000);
-  assert.deepEqual(plan.counts, { changed: 700, adjacent: 2, testMapped: 298 });
+  assert.equal(plan.plannedLines, 902);
+  assert.deepEqual(plan.counts, { changed: 700, adjacent: 2, testMapped: 200 });
   assert.deepEqual(plan.ranges[0], { file: "a.ts", start: 1, end: 700, source: "changed" });
   assert.equal(
     plan.ranges.reduce((count, range) => count + range.end - range.start + 1, 0),
-    1000,
+    902,
   );
+
+  assert.deepEqual(plan.omittedRanges, [
+    {
+      file: "a.ts",
+      start: 903,
+      end: 1000,
+      source: "testMapped",
+      reason: "test-mapped line budget 200; changed and adjacent lines kept first",
+    },
+  ]);
 });
 
 test("job summary shows plan size, source counts, and every omitted range", () => {
@@ -470,4 +480,81 @@ test("config-only PRs run unconditional gate contracts and actions are immutable
     assert.match(match[1], /^[a-f0-9]{40}$/);
   }
   assert.match(workflow, /group: mutation-\$\{\{ github.ref \}\}\n  cancel-in-progress: true/);
+});
+
+test("test targets require both a direct import and a span observed by that test file", () => {
+  const app = mkdtempSync(join(tmpdir(), "mutation-direct-"));
+  try {
+    mkdirSync(join(app, "tinker"));
+    symlinkSync(join(process.cwd(), "node_modules"), join(app, "node_modules"), "dir");
+    writeFileSync(join(app, "package.json"), "{}");
+    writeFileSync(join(app, "stryker.config.json"), JSON.stringify({ mutate: ["tinker/**/*.ts"] }));
+    writeFileSync(join(app, "tinker/direct.ts"), 'export * from "./indirect";\n');
+    writeFileSync(join(app, "tinker/indirect.ts"), "export const indirect = 1;\n");
+
+    const entry = { file: "tests/unit.test.ts", text: 'import {value} from "../tinker/direct";\n' };
+    const own = {
+      file: "tinker/direct.ts",
+      start: 2,
+      end: 5,
+      tests: [{ file: entry.file, name: "covered" }],
+    };
+    const result = testImportSpans(app, [entry], {
+      nodes: [
+        own,
+        { ...own, start: 8, end: 12, tests: [{ file: "tests/other.test.ts", name: "other" }] },
+        { ...own, file: "tinker/indirect.ts" },
+      ],
+      imports: { "tinker/direct.ts": ["tinker/indirect.ts"] },
+    });
+    assert.deepEqual(result.ranges, [{ file: "tinker/direct.ts", start: 2, end: 5 }]);
+    assert.deepEqual(result.testSources[entry.file], ["tinker/direct.ts"]);
+
+    const uncovered = testImportSpans(app, [entry], { nodes: [{ ...own, tests: [] }] });
+    assert.deepEqual(uncovered.ranges, []);
+    assert.equal(
+      uncovered.omittedRanges[0].reason,
+      "direct imports have no spans covered by this test",
+    );
+  } finally {
+    rmSync(app, { recursive: true, force: true });
+  }
+});
+
+test("test-mapped budget is stable, reports omissions, and never spends changed-line space", () => {
+  const sources = {
+    changed: [{ file: "z.ts", start: 1, end: 1000 }],
+    adjacent: [{ file: "z.ts", start: 1001, end: 1002 }],
+    testMapped: [
+      { file: "b.ts", start: 1, end: 3 },
+      { file: "a.ts", start: 1, end: 3 },
+      { file: "z.ts", start: 1, end: 1000 },
+    ],
+  };
+
+  const plan = planRanges(sources, 4);
+  assert.deepEqual(plan.counts, { changed: 1000, adjacent: 2, testMapped: 4 });
+  assert.deepEqual(plan.ranges.slice(-2), [
+    { file: "a.ts", start: 1, end: 3, source: "testMapped" },
+    { file: "b.ts", start: 1, end: 1, source: "testMapped" },
+  ]);
+
+  assert.deepEqual(plan.omittedRanges, [
+    {
+      file: "b.ts",
+      start: 2,
+      end: 3,
+      source: "testMapped",
+      reason: "test-mapped line budget 4; changed and adjacent lines kept first",
+    },
+  ]);
+  assert.deepEqual(
+    planRanges({ ...sources, testMapped: [...sources.testMapped].reverse() }, 4),
+    plan,
+  );
+  assert.deepEqual(planRanges(sources, 0).counts, { changed: 1000, adjacent: 2, testMapped: 0 });
+
+  const summary = planSummary({ ...plan, app: "apps/example" });
+  assert(summary.includes("Test-mapped budget: **4**"));
+  assert(summary.includes("b.ts:2-3"));
 });

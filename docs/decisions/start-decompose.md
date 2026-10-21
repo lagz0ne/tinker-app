@@ -223,11 +223,13 @@ tests, and gaps: operation/resource handles with no observed test span.
 The second command finds the PR merge base with the base branch, then reads
 Git's changed lines, finds their handles, and follows
 reverse `.depends` edges to command main or scope. It mutates only those line
-ranges. A changed test selects only source files it imports, transitively, inside
-the app, then the spans owned by those files. Plain helper files without Core
-handles use their own file span. Type-only imports do not add targets. A test
-with no mutable app imports plans nothing, and the summary says so. Deleted
-tests use their base-revision imports. There is no fallback to all source files.
+ranges. A changed test selects its direct app imports only (depth one), then
+intersects those files with spans that test file actually observed in the span
+map. Indirect imports, type-only imports, unobserved spans, and plain helpers
+without spans add no test-mapped targets. A test with no matching span plans
+nothing, and the summary says why. Deleted tests use their base-revision imports
+and any coverage still present in the current map. There is no fallback to all
+source files.
 Removed-only hunks select two surviving lines on each side, clamped at file ends.
 A deleted file has no adjacent surviving lines; its omission is reported. Vitest selects the mapped test files; Stryker's per-test coverage then
 selects tests for each mutant. Native helpers and unobserved handles fall back
@@ -249,7 +251,10 @@ job. Each job still uses one mutation worker and a
 Every changed line stays planned; there is no total line budget or random
 source-line sample. Arid/static filtering happens in Stryker. The per-line mutant
 cap then applies to all planned sources, with changed-line ranges first. Extra
-test-mapped spans currently have no budget either. If the measured plan cannot
+test-mapped lines have a separate 200-line budget, picked in stable file-and-line
+order after changed and adjacent lines own overlaps. Every range left out is
+listed in the GitHub summary. The budget never removes changed or adjacent
+lines. If the measured plan cannot
 fit the deadline, split by file into deterministic matrix shards; never drop
 changed lines to make it fit. Weekly full reports stay uncapped.
 The diff job always runs the tool contracts, including config-only

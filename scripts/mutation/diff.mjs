@@ -90,8 +90,11 @@ export function selectTests(nodes, changed, inventory) {
   };
 }
 
-/** Merge overlapping ranges without dropping lines; changed lines own overlaps first. */
-export function planRanges(sources) {
+/** Keep all changed/adjacent lines; budget only extra test-mapped lines after overlaps. */
+export function planRanges(sources, testMappedLineBudget = 200) {
+  if (!Number.isInteger(testMappedLineBudget) || testMappedLineBudget < 0) {
+    throw new Error("Test-mapped line budget must be a non-negative integer");
+  }
   const order = ["changed", "adjacent", "testMapped"];
   const lines = new Map();
 
@@ -109,66 +112,65 @@ export function planRanges(sources) {
       order.indexOf(a.source) - order.indexOf(b.source) ||
       (a.file === b.file ? a.line - b.line : a.file < b.file ? -1 : 1),
   );
-  const ranges = [];
+  const firstMapped = sorted.findIndex(({ source }) => source === "testMapped");
+  const selected = sorted.filter(
+    ({ source }, index) => source !== "testMapped" || index - firstMapped < testMappedLineBudget,
+  );
+  const omitted = firstMapped < 0 ? [] : sorted.slice(firstMapped + testMappedLineBudget);
   const counts = { changed: 0, adjacent: 0, testMapped: 0 };
+  selected.forEach(({ source }) => counts[source]++);
 
-  for (const { file, line, source } of sorted) {
-    counts[source]++;
+  return {
+    ranges: mergeLines(selected),
+    counts,
+    plannedLines: selected.length,
+    testMappedLineBudget,
+    omittedRanges: mergeLines(omitted).map((range) => ({
+      ...range,
+      reason: `test-mapped line budget ${testMappedLineBudget}; changed and adjacent lines kept first`,
+    })),
+  };
+}
+
+/** Compact both selected and omitted lines without hiding a gap. */
+function mergeLines(lines) {
+  const ranges = [];
+  for (const { file, line, source } of lines) {
     const previous = ranges.at(-1);
     if (previous?.file === file && previous.source === source && previous.end + 1 === line) {
       previous.end = line;
     } else ranges.push({ file, start: line, end: line, source });
   }
-
-  return { ranges, counts, plannedLines: lines.size };
+  return ranges;
 }
 
-/** Follow only each test's literal app imports, then select the spans those files own. */
+/** Intersect a test's direct app imports with the spans that test actually observed. */
 export function testImportSpans(app, entries, map) {
   const config = JSON.parse(readFileSync(resolve(app, "stryker.config.json"), "utf8"));
-  const imports = { ...map.imports, ...importGraph(app, entries) };
+  const imports = importGraph(app, entries);
   const ranges = [];
   const omittedRanges = [];
   const testSources = {};
 
   entries.forEach((entry) => {
-    const visited = new Set([entry.file]);
-    for (const file of visited) {
-      if (!imports[file] && existsSync(resolve(app, file))) {
-        Object.assign(
-          imports,
-          importGraph(app, [{ file, text: readFileSync(resolve(app, file), "utf8") }]),
-        );
-      }
-      (imports[file] ?? []).forEach((imported) => visited.add(imported));
-    }
-
-    const files = [...visited]
+    const files = (imports[entry.file] ?? [])
       .filter((file) => inScope(config, file))
       .sort((a, b) => a.localeCompare(b));
     testSources[entry.file] = files;
-    if (!files.length) {
+    const covered = map.nodes.filter(
+      (node) => files.includes(node.file) && node.tests.some((test) => test.file === entry.file),
+    );
+    ranges.push(...covered.map(({ file, start, end }) => ({ file, start, end })));
+    if (!covered.length) {
       omittedRanges.push({
         file: entry.file,
         start: 1,
         end: entry.text.split("\n").length,
         source: "testMapped",
-        reason: "test imports no mutable app source",
+        reason: files.length
+          ? "direct imports have no spans covered by this test"
+          : "test imports no mutable app source directly",
       });
-    }
-
-    for (const file of files) {
-      const owned = map.nodes.filter((node) => node.file === file);
-      const spans = owned.length
-        ? owned
-        : [
-            {
-              file,
-              start: 1,
-              end: readFileSync(resolve(app, file), "utf8").trimEnd().split("\n").length,
-            },
-          ];
-      ranges.push(...spans.map(({ file, start, end }) => ({ file, start, end })));
     }
   });
 
@@ -188,7 +190,7 @@ export function planSummary(plan) {
   const omitted = plan.omittedRanges
     .map(({ file, start, end, reason }) => `| ${file}:${start}-${end} | ${reason} |`)
     .join("\n");
-  return `## Mutation plan: ${plan.app}\n\nPlanned source lines: **${plan.plannedLines}**. No total line cap. Counts are exclusive; overlaps belong to changed, then adjacent, then test-mapped.\n\n| Source | Lines |\n| --- | ---: |\n| Changed | ${plan.counts.changed} |\n| Test-mapped | ${plan.counts.testMapped} |\n| Adjacent | ${plan.counts.adjacent} |\n\n### Every omitted range\n\n${omitted ? `| Range | Reason |\n| --- | --- |\n${omitted}` : "None."}\n\nArid/static filtering and one mutant per planned source line happen after this plan.\n`;
+  return `## Mutation plan: ${plan.app}\n\nPlanned source lines: **${plan.plannedLines}**. No total line cap. Test-mapped budget: **${plan.testMappedLineBudget}** lines, in file-and-line order after changed and adjacent lines. Counts are exclusive; overlaps belong to changed, then adjacent, then test-mapped.\n\n| Source | Lines |\n| --- | ---: |\n| Changed | ${plan.counts.changed} |\n| Test-mapped | ${plan.counts.testMapped} |\n| Adjacent | ${plan.counts.adjacent} |\n\n### Every omitted range\n\n${omitted ? `| Range | Reason |\n| --- | --- |\n${omitted}` : "None."}\n\nArid/static filtering and one mutant per planned source line happen after this plan.\n`;
 }
 
 export function planDiff({ app, base, head, map }) {
@@ -264,6 +266,7 @@ export function planDiff({ app, base, head, map }) {
   }
   const planned = planRanges(sources);
   const omittedRanges = [
+    ...planned.omittedRanges,
     ...mapped.omittedRanges,
     ...deletedSources.map((file) => ({
       file,
