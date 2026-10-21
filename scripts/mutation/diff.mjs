@@ -187,6 +187,42 @@ export function testImportSpans(app, entries, map) {
   return { ranges, omittedRanges, testSources };
 }
 
+/** Native Stryker requires full containment: include enclosing top-level statements. */
+export function instrumentRanges(app, ranges) {
+  if (!ranges.length) return [];
+  const require = createRequire(resolve(app, "package.json"));
+  const ts = require("typescript-api");
+  const expanded = [];
+
+  for (const file of new Set(ranges.map((range) => range.file))) {
+    const source = ts.createSourceFile(
+      file,
+      readFileSync(resolve(app, file), "utf8"),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const own = ranges.filter((range) => range.file === file);
+    expanded.push(...own);
+    source.statements.forEach((statement) => {
+      const start = source.getLineAndCharacterOfPosition(statement.getStart(source)).line + 1;
+      const end = source.getLineAndCharacterOfPosition(statement.end - 1).line + 1;
+      if (own.some((range) => range.start <= end && range.end >= start)) {
+        expanded.push({ file, start, end });
+      }
+    });
+  }
+  const merged = [];
+  expanded
+    .sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.start - b.start))
+    .forEach((range) => {
+      const previous = merged.at(-1);
+      if (previous?.file === range.file && range.start <= previous.end + 1) {
+        previous.end = Math.max(previous.end, range.end);
+      } else merged.push({ file: range.file, start: range.start, end: range.end });
+    });
+  return merged.map(({ file, start, end }) => `${file}:${start}-${end}`);
+}
+
 /** Both direct source changes and imported test targets use the same declared scope. */
 function inScope(config, file) {
   return (
@@ -393,6 +429,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
     config.jsonReporter = { fileName: "reports/mutation/diff.json" };
 
+    const instrumentMutate = instrumentRanges(app, plan.ranges);
     const path = resolve(directory, "diff.stryker.json");
 
     writeFileSync(path, JSON.stringify(config, null, 2) + "\n");
@@ -414,7 +451,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
     const result = spawnSync(
       process.execPath,
-      [cli, "run", path, "--mutate", plan.mutate.join(",")],
+      [cli, "run", path, "--mutate", instrumentMutate.join(",")],
       {
         cwd: app,
         stdio: "inherit",
@@ -445,6 +482,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       app: plan.app,
       shardId,
       mutate: plan.mutate,
+      instrumentMutate,
       counts,
       score: score(counts),
     };

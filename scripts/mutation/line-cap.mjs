@@ -1,17 +1,15 @@
 import { createHash } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { relative, resolve } from "node:path";
 
 const app = createRequire(resolve("package.json"));
 const stryker = createRequire(app.resolve("@stryker-mutator/core"));
 
-const { declareFactoryPlugin, PluginKind, commonTokens, tokens } = stryker(
-  "@stryker-mutator/api/plugin",
-);
+const { declareFactoryPlugin, PluginKind } = stryker("@stryker-mutator/api/plugin");
 
 /** Change only public mutable plan entries; leave the readonly event array intact. */
-export function capPlans(plans, mutate, root = process.cwd()) {
+export function capPlans(plans, mutate, root = process.cwd(), expanded = false) {
   const ranges = mutate.map((pattern) => {
     const [, file, start, end] = /^(.*):(\d+)-(\d+)$/.exec(pattern) ?? [];
 
@@ -22,37 +20,45 @@ export function capPlans(plans, mutate, root = process.cwd()) {
 
   const groups = new Map();
 
-  for (const plan of plans.filter((plan) => plan.mutant.status !== "Ignored")) {
-    const mutant = plan.mutant;
-    const file = relative(root, mutant.fileName).replaceAll("\\", "/");
-    // Native plan positions are zero-based; Git ranges are one-based.
-    const start = mutant.location.start.line + 1;
-    const end = mutant.location.end.line + Number(mutant.location.end.column > 0);
-    const range = ranges.find(
-      (range) => range.file === file && range.start <= end && range.end >= start,
-    );
+  plans
+    .filter((plan) => plan.mutant.status !== "Ignored")
+    .forEach((plan) => {
+      const mutant = plan.mutant;
+      const file = relative(root, mutant.fileName).replaceAll("\\", "/");
+      // Native plan positions are zero-based; Git ranges are one-based.
+      const start = mutant.location.start.line + 1;
+      const end = mutant.location.end.line + Number(mutant.location.end.column > 0);
+      const range = ranges.find(
+        (range) => range.file === file && range.start <= end && range.end >= start,
+      );
 
-    if (!range) {
-      throw new Error(`Mutant outside diff ranges: ${file}:${start}`);
-    }
+      if (!range) {
+        if (expanded && ranges.some((range) => range.file === file)) {
+          plan.plan = "EarlyResult";
+          mutant.status = "Ignored";
+          mutant.statusReason = "diff: enclosing statement outside planned lines";
+          return;
+        }
+        throw new Error(`Mutant outside diff ranges: ${file}:${start}`);
+      }
 
-    // Multiline nodes belong to their first changed line, never an unchanged line.
-    const line = Math.max(range.start, start);
-    const key = `${file}:${line}`;
-    const candidate = JSON.stringify([
-      mutant.location.start.line,
-      mutant.location.start.column,
-      mutant.location.end.line,
-      mutant.location.end.column,
-      mutant.mutatorName,
-      mutant.replacement,
-    ]);
-    const rank = createHash("sha256").update(`${key}\n${candidate}`).digest("hex") + candidate;
+      // Multiline nodes belong to their first changed line, never an unchanged line.
+      const line = Math.max(range.start, start);
+      const key = `${file}:${line}`;
+      const candidate = JSON.stringify([
+        mutant.location.start.line,
+        mutant.location.start.column,
+        mutant.location.end.line,
+        mutant.location.end.column,
+        mutant.mutatorName,
+        mutant.replacement,
+      ]);
+      const rank = createHash("sha256").update(`${key}\n${candidate}`).digest("hex") + candidate;
 
-    if (!groups.has(key)) groups.set(key, []);
+      if (!groups.has(key)) groups.set(key, []);
 
-    groups.get(key).push({ plan, rank });
-  }
+      groups.get(key).push({ plan, rank });
+    });
 
   const selected = [];
 
@@ -70,11 +76,12 @@ export function capPlans(plans, mutate, root = process.cwd()) {
   return selected;
 }
 
-function createLineCap(options) {
+function createLineCap() {
   return {
     onMutationTestingPlanReady({ mutantPlans }) {
       try {
-        const selected = capPlans(mutantPlans, options.mutate);
+        const plan = JSON.parse(readFileSync("reports/mutation/diff-plan.json", "utf8"));
+        const selected = capPlans(mutantPlans, plan.mutate, process.cwd(), true);
 
         writeFileSync(
           "reports/mutation/diff-line-cap.json",
@@ -100,7 +107,7 @@ function createLineCap(options) {
   };
 }
 
-createLineCap.inject = tokens(commonTokens.options);
+createLineCap.inject = [];
 
 export const strykerPlugins = [
   declareFactoryPlugin(PluginKind.Reporter, "diff-line-cap", createLineCap),

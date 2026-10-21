@@ -267,7 +267,10 @@ weak result. App configuration floors stay at 60, and unsharded local runs keep
 that floor. Weekly full reports and Start's floor are unchanged.
 Every changed line stays planned; there is no total line budget or random
 source-line sample. Arid/static filtering happens in Stryker. The per-line mutant
-cap then applies to all planned sources, with changed-line ranges first. Extra
+cap then applies to all planned sources, with changed-line ranges first. Native
+instrumentation includes enclosing statements and merges touching ranges across
+source kinds, so multiline mutants at range edges remain eligible. The line cap
+uses the original plan and ignores statement neighbors outside its lines. Extra
 test-mapped lines have a separate 200-line budget, picked in stable file-and-line
 order after changed and adjacent lines own overlaps. Every range left out is
 listed in the GitHub summary. The budget never removes changed or adjacent

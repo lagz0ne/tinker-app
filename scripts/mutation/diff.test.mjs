@@ -15,7 +15,14 @@ import { dirname, join, matchesGlob } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { planRanges, planSummary, changedRanges, selectTests, testImportSpans } from "./diff.mjs";
+import {
+  planRanges,
+  planSummary,
+  changedRanges,
+  selectTests,
+  testImportSpans,
+  instrumentRanges,
+} from "./diff.mjs";
 
 test("new-side diff ranges include additions and surviving deletion neighbors", () => {
   assert.deepEqual(
@@ -305,6 +312,11 @@ test("CLI rejects missing or mismatched cap results, clears stale files, and rec
       copyFileSync(join(import.meta.dirname, file), join(root, "scripts/mutation", file));
     }
     writeFileSync(join(app, "package.json"), "{}");
+    symlinkSync(
+      join(process.cwd(), "node_modules/typescript-api"),
+      join(app, "node_modules/typescript-api"),
+      "dir",
+    );
     writeFileSync(join(app, "node_modules/@stryker-mutator/core/package.json"), "{}");
     // Fault at the native process boundary: exit zero without running the cap.
     writeFileSync(
@@ -648,6 +660,28 @@ test("named and star re-exports follow cycles without following ordinary imports
       nodes: [covered, { ...covered, file: "tinker/unrelated.ts" }],
     });
     assert.deepEqual(result.ranges, [{ file: covered.file, start: 1, end: 1 }]);
+  } finally {
+    rmSync(app, { recursive: true, force: true });
+  }
+});
+
+test("native mutation ranges include multiline statements and merge touching source kinds", () => {
+  const app = mkdtempSync(join(tmpdir(), "mutation-statement-"));
+  try {
+    symlinkSync(join(process.cwd(), "node_modules"), join(app, "node_modules"), "dir");
+    writeFileSync(join(app, "package.json"), "{}");
+    writeFileSync(join(app, "value.ts"), "const value = [1,\n  2];\nconst other = 3;\n");
+    assert.deepEqual(
+      instrumentRanges(app, [{ file: "value.ts", start: 1, end: 1, source: "changed" }]),
+      ["value.ts:1-2"],
+    );
+    assert.deepEqual(
+      instrumentRanges(app, [
+        { file: "value.ts", start: 1, end: 1, source: "changed" },
+        { file: "value.ts", start: 2, end: 2, source: "adjacent" },
+      ]),
+      ["value.ts:1-2"],
+    );
   } finally {
     rmSync(app, { recursive: true, force: true });
   }

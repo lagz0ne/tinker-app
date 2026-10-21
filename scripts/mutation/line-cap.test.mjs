@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -89,6 +89,7 @@ test("a reporter error suppresses every case and leaves a failure artifact", () 
   try {
     process.chdir(folder);
 
+    writeFileSync("reports/mutation/diff-plan.json", JSON.stringify({ mutate: ["invalid-glob"] }));
     const reporter = strykerPlugins[0].factory({ mutate: ["invalid-glob"] });
 
     assert.throws(
@@ -103,4 +104,16 @@ test("a reporter error suppresses every case and leaves a failure artifact", () 
     process.chdir(cwd);
     rmSync(folder, { recursive: true, force: true });
   }
+});
+
+test("expanded statements keep a changed-line multiline mutant and ignore unplanned neighbors", () => {
+  const wide = candidate("wide", 2, {
+    location: { start: { line: 1, column: 1 }, end: { line: 2, column: 10 } },
+  });
+  const outside = candidate("neighbor", 3);
+  const selected = capPlans([wide, outside], ["tinker/value.ts:2-2"], "/app", true);
+
+  assert.deepEqual(selected, [{ line: "tinker/value.ts:2", id: "wide" }]);
+  assert.equal(wide.plan, "Run");
+  assert.equal(outside.mutant.status, "Ignored");
 });
