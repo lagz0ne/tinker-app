@@ -72,6 +72,53 @@ test("an unobserved handle or native helper uses every recorded test, not zero t
   }
 });
 
+test("mixed helper and covered operation ranges use the full inventory and report fallback", () => {
+  const greet = { file: "tests/greet.test.ts", name: "greets" };
+  const helper = { file: "tests/http.test.ts", name: "sends" };
+  const node = {
+    id: "greet",
+    file: "src/backend/greet.ts",
+    start: 2,
+    end: 8,
+    tests: [greet],
+    callers: [],
+  };
+  const covered = { file: node.file, start: 3, end: 3 };
+  const inventory = [greet, helper];
+
+  for (const untraced of [
+    { file: "tinker/components/http/backend.ts", start: 2, end: 2 },
+    { file: node.file, start: 20, end: 20 },
+  ]) {
+    for (const ranges of [
+      [covered, untraced],
+      [untraced, covered],
+    ]) {
+      const result = selectTests([node], ranges, inventory);
+      assert.equal(
+        result.fallback,
+        true,
+        "each untraced range must trigger fallback in a mixed diff",
+      );
+      assert.deepEqual(result.tests, inventory);
+      assert.deepEqual(
+        result.nodes,
+        ["greet"],
+        "fallback does not change the traced dependency walk",
+      );
+
+      const summary = planSummary({
+        app: "apps/example",
+        plannedLines: 2,
+        counts: { changed: 2, adjacent: 0, testMapped: 0 },
+        omittedRanges: [],
+        fallback: result.fallback,
+      });
+      assert(summary.includes("Full inventory fallback: **yes**"));
+    }
+  }
+});
+
 test("source selection ignores generated diffs larger than Git's capture buffer", async () => {
   const root = mkdtempSync(join(tmpdir(), "mutation-git-"));
   const app = join(root, "apps/example");

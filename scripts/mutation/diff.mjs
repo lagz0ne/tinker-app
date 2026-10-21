@@ -79,7 +79,15 @@ export function selectTests(nodes, changed, inventory) {
 
   // Native helpers and preset-only handles have no Core span. Fail-safe: use
   // the full recorded inventory instead of dropping changed lines.
-  const fallback = !touched.length || touched.some((node) => !node.tests?.length);
+  const fallback =
+    !touched.length ||
+    touched.some((node) => !node.tests?.length) ||
+    changed.some(
+      (range) =>
+        !nodes.some(
+          (node) => range.file === node.file && range.start <= node.end && range.end >= node.start,
+        ),
+    );
 
   if (fallback || !tests.size) inventory.forEach((test) => tests.set(JSON.stringify(test), test));
 
@@ -239,7 +247,7 @@ export function planSummary(plan) {
   const outOfScope = (plan.outOfScope ?? [])
     .map(({ file, reason }) => `| ${file} | ${reason} |`)
     .join("\n");
-  return `## Mutation plan: ${plan.app}\n\nPlanned source lines: **${plan.plannedLines}**. No total line cap. Test-mapped budget: **${plan.testMappedLineBudget}** lines, in file-and-line order after changed and adjacent lines. Counts are exclusive; overlaps belong to changed, then adjacent, then test-mapped.\n\n| Source | Lines |\n| --- | ---: |\n| Changed | ${plan.counts.changed} |\n| Test-mapped | ${plan.counts.testMapped} |\n| Adjacent | ${plan.counts.adjacent} |\n\n### Every omitted range\n\n${omitted ? `| Range | Reason |\n| --- | --- |\n${omitted}` : "None."}\n\n### Changed files outside mutation scope\n\n${outOfScope ? `| File | Reason |\n| --- | --- |\n${outOfScope}` : "None."}\n\nArid/static filtering and one mutant per planned source line happen after this plan.\n`;
+  return `## Mutation plan: ${plan.app}\n\nFull inventory fallback: **${plan.fallback ? "yes" : "no"}**.\n\nPlanned source lines: **${plan.plannedLines}**. No total line cap. Test-mapped budget: **${plan.testMappedLineBudget}** lines, in file-and-line order after changed and adjacent lines. Counts are exclusive; overlaps belong to changed, then adjacent, then test-mapped.\n\n| Source | Lines |\n| --- | ---: |\n| Changed | ${plan.counts.changed} |\n| Test-mapped | ${plan.counts.testMapped} |\n| Adjacent | ${plan.counts.adjacent} |\n\n### Every omitted range\n\n${omitted ? `| Range | Reason |\n| --- | --- |\n${omitted}` : "None."}\n\n### Changed files outside mutation scope\n\n${outOfScope ? `| File | Reason |\n| --- | --- |\n${outOfScope}` : "None."}\n\nArid/static filtering and one mutant per planned source line happen after this plan.\n`;
 }
 
 export function planDiff({ app, base, head, map }) {
