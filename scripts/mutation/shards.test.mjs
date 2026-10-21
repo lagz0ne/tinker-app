@@ -69,7 +69,7 @@ test("1,000 lines split deterministically into three whole-file shards without o
   assert.deepEqual(splitPlan({ ...input, ranges: [...input.ranges].reverse() }), shards);
 });
 
-test("empty plans still get a job; large individual files stay whole and visible", () => {
+test("empty plans still get a job; oversized files split without losing a line", () => {
   const empty = splitPlan({ ...plan(), plannedLines: 0, ranges: [] });
   assert.equal(empty.length, 1);
   assert.deepEqual(empty[0].ranges, []);
@@ -79,9 +79,22 @@ test("empty plans still get a job; large individual files stay whole and visible
     plannedLines: 1000,
     ranges: [{ file: "large.ts", start: 1, end: 1000, source: "changed" }],
   });
-  assert.equal(large.length, 1);
-  assert.equal(large[0].plannedLines, 1000);
-  assert(large[0].estimatedMinutes > 60);
+  assert.equal(large.length, 3);
+  assert.deepEqual(
+    large.map((shard) => shard.plannedLines),
+    [466, 466, 68],
+  );
+  assert(large.every((shard) => shard.estimatedMinutes <= 60));
+  const lines = large.flatMap((shard) =>
+    shard.ranges.flatMap(({ start, end }) =>
+      Array.from({ length: end - start + 1 }, (_, i) => start + i),
+    ),
+  );
+  assert.equal(new Set(lines).size, 1000);
+  assert.deepEqual(
+    lines.toSorted((a, b) => a - b),
+    Array.from({ length: 1000 }, (_, i) => i + 1),
+  );
 });
 
 test("combined score sums counts rather than averaging shard scores", () => {

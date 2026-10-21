@@ -117,3 +117,17 @@ test("expanded statements keep a changed-line multiline mutant and ignore unplan
   assert.equal(wide.plan, "Run");
   assert.equal(outside.mutant.status, "Ignored");
 });
+
+test("a multiline mutant crossing file shards has one global owner", () => {
+  const wide = candidate("crossing", 2, {
+    location: { start: { line: 1, column: 1 }, end: { line: 4, column: 10 } },
+  });
+  const owners = ["tinker/value.ts:2-2", "tinker/value.ts:5-5"];
+  assert.deepEqual(capPlans([structuredClone(wide)], [owners[0]], "/app", true, owners), [
+    { line: "tinker/value.ts:2", id: "crossing" },
+  ]);
+
+  const second = structuredClone(wide);
+  assert.deepEqual(capPlans([second], [owners[1]], "/app", true, owners), []);
+  assert.equal(second.mutant.status, "Ignored");
+});

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 // Count every planned line as one possible mutant; keep baseline time on top.
 export const sizing = { secondsPerLine: 7.29, baselineSeconds: 200, targetMinutes: 60 };
 
-/** Stable largest-file-first packing; every file belongs to exactly one shard. */
+/** Stable file-first packing; oversized files become bounded range pieces. */
 export function splitPlan(plan) {
   const order = ["changed", "adjacent", "testMapped"];
   const ranges = [...plan.ranges].sort(
@@ -25,21 +25,27 @@ export function splitPlan(plan) {
   const capacity = Math.floor(
     (sizing.targetMinutes * 60 - sizing.baselineSeconds) / sizing.secondsPerLine,
   );
-  const count = Math.max(1, Math.min(files.size, Math.ceil(plan.plannedLines / capacity)));
+  const units = [...files.values()].flatMap((file) => splitFile(file, capacity));
+  const count = Math.max(1, Math.min(units.length, Math.ceil(plan.plannedLines / capacity)));
   const shards = Array.from({ length: count }, (_, index) => ({
     id: String(index + 1),
     files: [],
+    ranges: [],
     plannedLines: 0,
     counts: { changed: 0, adjacent: 0, testMapped: 0 },
   }));
 
-  [...files.values()]
-    .sort((a, b) => b.lines - a.lines || compare(a.file, b.file))
+  units
+    .sort(
+      (a, b) =>
+        b.lines - a.lines || compare(a.file, b.file) || a.ranges[0].start - b.ranges[0].start,
+    )
     .forEach((file) => {
       const shard = [...shards].sort(
         (a, b) => a.plannedLines - b.plannedLines || compare(a.id, b.id),
       )[0];
-      shard.files.push(file.file);
+      if (!shard.files.includes(file.file)) shard.files.push(file.file);
+      shard.ranges.push(...file.ranges);
       shard.plannedLines += file.lines;
       file.ranges.forEach((range) => {
         shard.counts[range.source] += range.end - range.start + 1;
@@ -50,9 +56,34 @@ export function splitPlan(plan) {
     ...shard,
     files: shard.files.sort(compare),
     // Retain changed-first ordering so multiline mutants keep the same owner.
-    ranges: ranges.filter((range) => shard.files.includes(range.file)),
+    ranges: shard.ranges.sort(
+      (a, b) =>
+        order.indexOf(a.source) - order.indexOf(b.source) ||
+        compare(a.file, b.file) ||
+        a.start - b.start,
+    ),
     estimatedMinutes: (shard.plannedLines * sizing.secondsPerLine + sizing.baselineSeconds) / 60,
   }));
+}
+
+function splitFile(file, capacity) {
+  const pieces = [];
+  let piece = { file: file.file, lines: 0, ranges: [] };
+  for (const range of file.ranges) {
+    let start = range.start;
+    while (start <= range.end) {
+      const end = Math.min(range.end, start + capacity - piece.lines - 1);
+      piece.ranges.push({ ...range, start, end });
+      piece.lines += end - start + 1;
+      start = end + 1;
+      if (piece.lines === capacity) {
+        pieces.push(piece);
+        piece = { file: file.file, lines: 0, ranges: [] };
+      }
+    }
+  }
+  if (piece.lines) pieces.push(piece);
+  return pieces;
 }
 
 function compare(a, b) {
@@ -209,7 +240,7 @@ function matrixCommand(folder, destination) {
     ),
   );
   summary(
-    `## Mutation shards\n\nFile split; estimates include a 200 s baseline. Target: about 60 minutes, not a hard time guarantee. No changed lines omitted.\n\n| App | Shard | Lines | Estimated minutes |\n| --- | --- | ---: | ---: |\n${rows.join("\n")}\n`,
+    `## Mutation shards\n\nFile split, with oversized files split by range; estimates include a 200 s baseline. Target: about 60 minutes, not a hard time guarantee. No changed lines omitted.\n\n| App | Shard | Lines | Estimated minutes |\n| --- | --- | ---: | ---: |\n${rows.join("\n")}\n`,
   );
 }
 

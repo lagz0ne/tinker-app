@@ -9,12 +9,24 @@ const stryker = createRequire(app.resolve("@stryker-mutator/core"));
 const { declareFactoryPlugin, PluginKind } = stryker("@stryker-mutator/api/plugin");
 
 /** Change only public mutable plan entries; leave the readonly event array intact. */
-export function capPlans(plans, mutate, root = process.cwd(), expanded = false) {
+export function capPlans(
+  plans,
+  mutate,
+  root = process.cwd(),
+  expanded = false,
+  ownership = mutate,
+) {
   const ranges = mutate.map((pattern) => {
     const [, file, start, end] = /^(.*):(\d+)-(\d+)$/.exec(pattern) ?? [];
 
     if (!file) throw new Error(`Diff line cap needs explicit line ranges: ${pattern}`);
 
+    return { file, start: Number(start), end: Number(end) };
+  });
+
+  const owners = ownership.map((pattern) => {
+    const [, file, start, end] = /^(.*):(\d+)-(\d+)$/.exec(pattern) ?? [];
+    if (!file) throw new Error(`Diff ownership needs explicit line ranges: ${pattern}`);
     return { file, start: Number(start), end: Number(end) };
   });
 
@@ -28,8 +40,12 @@ export function capPlans(plans, mutate, root = process.cwd(), expanded = false) 
       // Native plan positions are zero-based; Git ranges are one-based.
       const start = mutant.location.start.line + 1;
       const end = mutant.location.end.line + Number(mutant.location.end.column > 0);
-      const range = ranges.find(
+      const owner = owners.find(
         (range) => range.file === file && range.start <= end && range.end >= start,
+      );
+      const line = owner && Math.max(owner.start, start);
+      const range = ranges.find(
+        (range) => range.file === file && range.start <= line && range.end >= line,
       );
 
       if (!range) {
@@ -43,7 +59,6 @@ export function capPlans(plans, mutate, root = process.cwd(), expanded = false) 
       }
 
       // Multiline nodes belong to their first changed line, never an unchanged line.
-      const line = Math.max(range.start, start);
       const key = `${file}:${line}`;
       const candidate = JSON.stringify([
         mutant.location.start.line,
@@ -81,7 +96,13 @@ function createLineCap() {
     onMutationTestingPlanReady({ mutantPlans }) {
       try {
         const plan = JSON.parse(readFileSync("reports/mutation/diff-plan.json", "utf8"));
-        const selected = capPlans(mutantPlans, plan.mutate, process.cwd(), true);
+        const selected = capPlans(
+          mutantPlans,
+          plan.mutate,
+          process.cwd(),
+          true,
+          plan.ownerMutate ?? plan.mutate,
+        );
 
         writeFileSync(
           "reports/mutation/diff-line-cap.json",

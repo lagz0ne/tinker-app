@@ -245,9 +245,11 @@ overlaps before adjacent lines and test-mapped spans.
 The serial checks in `start-gates.yml` stay unchanged.
 
 CI first builds each app's span map and full diff plan. It then splits the
-planned ranges by whole file into parallel matrix jobs, with no shared services
+planned ranges by file into parallel matrix jobs, with no shared services
 or writable files. Largest files go first to the least-loaded shard, with stable
-file-name ties. Every file and planned line belongs to exactly one shard.
+file-name ties. Files over the 60-minute target split into bounded range pieces. Every planned
+line belongs to exactly one shard. Multiline mutants keep their global owner
+line, so a file split cannot count one mutant twice.
 Each mutation job uses one worker and a 180-minute deadline. New pushes cancel
 the older run for that ref. A failed shard does not cancel its siblings.
 
@@ -256,8 +258,8 @@ calibration is PR #3 at concurrency one: 1,814 tested mutants, 220.29 minutes,
 7.29 seconds per tested mutant including baseline. Sizing counts every planned
 line as one possible mutant and reserves another 200 seconds for each baseline.
 The 1,000-line plan splits into three jobs of 334, 333, and 333 lines. These are
-estimates, not a time guarantee. A single large file stays whole; its estimate
-remains visible. Plans above GitHub's 256-job limit fail rather than drop lines.
+estimates, not a time guarantee. A single large file splits by planned ranges at the same line capacity; its
+pieces are packed with the other files. Plans above GitHub's 256-job limit fail rather than drop lines.
 
 Each shard reports its score but has no individual score floor. The always-run
 `diff-gate` job requires every shard to succeed, rejects missing, duplicate,

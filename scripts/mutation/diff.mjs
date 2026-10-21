@@ -393,6 +393,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         ...shard,
         shardId,
         fullPlannedLines: fullPlan.plannedLines,
+        ownerMutate: fullPlan.mutate,
         mutate: shard.ranges.map(({ file, start, end }) => `${file}:${start}-${end}`),
       }
     : fullPlan;
