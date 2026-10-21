@@ -3,15 +3,13 @@ import { createRequire } from "node:module";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-import react from "@vitejs/plugin-react";
-
 import { clientOutput, serverOutput } from "./lib/build-output.mjs";
 import { say as routeSay } from "./lib/checks/routes.mjs";
 import { buildChecks } from "./lib/doctor.mjs";
 import { aliases, passThrough, startOptions } from "./lib/glue.mjs";
 import { recordViolation, restartNote, startViolations } from "./lib/hooks.mjs";
 import { installDevServer } from "./lib/main-host.mjs";
+import { cliOnly, commandFiles } from "./lib/named.mjs";
 import { baseDir } from "./lib/paths.mjs";
 import { prepare } from "./lib/prepare.mjs";
 import { checkTypes } from "./lib/typecheck.mjs";
@@ -34,8 +32,9 @@ function glueConfig(root) {
  * runs: doctor's build-start lines, so a stop comes before the generator could rewrite a route
  * file in src/. At build start, once the generator wrote the route tree: the app's own tsc.
  * Then this build's boundary record starts empty; Start's onViolation fills it.
+ * A CLI-only app passes no record: it runs no Start, so it gets only its named check and tsc.
  * @param {string} root - From tinker(); why: the app being built.
- * @param {{ found?: Map<string, object> }} record - From tinker(); why: shared with onViolation.
+ * @param {{ found?: Map<string, object> }} [record] - From tinker(); why: shared with onViolation.
  */
 function verify(root, record) {
   let checked = false;
@@ -48,7 +47,7 @@ function verify(root, record) {
       handler(config) {
         if (checked) return;
         checked = true;
-        const { errors, warnings } = buildChecks(root);
+        const { errors, warnings } = buildChecks(root, { cli: !record });
         for (const line of warnings) config.logger.warn(line);
         if (errors.length > 0) throw new Error(errors.join("\n"));
       },
@@ -58,7 +57,7 @@ function verify(root, record) {
       typed = true;
       const types = checkTypes(root);
       if (types.length > 0) this.error(types.join("\n"));
-      record.found = startViolations(root);
+      if (record) record.found = startViolations(root);
     },
   };
 }
@@ -102,12 +101,32 @@ async function tailwind(root) {
 }
 
 /**
+ * A CLI-only app's plugins: the glue, which builds cmds/cli.ts the way its vite.cli.config.ts
+ * names, so `vp build` is its build; and the checks, before anything is built.
+ * @param {string} root - From tinker(); why: the app being built.
+ */
+function cliPlugins(root) {
+  const cli = commandFiles(root).find((entry) => entry.role === "cli");
+  const build = { ssr: cli.file, outDir: cli.outDir };
+  return [
+    { name: "tinker:glue", enforce: "pre", config: () => ({ ...glueConfig(root), build }) },
+    verify(root),
+  ];
+}
+
+/**
  * The glue: one call in the app's vite.config.ts joins the app to the base (ADR 0106).
+ * An app that names `cliEntry` and no web entry is CLI-only: it gets the aliases, the generated
+ * tsconfig, its build checks, and no web plugins, routes, React, or TanStack Start.
  * @param {{ root?: string, serverEntry: string, routerEntry: string, startEntry: string, compileHints?: boolean, prerender?: object, pages?: object[], spa?: object, sitemap?: object }} [options] - From vite.config.ts; why: the app folder (default cwd), the app-owned native command entries, and Start's static output options.
  */
 export function tinker(options = {}) {
   const passed = passThrough(options);
   const root = resolve(options.root ?? process.cwd());
+  if (cliOnly(root)) {
+    prepare(root);
+    return cliPlugins(root);
+  }
 
   if (!existsSync(join(root, "src/routes"))) throw new Error(`tinker: ${routeSay.missing}`);
   prepare(root);
@@ -131,11 +150,14 @@ export function tinker(options = {}) {
     if (record.found) recordViolation(root, record.found, info);
   };
 
-  const start = tanstackStart({
-    ...own,
-    ...passed,
-    importProtection: { ...own.importProtection, onViolation },
-  });
+  // A web app loads TanStack Start and React here, so a CLI-only app never needs them.
+  const start = import("@tanstack/react-start/plugin/vite").then(({ tanstackStart }) =>
+    tanstackStart({
+      ...own,
+      ...passed,
+      importProtection: { ...own.importProtection, onViolation },
+    }),
+  );
 
   if (process.env.VITEST) return [glue, start];
 
@@ -144,7 +166,7 @@ export function tinker(options = {}) {
     verify(root, record),
     restartOn(root),
     start,
-    react(),
+    import("@vitejs/plugin-react").then(({ default: react }) => react()),
     tailwind(root),
     clientOutput(options.compileHints ?? true),
     serverOutput(root),

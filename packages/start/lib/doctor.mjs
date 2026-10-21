@@ -23,18 +23,24 @@ const stopping = new Set(["named files", "imports", "routes", "style"]);
 /** Checks a build reads too; their lines only warn, save a glue line that breaks the build. */
 const warning = new Set(["glue"]);
 
+/** A CLI-only build has no routes, styles, or web glue: only its named check stops it. */
+const cliStopping = new Set(["named files"]);
+
 /**
  * What tinker() runs at build start: doctor's own lines, so the build and doctor agree.
  * @param {string} root - From tinker(); why: the app being built.
+ * @param {{ cli?: boolean }} [app] - From tinker(); why: a CLI-only app runs fewer checks.
  */
-export function buildChecks(root) {
+export function buildChecks(root, { cli = false } = {}) {
+  const stops = cli ? cliStopping : stopping;
+  const warns = cli ? new Set() : warning;
   const lines = checks
-    .filter(({ label }) => stopping.has(label) || warning.has(label))
+    .filter(({ label }) => stops.has(label) || warns.has(label))
     .flatMap(({ label, check }) => {
       const result = check(root);
       if (result.status !== "fail") return [];
       return result.lines.map((line) => ({
-        stops: stopping.has(label) || breaksBuild(line),
+        stops: stops.has(label) || breaksBuild(line),
         text: `tinker doctor, ${label}: ${line}`,
       }));
     });

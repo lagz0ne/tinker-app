@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+import { cliOnly } from "../named.mjs";
 import {
   baseDir,
   basePackage,
@@ -35,12 +36,19 @@ export const say = {
   notRun:
     "tinker prepare: check 5 fails, so the route generator did not run (it would stop, or write src/); fix the lines below:",
   passed: ".tinker/ matches this base and src/routes; .gitignore lists .tinker/ and .tanstack/",
+  cliPassed: ".tinker/ matches this base; .gitignore lists .tinker/",
   fixed: (added) =>
     `ran tinker prepare${added.length > 0 ? `; added ${added.join(" ")} to .gitignore` : ""}`,
 };
 
-/** Generated folders the app's .gitignore must list. */
-const ignored = [".tinker/", ".tanstack/"];
+/**
+ * Generated folders the app's .gitignore must list. A CLI-only app runs no TanStack, so it
+ * has no .tanstack/.
+ * @param {string} root - From unignored; why: a CLI-only app lists fewer.
+ */
+function ignored(root) {
+  return cliOnly(root) ? [".tinker/"] : [".tinker/", ".tanstack/"];
+}
 
 /** @param {string} root - From the generated check; why: compare the running tinker with the app's base. */
 function otherBase(root) {
@@ -134,7 +142,7 @@ export function staleTree(root) {
 function unignored(root) {
   const path = join(root, ".gitignore");
   const lines = existsSync(path) ? readFileSync(path, "utf8").split("\n") : [];
-  return ignored.filter((entry) => !lines.includes(entry));
+  return ignored(root).filter((entry) => !lines.includes(entry));
 }
 
 /**
@@ -181,7 +189,7 @@ function folderProblems(root) {
         !existsSync(join(dir, name)) || readFileSync(join(dir, name), "utf8") !== text,
     )
     .map(([name]) => say.stale(name));
-  return [...stale, ...treeProblems(root)];
+  return cliOnly(root) ? stale : [...stale, ...treeProblems(root)];
 }
 
 /**
@@ -199,7 +207,7 @@ export function generated(root) {
 
   const missing = unignored(root);
   const problems = [...folderProblems(root), ...missing.map(say.ignore)];
-  return verdict(problems, say.passed, () => {
+  return verdict(problems, cliOnly(root) ? say.cliPassed : say.passed, () => {
     prepare(root);
     addIgnored(root, missing);
     fixTree(root);

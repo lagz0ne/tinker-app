@@ -5,19 +5,17 @@ import { physical, rootRoute } from "@tanstack/virtual-file-routes";
 import { appFiles } from "./named.mjs";
 
 /**
- * Vite aliases that join the app to the base: `@/` for the app, the copied `~/` files, and the generated route tree. A query such as `?url`
+ * Vite aliases that join the app to the base: `@/` for the app, the copied `~/` files, the generated route tree, and the server entry when the app has one. A query such as `?url`
  * stays on the replaced path.
  * @param {string} root - From tinker(); why: the base reads app paths from there.
  */
 export function aliases(root) {
+  const server = appFiles(root).find((entry) => entry.option === "serverEntry")?.file;
   return [
     { find: /^~\//, replacement: `${join(root, "tinker")}/` },
     { find: /^@\//, replacement: `${join(root, "src")}/` },
     { find: /^#tinker\/routes$/, replacement: join(root, ".tinker/routeTree.gen.ts") },
-    {
-      find: /^#tinker\/server-main$/,
-      replacement: join(root, appFiles(root).find((entry) => entry.option === "serverEntry").file),
-    },
+    ...(server ? [{ find: /^#tinker\/server-main$/, replacement: join(root, server) }] : []),
   ];
 }
 

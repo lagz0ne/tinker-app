@@ -137,6 +137,28 @@
     },
     {
       "$schema": "https://ui.shadcn.com/schema/registry-component.json",
+      "name": "base-main",
+      "type": "registry:lib",
+      "title": "Start command entry",
+      "description": "The defineMain entry and MainContext type, copied from the app. A CLI-only app needs only this.",
+      "dependencies": [
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz"
+      ],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "tinker/base/main.ts",
+          "type": "registry:file",
+          "target": "~/tinker/base/main.ts",
+          "content": "import type { Scope } from \"@tinker/core\";\n\n/** The host supplies inputs and owns process stop. Commands choose exit codes. */\nexport type MainContext = {\n  env: Readonly<Record<string, string | undefined>>;\n  args: readonly string[];\n  /** The folder the process runs in; the host reads it, so commands read no process global. */\n  cwd: string;\n  signal: AbortSignal;\n  stdout: { write(chunk: string): unknown };\n  stderr: { write(chunk: string): unknown };\n  exit: (code: number, reason?: unknown) => void;\n};\n\n/** Type-only entry marker, with no startup, state, or hidden error policy. */\nexport const defineMain = <R extends { closed: Promise<void> }>(\n  main: (ctx: MainContext) => Promise<R>,\n) => main;\n\n/** @param result - From a closed root; why: surface work and cleanup errors before exit. */\nexport function checkClosed(result: Scope.Result) {\n  if (result.status === \"failed\") throw result.error;\n  if (result.teardownErrors?.length) throw result.teardownErrors[0];\n}\n"
+        }
+      ],
+      "meta": {
+        "ownership": "userland"
+      }
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-component.json",
       "name": "base",
       "type": "registry:lib",
       "title": "Start entry helpers",
@@ -148,6 +170,7 @@
         "react@^19.3.0"
       ],
       "registryDependencies": [
+        "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r/base-main.json",
         "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r/errors.json",
         "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r/requests.json"
       ],
@@ -157,12 +180,6 @@
           "type": "registry:file",
           "target": "~/tinker/base/fallbacks.tsx",
           "content": "import type { ErrorComponentProps } from \"@tanstack/react-router\";\n\nimport { ErrorDetails } from \"./panics\";\n\n/**\n * A production page hides error text; the server reports its route failure to the console.\n */\nexport function TinkerError({\n  error,\n  dev,\n  server,\n}: ErrorComponentProps & { dev: boolean; server: boolean }) {\n  if (server) console.error(\"tinker: a route failed on the server:\", error);\n  return <ErrorDetails error={error} dev={dev} />;\n}\n\n/** The base's 404 page; a route's own notFoundComponent, or the router command, replaces it. */\nexport function TinkerNotFound() {\n  return (\n    <main>\n      <h1>Not found</h1>\n    </main>\n  );\n}\n"
-        },
-        {
-          "path": "tinker/base/main.ts",
-          "type": "registry:file",
-          "target": "~/tinker/base/main.ts",
-          "content": "import type { Scope } from \"@tinker/core\";\n\n/** The host supplies inputs and owns process stop. Commands choose exit codes. */\nexport type MainContext = {\n  env: Readonly<Record<string, string | undefined>>;\n  args: readonly string[];\n  /** The folder the process runs in; the host reads it, so commands read no process global. */\n  cwd: string;\n  signal: AbortSignal;\n  stdout: { write(chunk: string): unknown };\n  stderr: { write(chunk: string): unknown };\n  exit: (code: number, reason?: unknown) => void;\n};\n\n/** Type-only entry marker, with no startup, state, or hidden error policy. */\nexport const defineMain = <R extends { closed: Promise<void> }>(\n  main: (ctx: MainContext) => Promise<R>,\n) => main;\n\n/** @param result - From a closed root; why: surface work and cleanup errors before exit. */\nexport function checkClosed(result: Scope.Result) {\n  if (result.status === \"failed\") throw result.error;\n  if (result.teardownErrors?.length) throw result.teardownErrors[0];\n}\n"
         },
         {
           "path": "tinker/base/observe.ts",

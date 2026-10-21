@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { shellFile } from "../named.mjs";
+import { cliOnly, shellFile } from "../named.mjs";
 import { listFiles } from "../paths.mjs";
 import { isRouteFile, routeId, routePath } from "../route-path.mjs";
 import {
@@ -13,7 +13,7 @@ import {
   stringCallsOf,
   usesOf,
 } from "../source.mjs";
-import { fail, verdict } from "./result.mjs";
+import { fail, skip, verdict } from "./result.mjs";
 
 export const say = {
   missing: "src/routes/ is missing; create src/routes/index.tsx",
@@ -67,6 +67,8 @@ function shellProblems(root) {
  * and no route takes or nests under a path the base mounts, an on part's included. No fix.
  */
 export function routes(root) {
+  if (cliOnly(root)) return skip("a CLI-only app has no routes");
+
   const dir = join(root, "src/routes");
   if (!existsSync(dir)) return fail([say.missing]);
   const problems = listFiles(dir)

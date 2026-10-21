@@ -116,6 +116,26 @@
       ]
     },
     {
+      "name": "base-main",
+      "type": "registry:lib",
+      "title": "Start command entry",
+      "description": "The defineMain entry and MainContext type, copied from the app. A CLI-only app needs only this.",
+      "dependencies": [
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz"
+      ],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "tinker/base/main.ts",
+          "type": "registry:file",
+          "target": "~/tinker/base/main.ts"
+        }
+      ],
+      "meta": {
+        "ownership": "userland"
+      }
+    },
+    {
       "name": "base",
       "type": "registry:lib",
       "title": "Start entry helpers",
@@ -126,17 +146,16 @@
         "@tanstack/react-router@1.170.41",
         "react@catalog:"
       ],
-      "registryDependencies": ["@tinker-start/errors", "@tinker-start/requests"],
+      "registryDependencies": [
+        "@tinker-start/base-main",
+        "@tinker-start/errors",
+        "@tinker-start/requests"
+      ],
       "files": [
         {
           "path": "tinker/base/fallbacks.tsx",
           "type": "registry:file",
           "target": "~/tinker/base/fallbacks.tsx"
-        },
-        {
-          "path": "tinker/base/main.ts",
-          "type": "registry:file",
-          "target": "~/tinker/base/main.ts"
         },
         {
           "path": "tinker/base/observe.ts",

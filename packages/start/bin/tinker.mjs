@@ -12,6 +12,7 @@ import { compressResponse } from "../lib/compression.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { writeResponse } from "../lib/host-response.mjs";
 import { createMainHost, quietGoneOutput } from "../lib/main-host.mjs";
+import { cliOnly } from "../lib/named.mjs";
 import { prepare, prepareExitCode } from "../lib/prepare.mjs";
 import { createAssets } from "../lib/serve.mjs";
 
@@ -156,6 +157,11 @@ const commands = {
     }
 
     const files = prepare(root);
+    if (cliOnly(root)) {
+      console.log(`tinker prepare: wrote .tinker/${files.join(", .tinker/")}`);
+      return 0;
+    }
+
     const blocked = generatorBlocked(root);
     if (blocked.length === 0) files.push(await writeRouteTree(root));
 
