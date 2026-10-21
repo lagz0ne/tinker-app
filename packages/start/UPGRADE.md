@@ -22,7 +22,8 @@ These changes are in current source, not the released 0.11.0 tarball.
   `serverEntry`. It needs no router, start, or server entry, no `src/routes`,
   and no React or TanStack: those are now optional peers, and `tinker()` loads
   them only for a web app. `tinker prepare` writes no route tree for it, and
-  doctor skips the routes check. The registry's new `base-main` item copies only
+  doctor skips the routes check and does not ask for `.tanstack/` in
+  `.gitignore`. The registry's new `base-main` item copies only
   `tinker/base/main.ts`; the web `base` item requires it.
 
 ## 0.11.0

@@ -1,14 +1,16 @@
 import { spawnSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
   realpathSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { expect, test } from "vite-plus/test";
@@ -97,6 +99,42 @@ function cliApp() {
 }
 
 /**
+ * A CLI-only app with Start copied in, as an install leaves it, instead of linked to this repo,
+ * where TanStack sits beside it. Only the packages its types read are linked.
+ */
+function installedCliApp() {
+  const root = cliApp();
+  const start = join(root, "node_modules/@tinker/start");
+  rmSync(start);
+  const { files } = JSON.parse(readFileSync(join(baseDir, "package.json"), "utf8"));
+  for (const name of ["package.json", ...files]) {
+    cpSync(join(baseDir, name), join(start, name), { recursive: true });
+  }
+
+  mkdirSync(join(root, "node_modules/@types"));
+  const links = {
+    "vite-plus": join(baseDir, "node_modules/vite-plus"),
+    "@types/node": join(baseDir, "node_modules/@types/node"),
+    vite: join(baseDir, "../../node_modules/vite"),
+  };
+  for (const [name, from] of Object.entries(links)) {
+    symlinkSync(realpathSync(from), join(root, "node_modules", name), "dir");
+  }
+  return root;
+}
+
+/**
+ * @param {string} dir - From a test; why: where Node starts its walk up.
+ * @param {string} name - From a test; why: the package to look for.
+ */
+function reachable(dir, name) {
+  for (let at = dir; ; at = dirname(at)) {
+    if (existsSync(join(at, "node_modules", name))) return true;
+    if (dirname(at) === at) return false;
+  }
+}
+
+/**
  * @param {string} root - From a test; why: the app folder.
  * @param {Record<string, string>} env - From blockWeb; why: web packages throw.
  * @param {string} command - From a test; why: the program.
@@ -137,6 +175,18 @@ test("a CLI-only app with no React passes prepare, doctor, config load, build, a
   expect(existsSync(join(root, "dist-cli/cli.js"))).toBe(true);
   expect(gate.status, gate.stdout + gate.stderr).toBe(0);
   expect(gate.stdout).toContain("PASS process command: cmds/cli.ts");
+});
+
+test("a CLI-only app type-checks tinker({ cliEntry }) with no TanStack installed", () => {
+  const root = installedCliApp();
+  prepare(root);
+  const tsc = join(baseDir, "node_modules/typescript/bin/tsc");
+
+  const checked = run(root, process.env, process.execPath, [tsc, "--noEmit", "-p", "."]);
+
+  expect(reachable(join(root, "node_modules/@tinker/start"), "@tanstack/react-start")).toBe(false);
+  expect(checked.stdout + checked.stderr).toBe("");
+  expect(checked.status).toBe(0);
 });
 
 test("the web block is real: a web app's config load fails under it", () => {
@@ -199,6 +249,31 @@ test("a CLI-only app's generated folder has no route tree to check", () => {
 
   expect(generated(root).status).toBe("ok");
   expect(generated(web).lines.join("\n")).toContain(".tinker/routeTree.gen.ts is missing");
+});
+
+test("a CLI-only app's .gitignore needs only .tinker/; a web app's also needs .tanstack/", () => {
+  const listed = cliApp();
+  const bare = cliApp();
+  const web = goodApp();
+  for (const [root, text] of [
+    [listed, ".tinker/\n"],
+    [bare, "dist/\n"],
+    [web, ".tinker/\n"],
+  ]) {
+    prepare(root);
+    writeFileSync(join(root, ".gitignore"), text);
+  }
+
+  const missing = generated(bare);
+
+  expect(generated(listed)).toEqual({
+    status: "ok",
+    lines: [".tinker/ matches this base; .gitignore lists .tinker/"],
+  });
+  expect(missing.lines).toEqual([".gitignore does not list .tinker/"]);
+  expect(missing.fix()).toBe("ran tinker prepare; added .tinker/ to .gitignore");
+  expect(readFileSync(join(bare, ".gitignore"), "utf8")).toBe("dist/\n.tinker/\n");
+  expect(generated(web).lines).toContain(".gitignore does not list .tanstack/");
 });
 
 test("only an app with a server entry gets the #tinker/server-main alias", () => {
