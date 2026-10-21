@@ -161,28 +161,41 @@ async function failedMain(error, app, signal, stop) {
  * does not fail the command; any other write error does.
  */
 async function flushOutput(stdout, stderr) {
-  await fenceStream(stdout).catch(ignoreGone);
-  await fenceStream(stderr).catch(ignoreGone);
+  for (const stream of [stdout, stderr]) {
+    await fenceStream(stream).catch((error) => {
+      if (!readerGone(stream, error)) throw error;
+    });
+  }
 }
 
-/** Write errors that mean the reader is gone: a closed pipe (EPIPE) or a closed terminal (EIO). */
-const goneCodes = new Set(["EPIPE", "EIO"]);
-
-/** @param {unknown} error - From a stream; why: gone output is quiet, any other error throws. */
-function ignoreGone(error) {
-  if (!goneCodes.has(error?.code)) throw error;
+/**
+ * True when a write error means the stream's reader is gone: a closed pipe (EPIPE) on any
+ * stream, or a closed terminal (EIO) on a terminal stream. On a file or a pipe, EIO is a real
+ * write failure, such as a disk error, and the output is lost, so it still fails the run.
+ * @param {{ isTTY?: boolean }} stream - From the host; why: EIO is quiet only on a terminal.
+ * @param {unknown} error - From that stream; why: the code to judge.
+ */
+function readerGone(stream, error) {
+  return error?.code === "EPIPE" || (error?.code === "EIO" && stream.isTTY === true);
 }
 
 /**
  * Keep a command running, and its exit code, when its output goes away: a reader such as
- * `head` closes the pipe, or a hangup closes the terminal. Listens on each stream that can
+ * `head` closes the pipe (EPIPE), or a hangup closes the terminal (EIO on a terminal stream).
+ * Any other error, EIO on a file included, still throws. Listens on each stream that can
  * listen. Returns the function that removes the listeners.
  * @param {...{ on?: Function, off?: Function }} streams - From a host; why: the output streams.
  */
 export function quietGoneOutput(...streams) {
-  for (const stream of streams) stream.on?.("error", ignoreGone);
+  const listeners = streams.map((stream) => [
+    stream,
+    (error) => {
+      if (!readerGone(stream, error)) throw error;
+    },
+  ]);
+  for (const [stream, listener] of listeners) stream.on?.("error", listener);
   return () => {
-    for (const stream of streams) stream.off?.("error", ignoreGone);
+    for (const [stream, listener] of listeners) stream.off?.("error", listener);
   };
 }
 
@@ -200,8 +213,8 @@ const signalCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };
 
 /**
  * Run a process command with host-owned OS signals and flushed output. A closed terminal
- * (SIGHUP) stops it like Ctrl-C. Output that goes away (EPIPE or EIO, on stdout or stderr)
- * does not change the command's exit code.
+ * (SIGHUP) stops it like Ctrl-C. Output that goes away, a closed pipe (EPIPE) or a closed
+ * terminal (EIO on a terminal), on stdout or stderr, does not change the command's exit code.
  */
 export async function runMain(main, options = {}) {
   const inputs = {

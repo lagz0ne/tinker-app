@@ -11,10 +11,11 @@ These changes are in current source, not the released 0.11.0 tarball.
   builds a context by hand adds `cwd`, such as `cwd: import.meta.dirname`.
 - `runMain` and `tinker serve` stop on SIGHUP with exit 129, as they stop on
   SIGINT (130) and SIGTERM (143).
-- Output that goes away no longer fails the run: a reader that closes stdout
-  early, such as `head` (EPIPE), or a closed terminal (EIO). `runMain` ignores
-  EPIPE and EIO on stdout and stderr, and the command's exit code stands, such
-  as 129 after a hangup.
+- Output that goes away no longer fails the run: a reader that closes the
+  pipe early, such as `head` (EPIPE), or a closed terminal (EIO on a terminal
+  stream). `runMain` and `tinker serve` ignore those on stdout and stderr, and
+  the command's exit code stands, such as 129 after a hangup. EIO on a file or
+  a pipe is a real write error, and still fails the run.
 - The contract adds two rules. A command that owns child processes ends them
   inside the 10-second grace. A command may give exit 2 one documented meaning.
 
