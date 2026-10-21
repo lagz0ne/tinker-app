@@ -93,6 +93,7 @@ async function copyDemoFiles(target) {
     "vite.worker.config.ts",
     "maintain/worker.mjs",
     "stryker.config.json",
+    "scripts/mutation-arid.mjs",
   ]) {
     await mkdir(dirname(join(target, path)), { recursive: true });
     await cp(join(app, path), join(target, path), { recursive: true });

@@ -1275,6 +1275,11 @@
           "target": "~/stryker.config.json"
         },
         {
+          "path": "scripts/mutation-arid.mjs",
+          "type": "registry:file",
+          "target": "~/scripts/mutation-arid.mjs"
+        },
+        {
           "path": "tests/auth-context.test.ts",
           "type": "registry:file",
           "target": "~/tests/auth-context.test.ts"
