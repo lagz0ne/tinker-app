@@ -1392,6 +1392,16 @@ const entryHelpers = {
     // Configure Start's CSRF guard and cache the command's async options once.
     "createStartEntry",
   ],
+  "tinker/base/telemetry-worker.ts": [
+    // New: read the worker thread's inputs and write console lines straight to the descriptor.
+    "telemetryWorkerInput",
+    "write",
+    // New: read the shared ring, answer the port, and post health when its kind changes.
+    "serveTelemetryWorker",
+    "post",
+    "ringLines",
+    "takeLines",
+  ],
 };
 
 function definedMainCall(node) {

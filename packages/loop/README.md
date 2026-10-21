@@ -24,6 +24,7 @@ The command reads `<app>/loop.json`:
 
 It runs each gate in order, in the app folder.
 It runs every gate, also after a red gate.
+Check prints the folder it covers: `checked: apps/issue-board only`.
 Each gate's output goes to `.loop/gates/<name>.log`.
 Two gate names must not give the same log file name.
 A gate stops after its `timeout` in milliseconds.
@@ -133,10 +134,80 @@ A broken `last-check.json` makes `status` exit 78 and name the file.
 Check skips a broken `last-check.json` and writes it again.
 A broken `rounds.jsonl` line exits 78 and names the line to fix or delete.
 
+## Review
+
+```bash
+vp exec tinker-loop review [--app <dir>] [--base <ref>]
+```
+
+`review` runs a separate reviewer model on the change.
+The change is the same range as check's scan: from the merge base to the work tree.
+The reviewer gets the app's tinker-review skill: `.agents/skills/tinker-review/SKILL.md`.
+With no skill, it gets the review rules of the app's own Start, `docs/rules.md`.
+Then review prints which rules it used.
+With neither, review exits 78.
+Review prints the folder it covers: `reviewed: apps/issue-board only`.
+Changes in other folders of the repo are not reviewed.
+No base, from `--base` or `loop.json`, exits 78.
+An unknown `--base` exits 64.
+The default reviewer is Claude Opus 5.5, `claude-opus-5-5`, run headless with `claude -p`.
+It gets the tools Read, Grep, and Glob, and nothing that runs commands.
+`--restricted` removes every tool that runs commands or code.
+`--restricted` also ignores user, project, and local settings, so no setting can widen the tools.
+`--permission-mode dontAsk` denies every other tool.
+The reviewer runs in the app folder.
+Its prompt goes on stdin.
+`loop.json` can set another reviewer: `"review": { "command": ["node", "reviewer.mjs"] }`.
+The prompt goes on its stdin too.
+A `{prompt}` word in the command takes the prompt instead, and stdin is empty.
+`"review": { "timeout": 600000 }` sets its timeout in milliseconds.
+The default timeout is 20 minutes.
+A reviewer past its timeout, or stopped, is killed with its whole process group.
+
+Before the run, review writes the change to files, since the reviewer runs no commands.
+`.loop/review/change.patch` holds the git diff from the merge base to the work tree, for the app folder.
+`.loop/review/untracked.txt` lists the new files git does not know yet, one per line.
+So the prompt stays small, however large the change is.
+The prompt starts with a plain title line, so it never starts with `-` and never reads as an option.
+Then come the skill, the range, the open review findings, and the answered review findings.
+The prompt tells the reviewer to read the two files.
+It asks for the skill's JSON lines only.
+It tells the reviewer not to run the gates and not to report `G1`.
+A `G1` line from the reviewer becomes a `question` row: gates belong to check.
+It asks the reviewer to recheck each open review finding.
+A finding that is still there comes back with the same `id`.
+A fixed one comes back as `{"id": "<its id>", "status": "fixed"}`.
+Answered review findings go in the prompt with the same fields as open ones, plus the reason.
+A reworded repeat of an answered finding comes back with the same `id`.
+So it updates that row, which stays answered, and adds no new open row.
+`review-output` rows are never sent back, for recheck or as answered.
+The prompt, the output, and the reviewer's stderr are saved in `.loop/review/`.
+
+Each finding line becomes a row with `source` `review`.
+Its `seenSha` is HEAD, and its `round` comes from `recordReviewRound`.
+A new finding gets the loop's id, a hash, like a check finding.
+A finding with an id from the prompt keeps that id.
+A finding's `line` is a line in the file at the work tree.
+A line past the end of its file becomes line 0, and its `trigger` gets a note with the given line.
+Blank lines, code fences, and a `clear` line are skipped.
+Any other line that is not a finding becomes one `question` row with rule `review-output`.
+That row names the line and says why it is not a finding.
+A bad line never stops the review.
+
+The review merges under the findings lock, with `updateFindings`.
+A finding reported again follows the check rules.
+An open finding stays open, an answered one stays answered, and a fixed one opens again.
+An open review finding rechecked as fixed becomes `fixed` at HEAD.
+An open review finding the reviewer does not mention stays open.
+
+Exit code 0 means the review ran; findings are advice.
+Exit code 1 means the reviewer failed or timed out.
+Then nothing is written and no round is recorded.
+
 ## Review rounds
 
 Each review round is one line in `.loop/rounds.jsonl`: `{ round, source, sha }`.
-The review tool calls `recordReviewRound` from `@tinker/loop/findings` once per review run.
+`tinker-loop review` calls `recordReviewRound` from `@tinker/loop/findings` once per review that runs.
 It writes the line under the findings lock and returns the round number.
 The review tool stamps that number on the findings of that round.
 A round number is one more than any round in the findings, in `rounds.jsonl`, or in the last check.
@@ -206,7 +277,7 @@ Outside git, it goes up to the root folder.
 It never uses `NODE_PATH` or Node's global folders.
 Those belong to the tool's runner, not to the app: pnpm's bin shims set `NODE_PATH`.
 So each app reads the rules of its own Start version.
-The first output line names that Start and its rules file: `@tinker/start 0.10.0: <path>`.
+The first output line names that Start and its rules file: `@tinker/start 0.11.0: <path>`.
 With no ID, the command prints every rule under its group heading.
 With IDs, it prints only those rules, in the order asked.
 IDs are not case sensitive: `b1` is `B1`.

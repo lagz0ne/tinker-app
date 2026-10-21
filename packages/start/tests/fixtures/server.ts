@@ -20,6 +20,11 @@ import {
   renderNs,
   browserIngest,
   browserTelemetry,
+  telemetryWorker,
+  threadExport,
+  threadObserver,
+  threadRenderObserve,
+  threadIngest,
 } from "~/components/telemetry/index.server";
 
 /** The host starts the server; importing this command opens nothing. */
@@ -33,10 +38,13 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
   try {
     const stop = { tools: new AbortController(), app: new AbortController() };
     const appStop = AbortSignal.any([signal, stop.app.signal]);
+    /** A built server sends telemetry from a worker thread; dev and tests keep it on this thread. */
+    const threaded = !import.meta.env.DEV;
     const tools = createScope({
       signal: stop.tools.signal,
-      extensions: [telemetryExport],
+      extensions: [threaded ? threadExport : telemetryExport],
       tags: [
+        threaded && telemetryWorker(new URL("./telemetry-worker.js", import.meta.url)),
         telemetrySide("server"),
         consoleOutput(stdout),
         env.OTEL_SERVICE_NAME !== undefined && telemetryService(env.OTEL_SERVICE_NAME),
@@ -52,12 +60,16 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
     try {
       const app = createScope({
         signal: appStop,
-        observe: tools.resolve(observer),
+        observe: tools.resolve(threaded ? threadObserver : observer),
         extensions: [startRequests],
         tags: [
           backendStop(appStop),
-          renderObservation(tools.resolve(renderObserve, { ns: renderNs })),
-          browserTelemetry(tools.resolve(browserIngest).ingest),
+          renderObservation(
+            threaded
+              ? tools.resolve(threadRenderObserve, { ns: renderNs })
+              : tools.resolve(renderObserve, { ns: renderNs }),
+          ),
+          browserTelemetry(tools.resolve(threaded ? threadIngest : browserIngest).ingest),
         ],
       });
 

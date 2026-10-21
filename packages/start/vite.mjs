@@ -154,6 +154,6 @@ export function tinker(options = {}) {
     import("@vitejs/plugin-react").then(({ default: react }) => react()),
     tailwind(root),
     clientOutput(options.compileHints ?? true),
-    serverOutput(),
+    serverOutput(root),
   ];
 }

@@ -1,5 +1,5 @@
 /** Core and React stay on the tinkered release that Start was tested with. */
-export const coreRelease = "0.8.0";
+export const coreRelease = "0.9.0";
 
 /**
  * A tinker-app tag holds Start only; Core and React keep their tinkered release.

@@ -5,17 +5,17 @@
   "title": "demo",
   "description": "App-owned example business code in src/demo; components stay generic.",
   "dependencies": [
-    "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
-    "@tinker/react@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
+    "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+    "@tinker/react@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz",
     "drizzle-orm@1.0.0-rc.4",
     "zod@^4.0.0"
   ],
   "registryDependencies": [
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.10.0/apps/start-scaffold/public/r/auth.json",
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.10.0/apps/start-scaffold/public/r/database.json",
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.10.0/apps/start-scaffold/public/r/errors.json",
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.10.0/apps/start-scaffold/public/r/mail.json",
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.10.0/apps/start-scaffold/public/r/sync.json"
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r/auth.json",
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r/database.json",
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r/errors.json",
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r/mail.json",
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.11.0/apps/start-scaffold/public/r/sync.json"
   ],
   "files": [
     {

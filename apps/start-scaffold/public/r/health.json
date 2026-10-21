@@ -5,7 +5,7 @@
   "title": "health",
   "description": "Copied health component. You own its files.",
   "dependencies": [
-    "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+    "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
     "@tanstack/react-router@1.170.41",
     "react@^19.3.0"
   ],
@@ -21,7 +21,7 @@
       "path": "tinker/components/health/health.ts",
       "type": "registry:file",
       "target": "~/tinker/components/health/health.ts",
-      "content": "import { operation } from \"@tinker/core\";\n\n/** The copied base version; it changes when this component is updated. */\nexport const baseVersion = \"0.10.0\";\n\nexport const health = operation({\n  label: \"tinker.health\",\n  run: () => ({ ok: true, base: baseVersion }),\n});\n"
+      "content": "import { operation } from \"@tinker/core\";\n\n/** The copied base version; it changes when this component is updated. */\nexport const baseVersion = \"0.11.0\";\n\nexport const health = operation({\n  label: \"tinker.health\",\n  run: () => ({ ok: true, base: baseVersion }),\n});\n"
     },
     {
       "path": "tinker/components/health/index.ts",

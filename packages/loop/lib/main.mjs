@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 
 import { answerFinding, fixCommit } from "./answer.mjs";
 import {
+  loopFolder,
   mergeCheck,
   nextRound,
   readFindings,
@@ -12,8 +13,9 @@ import {
   writeLastCheck,
 } from "./findings.mjs";
 import { readConfig, runGates } from "./gates.mjs";
-import { headSha } from "./git.mjs";
+import { appScope, headSha } from "./git.mjs";
 import { findingList, ruleLines, summary } from "./report.mjs";
+import { runReview } from "./review.mjs";
 import { readRules } from "./rules.mjs";
 import { changeDiff, scanBase, scanDiff, treeState } from "./scan.mjs";
 import { loopStatus } from "./status.mjs";
@@ -27,6 +29,7 @@ const usage = [
   "       tinker-loop rules [ID...] [--app <dir>]",
   '       tinker-loop answer <ID> (--fixed [--sha <sha>] | --reason "<text>") [--app <dir>]',
   "       tinker-loop status [--app <dir>]",
+  "       tinker-loop review [--app <dir>] [--base <ref>]",
 ].join("\n");
 
 /** Each command: the flags it takes, and its call with the app folder and the command line. */
@@ -54,11 +57,16 @@ const commands = {
     flags: ["app"],
     run: (app, { print }) => status(app, print),
   },
+  review: {
+    flags: ["app", "base"],
+    run: (app, { options, print, stderr, signal }) =>
+      review(app, { base: options.base, print, stderr, signal }),
+  },
 };
 
 /**
- * Run one tinker-loop command. Returns the exit code: 0 done, 1 a red gate or not done,
- * 2 needs a person, 64 bad arguments, an unknown rule or ID, or a refused answer,
+ * Run one tinker-loop command. Returns the exit code: 0 done, 1 a red gate, not done, or a
+ * failed reviewer, 2 needs a person, 64 bad arguments, an unknown rule or ID, or a refused answer,
  * 78 a bad loop.json, findings file, or Start install, 129, 130, or 143 when stopped.
  * @param {{ args: readonly string[], cwd: string, stdout: { write(chunk: string): unknown },
  *   stderr: { write(chunk: string): unknown }, signal?: AbortSignal }} context - From the bin
@@ -140,6 +148,7 @@ function idsProblem(command, ids, count) {
  */
 async function check(app, { base, print, signal }) {
   const config = readConfig(app);
+  loopFolder(app);
   const before = treeState(app);
   const gates = await runGates(app, config.gates, { print, signal });
   if (stopCode(signal)) return stopCode(signal);
@@ -160,6 +169,7 @@ async function check(app, { base, print, signal }) {
   const results = gates.map(({ name, green }) => ({ name, green }));
   writeLastCheck(app, { round, sha: run.sha, tree: after, gates: results });
 
+  print(`checked: ${appScope(app)} only`);
   print(
     `tinker-loop check, round ${round}: ${gates.length - red.length} gates green, ${red.length} red`,
   );
@@ -288,6 +298,19 @@ function recordAnswer(app, id, options) {
     refused: answerFinding(app, id, { fixed, named }),
     done: `fixed ${id} at ${fixed.slice(0, 12)}`,
   };
+}
+
+/**
+ * Run the reviewer model on the change and merge its findings as one review round.
+ * @param {string} app - From --app; why: the app to review.
+ * @param {{ base?: string, print: (line: string) => void,
+ *   stderr: { write(chunk: string): unknown }, signal?: AbortSignal }} run - From main; why:
+ *   --base overrides loop.json's base; print, stderr, and the stop.
+ */
+async function review(app, { base, print, stderr, signal }) {
+  const config = readConfig(app);
+  const code = await runReview(app, { base, config, print, stderr, signal });
+  return stopCode(signal) || code;
 }
 
 /**

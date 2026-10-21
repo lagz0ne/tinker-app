@@ -165,6 +165,7 @@ try {
   // Exercise the actual entries, not three replicas of their scope wiring.
   await clients[0].query("SELECT pg_advisory_lock($1,$2)", [...migrationLockKey]);
   const commands = [];
+  let unlocked = false;
   try {
     for (const command of ["server", "worker", "cli"]) {
       const { default: main } = await vite.ssrLoadModule(`/cmds/${command}.ts`);
@@ -238,8 +239,40 @@ try {
     console.log(
       "PASS migration owner: real server, worker and CLI entries all wait before ready or work.",
     );
-  } finally {
+
+    // Every entry is now in its owner wait, so its start began earlier. Hold the lock
+    // 11 s more, past Core's default 10 s start limit; the 60 s migration wait must win.
+    await new Promise((resolve) => setTimeout(resolve, 11_000));
+    for (const trial of commands) {
+      assert(
+        !trial.returned && trial.error === undefined,
+        `${trial.command} command must outlast Core's 10 s start limit while the owner waits: ${trial.error ?? "returned early"}`,
+      );
+    }
     await clients[0].query("SELECT pg_advisory_unlock($1,$2)", [...migrationLockKey]);
+    unlocked = true;
+    for (const trial of commands) {
+      const settled = await Promise.race([
+        trial.pending.then(
+          () => "ready",
+          (error) => error,
+        ),
+        new Promise((resolve) => setTimeout(() => resolve("not-settled"), 20_000)),
+      ]);
+      // The CLI's proof file is missing on purpose; it fails only after startup.
+      if (trial.command === "cli") {
+        assert.doesNotMatch(String(trial.error ?? settled), /StartTimeout|not-settled/);
+      } else {
+        assert.equal(settled, "ready", `${trial.command}: ${trial.error ?? String(settled)}`);
+      }
+    }
+    console.log(
+      "PASS migration owner: entries waiting 11 s for the owner still get ready after unlock.",
+    );
+  } finally {
+    if (!unlocked) {
+      await clients[0].query("SELECT pg_advisory_unlock($1,$2)", [...migrationLockKey]);
+    }
     for (const trial of commands) trial.stop.abort();
     await Promise.allSettled(
       commands.map(async (trial) => {

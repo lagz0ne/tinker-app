@@ -367,6 +367,48 @@ function gone(old, run) {
   const checked = old.source === "check" && (old.rule === gateRule || run.scanned);
   if (!checked || old.status === "fixed") return old;
 
+  return fixedAt(old, run);
+}
+
+/**
+ * A finding marked fixed by a run: its round, the HEAD commit, and `dirty` when the fix was
+ * only in the work tree. An answer's reason stays.
+ * @param {object} old - From the file; why: the row to mark.
+ * @param {{ round: number, sha: string | null, dirty: boolean }} run - From the run; why:
+ *   where and when it was fixed.
+ */
+function fixedAt(old, run) {
   const fixed = { ...old, round: run.round, status: "fixed", sha: run.sha };
   return run.dirty ? { ...fixed, dirty: true } : fixed;
+}
+
+/**
+ * Merge one review run into the file's list. A finding the reviewer reports again is seen
+ * again, as check does: open stays open, answered stays answered, fixed opens again. An open
+ * review finding the reviewer rechecked as fixed becomes fixed. Every other row stays as it
+ * is: an open review finding the reviewer did not mention is left open.
+ * @param {object[]} previous - From readFindings; why: the state before this run.
+ * @param {{ found: object[], fixed: Set<string> }} review - From parseReview; why: what the
+ *   reviewer reported, and the open review ids it rechecked as fixed.
+ * @param {{ round: number, sha: string | null, dirty: boolean }} run - From recordReviewRound
+ *   and git; why: stamps the round and the reviewed commit.
+ */
+export function mergeReview(previous, review, run) {
+  const found = new Map(review.found.map((finding) => [finding.id, finding]));
+  const merged = previous.map((old) => {
+    const now = found.get(old.id);
+    found.delete(old.id);
+    if (now) return seenAgain(old, now, run);
+
+    const rechecked = old.source === "review" && old.status === "open" && review.fixed.has(old.id);
+    return rechecked ? fixedAt(old, run) : old;
+  });
+
+  const added = [...found.values()].map((finding) => ({
+    ...finding,
+    ...seenAt(run.sha),
+    round: run.round,
+    status: "open",
+  }));
+  return [...merged, ...added];
 }

@@ -12,12 +12,12 @@ import {
 import { copyTemplates } from "../../../apps/start-scaffold/maintain/template-sync.mjs";
 import { releaseUrls } from "../lib/release.mjs";
 
-test("release URLs name Start under tinker-app and Core/React under tinkered 0.8.0", () => {
+test("release URLs name Start under tinker-app and Core/React under tinkered 0.9.0", () => {
   expect(releaseUrls("0.7.0")).toEqual({
     "@tinker/core":
-      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-core-0.8.0.tgz",
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
     "@tinker/react":
-      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.8.0/tinker-react-0.8.0.tgz",
+      "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz",
     "@tinker/start":
       "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.7.0/tinker-start-0.7.0.tgz",
   });
@@ -71,16 +71,16 @@ test("default exports pin the released host and refuse the old one", async () =>
     expect((await readdir(out)).sort()).toEqual(["demo", "small"]);
     for (const name of ["demo", "small"]) {
       const pkg = JSON.parse(await readFile(join(out, name, "package.json"), "utf8"));
-      expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.10.0")["@tinker/start"]);
+      expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.11.0")["@tinker/start"]);
     }
 
     await expect(registryItems({ version: "0.9.0" })).rejects.toThrow(
-      "require @tinker/start 0.10.0",
+      "require @tinker/start 0.11.0",
     );
 
     const { packages } = await registryItems();
     for (const pkg of Object.values(packages)) {
-      expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.10.0")["@tinker/start"]);
+      expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.11.0")["@tinker/start"]);
       expect(JSON.stringify(pkg)).not.toMatch(/workspace:|catalog:/);
     }
   } finally {
