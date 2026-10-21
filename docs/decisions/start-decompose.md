@@ -241,7 +241,9 @@ rejects a checkout whose changed source differs from the requested head.
 Both commands write their report under the app's `reports/mutation/`. CI uploads
 the map, gap list, diff plan, elapsed run time, and mutant results, even on failure.
 The GitHub job summary shows plan size, changed/test-mapped/adjacent line counts,
-and every omitted range with its reason. Counts are exclusive: changed lines own
+and every omitted range with its reason. A separate table lists every changed
+app file outside the mutation scope, including excluded source and generated
+files; changed test files are marked as mapped separately. Counts are exclusive: changed lines own
 overlaps before adjacent lines and test-mapped spans.
 The serial checks in `start-gates.yml` stay unchanged.
 

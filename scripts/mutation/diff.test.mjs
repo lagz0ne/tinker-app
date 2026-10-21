@@ -91,6 +91,8 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
   try {
     mkdirSync(join(app, "tinker"), { recursive: true });
     mkdirSync(join(app, "public/r"), { recursive: true });
+    mkdirSync(join(app, "src/frontend"), { recursive: true });
+    writeFileSync(join(app, "src/frontend/App.tsx"), "export const App = () => null;\n");
     mkdirSync(join(root, "scripts/mutation"), { recursive: true });
     for (const file of ["diff.mjs", "span-map.mjs", "shards.mjs"]) {
       copyFileSync(join(import.meta.dirname, file), join(root, "scripts/mutation", file));
@@ -108,6 +110,7 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
     git("commit", "--quiet", "-m", "Initial fixture");
     const base = git("rev-parse", "HEAD");
     writeFileSync(join(app, "tinker/value.ts"), "export const value = 2;\n");
+    writeFileSync(join(app, "src/frontend/App.tsx"), "export const App = () => false;\n");
 
     writeFileSync(
       join(app, "public/r/large.json"),
@@ -143,6 +146,10 @@ test("source selection ignores generated diffs larger than Git's capture buffer"
     assert.equal(plan.base, base, "upstream edits must not become PR edits");
     assert.deepEqual(plan.mutate, ["tinker/value.ts:1-1"]);
     assert.deepEqual(plan.testFiles, ["tests/value.test.ts"]);
+    assert(plan.outOfScope.some(({ file }) => file === "src/frontend/App.tsx"));
+    assert(
+      planSummary(plan).includes("| src/frontend/App.tsx | outside configured mutation scope |"),
+    );
 
     mkdirSync(join(app, "tests"), { recursive: true });
     symlinkSync(join(process.cwd(), "node_modules"), join(app, "node_modules"), "dir");
@@ -490,6 +497,7 @@ test("job summary shows plan size, source counts, and every omitted range", () =
   const plan = {
     app: "apps/example",
     plannedLines: 705,
+    outOfScope: [{ file: "src/frontend/App.tsx", reason: "outside configured mutation scope" }],
     counts: { changed: 700, testMapped: 3, adjacent: 2 },
     omittedRanges: [
       { file: "tests/external.ts", start: 1, end: 4, reason: "test imports no mutable app source" },
@@ -505,6 +513,8 @@ test("job summary shows plan size, source counts, and every omitted range", () =
     "tests/external.ts:1-4",
     "a.ts:1-10",
     "No total line cap",
+    "Changed files outside mutation scope",
+    "src/frontend/App.tsx",
   ]) {
     assert(summary.includes(part), part);
   }

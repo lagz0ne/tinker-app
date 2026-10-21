@@ -236,7 +236,10 @@ export function planSummary(plan) {
   const omitted = plan.omittedRanges
     .map(({ file, start, end, reason }) => `| ${file}:${start}-${end} | ${reason} |`)
     .join("\n");
-  return `## Mutation plan: ${plan.app}\n\nPlanned source lines: **${plan.plannedLines}**. No total line cap. Test-mapped budget: **${plan.testMappedLineBudget}** lines, in file-and-line order after changed and adjacent lines. Counts are exclusive; overlaps belong to changed, then adjacent, then test-mapped.\n\n| Source | Lines |\n| --- | ---: |\n| Changed | ${plan.counts.changed} |\n| Test-mapped | ${plan.counts.testMapped} |\n| Adjacent | ${plan.counts.adjacent} |\n\n### Every omitted range\n\n${omitted ? `| Range | Reason |\n| --- | --- |\n${omitted}` : "None."}\n\nArid/static filtering and one mutant per planned source line happen after this plan.\n`;
+  const outOfScope = (plan.outOfScope ?? [])
+    .map(({ file, reason }) => `| ${file} | ${reason} |`)
+    .join("\n");
+  return `## Mutation plan: ${plan.app}\n\nPlanned source lines: **${plan.plannedLines}**. No total line cap. Test-mapped budget: **${plan.testMappedLineBudget}** lines, in file-and-line order after changed and adjacent lines. Counts are exclusive; overlaps belong to changed, then adjacent, then test-mapped.\n\n| Source | Lines |\n| --- | ---: |\n| Changed | ${plan.counts.changed} |\n| Test-mapped | ${plan.counts.testMapped} |\n| Adjacent | ${plan.counts.adjacent} |\n\n### Every omitted range\n\n${omitted ? `| Range | Reason |\n| --- | --- |\n${omitted}` : "None."}\n\n### Changed files outside mutation scope\n\n${outOfScope ? `| File | Reason |\n| --- | --- |\n${outOfScope}` : "None."}\n\nArid/static filtering and one mutant per planned source line happen after this plan.\n`;
 }
 
 export function planDiff({ app, base, head, map }) {
@@ -349,6 +352,14 @@ export function planDiff({ app, base, head, map }) {
     requestedBase: base,
     head,
     changedTests,
+    outOfScope: changedFiles
+      .filter((file) => !inScope(config, file))
+      .map((file) => ({
+        file,
+        reason: changedTests.includes(file)
+          ? "test file; source spans mapped separately"
+          : "outside configured mutation scope",
+      })),
     deletedSources,
     ...planned,
     sources,
