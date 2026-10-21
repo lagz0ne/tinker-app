@@ -395,18 +395,30 @@ test("runMain, in this process: SIGHUP stops with 129, quietly, with cwd and its
   }).toEqual(before);
 });
 
-test("runMain ignores EPIPE and EIO on stdout and stderr, and throws any other error", async () => {
+test("runMain ignores EPIPE on any stream and EIO on a terminal, and throws any other error", async () => {
   const out = capture();
   const errors = capture();
   const caught = {};
+  const fail = (code) => Object.assign(new Error(`write ${code}`), { code });
   try {
     const code = await runMain(
       async ({ exit }) => {
+        out.stream.emit("error", fail("EPIPE"));
+        errors.stream.emit("error", fail("EPIPE"));
+
         for (const stream of [out.stream, errors.stream]) {
-          for (const gone of ["EPIPE", "EIO"]) {
-            stream.emit("error", Object.assign(new Error(`write ${gone}`), { code: gone }));
+          try {
+            stream.emit("error", fail("EIO"));
+          } catch (error) {
+            caught.fileEio = [...(caught.fileEio ?? []), error.code];
           }
         }
+
+        out.stream.isTTY = true;
+        errors.stream.isTTY = true;
+        out.stream.emit("error", fail("EIO"));
+        errors.stream.emit("error", fail("EIO"));
+
         try {
           errors.stream.emit("error", new Error("disk gone"));
         } catch (error) {
@@ -428,7 +440,11 @@ test("runMain ignores EPIPE and EIO on stdout and stderr, and throws any other e
     process.exitCode = undefined;
   }
 
-  expect(caught).toEqual({ other: "disk gone", empty: { error: undefined } });
+  expect(caught).toEqual({
+    fileEio: ["EIO", "EIO"],
+    other: "disk gone",
+    empty: { error: undefined },
+  });
   expect(errors.stream.listenerCount("error")).toBe(0);
 });
 
@@ -448,13 +464,17 @@ test("runMain takes plain { write } streams with no event methods", async () => 
   }
 });
 
-/** @param {string} code - From a test; why: every write fails with this error code. */
-function failing(code) {
+/**
+ * @param {string} code - From a test; why: every write fails with this error code.
+ * @param {boolean} [terminal] - From a test; why: marks the stream as a terminal (isTTY).
+ */
+function failing(code, terminal = false) {
   const stream = new Writable({
     write(_chunk, _encoding, done) {
       done(Object.assign(new Error(`write ${code}`), { code }));
     },
   });
+  if (terminal) stream.isTTY = true;
   stream.on("error", () => {});
   return stream;
 }
@@ -471,16 +491,20 @@ for (const stream of ["stdout", "stderr"]) {
     expect(await host.closed).toBe(1);
   });
 
-  for (const gone of ["EPIPE", "EIO"]) {
-    test(`${gone} while flushing ${stream} does not fail the run`, async () => {
+  for (const [code, terminal, expected, what] of [
+    ["EPIPE", false, 0, "a closed pipe does not fail the run"],
+    ["EIO", true, 0, "a closed terminal does not fail the run"],
+    ["EIO", false, 1, "a file write error still fails the run"],
+  ]) {
+    test(`${code} while flushing ${stream}${terminal ? " (a terminal)" : ""}: ${what}`, async () => {
       const host = createMainHost(async () => ({ closed: Promise.resolve() }), {
         env: {},
         stdout: quiet,
         stderr: quiet,
-        [stream]: failing(gone),
+        [stream]: failing(code, terminal),
       });
 
-      expect(await host.closed).toBe(0);
+      expect(await host.closed).toBe(expected);
     });
   }
 }
