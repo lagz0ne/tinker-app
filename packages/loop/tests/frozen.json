@@ -1,0 +1,12 @@
+{
+  "tests": 120,
+  "files": {
+    "answer.test.mjs": "79259c49498cdf9ab2b969b4f8bae290ea3b3d847895392de9f876f96f85674c",
+    "check.test.mjs": "302e4e00e42937c78a2b50ec3febfaf6fb9b8ccaf2550d18b51196f5d69d676d",
+    "findings.test.mjs": "a6af46188a9a1b50c6fecea92f6675b54d5ceb2c32386d2cb2ce698a9ce97b4f",
+    "review.test.mjs": "1e36253590cd20539d5c4370a6f89999a2f914d55dab6acb932482d5c5fe1474",
+    "rules.test.mjs": "17e6d984fa426b28a7298ab090b7f105111c84097f73dba686cae93fec4c75fc",
+    "scan.test.mjs": "ed125fa53891ef85d258aa6aa5ac7397c68a2b2fa16cd8771cbd3e7c493ace7e",
+    "status.test.mjs": "1dcc5a158a8f688927c88dc34a84186543862938a785437909ca247508f45eca"
+  }
+}

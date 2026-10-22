@@ -300,3 +300,16 @@ The owner removes the lock only while it still holds that token.
 A lock older than 10 seconds is stale.
 A tool renames a stale lock to a unique name, then removes it.
 Age is the only rule, since a pid means nothing across the sandbox and the host.
+
+## Frozen tests
+
+The `tests/*.test.mjs` files are the loop's acceptance suite: 120 tests that
+pin what the tool does from the outside. They run the command and read its
+exit code, its output, and the files it writes. The port to a Tinker app must
+pass them unchanged (`docs/decisions/loop-on-tinker.md`, ticket 5).
+
+- The tests import only from `tests/api.mjs` and `tests/fixture.mjs`. A port
+  changes those files, not the test bodies.
+- `tests/frozen.json` holds the sha256 of each test file.
+  `node maintain/check-frozen.mjs` fails on a changed, added, or removed file.
+  CI runs it after the loop tests.

@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { expect, test } from "vite-plus/test";
 
-import { recordReviewRound } from "../lib/findings.mjs";
+import { recordReviewRound } from "./api.mjs";
 import {
   commit,
   fail,
@@ -119,7 +119,8 @@ test("one review finding open across 3 recorded review rounds needs a person", a
   const app = repo({ "loop.json": loopJson({ ok: pass }) });
   await loop(app, "check");
   const sha = git(app, "rev-parse", "HEAD");
-  const rounds = [1, 2, 3].map(() => recordReviewRound(app, { sha }));
+  const rounds = [];
+  for (let round = 0; round < 3; round += 1) rounds.push(await recordReviewRound(app, { sha }));
   setFindings(app, [review(rounds[0])]);
 
   const run = await loop(app, "status");
@@ -135,7 +136,7 @@ test("a red gate alone after 3 review rounds is not done, not a person", async (
   const app = repo({ "loop.json": loopJson({ red: fail }) });
   await loop(app, "check");
   const sha = git(app, "rev-parse", "HEAD");
-  for (let round = 0; round < 3; round += 1) recordReviewRound(app, { sha });
+  for (let round = 0; round < 3; round += 1) await recordReviewRound(app, { sha });
   setFindings(app, [
     ...findingsOf(app),
     review(2, "fixed"),
@@ -154,12 +155,12 @@ test("fewer than 3 recorded rounds is not done; all closed after 3 rounds is don
   const app = repo({ "loop.json": loopJson({ ok: pass }) });
   await loop(app, "check");
   const sha = git(app, "rev-parse", "HEAD");
-  recordReviewRound(app, { sha });
-  recordReviewRound(app, { sha });
+  await recordReviewRound(app, { sha });
+  await recordReviewRound(app, { sha });
   setFindings(app, [review(2)]);
   const two = await loop(app, "status");
 
-  recordReviewRound(app, { sha });
+  await recordReviewRound(app, { sha });
   setFindings(app, [review(2, "fixed")]);
   const closed = await loop(app, "status");
 
@@ -169,7 +170,7 @@ test("fewer than 3 recorded rounds is not done; all closed after 3 rounds is don
 test("a check after a recorded review round takes the next round number", async () => {
   const app = repo({ "loop.json": loopJson({ ok: pass }) });
   await loop(app, "check");
-  recordReviewRound(app, { sha: null });
+  await recordReviewRound(app, { sha: null });
 
   const run = await loop(app, "check");
 

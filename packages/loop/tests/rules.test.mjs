@@ -5,10 +5,17 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vite-plus/test";
 
-import { gateRule } from "../lib/findings.mjs";
-import { parseRules } from "../lib/rules.mjs";
-import { scans } from "../lib/scan.mjs";
-import { fail, git, loop, loopJson, repo, setFindings, tempFolder } from "./fixture.mjs";
+import {
+  commit,
+  fail,
+  findingsOf,
+  git,
+  loop,
+  loopJson,
+  repo,
+  setFindings,
+  tempFolder,
+} from "./fixture.mjs";
 
 const repoRoot = join(import.meta.dirname, "../../..");
 const startPackage = join(repoRoot, "packages/start");
@@ -78,24 +85,50 @@ function groups(text) {
   return text.slice(text.indexOf("\n### ") + 1);
 }
 
-test("rules.md lists every rule once, in its group, as the parser reads it", () => {
-  const rules = parseRules(shipped);
+test("rules.md lists every rule once, in its group, as the parser reads it", async () => {
+  const app = appWithStart();
 
-  expect(rules.map((rule) => rule.id)).toEqual(ids);
-  expect(rules.find((rule) => rule.id === "C3")).toEqual(
-    expect.objectContaining({ group: "C: close before success" }),
-  );
-  expect(rules.find((rule) => rule.id === "I5").lines).toEqual([
+  const all = await loop(app, "rules");
+  const unknown = await loop(app, "rules", "Z9");
+  const i5 = await loop(app, "rules", "I5");
+  const c3 = all.stdout.split("\n### ").find((part) => part.includes("\n- `C3` "));
+
+  expect(unknown.stderr).toContain(`known rules: ${ids.join(", ")}\n`);
+  expect(c3.split("\n")[0]).toBe("C: close before success");
+  expect(i5.stdout.split("\n").slice(1)).toEqual([
+    "",
     "- `I5` Four import groups at the top, no `.ts` endings,",
     "  blank lines between steps. Severity: nit.",
+    "",
   ]);
 });
 
-test("every rule the check tool gives exists in rules.md", () => {
-  const known = new Set(parseRules(shipped).map((rule) => rule.id));
-  const given = [gateRule, ...scans.map((scan) => scan.rule)];
+test("every rule the check tool gives exists in rules.md", async () => {
+  const app = appWithStart({
+    ".gitignore": "node_modules/\n",
+    "loop.json": loopJson({ red: fail }, "main"),
+  });
+  git(app, "checkout", "--quiet", "-b", "work");
+  const every = [
+    "process.env.X;",
+    "Date.now();",
+    "randomUUID();",
+    "setInterval(() => {});",
+    "class Thing {}",
+    "fetch(url);",
+    "it.skip(x);",
+    "const y = z as unknown as number;",
+  ];
+  commit(app, { "src/every.ts": `${every.join("\n")}\n` }, "every scan");
+  await loop(app, "check");
 
-  expect(given.filter((id) => !known.has(id))).toEqual([]);
+  const run = await loop(app, "findings", "--rules");
+  const given = [...new Set(findingsOf(app).map((finding) => finding.rule))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+  expect(given).toEqual(["B1", "B3", "G1", "H2", "H3", "H5", "O1"]);
+  expect(run.stdout).not.toContain("not in this Start's rules.md");
 });
 
 test("rules.md holds the review skill's rules word for word", () => {
@@ -174,12 +207,15 @@ for (const [problem, text, message] of [
     'line 5: a group heading reads "### <letter>: <title>"',
   ],
 ]) {
-  test(`the parser throws on ${problem}`, () => {
-    expect(() => parseRules(text)).toThrow(message);
+  test(`the parser throws on ${problem}`, async () => {
+    const run = await loop(fakeStart("1.0.0", text), "rules");
+
+    expect(run.code).toBe(78);
+    expect(run.stderr).toContain(message);
   });
 }
 
-test("text before the first group and after a ## heading is free prose", () => {
+test("text before the first group and after a ## heading is free prose", async () => {
   const text = [
     "# Start rules",
     "#1 note: prose, not a heading",
@@ -198,14 +234,30 @@ test("text before the first group and after a ## heading is free prose", () => {
     "\tand tabs.",
   ].join("\n");
 
-  expect(parseRules(text).map((rule) => rule.lines)).toEqual([["- `B1` One,", "  two."]]);
+  const run = await loop(fakeStart("1.0.0", text), "rules");
+
+  expect(run.stdout.split("\n").slice(1)).toEqual([
+    "",
+    "### B: own the boundary",
+    "",
+    "- `B1` One,",
+    "  two.",
+    "",
+  ]);
 });
 
-test("the parser reads Windows line ends", () => {
-  const rules = parseRules("### B: own the boundary\r\n\r\n- `B1` One,\r\n  two.\r\n");
+test("the parser reads Windows line ends", async () => {
+  const text = "### B: own the boundary\r\n\r\n- `B1` One,\r\n  two.\r\n";
 
-  expect(rules).toEqual([
-    { id: "B1", group: "B: own the boundary", lines: ["- `B1` One,", "  two."] },
+  const run = await loop(fakeStart("1.0.0", text), "rules");
+
+  expect(run.stdout.split("\n").slice(1)).toEqual([
+    "",
+    "### B: own the boundary",
+    "",
+    "- `B1` One,",
+    "  two.",
+    "",
   ]);
 });
 
