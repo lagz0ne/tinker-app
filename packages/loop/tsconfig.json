@@ -1,16 +1,4 @@
 {
-  "compilerOptions": {
-    "target": "esnext",
-    "lib": ["es2024"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "types": ["node"],
-    "strict": true,
-    "noUnusedLocals": true,
-    "noEmit": true,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "skipLibCheck": true
-  },
-  "include": ["vite.config.ts"]
+  "extends": "./.tinker/tsconfig.json",
+  "include": ["cmds", "tinker", "tests-app", "vite.config.ts", "vite.cli.config.ts"]
 }
