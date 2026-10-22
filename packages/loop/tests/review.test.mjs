@@ -5,13 +5,14 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vite-plus/test";
 
-import { main } from "../lib/main.mjs";
-import { promptTitle } from "../lib/review.mjs";
+import { main } from "./api.mjs";
 import { commit, findingsOf, git, loop, pass, repo, setFindings, tempFolder } from "./fixture.mjs";
 
 const fake = fileURLToPath(new URL("./fake-reviewer.mjs", import.meta.url));
 const bin = fileURLToPath(new URL("../bin/tinker-loop.mjs", import.meta.url));
 const skill = "---\nname: tinker-review\n---\n\n# Review a change\n\nSKILL TEXT: the rules.\n";
+/** The prompt's first line: plain words, so the reviewer never reads it as an option. */
+const promptTitle = "Review one change in this app with the tinker-review skill below.";
 
 /**
  * A repo on branch `work`, one commit past `main`, with the review skill and a loop.json

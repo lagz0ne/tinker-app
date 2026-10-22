@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test } from "vite-plus/test";
 
-import { main } from "../lib/main.mjs";
+import { main } from "./api.mjs";
 import {
   commit,
   fail,
@@ -360,6 +360,32 @@ test("a stop kills the running gate, writes nothing, and exits 130", async () =>
   expect(code).toBe(130);
   expect(existsSync(join(app, ".loop/findings.jsonl"))).toBe(false);
 });
+
+test("a stop while the gate ignores SIGTERM exits 130, and the gate is gone within 6 seconds", async () => {
+  const stubborn = `node -e "process.on('SIGTERM', () => {}); require('fs').writeFileSync('pid', String(process.pid)); setInterval(() => {}, 1000)"`;
+  const app = repo({ "loop.json": loopJson({ stubborn }) });
+  const stop = new AbortController();
+  const run = main({
+    args: ["check"],
+    cwd: app,
+    stdout: { write: () => true },
+    stderr: { write: () => true },
+    signal: stop.signal,
+  });
+  while (!existsSync(join(app, "pid")) || readFileSync(join(app, "pid"), "utf8") === "") {
+    await delay(20);
+  }
+
+  const pid = Number(readFileSync(join(app, "pid"), "utf8"));
+  const stoppedAt = performance.now();
+  stop.abort("SIGINT");
+  const code = await run;
+  const took = performance.now() - stoppedAt;
+
+  expect(code).toBe(130);
+  expect(took).toBeLessThan(6000);
+  expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: "ESRCH" }));
+}, 15_000);
 
 test("a missing or bad loop.json exits 78; an unknown command or flag exits 64", async () => {
   const app = repo({ "readme.md": "" });

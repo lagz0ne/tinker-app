@@ -12,7 +12,7 @@ import { join } from "node:path";
 
 import { expect, test } from "vite-plus/test";
 
-import { lockFindings } from "../lib/findings.mjs";
+import { lockFindings } from "./api.mjs";
 import { fail, loop, loopJson, repo, setFindings } from "./fixture.mjs";
 
 const finding = (id, status, severity, extra = {}) => ({
@@ -132,15 +132,17 @@ test("check waits for a fresh lock, then writes after its owner releases it", as
   );
 });
 
-test("a lock is released only while it still holds its owner's token", () => {
+test("a lock is released only while it still holds its owner's token", async () => {
   const app = repo({ "readme.md": "" });
   const lock = join(app, ".loop/findings.lock");
 
-  lockFindings(app)();
+  await (
+    await lockFindings(app)
+  )();
   const gone = existsSync(lock);
-  const release = lockFindings(app);
+  const release = await lockFindings(app);
   writeFileSync(lock, "a tool that broke the lock as stale");
-  release();
+  await release();
 
   expect(gone).toBe(false);
   expect(readFileSync(lock, "utf8")).toBe("a tool that broke the lock as stale");

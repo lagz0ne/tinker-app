@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 
 import { onTestFinished } from "vite-plus/test";
 
-import { main } from "../lib/main.mjs";
+import { main } from "./api.mjs";
 
 export const pass = 'node -e "process.exit(0)"';
 export const fail = 'node -e "process.exit(1)"';
