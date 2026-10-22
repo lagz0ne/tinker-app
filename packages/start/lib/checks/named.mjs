@@ -2,7 +2,14 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { readComponentModules } from "../component-modules.mjs";
-import { appFiles, cliOnly, ignoredFiles, serverFile, commandProblems } from "../named.mjs";
+import {
+  appFiles,
+  binProblems,
+  cliOnly,
+  ignoredFiles,
+  serverFile,
+  commandProblems,
+} from "../named.mjs";
 import { serverSource } from "../server-source.mjs";
 import { mayExport } from "../source.mjs";
 import { fail, verdict } from "./result.mjs";
@@ -57,7 +64,7 @@ export function named(root) {
     )
     .map(({ file, hint }) => say.ignored(file, hint));
   return verdict(
-    [...serverProblems(root), ...missing, ...ignored],
+    [...serverProblems(root), ...missing, ...ignored, ...binProblems(root)],
     say.passed(found.map(({ file }) => file)),
   );
 }

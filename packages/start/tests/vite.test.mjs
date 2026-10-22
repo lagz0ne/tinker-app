@@ -52,6 +52,7 @@ test("a CLI-only app gets the glue, which builds cmds/cli.ts, and the build chec
     resolve: { alias: aliases(root) },
     tsconfig: join(root, ".tinker/tsconfig.json"),
     build: { ssr: "cmds/cli.ts", outDir: "dist-cli" },
+    ssr: { external: ["@tinker/start", "@tinker/core"] },
   });
 });
 

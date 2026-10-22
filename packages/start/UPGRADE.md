@@ -28,6 +28,27 @@ These changes are in current source, not the released 0.11.0 tarball.
   and tsc, then builds `cmds/cli.ts` to the `build.outDir` that
   `vite.cli.config.ts` names. The registry's new `base-main` item copies only
   `tinker/base/main.ts`; the web `base` item requires it.
+- A CLI-only app may ship its CLI as a package `bin`. The app owns the bin
+  file, and `@tinker/start` and `@tinker/core` are its runtime dependencies:
+
+  ```json
+  "bin": { "hello": "./bin/hello.mjs" },
+  "files": ["bin", "dist-cli"]
+  ```
+
+  ```js
+  #!/usr/bin/env node
+  import { runMain } from "@tinker/start/main-host";
+
+  import main from "../dist-cli/cli.js";
+
+  await runMain(main);
+  ```
+
+  Its `vp build` keeps `@tinker/start` and `@tinker/core` as imports, so
+  `dist-cli` holds no copy of them. Doctor checks each bin: the file exists,
+  it imports the built CLI entry, which is the `build.outDir` in
+  `vite.cli.config.ts` plus the entry's name, and `files` lists both.
 
 ## 0.11.0
 

@@ -366,3 +366,168 @@ test("only an app with a server entry gets the #tinker/server-main alias", () =>
     "^#tinker\\/routes$",
   ]);
 });
+
+/**
+ * A bin file that runs the built CLI, as an app owns it.
+ * @param {string} entry - From a test; why: the built CLI entry it imports.
+ */
+function binFile(entry) {
+  return [
+    "#!/usr/bin/env node",
+    'import { runMain } from "@tinker/start/main-host";',
+    "",
+    `import main from "${entry}";`,
+    "",
+    "await runMain(main);",
+    "",
+  ].join("\n");
+}
+
+test("doctor checks each package.json bin: the file exists, files lists it, and it imports the built CLI", () => {
+  const pkg = (fields) => JSON.stringify({ type: "module", ...fields });
+  const buildCli = 'export default { build: { ssr: "cmds/cli.ts", outDir: "build-cli" } };\n';
+  const apps = {
+    good: cliApp({
+      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["bin", "build-cli"] }),
+      "vite.cli.config.ts": buildCli,
+      "bin/hello.mjs": binFile("../build-cli/cli.js"),
+    }),
+    noFiles: cliApp({
+      "package.json": pkg({ name: "hello", bin: "bin/hello.mjs" }),
+      "bin/hello.mjs": binFile("../dist-cli/cli.js"),
+    }),
+    folder: cliApp({
+      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["./bin/", "dist-cli/"] }),
+      "bin/hello.mjs": binFile("../dist-cli/cli.js"),
+    }),
+    exact: cliApp({
+      "package.json": pkg({
+        bin: { hello: "./bin/hello.mjs" },
+        files: ["bin/hello.mjs", "dist-cli/cli.js"],
+      }),
+      "bin/hello.mjs": binFile("../dist-cli/cli.js"),
+    }),
+    noOutDir: cliApp({
+      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" } }),
+      "vite.cli.config.ts": 'export default { build: { ssr: "cmds/cli.ts" } };\n',
+      "bin/hello.mjs": binFile("../dist-cli/cli.js"),
+    }),
+    missing: cliApp({
+      "package.json": pkg({ name: "hello", bin: "./bin/hello.mjs", files: ["bin"] }),
+    }),
+    unlistedEntry: cliApp({
+      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["bin"] }),
+      "bin/hello.mjs": binFile("../dist-cli/cli.js"),
+    }),
+    unlisted: cliApp({
+      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["dist-cli"] }),
+      "bin/hello.mjs": binFile("../dist-cli/cli.js"),
+    }),
+    hardCoded: cliApp({
+      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" }, files: ["bin/*.mjs", "build-cli"] }),
+      "vite.cli.config.ts": buildCli,
+      "bin/hello.mjs": binFile("../dist-cli/cli.js"),
+    }),
+    web: goodApp({
+      "package.json": pkg({ bin: { hello: "./bin/hello.mjs" } }),
+      "bin/hello.mjs": binFile("../dist-cli/cli.js"),
+    }),
+  };
+
+  const checked = Object.fromEntries(
+    Object.entries(apps).map(([name, root]) => [name, named(root)]),
+  );
+
+  expect(
+    [checked.good, checked.noFiles, checked.folder, checked.exact].map(({ status }) => status),
+  ).toEqual(["ok", "ok", "ok", "ok"]);
+  expect(checked.noOutDir.lines).toEqual([
+    "vite.cli.config.ts:1 name a literal build.outDir for cmds/cli.ts",
+  ]);
+  expect(checked.missing.lines).toEqual([
+    "bin/hello.mjs:1 is missing; package.json bin hello names it",
+  ]);
+  expect(checked.unlisted.lines).toEqual([
+    "package.json: files does not list bin/hello.mjs, so a pack leaves out bin hello",
+  ]);
+  expect(checked.unlistedEntry.lines).toEqual([
+    "package.json: files does not list dist-cli/cli.js, so a pack leaves out the CLI bin hello imports",
+  ]);
+  expect(checked.hardCoded.lines).toEqual([
+    "bin/hello.mjs:1 does not import ../build-cli/cli.js, the built CLI entry; import main from it",
+  ]);
+  expect(checked.web.lines).toEqual([
+    "package.json: bin hello runs a built CLI; name cliEntry in tinker()",
+  ]);
+});
+
+test("a CLI-only build keeps @tinker/start and a linked @tinker/core as imports, not copies", () => {
+  const root = cliApp({
+    "cmds/main-host.d.ts":
+      'declare module "@tinker/start/main-host" {\n  export function quietGoneOutput(...streams: unknown[]): () => void;\n}\n',
+    "cmds/cli.ts": [
+      'import { resource } from "@tinker/core";',
+      'import { quietGoneOutput } from "@tinker/start/main-host";',
+      "",
+      'import { defineMain } from "~/base/main";',
+      "",
+      "export default defineMain(async ({ stdout, exit }) => {",
+      "  stdout.write(`${typeof quietGoneOutput} ${typeof resource}\\n`);",
+      "  exit(0);",
+      "  return { closed: Promise.resolve() };",
+      "});",
+      "",
+    ].join("\n"),
+  });
+  const linked = join(root, "packages/core");
+  cpSync(core, linked, { recursive: true });
+  rmSync(join(root, "node_modules/@tinker/core"));
+  symlinkSync(linked, join(root, "node_modules/@tinker/core"), "dir");
+
+  const built = run(root, blockWeb(root), "vp", ["build"]);
+  const text = readFileSync(join(root, "dist-cli/cli.js"), "utf8");
+
+  expect(built.status, built.stdout + built.stderr).toBe(0);
+  expect(text).toContain('from "@tinker/start/main-host"');
+  expect(text).toContain('from "@tinker/core"');
+  expect(text).not.toContain("function quietGoneOutput");
+});
+
+test("proof: a packed CLI-only app's bin runs in another app with vp exec", () => {
+  const app = cliApp({
+    "package.json": JSON.stringify({
+      name: "hello-cli",
+      version: "1.0.0",
+      type: "module",
+      bin: { "hello-cli": "./bin/hello-cli.mjs" },
+      files: ["bin", "dist-cli"],
+      dependencies: { "@tinker/start": "*", "@tinker/core": "*" },
+    }),
+    "bin/hello-cli.mjs": binFile("../dist-cli/cli.js"),
+  });
+  const user = fixture({
+    "package.json": JSON.stringify({
+      name: "user",
+      private: true,
+      dependencies: { "hello-cli": `file:${join(app, "hello-cli-1.0.0.tgz")}` },
+    }),
+    "pnpm-workspace.yaml": `overrides:\n  "@tinker/start": "link:${baseDir}"\n  "@tinker/core": "link:${core}"\n`,
+  });
+
+  const built = run(app, blockWeb(app), "vp", ["build"]);
+  const packed = run(app, process.env, "pnpm", ["pack"]);
+  const listed = run(app, process.env, "tar", ["tzf", "hello-cli-1.0.0.tgz"]);
+  const installed = run(user, process.env, "pnpm", ["install", "--offline"]);
+  const ran = run(user, process.env, "vp", ["exec", "hello-cli"]);
+
+  expect(built.status, built.stdout + built.stderr).toBe(0);
+  expect(packed.status, packed.stdout + packed.stderr).toBe(0);
+  expect(listed.stdout.split("\n").filter(Boolean).sort()).toEqual([
+    "package/bin/hello-cli.mjs",
+    "package/dist-cli/cli.js",
+    "package/package.json",
+  ]);
+  expect(installed.status, installed.stdout + installed.stderr).toBe(0);
+  expect(ran.status, ran.stdout + ran.stderr).toBe(0);
+  expect(ran.stdout).toBe("hello\n");
+});
