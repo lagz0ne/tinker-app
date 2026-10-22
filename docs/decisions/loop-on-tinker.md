@@ -513,10 +513,11 @@ The freeze ticket (ticket 5) runs on today's code.
 
 - Every test imports from one file,
   `tests/api.mjs`.
-  It re-exports `main`, `lockFindings`, and
-  `recordReviewRound`.
-- Tests that import `parseRules`, `gateRule`, or
-  `scans` move to the CLI seam first.
+  It re-exports `main`, and gives `lockFindings`
+  and `recordReviewRound` as async functions.
+- Tests that import `parseRules`, `gateRule`,
+  `scans`, or `promptTitle` move to the CLI seam
+  first.
   Parser cases write a fake Start's `rules.md`
   and run `tinker-loop rules`.
   The rule-coverage test runs `check` and then
@@ -527,8 +528,12 @@ The freeze ticket (ticket 5) runs on today's code.
   get `await`, so the same test bodies pass when
   those become async store methods.
 - The S4 stop test is added.
-- The suite stays 111 tests:
-  99, plus T3's 11, plus the stop test.
+- The suite is 120 tests:
+  99 from before T3, plus T3's 20
+  (19 review tests and 1 scan test),
+  plus the stop test.
+  An earlier draft said 111. It counted T3's
+  11 tests from before T3 merged.
 - After ticket 5, the `*.test.mjs` files freeze.
   Later tickets change only `tests/api.mjs`,
   `tests/fixture.mjs`, and test setup files.
@@ -545,7 +550,7 @@ Through tickets 6 and 7, the old code keeps serving.
   The store helpers open a scope test root
   with the store resource.
 - Every port ticket checks two things:
-  the 111 frozen tests pass, and
+  the 120 frozen tests pass, and
   `git diff <freeze> -- 'packages/loop/tests/*.test.mjs'`
   is empty.
 
@@ -605,23 +610,23 @@ In order. Each ticket is one commit or PR.
 5. **Freeze** — `tests/api.mjs`, `await`,
    internals moved to the CLI seam,
    and the S4 stop test
-   Verify: 111 tests pass. After this ticket,
+   Verify: 120 tests pass. After this ticket,
    the `*.test.mjs` files do not change.
 6. **Skeleton** — the app beside `lib/`
    CLI-only files, `base-main`, `check-plain.mjs`
    copied, and tsx as a devDependency.
    Verify: doctor, `gate:commands`,
    `check-plain`, and `check-plain --prove` pass.
-   The 111 frozen tests pass.
+   The 120 frozen tests pass.
 7. **Resources** — processes, store, git,
    startRules, reviewer, each with its parameters
    Verify: a scope test closes the root while a
    child ignores SIGTERM, and finds its group
    gone within 6 seconds.
-   The 111 frozen tests pass.
+   The 120 frozen tests pass.
 8. **Operations** — all six commands on Core,
    bodies inline, then the switch
-   Verify: the 111 frozen tests pass,
+   Verify: the 120 frozen tests pass,
    serial and the CI way.
    The test-body diff since ticket 5 is empty.
    `check-plain` passes.
