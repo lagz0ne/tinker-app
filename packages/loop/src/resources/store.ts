@@ -132,7 +132,14 @@ export const store = resource({
       }
     };
 
-    defer(() => {
+    /**
+     * Close waits for every running `locked` callback, since Core waits only for its own work:
+     * releasing the lock under a running callback lets another writer in, and the late write
+     * then drops that writer's rows. Only then is a lock still held released.
+     */
+    const running = new Set<Promise<unknown>>();
+    defer(async () => {
+      await Promise.allSettled(running);
       if (held) release(held);
     });
 
@@ -141,11 +148,19 @@ export const store = resource({
       folder: ensure,
       /** Run `work` under `.loop/findings.lock`, so two tools never drop each other's rows. */
       locked: async <T>(work: () => T | Promise<T>) => {
-        const token = await lock();
+        const ran = (async () => {
+          const token = await lock();
+          try {
+            return await work();
+          } finally {
+            release(token);
+          }
+        })();
+        running.add(ran);
         try {
-          return await work();
+          return await ran;
         } finally {
-          release(token);
+          running.delete(ran);
         }
       },
       /** Every findings row, in file order. Read it inside `locked` when you write it back. */

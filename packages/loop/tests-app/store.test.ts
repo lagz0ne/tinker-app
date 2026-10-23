@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import { createScope } from "@tinker/core";
 import { makeTestClock, makeTestRandom } from "@tinker/core/testing";
@@ -21,10 +22,12 @@ test("findings round-trip under a lock whose token is ctx.random; .loop ignores 
     return readFileSync(lock, "utf8");
   });
   const read = files.findings();
+  const lockedAfter = existsSync(lock);
   await scope.close();
 
   expect(held).toBe(makeTestRandom({ seed: 7 }).uuid());
   expect(read).toEqual([{ id: "a", rule: "G1" }]);
+  expect(lockedAfter).toBe(false);
   expect(readFileSync(join(dir, ".loop/.gitignore"), "utf8")).toBe("*\n");
   expect(readdirSync(join(dir, ".loop")).sort()).toEqual([".gitignore", "findings.jsonl"]);
 });
@@ -90,16 +93,29 @@ test("a lock older than 10 seconds on ctx.clock is broken; a lock taken over is 
   expect(readFileSync(lock, "utf8")).toBe("a tool that broke this lock as stale");
 });
 
-test("a lock still held when the root closes is released", async () => {
+test("close waits for a running locked callback, and only then releases its lock", async () => {
   const dir = tempFolder();
   const scope = createScope({ tags: [appDir(dir)] });
   const files = scope.resolve(store);
   const lock = join(dir, ".loop/findings.lock");
+  let open = () => {};
+  const gate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  const order: string[] = [];
 
-  void files.locked(() => new Promise(() => {}));
-  const held = existsSync(lock);
-  await scope.close();
+  const work = files.locked(async () => {
+    await gate;
+    order.push("callback done");
+  });
+  const closing = scope.close().then(() => order.push("closed"));
+  await delay(100);
+  const whileWaiting = { held: existsSync(lock), closed: order.includes("closed") };
+  open();
+  await closing;
+  await work;
 
-  expect(held).toBe(true);
+  expect(whileWaiting).toEqual({ held: true, closed: false });
+  expect(order).toEqual(["callback done", "closed"]);
   expect(existsSync(lock)).toBe(false);
 });
