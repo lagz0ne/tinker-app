@@ -8,5 +8,8 @@ import { defineConfig } from "vite-plus";
  */
 export default defineConfig({
   plugins: [tinker({ cliEntry: "cmds/cli.ts" })],
-  test: { include: ["tests/**/*.test.mjs", "maintain/**/*.test.mjs", "tests-app/**/*.test.ts"] },
+  test: {
+    include: ["tests/**/*.test.mjs", "maintain/**/*.test.mjs", "tests-app/**/*.test.ts"],
+    globalSetup: ["tests-app/global-setup.ts"],
+  },
 });

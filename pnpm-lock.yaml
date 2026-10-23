@@ -523,13 +523,14 @@ importers:
         version: 1.0.0(@types/node@24.19.2)(@vitest/ui@5.0.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(typescript@7.0.2)
 
   packages/loop:
-    devDependencies:
+    dependencies:
       '@tinker/core':
         specifier: https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz
         version: https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz
       '@tinker/start':
         specifier: workspace:*
         version: link:../start
+    devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.2

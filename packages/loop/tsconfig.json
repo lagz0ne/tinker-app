@@ -1,4 +1,7 @@
 {
   "extends": "./.tinker/tsconfig.json",
-  "include": ["cmds", "tinker", "tests-app", "vite.config.ts", "vite.cli.config.ts"]
+  "compilerOptions": {
+    "allowJs": true
+  },
+  "include": ["src", "cmds", "tinker", "tests-app", "vite.config.ts", "vite.cli.config.ts"]
 }

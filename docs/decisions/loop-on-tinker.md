@@ -149,10 +149,18 @@ unless a branch is named.
 - In the repo, the tool's TypeScript source runs
   with tsx, a devDependency of the tool.
   Not `pnpm dlx`.
-- Tests and `vp exec` run `cmds/cli.ts` through tsx.
-  There is no `dist-cli` build before tests.
-- The published bin ships built JS: `dist-cli`,
-  run with plain node.
+- tsx runs the source for dev and for the app's
+  own tests (`tests-app/`).
+- The bin runs built JS: `dist-cli`, with plain
+  node, in the repo and when published.
+  So the frozen tests that start the bin need one
+  build first: a vitest global setup runs
+  `vp build` once (Duke, 2026-10-22 23:53).
+  No frozen test body builds.
+- The loop's `prepare` script runs `vp build`,
+  so an install builds `dist-cli`, and the
+  scaffold's `tinker-loop` works from the
+  workspace.
 - Why tsx: Node 24 strips types, but it ignores
   tsconfig `paths`. So plain node cannot load
   `~/` and `@/` imports (checked 2026-10-20).
@@ -540,11 +548,15 @@ The freeze ticket (ticket 5) runs on today's code.
 
 Through tickets 6 and 7, the old code keeps serving.
 
-- The bin and `tests/api.mjs` point at `lib/`
-  until ticket 8.
+- Ticket 6 switches the bin to the S2 `runMain`
+  bin over `dist-cli` (Duke, 2026-10-22 23:53).
+  `cmds/cli.ts` hands each command to `lib/`
+  through `src/old-tool.ts`: the strangler fig.
+- `tests/api.mjs` points at `lib/` until ticket 8.
 - Tickets 6 and 7 add the app beside `lib/`.
-- Ticket 8 switches the bin to `runMain` and
-  `tests/api.mjs` to the app in one ticket.
+- Ticket 8 ports the operations, removes the
+  hand-off, and switches `tests/api.mjs` to the
+  app in one ticket.
 - `main` then becomes an in-process host
   around the CLI command, with `cwd`.
   The store helpers open a scope test root
@@ -613,11 +625,12 @@ In order. Each ticket is one commit or PR.
    Verify: 120 tests pass. After this ticket,
    the `*.test.mjs` files do not change.
 6. **Skeleton** — the app beside `lib/`
-   CLI-only files, `base-main`, `check-plain.mjs`
-   copied, and tsx as a devDependency.
-   Verify: doctor, `gate:commands`,
-   `check-plain`, and `check-plain --prove` pass.
-   The 120 frozen tests pass.
+   CLI-only files, `base-main`, tsx as a
+   devDependency, the S2 bin, and the hand-off
+   to `lib/`.
+   Verify: doctor and `gate:commands` pass.
+   The 120 frozen tests pass, with one build first.
+   The scaffold's `tinker-loop` runs.
 7. **Resources** — processes, store, git,
    startRules, reviewer, each with its parameters
    Verify: a scope test closes the root while a
@@ -629,20 +642,22 @@ In order. Each ticket is one commit or PR.
    Verify: the 120 frozen tests pass,
    serial and the CI way.
    The test-body diff since ticket 5 is empty.
-   `check-plain` passes.
-   Each plain helper in `PLAIN.md` names its
-   two units.
    Types are declared only at tags and Data
    schemas; graph values carry no hand-written
    type, and review checks it.
 9. **Clean up** — `lib/` removed, CI runs the
    loop's doctor and gates
+   `check-plain.mjs` comes here, with its first
+   user: copy it and add the `check-plain` script
+   when CI runs the loop's gates.
    Mutation follows Duke's rule for apps
    (2026-10-19 19:34): a diff gate on changed
    lines, through the Core graph, and a full run
    as a scheduled report with floor 60.
    Start stays at 85.
    Verify: CI is green. The diff gate passes.
+   `check-plain` passes, and each plain helper
+   in `PLAIN.md` names its two units.
    The scheduled full run reports at least 60.
    A real `tinker-loop check` runs in the scaffold.
 

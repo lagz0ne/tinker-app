@@ -11,19 +11,19 @@ import { expect, onTestFinished, test } from "vite-plus/test";
 import main from "../cmds/cli";
 
 const root = join(import.meta.dirname, "..");
+const scaffold = join(root, "../../apps/start-scaffold");
+const from = createRequire(join(root, "package.json"));
+const g1 = "- `G1` Every gate in AGENTS.md passes.";
 
-const said =
-  "tinker-loop check: the app has no commands yet; bin/tinker-loop.mjs runs lib/ until ticket 8\n";
-
-test("the skeleton has no commands yet: any input says so on stderr and exits 64", async () => {
+test("the app hands each command to lib/ until ticket 8, in the context's folder", async () => {
   const out: unknown[] = [];
   const err: unknown[] = [];
   const codes: number[] = [];
 
   const done = await main({
     env: {},
-    args: ["check"],
-    cwd: root,
+    args: ["rules", "G1"],
+    cwd: scaffold,
     signal: new AbortController().signal,
     stdout: { write: (chunk) => out.push(chunk) },
     stderr: { write: (chunk) => err.push(chunk) },
@@ -31,13 +31,12 @@ test("the skeleton has no commands yet: any input says so on stderr and exits 64
   });
   await done.closed;
 
-  expect(codes).toEqual([64]);
-  expect(out).toEqual([]);
-  expect(err).toEqual([said]);
+  expect(codes).toEqual([0]);
+  expect(err).toEqual([]);
+  expect(out.join("")).toContain(`\n${g1}\n`);
 });
 
-test("tsx runs cmds/cli.ts from source through runMain, with its ~/ imports", () => {
-  const from = createRequire(join(root, "package.json"));
+test("tsx runs cmds/cli.ts from source through runMain; an unknown command exits 64", () => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "tinker-loop-tsx-")));
   onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
   const entry = join(dir, "run.mjs");
@@ -51,12 +50,37 @@ test("tsx runs cmds/cli.ts from source through runMain, with its ~/ imports", ()
     ].join("\n"),
   );
 
-  const run = spawnSync(process.execPath, [from.resolve("tsx/cli"), entry, "check"], {
+  const run = spawnSync(process.execPath, [from.resolve("tsx/cli"), entry, "frobnicate"], {
     cwd: root,
     encoding: "utf8",
   });
 
   expect(run.stdout).toBe("");
-  expect(run.stderr).toBe(said);
+  expect(run.stderr).toMatch(/^usage: tinker-loop check /);
   expect(run.status).toBe(64);
+});
+
+test("doctor passes on the loop app, its bin check included", () => {
+  const doctor = spawnSync(
+    process.execPath,
+    [
+      from.resolve("@tinker/start/package.json").replace("package.json", "bin/tinker.mjs"),
+      "doctor",
+    ],
+    { cwd: root, encoding: "utf8" },
+  );
+
+  expect(doctor.stdout).toContain("doctor: all checks pass");
+  expect(doctor.status).toBe(0);
+});
+
+test("the scaffold's tinker-loop runs the built app from the workspace", () => {
+  const run = spawnSync(join(scaffold, "node_modules/.bin/tinker-loop"), ["rules", "G1"], {
+    cwd: scaffold,
+    encoding: "utf8",
+  });
+
+  expect(run.stderr).toBe("");
+  expect(run.status).toBe(0);
+  expect(run.stdout).toContain(`\n${g1}\n`);
 });

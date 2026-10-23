@@ -1,14 +1,13 @@
 import { defineMain } from "~/base/main";
 
+import { handOff } from "@/old-tool";
+
 /**
- * tinker-loop as a CLI-only Start app (docs/decisions/loop-on-tinker.md). The commands come in
- * ticket 8. Until then bin/tinker-loop.mjs runs lib/, and any input here exits 64.
+ * tinker-loop as a CLI-only Start app (docs/decisions/loop-on-tinker.md). Until ticket 8 ports
+ * the operations, each command goes to the old tool in lib/, with this context's folder, output,
+ * and stop: the strangler fig. lib/ picks the exit code.
  */
-export default defineMain(async ({ args, stderr, exit }) => {
-  const said = ["tinker-loop", ...args.slice(0, 1)].join(" ");
-  stderr.write(
-    `${said}: the app has no commands yet; bin/tinker-loop.mjs runs lib/ until ticket 8\n`,
-  );
-  exit(64);
+export default defineMain(async ({ args, cwd, stdout, stderr, signal, exit }) => {
+  exit(await handOff({ args: [...args], cwd, stdout, stderr, signal }));
   return { closed: Promise.resolve() };
 });
