@@ -1,13 +1,48 @@
-import { defineMain } from "~/base/main";
+import { createScope } from "@tinker/core";
 
+import { checkClosed, defineMain } from "~/base/main";
+
+import { readCommandLine } from "@/command-line";
 import { handOff } from "@/old-tool";
+import { rules } from "@/operations/rules";
+import { appDir, childEnv, print, warn } from "@/tags";
 
 /**
- * tinker-loop as a CLI-only Start app (docs/decisions/loop-on-tinker.md). Until ticket 8 ports
- * the operations, each command goes to the old tool in lib/, with this context's folder, output,
- * and stop: the strangler fig. lib/ picks the exit code.
+ * tinker-loop as a CLI-only Start app (docs/decisions/loop-on-tinker.md). This command is the
+ * seam (ADR 0113): it alone reads the context, binds the tags, and picks the exit code. Ticket 8
+ * ports the commands one by one; until a command is ported, it goes to the old tool in lib/.
  */
-export default defineMain(async ({ args, cwd, stdout, stderr, signal, exit }) => {
-  exit(await handOff({ args: [...args], cwd, stdout, stderr, signal }));
-  return { closed: Promise.resolve() };
+export default defineMain(async ({ env, args, cwd, stdout, stderr, signal, exit }) => {
+  const line = readCommandLine(args, cwd);
+  if (!line.ok) {
+    stderr.write(line.problem);
+    exit(64);
+    return { closed: Promise.resolve() };
+  }
+  if (line.name !== "rules") {
+    exit(await handOff({ args: [...args], cwd, stdout, stderr, signal }));
+    return { closed: Promise.resolve() };
+  }
+
+  const root = createScope({
+    tags: [
+      appDir(line.app),
+      childEnv(env),
+      print((text) => stdout.write(`${text}\n`)),
+      warn((text) => stderr.write(`${text}\n`)),
+    ],
+    signal,
+  });
+  // A root with a stop signal settles its operations async, whatever settle's sync type says.
+  const ran = await Promise.resolve(root.settle(rules, { input: { ids: line.positionals } }));
+  let code = 0;
+  if (ran.status === "failed") {
+    const { error } = ran;
+    stderr.write(`tinker-loop: ${error instanceof Error ? error.message : String(error)}\n`);
+    code = 78;
+  } else if (ran.status === "success" && ran.value === "refused") code = 64;
+
+  const closed = root.close({ graceful: true }).then(checkClosed);
+  exit(code);
+  return { closed };
 });

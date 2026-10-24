@@ -14,6 +14,12 @@ export const childEnv = tag<Readonly<Record<string, string | undefined>>>({
   label: "loop.childEnv",
 });
 
+/** Write one line to the tool's stdout. Output is an outside effect, so cmds/cli.ts binds it. */
+export const print = tag<(line: string) => void>({ label: "loop.print" });
+
+/** Write one line to the tool's stderr. Bound by cmds/cli.ts, like print. */
+export const warn = tag<(line: string) => void>({ label: "loop.warn" });
+
 /** The default reviewer's model, when loop.json names no review.command. */
 export const reviewModel = tag<string>({ label: "loop.reviewModel", default: "claude-opus-5-5" });
 

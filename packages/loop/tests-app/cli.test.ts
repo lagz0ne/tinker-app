@@ -9,6 +9,7 @@ import { expect, onTestFinished, test } from "vite-plus/test";
 
 // oxlint-disable-next-line import/no-relative-parent-imports -- Test the native command contract.
 import main from "../cmds/cli";
+import { tempFolder } from "./temp";
 
 const root = join(import.meta.dirname, "..");
 const scaffold = join(root, "../../apps/start-scaffold");
@@ -83,4 +84,28 @@ test("the scaffold's tinker-loop runs the built app from the workspace", () => {
   expect(run.stderr).toBe("");
   expect(run.status).toBe(0);
   expect(run.stdout).toContain(`\n${g1}\n`);
+});
+
+test("an operation's thrown Error prints tinker-loop: <message> on stderr and exits 78", async () => {
+  const app = tempFolder();
+  const out: unknown[] = [];
+  const err: unknown[] = [];
+  const codes: number[] = [];
+
+  const done = await main({
+    env: { PATH: process.env.PATH },
+    args: ["rules"],
+    cwd: app,
+    signal: new AbortController().signal,
+    stdout: { write: (chunk) => out.push(chunk) },
+    stderr: { write: (chunk) => err.push(chunk) },
+    exit: (code) => codes.push(code),
+  });
+  await done.closed;
+
+  expect(codes).toEqual([78]);
+  expect(out).toEqual([]);
+  expect(err).toEqual([
+    `tinker-loop: cannot find @tinker/start from ${app}; install it to read its rules\n`,
+  ]);
 });
