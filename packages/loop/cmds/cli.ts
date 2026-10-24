@@ -1,11 +1,30 @@
-import { createScope } from "@tinker/core";
+import { createScope, type Scope } from "@tinker/core";
 
 import { checkClosed, defineMain } from "~/base/main";
 
 import { readCommandLine } from "@/command-line";
 import { handOff } from "@/old-tool";
+import { findings } from "@/operations/findings";
 import { rules } from "@/operations/rules";
 import { appDir, childEnv, print, warn } from "@/tags";
+
+/** What each operation's outcome means as an exit code; only this command picks them. */
+const codes: Record<string, number> = { done: 0, refused: 64 };
+
+/**
+ * The ported commands: each settles its operation with this command line's input. A command
+ * not here yet goes to the old tool in lib/.
+ */
+const ported = {
+  rules: (root: Scope.Handle, line: CommandLine) =>
+    root.settle(rules, { input: { ids: line.positionals } }),
+  findings: (root: Scope.Handle, line: CommandLine) =>
+    root.settle(findings, {
+      input: { open: line.options.open ?? false, rules: line.options.rules ?? false },
+    }),
+};
+
+type CommandLine = Extract<ReturnType<typeof readCommandLine>, { ok: true }>;
 
 /**
  * tinker-loop as a CLI-only Start app (docs/decisions/loop-on-tinker.md). This command is the
@@ -19,7 +38,7 @@ export default defineMain(async ({ env, args, cwd, stdout, stderr, signal, exit 
     exit(64);
     return { closed: Promise.resolve() };
   }
-  if (line.name !== "rules") {
+  if (!Object.hasOwn(ported, line.name)) {
     exit(await handOff({ args: [...args], cwd, stdout, stderr, signal }));
     return { closed: Promise.resolve() };
   }
@@ -34,13 +53,12 @@ export default defineMain(async ({ env, args, cwd, stdout, stderr, signal, exit 
     signal,
   });
   // A root with a stop signal settles its operations async, whatever settle's sync type says.
-  const ran = await Promise.resolve(root.settle(rules, { input: { ids: line.positionals } }));
-  let code = 0;
+  const ran = await Promise.resolve(ported[line.name as keyof typeof ported](root, line));
+  let code = ran.status === "success" ? (codes[ran.value] ?? 1) : 78;
   if (ran.status === "failed") {
     const { error } = ran;
     stderr.write(`tinker-loop: ${error instanceof Error ? error.message : String(error)}\n`);
-    code = 78;
-  } else if (ran.status === "success" && ran.value === "refused") code = 64;
+  }
 
   const closed = root.close({ graceful: true }).then(checkClosed);
   exit(code);

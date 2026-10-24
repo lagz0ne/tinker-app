@@ -18,8 +18,25 @@ import { z } from "zod";
 
 import { appDir } from "@/tags";
 
-/** One findings row: a JSON object with a string id; the operations read the rest. */
-const finding = z.looseObject({ id: z.string() });
+/**
+ * One findings row: a JSON object with a string id. The other fields are the ones the tool
+ * writes; a row may leave any of them out.
+ */
+export const finding = z.looseObject({
+  id: z.string(),
+  source: z.string().optional(),
+  rule: z.string().optional(),
+  severity: z.string().optional(),
+  status: z.string().optional(),
+  file: z.string().optional(),
+  line: z.number().nullable().optional(),
+  summary: z.string().optional(),
+  trigger: z.string().optional(),
+  fix: z.string().optional(),
+  reason: z.string().optional(),
+  round: z.number().optional(),
+  sha: z.string().nullable().optional(),
+});
 
 /** One review round row: a JSON object with a whole-number round. */
 const round = z.looseObject({ round: z.int() });
