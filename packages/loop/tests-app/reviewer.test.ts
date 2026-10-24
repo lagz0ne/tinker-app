@@ -5,9 +5,9 @@ import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { reviewer } from "@/resources/reviewer";
-import { appDir, childEnv, loopConfig, reviewModel } from "@/tags";
+import { appDir, childEnv, reviewModel } from "@/tags";
 
-import { tempFolder } from "./temp";
+import { tempFolder, writeLoop } from "./temp";
 
 const gates = [{ name: "ok", run: "true" }];
 
@@ -51,8 +51,9 @@ const defaultArgs = [
 test("the default reviewer is claude with the reviewModel tag; the prompt goes on stdin and is saved", async () => {
   const app = tempFolder();
   const claude = fakeClaude();
+  writeLoop(app, { gates });
   const scope = createScope({
-    tags: [appDir(app), childEnv(claude.env), loopConfig({ gates, base: null, review: {} })],
+    tags: [appDir(app), childEnv(claude.env)],
   });
   const { ask } = scope.resolve(reviewer);
 
@@ -72,12 +73,8 @@ test("the default reviewer is claude with the reviewModel tag; the prompt goes o
 test("a reviewModel binding picks the default reviewer's model", async () => {
   const app = tempFolder();
   const claude = fakeClaude();
-  const tags = [
-    appDir(app),
-    childEnv(claude.env),
-    loopConfig({ gates, base: null, review: {} }),
-    reviewModel("a-model"),
-  ];
+  writeLoop(app, { gates });
+  const tags = [appDir(app), childEnv(claude.env), reviewModel("a-model")];
   const scope = createScope({ tags });
   const { ask } = scope.resolve(reviewer);
 
@@ -95,8 +92,9 @@ test("a loop.json review command gets the prompt as its one {prompt} word, and n
   const app = tempFolder();
   const claude = fakeClaude();
   const review = { command: ["claude", "--prompt", "{prompt}"] };
+  writeLoop(app, { gates, review });
   const scope = createScope({
-    tags: [appDir(app), childEnv(claude.env), loopConfig({ gates, base: null, review })],
+    tags: [appDir(app), childEnv(claude.env)],
   });
   const { ask } = scope.resolve(reviewer);
 
@@ -113,8 +111,9 @@ test("the loop.json review timeout stops a slow reviewer, and a caller's stop st
   const app = tempFolder();
   const claude = fakeClaude(30_000);
   const review = { timeout: 300 };
+  writeLoop(app, { gates, review });
   const scope = createScope({
-    tags: [appDir(app), childEnv(claude.env), loopConfig({ gates, base: null, review })],
+    tags: [appDir(app), childEnv(claude.env)],
   });
   const { ask } = scope.resolve(reviewer);
   const stop = new AbortController();
