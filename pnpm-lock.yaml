@@ -530,6 +530,9 @@ importers:
       '@tinker/start':
         specifier: workspace:*
         version: link:../start
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
