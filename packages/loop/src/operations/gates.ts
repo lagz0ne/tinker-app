@@ -3,9 +3,10 @@ import { join } from "node:path";
 
 import { operation } from "@tinker/core";
 
+import { loopConfig } from "@/resources/loop-config";
 import { processes } from "@/resources/processes";
 import { store } from "@/resources/store";
-import { loopConfig, print, stop } from "@/tags";
+import { print, stop } from "@/tags";
 
 const ansi = new RegExp(String.raw`\u001b\[[0-9;?]*[A-Za-z]`, "g");
 

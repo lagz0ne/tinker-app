@@ -21,13 +21,17 @@ export function findingLine(f: z.infer<typeof finding>) {
 
 /** Counts by severity and by status, then each open important finding on one line. */
 export function summary(findings: z.infer<typeof finding>[]) {
-  const count = (field: "severity" | "status", names: string[]) =>
-    names.map((name) => `${name} ${findings.filter((f) => f[field] === name).length}`).join(", ");
+  const bySeverity = severities.map((name) => {
+    return `${name} ${findings.filter((f) => f.severity === name).length}`;
+  });
+  const byStatus = statuses.map((name) => {
+    return `${name} ${findings.filter((f) => f.status === name).length}`;
+  });
   const important = findings.filter((f) => f.status === "open" && f.severity === "important");
 
   return [
-    `severity: ${count("severity", severities)}`,
-    `status: ${count("status", statuses)}`,
+    `severity: ${bySeverity.join(", ")}`,
+    `status: ${byStatus.join(", ")}`,
     ...(important.length > 0
       ? ["open important:", ...important.map((f) => `  ${findingLine(f)}`)]
       : []),

@@ -2,10 +2,14 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { resource } from "@tinker/core";
+import { z } from "zod";
 
 import { appDir } from "@/tags";
 
 import { git } from "./git";
+
+/** One rule of rules.md: its ID, its group heading, and its lines. */
+const rule = z.object({ id: z.string(), group: z.string().nullable(), lines: z.array(z.string()) });
 
 const ruleStart = /^- `([A-Z][0-9]+)` \S/;
 const groupHeading = /^### [A-Z]: .+$/;
@@ -41,7 +45,7 @@ export const startRules = resource({
      * group, every other line is blank or a heading. Throws, naming the line, on anything else.
      */
     const parse = (text: string) => {
-      const rules: { id: string; group: string | null; lines: string[] }[] = [];
+      const rules: z.infer<typeof rule>[] = [];
       const seen = new Map<string, number>();
       let group: string | null = null;
       let open: (typeof rules)[number] | null = null;
@@ -49,7 +53,7 @@ export const startRules = resource({
       const fail = (number: number, problem: string) => {
         throw new Error(`line ${number}: ${problem}`);
       };
-      const ruleProblem = (id: string) => {
+      const ruleProblem = (id: z.infer<typeof rule>["id"]) => {
         if (!group) return `rule ${id} is not under a "### <letter>: <title>" group heading`;
         if (id[0] !== group[0]) {
           return `rule ${id} is in group ${group[0]}; its ID must start ${group[0]}`;
@@ -102,7 +106,7 @@ export const startRules = resource({
         try {
           ({ version } = JSON.parse(readFileSync(join(start, "package.json"), "utf8")));
         } catch (error) {
-          const { code, message } = error as { code?: string; message: string };
+          const { code, message } = error as NodeJS.ErrnoException;
           throw new Error(`cannot read @tinker/start from ${app}: ${code ?? message}`);
         }
 

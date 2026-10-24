@@ -3,9 +3,10 @@ import { join } from "node:path";
 
 import { resource } from "@tinker/core";
 
-import { appDir } from "@/tags";
+import { appDir, baseRef } from "@/tags";
 
 import { git } from "./git";
+import { loopConfig } from "./loop-config";
 import { store } from "./store";
 
 /**
@@ -59,8 +60,8 @@ const scans = [
  */
 export const scan = resource({
   label: "loop.scan",
-  depends: { appDir, git, store },
-  factory: ({ appDir: app, git: answers, store: files }) => {
+  depends: { appDir, baseRef, loopConfig, git, store },
+  factory: ({ appDir: app, baseRef: wanted, loopConfig: config, git: answers, store: files }) => {
     /** An untracked file as a diff that adds every line; links, binary, large, gone files add nothing. */
     const addedFile = (file: string) => {
       let text;
@@ -86,7 +87,6 @@ export const scan = resource({
      * path that has a space with a tab, which is not part of the name.
      */
     const addedLines = (diff: string) => {
-      const added: { file: string; line: number; text: string }[] = [];
       let file: string | null | undefined;
       let line = 0;
       const pathOf = (text: string) =>
@@ -96,42 +96,17 @@ export const scan = resource({
         if (text.startsWith("diff --git ")) file = undefined;
         else if (file === undefined && text.startsWith("+++ ")) file = pathOf(text);
         else if (text.startsWith("@@ ")) line = hunkStart(text);
-        else if (file && text.startsWith("+")) {
-          added.push({ file, line, text: text.slice(1) });
-          line += 1;
-        }
+        else if (file && text.startsWith("+")) return [{ file, line: line++, text: text.slice(1) }];
+        return [];
       };
 
-      for (const text of diff.split("\n")) read(text);
-      return added;
+      return diff.split("\n").flatMap(read);
     };
     /** `<remote>/<branch>` when the repo has exactly one remote, and it has the branch. */
     const remoteBranch = (branch: string) => {
       const remotes = (answers.run(["remote"]) ?? "").split("\n").filter(Boolean);
       const ref = remotes.length === 1 ? `${remotes[0]}/${branch}` : null;
       return ref && answers.commitSha(ref) ? ref : null;
-    };
-
-    /** The quick-scan findings on one added line. */
-    const lineHits = ({ file, line, text }: { file: string; line: number; text: string }) => {
-      const code = text.trim();
-      const shown = code.length > 120 ? `${code.slice(0, 117)}...` : code;
-      return scans
-        .filter((rule) => rule.pattern.test(code))
-        .map((rule) => {
-          const hit = {
-            rule: rule.rule,
-            severity: "question",
-            file,
-            line,
-            summary: `${rule.topic}: ${shown}`,
-            trigger:
-              "Quick-scan grep hit on an added line. Read the code before you call it a problem.",
-            fix: rule.fix,
-            source: "check",
-          };
-          return { id: files.findingId(hit), ...hit };
-        });
     };
 
     return {
@@ -141,7 +116,8 @@ export const scan = resource({
        * local copy is often old; next comes the branch itself, then `<remote>/<branch>` when the
        * repo has one remote.
        */
-      base: ({ wanted, configured }: { wanted: string | null; configured: string | null }) => {
+      base: () => {
+        const configured = config.base;
         if (wanted) return answers.commitSha(wanted) ? wanted : null;
         if (!configured) return null;
 
@@ -183,11 +159,29 @@ export const scan = resource({
 
       /** Quick-scan hits on the added lines of a unified diff, once per finding id. */
       hits: (diff: string) => {
-        const found = new Map<string, ReturnType<typeof lineHits>[number]>();
-        for (const hit of addedLines(diff).flatMap(lineHits)) {
-          if (!found.has(hit.id)) found.set(hit.id, hit);
-        }
-        return [...found.values()];
+        const hits = addedLines(diff).flatMap((added) => {
+          const code = added.text.trim();
+          const shown = code.length > 120 ? `${code.slice(0, 117)}...` : code;
+          return scans
+            .filter((rule) => rule.pattern.test(code))
+            .map((rule) => {
+              const hit = {
+                rule: rule.rule,
+                severity: "question",
+                file: added.file,
+                line: added.line,
+                summary: `${rule.topic}: ${shown}`,
+                trigger:
+                  "Quick-scan grep hit on an added line. Read the code before you call it a problem.",
+                fix: rule.fix,
+                source: "check",
+              };
+              return { id: files.findingId(hit), ...hit };
+            });
+        });
+        return hits.filter(
+          (hit, index) => hits.findIndex((other) => other.id === hit.id) === index,
+        );
       },
     };
   },

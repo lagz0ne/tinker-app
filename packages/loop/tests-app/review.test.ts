@@ -7,9 +7,9 @@ import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { review } from "@/operations/review";
-import { appDir, baseRef, childEnv, loopConfig, print, stop, warn } from "@/tags";
+import { appDir, baseRef, childEnv, print, stop, warn } from "@/tags";
 
-import { start, tempFolder } from "./temp";
+import { start, tempFolder, writeLoop } from "./temp";
 
 const skill = "---\nname: tinker-review\n---\n\n# Review a change\n\nSKILL TEXT.\n";
 
@@ -22,7 +22,7 @@ function repo(noSkill = false) {
       encoding: "utf8",
     }).trim();
   git("init", "--quiet", "-b", "main");
-  writeFileSync(join(app, ".gitignore"), ".loop/\nnode_modules/\nreply.txt\n");
+  writeFileSync(join(app, ".gitignore"), ".loop/\nnode_modules/\nreply.txt\nloop.json\n");
   if (!noSkill) {
     mkdirSync(join(app, ".agents/skills/tinker-review"), { recursive: true });
     writeFileSync(join(app, ".agents/skills/tinker-review/SKILL.md"), skill);
@@ -54,16 +54,16 @@ async function run(
     reply === null
       ? "process.exit(3)"
       : "process.stdout.write(require('fs').readFileSync('reply.txt', 'utf8'))";
+  writeLoop(app, {
+    gates: [{ name: "ok", run: "true" }],
+    base: "configured" in options ? (options.configured ?? null) : "main",
+    review: { command: [process.execPath, "-e", code] },
+  });
   const out: string[] = [];
   const err: string[] = [];
   const tags = [
     appDir(app),
     childEnv({ PATH: process.env.PATH }),
-    loopConfig({
-      gates: [{ name: "ok", run: "true" }],
-      base: "configured" in options ? (options.configured ?? null) : "main",
-      review: { command: [process.execPath, "-e", code] },
-    }),
     baseRef(options.base ?? null),
     print((line) => out.push(line)),
     warn((line) => err.push(line)),
@@ -249,21 +249,21 @@ test("a stop while review waits for another tool's lock records no round and wri
   const lock = join(app, ".loop/findings.lock");
   writeFileSync(lock, "tool A");
   writeFileSync(join(app, "reply.txt"), `${finding({})}\n`);
+  writeLoop(app, {
+    gates: [{ name: "ok", run: "true" }],
+    base: "main",
+    review: {
+      command: [
+        process.execPath,
+        "-e",
+        "process.stdout.write(require('fs').readFileSync('reply.txt', 'utf8'))",
+      ],
+    },
+  });
   const halt = new AbortController();
   const tags = [
     appDir(app),
     childEnv({ PATH: process.env.PATH }),
-    loopConfig({
-      gates: [{ name: "ok", run: "true" }],
-      base: "main",
-      review: {
-        command: [
-          process.execPath,
-          "-e",
-          "process.stdout.write(require('fs').readFileSync('reply.txt', 'utf8'))",
-        ],
-      },
-    }),
     print(() => {}),
     warn(() => {}),
     stop(halt.signal),

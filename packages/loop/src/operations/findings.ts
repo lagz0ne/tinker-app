@@ -21,7 +21,7 @@ export const findings = operation({
 
     const rank = (f: (typeof all)[number]) =>
       statuses.indexOf(f.status ?? "") * 10 + severities.indexOf(f.severity ?? "");
-    const ruleText = (id: string | undefined) => {
+    const ruleText = (id: (typeof all)[number]["rule"]) => {
       const rule = book?.find((entry) => entry.id === id);
       if (!rule) return "not in this Start's rules.md";
       return rule.lines.map((line) => line.replace(/^- `[A-Z][0-9]+` /, "").trim()).join(" ");

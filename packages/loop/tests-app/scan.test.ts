@@ -6,9 +6,9 @@ import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { scan } from "@/resources/scan";
-import { appDir, childEnv } from "@/tags";
+import { appDir, baseRef, childEnv } from "@/tags";
 
-import { tempFolder } from "./temp";
+import { tempFolder, writeLoop } from "./temp";
 
 const env = { PATH: process.env.PATH };
 
@@ -32,10 +32,23 @@ function repo(files: Record<string, string> = { "readme.md": "" }) {
   return { app, git };
 }
 
-/** @param app - From repo; why: the app to scan. */
+/** @param app - From repo; why: the app to scan, with a plain loop.json. */
 function scanner(app: string) {
+  writeLoop(app, { gates: [{ name: "ok", run: "true" }] });
   const scope = createScope({ tags: [appDir(app), childEnv(env)] });
   return { found: scope.resolve(scan), close: () => scope.close() };
+}
+
+/**
+ * The scan base for --base `wanted` and a loop.json base of `configured`.
+ * @param app - From repo; why: the app whose base to find.
+ */
+async function baseOf(app: string, wanted: string | null, configured: string | null) {
+  writeLoop(app, { gates: [{ name: "ok", run: "true" }], base: configured });
+  const scope = createScope({ tags: [appDir(app), childEnv(env), baseRef(wanted)] });
+  const base = scope.resolve(scan).base();
+  await scope.close();
+  return base;
 }
 
 test("the base is --base when it names a commit, else loop.json's branch, its upstream, or the one remote's", async () => {
@@ -43,22 +56,20 @@ test("the base is --base when it names a commit, else loop.json's branch, its up
   const { app, git } = repo();
   git("remote", "add", "origin", upstream.app);
   git("fetch", "--quiet", "origin");
-  const { found, close } = scanner(app);
 
   const bases = [
-    found.base({ wanted: "main", configured: "nope" }),
-    found.base({ wanted: "nope", configured: "main" }),
-    found.base({ wanted: null, configured: null }),
-    found.base({ wanted: null, configured: "main" }),
-    found.base({ wanted: null, configured: "work" }),
+    await baseOf(app, "main", "nope"),
+    await baseOf(app, "nope", "main"),
+    await baseOf(app, null, null),
+    await baseOf(app, null, "main"),
+    await baseOf(app, null, "work"),
   ];
   git("branch", "--quiet", "--set-upstream-to=origin/main", "main");
-  const tracked = found.base({ wanted: null, configured: "main" });
+  const tracked = await baseOf(app, null, "main");
   git("branch", "--quiet", "-D", "main");
-  const remote = found.base({ wanted: null, configured: "main" });
+  const remote = await baseOf(app, null, "main");
   git("remote", "add", "other", upstream.app);
-  const twoRemotes = found.base({ wanted: null, configured: "main" });
-  await close();
+  const twoRemotes = await baseOf(app, null, "main");
 
   expect(bases).toEqual(["main", null, null, "main", "work"]);
   expect([tracked, remote, twoRemotes]).toEqual(["origin/main", "origin/main", null]);

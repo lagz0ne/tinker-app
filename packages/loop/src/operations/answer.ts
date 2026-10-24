@@ -2,7 +2,7 @@ import { operation } from "@tinker/core";
 import { z } from "zod";
 
 import { git } from "@/resources/git";
-import { store } from "@/resources/store";
+import { type finding, store } from "@/resources/store";
 import { print, warn } from "@/tags";
 
 /**
@@ -21,7 +21,7 @@ export const answer = operation({
   }),
   depends: { store, git, print, warn },
   run: async ({ store: files, git: answers, print: say, warn: complain }, { input }) => {
-    const short = (sha: string) => sha.slice(0, 12);
+    const short = (sha: NonNullable<z.infer<typeof finding>["sha"]>) => sha.slice(0, 12);
     const refuse = (why: string) => {
       complain(`tinker-loop answer: ${why}`);
       return "refused" as const;
@@ -33,24 +33,6 @@ export const answer = operation({
       if (input.sha !== undefined && !input.fixed) return "--sha goes with --fixed";
       return input.reason !== undefined && !input.reason.trim() ? "--reason needs text" : null;
     };
-    const seenProblem = (id: string, seen: string, fixed: string, head: string) => {
-      if (!answers.inHistory(seen, head)) {
-        return `finding ${id} was seen at ${short(seen)}, which is no longer in HEAD's history (amended or rebased); run tinker-loop check, or the tool that saw it, again`;
-      }
-      if (fixed === seen || !answers.inHistory(seen, fixed)) {
-        return `finding ${id} was seen at ${short(seen)}; commit the fix after it, then answer`;
-      }
-      return null;
-    };
-    const fixProblem = (id: string, seen: string | undefined, fixed: string) => {
-      const head = answers.headSha() ?? "HEAD";
-      if (!answers.inHistory(fixed, head)) return `commit ${short(fixed)} is not in HEAD's history`;
-      if (seen) return seenProblem(id, seen, fixed, head);
-      return input.sha !== undefined
-        ? null
-        : `finding ${id} has no seenSha, so no tool recorded where it was seen; name the fix commit with --sha`;
-    };
-
     const fixed = input.fixed ? answers.commitSha(input.sha ?? "HEAD") : null;
     const reason = () => input.reason?.trim() ?? "";
     const problem = () => {
@@ -62,7 +44,27 @@ export const answer = operation({
       const rows = files.findings();
       const row = rows.find((f) => f.id === input.id);
       if (!row) return `no finding has id ${input.id}`;
-      const refused = fixed ? fixProblem(row.id, row.seenSha, fixed) : null;
+      /** Why `fixed` cannot close this row: it must come after the commit where it was seen. */
+      const fixProblem = (commit: NonNullable<typeof fixed>) => {
+        const head = answers.headSha() ?? "HEAD";
+
+        if (!answers.inHistory(commit, head)) {
+          return `commit ${short(commit)} is not in HEAD's history`;
+        }
+        if (!row.seenSha) {
+          return input.sha !== undefined
+            ? null
+            : `finding ${row.id} has no seenSha, so no tool recorded where it was seen; name the fix commit with --sha`;
+        }
+        if (!answers.inHistory(row.seenSha, head)) {
+          return `finding ${row.id} was seen at ${short(row.seenSha)}, which is no longer in HEAD's history (amended or rebased); run tinker-loop check, or the tool that saw it, again`;
+        }
+        if (commit === row.seenSha || !answers.inHistory(row.seenSha, commit)) {
+          return `finding ${row.id} was seen at ${short(row.seenSha)}; commit the fix after it, then answer`;
+        }
+        return null;
+      };
+      const refused = fixed ? fixProblem(fixed) : null;
       if (refused) return refused;
 
       const { sha: _sha, dirty: _dirty, ...kept } = row;

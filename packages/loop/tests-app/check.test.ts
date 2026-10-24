@@ -6,9 +6,9 @@ import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { check } from "@/operations/check";
-import { appDir, baseRef, childEnv, loopConfig, print, stop, warn } from "@/tags";
+import { appDir, baseRef, childEnv, print, stop, warn } from "@/tags";
 
-import { tempFolder } from "./temp";
+import { tempFolder, writeLoop } from "./temp";
 
 /** A repo on branch work, one commit past main, that adds a Date.now() line. */
 function repo() {
@@ -19,7 +19,7 @@ function repo() {
       encoding: "utf8",
     }).trim();
   git("init", "--quiet", "-b", "main");
-  writeFileSync(join(app, ".gitignore"), ".loop/\nred\n");
+  writeFileSync(join(app, ".gitignore"), ".loop/\nred\nloop.json\n");
   git("add", ".");
   git("commit", "--quiet", "-m", "one");
 
@@ -45,15 +45,14 @@ async function run(
   app: string,
   options: { base?: string | null; configured?: string | null; signal?: AbortSignal } = {},
 ) {
+  writeLoop(app, {
+    gates: [{ name: "ok", run: "true" }, redGate],
+    base: "configured" in options ? (options.configured ?? null) : "main",
+  });
   const out: string[] = [];
   const tags = [
     appDir(app),
     childEnv({ PATH: process.env.PATH }),
-    loopConfig({
-      gates: [{ name: "ok", run: "true" }, redGate],
-      base: "configured" in options ? (options.configured ?? null) : "main",
-      review: {},
-    }),
     baseRef(options.base ?? null),
     print((line) => out.push(line)),
     warn(() => {}),

@@ -38,6 +38,7 @@ export const finding = z.looseObject({
   round: z.number().optional(),
   sha: z.string().nullable().optional(),
   seenSha: z.string().optional(),
+  dirty: z.boolean().optional(),
 });
 
 /** One review round row: a JSON object with a whole-number round. */
@@ -71,7 +72,7 @@ const lockWaitMs = 15_000;
 export const store = resource({
   label: "loop.store",
   depends: { appDir },
-  factory: ({ appDir: app }, { clock, random, defer }) => {
+  factory: ({ appDir: app }, { clock, random, defer, closing }) => {
     const folder = join(app, ".loop");
     const lockPath = join(folder, "findings.lock");
     let held: string | null = null;
@@ -120,7 +121,7 @@ export const store = resource({
         closeSync(file);
         return true;
       } catch (error) {
-        if ((error as { code?: string }).code === "EEXIST") return false;
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
         throw error;
       }
     };
@@ -149,16 +150,21 @@ export const store = resource({
         // The lock was broken as stale; it is not ours to remove.
       }
     };
-    const lock = async () => {
+    /**
+     * Take the lock, waiting while another tool holds it. The wait ends on the root's close and
+     * on the caller's stop, so a stopped tool exits by its signal and takes no lock.
+     */
+    const lock = async (stop?: AbortSignal) => {
       ensure();
       const token = random.uuid();
       const deadline = clock.currentTimeMillis() + lockWaitMs;
+      const halt = stop ? AbortSignal.any([closing, stop]) : closing;
       for (;;) {
         if (tryLock(token)) return (held = token);
         if (age(lockPath) > staleLockMs) breakLock(token);
         else if (clock.currentTimeMillis() > deadline) {
           throw new Error(`${lockPath} is held by another tool; delete it if no tool is running`);
-        } else await clock.sleep(50);
+        } else await clock.sleep(50, halt);
       }
     };
 
@@ -173,10 +179,13 @@ export const store = resource({
       if (held) release(held);
     });
 
-    /** Run `work` under `.loop/findings.lock`, so two tools never drop each other's rows. */
-    const locked = async <T>(work: () => T | Promise<T>) => {
+    /**
+     * Run `work` under `.loop/findings.lock`, so two tools never drop each other's rows. A stop
+     * while another tool holds the lock rejects, and `work` does not run.
+     */
+    const locked = async <T>(work: () => T | Promise<T>, stop?: AbortSignal) => {
       const ran = (async () => {
-        const token = await lock();
+        const token = await lock(stop);
         try {
           return await work();
         } finally {
@@ -249,8 +258,10 @@ export const store = resource({
     };
 
     /** A run that stamps rows: its round and the HEAD it saw. */
-    type Stamp = { round: number; sha: string | null; dirty?: boolean };
-    const seenAt = (sha: string | null) => (sha ? { seenSha: sha } : {});
+    /** A run that stamps rows: its round and HEAD, as the last check saves them, and `dirty`. */
+    type Stamp = Pick<z.infer<typeof lastCheckRun>, "round" | "sha"> &
+      Pick<z.infer<typeof finding>, "dirty">;
+    const seenAt = (sha: Stamp["sha"]) => (sha ? { seenSha: sha } : {});
 
     return {
       /**
@@ -258,7 +269,10 @@ export const store = resource({
        * Digit runs are folded, so a timing or count in a summary does not make a new id. A gate
        * finding passes no summary: one red gate is one finding, whatever its message.
        */
-      findingId: (row: { source: string; rule: string; file: string; summary?: string }) => {
+      findingId: (
+        row: Required<Pick<z.infer<typeof finding>, "source" | "rule" | "file">> &
+          Pick<z.infer<typeof finding>, "summary">,
+      ) => {
         const key = [row.source, row.rule, row.file, (row.summary ?? "").replaceAll(/\d+/g, "#")];
         return createHash("sha256").update(key.join("\n")).digest("hex").slice(0, 12);
       },
@@ -297,7 +311,7 @@ export const store = resource({
        * Record one review round under the lock, and return its number. The review records it
        * before it writes that round's findings, so status counts every round.
        */
-      recordReviewRound: (sha: string | null) =>
+      recordReviewRound: (sha: Stamp["sha"]) =>
         locked(() => {
           const next = nextRound();
           appendRound({ round: next, source: "review", sha });

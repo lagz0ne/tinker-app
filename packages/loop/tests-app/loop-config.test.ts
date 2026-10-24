@@ -1,23 +1,28 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
-import { loopConfig, reviewModel } from "@/tags";
+import { loopConfig } from "@/resources/loop-config";
+import { appDir, reviewModel } from "@/tags";
+
+import { tempFolder, writeLoop } from "./temp";
 
 /**
- * loop.json as the loopConfig tag reads it: the checked value, or the first problem.
- * @param raw - From a test; why: the parsed loop.json.
+ * loop.json as the loopConfig resource reads it from an app: the checked value, or the message.
+ * @param text - From a test; why: the file's text, or null for no file.
  */
-async function read(raw: unknown) {
+async function read(text: string | null) {
+  const app = tempFolder();
+  if (text !== null) writeFileSync(join(app, "loop.json"), text);
+  const scope = createScope({ tags: [appDir(app)] });
   try {
-    const scope = createScope({ tags: [loopConfig(raw as never)] });
-    const value = scope.resolve(loopConfig);
-    await scope.close();
-    return value;
+    return { app, value: await Promise.resolve(scope.resolve(loopConfig)) };
   } catch (error) {
-    const refused = error as {
-      payload?: { cause?: { payload?: { issues?: { message: string }[] } } };
-    };
-    return refused.payload?.cause?.payload?.issues?.[0]?.message ?? String(error);
+    return { app, value: (error as Error).message };
+  } finally {
+    await scope.close();
   }
 }
 
@@ -25,10 +30,26 @@ test("a good loop.json reads with its gates, its base, and its review block", as
   const gates = [{ name: "test", run: "vp test", timeout: 1000 }];
   const review = { command: ["claude", "{prompt}"], timeout: 2000 };
 
-  expect(await read({ gates, base: "main", review })).toEqual({ gates, base: "main", review });
-  expect(await read({ gates, base: 7 })).toEqual({ gates, base: null, review: {} });
+  expect((await read(JSON.stringify({ gates, base: "main", review }))).value).toEqual({
+    gates,
+    base: "main",
+    review,
+  });
+  expect((await read(JSON.stringify({ gates, base: 7 }))).value).toEqual({
+    gates,
+    base: null,
+    review: {},
+  });
   const longest = [{ name: "slow", run: "x", timeout: 2_147_483_647 }];
-  expect(await read({ gates: longest })).toEqual({ gates: longest, base: null, review: {} });
+  expect((await read(JSON.stringify({ gates: longest }))).value).toMatchObject({ gates: longest });
+});
+
+test("no loop.json, or one that is not JSON, says so", async () => {
+  const missing = await read(null);
+  const broken = await read("{bad");
+
+  expect(missing.value).toBe(`${join(missing.app, "loop.json")} is missing`);
+  expect(broken.value).toMatch(/JSON/);
 });
 
 test("the reviewModel tag defaults to Claude Opus 5.5", async () => {
@@ -42,7 +63,14 @@ const gate = { name: "a", run: "x" };
 
 for (const [problem, raw, message] of [
   ["no file body", null, '"gates" must list at least one gate'],
+  ["a body that is a list", [], '"gates" must list at least one gate'],
   ["no gates", { gates: [] }, '"gates" must list at least one gate'],
+  ["gates that are not a list", { gates: "a" }, '"gates" must list at least one gate'],
+  [
+    "a gate that is not an object",
+    { gates: [null] },
+    'each gate needs a "name" and a "run" string',
+  ],
   ["a gate with no run", { gates: [{ name: "a" }] }, 'each gate needs a "name" and a "run" string'],
   [
     "a gate with an empty name",
@@ -52,6 +80,11 @@ for (const [problem, raw, message] of [
   [
     "a zero gate timeout",
     { gates: [{ ...gate, timeout: 0 }] },
+    'gate a: "timeout" must be a positive whole number of milliseconds',
+  ],
+  [
+    "a gate timeout that is text",
+    { gates: [{ ...gate, timeout: "5" }] },
     'gate a: "timeout" must be a positive whole number of milliseconds',
   ],
   [
@@ -65,9 +98,14 @@ for (const [problem, raw, message] of [
     { gates: [gate, { name: "a?", run: "x" }, { name: "a!", run: "y" }] },
     "gate names must differ after each character other than a letter, digit, '.', '_', or '-' becomes '-', since each names a log file",
   ],
-  ["a review that is not an object", { gates: [gate], review: [] }, '"review" must be an object'],
+  ["a review that is a list", { gates: [gate], review: [] }, '"review" must be an object'],
   ["a null review", { gates: [gate], review: null }, '"review" must be an object'],
   ["a review that is a word", { gates: [gate], review: "claude" }, '"review" must be an object'],
+  [
+    "a review command with an empty word",
+    { gates: [gate], review: { command: ["claude", ""] } },
+    '"review.command" must list the program and its arguments as strings',
+  ],
   [
     "an empty review command",
     { gates: [gate], review: { command: [] } },
@@ -79,17 +117,24 @@ for (const [problem, raw, message] of [
     '"review.command" must list the program and its arguments as strings',
   ],
   [
-    "a review command with an empty word",
-    { gates: [gate], review: { command: ["claude", ""] } },
-    '"review.command" must list the program and its arguments as strings',
-  ],
-  [
     "a review timeout of 1.5",
     { gates: [gate], review: { timeout: 1.5 } },
     '"review.timeout" must be a positive whole number of milliseconds',
   ],
 ] as const) {
   test(`loop.json with ${problem} is refused: ${message}`, async () => {
-    expect(await read(raw)).toBe(message);
+    const app = tempFolder();
+    writeLoop(app, raw);
+    const scope = createScope({ tags: [appDir(app)] });
+
+    let refused = "";
+    try {
+      scope.resolve(loopConfig);
+    } catch (error) {
+      refused = (error as Error).message;
+    }
+    await scope.close();
+
+    expect(refused).toBe(`${join(app, "loop.json")}: ${message}`);
   });
 }

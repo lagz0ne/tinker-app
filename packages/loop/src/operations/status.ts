@@ -1,8 +1,9 @@
 import { operation } from "@tinker/core";
+import type { z } from "zod";
 
 import { findingLine } from "@/report";
 import { git } from "@/resources/git";
-import { store } from "@/resources/store";
+import { type lastCheckRun, store } from "@/resources/store";
 import { print } from "@/tags";
 
 /** A person checks the work when review findings are still open after this many reviews. */
@@ -18,7 +19,8 @@ export const status = operation({
   label: "loop.status",
   depends: { store, git, print },
   run: ({ store: files, git: answers, print: say }) => {
-    const short = (sha: string | null) => (sha ? sha.slice(0, 12) : "no commit");
+    const short = (sha: z.infer<typeof lastCheckRun>["sha"]) =>
+      sha ? sha.slice(0, 12) : "no commit";
     const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
     const findings = files.findings();

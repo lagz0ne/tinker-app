@@ -23,3 +23,12 @@ export function start(dir: string, version: string, text: string | null) {
   if (text !== null) writeFileSync(join(folder, "docs/rules.md"), text);
   return folder;
 }
+
+/**
+ * Write an app's loop.json, as a writer would.
+ * @param app - From a test; why: the app folder.
+ * @param config - From a test; why: the loop.json content.
+ */
+export function writeLoop(app: string, config: unknown) {
+  writeFileSync(join(app, "loop.json"), JSON.stringify(config));
+}

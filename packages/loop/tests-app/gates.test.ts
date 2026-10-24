@@ -5,9 +5,9 @@ import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { gates } from "@/operations/gates";
-import { appDir, childEnv, loopConfig, print, stop, warn } from "@/tags";
+import { appDir, childEnv, print, stop, warn } from "@/tags";
 
-import { tempFolder } from "./temp";
+import { tempFolder, writeLoop } from "./temp";
 
 const node = JSON.stringify(process.execPath);
 
@@ -18,11 +18,11 @@ const node = JSON.stringify(process.execPath);
  */
 async function run(list: { name: string; run: string; timeout?: number }[], signal?: AbortSignal) {
   const app = tempFolder();
+  writeLoop(app, { gates: list });
   const out: string[] = [];
   const tags = [
     appDir(app),
     childEnv({ PATH: process.env.PATH }),
-    loopConfig({ gates: list, base: null, review: {} }),
     print((line) => out.push(line)),
     warn(() => {}),
     stop(signal ?? new AbortController().signal),

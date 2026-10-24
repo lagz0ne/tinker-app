@@ -4,7 +4,7 @@ import { summary } from "@/report";
 import { git } from "@/resources/git";
 import { scan } from "@/resources/scan";
 import { store } from "@/resources/store";
-import { baseRef, loopConfig, print, stop } from "@/tags";
+import { baseRef, print, stop } from "@/tags";
 
 import { gates } from "./gates";
 
@@ -17,9 +17,9 @@ import { gates } from "./gates";
  */
 export const check = operation({
   label: "loop.check",
-  depends: { loopConfig, baseRef, store, git, scan, gates, print, stop },
+  depends: { baseRef, store, git, scan, gates, print, stop },
   run: async (deps) => {
-    const { loopConfig: config, baseRef: wanted, store: files, git: answers, scan: scanner } = deps;
+    const { baseRef: wanted, store: files, git: answers, scan: scanner } = deps;
     const { gates: runGates, print: say, stop: signal } = deps;
     files.folder();
     const before = answers.tree();
@@ -27,7 +27,7 @@ export const check = operation({
     if (signal.aborted) return "stopped" as const;
 
     const red = results.flatMap((gate) => (gate.finding ? [gate.finding] : []));
-    const ref = scanner.base({ wanted, configured: config.base });
+    const ref = scanner.base();
     const diff = ref ? scanner.diff(ref, before.untracked) : null;
     /** The scan's hits, after a line that says where it started or why it was skipped. */
     const scanHits = () => {
@@ -69,7 +69,11 @@ export const check = operation({
       files.writeFindings(next);
       return next;
     };
-    const merged = await files.locked(merge);
+    // A stop while another tool holds the lock ends the wait: then this run is stopped.
+    const merged = await files.locked(merge, signal).catch((error: unknown) => {
+      if (signal.aborted) return null;
+      throw error;
+    });
     if (!merged) return "stopped" as const;
 
     const gateResults = results.map(({ name, green }) => ({ name, green }));
