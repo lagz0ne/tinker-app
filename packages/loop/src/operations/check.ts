@@ -29,20 +29,26 @@ export const check = operation({
     const red = results.flatMap((gate) => (gate.finding ? [gate.finding] : []));
     const ref = scanner.base({ wanted, configured: config.base });
     const diff = ref ? scanner.diff(ref, before.untracked) : null;
-    const scanSkipped = () => {
+    /** The scan's hits, after a line that says where it started or why it was skipped. */
+    const scanHits = () => {
+      if (diff !== null) {
+        say(`scan base: ${ref}`);
+        return scanner.hits(diff);
+      }
       const why = ref ? `git cannot diff from ${ref}` : "no base found; pass --base <ref>";
       say(`scan skipped: ${wanted && !ref ? `git cannot find --base ${wanted}` : why}`);
       say("earlier scan findings stay as they are");
       return [];
     };
-    if (diff !== null) say(`scan base: ${ref}`);
-    const hits = diff === null ? scanSkipped() : scanner.hits(diff);
+    const hits = scanHits();
     const run = { sha: answers.headSha(), scanned: diff !== null, dirty: before.dirty };
     const after = answers.tree().fingerprint;
     if (signal.aborted) return "stopped" as const;
 
     let round = 0;
     const merge = () => {
+      // A stop can land while another tool holds the lock; then this run writes nothing.
+      if (signal.aborted) return null;
       const previous = files.findings();
       round = files.nextRound();
       const stamp = { ...run, round };
@@ -64,6 +70,7 @@ export const check = operation({
       return next;
     };
     const merged = await files.locked(merge);
+    if (!merged) return "stopped" as const;
 
     const gateResults = results.map(({ name, green }) => ({ name, green }));
     files.writeLastCheck({ round, sha: run.sha, tree: after, gates: gateResults });

@@ -353,9 +353,14 @@ export const review = operation({
       known: new Set([...open, ...answered].map((f) => f.id)),
     });
     const reported = parsed.found.map(placeLine);
-    const round = await files.recordReviewRound(head);
-    const stamp = { round, sha: head, dirty: tree.dirty };
+    let round = 0;
     const merge = () => {
+      // A stop can land while another tool holds the lock; then this run records nothing.
+      if (signal.aborted) return null;
+      round = files.nextRound();
+      files.appendRound({ round, source: "review", sha: head });
+      const stamp = { round, sha: head, dirty: tree.dirty };
+
       const byId = new Map(reported.map((row) => [row.id, row]));
       const merged = files.findings().map((old) => {
         const now = byId.get(old.id);
@@ -371,6 +376,7 @@ export const review = operation({
       return next;
     };
     const merged = await files.locked(merge);
+    if (!merged) return "stopped" as const;
 
     say(
       `tinker-loop review, round ${round}: ${reported.length} reported, ${parsed.fixed.size} rechecked fixed`,

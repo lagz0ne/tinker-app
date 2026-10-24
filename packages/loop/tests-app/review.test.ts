@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
@@ -240,4 +241,44 @@ test("with no review skill the reviewer gets the Start rules; with neither, revi
   );
   expect(prompt).toContain("- `C3` Close it.");
   expect(folder).toBe(join(app, "node_modules/@tinker/start"));
+});
+
+test("a stop while review waits for another tool's lock records no round and writes nothing", async () => {
+  const { app } = repo();
+  mkdirSync(join(app, ".loop"), { recursive: true });
+  const lock = join(app, ".loop/findings.lock");
+  writeFileSync(lock, "tool A");
+  writeFileSync(join(app, "reply.txt"), `${finding({})}\n`);
+  const halt = new AbortController();
+  const tags = [
+    appDir(app),
+    childEnv({ PATH: process.env.PATH }),
+    loopConfig({
+      gates: [{ name: "ok", run: "true" }],
+      base: "main",
+      review: {
+        command: [
+          process.execPath,
+          "-e",
+          "process.stdout.write(require('fs').readFileSync('reply.txt', 'utf8'))",
+        ],
+      },
+    }),
+    print(() => {}),
+    warn(() => {}),
+    stop(halt.signal),
+  ];
+  const scope = createScope({ tags });
+
+  const waiting = Promise.resolve(scope.run(review));
+  while (!existsSync(join(app, ".loop/review/output.txt"))) await delay(20);
+  await delay(300);
+  halt.abort("SIGINT");
+  rmSync(lock);
+  const outcome = await waiting;
+  await scope.close();
+
+  expect(outcome).toBe("stopped");
+  expect(existsSync(join(app, ".loop/rounds.jsonl"))).toBe(false);
+  expect(existsSync(join(app, ".loop/findings.jsonl"))).toBe(false);
 });

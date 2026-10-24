@@ -1,8 +1,9 @@
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
 import { expect, onTestFinished, test } from "vite-plus/test";
@@ -108,4 +109,46 @@ test("an operation's thrown Error prints tinker-loop: <message> on stderr and ex
   expect(err).toEqual([
     `tinker-loop: cannot find @tinker/start from ${app}; install it to read its rules\n`,
   ]);
+});
+
+test("a stop while check waits for another tool's lock writes nothing and exits 130", async () => {
+  const app = tempFolder();
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: app });
+  git("init", "--quiet");
+  writeFileSync(join(app, "loop.json"), JSON.stringify({ gates: [{ name: "ok", run: "true" }] }));
+  git("add", ".");
+  git("commit", "--quiet", "-m", "one");
+  const run = (signal: AbortSignal, out: string[]) =>
+    main({
+      env: { PATH: process.env.PATH },
+      args: ["check"],
+      cwd: app,
+      signal,
+      stdout: { write: (chunk) => out.push(chunk) },
+      stderr: { write: () => true },
+      exit: (code) => codes.push(code),
+    });
+  const codes: number[] = [];
+  await (
+    await run(new AbortController().signal, [])
+  ).closed;
+  const files = ["findings.jsonl", "last-check.json"].map((name) => join(app, ".loop", name));
+  const before = files.map((path) => readFileSync(path, "utf8"));
+
+  const lock = join(app, ".loop/findings.lock");
+  writeFileSync(lock, "tool A");
+  const stop = new AbortController();
+  const out: string[] = [];
+  const waiting = run(stop.signal, out);
+  while (!out.join("").includes("checked") && !out.join("").includes("PASS ok")) await delay(20);
+  await delay(300);
+  stop.abort("SIGINT");
+  rmSync(lock);
+  await (
+    await waiting
+  ).closed;
+
+  expect(codes).toEqual([0, 130]);
+  expect(files.map((path) => readFileSync(path, "utf8"))).toEqual(before);
 });
