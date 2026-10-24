@@ -3,7 +3,6 @@ import { createScope, type Scope } from "@tinker/core";
 import { checkClosed, defineMain } from "~/base/main";
 
 import { readCommandLine, readLoopConfig } from "@/command-line";
-import { handOff } from "@/old-tool";
 import { answer } from "@/operations/answer";
 import { check } from "@/operations/check";
 import { findings } from "@/operations/findings";
@@ -28,11 +27,8 @@ const stopCodes: Record<string, number> = { SIGHUP: 129, SIGINT: 130, SIGTERM: 1
 /** The commands that read loop.json. */
 const configured = new Set(["check", "review"]);
 
-/**
- * The ported commands: each settles its operation with this command line's input. A command
- * not here yet goes to the old tool in lib/.
- */
-const ported = {
+/** Each command settles its operation with this command line's input. */
+const operations = {
   check: (root: Scope.Handle) => root.settle(check),
   review: (root: Scope.Handle) => root.settle(review),
   answer: (root: Scope.Handle, line: CommandLine) =>
@@ -57,8 +53,8 @@ type CommandLine = Extract<ReturnType<typeof readCommandLine>, { ok: true }>;
 
 /**
  * tinker-loop as a CLI-only Start app (docs/decisions/loop-on-tinker.md). This command is the
- * seam (ADR 0113): it alone reads the context, binds the tags, and picks the exit code. Ticket 8
- * ports the commands one by one; until a command is ported, it goes to the old tool in lib/.
+ * seam (ADR 0113): it alone reads the context, binds the tags, and picks the exit code; each
+ * command is one operation on the app's resources.
  */
 export default defineMain(async ({ env, args, cwd, stdout, stderr, signal, exit }) => {
   const finish = (code: number, problem?: string) => {
@@ -67,7 +63,7 @@ export default defineMain(async ({ env, args, cwd, stdout, stderr, signal, exit 
     return { closed: Promise.resolve() };
   };
   /** The exit code for how the operation ended; a failure prints its message. */
-  const codeOf = (ran: Awaited<ReturnType<(typeof ported)[keyof typeof ported]>>) => {
+  const codeOf = (ran: Awaited<ReturnType<(typeof operations)[keyof typeof operations]>>) => {
     if (ran.status === "failed") {
       const { error } = ran;
       stderr.write(`tinker-loop: ${error instanceof Error ? error.message : String(error)}\n`);
@@ -81,9 +77,6 @@ export default defineMain(async ({ env, args, cwd, stdout, stderr, signal, exit 
 
   const line = readCommandLine(args, cwd);
   if (!line.ok) return finish(64, line.problem);
-  if (!Object.hasOwn(ported, line.name)) {
-    return finish(await handOff({ args: [...args], cwd, stdout, stderr, signal }));
-  }
   const config = configured.has(line.name) ? readLoopConfig(line.app) : null;
   if (config && !config.ok) return finish(78, `tinker-loop: ${config.problem}\n`);
 
@@ -100,7 +93,7 @@ export default defineMain(async ({ env, args, cwd, stdout, stderr, signal, exit 
     signal,
   });
   // A root with a stop signal settles its operations async, whatever settle's sync type says.
-  const ran = await Promise.resolve(ported[line.name as keyof typeof ported](root, line));
+  const ran = await Promise.resolve(operations[line.name](root, line));
   const code = codeOf(ran);
   const closed = root.close({ graceful: true }).then(checkClosed);
   exit(code);

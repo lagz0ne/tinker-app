@@ -16,7 +16,7 @@ const scaffold = join(root, "../../apps/start-scaffold");
 const from = createRequire(join(root, "package.json"));
 const g1 = "- `G1` Every gate in AGENTS.md passes.";
 
-test("the app hands each command to lib/ until ticket 8, in the context's folder", async () => {
+test("the app runs each command in the context's folder", async () => {
   const out: unknown[] = [];
   const err: unknown[] = [];
   const codes: number[] = [];
