@@ -7,12 +7,20 @@ import { handOff } from "@/old-tool";
 import { answer } from "@/operations/answer";
 import { check } from "@/operations/check";
 import { findings } from "@/operations/findings";
+import { review } from "@/operations/review";
 import { rules } from "@/operations/rules";
 import { status } from "@/operations/status";
 import { appDir, baseRef, childEnv, print, stop, warn } from "@/tags";
 
 /** What each operation's outcome means as an exit code; only this command picks them. */
-const codes: Record<string, number> = { done: 0, red: 1, notDone: 1, needsPerson: 2, refused: 64 };
+const codes: Record<string, number> = {
+  done: 0,
+  red: 1,
+  failed: 1,
+  notDone: 1,
+  needsPerson: 2,
+  refused: 64,
+};
 
 /** How a stopped run exits, by the signal that stopped it. */
 const stopCodes: Record<string, number> = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };
@@ -26,6 +34,7 @@ const configured = new Set(["check", "review"]);
  */
 const ported = {
   check: (root: Scope.Handle) => root.settle(check),
+  review: (root: Scope.Handle) => root.settle(review),
   answer: (root: Scope.Handle, line: CommandLine) =>
     root.settle(answer, {
       input: {
