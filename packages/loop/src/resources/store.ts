@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   appendFileSync,
   closeSync,
@@ -247,7 +248,38 @@ export const store = resource({
       appendFileSync(join(ensure(), "rounds.jsonl"), `${JSON.stringify(row)}\n`);
     };
 
+    /** A run that stamps rows: its round and the HEAD it saw. */
+    type Stamp = { round: number; sha: string | null; dirty?: boolean };
+    const seenAt = (sha: string | null) => (sha ? { seenSha: sha } : {});
+
     return {
+      /**
+       * A stable id: the same problem gets the same id on every run, wherever its line moves.
+       * Digit runs are folded, so a timing or count in a summary does not make a new id. A gate
+       * finding passes no summary: one red gate is one finding, whatever its message.
+       */
+      findingId: (row: { source: string; rule: string; file: string; summary?: string }) => {
+        const key = [row.source, row.rule, row.file, (row.summary ?? "").replaceAll(/\d+/g, "#")];
+        return createHash("sha256").update(key.join("\n")).digest("hex").slice(0, 12);
+      },
+      /** A new finding: open, at this run's round, seen at its HEAD. */
+      opened: (row: z.infer<typeof finding>, run: Stamp) => ({
+        ...row,
+        ...seenAt(run.sha),
+        round: run.round,
+        status: "open",
+      }),
+      /** A finding this run found again: the latest fields, open unless answered. */
+      seen: (old: z.infer<typeof finding>, now: z.infer<typeof finding>, run: Stamp) => {
+        const { sha: _sha, dirty: _dirty, seenSha: _seen, ...kept } = old;
+        const status = old.status === "answered" ? "answered" : "open";
+        return { ...kept, ...now, ...seenAt(run.sha), round: run.round, status };
+      },
+      /** A finding a run marks fixed: its round, the HEAD, and `dirty` when only the tree had it. */
+      fixed: (old: z.infer<typeof finding>, run: Stamp) => {
+        const fixed = { ...old, round: run.round, status: "fixed", sha: run.sha };
+        return run.dirty ? { ...fixed, dirty: true } : fixed;
+      },
       /** Make `.loop` and return its path, for files such as the review's. */
       folder: ensure,
       locked,

@@ -20,6 +20,12 @@ export const print = tag<(line: string) => void>({ label: "loop.print" });
 /** Write one line to the tool's stderr. Bound by cmds/cli.ts, like print. */
 export const warn = tag<(line: string) => void>({ label: "loop.warn" });
 
+/** --base: the exact ref the scan starts from, or null to use loop.json's base. */
+export const baseRef = tag<string | null>({ label: "loop.baseRef", default: null });
+
+/** The tool's stop: the context's signal, so an operation stops early and writes nothing. */
+export const stop = tag<AbortSignal>({ label: "loop.stop" });
+
 /** The default reviewer's model, when loop.json names no review.command. */
 export const reviewModel = tag<string>({ label: "loop.reviewModel", default: "claude-opus-5-5" });
 

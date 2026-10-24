@@ -1,9 +1,13 @@
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
+import { loopConfig } from "@/tags";
+
 /**
- * The command line's Data parse (docs/decisions/loop-on-tinker.md). cmds/cli.ts reads the
- * context and calls this; a command file imports no Node module, so the parse lives here.
+ * The tool's inputs, read (docs/decisions/loop-on-tinker.md): the command line's Data parse,
+ * and the app's loop.json. cmds/cli.ts reads the context and calls these; a command file imports
+ * no Node module, so they live here.
  */
 
 const usage = [
@@ -70,4 +74,34 @@ export function readCommandLine(args: readonly string[], cwd: string) {
     return { ok: false as const, problem: `tinker-loop ${name} ${wrongIds}\n${usage}\n` };
   }
   return { ok: true as const, name, app: resolve(cwd, options.app), options, positionals };
+}
+
+/**
+ * The app's loop.json as a loopConfig binding, or why it cannot be read: missing, not JSON, or
+ * refused by the tag's schema, in the words the tool printed before the port.
+ */
+export function readLoopConfig(app: string) {
+  const path = join(app, "loop.json");
+  if (!existsSync(path)) return { ok: false as const, problem: `${path} is missing` };
+
+  /** Core refuses a bad binding with DataValidationFailed; its cause holds the schema issues. */
+  const refusal = (error: unknown) => {
+    const refused = error as {
+      payload?: { cause?: { payload?: { issues?: { message: string }[] } } };
+    };
+    return refused.payload?.cause?.payload?.issues?.[0]?.message ?? String(error);
+  };
+  const bind = (raw: unknown) => {
+    try {
+      return { ok: true as const, binding: loopConfig(raw as never) };
+    } catch (error) {
+      return { ok: false as const, problem: `${path}: ${refusal(error)}` };
+    }
+  };
+
+  try {
+    return bind(JSON.parse(readFileSync(path, "utf8")));
+  } catch (error) {
+    return { ok: false as const, problem: (error as Error).message };
+  }
 }

@@ -1,16 +1,10 @@
 import { operation } from "@tinker/core";
 import { z } from "zod";
 
-import { findingLine } from "@/report";
+import { findingLine, severities, statuses } from "@/report";
 import { startRules } from "@/resources/start-rules";
 import { store } from "@/resources/store";
 import { print } from "@/tags";
-
-/** Severity order for lists: what blocks done comes first. */
-const severities = ["important", "question", "nit", "old"];
-
-/** Status order for lists: open work comes first. */
-const statuses = ["open", "answered", "fixed"];
 
 /**
  * `tinker-loop findings [--open] [--rules]`: the findings as a list, open first, then

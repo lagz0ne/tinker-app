@@ -155,3 +155,54 @@ test("a review round is recorded under the lock with the next number, and return
     { round: 3, source: "review", sha: null },
   ]);
 });
+
+test("a finding's id is stable: source, rule, file, and its summary with digit runs folded", async () => {
+  const scope = createScope({ tags: [appDir(tempFolder())] });
+  const files = scope.resolve(store);
+  const id = (summary?: string) =>
+    files.findingId({ source: "check", rule: "G1", file: "t", summary });
+
+  const ids = [id(), id(""), id("took 12 ms"), id("took 345 ms"), id("took ms")];
+  await scope.close();
+
+  expect(ids[0]).toMatch(/^[0-9a-f]{12}$/);
+  expect(ids[0]).toBe(ids[1]);
+  expect(ids[2]).toBe(ids[3]);
+  expect(new Set(ids).size).toBe(3);
+});
+
+test("opened, seen, and fixed stamp a row with the run's round and commit", async () => {
+  const scope = createScope({ tags: [appDir(tempFolder())] });
+  const files = scope.resolve(store);
+  const run = { round: 4, sha: "abc", dirty: false };
+  const row = {
+    id: "x",
+    rule: "B1",
+    summary: "old",
+    status: "open",
+    sha: "s",
+    dirty: true,
+    seenSha: "q",
+  };
+
+  const found = {
+    opened: files.opened({ id: "n", rule: "B1" }, run),
+    openedNoSha: files.opened({ id: "n" }, { ...run, sha: null }),
+    seen: files.seen(row, { id: "x", rule: "B1", summary: "new" }, run),
+    seenAnswered: files.seen({ ...row, status: "answered" }, { id: "x" }, run).status,
+    seenFixed: files.seen({ ...row, status: "fixed" }, { id: "x" }, run).status,
+    fixed: files.fixed({ id: "x", status: "open", reason: "r" }, run),
+    fixedDirty: files.fixed({ id: "x" }, { ...run, dirty: true }),
+  };
+  await scope.close();
+
+  expect(found).toEqual({
+    opened: { id: "n", rule: "B1", seenSha: "abc", round: 4, status: "open" },
+    openedNoSha: { id: "n", round: 4, status: "open" },
+    seen: { id: "x", rule: "B1", summary: "new", seenSha: "abc", round: 4, status: "open" },
+    seenAnswered: "answered",
+    seenFixed: "open",
+    fixed: { id: "x", status: "fixed", reason: "r", round: 4, sha: "abc" },
+    fixedDirty: { id: "x", status: "fixed", round: 4, sha: "abc", dirty: true },
+  });
+});
