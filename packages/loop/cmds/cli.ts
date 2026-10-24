@@ -4,6 +4,7 @@ import { checkClosed, defineMain } from "~/base/main";
 
 import { readCommandLine } from "@/command-line";
 import { handOff } from "@/old-tool";
+import { answer } from "@/operations/answer";
 import { findings } from "@/operations/findings";
 import { rules } from "@/operations/rules";
 import { appDir, childEnv, print, warn } from "@/tags";
@@ -16,6 +17,15 @@ const codes: Record<string, number> = { done: 0, refused: 64 };
  * not here yet goes to the old tool in lib/.
  */
 const ported = {
+  answer: (root: Scope.Handle, line: CommandLine) =>
+    root.settle(answer, {
+      input: {
+        id: line.positionals[0] ?? "",
+        fixed: line.options.fixed ?? false,
+        sha: line.options.sha,
+        reason: line.options.reason,
+      },
+    }),
   rules: (root: Scope.Handle, line: CommandLine) =>
     root.settle(rules, { input: { ids: line.positionals } }),
   findings: (root: Scope.Handle, line: CommandLine) =>

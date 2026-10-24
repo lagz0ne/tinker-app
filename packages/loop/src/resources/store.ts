@@ -36,6 +36,7 @@ export const finding = z.looseObject({
   reason: z.string().optional(),
   round: z.number().optional(),
   sha: z.string().nullable().optional(),
+  seenSha: z.string().optional(),
 });
 
 /** One review round row: a JSON object with a whole-number round. */
