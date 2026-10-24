@@ -1,6 +1,7 @@
 import { operation } from "@tinker/core";
 import { z } from "zod";
 
+import { findingLine } from "@/report";
 import { startRules } from "@/resources/start-rules";
 import { store } from "@/resources/store";
 import { print } from "@/tags";
@@ -32,9 +33,8 @@ export const findings = operation({
       return rule.lines.map((line) => line.replace(/^- `[A-Z][0-9]+` /, "").trim()).join(" ");
     };
     const linesOf = (f: (typeof all)[number]) => {
-      const where = f.line ? `${f.file}:${f.line}` : f.file;
       return [
-        `${f.status} ${f.severity} ${f.rule} ${where}: ${f.summary} [${f.id}] (round ${f.round})`,
+        `${f.status} ${f.severity} ${findingLine(f)} (round ${f.round})`,
         ...(book ? [`  rule: ${ruleText(f.rule)}`] : []),
         ...(f.status === "answered" ? [`  reason: ${f.reason}`] : []),
         ...(f.status === "fixed" && f.sha ? [`  fixed at ${f.sha.slice(0, 12)}`] : []),

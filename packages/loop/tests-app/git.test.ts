@@ -75,3 +75,32 @@ test("git sees only childEnv: a GIT_DIR in the tool's env does not reach it", as
 
   expect(found).toBe(head);
 });
+
+test("tree() lists untracked files, says if the app is dirty, and fingerprints its uncommitted work", async () => {
+  const { top } = repo();
+  const scope = createScope({ tags: [appDir(top), childEnv(env)] });
+  const answers = scope.resolve(git);
+
+  const clean = answers.tree();
+  writeFileSync(join(top, "new.txt"), "one");
+  const added = answers.tree();
+  writeFileSync(join(top, "new.txt"), "two");
+  const edited = answers.tree();
+  writeFileSync(join(top, "new.txt"), "one");
+  const back = answers.tree();
+  await scope.close();
+
+  expect([clean.untracked, clean.dirty]).toEqual([[], false]);
+  expect([added.untracked, added.dirty]).toEqual([["new.txt"], true]);
+  expect(new Set([clean.fingerprint, added.fingerprint, edited.fingerprint]).size).toBe(3);
+  expect(back.fingerprint).toBe(added.fingerprint);
+});
+
+test("outside a repo tree() has no untracked list and no fingerprint", async () => {
+  const scope = createScope({ tags: [appDir(tempFolder()), childEnv(env)] });
+
+  const tree = scope.resolve(git).tree();
+  await scope.close();
+
+  expect(tree).toEqual({ untracked: null, dirty: false, fingerprint: null });
+});

@@ -42,6 +42,14 @@ export const finding = z.looseObject({
 /** One review round row: a JSON object with a whole-number round. */
 const round = z.looseObject({ round: z.int() });
 
+/** What the last check run saw: its round, its HEAD, its work tree's fingerprint, its gates. */
+export const lastCheckRun = z.looseObject({
+  round: z.int(),
+  sha: z.string().nullable(),
+  tree: z.string().nullable().optional(),
+  gates: z.array(z.looseObject({ name: z.string(), green: z.boolean() })),
+});
+
 /** A row's round, where it has one: findings, review rounds, and the last check count up. */
 const numbered = z.object({ round: z.int() });
 
@@ -205,13 +213,20 @@ export const store = resource({
     const readLast = () => {
       const path = join(folder, "last-check.json");
       if (!existsSync(path)) return null;
+      let raw: unknown;
       try {
-        return JSON.parse(readFileSync(path, "utf8")) as unknown;
+        raw = JSON.parse(readFileSync(path, "utf8"));
       } catch (error) {
         throw new Error(
           `${path}: ${(error as Error).message}; run tinker-loop check to write it again`,
         );
       }
+
+      const run = lastCheckRun.safeParse(raw);
+      if (!run.success) {
+        throw new Error(`${path}: not a check run; run tinker-loop check to write it again`);
+      }
+      return run.data;
     };
     /**
      * The next round number: one more than any round in the findings, the review rounds, or
@@ -257,7 +272,7 @@ export const store = resource({
           return next;
         }),
       /** Save what a check run saw, in one rename. */
-      writeLastCheck: (run: unknown) => {
+      writeLastCheck: (run: z.infer<typeof lastCheckRun>) => {
         replace("last-check.json", `${JSON.stringify(run)}\n`);
       },
     };

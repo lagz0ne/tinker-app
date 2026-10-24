@@ -128,7 +128,7 @@ test("the next round is one more than any in the findings, the rounds, or the la
   const first = files.nextRound();
   files.writeFindings([{ id: "a", round: 3 }]);
   files.appendRound({ round: 5, source: "review", sha: null });
-  files.writeLastCheck({ round: 4 });
+  files.writeLastCheck({ round: 4, sha: null, gates: [] });
   const later = files.nextRound();
   writeFileSync(join(dir, ".loop/last-check.json"), "{");
   const broken = files.nextRound();
@@ -141,7 +141,7 @@ test("a review round is recorded under the lock with the next number, and return
   const dir = tempFolder();
   const scope = createScope({ tags: [appDir(dir)] });
   const files = scope.resolve(store);
-  files.writeLastCheck({ round: 1 });
+  files.writeLastCheck({ round: 1, sha: null, gates: [] });
 
   const rounds = [await files.recordReviewRound("abc"), await files.recordReviewRound(null)];
   const lockLeft = existsSync(join(dir, ".loop/findings.lock"));

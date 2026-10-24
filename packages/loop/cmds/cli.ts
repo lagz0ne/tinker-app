@@ -7,10 +7,11 @@ import { handOff } from "@/old-tool";
 import { answer } from "@/operations/answer";
 import { findings } from "@/operations/findings";
 import { rules } from "@/operations/rules";
+import { status } from "@/operations/status";
 import { appDir, childEnv, print, warn } from "@/tags";
 
 /** What each operation's outcome means as an exit code; only this command picks them. */
-const codes: Record<string, number> = { done: 0, refused: 64 };
+const codes: Record<string, number> = { done: 0, notDone: 1, needsPerson: 2, refused: 64 };
 
 /**
  * The ported commands: each settles its operation with this command line's input. A command
@@ -26,6 +27,7 @@ const ported = {
         reason: line.options.reason,
       },
     }),
+  status: (root: Scope.Handle) => root.settle(status),
   rules: (root: Scope.Handle, line: CommandLine) =>
     root.settle(rules, { input: { ids: line.positionals } }),
   findings: (root: Scope.Handle, line: CommandLine) =>
