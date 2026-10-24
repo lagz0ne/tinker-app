@@ -1,26 +1,78 @@
-import { lockFindings as lockFile, recordReviewRound as recordRound } from "../lib/findings.mjs";
+import { createScope } from "@tinker/core";
+
+import { store } from "@/resources/store";
+import { appDir } from "@/tags";
+
+// oxlint-disable-next-line import/no-relative-parent-imports -- The tests drive the app's own command.
+import cli from "../cmds/cli";
 
 /**
  * The loop as the frozen tests see it (docs/decisions/loop-on-tinker.md, ticket 5). The tests
  * import only from here and from fixture.mjs, so the port changes this file, not their bodies.
- * Until ticket 8 it points at lib/; ticket 8 points it at the Tinker app.
+ * Since ticket 8 it drives the app: `main` runs cmds/cli.ts in process, as runMain would, and
+ * the store helpers open a scope with the store resource.
  */
-export { main } from "../lib/main.mjs";
 
 /**
- * Take the findings lock. Async, as the port's store method is, so the tests await it now.
- * @param {string} app - From a test; why: the app whose findings file to lock.
+ * Run one tinker-loop command line through the app's command, and return its exit code.
+ * @param {{ args: string[], cwd: string, stdout: { write(chunk: string): unknown },
+ *   stderr: { write(chunk: string): unknown }, signal?: AbortSignal }} run - From a test.
  */
-export async function lockFindings(app) {
-  const release = lockFile(app);
-  return async () => release();
+export async function main({ args, cwd, stdout, stderr, signal }) {
+  let code;
+  const done = await cli({
+    env: process.env,
+    args,
+    cwd,
+    stdout,
+    stderr,
+    signal: signal ?? new AbortController().signal,
+    exit: (next) => {
+      code ??= next;
+    },
+  });
+  await done.closed;
+  return code;
 }
 
 /**
- * Record a review round. Async, as the port's store method is, so the tests await it now.
+ * Take the findings lock, as the store takes it. Resolves once the lock is held, with its release.
+ * @param {string} app - From a test; why: the app whose findings file to lock.
+ */
+export async function lockFindings(app) {
+  const scope = createScope({ tags: [appDir(app)] });
+  const files = scope.resolve(store);
+  let open = () => {};
+  const gate = new Promise((resolve) => {
+    open = resolve;
+  });
+  let taken = () => {};
+  const took = new Promise((resolve) => {
+    taken = resolve;
+  });
+
+  const held = files.locked(() => {
+    taken();
+    return gate;
+  });
+  await Promise.race([took, held]);
+  return async () => {
+    open();
+    await held;
+    await scope.close();
+  };
+}
+
+/**
+ * Record a review round with the store, and return its number.
  * @param {string} app - From a test; why: the app whose rounds file to write.
  * @param {{ sha: string | null }} round - From a test; why: the commit the review saw.
  */
-export async function recordReviewRound(app, round) {
-  return recordRound(app, round);
+export async function recordReviewRound(app, { sha }) {
+  const scope = createScope({ tags: [appDir(app)] });
+  try {
+    return await scope.resolve(store).recordReviewRound(sha);
+  } finally {
+    await scope.close();
+  }
 }

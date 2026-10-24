@@ -119,3 +119,39 @@ test("close waits for a running locked callback, and only then releases its lock
   expect(order).toEqual(["callback done", "closed"]);
   expect(existsSync(lock)).toBe(false);
 });
+
+test("the next round is one more than any in the findings, the rounds, or the last check", async () => {
+  const dir = tempFolder();
+  const scope = createScope({ tags: [appDir(dir)] });
+  const files = scope.resolve(store);
+
+  const first = files.nextRound();
+  files.writeFindings([{ id: "a", round: 3 }]);
+  files.appendRound({ round: 5, source: "review", sha: null });
+  files.writeLastCheck({ round: 4 });
+  const later = files.nextRound();
+  writeFileSync(join(dir, ".loop/last-check.json"), "{");
+  const broken = files.nextRound();
+  await scope.close();
+
+  expect([first, later, broken]).toEqual([1, 6, 6]);
+});
+
+test("a review round is recorded under the lock with the next number, and returned", async () => {
+  const dir = tempFolder();
+  const scope = createScope({ tags: [appDir(dir)] });
+  const files = scope.resolve(store);
+  files.writeLastCheck({ round: 1 });
+
+  const rounds = [await files.recordReviewRound("abc"), await files.recordReviewRound(null)];
+  const lockLeft = existsSync(join(dir, ".loop/findings.lock"));
+  const written = files.rounds();
+  await scope.close();
+
+  expect(rounds).toEqual([2, 3]);
+  expect(lockLeft).toBe(false);
+  expect(written).toEqual([
+    { round: 2, source: "review", sha: "abc" },
+    { round: 3, source: "review", sha: null },
+  ]);
+});

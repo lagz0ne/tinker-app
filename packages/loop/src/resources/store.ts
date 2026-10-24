@@ -24,6 +24,9 @@ const finding = z.looseObject({ id: z.string() });
 /** One review round row: a JSON object with a whole-number round. */
 const round = z.looseObject({ round: z.int() });
 
+/** A row's round, where it has one: findings, review rounds, and the last check count up. */
+const numbered = z.object({ round: z.int() });
+
 /**
  * A lock older than this is stale: a tool holds it for one read, merge, and write, a few
  * milliseconds. Age is the only rule; a pid means nothing across the sandbox and the host.
@@ -143,67 +146,98 @@ export const store = resource({
       if (held) release(held);
     });
 
+    /** Run `work` under `.loop/findings.lock`, so two tools never drop each other's rows. */
+    const locked = async <T>(work: () => T | Promise<T>) => {
+      const ran = (async () => {
+        const token = await lock();
+        try {
+          return await work();
+        } finally {
+          release(token);
+        }
+      })();
+      running.add(ran);
+      try {
+        return await ran;
+      } finally {
+        running.delete(ran);
+      }
+    };
+    /** Every findings row, in file order. Read it inside `locked` when you write it back. */
+    const readFindings = () =>
+      rows("findings.jsonl").map(({ path, number, line }) => {
+        const row = finding.safeParse(json(line));
+        if (!row.success) {
+          throw new Error(`${path}:${number} is not a finding: one JSON object with a string id`);
+        }
+        return row.data;
+      });
+    /** Each recorded review round, in file order. */
+    const readRounds = () =>
+      rows("rounds.jsonl").map(({ path, number, line }) => {
+        const row = round.safeParse(json(line));
+        if (!row.success) {
+          throw new Error(
+            `${path}:${number} is not a round: one JSON object with a whole-number round; fix or delete that line`,
+          );
+        }
+        return row.data;
+      });
+    /** What the last check run saw, or null before the first check. */
+    const readLast = () => {
+      const path = join(folder, "last-check.json");
+      if (!existsSync(path)) return null;
+      try {
+        return JSON.parse(readFileSync(path, "utf8")) as unknown;
+      } catch (error) {
+        throw new Error(
+          `${path}: ${(error as Error).message}; run tinker-loop check to write it again`,
+        );
+      }
+    };
+    /**
+     * The next round number: one more than any round in the findings, the review rounds, or
+     * the last check. A last check that cannot be read counts as none. Call it inside `locked`.
+     */
+    const nextRound = () => {
+      let last: unknown = null;
+      try {
+        last = readLast();
+      } catch {
+        // A broken last check has no round; check writes it again.
+      }
+      const all = [...readFindings(), ...readRounds(), last];
+      return Math.max(0, ...all.map((row) => numbered.safeParse(row).data?.round ?? 0)) + 1;
+    };
+    /** Add one review round. Call it inside `locked`. */
+    const appendRound = (row: z.infer<typeof round>) => {
+      appendFileSync(join(ensure(), "rounds.jsonl"), `${JSON.stringify(row)}\n`);
+    };
+
     return {
       /** Make `.loop` and return its path, for files such as the review's. */
       folder: ensure,
-      /** Run `work` under `.loop/findings.lock`, so two tools never drop each other's rows. */
-      locked: async <T>(work: () => T | Promise<T>) => {
-        const ran = (async () => {
-          const token = await lock();
-          try {
-            return await work();
-          } finally {
-            release(token);
-          }
-        })();
-        running.add(ran);
-        try {
-          return await ran;
-        } finally {
-          running.delete(ran);
-        }
-      },
-      /** Every findings row, in file order. Read it inside `locked` when you write it back. */
-      findings: () =>
-        rows("findings.jsonl").map(({ path, number, line }) => {
-          const row = finding.safeParse(json(line));
-          if (!row.success) {
-            throw new Error(`${path}:${number} is not a finding: one JSON object with a string id`);
-          }
-          return row.data;
-        }),
+      locked,
+      findings: readFindings,
       /** Replace the findings file. Call it inside `locked`. */
       writeFindings: (findings: z.infer<typeof finding>[]) => {
         const text = findings.map((row) => JSON.stringify(row)).join("\n");
         replace("findings.jsonl", text ? `${text}\n` : "");
       },
-      /** Each recorded review round, in file order. */
-      rounds: () =>
-        rows("rounds.jsonl").map(({ path, number, line }) => {
-          const row = round.safeParse(json(line));
-          if (!row.success) {
-            throw new Error(
-              `${path}:${number} is not a round: one JSON object with a whole-number round; fix or delete that line`,
-            );
-          }
-          return row.data;
+      rounds: readRounds,
+      appendRound,
+      lastCheck: readLast,
+      nextRound,
+      /**
+       * Record one review round under the lock, and return its number. The review records it
+       * before it writes that round's findings, so status counts every round.
+       */
+      recordReviewRound: (sha: string | null) =>
+        locked(() => {
+          const next = nextRound();
+          appendRound({ round: next, source: "review", sha });
+          return next;
         }),
-      /** Add one review round. Call it inside `locked`. */
-      appendRound: (row: z.infer<typeof round>) => {
-        appendFileSync(join(ensure(), "rounds.jsonl"), `${JSON.stringify(row)}\n`);
-      },
-      /** What the last check run saw, or null before the first check. */
-      lastCheck: () => {
-        const path = join(folder, "last-check.json");
-        if (!existsSync(path)) return null;
-        try {
-          return JSON.parse(readFileSync(path, "utf8")) as unknown;
-        } catch (error) {
-          throw new Error(
-            `${path}: ${(error as Error).message}; run tinker-loop check to write it again`,
-          );
-        }
-      },
       /** Save what a check run saw, in one rename. */
       writeLastCheck: (run: unknown) => {
         replace("last-check.json", `${JSON.stringify(run)}\n`);
