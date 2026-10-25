@@ -21,7 +21,9 @@
     "check": "vp check",
     "doctor": "tinker doctor",
     "gate:commands": "node node_modules/@tinker/start/lib/command-gate.mjs",
-    "prepare": "tinker prepare && vp build --config vite.cli.config.ts"
+    "prepare": "tinker prepare && vp build --config vite.cli.config.ts",
+    "mutate": "stryker run",
+    "mutate:diff": "node maintain/mutate-diff.mjs"
   },
   "dependencies": {
     "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
@@ -29,6 +31,8 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "catalog:",
+    "@stryker-mutator/vitest-runner": "catalog:",
     "@types/node": "catalog:",
     "tsx": "4.23.15",
     "typescript": "catalog:",
