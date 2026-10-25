@@ -24,6 +24,12 @@ export const answer = operation({
   run: async ({ recordAnswer: record, print: say, warn: complain }, { input }) => {
     const at = input.fixed ? (input.sha ?? "HEAD") : null;
     const reason = (input.reason ?? "").trim();
+    // The command line checks the flags; a direct caller still needs a fix or a reason.
+    if (at === null && !reason) {
+      complain("tinker-loop answer: --reason needs text");
+      return "refused" as const;
+    }
+
     const call = { id: input.id, at, named: input.sha !== undefined, reason };
     const done = await record.run({ input: call });
     if ("refused" in done) {

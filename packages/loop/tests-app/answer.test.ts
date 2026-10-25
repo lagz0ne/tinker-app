@@ -97,6 +97,9 @@ test("a bad answer is refused on warn and changes nothing", async () => {
     { id: "y", status: "open" },
   ]);
   const cases = [
+    { id: "x" },
+    { id: "x", reason: "  " },
+    { id: "x", fixed: true, sha: "" },
     { id: "nope", reason: "why" },
     { id: "x", fixed: true, sha: "no-such-ref" },
     { id: "x", fixed: true, sha: a },
@@ -108,6 +111,9 @@ test("a bad answer is refused on warn and changes nothing", async () => {
 
   expect(runs.map(({ outcome }) => outcome)).toEqual(cases.map(() => "refused"));
   expect(runs.map(({ err }) => err.join(""))).toEqual([
+    "tinker-loop answer: --reason needs text",
+    "tinker-loop answer: --reason needs text",
+    "tinker-loop answer:  is not a commit",
     "tinker-loop answer: no finding has id nope",
     "tinker-loop answer: no-such-ref is not a commit",
     `tinker-loop answer: finding x was seen at ${a.slice(0, 12)}; commit the fix after it, then answer`,

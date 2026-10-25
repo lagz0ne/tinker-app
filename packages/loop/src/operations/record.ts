@@ -115,8 +115,8 @@ export const recordAnswer = operation({
   }),
   depends: { store, findingsLock, git },
   run: async ({ store: files, findingsLock: lock, git: answers }, { input }) => {
-    const fixed = input.at ? answers.commitSha(input.at) : null;
-    if (input.at && !fixed) return { refused: `${input.at} is not a commit` };
+    const fixed = input.at === null ? null : answers.commitSha(input.at);
+    if (input.at !== null && !fixed) return { refused: `${input.at} is not a commit` };
 
     const token = await lock.take();
     try {
