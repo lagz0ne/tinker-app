@@ -23,8 +23,8 @@ export const say = {
   strict: (file, line) => `${file}:${line} turns strict off; the base's files need strict`,
   postinstall:
     'package.json:1 has no "postinstall": "tinker prepare"; a fresh clone has no .tinker/',
-  passed: (file) =>
-    `${file} calls tinker() once; tsconfig.json extends .tinker; postinstall runs tinker prepare`,
+  passed: (file, script) =>
+    `${file} calls tinker() once; tsconfig.json extends .tinker; ${script} runs tinker prepare`,
   fixed: (written) => `wrote ${written.join(" and ")}`,
 };
 
@@ -186,11 +186,20 @@ function tsconfigProblems(root, tsconfig) {
   ];
 }
 
+/**
+ * The script that runs `tinker prepare`: `postinstall` for an app, or `prepare` for a package
+ * other apps install, since an install of its tarball runs `postinstall` but never `prepare`.
+ * @param {ReturnType<typeof readJsonc>} pkg - From the glue check; why: the parsed package.json.
+ */
+function prepareScript(pkg) {
+  const { scripts = {} } = pkg.value ?? {};
+  return ["postinstall", "prepare"].find((name) => /\btinker prepare\b/.test(scripts[name] ?? ""));
+}
+
 /** @param {ReturnType<typeof readJsonc>} pkg - From the glue check; why: the parsed package.json. */
 function postinstallProblems(pkg) {
   if (pkg.error) return [parseProblem("package.json", pkg.error)];
-  const { scripts = {} } = pkg.value;
-  return [!/\btinker prepare\b/.test(scripts.postinstall ?? "") && say.postinstall];
+  return [!prepareScript(pkg) && say.postinstall];
 }
 
 /**
@@ -216,7 +225,7 @@ function fixGlue(root, read, problems) {
 /**
  * Check 2: the Vite config calls tinker() once and adds nothing it owns; tsconfig.json extends
  * `.tinker/`, and neither it nor a local file it extends after `.tinker/` overrides a base
- * option; postinstall runs `tinker prepare`.
+ * option; postinstall runs `tinker prepare` (or prepare does, for a package other apps install).
  * `--fix` writes the extends key and the postinstall script, and keeps the rest of each file;
  * it never edits the Vite config, nor a file that does not parse.
  */
@@ -234,7 +243,7 @@ export function glue(root) {
   const fixable = problems.some((line) => line === say.extends || line === say.postinstall);
   return verdict(
     problems,
-    say.passed(file),
+    say.passed(file, prepareScript(read.pkg)),
     fixable ? () => fixGlue(root, read, problems) : undefined,
   );
 }
