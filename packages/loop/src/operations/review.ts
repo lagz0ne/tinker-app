@@ -1,6 +1,3 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { operation } from "@tinker/core";
 import { z } from "zod";
 
@@ -8,9 +5,8 @@ import { severities, summary } from "@/report";
 import { git } from "@/resources/git";
 import { reviewer } from "@/resources/reviewer";
 import { scan } from "@/resources/scan";
-import { startRules } from "@/resources/start-rules";
 import { type finding, store } from "@/resources/store";
-import { appDir, baseRef, print, stop, warn } from "@/tags";
+import { baseRef, print, stop, warn } from "@/tags";
 
 /**
  * The prompt's first line. When a reviewer takes the prompt as one argv word, a word that starts
@@ -65,35 +61,12 @@ const reviewerFinding = z.looseObject({
  */
 export const review = operation({
   label: "loop.review",
-  depends: { appDir, baseRef, store, git, scan, reviewer, startRules, print, warn, stop },
+  depends: { baseRef, store, git, scan, reviewer, print, warn, stop },
   run: async (deps) => {
-    const { appDir: app, baseRef: wanted, store: files, git: answers } = deps;
-    const { scan: scanner, reviewer: asker, startRules: found, print: say, warn: complain } = deps;
+    const { baseRef: wanted, store: files, git: answers } = deps;
+    const { scan: scanner, reviewer: asker, print: say, warn: complain } = deps;
     const signal = deps.stop;
 
-    /** The app's tinker-review skill, or else its Start's review rules, with `from` naming them. */
-    const reviewRules = () => {
-      const skill = join(app, ".agents", "skills", "tinker-review", "SKILL.md");
-      if (existsSync(skill)) return { text: readFileSync(skill, "utf8"), from: null };
-
-      let book;
-      try {
-        book = found.read();
-      } catch (error) {
-        throw new Error(
-          `${skill} is missing, and the Start rules cannot be read (${(error as Error).message}); review needs one of them`,
-        );
-      }
-      const text = [
-        "# Review a change",
-        "",
-        "This app has no tinker-review skill, so these are the review rules of its Start.",
-        "Each finding names one rule ID from the list below.",
-        "",
-        readFileSync(book.path, "utf8").trimEnd(),
-      ].join("\n");
-      return { text, from: `@tinker/start ${book.version} docs/rules.md` };
-    };
     /** Where the change starts: the merge base of HEAD and the base, as check's scan finds it. */
     const reviewRange = () => {
       const ref = scanner.base();
@@ -105,15 +78,15 @@ export const review = operation({
       return { ref, start };
     };
 
-    const rules = reviewRules();
+    const rules = asker.rules();
     const range = reviewRange();
     if (!range) {
       complain(`tinker-loop review: git cannot find --base ${wanted}`);
       return "refused" as const;
     }
 
-    const folder = join(files.folder(), "review");
-    mkdirSync(folder, { recursive: true });
+    // `.loop` ignores itself, so make it before the work tree is read.
+    files.folder();
     const tree = answers.tree();
     const head = answers.headSha();
     const earlier = files.findings().filter((f) => f.source === "review" && f.rule !== outputRule);
@@ -122,24 +95,19 @@ export const review = operation({
     const recheck = new Set(open.map((f) => f.id));
     const known = new Set([...open, ...answered].map((f) => f.id));
     const untracked = tree.untracked ?? [];
-    /** The change as files: the diff from where it starts to the work tree, and the new files. */
-    const writeChange = () => {
-      const patch = answers.run(
-        [
-          "-c",
-          "core.quotePath=false",
-          "diff",
-          "--no-color",
-          "--no-ext-diff",
-          "--relative",
-          range.start,
-        ],
-        { raw: true },
-      );
-      writeFileSync(join(folder, "change.patch"), patch ?? "");
-      writeFileSync(join(folder, "untracked.txt"), untracked.map((file) => `${file}\n`).join(""));
-    };
-    writeChange();
+    const patch = answers.run(
+      [
+        "-c",
+        "core.quotePath=false",
+        "diff",
+        "--no-color",
+        "--no-ext-diff",
+        "--relative",
+        range.start,
+      ],
+      { raw: true },
+    );
+    asker.writeChange(patch, untracked);
     if (rules.from) say(`review: no tinker-review skill in this app; using ${rules.from}`);
     say(`reviewed: ${answers.appScope()} only`);
 
@@ -301,11 +269,11 @@ export const review = operation({
 
     /**
      * The reviewer's report: its findings as review rows, once per id, and the open ids it
-     * rechecked as fixed. Blank lines, code fences, and a `clear` line are skipped. A finding
-     * line past the end of its file gets line 0 and a note; an unreadable file keeps its line.
+     * rechecked as fixed. Blank lines, code fences, and a `clear` line are skipped; the reviewer
+     * resource places each reported line in its file.
      */
     const fixed = new Set<z.infer<typeof finding>["id"]>();
-    const lines = readFileSync(join(folder, "output.txt"), "utf8").split(/\r?\n/);
+    const lines = asker.reply().split(/\r?\n/);
     const rows = lines.flatMap((raw, index) => {
       const line = raw.trim();
       if (!line || line.startsWith("```") || /^clear\b/i.test(line)) return [];
@@ -320,20 +288,7 @@ export const review = operation({
     });
     const reported = rows
       .filter((row, index) => rows.findIndex((other) => other.id === row.id) === index)
-      .map((row) => {
-        if (!row.line) return row;
-        let text;
-        try {
-          text = readFileSync(join(app, row.file), "utf8");
-        } catch {
-          return row;
-        }
-
-        const count = text === "" ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
-        if (row.line <= count) return row;
-        const note = `The reviewer gave line ${row.line}; the file has ${count} line${count === 1 ? "" : "s"}.`;
-        return { ...row, line: 0, trigger: row.trigger ? `${row.trigger} (${note})` : note };
-      });
+      .map((row) => asker.place(row));
 
     let round = 0;
     const merge = () => {

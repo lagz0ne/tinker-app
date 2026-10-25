@@ -1,6 +1,3 @@
-import { mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { operation } from "@tinker/core";
 
 import { loopConfig } from "@/resources/loop-config";
@@ -25,9 +22,6 @@ export const gates = operation({
     print: say,
     stop: signal,
   }) => {
-    const folder = join(files.folder(), "gates");
-    mkdirSync(folder, { recursive: true });
-
     /** The first line that reads like an error, else the first line, else how it ended. */
     const firstErrorLine = (output: string, ending: string) => {
       const lines = output
@@ -40,25 +34,22 @@ export const gates = operation({
       return line.length > 200 ? `${line.slice(0, 197)}...` : line;
     };
     const one = async (gate: (typeof config.gates)[number]) => {
-      const file = `${gate.name.replaceAll(/[^\w.-]/g, "-")}.log`;
-      const log = join(".loop", "gates", file);
+      const log = files.gateLog(gate.name);
       const ending = await children.run(
-        { command: gate.run, timeout: gate.timeout, out: join(folder, file) },
+        { command: gate.run, timeout: gate.timeout, out: log.path },
         signal,
       );
       say(`${ending ? "FAIL" : "PASS"} ${gate.name}`);
       if (!ending) return { name: gate.name, green: true };
 
-      const summary = ending.startsWith("timed out")
-        ? ending
-        : firstErrorLine(readFileSync(join(folder, file), "utf8"), ending);
+      const summary = ending.startsWith("timed out") ? ending : firstErrorLine(log.read(), ending);
       const finding = {
         rule: "G1",
         severity: "important",
         file: gate.name,
         line: null,
         summary,
-        trigger: `\`${gate.run}\` ${ending}; full output in ${log}`,
+        trigger: `\`${gate.run}\` ${ending}; full output in ${log.shown}`,
         fix: `Make \`${gate.run}\` pass.`,
         source: "check",
       };

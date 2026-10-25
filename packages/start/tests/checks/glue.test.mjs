@@ -100,6 +100,27 @@ test("names a package.json with no postinstall that runs tinker prepare", () => 
   ]);
 });
 
+test("a package that other apps install may run tinker prepare in prepare instead", () => {
+  const prepared = goodApp({
+    "package.json": JSON.stringify({
+      scripts: { prepare: "tinker prepare && vp build --config vite.cli.config.ts" },
+    }),
+  });
+  const elsewhere = goodApp({
+    "package.json": JSON.stringify({ scripts: { prepare: "vp build", test: "tinker prepare" } }),
+  });
+
+  expect(glue(prepared)).toEqual({
+    status: "ok",
+    lines: [
+      "vite.config.ts calls tinker() once; tsconfig.json extends .tinker; prepare runs tinker prepare",
+    ],
+  });
+  expect(glue(elsewhere).lines).toEqual([
+    'package.json:1 has no "postinstall": "tinker prepare"; a fresh clone has no .tinker/',
+  ]);
+});
+
 test("reads tsconfig.json as tsc does: a comment and a trailing comma are fine", () => {
   const root = goodApp({
     "tsconfig.json":

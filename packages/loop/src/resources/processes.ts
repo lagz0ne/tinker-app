@@ -5,6 +5,8 @@ import { resource } from "@tinker/core";
 
 import { appDir, childEnv } from "@/tags";
 
+import type { LoopFile } from "./loop-config";
+
 /** A command with no `timeout` stops after 20 minutes. */
 const defaultTimeoutMs = 20 * 60 * 1000;
 
@@ -53,8 +55,9 @@ export const processes = resource({
      */
     const run = (
       job: {
-        command: string | string[];
-        timeout?: number;
+        /** A gate's `run` (a shell line), or the review's argv. */
+        command: LoopFile["gates"][number]["run"] | NonNullable<LoopFile["review"]["command"]>;
+        timeout?: LoopFile["gates"][number]["timeout"];
         input?: string;
         out: string;
         err?: string;

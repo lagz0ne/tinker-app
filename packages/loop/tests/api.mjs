@@ -64,14 +64,20 @@ export async function lockFindings(app) {
 }
 
 /**
- * Record a review round with the store, and return its number.
+ * Record a review round as the review operation does: under the findings lock, one more than any
+ * round in the findings, the review rounds, or the last check. Returns its number.
  * @param {string} app - From a test; why: the app whose rounds file to write.
  * @param {{ sha: string | null }} round - From a test; why: the commit the review saw.
  */
 export async function recordReviewRound(app, { sha }) {
   const scope = createScope({ tags: [appDir(app)] });
+  const files = scope.resolve(store);
   try {
-    return await scope.resolve(store).recordReviewRound(sha);
+    return await files.locked(() => {
+      const round = files.nextRound();
+      files.appendRound({ round, source: "review", sha });
+      return round;
+    });
   } finally {
     await scope.close();
   }
