@@ -12,6 +12,7 @@ for (const key of ["VICTORIA_TRACES_URL", "VICTORIA_LOGS_URL"] as const) {
     const worker = await main({
       env: { [key]: "http://127.0.0.1:19123/collector" },
       args: [],
+      cwd: import.meta.dirname,
       signal: new AbortController().signal,
       stdout: { write() {} },
       stderr: { write() {} },

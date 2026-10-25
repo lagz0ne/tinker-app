@@ -1,6 +1,6 @@
 import { createScope } from "@tinker/core";
 
-import { defineMain, checkClosed } from "~/base/main";
+import { defineMain, mainErrorCode, checkClosed } from "~/base/main";
 import {
   databaseSetup,
   databaseMigrationTimeout,
@@ -120,14 +120,7 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       throw error;
     }
   } catch (error) {
-    let code = 1;
-    if (error && typeof error === "object") {
-      if ("kind" in error && ["MissingTag", "DataValidationFailed"].includes(String(error.kind))) {
-        code = 78;
-      }
-      if ("code" in error && error.code === "ERR_INVALID_URL") code = 78;
-    }
-    exit(code, error);
+    exit(mainErrorCode(error), error);
     return { closed: Promise.resolve() };
   }
 });

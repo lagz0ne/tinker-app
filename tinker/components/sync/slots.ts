@@ -35,7 +35,7 @@ export const streamMessageSlot = tag<{
 }>({ label: "sync.streamMessage" });
 
 /** The command names the component's host; there is no implicit role or config. */
-export const syncSide = tag<"server" | "tab">({
+export const syncSide = tag({
   label: "sync.side",
   parse: z.enum(["server", "tab"]),
 });

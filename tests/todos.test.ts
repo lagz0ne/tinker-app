@@ -8,9 +8,10 @@ import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
+import { readAccount } from "@/demo/backend/auth.server";
+import { bootstrap } from "@/demo/backend/sync.server";
 import { listTodos, changeTodo } from "@/demo/backend/todos.server";
 import { raise, isError } from "@/demo/errors";
-import * as demo from "@/demo/index.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
@@ -19,7 +20,7 @@ import { write, settleWrite } from "./write-boundary";
 const requestBindings = requestHostStop(new AbortController().signal);
 
 const tags = [
-  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
+  [bootstrapSlot(bootstrap), readAccountSlot(readAccount)],
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",

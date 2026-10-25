@@ -62,7 +62,7 @@ vp run test:registry
 
 There is one item per component. Its `registryDependencies` equal its direct `requires`.
 `demo` ships app-owned business code in `src/demo`, with its own paths and no component manifest.
-The browser entry is `@/demo/client`; this keeps the CLI from confusing it with the `/demo` route.
+Code imports each demo owner file directly. There is no demo barrel (rule I4).
 Copy the example once; edit later app changes by hand. Never apply a whole-component update to it.
 `base` owns the copied entry helpers. `app` adds base, health, telemetry, and user files
 into an empty folder. Examples add their own files and never overwrite app files.
@@ -171,13 +171,14 @@ From the workspace root, copy both templates into a new empty output folder:
 node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
-Default exports pin the released Start 0.11.0 host and its matching registry.
+Default exports pin the released Start 0.12.0 host and its matching registry.
 Start 0.9.0 cannot run these templates. Local proofs pass an explicit current
 host pack; the export carries it in vendor and checks its host files against
 this source. Nothing is published.
 
 The export copies source. It never changes template branches or another checkout.
-The golden runtime is `tinker/`; its mutation floor is 85. The lander runs mutation checks.
+The golden runtime is `tinker/`. App pull requests use the changed-line mutation
+gate at floor 60; the weekly full run is a report. `packages/start` stays at 85.
 
 ## Promises tested through app scopes
 
@@ -241,7 +242,7 @@ Their resources own and close the connection.
 
 `npm start` uses the `tinker serve` host from the `@tinker/start` dev dependency.
 Keep dev dependencies installed on the server; an `npm install --omit=dev` install cannot start it.
-Templates use the Start 0.11.0 contract. Default installs use its released host
+Templates use the Start 0.12.0 contract. Default installs use its released host
 and registry.
 Local registry proofs use a packed Start through `TINKER_PACKAGE_DIR`.
 The standalone export proof supplies a current host pack explicitly.
