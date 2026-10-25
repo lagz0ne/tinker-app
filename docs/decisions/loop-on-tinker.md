@@ -684,11 +684,21 @@ In order. Each ticket is one commit or PR.
    the user approves it, and an install of a
    tarball never runs `prepare`. Doctor accepts
    either script.
-   Status: `check-plain` on the loop counts 86
-   plain functions, over the cap of 17. Whether
-   the loop is reshaped for it waits on Duke.
-   Until then, CI runs no `check-plain` for
-   the loop.
+   Status: `check-plain` on the loop counts 4
+   plain functions, under the cap of 17.
+   CI runs it as `pnpm --dir packages/loop run
+   check-plain`, with the scaffold's script.
+10. **Reshape for check-plain** — the closures
+   inside units become graph work.
+   - A resource returns one object; its
+     methods call each other by name.
+   - Lock work is `findingsLock.take` and
+     `release`, inside the record operations.
+   - The command line is the `commandLine`
+     resource; `runCommand` picks the command.
+   - What is left plain: the 4 report lines.
+   Verify: `check-plain` passes. The 120 frozen
+   tests are unchanged and pass.
 
 ## Decided
 

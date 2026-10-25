@@ -16,29 +16,30 @@ export const findings = operation({
   depends: { store, startRules, print },
   run: ({ store: files, startRules: found, print: say }, { input }) => {
     const book = input.rules ? found.read().rules : null;
+    const texts = new Map(
+      (book ?? []).map((rule) => [
+        rule.id,
+        rule.lines.map((line) => line.replace(/^- `[A-Z][0-9]+` /, "").trim()).join(" "),
+      ]),
+    );
     const all = files.findings();
     const shown = input.open ? all.filter((f) => f.status === "open") : all;
 
-    const rank = (f: (typeof all)[number]) =>
-      statuses.indexOf(f.status ?? "") * 10 + severities.indexOf(f.severity ?? "");
-    const ruleText = (id: (typeof all)[number]["rule"]) => {
-      const rule = book?.find((entry) => entry.id === id);
-      if (!rule) return "not in this Start's rules.md";
-      return rule.lines.map((line) => line.replace(/^- `[A-Z][0-9]+` /, "").trim()).join(" ");
-    };
-    const linesOf = (f: (typeof all)[number]) => {
-      return [
-        `${f.status} ${f.severity} ${findingLine(f)} (round ${f.round})`,
-        ...(book ? [`  rule: ${ruleText(f.rule)}`] : []),
-        ...(f.status === "answered" ? [`  reason: ${f.reason}`] : []),
-        ...(f.status === "fixed" && f.sha ? [`  fixed at ${f.sha.slice(0, 12)}`] : []),
-        ...(f.status === "open" ? [`  fix: ${f.fix}`] : []),
-      ];
-    };
-
-    const sorted = shown.toSorted((a, b) => rank(a) - rank(b));
-    const lines = sorted.length === 0 ? ["no findings"] : sorted.flatMap(linesOf);
-    for (const line of lines) say(line);
+    const sorted = shown
+      .map((f) => ({
+        f,
+        rank: statuses.indexOf(f.status ?? "") * 10 + severities.indexOf(f.severity ?? ""),
+        rule: texts.get(f.rule ?? "") ?? "not in this Start's rules.md",
+      }))
+      .toSorted((a, b) => a.rank - b.rank);
+    const lines = sorted.flatMap(({ f, rule }) => [
+      `${f.status} ${f.severity} ${findingLine(f)} (round ${f.round})`,
+      ...(book ? [`  rule: ${rule}`] : []),
+      ...(f.status === "answered" ? [`  reason: ${f.reason}`] : []),
+      ...(f.status === "fixed" && f.sha ? [`  fixed at ${f.sha.slice(0, 12)}`] : []),
+      ...(f.status === "open" ? [`  fix: ${f.fix}`] : []),
+    ]);
+    for (const line of lines.length === 0 ? ["no findings"] : lines) say(line);
     return "done" as const;
   },
 });

@@ -1,5 +1,6 @@
 import { createScope } from "@tinker/core";
 
+import { findingsLock } from "@/resources/findings-lock";
 import { store } from "@/resources/store";
 import { appDir } from "@/tags";
 
@@ -36,29 +37,16 @@ export async function main({ args, cwd, stdout, stderr, signal }) {
 }
 
 /**
- * Take the findings lock, as the store takes it. Resolves once the lock is held, with its release.
+ * Take the findings lock, as the operations take it. Resolves once the lock is held, with its
+ * release.
  * @param {string} app - From a test; why: the app whose findings file to lock.
  */
 export async function lockFindings(app) {
   const scope = createScope({ tags: [appDir(app)] });
-  const files = scope.resolve(store);
-  let open = () => {};
-  const gate = new Promise((resolve) => {
-    open = resolve;
-  });
-  let taken = () => {};
-  const took = new Promise((resolve) => {
-    taken = resolve;
-  });
-
-  const held = files.locked(() => {
-    taken();
-    return gate;
-  });
-  await Promise.race([took, held]);
+  const lock = scope.resolve(findingsLock);
+  const token = await lock.take();
   return async () => {
-    open();
-    await held;
+    lock.release(token);
     await scope.close();
   };
 }
@@ -72,13 +60,14 @@ export async function lockFindings(app) {
 export async function recordReviewRound(app, { sha }) {
   const scope = createScope({ tags: [appDir(app)] });
   const files = scope.resolve(store);
+  const lock = scope.resolve(findingsLock);
+  const token = await lock.take();
   try {
-    return await files.locked(() => {
-      const round = files.nextRound();
-      files.appendRound({ round, source: "review", sha });
-      return round;
-    });
+    const round = files.nextRound();
+    files.appendRound({ round, source: "review", sha });
+    return round;
   } finally {
+    lock.release(token);
     await scope.close();
   }
 }
