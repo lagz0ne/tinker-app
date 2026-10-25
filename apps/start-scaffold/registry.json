@@ -410,16 +410,6 @@
           "path": "src/demo/frontend/state.ts",
           "type": "registry:file",
           "target": "~/src/demo/frontend/state.ts"
-        },
-        {
-          "path": "src/demo/index.server.ts",
-          "type": "registry:file",
-          "target": "~/src/demo/index.server.ts"
-        },
-        {
-          "path": "src/demo/client.ts",
-          "type": "registry:file",
-          "target": "~/src/demo/client.ts"
         }
       ],
       "meta": {
@@ -1086,11 +1076,6 @@
           "path": "drizzle/20261010090000_drop_session_wake/snapshot.json",
           "type": "registry:file",
           "target": "~/drizzle/20261010090000_drop_session_wake/snapshot.json"
-        },
-        {
-          "path": "src/frontend/actions.ts",
-          "type": "registry:file",
-          "target": "~/src/frontend/actions.ts"
         },
         {
           "path": "src/frontend/error-text.ts",

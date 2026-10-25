@@ -14,7 +14,8 @@ import {
   streamMessageSlot,
 } from "~/components/sync";
 
-import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo/client";
+import { readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo/contracts/sync";
+import { records } from "@/demo/frontend/records";
 
 /** Keep migration inside each test; copy only the empty database's ready state. */
 let template: PGliteInterface;

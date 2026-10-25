@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useData, useRun } from "@tinker/react";
 
-import { profile, pending, notice, authMode } from "@/demo/client";
+import { profile, pending, notice, authMode } from "@/demo/frontend/state";
 
 import { signIn, setAuthMode, signOut } from "./auth-actions";
 import { errorText } from "./error-text";

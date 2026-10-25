@@ -21,8 +21,7 @@ import { syncStartup } from "~/components/sync/slots";
 import { readAccount } from "@/demo/backend/auth.server";
 import { incrementCounter } from "@/demo/backend/counter.server";
 import { bootstrap } from "@/demo/backend/sync.server";
-import * as demo from "@/demo/index.server";
-import { authClient, signIn } from "@/frontend/actions";
+import { authClient, signIn } from "@/frontend/auth-actions";
 
 import { clientBindings } from "./presets";
 import { handleAuth } from "./presets";
@@ -32,7 +31,7 @@ import { write } from "./write-boundary";
 const requestBindings = requestHostStop(new AbortController().signal);
 
 const settings = [
-  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
+  [bootstrapSlot(bootstrap), readAccountSlot(readAccount)],
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",

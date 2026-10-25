@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { syncClient } from "~/components/sync";
 
-import { readProfileInput } from "@/demo/client";
-import { raise } from "@/demo/client";
-import { nameDraft, pending, notice, profileResult } from "@/demo/client";
+import { readProfileInput } from "@/demo/contracts/profile-contract";
+import { raise } from "@/demo/errors";
+import { nameDraft, pending, notice, profileResult } from "@/demo/frontend/state";
 import { updateProfile, retryProfileNotification } from "@/transport/profile.functions";
 
 const notificationId = z.uuid();

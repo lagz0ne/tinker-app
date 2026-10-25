@@ -1,6 +1,6 @@
 import { isError as isBaseError } from "~/components/errors";
 
-import { isError } from "@/demo/client";
+import { isError } from "@/demo/errors";
 
 /**
  * @param error - From a form action failure; why: pick the shown message.

@@ -1,11 +1,10 @@
 import { operation } from "@tinker/core";
+import type { z } from "zod";
 
 import { loopConfig } from "@/resources/loop-config";
 import { processes } from "@/resources/processes";
-import { store } from "@/resources/store";
+import { type finding, store } from "@/resources/store";
 import { print, stop } from "@/tags";
-
-const ansi = new RegExp(String.raw`\u001b\[[0-9;?]*[A-Za-z]`, "g");
 
 /**
  * Run every gate of loop.json in order, all of them, even after a red one; stop early only on
@@ -22,28 +21,20 @@ export const gates = operation({
     print: say,
     stop: signal,
   }) => {
-    /** The first line that reads like an error, else the first line, else how it ended. */
-    const firstErrorLine = (output: string, ending: string) => {
-      const lines = output
-        .replaceAll(ansi, "")
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
-      const line =
-        lines.find((text) => /error|fail|assert|not ok|✗|×/i.test(text)) ?? lines[0] ?? ending;
-      return line.length > 200 ? `${line.slice(0, 197)}...` : line;
-    };
-    const one = async (gate: (typeof config.gates)[number]) => {
+    const results: { name: string; green: boolean; finding?: z.infer<typeof finding> }[] = [];
+    for (const gate of config.gates) {
+      if (signal.aborted) break;
       const log = files.gateLog(gate.name);
-      const ending = await children.run(
-        { command: gate.run, timeout: gate.timeout, out: log.path },
-        signal,
-      );
+      const job = { command: gate.run, timeout: gate.timeout, out: log.path };
+      const ending = await children.run(job, signal);
       say(`${ending ? "FAIL" : "PASS"} ${gate.name}`);
-      if (!ending) return { name: gate.name, green: true };
+      if (!ending) {
+        results.push({ name: gate.name, green: true });
+        continue;
+      }
 
-      const summary = ending.startsWith("timed out") ? ending : firstErrorLine(log.read(), ending);
-      const finding = {
+      const summary = ending.startsWith("timed out") ? ending : files.gateError(gate.name, ending);
+      const row = {
         rule: "G1",
         severity: "important",
         file: gate.name,
@@ -54,13 +45,7 @@ export const gates = operation({
         source: "check",
       };
       const id = files.findingId({ source: "check", rule: "G1", file: gate.name });
-      return { name: gate.name, green: false, finding: { id, ...finding } };
-    };
-
-    const results: Awaited<ReturnType<typeof one>>[] = [];
-    for (const gate of config.gates) {
-      if (signal.aborted) break;
-      results.push(await one(gate));
+      results.push({ name: gate.name, green: false, finding: { id, ...row } });
     }
     return results;
   },

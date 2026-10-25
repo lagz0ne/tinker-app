@@ -73,6 +73,12 @@ Tests and generated files do not count.
     - `src/transport/profile.functions.ts#updateProfile.callback`
     - `src/transport/todos.functions.ts#updateTodo.callback`
 
+- **tinker/base/main.ts#mainErrorCode**
+  - `error`: `unknown`. From command startup; why: map only known config errors to 78.
+  - Callers:
+    - `cmds/server.ts#module.callback1`
+    - `cmds/worker.ts#module.callback1`
+
 - **tinker/base/main.ts#checkClosed**
   - `result`: `Scope.Result`. From a closed root; why: surface work and cleanup errors before exit.
   - Callers:

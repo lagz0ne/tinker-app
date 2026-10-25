@@ -27,7 +27,8 @@ import {
   observer,
 } from "~/components/telemetry";
 
-import { records, readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo/client";
+import { readBatch, readBootstrap, readSnapshot, streamMessage } from "@/demo/contracts/sync";
+import { records } from "@/demo/frontend/records";
 
 /** Start asks for a fresh render root; the browser keeps its root until page hide. */
 export async function getRouter() {

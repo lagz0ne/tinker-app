@@ -22,75 +22,6 @@ const timeoutMs = z
   .max(maxTimeoutMs, { error: `must be at most ${maxTimeoutMs} ms, about 24 days` });
 
 /**
- * loop.json, checked: its gates (each with a name, a run, and its own log file), its base
- * branch, and its optional review block (the reviewer's argv and timeout). The checks run in file
- * order, so the first refusal is the first problem, in the words the tool printed before the port.
- */
-const loopFile = z.preprocess(
-  (raw) => raw ?? {},
-  z.looseObject(
-    {
-      gates: z
-        .array(
-          z
-            .looseObject(
-              {
-                name: z.string({ error: nameAndRun }).min(1, { error: nameAndRun }),
-                run: z.string({ error: nameAndRun }),
-                timeout: z.unknown().optional(),
-              },
-              { error: nameAndRun },
-            )
-            .superRefine((gate, ctx) => {
-              const timeout = timeoutMs.optional().safeParse(gate.timeout);
-              if (timeout.success) return;
-              const problem = timeout.error.issues[0]?.message;
-              ctx.addIssue({ code: "custom", message: `gate ${gate.name}: "timeout" ${problem}` });
-            })
-            .pipe(
-              z.looseObject({ name: z.string(), run: z.string(), timeout: timeoutMs.optional() }),
-            ),
-          { error: listed },
-        )
-        .min(1, { error: listed })
-        .superRefine((gates, ctx) => {
-          const names = new Set(gates.map((gate) => gate.name));
-          const logs = new Set(gates.map((gate) => gate.name.replaceAll(/[^\w.-]/g, "-")));
-          if (names.size !== gates.length) {
-            ctx.addIssue({ code: "custom", message: "gate names must differ" });
-          } else if (logs.size !== gates.length) {
-            ctx.addIssue({
-              code: "custom",
-              message:
-                "gate names must differ after each character other than a letter, digit, '.', '_', or '-' becomes '-', since each names a log file",
-            });
-          }
-        }),
-      base: z
-        .unknown()
-        .optional()
-        .transform((base) => (typeof base === "string" ? base : null)),
-      review: z
-        .looseObject(
-          {
-            command: z
-              .array(z.string({ error: words }).min(1, { error: words }), { error: words })
-              .min(1, { error: words })
-              .optional(),
-            timeout: timeoutMs.optional(),
-          },
-          { error: '"review" must be an object' },
-        )
-        .default({}),
-    },
-    { error: listed },
-  ),
-);
-
-/** loop.json once checked: the type every unit that reads it takes its fields from. */
-export type LoopFile = z.infer<typeof loopFile>;
-
-/**
  * The app's loop.json, read and checked. A missing file, a file that is not JSON, or a refused
  * field fails with the message the tool printed before the port: the seam prints it and exits 78.
  * A timeout's message names its gate, or `review.timeout`.
@@ -99,6 +30,79 @@ export const loopConfig = resource({
   label: "loop.config",
   depends: { appDir },
   factory: ({ appDir: app }) => {
+    /**
+     * loop.json, checked: its gates (each with a name, a run, and its own log file), its base
+     * branch, and its optional review block (the reviewer's argv and timeout). The checks run in file
+     * order, so the first refusal is the first problem, in the words the tool printed before the port.
+     */
+    const loopFile = z.preprocess(
+      (raw) => raw ?? {},
+      z.looseObject(
+        {
+          gates: z
+            .array(
+              z
+                .looseObject(
+                  {
+                    name: z.string({ error: nameAndRun }).min(1, { error: nameAndRun }),
+                    run: z.string({ error: nameAndRun }),
+                    timeout: z.unknown().optional(),
+                  },
+                  { error: nameAndRun },
+                )
+                .superRefine((gate, ctx) => {
+                  const timeout = timeoutMs.optional().safeParse(gate.timeout);
+                  if (timeout.success) return;
+                  const problem = timeout.error.issues[0]?.message;
+                  ctx.addIssue({
+                    code: "custom",
+                    message: `gate ${gate.name}: "timeout" ${problem}`,
+                  });
+                })
+                .pipe(
+                  z.looseObject({
+                    name: z.string(),
+                    run: z.string(),
+                    timeout: timeoutMs.optional(),
+                  }),
+                ),
+              { error: listed },
+            )
+            .min(1, { error: listed })
+            .superRefine((gates, ctx) => {
+              const names = new Set(gates.map((gate) => gate.name));
+              const logs = new Set(gates.map((gate) => gate.name.replaceAll(/[^\w.-]/g, "-")));
+              if (names.size !== gates.length) {
+                ctx.addIssue({ code: "custom", message: "gate names must differ" });
+              } else if (logs.size !== gates.length) {
+                ctx.addIssue({
+                  code: "custom",
+                  message:
+                    "gate names must differ after each character other than a letter, digit, '.', '_', or '-' becomes '-', since each names a log file",
+                });
+              }
+            }),
+          base: z
+            .unknown()
+            .optional()
+            .transform((base) => (typeof base === "string" ? base : null)),
+          review: z
+            .looseObject(
+              {
+                command: z
+                  .array(z.string({ error: words }).min(1, { error: words }), { error: words })
+                  .min(1, { error: words })
+                  .optional(),
+                timeout: timeoutMs.optional(),
+              },
+              { error: '"review" must be an object' },
+            )
+            .default({}),
+        },
+        { error: listed },
+      ),
+    );
+
     const path = join(app, "loop.json");
     if (!existsSync(path)) throw new Error(`${path} is missing`);
 
@@ -113,3 +117,6 @@ export const loopConfig = resource({
     throw new Error(`${path}: ${problem}`);
   },
 });
+
+/** loop.json once checked: the type every unit that reads it takes its fields from. */
+export type LoopFile = ReturnType<typeof loopConfig.factory>;

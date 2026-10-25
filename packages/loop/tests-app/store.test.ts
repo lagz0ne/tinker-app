@@ -6,6 +6,7 @@ import { createScope } from "@tinker/core";
 import { makeTestClock, makeTestRandom } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
+import { findingsLock } from "@/resources/findings-lock";
 import { store } from "@/resources/store";
 import { appDir } from "@/tags";
 
@@ -17,10 +18,10 @@ test("findings round-trip under a lock whose token is ctx.random; .loop ignores 
   const files = scope.resolve(store);
   const lock = join(dir, ".loop/findings.lock");
 
-  const held = await files.locked(async () => {
-    files.writeFindings([{ id: "a", rule: "G1" }]);
-    return readFileSync(lock, "utf8");
-  });
+  const token = await scope.resolve(findingsLock).take();
+  files.writeFindings([{ id: "a", rule: "G1" }]);
+  const held = readFileSync(lock, "utf8");
+  scope.resolve(findingsLock).release(token);
   const read = files.findings();
   const lockedAfter = existsSync(lock);
   await scope.close();
@@ -81,22 +82,21 @@ test("a lock older than 10 seconds on ctx.clock is broken; a lock taken over is 
     tags: [appDir(dir)],
     clock: makeTestClock({ now: Date.now() + 11_000 }),
   });
-  const files = scope.resolve(store);
+  const locks = scope.resolve(findingsLock);
 
-  const ran = await files.locked(async () => {
-    writeFileSync(lock, "a tool that broke this lock as stale");
-    return "ran";
-  });
+  const token = await locks.take();
+  writeFileSync(lock, "a tool that broke this lock as stale");
+  locks.release(token);
   await scope.close();
 
-  expect(ran).toBe("ran");
+  expect(token).toMatch(/^[0-9a-f-]{36}$/);
   expect(readFileSync(lock, "utf8")).toBe("a tool that broke this lock as stale");
 });
 
-test("close waits for a running locked callback, and only then releases its lock", async () => {
+test("close waits for a held lock, and ends only after its release", async () => {
   const dir = tempFolder();
   const scope = createScope({ tags: [appDir(dir)] });
-  const files = scope.resolve(store);
+  const locks = scope.resolve(findingsLock);
   const lock = join(dir, ".loop/findings.lock");
   let open = () => {};
   const gate = new Promise<void>((resolve) => {
@@ -104,9 +104,10 @@ test("close waits for a running locked callback, and only then releases its lock
   });
   const order: string[] = [];
 
-  const work = files.locked(async () => {
-    await gate;
+  const token = await locks.take();
+  const work = gate.then(() => {
     order.push("callback done");
+    locks.release(token);
   });
   const closing = scope.close().then(() => order.push("closed"));
   await delay(100);
@@ -194,11 +195,13 @@ test("a gate's log lives in .loop/gates under a safe name, shown by its short pa
   const files = scope.resolve(store);
 
   const log = files.gateLog("unit tests?");
-  writeFileSync(log.path, "all good\n");
-  const read = log.read();
+  writeFileSync(log.path, "\u001b[32mok\u001b[0m\n  Error: it broke  \n");
+  const error = files.gateError("unit tests?", "exited 1");
+  writeFileSync(log.path, "");
+  const empty = files.gateError("unit tests?", "exited 1");
   await scope.close();
 
   expect(log.path).toBe(join(dir, ".loop/gates/unit-tests-.log"));
   expect(log.shown).toBe(".loop/gates/unit-tests-.log");
-  expect(read).toBe("all good\n");
+  expect([error, empty]).toEqual(["Error: it broke", "exited 1"]);
 });

@@ -62,54 +62,59 @@ export const scan = resource({
   label: "loop.scan",
   depends: { appDir, baseRef, loopConfig, git, store },
   factory: ({ appDir: app, baseRef: wanted, loopConfig: config, git: answers, store: files }) => {
-    /** An untracked file as a diff that adds every line; links, binary, large, gone files add nothing. */
-    const addedFile = (file: string) => {
-      let text;
-      try {
-        const stat = lstatSync(join(app, file));
-        if (!stat.isFile() || stat.size > 1024 * 1024) return "";
-        text = readFileSync(join(app, file), "utf8");
-      } catch {
-        return "";
-      }
+    const scanner = {
+      /** An untracked file as a diff that adds every line; links, binary, large, gone files add nothing. */
+      addedFile: (file: string) => {
+        let text;
+        try {
+          const stat = lstatSync(join(app, file));
+          if (!stat.isFile() || stat.size > 1024 * 1024) return "";
+          text = readFileSync(join(app, file), "utf8");
+        } catch {
+          return "";
+        }
 
-      if (text.includes("\0")) return "";
-      const lines = text.split("\n");
-      if (lines.at(-1) === "") lines.pop();
-      return [`diff --git a/${file} b/${file}`, `+++ b/${file}`, `@@ -0,0 +1,${lines.length} @@`]
-        .concat(lines.map((line) => `+${line}`))
-        .join("\n");
-    };
+        if (text.includes("\0")) return "";
+        const lines = text.split("\n");
+        if (lines.at(-1) === "") lines.pop();
+        return [`diff --git a/${file} b/${file}`, `+++ b/${file}`, `@@ -0,0 +1,${lines.length} @@`]
+          .concat(lines.map((line) => `+${line}`))
+          .join("\n");
+      },
 
-    /**
-     * Each added line with its file and new line number. A file is undefined while its header
-     * is read, so only a header's `+++` line names it; an added `++` line never does. Git ends a
-     * path that has a space with a tab, which is not part of the name.
-     */
-    const addedLines = (diff: string) => {
-      let file: string | null | undefined;
-      let line = 0;
-      const pathOf = (text: string) =>
-        text.startsWith("+++ b/") ? text.slice(6).replace(/\t$/, "") : null;
-      const hunkStart = (text: string) => Number(/\+(\d+)/.exec(text)?.[1]);
-      const read = (text: string) => {
-        if (text.startsWith("diff --git ")) file = undefined;
-        else if (file === undefined && text.startsWith("+++ ")) file = pathOf(text);
-        else if (text.startsWith("@@ ")) line = hunkStart(text);
-        else if (file && text.startsWith("+")) return [{ file, line: line++, text: text.slice(1) }];
-        return [];
-      };
+      /** The file a `+++` header line names; null for `/dev/null`. Git ends a path that has a space with a tab. */
+      pathOf: (text: string) =>
+        text.startsWith("+++ b/") ? text.slice(6).replace(/\t$/, "") : null,
 
-      return diff.split("\n").flatMap(read);
-    };
-    /** `<remote>/<branch>` when the repo has exactly one remote, and it has the branch. */
-    const remoteBranch = (branch: string) => {
-      const remotes = (answers.run(["remote"]) ?? "").split("\n").filter(Boolean);
-      const ref = remotes.length === 1 ? `${remotes[0]}/${branch}` : null;
-      return ref && answers.commitSha(ref) ? ref : null;
-    };
+      /** The first new line number a `@@` hunk header names. */
+      hunkStart: (text: string) => Number(/\+(\d+)/.exec(text)?.[1]),
 
-    return {
+      /**
+       * Each added line with its file and new line number. A file is undefined while its header
+       * is read, so only a header's `+++` line names it; an added `++` line never does.
+       */
+      addedLines: (diff: string) => {
+        const added: { file: string; line: number; text: string }[] = [];
+        let file: string | null | undefined;
+        let line = 0;
+        for (const text of diff.split("\n")) {
+          if (text.startsWith("diff --git ")) file = undefined;
+          else if (file === undefined && text.startsWith("+++ ")) file = scanner.pathOf(text);
+          else if (text.startsWith("@@ ")) line = scanner.hunkStart(text);
+          else if (file && text.startsWith("+")) {
+            added.push({ file, line: line++, text: text.slice(1) });
+          }
+        }
+        return added;
+      },
+
+      /** `<remote>/<branch>` when the repo has exactly one remote, and it has the branch. */
+      remoteBranch: (branch: string) => {
+        const remotes = (answers.run(["remote"]) ?? "").split("\n").filter(Boolean);
+        const ref = remotes.length === 1 ? `${remotes[0]}/${branch}` : null;
+        return ref && answers.commitSha(ref) ? ref : null;
+      },
+
       /**
        * The ref the scan starts from, or null when git cannot find one. `wanted` (--base) stays
        * exact. A loop.json branch that tracks a remote resolves to that remote branch, since a
@@ -128,7 +133,21 @@ export const scan = resource({
           `${configured}@{upstream}`,
         ]);
         if (upstream) return upstream;
-        return answers.commitSha(configured) ? configured : remoteBranch(configured);
+        return answers.commitSha(configured) ? configured : scanner.remoteBranch(configured);
+      },
+
+      /**
+       * Where a review's change starts: the merge base of HEAD and the base, as check's scan
+       * finds it. Null when --base names a ref git cannot find; throws when there is no base.
+       */
+      range: () => {
+        const ref = scanner.base();
+        if (!ref && wanted) return null;
+        const start = ref ? answers.run(["merge-base", ref, "HEAD"]) : null;
+        if (!start) {
+          throw new Error('no base found to review from; set "base" in loop.json or pass --base');
+        }
+        return { ref, start };
       },
 
       /**
@@ -154,12 +173,12 @@ export const scan = resource({
           start,
         ]);
         if (tracked === null) return null;
-        return [tracked, ...untracked.map(addedFile)].join("\n");
+        return [tracked, ...untracked.map((file) => scanner.addedFile(file))].join("\n");
       },
 
       /** Quick-scan hits on the added lines of a unified diff, once per finding id. */
       hits: (diff: string) => {
-        const hits = addedLines(diff).flatMap((added) => {
+        const hits = scanner.addedLines(diff).flatMap((added) => {
           const code = added.text.trim();
           const shown = code.length > 120 ? `${code.slice(0, 117)}...` : code;
           return scans
@@ -183,6 +202,25 @@ export const scan = resource({
           (hit, index) => hits.findIndex((other) => other.id === hit.id) === index,
         );
       },
+
+      /**
+       * Check's scan of the change: whether it ran, its hits, and the lines check prints first,
+       * where it started or why it was skipped. `untracked` is the list from before the gates.
+       */
+      check: (untracked: string[] | null) => {
+        const ref = scanner.base();
+        const diff = ref ? scanner.diff(ref, untracked) : null;
+        if (diff !== null) {
+          return { scanned: true, hits: scanner.hits(diff), notes: [`scan base: ${ref}`] };
+        }
+
+        const why = ref ? `git cannot diff from ${ref}` : "no base found; pass --base <ref>";
+        const skipped = wanted && !ref ? `git cannot find --base ${wanted}` : why;
+        const notes = [`scan skipped: ${skipped}`, "earlier scan findings stay as they are"];
+        return { scanned: false, hits: [], notes };
+      },
     };
+
+    return scanner;
   },
 });

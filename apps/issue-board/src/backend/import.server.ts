@@ -11,9 +11,9 @@ import { issue, issueRowFields, team, teamMember } from "./board.schema.server";
 import { fractionalIndex, csvParser } from "./modules";
 import { lockTeamWrite, queueAlerts, fanOut, rowDeliveries } from "./team-write.server";
 
-export const importFile = tag<string>({ label: "import.file", parse: z.string().min(1) });
-export const importTeam = tag<string>({ label: "import.team", parse: z.string().min(1) });
-export const importActor = tag<string>({ label: "import.actor", parse: z.email() });
+export const importFile = tag({ label: "import.file", parse: z.string().min(1) });
+export const importTeam = tag({ label: "import.team", parse: z.string().min(1) });
+export const importActor = tag({ label: "import.actor", parse: z.email() });
 
 /** CSV is checked in full before any batch writes. Quoted cells retain line breaks. */
 export const readImport = operation({

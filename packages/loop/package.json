@@ -20,6 +20,7 @@
     "test": "vp test",
     "check": "vp check",
     "doctor": "tinker doctor",
+    "check-plain": "node ../../apps/start-scaffold/scripts/check-plain.mjs .",
     "gate:commands": "node node_modules/@tinker/start/lib/command-gate.mjs",
     "prepare": "tinker prepare && vp build --config vite.cli.config.ts",
     "mutate": "stryker run",
