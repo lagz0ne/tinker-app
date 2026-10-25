@@ -4,6 +4,12 @@
 
 These changes are in current source, not the released 0.11.0 tarball.
 
+- Doctor's glue check also accepts `tinker prepare` in the `prepare` script,
+  for a package that other apps install. pnpm refuses to install a tarball
+  that has a `postinstall` script until the user approves it, and an install
+  of a tarball never runs `prepare`. Its pass line then reads
+  `prepare runs tinker prepare`. An app keeps `postinstall`, and
+  `doctor --fix` still writes `postinstall`.
 - `MainContext` gets `cwd`, the folder the process runs in. The host fills it:
   `runMain` and `tinker serve` read the process folder, and `createMainHost`
   takes a `cwd` option that defaults to it. Commands read `cwd` from the

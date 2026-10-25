@@ -194,3 +194,66 @@ jobs:
         with:
           name: mutation-full-${{ matrix.app }}
           path: apps/${{ matrix.app }}/reports/mutation/
+
+  # The loop (packages/loop) has its own jobs; the shared scripts above serve apps/ only. Its
+  # frozen tests drive the whole CLI, some in a child process, so it gates on changed lines
+  # without a span map.
+  loop-diff:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      VITEST_MAX_WORKERS: "1"
+      VP_RUN_CONCURRENCY_LIMIT: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install pinned tools
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: Build the loop's commands before tests
+        run: pnpm --dir packages/loop run gate:commands
+      - name: Mutate the loop's changed src lines at floor 60
+        run: >-
+          pnpm --dir packages/loop run mutate:diff
+          --base ${{ github.event.pull_request.base.sha }}
+          --head ${{ github.event.pull_request.head.sha }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: mutation-loop-diff
+          path: packages/loop/reports/mutation/
+          if-no-files-found: ignore
+
+  loop-full:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      VITEST_MAX_WORKERS: "1"
+      VP_RUN_CONCURRENCY_LIMIT: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install pinned tools
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir packages/loop run gate:commands
+      - name: Full loop report at floor 60
+        run: pnpm --dir packages/loop run mutate
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: mutation-full-loop
+          path: packages/loop/reports/mutation/

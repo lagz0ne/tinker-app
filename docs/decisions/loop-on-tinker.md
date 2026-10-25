@@ -402,29 +402,47 @@ packages/loop
     copied base-main: defineMain,
     checkClosed
   src/tags.ts
-    appDir, baseRef, loopConfig,
-    childEnv, reviewModel
+    appDir, baseRef, childEnv,
+    reviewModel, print, warn, stop
+  src/report.ts
+    the one plain helper: finding lines,
+    the summary, the severity order
   src/resources/
     processes  child groups (S4, S6)
-    store      findings, rounds,
-               last check, the lock
-    git        rev-parse, diff, merge-base
+    store      findings, rounds, last check,
+               gate logs, the lock
+    git        rev-parse, diff, merge-base,
+               the work tree
     startRules finds the app's Start
-    reviewer   argv, runs on processes
+    loopConfig reads and checks loop.json
+    scan       the change's base, diff,
+               and quick-scan hits
+    reviewer   the rules, the change files,
+               the run on processes, the reply
   src/operations/
-    check, findings, rules,
+    check, gates, findings, rules,
     answer, status, review
   bin/tinker-loop.mjs
-    runMain host (S2)
+    runMain host (S2) over dist-cli
 ```
+
+This is the shape after ticket 9.
+There is no `lib/`. The package exports only
+`./package.json`: other apps use the bin.
 
 - Each unit lists its parameters: the tags and
   resources it depends on.
   Those are the edges of the graph.
 - Tags hold what `cmds/cli.ts` reads:
   the app folder (from `cwd` and `--app`),
-  `--base`, the checked `loop.json`,
-  the env for child processes, and the model.
+  `--base`, the env for child processes,
+  the model, the output (`print`, `warn`),
+  and the stop signal (`stop`).
+- `loopConfig` is a resource on `appDir`,
+  not a tag, so it comes from the graph.
+- Operations read and write no file
+  themselves: every file goes through a
+  resource (ticket 9).
 - `childEnv` is bound from the context's env.
   So the process resource passes env on purpose
   and reads no process global.
@@ -660,6 +678,17 @@ In order. Each ticket is one commit or PR.
    in `PLAIN.md` names its two units.
    The scheduled full run reports at least 60.
    A real `tinker-loop check` runs in the scaffold.
+   Also: the loop runs `tinker prepare` in
+   `prepare`, not `postinstall`. pnpm refuses
+   a tarball with a `postinstall` script until
+   the user approves it, and an install of a
+   tarball never runs `prepare`. Doctor accepts
+   either script.
+   Status: `check-plain` on the loop counts 86
+   plain functions, over the cap of 17. Whether
+   the loop is reshaped for it waits on Duke.
+   Until then, CI runs no `check-plain` for
+   the loop.
 
 ## Decided
 

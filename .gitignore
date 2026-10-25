@@ -34,6 +34,7 @@ dist-ssr
 
 # Stryker mutation testing
 .stryker-tmp
+.stryker-tmp-loop
 reports
 
 # SCIP code-intelligence indexes (regenerated per package as we go)
