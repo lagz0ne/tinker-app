@@ -84,6 +84,18 @@ test("a red gate's summary is its first error line, else its first line, else ho
   ]);
 });
 
+test("a gate that times out says so, even when its output has an error line", async () => {
+  const { results } = await run([
+    {
+      name: "slow",
+      run: `${node} -e "console.log('error: still working'); setTimeout(() => {}, 5000)"`,
+      timeout: 200,
+    },
+  ]);
+
+  expect(results[0]?.finding?.summary).toBe("timed out after 200 ms");
+});
+
 test("a stop before a gate runs no more gates", async () => {
   const stopped = new AbortController();
   stopped.abort("SIGINT");

@@ -140,6 +140,19 @@ test("review writes the change and the prompt, runs the reviewer, records a roun
   expect(rows[0]?.id).toMatch(/^[0-9a-f]{12}$/);
 });
 
+test("a .loop folder with no .gitignore of its own is never part of the change", async () => {
+  const { app } = repo();
+  writeFileSync(join(app, ".gitignore"), "node_modules/\nreply.txt\nloop.json\n");
+  mkdirSync(join(app, ".loop"));
+  writeFileSync(join(app, ".loop/notes.txt"), "left by hand\n");
+
+  const { outcome } = await run(app, "");
+
+  expect(outcome).toBe("done");
+  expect(readFileSync(join(app, ".loop/review/untracked.txt"), "utf8")).toBe("new.ts\n");
+  expect(readFileSync(join(app, ".loop/.gitignore"), "utf8")).toBe("*\n");
+});
+
 test("a recheck keeps a known id, marks a rechecked open finding fixed, and leaves the rest", async () => {
   const { app } = repo();
   await run(
