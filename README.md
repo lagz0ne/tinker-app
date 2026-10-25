@@ -37,7 +37,7 @@ A tag `start-vX.Y.Z` on `next` holds one asset: the Start tarball.
 Core and React keep their tinkered `start-v0.9.0` tarball URLs.
 The registry is read from the tag's own `apps/start-scaffold/public/r`.
 
-Start 0.11.0 is released from tag `start-v0.11.0`. It ships the current main contract.
+Start 0.12.0 is released from tag `start-v0.12.0`. It ships the current main contract.
 Default exports and registry installs use that host and registry.
 
 For each release, set the package version and add its released UPGRADE.md
@@ -46,11 +46,11 @@ section. Keep that version, the release assets, and the registry in step. Then:
 ```bash
 node packages/start/scripts/copy-contract.mjs
 pnpm --dir apps/start-scaffold run registry:build
-node scripts/release.mjs 0.11.0
-node scripts/release-check.mjs 0.11.0 > .release/start-v0.11.0/notes.md
+node scripts/release.mjs 0.12.0
+node scripts/release-check.mjs 0.12.0 > .release/start-v0.12.0/notes.md
 ```
 
-`release.mjs` packs Start into `.release/start-v0.11.0/`.
+`release.mjs` packs Start into `.release/start-v0.12.0/`.
 `copy-contract.mjs` writes the contract that Start ships, `packages/start/docs/contract.md`.
 Its links name this version's tag, so run it after you set the version.
 `release-check.mjs` checks the version, the UPGRADE.md section, and the registry links.
@@ -73,7 +73,7 @@ node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
 It exports small and demo copies into an empty output folder.
-It refuses a source tooling version below 0.11.0.
+It refuses a source tooling version below 0.12.0.
 It never changes another checkout, branch, or tag.
 
 To check an export now with an explicit pack of the current host:
