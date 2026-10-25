@@ -140,13 +140,14 @@ async function settleMain(started, options, signal, stop) {
   }
 }
 
-/** Keep a late failure visible, and still join the app's cleanup. */
+/** Keep a late failure visible, and still join the app's cleanup when it has one. */
 async function failedMain(error, app, signal, stop) {
   let failed = !signal.aborted || error !== signal.reason;
 
   if (failed) stop(1, error);
+  if (!(app?.closed instanceof Promise)) return failed;
 
-  await app?.closed.catch((cleanup) => {
+  await app.closed.catch((cleanup) => {
     if (cleanup !== error) {
       failed = true;
       stop(1, cleanup);

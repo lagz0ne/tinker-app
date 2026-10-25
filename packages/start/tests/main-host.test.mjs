@@ -6,7 +6,13 @@ import { Writable } from "node:stream";
 
 import { expect, test, vi } from "vite-plus/test";
 
-import { createMainHost, runMain } from "../lib/main-host.mjs";
+import {
+  createMainHost,
+  finishDevMain,
+  installDevServer,
+  registerDevMain,
+  runMain,
+} from "../lib/main-host.mjs";
 
 const quiet = { write() {} };
 
@@ -916,4 +922,262 @@ test("exit still aborts and joins when stderr write throws", async () => {
   expect(await host.closed).toBe(1);
   expect(returned).toBe(true);
   expect(host.signal.aborted).toBe(true);
+});
+
+/**
+ * A host with captured stderr around `main`, closed before it returns.
+ * @param {function} main - From a test; why: the command under the host.
+ * @param {object} [options] - From a test; why: more host options.
+ */
+async function hosted(main, options = {}) {
+  const errors = capture();
+  const host = createMainHost(main, { env: {}, stdout: quiet, stderr: errors.stream, ...options });
+  const code = await host.closed;
+  return { host, code, printed: errors.text() };
+}
+
+test("a host with no args gives the command none", async () => {
+  const seen = [];
+
+  await hosted(({ args }) => {
+    seen.push(args);
+    return { closed: Promise.resolve() };
+  });
+
+  expect(seen).toEqual([[]]);
+});
+
+test("an exit with no reason aborts with the host's quiet stop reason", async () => {
+  const { host, code, printed } = await hosted(({ exit }) => {
+    exit(3);
+    return { closed: Promise.resolve() };
+  });
+
+  expect(code).toBe(3);
+  expect(host.signal.reason).toBeInstanceOf(DOMException);
+  expect(host.signal.reason).toMatchObject({ name: "AbortError", message: "Command stopped" });
+  expect(printed).toBe("");
+});
+
+test("an exit with a null reason prints nothing", async () => {
+  const { code, printed } = await hosted(({ exit }) => {
+    exit(1, null);
+    return { closed: Promise.resolve() };
+  });
+
+  expect(code).toBe(1);
+  expect(printed).toBe("");
+});
+
+test("a clean exit with a reason prints it at no point, even when it is given again", async () => {
+  const done = new Error("done");
+
+  const { code, printed } = await hosted(({ exit }) => {
+    exit(0, done);
+    exit(1, done);
+    return { closed: Promise.resolve() };
+  });
+
+  expect(code).toBe(0);
+  expect(printed).toBe("");
+});
+
+test("a stop after the host closed is printed as after exit 0, and keeps no timer", async () => {
+  let hardStops = 0;
+  const { host, code } = await hosted(() => ({ closed: Promise.resolve() }), {
+    hardStop: () => (hardStops += 1),
+    graceMs: 1,
+  });
+  const errors = capture();
+  const late = createMainHost(() => ({ closed: Promise.resolve() }), {
+    env: {},
+    stdout: quiet,
+    stderr: errors.stream,
+    hardStop: () => (hardStops += 1),
+    graceMs: 1,
+  });
+  await late.closed;
+
+  late.stop(1, new Error("late"));
+  host.stop(2);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  expect(code).toBe(0);
+  expect(errors.text()).toMatch(/^after exit 0: Error: late\n/);
+  expect(late.signal.aborted).toBe(false);
+  expect(hardStops).toBe(0);
+});
+
+test.each([
+  ["nothing", () => undefined],
+  ["no closed", () => ({})],
+  ["a closed that is not a promise", () => ({ closed: true })],
+])("a main that returns %s fails with exit 1 and says it must return closed", async (_, main) => {
+  const { code, printed } = await hosted(main);
+
+  expect(code).toBe(1);
+  expect(printed).toMatch(/^command failed \(exit 1\): TypeError: main must return closed\n/);
+});
+
+test("a main that throws undefined still fails with exit 1", async () => {
+  const { code, printed } = await hosted(async () => {
+    throw undefined;
+  });
+
+  expect(code).toBe(1);
+  expect(printed).toBe("");
+});
+
+test("a failed onStop prints the host close failure and fails a clean run", async () => {
+  const { code, printed } = await hosted(() => ({ closed: Promise.resolve() }), {
+    onStop: () => {
+      throw new Error("socket stuck");
+    },
+  });
+
+  expect(code).toBe(1);
+  expect(printed).toBe("host close failed: Error: socket stuck\n");
+});
+
+test("a failed onStop keeps the command's own exit code", async () => {
+  const { code, printed } = await hosted(
+    ({ exit }) => {
+      exit(64);
+      return { closed: Promise.resolve() };
+    },
+    { onStop: () => Promise.reject(new Error("socket stuck")) },
+  );
+
+  expect(code).toBe(64);
+  expect(printed).toBe("host close failed: Error: socket stuck\n");
+});
+
+test("runMain gives the command the process args after the script by default", async () => {
+  const seen = [];
+
+  try {
+    await runMain(
+      ({ args }) => {
+        seen.push(args);
+        return { closed: Promise.resolve() };
+      },
+      { stdout: quiet, stderr: quiet },
+    );
+  } finally {
+    process.exitCode = undefined;
+  }
+
+  expect(seen).toEqual([process.argv.slice(2)]);
+});
+
+/** A Vite server stand-in whose native close is counted; its root is unique to the test. */
+function devSocket() {
+  const root = `dev-root-${Math.random()}`;
+  const server = { closes: 0, close: async () => (server.closes += 1) };
+  return { root, server };
+}
+
+/** A registered dev command that serves until its signal aborts, even before it starts. */
+function devCommand(errors = quiet) {
+  return createMainHost(
+    ({ signal }) => ({
+      closed: signal.aborted
+        ? Promise.resolve()
+        : new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true })),
+    }),
+    { env: {}, stdout: quiet, stderr: errors, hardStop: () => {} },
+  );
+}
+
+test.each([
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+])(
+  "%s first closes the dev socket, stops the command quietly, and exits %i",
+  async (name, code) => {
+    const { root, server } = devSocket();
+    const before = process.listeners(name);
+    installDevServer(root, server);
+    const errors = capture();
+    const host = devCommand(errors.stream);
+    registerDevMain(root, host);
+
+    const [first] = process.listeners(name);
+    first();
+    await server.close();
+
+    try {
+      expect(process.exitCode).toBe(code);
+    } finally {
+      process.exitCode = undefined;
+    }
+    expect(server.closes).toBe(1);
+    expect(await host.closed).toBe(code);
+    expect(host.signal.reason).toMatchObject({ name: "AbortError", message: "Dev host stopped" });
+    expect(errors.text()).toBe("");
+    expect(process.listeners(name)).toEqual(before);
+  },
+);
+
+test("a closed dev socket forgets its root; a later command there closes nothing", async () => {
+  const { root, server } = devSocket();
+  installDevServer(root, server, () => {});
+  await server.close();
+  const host = devCommand();
+
+  const detach = registerDevMain(root, host);
+
+  expect(finishDevMain(root, host)).toBeUndefined();
+  detach();
+  host.stop(0);
+  await host.closed;
+});
+
+test("a dev socket that replaced another on its root stays when the old one closes", async () => {
+  const { root, server: old } = devSocket();
+  const { server } = devSocket();
+  installDevServer(root, old, () => {});
+  installDevServer(root, server, () => {});
+  await old.close();
+  const host = devCommand();
+  registerDevMain(root, host);
+
+  host.stop(0);
+  await finishDevMain(root, host);
+
+  expect(server.closes).toBe(1);
+});
+
+test("a command on a root with no dev socket registers and finishes as a no-op", () => {
+  const host = devCommand();
+
+  const detach = registerDevMain("no-dev-socket", host);
+  detach();
+
+  expect(finishDevMain("no-dev-socket", host)).toBeUndefined();
+  host.stop(0);
+});
+
+test("only the registered command finishes the dev socket, and detach forgets only itself", async () => {
+  const { root, server } = devSocket();
+  installDevServer(root, server, () => {});
+  const old = devCommand();
+  const host = devCommand();
+  const detachOld = registerDevMain(root, old);
+  const detach = registerDevMain(root, host);
+
+  detachOld();
+  expect(finishDevMain(root, old)).toBeUndefined();
+  expect(server.closes).toBe(0);
+  detach();
+  expect(finishDevMain(root, host)).toBeUndefined();
+
+  const next = devCommand();
+  registerDevMain(root, next);
+  detach();
+  next.stop(0);
+  await finishDevMain(root, next);
+  expect(server.closes).toBe(1);
+  old.stop(0);
+  host.stop(0);
 });
