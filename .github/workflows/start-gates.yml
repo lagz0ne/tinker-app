@@ -58,6 +58,7 @@ jobs:
           pnpm --dir apps/issue-board run gate:commands
           pnpm --dir apps/start-scaffold run gate:commands
           pnpm --dir apps/start-min run gate:commands
+          pnpm --dir packages/loop run gate:commands
       - name: Types, tests and service-free fault controls, serially
         run: |
           pnpm --dir apps/issue-board run typecheck
@@ -75,9 +76,10 @@ jobs:
           pnpm --dir apps/issue-board run doctor
           pnpm --dir apps/start-scaffold run doctor
           pnpm --dir apps/start-min run doctor
+          pnpm --dir packages/loop run doctor
           pnpm --dir apps/issue-board run test:schema
           pnpm --dir apps/start-scaffold run test:schema
-          pnpm exec vp check apps/issue-board apps/start-scaffold apps/start-min packages/start
+          pnpm exec vp check apps/issue-board apps/start-scaffold apps/start-min packages/start packages/loop
           node apps/issue-board/scripts/check-plain.mjs
           node apps/issue-board/scripts/check-plain.mjs --prove
           node apps/start-scaffold/scripts/check-plain.mjs
