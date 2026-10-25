@@ -206,3 +206,18 @@ test("opened, seen, and fixed stamp a row with the run's round and commit", asyn
     fixedDirty: { id: "x", status: "fixed", round: 4, sha: "abc", dirty: true },
   });
 });
+
+test("a gate's log lives in .loop/gates under a safe name, shown by its short path", async () => {
+  const dir = tempFolder();
+  const scope = createScope({ tags: [appDir(dir)] });
+  const files = scope.resolve(store);
+
+  const log = files.gateLog("unit tests?");
+  writeFileSync(log.path, "all good\n");
+  const read = log.read();
+  await scope.close();
+
+  expect(log.path).toBe(join(dir, ".loop/gates/unit-tests-.log"));
+  expect(log.shown).toBe(".loop/gates/unit-tests-.log");
+  expect(read).toBe("all good\n");
+});

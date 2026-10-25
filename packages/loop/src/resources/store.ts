@@ -296,6 +296,21 @@ export const store = resource({
       },
       /** Make `.loop` and return its path, for files such as the review's. */
       folder: ensure,
+      /**
+       * A gate's log in `.loop/gates`: the file its output goes to, the short path findings show,
+       * and a reader. Each character other than a letter, digit, `.`, `_`, or `-` becomes `-`.
+       */
+      gateLog: (name: string) => {
+        const file = `${name.replaceAll(/[^\w.-]/g, "-")}.log`;
+        const gates = join(ensure(), "gates");
+        mkdirSync(gates, { recursive: true });
+        const path = join(gates, file);
+        return {
+          path,
+          shown: join(".loop", "gates", file),
+          read: () => readFileSync(path, "utf8"),
+        };
+      },
       locked,
       findings: readFindings,
       /** Replace the findings file. Call it inside `locked`. */
