@@ -128,14 +128,14 @@ export const commandLine = resource({
        * How a command ended, as one word: its outcome, "stopped", or "error" with the message to
        * print. A failure after a stop is a stop.
        */
-      outcome: (ran: RunResult<string>, stopped: boolean) => {
+      outcome: <T extends string>(ran: RunResult<T>, stopped: boolean) => {
         if (ran.status === "success" && ran.value !== "stopped") {
           return { word: ran.value, message: null };
         }
-        if (ran.status !== "failed" || stopped) return { word: "stopped", message: null };
+        if (ran.status !== "failed" || stopped) return { word: "stopped" as const, message: null };
         const { error } = ran;
         const message = `tinker-loop: ${error instanceof Error ? error.message : String(error)}`;
-        return { word: "error", message };
+        return { word: "error" as const, message };
       },
     };
 

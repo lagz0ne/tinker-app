@@ -16,7 +16,7 @@ const usage = [
 ].join("\n");
 
 /** What each way a command ends means as an exit code; only this command picks them. */
-const codes: Partial<Record<string, number>> = {
+const codes = {
   done: 0,
   red: 1,
   failed: 1,
@@ -24,7 +24,7 @@ const codes: Partial<Record<string, number>> = {
   needsPerson: 2,
   refused: 64,
   error: 78,
-};
+} as const;
 
 /** How a stopped run exits, by the signal that stopped it. */
 const stopCodes: Partial<Record<string, number>> = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };
@@ -40,7 +40,7 @@ export default defineMain(async ({ env, args, cwd, stdout, stderr, signal, exit 
   const lineReader = reading.resolve(commandLine);
   const line = lineReader.read(args, cwd);
   const roots = [reading];
-  let code = 64;
+  let code: number = 64;
 
   if ("problem" in line) stderr.write(`${line.problem}${usage}\n`);
   else {
@@ -64,7 +64,7 @@ export default defineMain(async ({ env, args, cwd, stdout, stderr, signal, exit 
     // runMain stops with a DOMException named by its signal.
     const reason: unknown = signal.reason;
     const name = reason instanceof Error ? reason.message : String(reason);
-    code = codes[word] ?? stopCodes[name] ?? 130;
+    code = word === "stopped" ? (stopCodes[name] ?? 130) : codes[word];
   }
 
   // Work and cleanup errors surface before exit: a failed close rejects `closed`.
