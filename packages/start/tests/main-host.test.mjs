@@ -6,7 +6,13 @@ import { Writable } from "node:stream";
 
 import { expect, test, vi } from "vite-plus/test";
 
-import { createMainHost, runMain } from "../lib/main-host.mjs";
+import {
+  createMainHost,
+  finishDevMain,
+  installDevServer,
+  registerDevMain,
+  runMain,
+} from "../lib/main-host.mjs";
 
 const quiet = { write() {} };
 
@@ -1062,4 +1068,116 @@ test("runMain gives the command the process args after the script by default", a
   }
 
   expect(seen).toEqual([process.argv.slice(2)]);
+});
+
+/** A Vite server stand-in whose native close is counted; its root is unique to the test. */
+function devSocket() {
+  const root = `dev-root-${Math.random()}`;
+  const server = { closes: 0, close: async () => (server.closes += 1) };
+  return { root, server };
+}
+
+/** A registered dev command that serves until its signal aborts, even before it starts. */
+function devCommand(errors = quiet) {
+  return createMainHost(
+    ({ signal }) => ({
+      closed: signal.aborted
+        ? Promise.resolve()
+        : new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true })),
+    }),
+    { env: {}, stdout: quiet, stderr: errors, hardStop: () => {} },
+  );
+}
+
+test.each([
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+])(
+  "%s first closes the dev socket, stops the command quietly, and exits %i",
+  async (name, code) => {
+    const { root, server } = devSocket();
+    const before = process.listeners(name);
+    installDevServer(root, server);
+    const errors = capture();
+    const host = devCommand(errors.stream);
+    registerDevMain(root, host);
+
+    const [first] = process.listeners(name);
+    first();
+    await server.close();
+
+    try {
+      expect(process.exitCode).toBe(code);
+    } finally {
+      process.exitCode = undefined;
+    }
+    expect(server.closes).toBe(1);
+    expect(await host.closed).toBe(code);
+    expect(host.signal.reason).toMatchObject({ name: "AbortError", message: "Dev host stopped" });
+    expect(errors.text()).toBe("");
+    expect(process.listeners(name)).toEqual(before);
+  },
+);
+
+test("a closed dev socket forgets its root; a later command there closes nothing", async () => {
+  const { root, server } = devSocket();
+  installDevServer(root, server, () => {});
+  await server.close();
+  const host = devCommand();
+
+  const detach = registerDevMain(root, host);
+
+  expect(finishDevMain(root, host)).toBeUndefined();
+  detach();
+  host.stop(0);
+  await host.closed;
+});
+
+test("a dev socket that replaced another on its root stays when the old one closes", async () => {
+  const { root, server: old } = devSocket();
+  const { server } = devSocket();
+  installDevServer(root, old, () => {});
+  installDevServer(root, server, () => {});
+  await old.close();
+  const host = devCommand();
+  registerDevMain(root, host);
+
+  host.stop(0);
+  await finishDevMain(root, host);
+
+  expect(server.closes).toBe(1);
+});
+
+test("a command on a root with no dev socket registers and finishes as a no-op", () => {
+  const host = devCommand();
+
+  const detach = registerDevMain("no-dev-socket", host);
+  detach();
+
+  expect(finishDevMain("no-dev-socket", host)).toBeUndefined();
+  host.stop(0);
+});
+
+test("only the registered command finishes the dev socket, and detach forgets only itself", async () => {
+  const { root, server } = devSocket();
+  installDevServer(root, server, () => {});
+  const old = devCommand();
+  const host = devCommand();
+  const detachOld = registerDevMain(root, old);
+  const detach = registerDevMain(root, host);
+
+  detachOld();
+  expect(finishDevMain(root, old)).toBeUndefined();
+  expect(server.closes).toBe(0);
+  detach();
+  expect(finishDevMain(root, host)).toBeUndefined();
+
+  const next = devCommand();
+  registerDevMain(root, next);
+  detach();
+  next.stop(0);
+  await finishDevMain(root, next);
+  expect(server.closes).toBe(1);
+  old.stop(0);
+  host.stop(0);
 });
