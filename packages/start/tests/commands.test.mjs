@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, test } from "vite-plus/test";
@@ -8,6 +8,7 @@ import { named } from "../lib/checks/named.mjs";
 import { checkCommands } from "../lib/command-gate.mjs";
 import { buildChecks } from "../lib/doctor.mjs";
 import { commandFiles } from "../lib/named.mjs";
+import { baseDir } from "../lib/paths.mjs";
 import { goodApp, write } from "./fixture.mjs";
 
 function processApp(extra = {}) {
@@ -98,4 +99,64 @@ test("a failed CLI build stops before its host check", () => {
       return spawnSync(command, args, { ...options, stdio: "pipe" });
     }),
   ).toThrow("cmds/cli.ts: build failed");
+});
+
+test("the command gate builds in the app with its config and runs the host check on each output", () => {
+  const root = processApp();
+  const calls = [];
+
+  checkCommands(root, (command, args, options) => {
+    calls.push({ command, args, options });
+    return { status: 0 };
+  });
+
+  const check = join(baseDir, "lib/command-check.mjs");
+  const build = { cwd: root, stdio: "inherit", timeout: 180000 };
+  const run = { cwd: root, stdio: "inherit", timeout: 20000 };
+  expect(calls).toEqual([
+    { command: "vp", args: ["build"], options: build },
+    { command: process.execPath, args: [check, "dist/server/server.js", "server"], options: run },
+    { command: "vp", args: ["build", "--config", "vite.worker.config.ts"], options: build },
+    { command: process.execPath, args: [check, "dist-worker/worker.js", "worker"], options: run },
+    { command: "vp", args: ["build", "--config", "vite.cli.config.ts"], options: build },
+    { command: process.execPath, args: [check, "dist-cli/cli.js", "cli"], options: run },
+  ]);
+});
+
+test("a build that emits no output stops the gate before its host check", () => {
+  const root = processApp();
+  rmSync(join(root, "dist-worker/worker.js"));
+  const commands = [];
+
+  expect(() =>
+    checkCommands(root, (command) => {
+      commands.push(command);
+      return { status: 0 };
+    }),
+  ).toThrow("cmds/worker.ts: build did not emit dist-worker/worker.js");
+
+  expect(commands).toEqual(["vp", process.execPath, "vp"]);
+});
+
+test("a failed host check names its entry", () => {
+  expect(() =>
+    checkCommands(processApp(), (command) => ({ status: command === "vp" ? 0 : 1 })),
+  ).toThrow("cmds/server.ts: host check failed");
+});
+
+test("the command gate stops on the named check before any build, one line per problem", () => {
+  const root = processApp({
+    "cmds/worker.ts": "export const unused = 1;",
+    "cmds/cli.ts": "export const unused = 1;",
+  });
+  const commands = [];
+
+  expect(() => checkCommands(root, (command) => commands.push(command))).toThrow(
+    [
+      "cmds/worker.ts:1 does not export default; the base imports it from this file",
+      "cmds/cli.ts:1 does not export default; the base imports it from this file",
+    ].join("\n"),
+  );
+
+  expect(commands).toEqual([]);
 });
