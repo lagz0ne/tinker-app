@@ -194,7 +194,7 @@ Any other line that is not a finding becomes one `question` row with rule `revie
 That row names the line and says why it is not a finding.
 A bad line never stops the review.
 
-The review merges under the findings lock, with `updateFindings`.
+The review records its round and merges under one hold of the findings lock.
 A finding reported again follows the check rules.
 An open finding stays open, an answered one stays answered, and a fixed one opens again.
 An open review finding rechecked as fixed becomes `fixed` at HEAD.
@@ -207,9 +207,9 @@ Then nothing is written and no round is recorded.
 ## Review rounds
 
 Each review round is one line in `.loop/rounds.jsonl`: `{ round, source, sha }`.
-`tinker-loop review` calls `recordReviewRound` from `@tinker/loop/findings` once per review that runs.
-It writes the line under the findings lock and returns the round number.
-The review tool stamps that number on the findings of that round.
+`tinker-loop review` records one round per review that runs.
+It writes the line under the findings lock.
+It stamps that round number on the findings of that round.
 A round number is one more than any round in the findings, in `rounds.jsonl`, or in the last check.
 `status` counts review rounds from `rounds.jsonl`.
 So a finding that stays open across 3 reviews counts 3 rounds.
@@ -236,7 +236,7 @@ Then `answer --fixed` says so; run the tool that saw the finding again.
 An empty `--reason` exits 64.
 An unknown ID exits 64.
 A refused answer exits 64 and says why.
-`answer` writes under the findings lock, with `updateFindings`.
+`answer` writes under the findings lock.
 A refused answer writes nothing.
 Answered and fixed findings stay in the file.
 A later check that finds a `fixed` finding again opens it again.
@@ -288,18 +288,33 @@ A Start whose `package.json` cannot be read exits 78 and names the error code.
 A Start without `docs/rules.md` exits 78.
 A `docs/rules.md` that the parser cannot read exits 78 and names the line.
 
-Other tools read the same file with `readRules` and `parseRules` from `@tinker/loop/rules`.
+Other tools read the same rules with `tinker-loop rules`.
 
 ## Writing the file
 
 Every tool that writes the file holds `.loop/findings.lock`.
 It holds the lock around its read, merge, and write.
-Use `updateFindings` from `@tinker/loop/findings`; it takes the lock for you.
+Another tool that writes the file must hold the lock the same way.
 The lock holds a token that only its owner knows.
 The owner removes the lock only while it still holds that token.
 A lock older than 10 seconds is stale.
 A tool renames a stale lock to a unique name, then removes it.
 Age is the only rule, since a pid means nothing across the sandbox and the host.
+
+## How it is built
+
+The loop is a CLI-only Tinker Start app (`docs/decisions/loop-on-tinker.md`).
+Other apps use only its bin; the package exports no code.
+
+- `cmds/cli.ts` reads the command line, binds the tags, runs one operation,
+  and picks the exit code. No other file reads the context.
+- `src/operations/` holds one operation for each command, and `gates`.
+- `src/resources/` holds the work that touches the outside: child processes,
+  the `.loop/` files and the lock, git, the app's Start rules, `loop.json`,
+  the change scan, and the reviewer. Operations read no file themselves.
+- `src/report.ts` is the one plain helper: the finding line and the summary.
+- `bin/tinker-loop.mjs` runs the built `dist-cli/cli.js` with Start's `runMain`.
+  `prepare` runs `tinker prepare`, then builds `dist-cli`.
 
 ## Frozen tests
 

@@ -9,15 +9,11 @@
   "files": [
     "bin",
     "dist-cli",
-    "lib",
     "README.md"
   ],
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./lib/main.mjs",
-    "./findings": "./lib/findings.mjs",
-    "./rules": "./lib/rules.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
