@@ -1,9 +1,22 @@
+import { readFileSync } from "node:fs";
 import { Readable } from "node:stream";
-import { brotliDecompressSync, gunzipSync, createBrotliDecompress, createGunzip } from "node:zlib";
+import {
+  brotliCompressSync,
+  brotliDecompressSync,
+  constants,
+  createBrotliDecompress,
+  createGunzip,
+  gunzipSync,
+} from "node:zlib";
 
 import { expect, test } from "vite-plus/test";
 
-import { compressResponse, readEncoding } from "../lib/compression.mjs";
+import {
+  compressBytes,
+  compressResponse,
+  isCompressible,
+  readEncoding,
+} from "../lib/compression.mjs";
 
 /** A streamed HTML body with a length that must be removed after compression. */
 const html = () =>
@@ -238,4 +251,136 @@ test("cancelling compressed HTML cancels the unfinished source", async () => {
   );
   await response.body.cancel();
   expect(await cancelled.promise).toBe(true);
+});
+
+/** @param {string} accepted - From a test; why: the Accept-Encoding header to negotiate. */
+const offered = (accepted) =>
+  new Request("http://app", { headers: { "accept-encoding": accepted } });
+
+test("weights out of range, a spaced q, and other parameters are read as the header says", () => {
+  // readEncoding keeps each header's choice; a fresh unknown token makes this run read it again.
+  const fresh = `, x-fresh-${crypto.randomUUID()}`;
+  const choices = [
+    ["br;q=2, gzip;q=0.5", "gzip"],
+    ["br;q=1.5, gzip;q=0.5", "gzip"],
+    ["gzip;q=1, br; q=0.5", "gzip"],
+    ["br;level=1, gzip;q=0.5", "br"],
+    ["identity;q=0, br;q=0, gzip;q=0", null],
+  ];
+
+  for (const [accepted, chosen] of choices) {
+    expect([accepted, readEncoding(offered(accepted + fresh))]).toEqual([accepted, chosen]);
+  }
+});
+
+test("only JS, CSS, and HTML types are compressible", () => {
+  const types = {
+    "text/html; charset=utf-8": true,
+    "TEXT/CSS": true,
+    "text/javascript": true,
+    "application/javascript": true,
+    "text/htmlx": false,
+    "application/x-text/html": false,
+    "image/svg+xml": false,
+    "": false,
+  };
+
+  for (const [type, compressible] of Object.entries(types)) {
+    expect([type, isCompressible(type)]).toEqual([type, compressible]);
+  }
+});
+
+test("encoded, partial, no-transform, untyped, and non-text responses pass through even with br", async () => {
+  for (const response of [
+    new Response("png", { headers: { "content-type": "image/png" } }),
+    new Response("x"),
+    new Response("x", { headers: { "content-type": "text/html", "content-encoding": "gzip" } }),
+    new Response("x", { status: 206, headers: { "content-type": "text/html" } }),
+    new Response("x", {
+      headers: { "content-type": "text/html", "cache-control": "public, No-Transform" },
+    }),
+  ]) {
+    const passed = await compressResponse(offered("br"), response);
+
+    expect(passed).toBe(response);
+    expect(passed.headers.get("vary")).toBeNull();
+  }
+});
+
+test("a cache-control without no-transform still compresses", async () => {
+  const response = await compressResponse(
+    offered("br"),
+    new Response("<p>x</p>", {
+      headers: { "content-type": "text/html", "cache-control": "public" },
+    }),
+  );
+
+  expect(response.headers.get("content-encoding")).toBe("br");
+});
+
+test.each([
+  ["*", "*"],
+  ["Accept-Encoding, Cookie", "Accept-Encoding, Cookie"],
+  ["Cookie,Accept-Encoding", "Cookie,Accept-Encoding"],
+  ["Cookie , ACCEPT-ENCODING", "Cookie , ACCEPT-ENCODING"],
+  ["Cookie", "Cookie, Accept-Encoding"],
+])("a Vary of %j becomes %j", async (vary, expected) => {
+  const response = await compressResponse(
+    offered("gzip"),
+    new Response("<p>x</p>", { headers: { "content-type": "text/html", vary } }),
+  );
+
+  expect(response.headers.get("vary")).toBe(expected);
+});
+
+test("HTML with no body gets no encoding, and a refused encoding still answers 406", async () => {
+  const empty = () => new Response(null, { headers: { "content-type": "text/html" } });
+
+  const encoded = await compressResponse(offered("br"), empty());
+  const refused = await compressResponse(offered("*;q=0"), empty());
+
+  expect(encoded.body).toBeNull();
+  expect(encoded.headers.get("content-encoding")).toBeNull();
+  expect(encoded.headers.get("vary")).toBe("Accept-Encoding");
+  expect(refused.status).toBe(406);
+});
+
+test("a plain HEAD gets no content encoding", async () => {
+  const response = await compressResponse(
+    new Request("http://app", { method: "HEAD" }),
+    new Response("<p>x</p>", { headers: { "content-type": "text/html" } }),
+  );
+
+  expect(response.headers.get("content-encoding")).toBeNull();
+});
+
+test("a finished body of exactly 64 KiB is still compressed whole with its length", async () => {
+  const page = "<p>" + "x".repeat(65536 - 7) + "</p>";
+  const response = await compressResponse(
+    offered("gzip"),
+    new Response(new TextEncoder().encode(page), { headers: { "content-type": "text/html" } }),
+  );
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+
+  expect(Buffer.byteLength(page)).toBe(65536);
+  expect(response.headers.get("content-length")).toBe(String(bytes.length));
+  expect(gunzipSync(bytes).toString()).toBe(page);
+});
+
+test("serving encodes Brotli at the fast level 4; the build asks for its own level", async () => {
+  const text = readFileSync(new URL("../lib/compression.mjs", import.meta.url), "utf8");
+  const level = (quality, extra = {}) =>
+    brotliCompressSync(text, { params: { [constants.BROTLI_PARAM_QUALITY]: quality, ...extra } });
+  expect(level(4).equals(level(11))).toBe(false);
+
+  const served = await compressResponse(
+    offered("br"),
+    new Response(text, { headers: { "content-type": "text/javascript" } }),
+  );
+  const hint = { [constants.BROTLI_PARAM_SIZE_HINT]: Buffer.byteLength(text) };
+
+  expect(Buffer.from(await served.arrayBuffer()).equals(level(4, hint))).toBe(true);
+  expect((await compressBytes(text, "br")).equals(level(4))).toBe(true);
+  expect((await compressBytes(text, "br", 11)).equals(level(11))).toBe(true);
 });
