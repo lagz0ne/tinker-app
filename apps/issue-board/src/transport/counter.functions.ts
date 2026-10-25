@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { startRequests } from "~/components/requests";
 import { readExecution } from "~/components/sync";
 
-import { incrementCounter } from "@/demo/index.server";
+import { incrementCounter } from "@/demo/backend/counter.server";
 
 import { readReceipt } from "./result.server";
 

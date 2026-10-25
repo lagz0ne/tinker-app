@@ -62,7 +62,7 @@ vp run test:registry
 
 There is one item per component. Its `registryDependencies` equal its direct `requires`.
 `demo` ships app-owned business code in `src/demo`, with its own paths and no component manifest.
-The browser entry is `@/demo/client`; this keeps the CLI from confusing it with the `/demo` route.
+Code imports each demo owner file directly. There is no demo barrel (rule I4).
 Copy the example once; edit later app changes by hand. Never apply a whole-component update to it.
 `base` owns the copied entry helpers. `app` adds base, health, telemetry, and user files
 into an empty folder. Examples add their own files and never overwrite app files.

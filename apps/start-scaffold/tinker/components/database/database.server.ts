@@ -9,7 +9,7 @@ import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator, drizzleOrm }
 import type { Database } from "./types";
 
 /** Where Postgres is. */
-export const databaseUrl = tag<URL>({ label: "database.url", parse: z.instanceof(URL) });
+export const databaseUrl = tag({ label: "database.url", parse: z.instanceof(URL) });
 
 /** Worker-only stop cancels startup and pool reads; in-flight write leases finish. */
 export const databaseStop = tag<AbortSignal | undefined>({

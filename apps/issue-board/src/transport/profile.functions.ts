@@ -4,8 +4,8 @@ import { startRequests } from "~/components/requests";
 import { readResult } from "~/components/requests/index.server";
 import { readRetry } from "~/components/sync";
 
-import { readProfileCommand } from "@/demo/client";
-import { readProfile, saveProfile, retryNotification } from "@/demo/index.server";
+import { readProfile, saveProfile, retryNotification } from "@/demo/backend/profile.server";
+import { readProfileCommand } from "@/demo/contracts/commands";
 
 import { readReceipt } from "./result.server";
 

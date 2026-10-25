@@ -85,3 +85,13 @@ export const streamMessage = z.discriminatedUnion("kind", [
 
 export const readFeatureResult = result;
 export const readFeatureEvents = z.array(event);
+
+/** This app fills the base's open registry with its own bodies. */
+declare module "~/components/sync" {
+  interface Register {
+    change: FeatureSync.Change;
+    result: FeatureSync.Result;
+    public: FeatureSync.Public;
+    private: FeatureSync.Private;
+  }
+}

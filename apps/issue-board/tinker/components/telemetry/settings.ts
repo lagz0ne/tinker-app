@@ -2,20 +2,18 @@ import { LEVELS, tag } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 import { z } from "zod";
 
-import type { Telemetry } from "./records";
-
-export const telemetrySide = tag<Telemetry.Side>({
+export const telemetrySide = tag({
   label: "telemetry.side",
   parse: z.enum(["server", "browser", "ssr", "worker"]),
 });
 
-export const telemetryService = tag<string>({
+export const telemetryService = tag({
   label: "telemetry.service",
   parse: z.string().min(1),
 });
 
-export const tracesUrl = tag<URL>({ label: "telemetry.tracesUrl", parse: z.instanceof(URL) });
-export const logsUrl = tag<URL>({ label: "telemetry.logsUrl", parse: z.instanceof(URL) });
+export const tracesUrl = tag({ label: "telemetry.tracesUrl", parse: z.instanceof(URL) });
+export const logsUrl = tag({ label: "telemetry.logsUrl", parse: z.instanceof(URL) });
 
 /** Info and 80 saved spans are safe without an app choice. */
 export const logLevel = tag<Observe.Level>({

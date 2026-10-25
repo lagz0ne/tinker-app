@@ -21,7 +21,8 @@ import {
   logsUrl,
 } from "~/components/telemetry/index.server";
 
-import { bootstrap, readAccount } from "@/demo/index.server";
+import { readAccount } from "@/demo/backend/auth.server";
+import { bootstrap } from "@/demo/backend/sync.server";
 
 import { clientBindings } from "./presets";
 

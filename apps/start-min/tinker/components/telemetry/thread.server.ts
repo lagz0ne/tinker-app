@@ -19,7 +19,7 @@ import {
 } from "./settings";
 
 /** The built worker command; the server command binds it, so tests and dev stay in process. */
-export const telemetryWorker = tag<URL>({
+export const telemetryWorker = tag({
   label: "telemetry.worker",
   parse: z.instanceof(URL),
 });

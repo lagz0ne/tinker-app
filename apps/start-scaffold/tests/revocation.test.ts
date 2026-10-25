@@ -11,8 +11,9 @@ import { requestStop, startRequests } from "~/components/requests";
 import { backendStop } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
+import { readAccount } from "@/demo/backend/auth.server";
 import { saveProfile } from "@/demo/backend/profile.server";
-import * as demo from "@/demo/index.server";
+import { bootstrap } from "@/demo/backend/sync.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
@@ -20,7 +21,7 @@ import { proofDatabase, proofMail, requestHeaders } from "./presets";
 const requestBindings = requestHostStop(new AbortController().signal);
 
 const tags = [
-  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
+  [bootstrapSlot(bootstrap), readAccountSlot(readAccount)],
   databaseUrl(new URL("postgres://proof")),
   authSettings({
     origin: "http://localhost:4318",

@@ -14,9 +14,10 @@ import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 
+import { readAccount } from "@/demo/backend/auth.server";
 import { readProfile, saveProfile } from "@/demo/backend/profile.server";
+import { bootstrap } from "@/demo/backend/sync.server";
 import { raise, isError } from "@/demo/errors";
-import * as demo from "@/demo/index.server";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
@@ -25,7 +26,7 @@ import { write } from "./write-boundary";
 const requestBindings = requestHostStop(new AbortController().signal);
 
 const tags = [
-  [bootstrapSlot(demo.bootstrap), readAccountSlot(demo.readAccount)],
+  [bootstrapSlot(bootstrap), readAccountSlot(readAccount)],
   databaseUrl(new URL("postgres://proof")),
   smtpUrl(new URL("smtp://proof:proof@proof:25")),
   mailFrom("proof@example.com"),

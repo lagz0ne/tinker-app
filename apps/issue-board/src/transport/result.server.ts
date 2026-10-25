@@ -1,6 +1,6 @@
 import type { RunResult } from "@tinker/core";
 
-import { isError, raise } from "@/demo/client";
+import { isError, raise } from "@/demo/errors";
 
 const rejections = [
   ["TeamChanged", "Team membership changed. Try again."],

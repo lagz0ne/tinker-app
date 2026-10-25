@@ -5,9 +5,9 @@ import { z } from "zod";
 
 import { syncClient } from "~/components/sync";
 
-import { readTodoChange } from "@/demo/client";
-import { isError } from "@/demo/client";
-import { todos, profile } from "@/demo/client";
+import { readTodoChange } from "@/demo/contracts/todos-contract";
+import { isError } from "@/demo/errors";
+import { todos, profile } from "@/demo/frontend/state";
 import { updateTodo } from "@/transport/todos.functions";
 
 import { Button } from "./ui/button";
