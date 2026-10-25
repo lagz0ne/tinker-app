@@ -1,21 +1,30 @@
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
 import { expect, onTestFinished, test } from "vite-plus/test";
 
 // oxlint-disable-next-line import/no-relative-parent-imports -- Test the native command contract.
 import main from "../cmds/cli";
+import { tempFolder } from "./temp";
 
 const root = join(import.meta.dirname, "..");
 const scaffold = join(root, "../../apps/start-scaffold");
 const from = createRequire(join(root, "package.json"));
 const g1 = "- `G1` Every gate in AGENTS.md passes.";
 
-test("the app hands each command to lib/ until ticket 8, in the context's folder", async () => {
+test("the app runs each command in the context's folder", async () => {
   const out: unknown[] = [];
   const err: unknown[] = [];
   const codes: number[] = [];
@@ -84,3 +93,135 @@ test("the scaffold's tinker-loop runs the built app from the workspace", () => {
   expect(run.status).toBe(0);
   expect(run.stdout).toContain(`\n${g1}\n`);
 });
+
+test("an operation's thrown Error prints tinker-loop: <message> on stderr and exits 78", async () => {
+  const app = tempFolder();
+  const out: unknown[] = [];
+  const err: unknown[] = [];
+  const codes: number[] = [];
+
+  const done = await main({
+    env: { PATH: process.env.PATH },
+    args: ["rules"],
+    cwd: app,
+    signal: new AbortController().signal,
+    stdout: { write: (chunk) => out.push(chunk) },
+    stderr: { write: (chunk) => err.push(chunk) },
+    exit: (code) => codes.push(code),
+  });
+  await done.closed;
+
+  expect(codes).toEqual([78]);
+  expect(out).toEqual([]);
+  expect(err).toEqual([
+    `tinker-loop: cannot find @tinker/start from ${app}; install it to read its rules\n`,
+  ]);
+});
+
+test("a stop while check waits for another tool's lock writes nothing and exits 130", async () => {
+  const app = tempFolder();
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: app });
+  git("init", "--quiet");
+  writeFileSync(join(app, "loop.json"), JSON.stringify({ gates: [{ name: "ok", run: "true" }] }));
+  git("add", ".");
+  git("commit", "--quiet", "-m", "one");
+  const run = (signal: AbortSignal, out: string[]) =>
+    main({
+      env: { PATH: process.env.PATH },
+      args: ["check"],
+      cwd: app,
+      signal,
+      stdout: { write: (chunk) => out.push(chunk) },
+      stderr: { write: () => true },
+      exit: (code) => codes.push(code),
+    });
+  const codes: number[] = [];
+  await (
+    await run(new AbortController().signal, [])
+  ).closed;
+  const files = ["findings.jsonl", "last-check.json"].map((name) => join(app, ".loop", name));
+  const before = files.map((path) => readFileSync(path, "utf8"));
+
+  const lock = join(app, ".loop/findings.lock");
+  writeFileSync(lock, "tool A");
+  const stop = new AbortController();
+  const out: string[] = [];
+  const waiting = run(stop.signal, out);
+  while (!out.join("").includes("checked") && !out.join("").includes("PASS ok")) await delay(20);
+  await delay(300);
+  stop.abort("SIGINT");
+  rmSync(lock);
+  await (
+    await waiting
+  ).closed;
+
+  expect(codes).toEqual([0, 130]);
+  expect(files.map((path) => readFileSync(path, "utf8"))).toEqual(before);
+});
+
+/**
+ * A git repo with a loop.json of `gates`, and a way to run the app's command in it.
+ * @param gates - From a test; why: loop.json's gates.
+ */
+function checkApp(gates: { name: string; run: string }[]) {
+  const app = tempFolder();
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: app });
+  git("init", "--quiet");
+  writeFileSync(join(app, "loop.json"), JSON.stringify({ gates }));
+  git("add", ".");
+  git("commit", "--quiet", "-m", "one");
+
+  const codes: number[] = [];
+  const run = async (signal: AbortSignal, out: string[] = []) => {
+    const done = await main({
+      env: { PATH: process.env.PATH },
+      args: ["check"],
+      cwd: app,
+      signal,
+      stdout: { write: (chunk) => out.push(chunk) },
+      stderr: { write: () => true },
+      exit: (code) => codes.push(code),
+    });
+    await done.closed;
+  };
+  return { app, codes, run };
+}
+
+test("SIGTERM while another tool holds the lock exits 143 at once and leaves the lock", async () => {
+  const { app, codes, run } = checkApp([{ name: "ok", run: "true" }]);
+  await run(new AbortController().signal);
+  const files = ["findings.jsonl", "last-check.json"].map((name) => join(app, ".loop", name));
+  const before = files.map((path) => readFileSync(path, "utf8"));
+  const lock = join(app, ".loop/findings.lock");
+  writeFileSync(lock, "tool A");
+
+  const stop = new AbortController();
+  const out: string[] = [];
+  const waiting = run(stop.signal, out);
+  while (!out.join("").includes("PASS ok")) await delay(20);
+  await delay(300);
+  const stoppedAt = performance.now();
+  stop.abort("SIGTERM");
+  await waiting;
+  const took = performance.now() - stoppedAt;
+
+  expect(codes).toEqual([0, 143]);
+  expect(took).toBeLessThan(2000);
+  expect(files.map((path) => readFileSync(path, "utf8"))).toEqual(before);
+  expect(readFileSync(lock, "utf8")).toBe("tool A");
+}, 30_000);
+
+test("runMain's SIGHUP, a DOMException, exits 129 in process", async () => {
+  const slow = `${JSON.stringify(process.execPath)} -e "setTimeout(() => {}, 30000)"`;
+  const { app, codes, run } = checkApp([{ name: "slow", run: slow }]);
+  const stop = new AbortController();
+
+  const running = run(stop.signal);
+  while (!existsSync(join(app, ".loop/gates/slow.log"))) await delay(20);
+  stop.abort(new DOMException("SIGHUP", "AbortError"));
+  await running;
+
+  expect(codes).toEqual([129]);
+}, 30_000);

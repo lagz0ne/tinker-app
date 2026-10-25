@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { createScope } from "@tinker/core";
@@ -8,25 +8,12 @@ import { expect, test } from "vite-plus/test";
 import { startRules } from "@/resources/start-rules";
 import { appDir, childEnv } from "@/tags";
 
-import { tempFolder } from "./temp";
+import { start, tempFolder } from "./temp";
 
 const env = { PATH: process.env.PATH };
 
 const rules =
   "# Rules\n\n### B: own the boundary\n\n- `B1` One,\r\n  two.\n\n### C: close\n\n- `C1` Close.\n";
-
-/**
- * A folder with a small @tinker/start of `version` in its node_modules.
- * @param dir - From a test; why: where node_modules goes.
- * @param text - From a test; why: its docs/rules.md, or null for none.
- */
-function start(dir: string, version: string, text: string | null) {
-  const folder = join(dir, "node_modules/@tinker/start");
-  mkdirSync(join(folder, "docs"), { recursive: true });
-  writeFileSync(join(folder, "package.json"), JSON.stringify({ name: "@tinker/start", version }));
-  if (text !== null) writeFileSync(join(folder, "docs/rules.md"), text);
-  return folder;
-}
 
 /** @param dir - From a test; why: the folder to make a git repo. */
 function gitInit(dir: string) {

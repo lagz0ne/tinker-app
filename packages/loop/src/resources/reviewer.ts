@@ -3,8 +3,9 @@ import { join } from "node:path";
 
 import { resource } from "@tinker/core";
 
-import { loopConfig, reviewModel } from "@/tags";
+import { reviewModel } from "@/tags";
 
+import { loopConfig } from "./loop-config";
 import { processes } from "./processes";
 import { store } from "./store";
 

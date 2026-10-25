@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   appendFileSync,
   closeSync,
@@ -18,11 +19,41 @@ import { z } from "zod";
 
 import { appDir } from "@/tags";
 
-/** One findings row: a JSON object with a string id; the operations read the rest. */
-const finding = z.looseObject({ id: z.string() });
+/**
+ * One findings row: a JSON object with a string id. The other fields are the ones the tool
+ * writes; a row may leave any of them out.
+ */
+export const finding = z.looseObject({
+  id: z.string(),
+  source: z.string().optional(),
+  rule: z.string().optional(),
+  severity: z.string().optional(),
+  status: z.string().optional(),
+  file: z.string().optional(),
+  line: z.number().nullable().optional(),
+  summary: z.string().optional(),
+  trigger: z.string().optional(),
+  fix: z.string().optional(),
+  reason: z.string().optional(),
+  round: z.number().optional(),
+  sha: z.string().nullable().optional(),
+  seenSha: z.string().optional(),
+  dirty: z.boolean().optional(),
+});
 
 /** One review round row: a JSON object with a whole-number round. */
 const round = z.looseObject({ round: z.int() });
+
+/** What the last check run saw: its round, its HEAD, its work tree's fingerprint, its gates. */
+export const lastCheckRun = z.looseObject({
+  round: z.int(),
+  sha: z.string().nullable(),
+  tree: z.string().nullable().optional(),
+  gates: z.array(z.looseObject({ name: z.string(), green: z.boolean() })),
+});
+
+/** A row's round, where it has one: findings, review rounds, and the last check count up. */
+const numbered = z.object({ round: z.int() });
 
 /**
  * A lock older than this is stale: a tool holds it for one read, merge, and write, a few
@@ -41,7 +72,7 @@ const lockWaitMs = 15_000;
 export const store = resource({
   label: "loop.store",
   depends: { appDir },
-  factory: ({ appDir: app }, { clock, random, defer }) => {
+  factory: ({ appDir: app }, { clock, random, defer, closing }) => {
     const folder = join(app, ".loop");
     const lockPath = join(folder, "findings.lock");
     let held: string | null = null;
@@ -90,7 +121,7 @@ export const store = resource({
         closeSync(file);
         return true;
       } catch (error) {
-        if ((error as { code?: string }).code === "EEXIST") return false;
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
         throw error;
       }
     };
@@ -119,16 +150,21 @@ export const store = resource({
         // The lock was broken as stale; it is not ours to remove.
       }
     };
-    const lock = async () => {
+    /**
+     * Take the lock, waiting while another tool holds it. The wait ends on the root's close and
+     * on the caller's stop, so a stopped tool exits by its signal and takes no lock.
+     */
+    const lock = async (stop?: AbortSignal) => {
       ensure();
       const token = random.uuid();
       const deadline = clock.currentTimeMillis() + lockWaitMs;
+      const halt = stop ? AbortSignal.any([closing, stop]) : closing;
       for (;;) {
         if (tryLock(token)) return (held = token);
         if (age(lockPath) > staleLockMs) breakLock(token);
         else if (clock.currentTimeMillis() > deadline) {
           throw new Error(`${lockPath} is held by another tool; delete it if no tool is running`);
-        } else await clock.sleep(50);
+        } else await clock.sleep(50, halt);
       }
     };
 
@@ -143,69 +179,146 @@ export const store = resource({
       if (held) release(held);
     });
 
+    /**
+     * Run `work` under `.loop/findings.lock`, so two tools never drop each other's rows. A stop
+     * while another tool holds the lock rejects, and `work` does not run.
+     */
+    const locked = async <T>(work: () => T | Promise<T>, stop?: AbortSignal) => {
+      const ran = (async () => {
+        const token = await lock(stop);
+        try {
+          return await work();
+        } finally {
+          release(token);
+        }
+      })();
+      running.add(ran);
+      try {
+        return await ran;
+      } finally {
+        running.delete(ran);
+      }
+    };
+    /** Every findings row, in file order. Read it inside `locked` when you write it back. */
+    const readFindings = () =>
+      rows("findings.jsonl").map(({ path, number, line }) => {
+        const row = finding.safeParse(json(line));
+        if (!row.success) {
+          throw new Error(`${path}:${number} is not a finding: one JSON object with a string id`);
+        }
+        return row.data;
+      });
+    /** Each recorded review round, in file order. */
+    const readRounds = () =>
+      rows("rounds.jsonl").map(({ path, number, line }) => {
+        const row = round.safeParse(json(line));
+        if (!row.success) {
+          throw new Error(
+            `${path}:${number} is not a round: one JSON object with a whole-number round; fix or delete that line`,
+          );
+        }
+        return row.data;
+      });
+    /** What the last check run saw, or null before the first check. */
+    const readLast = () => {
+      const path = join(folder, "last-check.json");
+      if (!existsSync(path)) return null;
+      let raw: unknown;
+      try {
+        raw = JSON.parse(readFileSync(path, "utf8"));
+      } catch (error) {
+        throw new Error(
+          `${path}: ${(error as Error).message}; run tinker-loop check to write it again`,
+        );
+      }
+
+      const run = lastCheckRun.safeParse(raw);
+      if (!run.success) {
+        throw new Error(`${path}: not a check run; run tinker-loop check to write it again`);
+      }
+      return run.data;
+    };
+    /**
+     * The next round number: one more than any round in the findings, the review rounds, or
+     * the last check. A last check that cannot be read counts as none. Call it inside `locked`.
+     */
+    const nextRound = () => {
+      let last: unknown = null;
+      try {
+        last = readLast();
+      } catch {
+        // A broken last check has no round; check writes it again.
+      }
+      const all = [...readFindings(), ...readRounds(), last];
+      return Math.max(0, ...all.map((row) => numbered.safeParse(row).data?.round ?? 0)) + 1;
+    };
+    /** Add one review round. Call it inside `locked`. */
+    const appendRound = (row: z.infer<typeof round>) => {
+      appendFileSync(join(ensure(), "rounds.jsonl"), `${JSON.stringify(row)}\n`);
+    };
+
+    /** A run that stamps rows: its round and the HEAD it saw. */
+    /** A run that stamps rows: its round and HEAD, as the last check saves them, and `dirty`. */
+    type Stamp = Pick<z.infer<typeof lastCheckRun>, "round" | "sha"> &
+      Pick<z.infer<typeof finding>, "dirty">;
+    const seenAt = (sha: Stamp["sha"]) => (sha ? { seenSha: sha } : {});
+
     return {
+      /**
+       * A stable id: the same problem gets the same id on every run, wherever its line moves.
+       * Digit runs are folded, so a timing or count in a summary does not make a new id. A gate
+       * finding passes no summary: one red gate is one finding, whatever its message.
+       */
+      findingId: (
+        row: Required<Pick<z.infer<typeof finding>, "source" | "rule" | "file">> &
+          Pick<z.infer<typeof finding>, "summary">,
+      ) => {
+        const key = [row.source, row.rule, row.file, (row.summary ?? "").replaceAll(/\d+/g, "#")];
+        return createHash("sha256").update(key.join("\n")).digest("hex").slice(0, 12);
+      },
+      /** A new finding: open, at this run's round, seen at its HEAD. */
+      opened: (row: z.infer<typeof finding>, run: Stamp) => ({
+        ...row,
+        ...seenAt(run.sha),
+        round: run.round,
+        status: "open",
+      }),
+      /** A finding this run found again: the latest fields, open unless answered. */
+      seen: (old: z.infer<typeof finding>, now: z.infer<typeof finding>, run: Stamp) => {
+        const { sha: _sha, dirty: _dirty, seenSha: _seen, ...kept } = old;
+        const status = old.status === "answered" ? "answered" : "open";
+        return { ...kept, ...now, ...seenAt(run.sha), round: run.round, status };
+      },
+      /** A finding a run marks fixed: its round, the HEAD, and `dirty` when only the tree had it. */
+      fixed: (old: z.infer<typeof finding>, run: Stamp) => {
+        const fixed = { ...old, round: run.round, status: "fixed", sha: run.sha };
+        return run.dirty ? { ...fixed, dirty: true } : fixed;
+      },
       /** Make `.loop` and return its path, for files such as the review's. */
       folder: ensure,
-      /** Run `work` under `.loop/findings.lock`, so two tools never drop each other's rows. */
-      locked: async <T>(work: () => T | Promise<T>) => {
-        const ran = (async () => {
-          const token = await lock();
-          try {
-            return await work();
-          } finally {
-            release(token);
-          }
-        })();
-        running.add(ran);
-        try {
-          return await ran;
-        } finally {
-          running.delete(ran);
-        }
-      },
-      /** Every findings row, in file order. Read it inside `locked` when you write it back. */
-      findings: () =>
-        rows("findings.jsonl").map(({ path, number, line }) => {
-          const row = finding.safeParse(json(line));
-          if (!row.success) {
-            throw new Error(`${path}:${number} is not a finding: one JSON object with a string id`);
-          }
-          return row.data;
-        }),
+      locked,
+      findings: readFindings,
       /** Replace the findings file. Call it inside `locked`. */
       writeFindings: (findings: z.infer<typeof finding>[]) => {
         const text = findings.map((row) => JSON.stringify(row)).join("\n");
         replace("findings.jsonl", text ? `${text}\n` : "");
       },
-      /** Each recorded review round, in file order. */
-      rounds: () =>
-        rows("rounds.jsonl").map(({ path, number, line }) => {
-          const row = round.safeParse(json(line));
-          if (!row.success) {
-            throw new Error(
-              `${path}:${number} is not a round: one JSON object with a whole-number round; fix or delete that line`,
-            );
-          }
-          return row.data;
+      rounds: readRounds,
+      appendRound,
+      lastCheck: readLast,
+      nextRound,
+      /**
+       * Record one review round under the lock, and return its number. The review records it
+       * before it writes that round's findings, so status counts every round.
+       */
+      recordReviewRound: (sha: Stamp["sha"]) =>
+        locked(() => {
+          const next = nextRound();
+          appendRound({ round: next, source: "review", sha });
+          return next;
         }),
-      /** Add one review round. Call it inside `locked`. */
-      appendRound: (row: z.infer<typeof round>) => {
-        appendFileSync(join(ensure(), "rounds.jsonl"), `${JSON.stringify(row)}\n`);
-      },
-      /** What the last check run saw, or null before the first check. */
-      lastCheck: () => {
-        const path = join(folder, "last-check.json");
-        if (!existsSync(path)) return null;
-        try {
-          return JSON.parse(readFileSync(path, "utf8")) as unknown;
-        } catch (error) {
-          throw new Error(
-            `${path}: ${(error as Error).message}; run tinker-loop check to write it again`,
-          );
-        }
-      },
       /** Save what a check run saw, in one rename. */
-      writeLastCheck: (run: unknown) => {
+      writeLastCheck: (run: z.infer<typeof lastCheckRun>) => {
         replace("last-check.json", `${JSON.stringify(run)}\n`);
       },
     };

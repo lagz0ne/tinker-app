@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { lstatSync, readFileSync, readlinkSync } from "node:fs";
+import { join } from "node:path";
 
 import { resource } from "@tinker/core";
 
@@ -42,6 +45,33 @@ export const git = resource({
       },
       /** The top folder of the app's repo, or null outside git. */
       top: () => run(["rev-parse", "--show-toplevel"]),
+      /**
+       * The app folder's work tree: its untracked files (null outside git), whether it has
+       * uncommitted changes, and a fingerprint of them: `git diff HEAD` and each untracked
+       * file's name and bytes. Two equal fingerprints at one HEAD mean the same work tree.
+       */
+      tree: () => {
+        const listed = run(["ls-files", "--others", "--exclude-standard", "-z"], { raw: true });
+        const status = run(["status", "--porcelain", "--untracked-files=all", "--", "."]);
+        const untracked = listed?.split("\0").filter(Boolean) ?? null;
+        const diff = run(["diff", "--no-ext-diff", "--binary", "HEAD", "--", "."], { raw: true });
+
+        const bytes = (file: string) => {
+          try {
+            const path = join(app, file);
+            return lstatSync(path).isSymbolicLink() ? readlinkSync(path) : readFileSync(path);
+          } catch {
+            return "";
+          }
+        };
+        let fingerprint: string | null = null;
+        if (diff !== null && untracked !== null) {
+          const hash = createHash("sha256").update(diff);
+          for (const file of untracked.toSorted()) hash.update(`\0${file}\0`).update(bytes(file));
+          fingerprint = hash.digest("hex");
+        }
+        return { untracked, dirty: Boolean(status), fingerprint };
+      },
     };
   },
 });
