@@ -1,4 +1,4 @@
-import { symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { brotliCompressSync, brotliDecompressSync, gunzipSync, gzipSync } from "node:zlib";
 
@@ -207,4 +207,98 @@ test("a warmed host serves its retained raw and encoded bytes after files go awa
   expect(brotliDecompressSync(Buffer.from(await bytes.arrayBuffer())).toString()).toBe(
     "console.log(1)",
   );
+});
+
+test("an app with no client build serves nothing, and a client path that is a file fails", async () => {
+  const root = fixture({ "dist/server/server.js": "" });
+  const asset = await createAssets(root);
+  writeFileSync(join(root, "dist/client"), "not a folder");
+
+  expect(await asset(new Request("http://app/robots.txt"))).toBeNull();
+  await expect(createAssets(root)).rejects.toMatchObject({ code: "ENOTDIR" });
+});
+
+test("a URL with another scheme still finds its built file by its pathname", async () => {
+  const asset = await createAssets(built());
+
+  const response = await asset(new Request("app://h/robots.txt"));
+
+  expect(await response?.text()).toBe("User-agent: *\n");
+});
+
+test("only compressible files vary and carry their length; a refused encoding is a 406", async () => {
+  const root = fixture({ "dist/client/a.png": "png", "dist/client/assets/app.js": "export {}" });
+  const asset = await createAssets(root);
+  const refused = { headers: { "accept-encoding": "*;q=0" } };
+
+  const png = await asset(new Request("http://app/a.png", refused));
+  const js = await asset(new Request("http://app/assets/app.js"));
+  const blocked = await asset(new Request("http://app/assets/app.js", refused));
+
+  expect(png.status).toBe(200);
+  expect(png.headers.get("vary")).toBeNull();
+  expect(png.headers.get("content-length")).toBeNull();
+  expect(js.headers.get("content-length")).toBe("9");
+  expect(blocked.status).toBe(406);
+  expect(blocked.body).toBeNull();
+  expect(blocked.headers.get("vary")).toBe("Accept-Encoding");
+  expect(blocked.headers.get("content-type")).toBe("text/javascript");
+});
+
+test("the host uses a build's gzip copy", async () => {
+  const root = built();
+  const file = join(root, "dist/client/assets/app-1a2b.js");
+  writeFileSync(`${file}.gz`, gzipSync("built gzip copy"));
+  const asset = await createAssets(root);
+
+  const response = await asset(
+    new Request("http://app/assets/app-1a2b.js", { headers: { "accept-encoding": "gzip" } }),
+  );
+
+  expect(gunzipSync(Buffer.from(await response.arrayBuffer())).toString()).toBe("built gzip copy");
+});
+
+test("only a hashed name in assets/ is immutable", async () => {
+  const root = fixture({
+    "dist/client/robots-1a2b3c.txt": "x",
+    "dist/client/assets/app-1a2b.v/plain": "x",
+  });
+  const asset = await createAssets(root);
+
+  for (const path of ["/robots-1a2b3c.txt", "/assets/app-1a2b.v/plain"]) {
+    const response = await asset(new Request(`http://app${path}`));
+    expect([path, response.headers.get("cache-control")]).toEqual([
+      path,
+      "public,max-age=0,must-revalidate",
+    ]);
+  }
+});
+
+test("a failed read is not kept: the next request reads the file again", async () => {
+  const root = built();
+  const loop = join(root, "dist/client/loop.txt");
+  symlinkSync("loop.txt", loop);
+  const asset = await createAssets(root);
+  await expect(asset(new Request("http://app/loop.txt"))).rejects.toMatchObject({ code: "ELOOP" });
+
+  unlinkSync(loop);
+  writeFileSync(loop, "fixed");
+
+  expect(await (await asset(new Request("http://app/loop.txt"))).text()).toBe("fixed");
+});
+
+test("the host keeps up to 64 MiB of built bytes, and reads the rest each time", async () => {
+  const root = fixture({ "dist/client/small.txt": "s" });
+  writeFileSync(join(root, "dist/client/big.txt"), Buffer.alloc(64 * 1024 * 1024));
+  const asset = await createAssets(root);
+  const big = new Request("http://app/big.txt");
+  const small = new Request("http://app/small.txt");
+
+  expect((await (await asset(big)).arrayBuffer()).byteLength).toBe(64 * 1024 * 1024);
+  expect(await (await asset(small)).text()).toBe("s");
+  rmSync(join(root, "dist/client/big.txt"));
+  rmSync(join(root, "dist/client/small.txt"));
+
+  expect((await (await asset(big)).arrayBuffer()).byteLength).toBe(64 * 1024 * 1024);
+  await expect(asset(small)).rejects.toMatchObject({ code: "ENOENT" });
 });
