@@ -1,8 +1,20 @@
 # Upgrade
 
-## Unreleased
+## 0.12.0
 
-These changes are in current source, not the released 0.11.0 tarball.
+Start 0.12.0 is released from `lagz0ne/tinker-app`, tag `start-v0.12.0`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0:
+
+```json
+"@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz",
+"@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.12.0/tinker-start-0.12.0.tgz"
+```
+
+Change the Start URL in your `package.json`, then run `pnpm install`.
+The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.12.0/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.12.0.
 
 - Doctor's glue check also accepts `tinker prepare` in the `prepare` script,
   for a package that other apps install. pnpm refuses to install a tarball
@@ -55,6 +67,33 @@ These changes are in current source, not the released 0.11.0 tarball.
   `dist-cli` holds no copy of them. Doctor checks each bin: the file exists,
   it imports the built CLI entry, which is the `build.outDir` in
   `vite.cli.config.ts` plus the entry's name, and `files` lists both.
+
+- A main that returns no `closed` promise, such as `{}` or `{ closed: true }`,
+  now fails with exit 1 and prints `main must return closed`. Before, the host
+  itself crashed with a TypeError instead of giving an exit code.
+- The copied `tinker/base/main.ts` adds `mainErrorCode(error)`: 78 for a
+  missing or invalid tag (`MissingTag`, `DataValidationFailed`) or a bad URL,
+  else 1. The scaffold's `cmds/server.ts` and `cmds/worker.ts`, and the small
+  app's `cmds/server.ts`, call it instead of their own copy of that block. Copy the new
+  `tinker/base/main.ts` (registry item `base-main`) before the new commands.
+- The copied database pool no longer crashes the process when Postgres drops
+  an idle client: it logs `database.idleLost`, and queries still reject. Copy
+  the new `tinker/components/database/database.server.ts` (item `database`).
+- The copied `tinker/base/router-entry.tsx` drops its own route-tree cache;
+  the module loader caches it, and Vite swaps it after a route edit.
+- Copied tags with a `parse` schema take their type from it:
+  `tag({ parse })`, not `tag<T>({ parse })`. Old copies still type-check.
+- The demo drops its forwarding files `src/demo/client.ts`,
+  `src/demo/index.server.ts` and `src/frontend/actions.ts`. Callers import
+  each owner file. The sync registry augmentation moves to
+  `src/demo/contracts/sync.ts`. An app built from the old demo may keep them.
+- Start's own tests now kill 89% of its mutants (Stryker floor stays 85).
+  The new tests prove the reply writer, the dev entry, the dev host
+  registry, compression, static assets, the build plugins, and the source
+  readers. No API change.
+- Not in the tarball: `@tinker/loop` (private, in this repo) moved onto the
+  app layout in loop tickets 5 to 9, with its 120 frozen tests unchanged.
+  App pull requests get a changed-line mutation gate at floor 60.
 
 ## 0.11.0
 
