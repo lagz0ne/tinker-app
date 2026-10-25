@@ -257,7 +257,6 @@ export const store = resource({
       appendFileSync(join(ensure(), "rounds.jsonl"), `${JSON.stringify(row)}\n`);
     };
 
-    /** A run that stamps rows: its round and the HEAD it saw. */
     /** A run that stamps rows: its round and HEAD, as the last check saves them, and `dirty`. */
     type Stamp = Pick<z.infer<typeof lastCheckRun>, "round" | "sha"> &
       Pick<z.infer<typeof finding>, "dirty">;
@@ -322,16 +321,6 @@ export const store = resource({
       appendRound,
       lastCheck: readLast,
       nextRound,
-      /**
-       * Record one review round under the lock, and return its number. The review records it
-       * before it writes that round's findings, so status counts every round.
-       */
-      recordReviewRound: (sha: Stamp["sha"]) =>
-        locked(() => {
-          const next = nextRound();
-          appendRound({ round: next, source: "review", sha });
-          return next;
-        }),
       /** Save what a check run saw, in one rename. */
       writeLastCheck: (run: z.infer<typeof lastCheckRun>) => {
         replace("last-check.json", `${JSON.stringify(run)}\n`);

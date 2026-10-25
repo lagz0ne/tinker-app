@@ -137,25 +137,6 @@ test("the next round is one more than any in the findings, the rounds, or the la
   expect([first, later, broken]).toEqual([1, 6, 6]);
 });
 
-test("a review round is recorded under the lock with the next number, and returned", async () => {
-  const dir = tempFolder();
-  const scope = createScope({ tags: [appDir(dir)] });
-  const files = scope.resolve(store);
-  files.writeLastCheck({ round: 1, sha: null, gates: [] });
-
-  const rounds = [await files.recordReviewRound("abc"), await files.recordReviewRound(null)];
-  const lockLeft = existsSync(join(dir, ".loop/findings.lock"));
-  const written = files.rounds();
-  await scope.close();
-
-  expect(rounds).toEqual([2, 3]);
-  expect(lockLeft).toBe(false);
-  expect(written).toEqual([
-    { round: 2, source: "review", sha: "abc" },
-    { round: 3, source: "review", sha: null },
-  ]);
-});
-
 test("a finding's id is stable: source, rule, file, and its summary with digit runs folded", async () => {
   const scope = createScope({ tags: [appDir(tempFolder())] });
   const files = scope.resolve(store);

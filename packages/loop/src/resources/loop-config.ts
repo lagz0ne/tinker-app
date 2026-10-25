@@ -87,6 +87,9 @@ const loopFile = z.preprocess(
   ),
 );
 
+/** loop.json once checked: the type every unit that reads it takes its fields from. */
+export type LoopFile = z.infer<typeof loopFile>;
+
 /**
  * The app's loop.json, read and checked. A missing file, a file that is not JSON, or a refused
  * field fails with the message the tool printed before the port: the seam prints it and exits 78.
