@@ -36,7 +36,9 @@ export default defineConfig({
       // Misreads Vite's `?raw` text imports as missing default exports.
       "import/default": "off",
     },
-    options: { typeAware: true, typeCheck: true },
+    // tsgolint (TypeScript 7.0) has no content mappers, so it cannot resolve Reylo `.sql` imports.
+    // Type errors come from each package's own tsc gate; start-scaffold's runs with --runExternalCode.
+    options: { typeAware: true, typeCheck: false },
     overrides: [
       // Plain Node scripts have no tsconfig, so `@/` cannot reach them.
       // Start's source is compiled inside each app, where `@/` is the app's own folder.

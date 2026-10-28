@@ -1,6 +1,8 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { readJsonc } from "./jsonc.mjs";
 import { appFiles, cliOnly } from "./named.mjs";
 
 const compilerOptions = {
@@ -59,6 +61,21 @@ export function render(root) {
 }
 
 /**
+ * An app whose tsconfig declares content mappers (Reylo `.sql`) reads each query's types from a
+ * development database, so the app builds that file from its own migrations. It is generated,
+ * beside `.tinker/`, before anything reads a query.
+ * @param {string} root - From prepare; why: build that app's development database.
+ */
+function prepareDevDatabase(root) {
+  const script = join(root, "maintain/sqlite-dev-db.mjs");
+  const config = readJsonc(join(root, "tsconfig.json"));
+  if (config.error !== undefined || config.value?.contentMappers === undefined) return;
+  if (!existsSync(script)) return;
+
+  execFileSync(process.execPath, [script], { cwd: root, encoding: "utf8" });
+}
+
+/**
  * Write `.tinker/` and drop files an older base or app shape left there. A CLI-only app has no
  * route tree, so an old one from its web days goes too.
  * @param {string} root - From the plugin or the CLI; why: write `.tinker/` in that app.
@@ -73,6 +90,8 @@ export function prepare(root) {
 
   const files = render(root);
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
+
+  prepareDevDatabase(root);
   return Object.keys(files);
 }
 

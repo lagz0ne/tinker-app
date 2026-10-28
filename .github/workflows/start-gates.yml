@@ -79,6 +79,7 @@ jobs:
           pnpm --dir apps/issue-board run typecheck
           pnpm --dir apps/start-scaffold run typecheck
           pnpm --dir apps/start-min run typecheck
+          pnpm --dir packages/loop run typecheck
           pnpm --dir apps/issue-board run doctor
           pnpm --dir apps/start-scaffold run doctor
           pnpm --dir apps/start-min run doctor
