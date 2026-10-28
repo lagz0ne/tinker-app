@@ -182,8 +182,12 @@ async function releasePackage(path, packs, releaseVersion) {
     }
   }
 
-  // npm 10 cannot resolve a "$vite" reference to an alias spec, so name the spec itself.
-  pkg.overrides = { vite: pkg.devDependencies.vite };
+  // npm 10 cannot resolve a "$vite" reference to an alias spec, so name the spec itself. A
+  // prerelease TypeScript also falls outside vite's `^7.0.0` peer range, so name its version too.
+  pkg.overrides = {
+    typescript: pkg.devDependencies.typescript,
+    vite: pkg.devDependencies.vite,
+  };
   // Keep npm's known keys before the app-owned intent field in standalone output.
   const { intent, ...manifest } = pkg;
   return { ...manifest, intent };

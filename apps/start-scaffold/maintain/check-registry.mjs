@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -155,7 +156,7 @@ for (const composition of [
           assert.equal(error.code, "ENOENT");
           return [];
         });
-        for (const migration of migrations.sort()) {
+        for (const migration of migrations.sort((left, right) => left.localeCompare(right))) {
           await client.exec(
             await readFile(join(consumer, "drizzle", migration, "migration.sql"), "utf8"),
           );
@@ -182,10 +183,19 @@ for (const composition of [
       const saved = await readFile(join(app, "PLAIN.md"), "utf8");
       const lastRouteCaller = "    - `src/routes/api.telemetry.ts#Route.POST`\n";
       assert.equal(saved.split(lastRouteCaller).length, 2);
-      const expected = saved.replace(
-        lastRouteCaller,
-        lastRouteCaller + "    - `src/transport/greet.functions.ts#runGreet.callback`\n",
-      );
+      // The app also holds variant components this composition does not install, so its rows
+      // name files the consumer has no copy of; the census cannot list those callers.
+      const expected = saved
+        .replace(
+          lastRouteCaller,
+          lastRouteCaller + "    - `src/transport/greet.functions.ts#runGreet.callback`\n",
+        )
+        .split("\n")
+        .filter((row) => {
+          const file = row.match(/(?:src|cmds|tinker)\/[^`#\s]+/)?.[0];
+          return !file || existsSync(join(consumer, file));
+        })
+        .join("\n");
       const census = spawnSync(process.execPath, ["scripts/check-plain.mjs", "--list"], {
         cwd: consumer,
         encoding: "utf8",

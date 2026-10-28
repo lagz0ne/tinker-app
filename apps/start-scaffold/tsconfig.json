@@ -1,8 +1,6 @@
 {
   "extends": "./.tinker/tsconfig.json",
-  "contentMappers": [
-    { "package": "reylo", "extensions": [".sql", ".reylo.yaml", ".reylo.yml"] }
-  ],
+  "contentMappers": [{ "package": "reylo", "extensions": [".sql", ".reylo.yaml", ".reylo.yml"] }],
   "include": ["src", "cmds", "tinker", "tests", "vite.config.ts", ".tinker/routeTree.gen.ts"],
   "exclude": ["tests/runtime", "dist", "node_modules"]
 }

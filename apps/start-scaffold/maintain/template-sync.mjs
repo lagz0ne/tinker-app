@@ -83,6 +83,9 @@ async function copyDemoFiles(target) {
     "scripts/setup.mjs",
     "drizzle",
     "drizzle.config.ts",
+    // The SQLite variant's schema and Reylo's dev database: the build's type check reads them.
+    "sqlite",
+    ".reylo.yaml",
     "compose.yml",
     ".env.example",
     "AGENTS.md",
@@ -92,6 +95,7 @@ async function copyDemoFiles(target) {
     "vitest.config.ts",
     "vite.worker.config.ts",
     "maintain/worker.mjs",
+    "maintain/sqlite-dev-db.mjs",
     "stryker.config.json",
     "scripts/mutation-arid.mjs",
   ]) {

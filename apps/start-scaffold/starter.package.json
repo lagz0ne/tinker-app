@@ -11,7 +11,7 @@
     "test": "vp test --maxWorkers=1 --no-file-parallelism",
     "db:generate": "drizzle-kit generate",
     "test:schema": "node scripts/check-schema.mjs",
-    "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
+    "typecheck": "node maintain/sqlite-dev-db.mjs && DATABASE_URL=file:.tinker/sqlite-dev.db node node_modules/typescript/bin/tsc --noEmit --runExternalCode",
     "check:plain": "node scripts/check-plain.mjs",
     "postinstall": "tinker prepare",
     "doctor": "tinker doctor",
@@ -39,11 +39,13 @@
     "pino": "10.3.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "reylo": "0.6.0",
     "tailwind-merge": "3.7.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@reylosql/sqlite": "0.6.0",
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@tailwindcss/vite": "4.3.3",
@@ -57,12 +59,13 @@
     "drizzle-kit": "1.0.0-rc.4",
     "oxc-parser": "^0.117.0",
     "tailwindcss": "4.3.3",
-    "typescript": "^7.0.2",
+    "typescript": "7.1.0-beta",
     "typescript-api": "npm:typescript@5.9.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
     "vite-plus": "1.0.0"
   },
   "overrides": {
+    "typescript": "7.1.0-beta",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0"
   },
   "intent": {
