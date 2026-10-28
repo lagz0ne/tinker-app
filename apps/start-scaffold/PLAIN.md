@@ -92,6 +92,9 @@ Tests and generated files do not count.
   - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
   - Callers:
     - `tinker/base/server-entry.ts#renderRequest.callback`
+    - `tinker/components/auth-sqlite/stream.server.ts#lease.check`
+    - `tinker/components/auth-sqlite/stream.server.ts#lease.open`
+    - `tinker/components/auth-sqlite/stream.server.ts#lease.wait`
     - `tinker/components/auth/stream.server.ts#lease.check`
     - `tinker/components/auth/stream.server.ts#lease.open`
     - `tinker/components/auth/stream.server.ts#lease.wait`
