@@ -98,6 +98,14 @@ Tests and generated files do not count.
     - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
     - `tinker/components/requests/render-lifetime.server.ts#retain`
     - `tinker/components/requests/start.ts#middleware.callback`
+    - `tinker/components/sync-sqlite/client/sync.ts#client.execute`
+    - `tinker/components/sync-sqlite/client/sync.ts#client.wait`
+    - `tinker/components/sync-sqlite/client/sync.ts#syncClient.factory`
+    - `tinker/components/sync-sqlite/history.server.ts#append`
+    - `tinker/components/sync-sqlite/history.server.ts#find`
+    - `tinker/components/sync-sqlite/history.server.ts#lock`
+    - `tinker/components/sync-sqlite/history.server.ts#read`
+    - `tinker/components/sync-sqlite/notifications.server.ts#subscribe`
     - `tinker/components/sync/client/sync.ts#client.execute`
     - `tinker/components/sync/client/sync.ts#client.wait`
     - `tinker/components/sync/client/sync.ts#syncClient.factory`
@@ -122,6 +130,9 @@ Tests and generated files do not count.
     - `tinker/components/database/database.server.ts#tx.transaction`
     - `tinker/components/errors/errors.ts#raise`
     - `tinker/components/requests/result.server.ts#readResult`
+    - `tinker/components/sync-sqlite/client/sync.ts#client.leave`
+    - `tinker/components/sync-sqlite/client/sync.ts#stop.stop`
+    - `tinker/components/sync-sqlite/client/sync.ts#syncClient.factory.callback1`
     - `tinker/components/sync/client/sync.ts#client.leave`
     - `tinker/components/sync/client/sync.ts#stop.stop`
     - `tinker/components/sync/client/sync.ts#syncClient.factory.callback1`
@@ -144,9 +155,18 @@ Tests and generated files do not count.
     - `src/routes/api.telemetry.ts#Route.POST`
     - `src/transport/profile.functions.ts#getProfile.callback`
     - `src/transport/todos.functions.ts#getTodos.callback`
+    - `tinker/components/sync-sqlite/functions.ts#getAccount.callback`
+    - `tinker/components/sync-sqlite/functions.ts#getBootstrap.callback`
+    - `tinker/components/sync-sqlite/notifications.server.ts#share`
     - `tinker/components/sync/functions.ts#getAccount.callback`
     - `tinker/components/sync/functions.ts#getBootstrap.callback`
     - `tinker/components/sync/notifications.server.ts#share`
+
+- **tinker/components/sync-sqlite/notice.ts#accountNotice**
+  - `accountId`: `string`. From the auth path; why: the account whose streams must re-read.
+  - Callers:
+    - `tinker/components/sync-sqlite/notifications.server.ts#notifications.factory`
+    - `tinker/components/sync-sqlite/publish.server.ts#publishAccountNotice.run`
 
 - **tinker/components/sync/notice.ts#accountNotice**
   - `accountId`: `string`. From the auth path; why: the account whose streams must re-read.
