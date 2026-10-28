@@ -266,7 +266,7 @@
       "name": "auth-sqlite",
       "type": "registry:lib",
       "title": "auth-sqlite",
-      "description": "Copied SQLite auth component. You own its files.",
+      "description": "Copied SQLite auth component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
       "dependencies": [
         "@better-auth/kysely-adapter@1.7.7",
         "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
@@ -394,7 +394,7 @@
       "name": "database-sqlite",
       "type": "registry:lib",
       "title": "database-sqlite",
-      "description": "Copied SQLite database component. You own its files.",
+      "description": "Copied SQLite database component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
       "dependencies": [
         "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "reylo@0.6.0",
@@ -944,7 +944,7 @@
       "name": "sync-sqlite",
       "type": "registry:lib",
       "title": "sync-sqlite",
-      "description": "Copied SQLite sync component. You own its files.",
+      "description": "Copied SQLite sync component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
       "dependencies": [
         "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "@tanstack/react-router@1.170.41",
