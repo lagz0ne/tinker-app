@@ -1,6 +1,6 @@
 # SQLite as a second database
 
-Date: 2026-10-28. Status: proposed.
+Date: 2026-10-28. Status: accepted.
 Asked by: Hedl on Tinker, gap G0.
 Duke, 2026-10-26: "SQLite is just fine".
 Duke, 2026-10-26: no workarounds in Hedl;
@@ -85,7 +85,7 @@ What it costs:
   `vite.config.ts`, for the build and Vitest.
 - `.sql` files stay in server code only.
 
-## Proposal (pending Duke's card)
+## Decision
 
 Variant components, each a whole copy:
 
@@ -147,6 +147,7 @@ Same public names as `database`:
 
 ## Not decided here
 
+- Duke, 2026-10-28: SQLite set first.
 - Postgres components (`database`, `auth`,
   `sync`, `mail`) keep Drizzle for now.
   Moving them to Reylo is its own ticket,
