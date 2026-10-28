@@ -183,19 +183,22 @@ for (const composition of [
       const saved = await readFile(join(app, "PLAIN.md"), "utf8");
       const lastRouteCaller = "    - `src/routes/api.telemetry.ts#Route.POST`\n";
       assert.equal(saved.split(lastRouteCaller).length, 2);
-      // The app also holds variant components this composition does not install, so its rows
-      // name files the consumer has no copy of; the census cannot list those callers.
+      // The app also holds variant components this composition does not install, so its list
+      // names files the consumer has no copy of: drop that entry, and the rows for missing files.
+      const missing = (row) => {
+        const file = row.match(/(?:src|cmds|tinker)\/[^`#\s]+/)?.[0];
+        return file !== undefined && !existsSync(join(consumer, file));
+      };
       const expected = saved
         .replace(
           lastRouteCaller,
           lastRouteCaller + "    - `src/transport/greet.functions.ts#runGreet.callback`\n",
         )
-        .split("\n")
-        .filter((row) => {
-          const file = row.match(/(?:src|cmds|tinker)\/[^`#\s]+/)?.[0];
-          return !file || existsSync(join(consumer, file));
-        })
-        .join("\n");
+        .split("\n\n")
+        .map((entry) => entry.split("\n"))
+        .filter((lines) => !missing(lines[0]))
+        .map((lines) => lines.filter((row) => !missing(row)).join("\n"))
+        .join("\n\n");
       const census = spawnSync(process.execPath, ["scripts/check-plain.mjs", "--list"], {
         cwd: consumer,
         encoding: "utf8",

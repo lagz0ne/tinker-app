@@ -868,6 +868,155 @@
       }
     },
     {
+      "name": "sync-sqlite",
+      "type": "registry:lib",
+      "title": "sync-sqlite",
+      "description": "Copied SQLite sync component. You own its files.",
+      "dependencies": [
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+        "@tanstack/react-router@1.170.41",
+        "@tanstack/react-start@1.168.60",
+        "reylo@0.6.0",
+        "zod@catalog:"
+      ],
+      "registryDependencies": [
+        "@tinker-start/errors",
+        "@tinker-start/requests",
+        "@tinker-start/database-sqlite"
+      ],
+      "files": [
+        {
+          "path": "tinker/components/sync-sqlite/client/events.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/client/events.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/client/owner.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/client/owner.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/client/router.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/client/router.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/client/sync.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/client/sync.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/client/tab.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/client/tab.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/component.json"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/envelopes.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/envelopes.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/functions.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/functions.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/history.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/history.server.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/index.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/index.server.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/index.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/index.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/notice.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/notice.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/notifications.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/notifications.server.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/part.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/part.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/protocol.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/protocol.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/publish.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/publish.server.ts"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/queries/bump_stream.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/queries/bump_stream.sql"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/queries/insert_event.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/queries/insert_event.sql"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/queries/insert_stream.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/queries/insert_stream.sql"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/queries/read_events.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/queries/read_events.sql"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/queries/read_execution.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/queries/read_execution.sql"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/queries/read_stream.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/queries/read_stream.sql"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/queries/write_result.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/queries/write_result.sql"
+        },
+        {
+          "path": "tinker/components/sync-sqlite/slots.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/sync-sqlite/slots.ts"
+        },
+        {
+          "path": "sqlite/migrations/20261028000100_sync.sql",
+          "type": "registry:file",
+          "target": "~/migrations/20261028000100_sync.sql"
+        }
+      ],
+      "meta": {
+        "ownership": "userland",
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+      }
+    },
+    {
       "name": "telemetry",
       "type": "registry:lib",
       "title": "telemetry",
