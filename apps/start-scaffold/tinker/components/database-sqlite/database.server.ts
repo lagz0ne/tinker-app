@@ -119,17 +119,15 @@ export const database = resource({
 
         const ahead = tail;
         const held = Promise.withResolvers<void>();
-        const aborted = Promise.withResolvers<never>();
-
-        aborted.promise.catch(() => {});
+        const turn = Promise.withResolvers<() => void>();
 
         tail = held.promise;
 
+        // One decision per waiter: the first of the grant and the abort wins, so one holder.
         let waiting = true;
 
         // Named, so the turn can take it off the caller's signal again.
         const leave = () => {
-          // Only the wait is cancellable; a turn already held is released by its session.
           if (!waiting) return;
 
           waiting = false;
@@ -138,19 +136,22 @@ export const database = resource({
           // waits on it, and the shared write connection is still inside that transaction.
           void ahead.then(() => held.resolve());
 
-          aborted.reject(signal?.reason);
+          turn.reject(signal?.reason);
         };
+
+        void ahead.then(() => {
+          // An abort that came first already handed this place on; a held turn ends with its session.
+          if (!waiting) return;
+
+          waiting = false;
+          signal?.removeEventListener("abort", leave);
+
+          turn.resolve(held.resolve);
+        });
 
         signal?.addEventListener("abort", leave, { once: true });
 
-        try {
-          await Promise.race([ahead, aborted.promise]);
-        } finally {
-          waiting = false;
-          signal?.removeEventListener("abort", leave);
-        }
-
-        return held.resolve;
+        return turn.promise;
       },
 
       /** A commit in this process wakes every listener now, without waiting for the poll. */
@@ -407,6 +408,9 @@ export const transaction = resource({
             .then((releaseTurn) => {
               release = releaseTurn;
 
+              // The session ended while it waited: its end opened nothing, so this must not.
+              if (state !== "open") throw fail("TransactionEnded", {});
+
               database.client.exec("BEGIN IMMEDIATE");
 
               began = true;
@@ -447,20 +451,20 @@ export const transaction = resource({
       commit() {
         if (state === "committed" || state === "rolledBack") return Promise.resolve();
 
-        const opened = state === "open" && began;
+        const opened = state === "open";
 
         state = "committed";
 
-        if (!opened) {
-          release?.();
-          release = undefined;
+        if (!opened) return Promise.resolve();
 
-          return Promise.resolve();
-        }
-
+        // A start still waiting for the turn ends first; only a transaction it began is committed.
         ending = Promise.resolve(starting)
-          .then(() => database.client.exec("COMMIT"))
+          .catch(() => {})
           .then(() => {
+            if (!began) return;
+
+            database.client.exec("COMMIT");
+
             if (notified) database.wake();
           })
           .catch((error) => {
@@ -485,19 +489,17 @@ export const transaction = resource({
       rollback() {
         if (state === "committed" || state === "rolledBack") return Promise.resolve();
 
-        const opened = state === "open" && began;
+        const opened = state === "open";
 
         state = "rolledBack";
 
-        if (!opened) {
-          release?.();
-          release = undefined;
-
-          return Promise.resolve();
-        }
+        if (!opened) return Promise.resolve();
 
         ending = Promise.resolve(starting)
-          .then(() => database.client.exec("ROLLBACK"))
+          .catch(() => {})
+          .then(() => {
+            if (began) database.client.exec("ROLLBACK");
+          })
           .finally(() => {
             release?.();
             release = undefined;
