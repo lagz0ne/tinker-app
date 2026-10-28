@@ -1,0 +1,3 @@
+# The dev database Reylo reads the schema from. `maintain/sqlite-dev-db.mjs` rebuilds it,
+# so the type check, the build and the tests need no running server.
+direct_url: file:./.tinker/sqlite-dev.db
