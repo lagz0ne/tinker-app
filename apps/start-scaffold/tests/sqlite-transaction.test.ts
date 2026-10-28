@@ -1,3 +1,4 @@
+import { getEventListeners } from "node:events";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -317,6 +318,62 @@ test("a call cancelled while it waits for the write turn leaves the queue", asyn
     status: "success",
   });
   expect(await payloads(root)).toEqual(["late"]);
+
+  await root.close({ graceful: true });
+});
+
+test("an aborted waiter leaves the queue only after the turn ahead of it ends", async () => {
+  const root = await sandbox();
+
+  const db = await root.resolve(database);
+
+  // The test holds the process's write turn, as a live session would.
+  const release = await db.writeTurn();
+
+  const save = (payload: string) =>
+    operation({
+      label: `proof.sqlite${payload}`,
+      depends: { tx: transaction },
+      run: async ({ tx }) => {
+        await tx.notify("proof", payload);
+      },
+    });
+
+  const second = new AbortController();
+
+  const waitingSecond = root.settle(save("b"), { signal: second.signal });
+
+  const waitingThird = root.settle(save("c"), { signal: new AbortController().signal });
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  second.abort();
+
+  expect(await waitingSecond).toMatchObject({ status: "cancelled" });
+
+  // The third waiter sits behind the aborted one, so it must not open a transaction yet.
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(await payloads(root)).toEqual([]);
+
+  release();
+
+  expect(await waitingThird).toMatchObject({ status: "success" });
+  expect(await payloads(root)).toEqual(["c"]);
+
+  await root.close({ graceful: true });
+});
+
+test("taking the write turn takes its abort listener off the caller", async () => {
+  const root = await sandbox();
+
+  const db = await root.resolve(database);
+
+  const stop = new AbortController();
+
+  const release = await db.writeTurn(stop.signal);
+
+  expect(getEventListeners(stop.signal, "abort")).toHaveLength(0);
+
+  release();
 
   await root.close({ graceful: true });
 });

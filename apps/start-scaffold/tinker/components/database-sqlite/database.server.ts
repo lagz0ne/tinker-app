@@ -112,7 +112,7 @@ export const database = resource({
       /**
        * One write transaction per process at a time: `node:sqlite` is synchronous, so two
        * sessions on one connection would mix statements. Waiters hand off in call order, and
-       * a waiter that aborts releases its place.
+       * a waiter that aborts keeps its place until the turn ahead of it ends.
        */
       async writeTurn(signal?: AbortSignal) {
         signal?.throwIfAborted();
@@ -127,22 +127,28 @@ export const database = resource({
 
         let waiting = true;
 
-        signal?.addEventListener(
-          "abort",
-          () => {
-            // Only the wait is cancellable; a turn already held is released by its session.
-            if (!waiting) return;
+        // Named, so the turn can take it off the caller's signal again.
+        const leave = () => {
+          // Only the wait is cancellable; a turn already held is released by its session.
+          if (!waiting) return;
 
-            waiting = false;
-            held.resolve();
-            aborted.reject(signal.reason);
-          },
-          { once: true },
-        );
+          waiting = false;
 
-        await Promise.race([ahead, aborted.promise]);
+          // Keep this place in the queue until the turn ahead of it ends: the next waiter
+          // waits on it, and the shared write connection is still inside that transaction.
+          void ahead.then(() => held.resolve());
 
-        waiting = false;
+          aborted.reject(signal?.reason);
+        };
+
+        signal?.addEventListener("abort", leave, { once: true });
+
+        try {
+          await Promise.race([ahead, aborted.promise]);
+        } finally {
+          waiting = false;
+          signal?.removeEventListener("abort", leave);
+        }
 
         return held.resolve;
       },
