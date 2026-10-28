@@ -5,6 +5,9 @@ Asked by: Hedl on Tinker, gap G0.
 Duke, 2026-10-26: "SQLite is just fine".
 Duke, 2026-10-26: no workarounds in Hedl;
 a Tinker gap is fixed in Tinker.
+Duke, 2026-10-28: use Reylo
+"so we no longer need drizzle".
+Duke, 2026-10-28: "Accept ts 7.1 beta".
 
 ## Context
 
@@ -44,6 +47,44 @@ rows past the last id they saw.
 shadcn ships a style as a whole copy
 of a component, not as a switch inside it.
 
+sqlc (Go) and PgTyped type plain `.sql`
+files against a real schema.
+Reylo does the same inside TypeScript 7.1:
+`import getUser from "./get_user.sql"`.
+
+dbmate and golang-migrate run plain,
+numbered `.sql` migration files and keep
+a table of the ones applied.
+
+## Drizzle goes
+
+Reylo replaces each Drizzle job:
+
+- Queries: one `.sql` file each,
+  typed by Reylo, run with `.runSync()`.
+- Schema: the migration files are the schema.
+  No `pgTable` or `sqliteTable`.
+- `drizzle-kit generate`: gone.
+  A person writes the next `.sql` migration.
+- Drizzle migrator: `migrate` runs the
+  numbered files, as dbmate does.
+- Better Auth: takes the `DatabaseSync`
+  itself (its Kysely `node:sqlite` dialect).
+  No drizzle adapter.
+
+What it costs:
+
+- TypeScript 7.1 beta, with
+  `--runExternalCode` on the type check.
+- Node 24 or later (CI has 24).
+- The type check needs a dev database.
+  For SQLite that is a file: CI applies the
+  migrations to it, then type checks.
+- Reylo is 0.6.0 and one day old.
+- Reylo's Vite plugin goes in
+  `vite.config.ts`, for the build and Vitest.
+- `.sql` files stay in server code only.
+
 ## Proposal (pending Duke's card)
 
 Variant components, each a whole copy:
@@ -62,8 +103,8 @@ Same public names as `database`:
 `database`, `databaseSetup`, `migrate`,
 `transaction`, `databaseUrl`.
 
-- Driver: `node:sqlite` with
-  `drizzle-orm/node-sqlite`.
+- Driver: `node:sqlite` (`DatabaseSync`).
+  Queries are Reylo `.sql` files.
 - `databaseUrl` is a `file:` URL.
 - On open: WAL, `synchronous = NORMAL`,
   `busy_timeout`, `foreign_keys = ON`.
@@ -78,6 +119,9 @@ Same public names as `database`:
   WAL lets them run beside the writer.
 - `migrate` holds `BEGIN EXCLUSIVE`
   in place of the advisory lock.
+  It runs each new file in `migrations/`
+  in name order and records it in
+  `start_migrations`.
 - `listen(channel)` polls a `start_notify`
   table by rowid; a write in the same process
   also wakes readers at once.
@@ -88,19 +132,24 @@ Same public names as `database`:
 
 ### auth-sqlite
 
-- `sqliteTable` schema.
-- Better Auth `provider: "sqlite"`.
-- No other change.
+- Tables in a `.sql` migration.
+- Better Auth gets `database.client`
+  (the `DatabaseSync`), no adapter.
 
 ### sync-sqlite
 
-- `sqliteTable` schema; JSON columns are
-  `text` with `mode: "json"`.
+- Tables in a `.sql` migration;
+  JSON columns are `text`.
+- Queries in `.sql` files.
 - `database.notify` in place of `pg_notify`.
 - No trigger: the publish step notifies
   in the same transaction.
 
 ## Not decided here
 
+- Postgres components (`database`, `auth`,
+  `sync`, `mail`) keep Drizzle for now.
+  Moving them to Reylo is its own ticket,
+  after the SQLite set proves it.
 - Hedl's own tables: app code, not Start.
 - A `mail-sqlite` variant: on a second asker.
