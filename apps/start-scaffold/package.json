@@ -19,7 +19,7 @@
     "test:registry-hook": "node --test maintain/test-registry-staged.mjs",
     "test:seam:fixture": "node maintain/check-seam-fixture.mjs",
     "test:schema": "node scripts/check-schema.mjs",
-    "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
+    "typecheck": "node maintain/sqlite-dev-db.mjs && DATABASE_URL=file:.tinker/sqlite-dev.db node node_modules/typescript/bin/tsc --noEmit --runExternalCode",
     "check:plain": "node scripts/check-plain.mjs",
     "postinstall": "tinker prepare",
     "doctor": "tinker doctor",
@@ -51,11 +51,13 @@
     "pino": "10.3.1",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "reylo": "0.6.0",
     "tailwind-merge": "3.7.0",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@electric-sql/pglite": "catalog:",
+    "@reylosql/sqlite": "0.6.0",
     "@stryker-mutator/core": "catalog:",
     "@stryker-mutator/vitest-runner": "catalog:",
     "@tailwindcss/vite": "4.3.3",
@@ -70,7 +72,7 @@
     "drizzle-kit": "catalog:",
     "oxc-parser": "catalog:",
     "tailwindcss": "4.3.3",
-    "typescript": "catalog:",
+    "typescript": "7.1.0-beta",
     "typescript-api": "npm:typescript@5.9.3",
     "vite": "catalog:",
     "vite-plus": "catalog:"
