@@ -404,3 +404,140 @@ test("a call that never writes takes no write turn", async () => {
     await root.close({ graceful: true });
   }
 });
+
+test("a session that ends while its first use waits for the turn opens no transaction", async () => {
+  const root = await sandbox();
+
+  const db = await root.resolve(database);
+
+  // The test holds the process's write turn, so the session's first use must wait.
+  const release = await db.writeTurn();
+
+  const ended = Promise.withResolvers<void>();
+
+  let endDone = false;
+
+  const early = operation({
+    label: "proof.sqliteEndWhileWaiting",
+    depends: { tx: transaction },
+    run: async ({ tx }) => {
+      const pending = tx.db();
+
+      pending.catch(() => {});
+
+      const rolledBack = tx.rollback().then(() => {
+        endDone = true;
+      });
+
+      ended.resolve();
+
+      await rolledBack;
+
+      return pending.then(
+        () => "opened",
+        (error: Error & { kind?: string }) => String(error.kind),
+      );
+    },
+  });
+
+  const running = root.settle(early, { signal: new AbortController().signal });
+
+  await ended.promise;
+
+  // The end waits for the start it overtook, as the Postgres twin waits for its BEGIN.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(endDone).toBe(false);
+
+  release();
+
+  expect(await running).toMatchObject({ status: "success", value: "TransactionEnded" });
+  expect(db.client.isTransaction).toBe(false);
+
+  // The ended session handed the turn back: the next taker gets it at once.
+  const next = await Promise.race([
+    db.writeTurn(),
+    new Promise<"held">((resolve) => setTimeout(() => resolve("held"), 1000)),
+  ]);
+
+  expect(next).toBeTypeOf("function");
+
+  if (typeof next === "function") next();
+
+  const later = operation({
+    label: "proof.sqliteAfterEarlyEnd",
+    depends: { tx: transaction },
+    run: async ({ tx }) => {
+      await tx.notify("proof", "later");
+    },
+  });
+
+  expect(await root.settle(later, { signal: new AbortController().signal })).toMatchObject({
+    status: "success",
+  });
+  expect(db.client.isTransaction).toBe(false);
+  expect(await payloads(root)).toEqual(["later"]);
+
+  await root.close({ graceful: true });
+});
+
+test("a waiter aborted as its turn comes leaves exactly one holder", async () => {
+  const root = await sandbox();
+
+  const db = await root.resolve(database);
+
+  // The abort lands in the same tick as the grant, then a few promise steps after it.
+  for (const steps of [0, 1, 2, 3, 4, 5]) {
+    const releaseFirst = await db.writeTurn();
+
+    const second = new AbortController();
+
+    let holders = 0;
+    let most = 0;
+    let thirdTurns = 0;
+
+    const hold = (release: () => void) => {
+      holders += 1;
+      most = Math.max(most, holders);
+
+      return () => {
+        holders -= 1;
+        release();
+      };
+    };
+
+    const waitingSecond = db.writeTurn(second.signal).then(hold);
+
+    const waitingThird = db.writeTurn().then((release) => {
+      thirdTurns += 1;
+
+      return hold(release);
+    });
+
+    waitingSecond.catch(() => {});
+
+    releaseFirst();
+
+    for (let step = 0; step < steps; step += 1) await Promise.resolve();
+
+    second.abort();
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect({ steps, most }).toEqual({ steps, most: 1 });
+
+    const [secondResult] = await Promise.allSettled([waitingSecond]);
+
+    if (secondResult?.status === "fulfilled") secondResult.value();
+
+    (await waitingThird)();
+
+    expect({ steps, most, thirdTurns, holders }).toEqual({
+      steps,
+      most: 1,
+      thirdTurns: 1,
+      holders: 0,
+    });
+  }
+
+  await root.close({ graceful: true });
+});
