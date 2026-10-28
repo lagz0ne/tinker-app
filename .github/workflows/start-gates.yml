@@ -64,6 +64,7 @@ jobs:
           pnpm --dir apps/issue-board run typecheck
           pnpm --dir apps/start-scaffold run typecheck
           pnpm --dir apps/start-min run typecheck
+          pnpm --dir packages/loop run typecheck
           pnpm --dir packages/start exec vp test --maxWorkers=1 --no-file-parallelism
           pnpm --dir packages/loop exec vp test --maxWorkers=1 --no-file-parallelism
           node packages/loop/maintain/check-frozen.mjs

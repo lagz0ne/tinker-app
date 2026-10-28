@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
+import { readJsonc } from "./jsonc.mjs";
 import { findPackage } from "./paths.mjs";
 
 export const say = {
@@ -24,6 +25,16 @@ export function typeErrors(output) {
 }
 
 /**
+ * An app's tsconfig declares content mappers for `.sql` files (Reylo) in its own file, not in
+ * the generated base, so its own tsconfig is the one to read.
+ * @param {string} root - From tinker(); why: read that app's tsconfig.
+ */
+function usesContentMappers(root) {
+  const config = readJsonc(join(root, "tsconfig.json"));
+  return config.error === undefined && config.value?.contentMappers !== undefined;
+}
+
+/**
  * Run the app's own tsc once. Vite strips types without checking them,
  * so a wrong `<Link to>` would ship and land on a 404.
  * TypeScript is found in the app's node_modules, walking up; never through NODE_PATH, which
@@ -34,8 +45,10 @@ export function checkTypes(root) {
   const typescript = findPackage(root, "typescript");
   if (!typescript) return [say.noTypescript];
   const tsc = join(typescript, "bin/tsc");
+  // tsc runs content mappers (a `.sql` import) only when the flag is on.
+  const run = usesContentMappers(root) ? ["--runExternalCode"] : [];
   try {
-    execFileSync(process.execPath, [tsc, "--noEmit", "--pretty", "false", "-p", root], {
+    execFileSync(process.execPath, [tsc, "--noEmit", "--pretty", "false", ...run, "-p", root], {
       cwd: root,
       encoding: "utf8",
     });
