@@ -13,6 +13,8 @@ export default defineConfig({
     },
   },
   test: {
+    // Every `.sql` import compiles against the dev database; build it before any test file loads.
+    globalSetup: ["./maintain/sqlite-dev-db.mjs"],
     // Vitest v4 compatibility: preserve mock call history.
     // Remove after tests no longer rely on calls from setup or earlier tests.
     // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings

@@ -18,6 +18,7 @@
   },
   "scripts": {
     "test": "vp test",
+    "typecheck": "tsc --noEmit",
     "check": "vp check",
     "doctor": "tinker doctor",
     "check-plain": "node ../../apps/start-scaffold/scripts/check-plain.mjs .",

@@ -1359,6 +1359,8 @@ function checkPlainFunction(node) {
 /** Named copied entry helpers and the approved server and browser mains keep native contracts. */
 const entryHelpers = {
   "tinker/components/database/database.server.ts": ["queryWithStop"],
+  // The SQLite twin's guarded view: the session owns the write connection until its end.
+  "tinker/components/database-sqlite/database.server.ts": ["guardQuery"],
   "tinker/components/database/lease.server.ts": ["leaseFrom", "logQuery", "query", "release"],
   "tinker/base/main.ts": ["defineMain"],
   "tinker/base/panics.server.ts": [

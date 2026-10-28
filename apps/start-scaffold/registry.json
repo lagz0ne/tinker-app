@@ -318,6 +318,80 @@
       "devDependencies": ["@types/pg@^8.15.6"]
     },
     {
+      "name": "database-sqlite",
+      "type": "registry:lib",
+      "title": "database-sqlite",
+      "description": "Copied SQLite database component. You own its files.",
+      "dependencies": [
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+        "reylo@0.6.0",
+        "zod@catalog:"
+      ],
+      "registryDependencies": ["@tinker-start/errors"],
+      "files": [
+        {
+          "path": "tinker/components/database-sqlite/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/component.json"
+        },
+        {
+          "path": "tinker/components/database-sqlite/database.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/database.server.ts"
+        },
+        {
+          "path": "tinker/components/database-sqlite/index.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/index.server.ts"
+        },
+        {
+          "path": "tinker/components/database-sqlite/index.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/index.ts"
+        },
+        {
+          "path": "tinker/components/database-sqlite/modules.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/modules.ts"
+        },
+        {
+          "path": "tinker/components/database-sqlite/queries/last_id.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/queries/last_id.sql"
+        },
+        {
+          "path": "tinker/components/database-sqlite/queries/notify.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/queries/notify.sql"
+        },
+        {
+          "path": "tinker/components/database-sqlite/queries/poll.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/queries/poll.sql"
+        },
+        {
+          "path": "tinker/components/database-sqlite/queries/trim.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/queries/trim.sql"
+        },
+        {
+          "path": "tinker/components/database-sqlite/types.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/types.ts"
+        },
+        {
+          "path": "sqlite/migrations/20261028000000_start_notify.sql",
+          "type": "registry:file",
+          "target": "~/migrations/20261028000000_start_notify.sql"
+        }
+      ],
+      "meta": {
+        "ownership": "userland",
+        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+      },
+      "devDependencies": ["@reylosql/sqlite@0.6.0"]
+    },
+    {
       "name": "demo",
       "type": "registry:item",
       "title": "demo",
@@ -1578,6 +1652,11 @@
           "path": "tests/worker-telemetry-command.test.ts",
           "type": "registry:file",
           "target": "~/tests/worker-telemetry-command.test.ts"
+        },
+        {
+          "path": "maintain/sqlite-dev-db.mjs",
+          "type": "registry:file",
+          "target": "~/maintain/sqlite-dev-db.mjs"
         }
       ],
       "meta": {
