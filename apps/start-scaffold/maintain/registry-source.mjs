@@ -184,7 +184,13 @@ async function releasePackage(path, packs, releaseVersion) {
 
   // npm 10 cannot resolve a "$vite" reference to an alias spec, so name the spec itself. A
   // prerelease TypeScript also falls outside vite's `^7.0.0` peer range, so name its version too.
+  // npm resolves the better-auth family a patch ahead of the app's, and the Kysely adapter's
+  // exact peers then disagree; pin the versions better-auth itself ships with. An app with no
+  // better-auth has nothing to conflict with, and a missing core pin is dropped from the file.
   pkg.overrides = {
+    "@better-auth/core": pkg.dependencies["better-auth"],
+    "@better-auth/utils": "0.4.2",
+    "better-call": "1.4.0",
     typescript: pkg.devDependencies.typescript,
     vite: pkg.devDependencies.vite,
   };

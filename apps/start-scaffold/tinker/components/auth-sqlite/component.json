@@ -1,0 +1,1 @@
+{ "requires": ["requests", "database-sqlite", "sync-sqlite", "errors"] }
