@@ -3,7 +3,7 @@
   "name": "auth-sqlite",
   "type": "registry:lib",
   "title": "auth-sqlite",
-  "description": "Copied SQLite auth component. You own its files.",
+  "description": "Copied SQLite auth component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
   "dependencies": [
     "@better-auth/kysely-adapter@1.7.7",
     "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
