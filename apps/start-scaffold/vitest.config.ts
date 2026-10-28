@@ -1,8 +1,10 @@
 import { fileURLToPath } from "node:url";
 
+import reylo from "reylo/vite";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  plugins: [reylo()],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
