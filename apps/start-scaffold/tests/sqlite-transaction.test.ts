@@ -541,3 +541,76 @@ test("a waiter aborted as its turn comes leaves exactly one holder", async () =>
 
   await root.close({ graceful: true });
 });
+
+test("an aborted waiter never gets the write turn", async () => {
+  const root = await sandbox();
+
+  const db = await root.resolve(database);
+
+  /** The next taker gets the turn at once, or the race reports it still held. */
+  const takeNow = () =>
+    Promise.race([
+      db.writeTurn(),
+      new Promise<"held">((resolve) => setTimeout(() => resolve("held"), 1000)),
+    ]);
+
+  const releaseFirst = await db.writeTurn();
+
+  const second = new AbortController();
+  const reason = new Error("second waiter stopped");
+
+  let secondTurns = 0;
+  let thirdTurns = 0;
+
+  const waitingSecond = db.writeTurn(second.signal).then((release) => {
+    secondTurns += 1;
+
+    return release;
+  });
+
+  const waitingThird = db.writeTurn().then((release) => {
+    thirdTurns += 1;
+
+    return release;
+  });
+
+  waitingSecond.catch(() => {});
+
+  second.abort(reason);
+
+  await expect(waitingSecond).rejects.toBe(reason);
+
+  releaseFirst();
+
+  for (let tick = 0; tick < 5; tick += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  expect({ secondTurns, thirdTurns }).toEqual({ secondTurns: 0, thirdTurns: 1 });
+
+  (await waitingThird)();
+
+  const next = await takeNow();
+
+  expect(next).toBeTypeOf("function");
+
+  if (typeof next === "function") next();
+
+  // A signal already aborted before the call never joins the queue.
+  const early = new AbortController();
+  const earlyReason = new Error("stopped before the call");
+
+  early.abort(earlyReason);
+
+  await expect(db.writeTurn(early.signal)).rejects.toBe(earlyReason);
+
+  const after = await takeNow();
+
+  expect(after).toBeTypeOf("function");
+
+  if (typeof after === "function") after();
+
+  expect(secondTurns).toBe(0);
+
+  await root.close({ graceful: true });
+});
