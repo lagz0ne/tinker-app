@@ -1,7 +1,8 @@
 name: App mutation reports
 
 on:
-  pull_request:
+  push:
+    branches: [next]
   schedule:
     - cron: "23 3 * * 1"
   workflow_dispatch:
@@ -9,13 +10,15 @@ on:
 permissions:
   contents: read
 
+# Trunk-based: the diff gate checks each push to next (before..sha).
+# One run per pushed range, so a newer push never cancels an older one.
 concurrency:
-  group: mutation-${{ github.event_name }}-${{ github.ref }}
+  group: mutation-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
   plan:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
@@ -29,7 +32,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
@@ -50,8 +53,8 @@ jobs:
       - name: Plan changed lines without starting mutation
         run: >-
           node scripts/mutation/diff.mjs --app apps/${{ matrix.app }}
-          --base ${{ github.event.pull_request.base.sha }}
-          --head ${{ github.event.pull_request.head.sha }} --plan-only
+          --base ${{ github.event.before }}
+          --head ${{ github.sha }} --plan-only
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -59,7 +62,7 @@ jobs:
           path: apps/${{ matrix.app }}/reports/mutation/
 
   matrix:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push'
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -68,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
@@ -85,7 +88,7 @@ jobs:
           path: mutation-manifest.json
 
   diff:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push'
     needs: matrix
     runs-on: ubuntu-latest
     timeout-minutes: 180
@@ -99,7 +102,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
@@ -117,8 +120,8 @@ jobs:
       - name: Mutate this shard at concurrency 1
         run: >-
           node scripts/mutation/diff.mjs --app apps/${{ matrix.app }}
-          --base ${{ github.event.pull_request.base.sha }}
-          --head ${{ github.event.pull_request.head.sha }}
+          --base ${{ github.event.before }}
+          --head ${{ github.sha }}
           --shard ${{ matrix.shard }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
@@ -129,7 +132,7 @@ jobs:
             apps/${{ matrix.app }}/reports/mutation/diff-summary.md
 
   diff-gate:
-    if: always() && github.event_name == 'pull_request'
+    if: always() && github.event_name == 'push'
     needs: [plan, matrix, diff]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -145,7 +148,7 @@ jobs:
           test "$DIFF_RESULT" = success
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
@@ -199,7 +202,7 @@ jobs:
   # frozen tests drive the whole CLI, some in a child process, so it gates on changed lines
   # without a span map.
   loop-diff:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
@@ -209,7 +212,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
@@ -223,8 +226,8 @@ jobs:
       - name: Mutate the loop's changed src lines at floor 60
         run: >-
           pnpm --dir packages/loop run mutate:diff
-          --base ${{ github.event.pull_request.base.sha }}
-          --head ${{ github.event.pull_request.head.sha }}
+          --base ${{ github.event.before }}
+          --head ${{ github.sha }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

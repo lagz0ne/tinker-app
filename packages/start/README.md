@@ -100,7 +100,7 @@ That folder has a strict type project so the demo's sync bodies do not leak into
 The app's `PLAIN.md` has a cap of 17. Only named copied base entry functions have exceptions.
 Components and src have no function skips. Commands allow only the named server and browser mains.
 
-App pull requests use the diff mutation gate at floor 60; the weekly full app
+Each push to `next` runs the diff mutation gate at floor 60; the weekly full app
 run is a report. Start tooling keeps floor 85 in its `stryker.config.json`.
 Local package packing and registry builds publish nothing.
 

@@ -90,5 +90,6 @@ The real registry proof packs local Start and uses the existing Core/React relea
 Its HTTP server stays on loopback. Nothing is published.
 
 The original prose lint and CI workflows are not in this checkout.
-App pull requests run a changed-line mutation gate at floor 60. A weekly full
-app run is a report, not a merge gate. `packages/start` keeps floor 85.
+Trunk-based: no pull requests; push straight to `next`.
+Each push to `next` runs a changed-line mutation gate at floor 60.
+A weekly full app run is a report, not a gate. `packages/start` keeps floor 85.

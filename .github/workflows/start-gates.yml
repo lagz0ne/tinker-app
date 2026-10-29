@@ -1,9 +1,8 @@
 name: Start and copied app gates
 
 on:
-  pull_request:
   push:
-    branches: [next, board/slice-7]
+    branches: [next]
 
 permissions:
   contents: read
