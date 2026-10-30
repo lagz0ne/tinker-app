@@ -77,8 +77,10 @@ prints the import lines to paste into `cmds/*.ts`. It never writes `cmds/` or `s
 Update replaces one folder whole through `.tinker/update/`, so a failed or killed update leaves
 the old folder intact. It refuses when the folder has local edits unless you pass `--force`,
 and it skips that refusal when it just restored a killed update.
-Check prints `edited: <path>`, `unknown component:`, `missing requires:`, and
-`interrupted update:` lines, exits 1 on any finding, and writes nothing.
+`tinker/components.lock` records a sha256 per file and the Start version that copied it, so an
+edit and a Start release are told apart: update measures a folder against the lock, and check
+prints `edited:`, `outdated:`, `no lock entry:`, `missing component:`, `missing requires:`, and
+`interrupted update:` lines. Check exits 1 on a finding and writes nothing.
 A registry item marked `meta.starterOnly` is refused, alone or inside a `requires` closure.
 A component may write only its own folder and `drizzle/`; any other target is `bad target ...`.
 Component names are folder names: lower case letters, digits, and dashes.

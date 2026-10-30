@@ -329,13 +329,20 @@ host owns process inputs and lifecycle; commands keep their wiring inline.
 
 ## D3: tooling and copied updates
 
-Current Start CLI commands are **prepare, doctor, and serve**. Doctor --fix only
-repairs its supported glue and generated files; it does not rewrite app wiring.
-Per-component registry items already exist. Build their output from the golden
-source with the existing registry:build script; never hand-merge generated files.
-The released 0.9.0 installer path is recorded in UPGRADE.md.
+Start CLI commands are **prepare, doctor, serve, add, update, and check**.
+Doctor --fix only repairs its supported glue and generated files; it does not
+rewrite app wiring. Per-component registry items come from the golden source
+through the registry:build script; never hand-merge generated files. The
+released 0.9.0 installer path is recorded in UPGRADE.md.
 
-Planned Start tooling is **add, update, and check**. That CLI will replace whole
-owned components and stop when it finds local edits, so the user can review them.
-It must protect app source, config, secrets, and command wiring. There is no
-automatic merge or working add/update/check command in this source yet.
+`tinker add` copies a component and every component it requires, merges its npm
+dependencies, and prints the lines to paste into `cmds/*.ts`. It never edits
+`cmds/` or `src/`. It writes only the component folder and the `drizzle/` files
+the component owns. `tinker update` replaces one folder whole and stops on local
+edits. `tinker check` is read-only and exits 1 on a finding.
+
+`tinker/components.lock` records a hash per file and the Start version each
+component came from, so a user edit and a Start release are told apart. Update
+compares the folder with the lock and refuses on an edit unless --force. Check
+also reports a copy the registry has moved past, as a note. A failed update
+leaves the old folder and the old lock entry whole.
