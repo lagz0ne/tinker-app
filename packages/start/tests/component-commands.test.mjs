@@ -863,6 +863,13 @@ test("G1 the real scaffold registry checks start-min clean, then add mail copies
   expect(existsSync(join(root, "tinker/components/database/index.server.ts"))).toBe(true);
   expect(existsSync(join(root, "drizzle/20261018041738_durable_mail/migration.sql"))).toBe(true);
   expect(snapshot(join(root, "tinker/components/errors"))).toEqual(errors);
+
+  const sync = tinker(root, "add", "sync", "--registry", scaffoldRegistry);
+  expect(sync.code).toBe(0);
+  expect(sync.lines.at(-1)).toBe("tinker add: added sync");
+  const syncLine = sync.lines.find((line) => line.includes('from "~/components/sync";'));
+  expect(syncLine).toContain("eventEnvelope");
+  expect(syncLine).toContain("snapshotEnvelope");
 });
 
 test("U0 a missing name or an unknown flag prints the usage line and exits 64", () => {
@@ -1099,4 +1106,34 @@ test("K4 check reports a leftover temp copy alone", () => {
     "interrupted update: c; run tinker update c",
     "tinker check: 1 findings",
   ]);
+});
+
+test("R1 a type-only star adds no runtime names", () => {
+  const files = {
+    "~/tinker/components/r1/component.json": '{ "requires": [] }\n',
+    "~/tinker/components/r1/index.ts": 'export const real = 1;\nexport type * from "./more";\n',
+    "~/tinker/components/r1/more.ts": "export const moreValue = 1;\n",
+  };
+  const registry = makeRegistry({ r1: { files } });
+  const root = app();
+
+  const run = tinker(root, "add", "r1", "--registry", registry);
+
+  expect(run.code).toBe(0);
+  expect(run.lines).toContain('import { real } from "~/components/r1";');
+});
+
+test("R2 a star through the ~/ alias keeps its names", () => {
+  const files = {
+    "~/tinker/components/r2/component.json": '{ "requires": [] }\n',
+    "~/tinker/components/r2/index.ts": 'export * from "~/components/r2/more";\n',
+    "~/tinker/components/r2/more.ts": "export const aliased = 1;\nexport type Hidden = string;\n",
+  };
+  const registry = makeRegistry({ r2: { files } });
+  const root = app();
+
+  const run = tinker(root, "add", "r2", "--registry", registry);
+
+  expect(run.code).toBe(0);
+  expect(run.lines).toContain('import { aliased } from "~/components/r2";');
 });

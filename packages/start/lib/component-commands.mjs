@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import * as fsp from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 
 import { listFiles } from "./paths.mjs";
 import { readRegistryJson } from "./registry.mjs";
@@ -262,8 +262,10 @@ async function writeFolder(root, name, files, ops) {
   await ops.mkdir(dirname(target), { recursive: true });
   try {
     await fillFolder(fresh, files, ops);
-    moved = existsSync(target);
-    if (moved) await ops.rename(target, old);
+    if (existsSync(target)) {
+      await ops.rename(target, old);
+      moved = true;
+    }
     await ops.rename(fresh, target);
   } catch (error) {
     if (moved) await ops.rename(old, target).catch(() => null);
@@ -328,60 +330,84 @@ async function recover(root, name, ops) {
 
 /**
  * The names a component index file exports at runtime, sorted; a type-only export is left out.
+ * @param {string} root - From pasteLines; why: `~/` is the app's `tinker/` folder.
  * @param {string} file - From pasteLines; why: an index file that was just written.
  * @param {Set<string>} [seen] - From starExports; why: a cycle of `export *` ends.
  */
-function runtimeExports(file, seen = new Set()) {
+function runtimeExports(root, file, seen = new Set()) {
   if (seen.has(file)) return [];
   seen.add(file);
 
   const names = new Set();
   for (const node of parseSource(file).program.body) {
-    for (const name of statementNames(file, node, seen)) names.add(name);
+    for (const name of statementNames(root, file, node, seen)) names.add(name);
   }
   return [...names].sort(byText);
 }
 
 /**
  * The runtime names one top-level statement adds: its own, or the ones a local star re-exports.
+ * @param {string} root - From runtimeExports; why: `~/` is the app's `tinker/` folder.
  * @param {string} file - From runtimeExports; why: the file holding the statement.
  * @param {object} node - From runtimeExports; why: one top-level statement.
  * @param {Set<string>} seen - From runtimeExports; why: a cycle of stars ends.
  */
-function statementNames(file, node, seen) {
-  if (node.type === "ExportAllDeclaration") return starExports(file, node, seen);
-  if (node.type !== "ExportNamedDeclaration" || node.exportKind === "type") return [];
+function statementNames(root, file, node, seen) {
+  if (node.exportKind === "type") return [];
+  if (node.type === "ExportAllDeclaration") return starExports(root, file, node, seen);
+  if (node.type !== "ExportNamedDeclaration") return [];
 
   return declaredExports(node);
 }
 
 /**
- * The names `export * as x` or `export * from "./file"` add; a star from a package adds none.
+ * The names `export * as x`, `export * from "./file"` and `export * from "~/file"` add.
+ * @param {string} root - From runtimeExports; why: `~/` is the app's `tinker/` folder.
  * @param {string} file - From runtimeExports; why: the file holding the statement.
  * @param {object} node - From runtimeExports; why: one ExportAllDeclaration.
  * @param {Set<string>} seen - From runtimeExports; why: a cycle of stars ends.
  */
-function starExports(file, node, seen) {
+function starExports(root, file, node, seen) {
   if (node.exported) return [node.exported.name ?? node.exported.value];
-  const target = localFile(file, node.source.value);
+  const target = localFile(root, file, node.source.value);
   if (target === null) return [];
 
-  return runtimeExports(target, seen).filter((name) => name !== "default");
+  return runtimeExports(root, target, seen).filter((name) => name !== "default");
 }
 
 /**
- * The file a relative module path names, or null for a package or a missing file.
- * @param {string} from - From starExports; why: resolve the path from this file.
+ * The app file a module path names, or null for a package, a missing file, or one outside the app.
+ * @param {string} root - From starExports; why: `~/` is the app's `tinker/` folder.
+ * @param {string} from - From starExports; why: resolve a relative path from this file.
  * @param {string} name - From an export statement; why: the module path it names.
  */
-function localFile(from, name) {
-  if (!name.startsWith(".")) return null;
-  const base = resolve(dirname(from), name);
+function localFile(root, from, name) {
+  const base = modulePath(root, from, name);
+  if (base === null) return null;
+
   const ends = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx"];
   return (
     ends.map((end) => base + end).find((path) => existsSync(path) && statSync(path).isFile()) ??
     null
   );
+}
+
+/**
+ * Where a module path sits in the app; `~/` is `tinker/`, and nothing may leave the app.
+ * @param {string} root - From localFile; why: the app folder to stay inside.
+ * @param {string} from - From localFile; why: the file a relative path starts at.
+ * @param {string} name - From an export statement; why: the module path it names.
+ */
+function modulePath(root, from, name) {
+  const inside = (path) => path.startsWith(`${root}${sep}`);
+  if (name.startsWith("~/")) {
+    const path = resolve(root, "tinker", name.slice(2));
+    return inside(path) ? path : null;
+  }
+  if (!name.startsWith(".")) return null;
+
+  const path = resolve(dirname(from), name);
+  return inside(path) ? path : null;
 }
 
 /**
@@ -432,7 +458,7 @@ function pasteLines(root, members) {
       const path = join(folderOf(root, name), file);
       if (!existsSync(path)) continue;
 
-      const names = runtimeExports(path);
+      const names = runtimeExports(root, path);
       if (names.length > 0) {
         lines.push(`import { ${names.join(", ")} } from "${moduleOf(name, file)}";`);
       }
