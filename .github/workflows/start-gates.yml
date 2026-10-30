@@ -89,6 +89,10 @@ jobs:
           node apps/issue-board/scripts/check-plain.mjs
           node apps/start-scaffold/scripts/check-plain.mjs
           pnpm --dir packages/loop run check-plain
+      - name: The committed registry matches its source (release needs it)
+        run: |
+          pnpm --dir apps/start-scaffold run registry:build
+          git diff --exit-code -- apps/start-scaffold/public/r
 
   test:
     runs-on: ubuntu-latest

@@ -7,7 +7,7 @@ name: Trunk status
 
 on:
   workflow_run:
-    workflows: ["Start and copied app gates", "App mutation reports"]
+    workflows: ["Start and copied app gates", "App mutation reports", release]
     types: [completed]
     branches: [main]
 

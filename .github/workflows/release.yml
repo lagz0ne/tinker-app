@@ -1,0 +1,122 @@
+# Continuous delivery from a green trunk, as tinkered does: when the gates
+# pass on main and main's Start version has no release yet, publish it.
+# Landing the version bump commit is the release (Duke 2026-10-30).
+# One job, own GITHUB_TOKEN only:
+#   1. pack Start and check notes (scripts/release.mjs, release-check.mjs);
+#   2. GitHub release start-vX.Y.Z on the exact commit the gates passed;
+#   3. export small and demo, commit each onto its branch, tag
+#      small-vX.Y.Z and demo-vX.Y.Z (the degit variations).
+name: release
+
+on:
+  workflow_run:
+    workflows: [Start and copied app gates]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Is this version released yet?
+        id: version
+        run: |
+          VERSION=$(node -p "require('./packages/start/package.json').version")
+          TAG="start-v$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          # The templates are their own step, so a failed template push is
+          # retried by the next green run even when the release is out.
+          if [ -z "$(git ls-remote --tags origin "refs/tags/demo-v$VERSION")" ]; then
+            echo "templates=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "templates=false" >> "$GITHUB_OUTPUT"
+          fi
+          DRAFT=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || echo none)
+          if [ "$DRAFT" = "false" ]; then
+            echo "$TAG is out already."
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$DRAFT" = "true" ]; then
+            echo "A failed run left a $TAG draft; deleting it to publish again."
+            gh release delete "$TAG" --yes
+          fi
+          echo "new=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: (steps.version.outputs.new == 'true' || steps.version.outputs.templates == 'true')
+        with:
+          node-version: "24"
+
+      - name: Install
+        if: (steps.version.outputs.new == 'true' || steps.version.outputs.templates == 'true')
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/pnpm" install --frozen-lockfile
+          echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Pack Start
+        if: steps.version.outputs.new == 'true'
+        run: node scripts/release.mjs "$VERSION"
+
+      - name: Check version, notes, contract, and registry
+        if: steps.version.outputs.new == 'true'
+        run: node scripts/release-check.mjs "$VERSION" > notes.md
+
+      - name: Export the small and demo templates
+        if: (steps.version.outputs.new == 'true' || steps.version.outputs.templates == 'true')
+        run: node apps/start-scaffold/maintain/template-sync.mjs "$RUNNER_TEMP/templates"
+
+      # Draft, attach, then publish; the tag lands on the commit the gates passed.
+      - name: Publish the Start release
+        if: steps.version.outputs.new == 'true'
+        run: |
+          gh release create "$TAG" --draft --target "$SHA" \
+            ".release/$TAG/assets/"*.tgz ".release/$TAG/manifest.json" \
+            --title "Start $VERSION" --notes-file notes.md
+          gh release edit "$TAG" --draft=false --latest
+
+      - name: Download and match sha256
+        if: steps.version.outputs.new == 'true'
+        run: |
+          mkdir fetched
+          gh release download "$TAG" --dir fetched --pattern '*.tgz'
+          jq -r '.assets[] | "\(.sha256)  fetched/\(.file)"' \
+            ".release/$TAG/manifest.json" | sha256sum --check
+
+      - name: Commit and tag the templates
+        if: steps.version.outputs.templates == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for name in small demo; do
+            dir="$RUNNER_TEMP/branch-$name"
+            git fetch --quiet origin "$name"
+            git worktree add --quiet "$dir" "origin/$name"
+            git -C "$dir" rm -rq --ignore-unmatch .
+            cp -a "$RUNNER_TEMP/templates/$name/." "$dir/"
+            git -C "$dir" add -A
+            git -C "$dir" commit -qm "$name app for $TAG" || echo "$name: no change"
+            git -C "$dir" tag "$name-v$VERSION"
+            git -C "$dir" push --quiet origin "HEAD:refs/heads/$name" "refs/tags/$name-v$VERSION"
+            echo "$name-v$VERSION -> $(git -C "$dir" rev-parse --short HEAD)"
+          done
