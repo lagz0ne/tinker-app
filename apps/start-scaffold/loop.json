@@ -1,5 +1,5 @@
 {
-  "base": "next",
+  "base": "main",
   "gates": [
     { "name": "commands", "run": "npm run gate:commands" },
     { "name": "typecheck", "run": "npm run typecheck" },

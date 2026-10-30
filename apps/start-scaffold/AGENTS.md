@@ -1,6 +1,6 @@
 # Start authoring
 
-Follow the parent repo's rules too. The [current contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) owns the
+Follow the parent repo's rules too. The [current contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md) owns the
 full API, import, input, update, and helper rules. These five rules are its
 local checklist; each release's changes stay in UPGRADE.md.
 

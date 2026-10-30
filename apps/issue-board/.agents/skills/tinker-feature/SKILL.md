@@ -5,7 +5,7 @@ description: Add a feature from its table to its page.
 
 # Add one feature
 
-Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) for imports, ownership,
+Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md) for imports, ownership,
 input checks, and commit-before-success. Use the board's issue operations as
 the new session-transaction write example. Counter and todos use the same session transaction and owned call boundary;
 their small write bodies are useful starting examples.

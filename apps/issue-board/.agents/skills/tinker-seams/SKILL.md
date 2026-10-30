@@ -5,7 +5,7 @@ description: Keep wiring on the owner's public entries.
 
 # Keep the seams
 
-Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) for the one-way imports,
+Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md) for the one-way imports,
 required bindings, defineMain/exit, auth hooks, and copied-update policy.
 Current Start commands are prepare, doctor, and serve. Add/update/check is
 planned; it will stop on local edits and replace whole owned components.

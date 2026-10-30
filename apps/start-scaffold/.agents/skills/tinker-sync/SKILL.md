@@ -5,7 +5,7 @@ description: Choose mutations and sync for saved state.
 
 # Saved changes and waits
 
-Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) for owned calls, auth,
+Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md) for owned calls, auth,
 stream creation, and transactions. Use sync for committed shared state; keep
 drafts and view choices in data. Read-only page/bootstrap calls never write.
 

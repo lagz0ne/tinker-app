@@ -5,7 +5,7 @@ description: Prove app promises through small scopes.
 
 # Test through a scope
 
-Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md#http-and-tests) for the shared
+Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md#http-and-tests) for the shared
 check rules. Tests stay serial with VITEST_MAX_WORKERS=1 and
 VP_RUN_CONCURRENCY_LIMIT=1. Never skip or quarantine a test.
 

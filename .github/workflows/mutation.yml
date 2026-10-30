@@ -2,7 +2,7 @@ name: App mutation reports
 
 on:
   push:
-    branches: [next]
+    branches: [main]
   schedule:
     - cron: "23 3 * * 1"
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 
-# Trunk-based: the diff gate checks each push to next (before..sha).
+# Trunk-based: the diff gate checks each push to main (before..sha).
 # One run per pushed range, so a newer push never cancels an older one.
 concurrency:
   group: mutation-${{ github.event_name }}-${{ github.sha }}

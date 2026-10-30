@@ -398,7 +398,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
   const fullPlan = planDiff({
     app,
-    base: value("--base", "origin/next"),
+    base: value("--base", "origin/main"),
     head: value("--head", "HEAD"),
     map,
   });

@@ -6,7 +6,7 @@ description: Review app changes against the authoring contract.
 # Review a change
 
 The other tinker skills write code. This skill reviews it.
-Use the same [authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) they use.
+Use the same [authoring contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md) they use.
 Each finding names one rule ID from the list below.
 
 ```text

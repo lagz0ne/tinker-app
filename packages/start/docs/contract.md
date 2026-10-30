@@ -220,7 +220,7 @@ Run this from the repo root after building the app:
 
 ```bash
 node scripts/mutation/span-map.mjs apps/issue-board
-node scripts/mutation/diff.mjs --app apps/issue-board --base origin/next --head HEAD
+node scripts/mutation/diff.mjs --app apps/issue-board --base origin/main --head HEAD
 ```
 
 The first command runs every app test once with both vite.config and

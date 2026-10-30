@@ -2,7 +2,7 @@ name: Start and copied app gates
 
 on:
   push:
-    branches: [next]
+    branches: [main]
 
 permissions:
   contents: read

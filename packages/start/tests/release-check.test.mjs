@@ -92,7 +92,7 @@ test.each(["guides", "package object", "package array", "registry dependency", "
       const problems = releaseProblems(root, templateHostVersion, packed);
       if (trial === "guides") {
         expect(JSON.stringify(items)).toContain(
-          "https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md",
+          "https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md",
         );
         expect(problems).toEqual([]);
       } else {

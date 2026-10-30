@@ -17,7 +17,7 @@ The command reads `<app>/loop.json`:
 
 ```json
 {
-  "base": "next",
+  "base": "main",
   "gates": [{ "name": "typecheck", "run": "npm run typecheck", "timeout": 600000 }]
 }
 ```
@@ -57,7 +57,7 @@ A hit is not a verdict.
 `--base` gives the base, used as it is.
 Without `--base`, the scan uses the `base` branch in `loop.json`.
 If that branch tracks a remote, the scan uses that remote branch.
-A local `next` is often old; `tinker-app/next` is not.
+A local `main` is often old; `tinker-app/main` is not.
 Next it tries the branch itself.
 Then it tries `<remote>/<base>` when the repo has one remote.
 The run prints the base it used.

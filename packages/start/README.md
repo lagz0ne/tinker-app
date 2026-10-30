@@ -83,7 +83,7 @@ Copied route files target `src/routes/`. App source remains user code.
 Start currently has prepare, doctor, and serve. Per-component registry items
 already exist. The planned add/update/check CLI will replace whole components
 and stop on local edits. Until then, review source and keep app-owned edits.
-See the [current contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md#d3-tooling-and-copied-updates).
+See the [current contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md#d3-tooling-and-copied-updates).
 
 ## Checks
 
@@ -100,10 +100,10 @@ That folder has a strict type project so the demo's sync bodies do not leak into
 The app's `PLAIN.md` has a cap of 17. Only named copied base entry functions have exceptions.
 Components and src have no function skips. Commands allow only the named server and browser mains.
 
-Each push to `next` runs the diff mutation gate at floor 60; the weekly full app
+Each push to `main` runs the diff mutation gate at floor 60; the weekly full app
 run is a report. Start tooling keeps floor 85 in its `stryker.config.json`.
 Local package packing and registry builds publish nothing.
 
-Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) for the main context,
+Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md) for the main context,
 clean exit, direct auth dependencies, and write-session ownership. Each
 released version has its own section in [UPGRADE.md](UPGRADE.md).

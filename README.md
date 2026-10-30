@@ -1,6 +1,41 @@
-# tinker-app `next`
+# tinker-app
 
-This branch holds Tinkered Start and its apps. It is a small pnpm workspace.
+Start a new app on `@tinker/start`, or work on Start itself.
+`main` is the trunk: no pull requests; push straight to `main`.
+
+## Start a new app
+
+Each variation branch is one starting point.
+
+Small app (one page, telemetry on, no settings):
+
+```bash
+npx degit lagz0ne/tinker-app#small my-app
+cd my-app && npm install && npm run dev
+```
+
+Full demo (accounts, profiles, todos, live sync, mail).
+It needs Docker for Postgres and Mailpit:
+
+```bash
+npx degit lagz0ne/tinker-app#demo my-app
+cd my-app && npm run setup && npm run dev
+```
+
+`npm run setup` writes `.env` with a new secret,
+starts the local services, and installs packages.
+Open `http://localhost:4318` when dev starts.
+
+Pin a release: each release tags every variation
+(`small-vX.Y.Z`, `demo-vX.Y.Z`). Put the tag after `#`:
+
+```bash
+npx degit lagz0ne/tinker-app#demo-v0.12.0 my-app
+```
+
+## This branch
+
+This branch holdsnd its apps. It is a small pnpm workspace.
 
 | Folder                | What it is                                                         |
 | --------------------- | ------------------------------------------------------------------ |
@@ -33,7 +68,7 @@ vp check
 
 ## Release
 
-A tag `start-vX.Y.Z` on `next` holds one asset: the Start tarball.
+A tag `start-vX.Y.Z` on `main` holds one asset: the Start tarball.
 Core and React keep their tinkered `start-v0.9.0` tarball URLs.
 The registry is read from the tag's own `apps/start-scaffold/public/r`.
 
@@ -90,6 +125,5 @@ The real registry proof packs local Start and uses the existing Core/React relea
 Its HTTP server stays on loopback. Nothing is published.
 
 The original prose lint and CI workflows are not in this checkout.
-Trunk-based: no pull requests; push straight to `next`.
-Each push to `next` runs a changed-line mutation gate at floor 60.
+Each push to `main` runs a changed-line mutation gate at floor 60.
 A weekly full app run is a report, not a gate. `packages/start` keeps floor 85.

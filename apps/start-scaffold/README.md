@@ -46,7 +46,7 @@ Only cmds/router.ts#getRouter and cmds/server.ts#main have approved cmd entry ex
 
 ## Command wiring
 
-Follow the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) and the actual
+Follow the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md) and the actual
 [server](cmds/server.ts) and [router](cmds/router.ts) commands. They show inline
 config bindings and the full owned close order. Auth imports its sync/mail work
 directly; sync's app readers and records still use required tags.
@@ -140,7 +140,7 @@ The server command accepts LOG_LEVEL as 20 (debug), 30 (info), 40 (warn), or 50 
 A bad value fails start and names telemetry.logLevel.
 
 Auth imports sync and mail directly. authStartup checks authSettings before ready.
-See the [current auth contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md#auth-and-account-streams)
+See the [current auth contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md#auth-and-account-streams)
 for hook calls and their owner.
 Doctor checks component dependencies and imports from JSON; it does not read app config.
 A build starts no Postgres or SMTP client. A running demo needs both services.
