@@ -1,0 +1,11 @@
+# Trunk-based: no PR gate, so this is the pre-integration check
+# (trunkbaseddevelopment.com). It runs the fast "check" job of
+# start-gates before a push; CI runs every stage on main.
+# Skip only in an emergency: git push --no-verify.
+set -e
+vp check apps/issue-board apps/start-scaffold apps/start-min packages/start packages/loop
+pnpm --dir apps/issue-board run typecheck
+pnpm --dir apps/start-scaffold run typecheck
+pnpm --dir apps/start-min run typecheck
+node apps/issue-board/scripts/check-plain.mjs
+node apps/start-scaffold/scripts/check-plain.mjs

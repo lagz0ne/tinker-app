@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prepare": "vp config --no-agent",
     "build": "vp run -r build",
     "test": "vp run -r test",
     "check": "vp check"

@@ -1,0 +1,58 @@
+name: Trunk status
+
+# Stop the line (trunk-based development, Toyota andon): when a gate goes
+# red on main, open one issue per workflow so the owner hears at once.
+# Rule: fix forward or revert within 10 minutes. The next green run of
+# the same workflow closes the issue.
+
+on:
+  workflow_run:
+    workflows: ["Start and copied app gates", "App mutation reports"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  issues: write
+
+concurrency:
+  group: trunk-status-${{ github.event.workflow_run.name }}
+  cancel-in-progress: false
+
+jobs:
+  status:
+    if: >-
+      github.event.workflow_run.event != 'pull_request' &&
+      contains(fromJSON('["success","failure","timed_out"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      NAME: ${{ github.event.workflow_run.name }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      URL: ${{ github.event.workflow_run.html_url }}
+      SUBJECT: ${{ github.event.workflow_run.display_title }}
+    steps:
+      - name: Open, update or close the red-trunk issue
+        run: |
+          title="main is red: $NAME"
+          open=$(gh issue list --state open --label trunk-red --search "in:title \"$title\"" \
+            --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -1)
+
+          if [ "$CONCLUSION" = success ]; then
+            [ -z "$open" ] || gh issue close "$open" --comment "Green again at $SHA: $URL"
+            exit 0
+          fi
+
+          note="**$NAME** is $CONCLUSION on main at \`$SHA\` ($SUBJECT).
+          Run: $URL
+
+          Fix forward or revert (\`git revert $SHA\`) within 10 minutes.
+          Do not push other work on top of a red main."
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "$note"
+          else
+            gh label create trunk-red --color B60205 --description "main is red" --force
+            gh issue create --title "$title" --label trunk-red --assignee "${{ github.repository_owner }}" --body "$note"
+          fi

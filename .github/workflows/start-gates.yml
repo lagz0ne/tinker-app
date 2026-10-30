@@ -1,19 +1,159 @@
 name: Start and copied app gates
 
+# Trunk-based CI (trunkbaseddevelopment.com, Continuous Delivery "commit
+# stage"): every push to main gets a fast verdict first. The old single
+# serial job took 80-110 min; 54 of them were the plain-rule proofs,
+# which only test the checker itself. Now independent stages run as
+# parallel jobs on separate runners, and the checker proofs run only
+# when the checker or what it reads changes (and weekly in full).
+
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "41 2 * * 0"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# A newer push re-checks the whole tree, so an older run on main may stop.
+concurrency:
+  group: start-gates-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+env:
+  VITEST_MAX_WORKERS: "1"
+  VP_RUN_CONCURRENCY_LIMIT: "1"
+
 jobs:
-  serial:
+  changes:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
-    env:
-      VITEST_MAX_WORKERS: "1"
-      VP_RUN_CONCURRENCY_LIMIT: "1"
+    timeout-minutes: 5
+    outputs:
+      plain: ${{ steps.diff.outputs.plain }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Did the plain checker or its inputs change?
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" != push ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "plain=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qE \
+            '^(apps/[^/]+/(scripts/check-plain\.mjs|PLAIN\.md|tsconfig\.json|tinker/)|packages/start/|pnpm-lock\.yaml)'; then
+            echo "plain=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "plain=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install the pinned package manager in the user folder
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install workspace dependencies and expose its pinned tools
+        run: |
+          pnpm install --frozen-lockfile
+          echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Build and check every process command
+        run: |
+          pnpm --dir apps/issue-board run gate:commands
+          pnpm --dir apps/start-scaffold run gate:commands
+          pnpm --dir apps/start-min run gate:commands
+          pnpm --dir packages/loop run gate:commands
+      - name: Types, doctor, schema, style and plain rules
+        run: |
+          pnpm --dir apps/issue-board run typecheck
+          pnpm --dir apps/start-scaffold run typecheck
+          pnpm --dir apps/start-min run typecheck
+          pnpm --dir apps/issue-board run doctor
+          pnpm --dir apps/start-scaffold run doctor
+          pnpm --dir apps/start-min run doctor
+          pnpm --dir packages/loop run doctor
+          pnpm --dir apps/issue-board run test:schema
+          pnpm --dir apps/start-scaffold run test:schema
+          pnpm exec vp check apps/issue-board apps/start-scaffold apps/start-min packages/start packages/loop
+          node apps/issue-board/scripts/check-plain.mjs
+          node apps/start-scaffold/scripts/check-plain.mjs
+          pnpm --dir packages/loop run check-plain
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install the pinned package manager in the user folder
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install workspace dependencies and expose its pinned tools
+        run: |
+          pnpm install --frozen-lockfile
+          echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Build and check every process command
+        run: |
+          pnpm --dir apps/issue-board run gate:commands
+          pnpm --dir apps/start-scaffold run gate:commands
+          pnpm --dir apps/start-min run gate:commands
+          pnpm --dir packages/loop run gate:commands
+      - name: Tests and service-free fault controls, serially
+        run: |
+          pnpm --dir packages/start exec vp test --maxWorkers=1 --no-file-parallelism
+          pnpm --dir packages/loop exec vp test --maxWorkers=1 --no-file-parallelism
+          node packages/loop/maintain/check-frozen.mjs
+          pnpm --dir apps/issue-board test
+          pnpm --dir apps/start-scaffold test
+          pnpm --dir apps/issue-board run test:proofs
+          pnpm --dir apps/start-scaffold run test:proofs
+
+  templates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install the pinned package manager in the user folder
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install workspace dependencies and expose its pinned tools
+        run: |
+          pnpm install --frozen-lockfile
+          echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Build and check every process command
+        run: |
+          pnpm --dir apps/issue-board run gate:commands
+          pnpm --dir apps/start-scaffold run gate:commands
+          pnpm --dir apps/start-min run gate:commands
+          pnpm --dir packages/loop run gate:commands
+      - name: Fresh templates and registry app
+        run: |
+          pnpm --dir apps/start-scaffold run registry:build
+          node apps/start-scaffold/maintain/check-template.mjs
+          node apps/start-scaffold/maintain/proof-registry.mjs
+          node apps/start-scaffold/maintain/proof-export.mjs
+
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:17.6-alpine
@@ -40,8 +180,8 @@ jobs:
           - 11027:1025
           - 18027:8025
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
       - name: Install the pinned package manager in the user folder
@@ -52,44 +192,12 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
-      - name: Build and check every process command, serially
+      - name: Build and check every process command
         run: |
           pnpm --dir apps/issue-board run gate:commands
           pnpm --dir apps/start-scaffold run gate:commands
           pnpm --dir apps/start-min run gate:commands
           pnpm --dir packages/loop run gate:commands
-      - name: Types, tests and service-free fault controls, serially
-        run: |
-          pnpm --dir apps/issue-board run typecheck
-          pnpm --dir apps/start-scaffold run typecheck
-          pnpm --dir apps/start-min run typecheck
-          pnpm --dir packages/start exec vp test --maxWorkers=1 --no-file-parallelism
-          pnpm --dir packages/loop exec vp test --maxWorkers=1 --no-file-parallelism
-          node packages/loop/maintain/check-frozen.mjs
-          pnpm --dir apps/issue-board test
-          pnpm --dir apps/start-scaffold test
-          pnpm --dir apps/issue-board run test:proofs
-          pnpm --dir apps/start-scaffold run test:proofs
-      - name: Doctor, schema, style and complete plain proofs, serially
-        run: |
-          pnpm --dir apps/issue-board run doctor
-          pnpm --dir apps/start-scaffold run doctor
-          pnpm --dir apps/start-min run doctor
-          pnpm --dir packages/loop run doctor
-          pnpm --dir apps/issue-board run test:schema
-          pnpm --dir apps/start-scaffold run test:schema
-          pnpm exec vp check apps/issue-board apps/start-scaffold apps/start-min packages/start packages/loop
-          node apps/issue-board/scripts/check-plain.mjs
-          node apps/issue-board/scripts/check-plain.mjs --prove
-          node apps/start-scaffold/scripts/check-plain.mjs
-          node apps/start-scaffold/scripts/check-plain.mjs --prove
-          pnpm --dir packages/loop run check-plain
-      - name: Fresh templates and registry app
-        run: |
-          pnpm --dir apps/start-scaffold run registry:build
-          node apps/start-scaffold/maintain/check-template.mjs
-          node apps/start-scaffold/maintain/proof-registry.mjs
-          node apps/start-scaffold/maintain/proof-export.mjs
       - name: Live PostgreSQL and local Mailpit proofs and fault controls, serially
         working-directory: apps/issue-board
         run: |
@@ -129,3 +237,34 @@ jobs:
           node maintain/proof-import.mjs
           node maintain/proof-import-controls.mjs
           node maintain/proof-prior-controls.mjs
+
+  plain-proof:
+    needs: changes
+    if: needs.changes.outputs.plain == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [issue-board, start-scaffold]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install the pinned package manager in the user folder
+        run: |
+          npm install --global --prefix "$HOME/.local" pnpm@12.4.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install workspace dependencies and expose its pinned tools
+        run: |
+          pnpm install --frozen-lockfile
+          echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Build and check every process command
+        run: |
+          pnpm --dir apps/issue-board run gate:commands
+          pnpm --dir apps/start-scaffold run gate:commands
+          pnpm --dir apps/start-min run gate:commands
+          pnpm --dir packages/loop run gate:commands
+      - name: Prove the plain checker catches each planted case
+        run: node apps/${{ matrix.app }}/scripts/check-plain.mjs --prove
