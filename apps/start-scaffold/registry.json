@@ -1086,6 +1086,11 @@
           "path": "sqlite/migrations/20261028000100_sync.sql",
           "type": "registry:file",
           "target": "~/migrations/20261028000100_sync.sql"
+        },
+        {
+          "path": "sqlite/migrations/20261030000000_sync_public.sql",
+          "type": "registry:file",
+          "target": "~/migrations/20261030000000_sync_public.sql"
         }
       ],
       "meta": {

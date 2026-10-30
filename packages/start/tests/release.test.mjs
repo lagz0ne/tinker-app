@@ -71,16 +71,16 @@ test("default exports pin the released host and refuse the old one", async () =>
     expect((await readdir(out)).sort()).toEqual(["demo", "small"]);
     for (const name of ["demo", "small"]) {
       const pkg = JSON.parse(await readFile(join(out, name, "package.json"), "utf8"));
-      expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.13.0")["@tinker/start"]);
+      expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.13.1")["@tinker/start"]);
     }
 
     await expect(registryItems({ version: "0.9.0" })).rejects.toThrow(
-      "require @tinker/start 0.13.0",
+      "require @tinker/start 0.13.1",
     );
 
     const { packages } = await registryItems();
     for (const pkg of Object.values(packages)) {
-      expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.13.0")["@tinker/start"]);
+      expect(pkg.devDependencies["@tinker/start"]).toBe(releaseUrls("0.13.1")["@tinker/start"]);
       expect(JSON.stringify(pkg)).not.toMatch(/workspace:|catalog:/);
     }
   } finally {

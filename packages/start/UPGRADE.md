@@ -1,5 +1,27 @@
 # Upgrade
 
+## 0.13.1
+
+Start 0.13.1 is released from `lagz0ne/tinker-app`, tag `start-v0.13.1`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.13.1/tinker-start-0.13.1.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.1/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.13.1.
+
+- `sync-sqlite` gets a second migration, `20261030000000_sync_public.sql`. It seeds the
+  `public` stream row, as the Postgres set's `account_streams` migration does. Without it,
+  `eventHistory.read(tx, "public")` fails with `StreamMissing`, so a bootstrap of the public
+  stream fails on a fresh SQLite database. Hedl found it: its bootstrap, the first app
+  code on the SQLite set to read the public stream, failed on a fresh database.
+  The demo template carries the file in
+  `sqlite/migrations`. The SQLite items are starter-only, so `tinker add` and `tinker update`
+  refuse them: an app made from the demo takes it by the template update from `demo-v0.13.0`
+  to `demo-v0.13.1`, or copies `apps/start-scaffold/sqlite/migrations/20261030000000_sync_public.sql`
+  from tag `start-v0.13.1` into its migrations folder. `migrate` applies it once; it changes no
+  existing row.
+
 ## 0.13.0
 
 Start 0.13.0 is released from `lagz0ne/tinker-app`, tag `start-v0.13.0`.

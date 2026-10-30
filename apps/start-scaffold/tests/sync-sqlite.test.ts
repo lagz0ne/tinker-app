@@ -310,6 +310,20 @@ test("history reads back the events it appended, in order and with their revisio
   await root.close({ graceful: true });
 });
 
+test("the migrations seed the public stream at revision 0, as the Postgres set does", async () => {
+  const root = await sandbox();
+
+  const readPublic = operation({
+    label: "proof.syncPublic",
+    depends: { tx: transaction, history: eventHistory },
+    run: async ({ tx, history }) => history.read(tx, "public"),
+  });
+
+  expect(await write(root, readPublic)).toBe(0);
+
+  await root.close({ graceful: true });
+});
+
 test("a missing stream is refused, and another account's execution is denied", async () => {
   const root = await sandbox();
 
@@ -353,7 +367,7 @@ test("createAccountStream is idempotent", async () => {
       .prepare("SELECT id FROM sync_stream ORDER BY id")
       .all()
       .map((row) => row.id),
-  ).toEqual(["acct-2"]);
+  ).toEqual(["acct-2", "public"]);
 
   await root.close({ graceful: true });
 });

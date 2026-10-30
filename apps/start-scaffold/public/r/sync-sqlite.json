@@ -12,9 +12,9 @@
     "zod@^4.0.0"
   ],
   "registryDependencies": [
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.0/apps/start-scaffold/public/r/errors.json",
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.0/apps/start-scaffold/public/r/requests.json",
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.0/apps/start-scaffold/public/r/database-sqlite.json"
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.1/apps/start-scaffold/public/r/errors.json",
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.1/apps/start-scaffold/public/r/requests.json",
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.1/apps/start-scaffold/public/r/database-sqlite.json"
   ],
   "files": [
     {
@@ -166,6 +166,12 @@
       "type": "registry:file",
       "target": "~/migrations/20261028000100_sync.sql",
       "content": "-- The sync part's three tables. JSON columns hold JSON text, checked at the boundary.\ncreate table sync_stream (\n  id text primary key,\n  revision integer not null default 0\n);\n\ncreate table sync_execution (\n  id text primary key,\n  stream text not null,\n  notification text check (notification is null or json_valid(notification)),\n  result text check (result is null or json_valid(result))\n);\n\ncreate table sync_event (\n  stream text not null,\n  revision integer not null,\n  execution_id text not null,\n  payload text not null check (json_valid(payload)),\n  primary key (stream, revision)\n);\n"
+    },
+    {
+      "path": "sqlite/migrations/20261030000000_sync_public.sql",
+      "type": "registry:file",
+      "target": "~/migrations/20261030000000_sync_public.sql",
+      "content": "-- The public stream every app's sync reads, as the Postgres set seeds it (account_streams migration).\ninsert into sync_stream (id) values ('public') on conflict do nothing;\n"
     }
   ],
   "meta": {
