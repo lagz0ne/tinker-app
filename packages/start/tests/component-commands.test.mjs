@@ -868,6 +868,7 @@ test("G1 the real scaffold registry checks start-min clean, then add mail copies
   // The repo's app has no lock (the export writes it), so each folder gets the note; still exit 0.
   expect(clean.lines.at(-1)).toBe(`tinker check: 5 components match registry ${scaffoldRegistry}`);
   expect(clean.lines.filter((line) => line.startsWith("no lock entry: "))).toHaveLength(5);
+  expect(clean.lines).toHaveLength(6);
 
   const errors = snapshot(join(root, "tinker/components/errors"));
   const added = tinker(root, "add", "mail", "--registry", scaffoldRegistry);

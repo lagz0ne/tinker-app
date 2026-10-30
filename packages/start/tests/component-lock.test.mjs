@@ -18,7 +18,11 @@
 // | swap rename fails          | v1     | -    | -    | v1   | folder v1, lock unchanged           |
 
 import { existsSync } from "node:fs";
-import { rename as renameAsync, writeFile as writeFileAsync } from "node:fs/promises";
+import {
+  rename as renameAsync,
+  rm as rmAsync,
+  writeFile as writeFileAsync,
+} from "node:fs/promises";
 import { join } from "node:path";
 
 import { expect, test } from "vite-plus/test";
@@ -37,7 +41,9 @@ import {
   read,
   setItem,
   shaFile,
+  sha,
   snapshot,
+  starterFiles,
   tinker,
   uV1,
   uV2,
@@ -57,6 +63,11 @@ function tempFiles(root) {
   return listFiles(root, root).filter(
     (file) => file.includes(".tinker-new") || file.startsWith(".tinker/update"),
   );
+}
+
+/** The lock entry a fixture file map would give, for a hand-written lock. */
+function entryFor(files, name) {
+  return { files: hashesOf(files, `tinker/components/${name}`), start: basePackage.version };
 }
 
 /** @param {string} a - From a sort; why: keep the order stable. @param {string} b - From a sort. */
@@ -449,4 +460,140 @@ test("K-roll-add add finishes a killed update for a closure member", () => {
     const path = `tinker/components/${name}/index.ts`;
     expect(lockOf(root).components[name].files[path]).toBe(shaFile(root, path));
   }
+});
+
+test("B1a check measures a starter-only component by its lock, with no fence and no advice", () => {
+  const registry = makeRegistry();
+  const locked = app({
+    ...starterFiles,
+    [lockPath]: lockText({ "s-starter": entryFor(starterFiles, "s-starter") }),
+  });
+
+  const run = tinker(locked, "check", "--registry", registry);
+
+  expect(run.code).toBe(0);
+  expect(run.lines).toEqual([`tinker check: 1 components match registry ${registry}`]);
+
+  const edited = app({
+    ...starterFiles,
+    "~/tinker/components/s-starter/index.ts": "export const sStarterValue = 'mine';\n",
+    [lockPath]: lockText({ "s-starter": entryFor(starterFiles, "s-starter") }),
+  });
+  const changed = tinker(edited, "check", "--registry", registry);
+  expect(changed.code).toBe(1);
+  expect(changed.lines).toEqual([
+    "edited: tinker/components/s-starter/index.ts (changed)",
+    "tinker check: 1 findings",
+  ]);
+
+  const unlocked = app(starterFiles);
+  const noted = tinker(unlocked, "check", "--registry", registry);
+  expect(noted.code).toBe(0);
+  expect(noted.lines).toEqual([
+    "no lock entry: s-starter (starter-only; check compares it with the lock only)",
+    `tinker check: 1 components match registry ${registry}`,
+  ]);
+});
+
+test("B1b check turns a bad registry item into one finding instead of stopping", () => {
+  const registry = makeRegistry();
+  const root = app({ ...items.c.files, ...items["bad-item"].files });
+
+  const run = tinker(root, "check", "--registry", registry);
+
+  expect(run.code).toBe(1);
+  expect(run.lines).toEqual([
+    "bad item: bad-item: bad target ~/src/z.ts in bad-item",
+    "no lock entry: c; run tinker update c to record it",
+    "tinker check: 1 findings",
+  ]);
+});
+
+test("B2 a stale .old never talks undoSwap into replacing the current folder", async () => {
+  const registry = makeRegistry();
+  const root = app();
+  expect(tinker(root, "add", "u", "--registry", registry).code).toBe(0);
+  const folderBefore = folderSnapshot(root, "u");
+  const lockBefore = read(root, lockPath);
+  writeFiles(root, { ".tinker/update/u.old/index.ts": "export const uVersion = 0;\n" });
+  setItem(registry, "u", { files: uV2 });
+
+  const fs = {
+    async rm(path, options) {
+      if (String(path).endsWith("u.old")) throw new Error("EPERM: simulated stale cleanup");
+      return rmAsync(path, options);
+    },
+  };
+
+  await expect(updateComponent(root, "u", registry, { fs })).rejects.toBeInstanceOf(Error);
+
+  expect(folderSnapshot(root, "u")).toEqual(folderBefore);
+  expect(read(root, lockPath)).toBe(lockBefore);
+});
+
+test("B3 a kill during an undo leaves the old folder whole for the next run", async () => {
+  const registry = makeRegistry();
+  const root = app();
+  expect(tinker(root, "add", "u", "--registry", registry).code).toBe(0);
+  const lockBefore = read(root, lockPath);
+  setItem(registry, "u", { files: uV2 });
+  const folder = join(root, "tinker/components/u");
+  const fs = {
+    async writeFile(file, data, options) {
+      if (String(file).includes("components.lock.tinker-new")) {
+        throw new Error("EIO: simulated lock write");
+      }
+      return writeFileAsync(file, data, options);
+    },
+    async rename(from, to) {
+      const back = String(from).endsWith("u.old") && String(to) === folder;
+      if (back) throw new Error("SIGKILL: simulated death during the undo");
+      return renameAsync(from, to);
+    },
+  };
+
+  await expect(updateComponent(root, "u", registry, { fs })).rejects.toBeInstanceOf(Error);
+
+  // Nothing was deleted in place: the new copy waits in .undo, the old one is whole in .old.
+  expect(existsSync(join(root, ".tinker/update/u.undo/index.ts"))).toBe(true);
+  expect(existsSync(join(root, ".tinker/update/u.old/index.ts"))).toBe(true);
+  expect(existsSync(folder)).toBe(false);
+  expect(read(root, lockPath)).toBe(lockBefore);
+
+  const checked = tinker(root, "check", "--registry", registry);
+  expect(checked.code).toBe(1);
+  expect(checked.lines).toContain("interrupted update: u; run tinker update u");
+
+  const run = tinker(root, "update", "u", "--registry", registry);
+  expect(run.code).toBe(0);
+  expect(run.lines[0]).toBe("restored tinker/components/u from an interrupted update");
+  expect(existsSync(join(root, ".tinker/update"))).toBe(false);
+  expect(lockOf(root).components.u.files["tinker/components/u/fresh.ts"]).toBe(
+    shaFile(root, "tinker/components/u/fresh.ts"),
+  );
+});
+
+test("N-badlockpath a lock that names a path outside the app is a finding", () => {
+  const registry = makeRegistry();
+  const root = app({
+    ...items.c.files,
+    [lockPath]: lockText({
+      c: {
+        files: {
+          ...hashesOf(items.c.files, "tinker/components/c"),
+          "../escape.txt": sha("escape"),
+        },
+        start: basePackage.version,
+      },
+    }),
+  });
+
+  const run = tinker(root, "check", "--registry", registry);
+
+  expect(run.code).toBe(1);
+  expect(run.lines).toEqual([
+    "bad lock path: ../escape.txt",
+    `outdated: c (lock start ${basePackage.version}; run tinker update c)`,
+    "tinker check: 1 findings",
+  ]);
 });
