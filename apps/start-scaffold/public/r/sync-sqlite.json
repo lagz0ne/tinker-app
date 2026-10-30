@@ -12,9 +12,9 @@
     "zod@^4.0.0"
   ],
   "registryDependencies": [
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.1/apps/start-scaffold/public/r/errors.json",
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.1/apps/start-scaffold/public/r/requests.json",
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.1/apps/start-scaffold/public/r/database-sqlite.json"
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.2/apps/start-scaffold/public/r/errors.json",
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.2/apps/start-scaffold/public/r/requests.json",
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.2/apps/start-scaffold/public/r/database-sqlite.json"
   ],
   "files": [
     {

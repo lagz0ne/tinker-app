@@ -1,5 +1,31 @@
 # Upgrade
 
+## 0.13.2
+
+Start 0.13.2 is released from `lagz0ne/tinker-app`, tag `start-v0.13.2`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.13.2/tinker-start-0.13.2.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.2/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.13.2.
+
+- The demo's `scripts/check-plain.mjs` lets a copied `tinker/base/` helper have one caller.
+  Other plain helpers still need two (`two-sites`), and a base helper with no caller still fails.
+  Before, `tinker/base/main.ts#mainErrorCode` needed two commands to call it, so an app with
+  only `cmds/server.ts` failed the plain check. Hedl found it: the move to the SQLite set
+  (`## 0.13.0`, step 1) drops the mail worker, which leaves the server as the only caller, and
+  `tinker/` may not be edited in the app. Two new `--prove` cases cover it:
+  `base-helper-zero-site` (red) and `base-helper-one-site-allowed` (green).
+  An app made from the demo takes the new `scripts/check-plain.mjs` by the template update from
+  `demo-v0.13.1` to `demo-v0.13.2`, or copies it from tag `start-v0.13.2`.
+- `tinker add` and `tinker update` record each component in `tinker/components.lock`: the Start
+  version it came from and a sha256 per file. `update` now refuses only when local files differ from
+  the lock, so a clean copy updates across a Start release without `--force`; `check` reports edits
+  against the lock. Template exports ship a lock made from their own bytes, so a fresh small or
+  demo app checks clean. A killed update rolls forward from the files on disk; a failed one leaves
+  the old folder and lock entry whole.
+
 ## 0.13.1
 
 Start 0.13.1 is released from `lagz0ne/tinker-app`, tag `start-v0.13.1`.

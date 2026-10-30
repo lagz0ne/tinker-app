@@ -1,6 +1,6 @@
 {
   "name": "@tinker/start",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "private": true,
   "description": "Build glue, checks, and the tinker command for copied Start components.",
   "bin": {

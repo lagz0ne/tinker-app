@@ -247,6 +247,6 @@
   ],
   "devDependencies": ["@tailwindcss/vite@4.3.3", "drizzle-kit@1.0.0-rc.4", "tailwindcss@4.3.3"],
   "registryDependencies": [
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.1/apps/start-scaffold/public/r/demo.json"
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.2/apps/start-scaffold/public/r/demo.json"
   ]
 }

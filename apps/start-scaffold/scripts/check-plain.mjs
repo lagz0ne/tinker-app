@@ -1358,7 +1358,9 @@ function checkPlainFunction(node) {
   }
 
   const callers = callSites(name, node);
-  if (callers.length < 2) fail(node, "two-sites");
+  // A copied base helper serves however many commands the app has; one command is a whole app.
+  const floor = pathOf(node).startsWith("tinker/base/") ? 1 : 2;
+  if (callers.length < floor) fail(node, "two-sites");
 
   plain.push(
     `- **${pathOf(node)}#${nameOf(name)}**\n${params.join("\n")}\n  - Callers:\n${callers.map((caller) => `    - \`${caller}\``).join("\n")}`,
@@ -2512,6 +2514,20 @@ if (process.argv.includes("--prove")) {
     ],
     ["one-site", "two-sites", "function probe(a: number) { return a; } probe(1);"],
     [
+      "base-helper-zero-site",
+      "two-sites",
+      "/** @param a - From the probe; why: return it. */ export function probe(a: number) { return a; }",
+      "tinker/base/plain-probe.ts",
+    ],
+    [
+      // The worker stops calling the copied base helper; the server's one call keeps it.
+      "base-helper-one-site-allowed",
+      null,
+      "",
+      "cmds/worker.ts",
+      ["exit(mainErrorCode(error), error);", "exit(1, error);"],
+    ],
+    [
       "error-registry-one-caller",
       "two-sites",
       'import { operation } from "@tinker/core";\n/** @param value - From the operation; why: return its value. */\nexport function raise(value: number) { return value; }\nconst probe = operation({ run: () => raise(1) });',
@@ -2841,19 +2857,26 @@ if (process.argv.includes("--prove")) {
     const generated = join(planted, ".tinker/tsconfig.json");
     await writeFile(generated, (await readFile(generated, "utf8")).replaceAll(root, planted));
 
-    for (const [name, rule, source, file = "src/plain-probe.ts"] of selected) {
+    for (const [name, rule, source, file = "src/plain-probe.ts", replace] of selected) {
       const path = join(planted, file);
       const original = await readFile(path, "utf8").catch((error) => {
         if (error.code === "ENOENT") return "";
         throw error;
       });
       await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, original + source + "\n");
+      if (replace) assert.ok(original.includes(replace[0]), `${name}: ${file} lacks ${replace[0]}`);
+      const base = replace ? original.replace(replace[0], replace[1]) : original;
+      await writeFile(path, base + source + "\n");
       if (name === "list") await writeFile(join(planted, "PLAIN.md"), "wrong list\n");
 
       const red = spawnSync(
         process.execPath,
-        [fileURLToPath(import.meta.url), planted, ...(name === "plain-cap" ? ["--list"] : [])],
+        [
+          fileURLToPath(import.meta.url),
+          planted,
+          // A new plain helper changes the list; the allowed base case prints it instead of comparing.
+          ...(name === "plain-cap" || name === "base-helper-one-site-allowed" ? ["--list"] : []),
+        ],
         {
           encoding: "utf8",
         },
