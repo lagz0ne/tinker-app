@@ -741,7 +741,13 @@ test("C1 check reports a clean app", () => {
   const run = tinker(root, "check", "--registry", registry);
 
   expect(run.code).toBe(0);
-  expect(run.lines).toEqual([`tinker check: 3 components match registry ${registry}`]);
+  // Card 6b: a folder with no lock entry gets a note; a note is not a finding.
+  expect(run.lines).toEqual([
+    "no lock entry: a; run tinker update a to record it",
+    "no lock entry: b; run tinker update b to record it",
+    "no lock entry: c; run tinker update c to record it",
+    `tinker check: 3 components match registry ${registry}`,
+  ]);
 });
 
 test("C2 check reports one changed byte", () => {
@@ -756,6 +762,7 @@ test("C2 check reports one changed byte", () => {
   expect(run.code).toBe(1);
   expect(run.lines).toEqual([
     "edited: tinker/components/c/index.ts (changed)",
+    "no lock entry: c; run tinker update c to record it",
     "tinker check: 1 findings",
   ]);
 });
@@ -777,7 +784,12 @@ test("C4 check reports a required component that is missing", () => {
   const run = tinker(root, "check", "--registry", registry);
 
   expect(run.code).toBe(1);
-  expect(run.lines).toEqual(["missing requires: b needs c", "tinker check: 1 findings"]);
+  expect(run.lines).toEqual([
+    "no lock entry: a; run tinker update a to record it",
+    "no lock entry: b; run tinker update b to record it",
+    "missing requires: b needs c",
+    "tinker check: 1 findings",
+  ]);
 });
 
 test("C5 check writes nothing, clean or interrupted", () => {
@@ -798,6 +810,7 @@ test("C5 check writes nothing, clean or interrupted", () => {
   const run = tinker(interrupted, "check", "--registry", registry);
   expect(run.code).toBe(1);
   expect(run.lines).toEqual([
+    "no lock entry: u; run tinker update u to record it",
     "interrupted update: u; run tinker update u",
     "tinker check: 1 findings",
   ]);
@@ -852,7 +865,9 @@ test("G1 the real scaffold registry checks start-min clean, then add mail copies
 
   const clean = tinker(root, "check", "--registry", scaffoldRegistry);
   expect(clean.code).toBe(0);
-  expect(clean.lines).toEqual([`tinker check: 5 components match registry ${scaffoldRegistry}`]);
+  // The repo's app has no lock (the export writes it), so each folder gets the note; still exit 0.
+  expect(clean.lines.at(-1)).toBe(`tinker check: 5 components match registry ${scaffoldRegistry}`);
+  expect(clean.lines.filter((line) => line.startsWith("no lock entry: "))).toHaveLength(5);
 
   const errors = snapshot(join(root, "tinker/components/errors"));
   const added = tinker(root, "add", "mail", "--registry", scaffoldRegistry);
@@ -896,6 +911,7 @@ test("C6 check reports an edited or missing outside file", () => {
   expect(changed.code).toBe(1);
   expect(changed.lines).toEqual([
     "edited: drizzle/1_m/migration.sql (changed)",
+    "no lock entry: m; run tinker update m to record it",
     "tinker check: 1 findings",
   ]);
 
@@ -905,6 +921,7 @@ test("C6 check reports an edited or missing outside file", () => {
   expect(missing.code).toBe(1);
   expect(missing.lines).toEqual([
     "edited: drizzle/1_m/migration.sql (missing)",
+    "no lock entry: m; run tinker update m to record it",
     "tinker check: 1 findings",
   ]);
 });
@@ -1103,6 +1120,7 @@ test("K4 check reports a leftover temp copy alone", () => {
 
   expect(run.code).toBe(1);
   expect(run.lines).toEqual([
+    "no lock entry: c; run tinker update c to record it",
     "interrupted update: c; run tinker update c",
     "tinker check: 1 findings",
   ]);

@@ -122,7 +122,7 @@
   ],
   "meta": {
     "ownership": "install-only",
-    "update": "Never re-apply app. Review copied source; planned Start updates stop on local edits."
+    "update": "Never re-apply app. Update components with tinker update; it stops on local edits."
   },
   "registryDependencies": [
     "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.1/apps/start-scaffold/public/r/base.json",

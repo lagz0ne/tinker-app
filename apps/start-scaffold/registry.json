@@ -107,7 +107,7 @@
       ],
       "meta": {
         "ownership": "install-only",
-        "update": "Never re-apply app. Review copied source; planned Start updates stop on local edits."
+        "update": "Never re-apply app. Update components with tinker update; it stops on local edits."
       },
       "registryDependencies": [
         "@tinker-start/base",
@@ -259,7 +259,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       }
     },
     {
@@ -332,7 +332,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app.",
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
         "starterOnly": true,
         "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
       }
@@ -388,7 +388,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       },
       "devDependencies": ["@types/pg@^8.15.6"]
     },
@@ -462,7 +462,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app.",
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
         "starterOnly": true,
         "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
       },
@@ -596,7 +596,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       }
     },
     {
@@ -629,7 +629,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       }
     },
     {
@@ -671,7 +671,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       }
     },
     {
@@ -749,7 +749,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       },
       "devDependencies": ["@types/nodemailer@^7.0.11"]
     },
@@ -827,7 +827,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       }
     },
     {
@@ -941,7 +941,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       }
     },
     {
@@ -1095,7 +1095,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app.",
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
         "starterOnly": true,
         "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
       }
@@ -1193,7 +1193,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       }
     },
     {

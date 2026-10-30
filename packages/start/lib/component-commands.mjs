@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import * as fsp from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 
-import { listFiles } from "./paths.mjs";
+import { entryOf, readLock, writeLock } from "./lock.mjs";
+import { basePackage, listFiles } from "./paths.mjs";
 import { readRegistryJson } from "./registry.mjs";
 import { parseSource } from "./source.mjs";
 
@@ -12,6 +14,11 @@ export class Refusal {
   constructor(lines) {
     this.lines = lines;
   }
+}
+
+/** @param {string} root - From a command; why: the app holding the temp folders. */
+function workOf(root) {
+  return join(root, ".tinker/update");
 }
 
 /** @param {string} name - From a command; why: the component folder under `tinker/`. */
@@ -186,6 +193,67 @@ function byText(a, b) {
   return a < b ? -1 : 1;
 }
 
+/** @param {Buffer | string} bytes - From a compare; why: the sha256 hex the lock records. */
+function digest(bytes) {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+/**
+ * The differences between the app and its lock entry: changed, missing, then added in the folder.
+ * @param {string} root - From a command; why: the app to read.
+ * @param {string} name - From a command; why: the component to diff.
+ * @param {{ files: Record<string, string> }} entry - From readLock; why: what it was copied from.
+ */
+function lockDiffOf(root, name, entry) {
+  const files = entry.files ?? {};
+  const lines = [];
+  for (const [path, hash] of Object.entries(files)) {
+    const file = join(root, path);
+    if (!existsSync(file)) lines.push(`missing: ${path}`);
+    else if (digest(readFileSync(file)) !== hash) lines.push(`changed: ${path}`);
+  }
+
+  const locked = new Set(Object.keys(files));
+  const folder = folderOf(root, name);
+  for (const path of listFiles(folder, folder).sort(byText)) {
+    if (!locked.has(`${areaOf(name)}${path}`)) lines.push(`added: ${areaOf(name)}${path}`);
+  }
+  return lines;
+}
+
+/**
+ * The hashes the registry item's bytes would give, without writing them.
+ * @param {Map<string, string>} files - From filesOf; why: the registry copy.
+ */
+function registryHashes(files) {
+  const hashes = {};
+  for (const [path, content] of files) hashes[path] = digest(content);
+  return hashes;
+}
+
+/**
+ * Whether two path -> hash maps name the same files with the same bytes.
+ * @param {Record<string, string>} left - From a lock entry; why: the recorded files.
+ * @param {Record<string, string>} right - From registryHashes; why: the registry files.
+ */
+function sameFiles(left, right) {
+  const paths = Object.keys(left);
+  if (paths.length !== Object.keys(right).length) return false;
+  return paths.every((path) => right[path] === left[path]);
+}
+
+/**
+ * A `changed:` line whose local bytes already equal the new copy: replacing it loses nothing.
+ * @param {string} root - From updateComponent; why: the app to read.
+ * @param {string} line - From a lock diff; why: one `changed: <path>` line.
+ * @param {Map<string, string>} files - From filesOf; why: the registry copy.
+ */
+function alreadyNew(root, line, files) {
+  if (!line.startsWith("changed: ")) return false;
+  const path = line.slice("changed: ".length);
+  return files.get(path) === readFileSync(join(root, path), "utf8");
+}
+
 /** @param {string} appFile - From a diff; why: rewrite one `changed: <path>` line for check. */
 function editedLine(appFile) {
   const [kind, ...rest] = appFile.split(": ");
@@ -251,43 +319,57 @@ async function fillFolder(dir, files, ops) {
  * @param {Map<string, string>} files - From a member; why: folder-relative path to content.
  * @param {object} ops - From a command; why: the fs ops a test can fail on purpose.
  */
-async function writeFolder(root, name, files, ops) {
+async function swapFolder(root, name, files, ops) {
   const target = folderOf(root, name);
   const work = join(root, ".tinker/update");
   const fresh = join(work, `${name}.new`);
   const old = join(work, `${name}.old`);
-  let moved = false;
 
   await ops.mkdir(work, { recursive: true });
   await ops.mkdir(dirname(target), { recursive: true });
   try {
     await fillFolder(fresh, files, ops);
-    if (existsSync(target)) {
-      await ops.rename(target, old);
-      moved = true;
-    }
+    if (existsSync(target)) await ops.rename(target, old);
     await ops.rename(fresh, target);
   } catch (error) {
-    if (moved) await ops.rename(old, target).catch(() => null);
-    await ops.rm(fresh, { recursive: true, force: true });
-    clearWork(work);
+    await undoSwap(root, name, ops);
     throw error;
   }
-
-  await dropOld(old, ops);
-  clearWork(work);
 }
 
 /**
  * Delete the moved-aside folder. Best effort: the folder is already the registry copy, and the
  * next add or update recovery drops a leftover `.old`.
- * @param {string} old - From writeFolder; why: the folder that held the previous copy.
- * @param {object} ops - From writeFolder; why: the fs ops a test can fail on purpose.
+ * @param {string} root - From a command; why: the app holding `.tinker/update`.
+ * @param {string} name - From a command; why: the component whose copy was replaced.
+ * @param {object} ops - From a command; why: the fs ops a test can fail on purpose.
  */
-async function dropOld(old, ops) {
+async function dropOld(root, name, ops) {
+  const old = join(root, ".tinker/update", `${name}.old`);
   if (!existsSync(old)) return;
 
   await ops.rm(old, { recursive: true, force: true }).catch(() => null);
+  clearWork(join(root, ".tinker/update"));
+}
+
+/**
+ * Undo a swap: the old folder comes back and the staging folder goes. The lock is left as it was.
+ * @param {string} root - From a command; why: the app holding `.tinker/update`.
+ * @param {string} name - From a command; why: the component to put back.
+ * @param {object} ops - From a command; why: the fs ops a test can fail on purpose.
+ */
+async function undoSwap(root, name, ops) {
+  const target = folderOf(root, name);
+  const work = join(root, ".tinker/update");
+  const old = join(work, `${name}.old`);
+
+  if (existsSync(old)) {
+    await ops.rm(target, { recursive: true, force: true }).catch(() => null);
+    await ops.rename(old, target).catch(() => null);
+  }
+
+  await ops.rm(join(work, `${name}.new`), { recursive: true, force: true }).catch(() => null);
+  clearWork(work);
 }
 
 /**
@@ -306,26 +388,58 @@ async function writeAtomic(file, content, ops) {
  * Finish or undo an update a killed process left behind, for this component only.
  * @param {string} root - From a command; why: the app holding `.tinker/update`.
  * @param {string} name - From a command; why: the component to recover.
- * @param {object} ops - From a command; why: the fs ops a test can fail on purpose.
+ * @param {string[]} paths - From a command; why: the registry item's files, for an outside file.
  */
-async function recover(root, name, ops) {
+async function recover(root, name, ops, paths) {
   const work = join(root, ".tinker/update");
   const target = folderOf(root, name);
   const old = join(work, `${name}.old`);
   const fresh = join(work, `${name}.new`);
-  let restored = false;
+  const lines = [];
 
   if (existsSync(old) && !existsSync(target)) {
     await ops.mkdir(dirname(target), { recursive: true });
     await ops.rename(old, target);
-    restored = true;
+    lines.push(restoredMessage(name));
   } else if (existsSync(old)) {
-    await ops.rm(old, { recursive: true, force: true });
+    await recordEntry(root, name, ops, paths);
+    await dropOld(root, name, ops);
+    lines.push(finishedMessage(name));
   }
 
   if (existsSync(fresh)) await ops.rm(fresh, { recursive: true, force: true });
   clearWork(work);
-  return restored;
+  return lines;
+}
+
+/**
+ * Record one component in the lock from the bytes on disk, merging into the entries it holds.
+ * @param {string} root - From a command; why: the app to write in.
+ * @param {string} name - From a command; why: the component that just landed.
+ * @param {object} ops - From a command; why: the fs ops a test can fail on purpose.
+ * @param {string[]} paths - From a command; why: the registry item's files, for an outside file.
+ */
+async function recordEntry(root, name, ops, paths) {
+  const lock = await readLock(root);
+  const owned = await ownedPaths(root, name, paths);
+  const entry = await entryOf(root, owned, basePackage.version);
+  await writeLock(root, { components: { ...lock.components, [name]: entry }, version: 1 }, ops);
+}
+
+/**
+ * The paths a component owns on disk: every file in its folder, plus the registry's outside
+ * files that the app holds.
+ * @param {string} root - From a command; why: the app to read.
+ * @param {string} name - From a command; why: the component folder to list.
+ * @param {string[]} paths - From a command; why: the registry item's files.
+ */
+async function ownedPaths(root, name, paths) {
+  const folder = folderOf(root, name);
+  const inside = listFiles(folder, folder).map((file) => `${areaOf(name)}${file}`);
+  const outside = paths.filter(
+    (path) => !path.startsWith(areaOf(name)) && existsSync(join(root, path)),
+  );
+  return [...inside, ...outside];
 }
 
 /**
@@ -520,13 +634,13 @@ function keepDep(pkg, field, dep) {
 /**
  * Recover every component the closure touches, so a killed update never blocks an add.
  * @param {string} root - From addComponent; why: the app holding `.tinker/update`.
- * @param {string[]} closure - From closureOf; why: the members, requires first.
+ * @param {object[]} members - From membersOf; why: the closure, requires first.
  * @param {object} ops - From addComponent; why: the fs ops a test can fail on purpose.
  */
-async function recoverAll(root, closure, ops) {
+async function recoverAll(root, members, ops) {
   const lines = [];
-  for (const member of closure) {
-    if (await recover(root, member, ops)) lines.push(restoredMessage(member));
+  for (const member of members) {
+    lines.push(...(await recover(root, member.name, ops, [...member.files.keys()])));
   }
   return lines;
 }
@@ -537,6 +651,14 @@ async function recoverAll(root, closure, ops) {
  */
 function restoredMessage(name) {
   return `restored tinker/components/${name} from an interrupted update`;
+}
+
+/**
+ * The line a recovery prints for a component whose swap finished but whose lock did not.
+ * @param {string} name - From a command; why: the component the lock now records.
+ */
+function finishedMessage(name) {
+  return `finished tinker/components/${name} from an interrupted update`;
 }
 
 /**
@@ -647,9 +769,31 @@ function splitKept(root, members, lines) {
  */
 async function copyAll(root, fresh, ops) {
   for (const member of fresh) {
-    await writeFolder(root, member.name, insideOf(member), ops);
+    await swapFolder(root, member.name, insideOf(member), ops);
     for (const [path, content] of outsideOf(member)) await writeOutside(root, path, content, ops);
   }
+}
+
+/**
+ * Record every component just copied in one lock write; a kept member keeps what it had.
+ * @param {string} root - From addComponent; why: the app to write in.
+ * @param {object[]} fresh - From splitKept; why: the members that landed.
+ * @param {object} ops - From addComponent; why: the fs ops a test can fail on purpose.
+ */
+async function recordEntries(root, fresh, ops) {
+  if (fresh.length === 0) return;
+
+  const lock = await readLock(root);
+  const components = { ...lock.components };
+  for (const member of fresh) {
+    components[member.name] = await entryOf(
+      root,
+      await ownedPaths(root, member.name, [...member.files.keys()]),
+      basePackage.version,
+    );
+  }
+  await writeLock(root, { components, version: 1 }, ops);
+  clearWork(workOf(root));
 }
 
 /**
@@ -678,7 +822,7 @@ export async function addComponent(root, name, base) {
 
   refuseStarterOnly(catalog, closure);
   const members = await membersOf(catalog, closure);
-  const lines = await recoverAll(root, closure, fsp);
+  const lines = await recoverAll(root, members, fsp);
   if (existsSync(folderOf(root, name))) {
     throw new Refusal([...lines, `${name} is already added; use tinker update ${name}`]);
   }
@@ -688,6 +832,7 @@ export async function addComponent(root, name, base) {
   if (conflicts.length > 0) throw new Refusal([...lines, ...conflicts]);
 
   await copyAll(root, fresh, fsp);
+  await recordEntries(root, fresh, fsp);
   lines.push(
     ...mergeDeps(
       root,
@@ -718,29 +863,62 @@ export async function updateComponent(root, name, base, options = {}) {
 
   refuseStarterOnly(catalog, [name]);
   const files = filesOf(item, name);
-  const restored = await recover(root, name, ops);
+  const paths = [...files.keys()];
+  const lines = await recover(root, name, ops, paths);
   if (!existsSync(folderOf(root, name))) {
     throw new Refusal([`${name} is not added; use tinker add ${name}`]);
   }
 
-  const member = { name, item, files };
-  const diff = diffOf(root, name, member.files);
-  if (diff.length > 0 && !options.force && !restored) {
-    throw new Refusal([
-      ...diff,
-      `tinker update: ${name} has local edits; rerun with --force to replace them`,
-    ]);
-  }
+  await refuseEdits(root, name, files, { force: options.force, recovered: lines.length > 0 });
+  await replaceWhole(root, name, { name, item, files }, ops, paths);
 
-  await writeFolder(root, name, insideOf(member), ops);
-  for (const [path, content] of outsideOf(member)) await writeOutside(root, path, content, ops);
-
-  const lines = restored ? [restoredMessage(name)] : [];
   lines.push(...mergeDeps(root, [item]));
   lines.push(
     `tinker update: replaced tinker/components/${name}; run tsc (npm run typecheck) to see breaks in your code`,
   );
   return { lines, code: 0 };
+}
+
+/**
+ * Refuse an update the lock marks as edited, unless --force or a recovery just put the folder back.
+ * @param {string} root - From updateComponent; why: the app to read.
+ * @param {string} name - From updateComponent; why: the component to measure.
+ * @param {Map<string, string>} files - From filesOf; why: the registry copy.
+ * @param {{ force?: boolean, recovered: boolean }} options - From updateComponent; why: --force, and whether recovery ran.
+ */
+async function refuseEdits(root, name, files, options) {
+  const lock = await readLock(root);
+  const entry = lock.components[name];
+  const diff = entry ? lockDiffOf(root, name, entry) : diffOf(root, name, files);
+  const edits = entry ? diff.filter((line) => !alreadyNew(root, line, files)) : diff;
+  if (edits.length === 0 || options.force || options.recovered) return;
+
+  throw new Refusal([
+    ...edits,
+    `tinker update: ${name} has local edits; rerun with --force to replace them`,
+  ]);
+}
+
+/**
+ * Swap the folder in, write its outside files, then record the lock entry. Any failure undoes
+ * the swap, so the old folder and the old lock entry both stay whole.
+ * @param {string} root - From updateComponent; why: the app to write in.
+ * @param {string} name - From updateComponent; why: the component to replace.
+ * @param {object} member - From updateComponent; why: the registry item and its files.
+ * @param {object} ops - From updateComponent; why: the fs ops a test can fail on purpose.
+ * @param {string[]} paths - From updateComponent; why: the registry item's files.
+ */
+async function replaceWhole(root, name, member, ops, paths) {
+  try {
+    await swapFolder(root, name, insideOf(member), ops);
+    for (const [path, content] of outsideOf(member)) await writeOutside(root, path, content, ops);
+    await recordEntry(root, name, ops, paths);
+  } catch (error) {
+    await undoSwap(root, name, ops);
+    throw error;
+  }
+
+  await dropOld(root, name, ops);
 }
 
 /**
@@ -750,30 +928,82 @@ export async function updateComponent(root, name, base, options = {}) {
  */
 export async function checkComponents(root, base) {
   const catalog = await catalogOf(base);
+  const lock = await readLock(root);
+  const names = componentNames(root);
+  const report = [];
+  for (const name of names) report.push(...(await folderReport(root, name, catalog, lock)));
+  for (const line of interruptedLines(root)) report.push({ line, finding: true });
+  for (const line of missingComponents(names, lock)) report.push({ line, finding: true });
+
+  const lines = report.map((entry) => entry.line);
+  const findings = report.filter((entry) => entry.finding).length;
+  if (findings === 0) {
+    return {
+      lines: [...lines, `tinker check: ${names.length} components match registry ${base}`],
+      code: 0,
+    };
+  }
+  return { lines: [...lines, `tinker check: ${findings} findings`], code: 1 };
+}
+
+/** @param {string} root - From checkComponents; why: the app whose folders to list. */
+function componentNames(root) {
   const dir = join(root, "tinker/components");
-  const names = existsSync(dir)
-    ? readdirSync(dir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-        .map((entry) => entry.name)
-        .sort(byText)
-    : [];
-  const lines = [];
+  if (!existsSync(dir)) return [];
 
-  for (const name of names) {
-    const item = await checkedItem(catalog, name);
-    if (item === null) {
-      lines.push(`unknown component: ${name}`);
-      continue;
-    }
-    lines.push(...diffOf(root, name, filesOf(item, name)).map(editedLine));
-    lines.push(...missingRequires(root, name));
-  }
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+    .map((entry) => entry.name)
+    .sort(byText);
+}
 
-  lines.push(...interruptedLines(root));
-  if (lines.length === 0) {
-    return { lines: [`tinker check: ${names.length} components match registry ${base}`], code: 0 };
-  }
-  return { lines: [...lines, `tinker check: ${lines.length} findings`], code: 1 };
+/**
+ * One local component: its `edited:` findings, its note, and its `missing requires:` lines.
+ * @param {string} root - From checkComponents; why: the app to read.
+ * @param {string} name - From checkComponents; why: the folder to report.
+ * @param {{ names: Set<string>, items: Map<string, object> }} catalog - From checkComponents; why: the index.
+ * @param {{ components: Record<string, { files: Record<string, string>, start: string }> }} lock - From readLock; why: what was copied.
+ */
+async function folderReport(root, name, catalog, lock) {
+  const item = await checkedItem(catalog, name);
+  if (item === null) return [{ line: `unknown component: ${name}`, finding: true }];
+
+  const files = filesOf(item, name);
+  const entry = lock.components[name];
+  const diff = entry ? lockDiffOf(root, name, entry) : diffOf(root, name, files);
+  const notes = entry
+    ? outdatedNote(name, entry, files)
+    : [`no lock entry: ${name}; run tinker update ${name} to record it`];
+  return [
+    ...diff.map((line) => ({ line: editedLine(line), finding: true })),
+    ...notes.map((line) => ({ line, finding: false })),
+    ...missingRequires(root, name).map((line) => ({ line, finding: true })),
+  ];
+}
+
+/**
+ * `outdated:` when the lock and the registry differ in paths or hashes; a `start` alone is fine.
+ * @param {string} name - From folderReport; why: the component to name.
+ * @param {{ files: Record<string, string> }} entry - From readLock; why: what the folder came from.
+ * @param {Map<string, string>} files - From folderReport; why: the registry item's bytes.
+ */
+function outdatedNote(name, entry, files) {
+  if (sameFiles(entry.files ?? {}, registryHashes(files))) return [];
+
+  return [`outdated: ${name} (lock start ${entry.start}; run tinker update ${name})`];
+}
+
+/**
+ * `missing component:` lines for lock entries whose folder is gone.
+ * @param {string[]} names - From checkComponents; why: the folders that exist.
+ * @param {{ components: Record<string, object> }} lock - From readLock; why: the recorded entries.
+ */
+function missingComponents(names, lock) {
+  const present = new Set(names);
+  return Object.keys(lock.components)
+    .filter((name) => !present.has(name))
+    .sort(byText)
+    .map((name) => `missing component: ${name} is in tinker/components.lock`);
 }
 
 /**

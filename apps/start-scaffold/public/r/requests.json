@@ -87,6 +87,6 @@
   ],
   "meta": {
     "ownership": "userland",
-    "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+    "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
   }
 }
