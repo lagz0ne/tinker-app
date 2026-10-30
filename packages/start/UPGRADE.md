@@ -1,5 +1,120 @@
 # Upgrade
 
+## 0.13.0
+
+Start 0.13.0 is released from `lagz0ne/tinker-app`, tag `start-v0.13.0`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0:
+
+```json
+"@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+"@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-react-0.9.0.tgz",
+"@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.13.0/tinker-start-0.13.0.tgz"
+```
+
+Change the Start URL in your `package.json`, then run `pnpm install`.
+The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.0/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.13.0.
+
+### The SQLite set
+
+Three new components are a second database set
+(ADR `docs/decisions/sqlite-variants.md`). An app picks one set.
+
+- `database-sqlite`: the same public names as `database` (`database`,
+  `databaseSetup`, `migrate`, `transaction`, `databaseUrl`), on `node:sqlite`.
+  `databaseUrl` takes a `file:` URL. One write transaction per process at a
+  time (`BEGIN IMMEDIATE`); reads use their own connection (WAL). `migrate`
+  runs each new numbered `.sql` file in `databaseMigrationsFolder` (default
+  `migrations`, relative to the working folder) and records it in
+  `start_migrations`. `listen` and `notify` use a `start_notify` table.
+- `auth-sqlite`: Better Auth on the `DatabaseSync` through its Kysely
+  dialect. No Drizzle adapter.
+- `sync-sqlite`: the sync twin. JSON columns are `text`; the publish step
+  notifies in the same transaction, so there is no trigger.
+
+Queries are plain `.sql` files, typed and run by Reylo 0.6.0
+(`import readUser from "./read_user.sql"`, then `.runSync()`).
+The migration files are the schema: no Drizzle and no `drizzle-kit generate`.
+There is no `mail-sqlite`; an app on the SQLite set sends no mail yet.
+The Postgres set (`database`, `auth`, `sync`, `mail`) is unchanged and keeps Drizzle.
+
+### The toolchain the SQLite set needs
+
+- TypeScript `7.1.0-beta`, also in `overrides`. The type check runs
+  `tsc --noEmit --runExternalCode`.
+- `reylo` 0.6.0 (dependency) and `@reylosql/sqlite` 0.6.0 (dev dependency).
+- For `auth-sqlite`: `kysely` 0.29.6 and `@better-auth/kysely-adapter` 1.7.7,
+  with the `overrides` `@better-auth/core` 1.7.7, `@better-auth/utils` 0.4.2
+  and `better-call` 1.4.0.
+- `reylo()` from `reylo/vite` first in the plugins of `vite.config.ts`, and
+  in `vitest.config.ts`, which also runs
+  `test.globalSetup: ["./maintain/sqlite-dev-db.mjs"]`.
+- `"contentMappers": [{ "package": "reylo", "extensions": [".sql", ".reylo.yaml", ".reylo.yml"] }]`
+  in `tsconfig.json`.
+- `.reylo.yaml` with `direct_url: file:./.tinker/sqlite-dev.db`, and
+  `maintain/sqlite-dev-db.mjs`, which rebuilds that dev database from
+  `sqlite/migrations` (or `migrations`). The `typecheck` script runs it first:
+  `node maintain/sqlite-dev-db.mjs && DATABASE_URL=file:.tinker/sqlite-dev.db node node_modules/typescript/bin/tsc --noEmit --runExternalCode`.
+- Node 24 or later.
+
+The registry marks the three items `meta.starterOnly`, because the `app` item
+has none of this toolchain. `tinker add database-sqlite` refuses them in an
+existing app, and `tinker update` refuses them too. An app gets them from the
+demo template, as below, and updates them by the next template update.
+
+### Move an app made from demo-v0.12.0
+
+The demo template now carries both sets. Bring its changes in as a template
+update: apply the template's own diff from `demo-v0.12.0` to `demo-v0.13.0` as
+a 3-way merge. Your local changes stay. The app must be a git repository
+(a degit copy is not one until you run `git init` and commit), and the work
+must be committed first: `git apply --3way` applies to the index.
+
+```bash
+git fetch --no-tags https://github.com/lagz0ne/tinker-app.git \
+  refs/tags/demo-v0.12.0:refs/tags/demo-v0.12.0 \
+  refs/tags/demo-v0.13.0:refs/tags/demo-v0.13.0
+git diff --binary demo-v0.12.0 demo-v0.13.0 | git apply --3way
+```
+
+Fix any conflict, then run `npm install` (or `pnpm install`) and `npm run typecheck`.
+The app still runs on Postgres. To move it to SQLite:
+
+1. In `cmds/server.ts`, `cmds/router.ts`, `src/routes/__root.tsx`,
+   `src/routes/api.auth.$.ts`, `src/routes/api.sync.ts`, and app files that
+   import `~/components/sync` (such as the demo's `src/frontend/Todos.tsx` and
+   `src/demo/frontend/state.ts`), import from `~/components/database-sqlite`,
+   `~/components/auth-sqlite` and `~/components/sync-sqlite`. Drop `mail` and
+   its tags. Drop the mail worker: `cmds/worker.ts`, `vite.worker.config.ts`,
+   `maintain/worker.mjs`, and the `worker` and `build:worker` scripts.
+   `database-sqlite` has no connect, lock or statement timeout tags.
+2. Resolve `DATABASE_URL` against the working folder, so `file:./data/app.db`
+   stays inside the app: `databaseUrl(new URL(env.DATABASE_URL, pathToFileURL(cwd + "/")))`.
+   A bare `new URL("file:./data/app.db")` is `/data/app.db`.
+   `node:sqlite` does not make the folder; make it first.
+3. Bind `databaseMigrationsFolder("sqlite/migrations")`: the template keeps
+   the SQLite migrations there, and the default is `migrations`.
+4. Move your app code off Drizzle onto `.sql` files, then delete the Postgres
+   components, `drizzle/`, `drizzle.config.ts`, their tests, and
+   `drizzle-orm`, `drizzle-kit`, `pg`, `nodemailer` and their types.
+
+### Other changes
+
+- `tinker add <name>`, `tinker update <name> [--force]` and `tinker check`
+  manage copied components. `add` copies a component and the ones it
+  requires, merges npm dependencies without changing your specs, writes outside
+  files such as migrations, and prints the import lines for `cmds/*.ts`. It
+  never writes `cmds/` or `src/`. `update` replaces one component folder whole,
+  so a killed update leaves the old folder whole; it refuses local edits unless
+  `--force`. `check` reports edited files, unknown components, missing
+  requires and interrupted updates, and exits 1 on any finding.
+- `mail.server.ts` spells out the options type of `send`: TypeScript 7.1
+  stops typing a destructured parameter default from context. Same behavior.
+- Start now releases itself: when a version bump lands green on `main`,
+  `release.yml` publishes `start-vX.Y.Z` and tags `small-vX.Y.Z` and
+  `demo-vX.Y.Z`.
+
 ## 0.12.0
 
 Start 0.12.0 is released from `lagz0ne/tinker-app`, tag `start-v0.12.0`.

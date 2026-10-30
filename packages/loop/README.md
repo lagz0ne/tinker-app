@@ -277,7 +277,7 @@ Outside git, it goes up to the root folder.
 It never uses `NODE_PATH` or Node's global folders.
 Those belong to the tool's runner, not to the app: pnpm's bin shims set `NODE_PATH`.
 So each app reads the rules of its own Start version.
-The first output line names that Start and its rules file: `@tinker/start 0.12.0: <path>`.
+The first output line names that Start and its rules file: `@tinker/start 0.13.0: <path>`.
 With no ID, the command prints every rule under its group heading.
 With IDs, it prints only those rules, in the order asked.
 IDs are not case sensitive: `b1` is `B1`.
