@@ -109,16 +109,17 @@ async function checkLocks(scratch) {
     }
   }
 
-  const small = join(scratch, "small");
-  const check = spawnSync(
-    process.execPath,
-    [join(root, "packages/start/bin/tinker.mjs"), "check", "--registry", join(app, "public/r")],
-    { cwd: small, encoding: "utf8" },
-  );
-  assert.equal(check.status, 0, check.stdout + check.stderr);
-  assert.ok(!check.stdout.includes("no lock entry"), check.stdout);
-  assert.ok(!check.stdout.includes("outdated:"), check.stdout);
-  console.log("PASS: both exports ship a lock that matches their files; small checks clean.");
+  for (const name of ["small", "demo"]) {
+    const check = spawnSync(
+      process.execPath,
+      [join(root, "packages/start/bin/tinker.mjs"), "check", "--registry", join(app, "public/r")],
+      { cwd: join(scratch, name), encoding: "utf8" },
+    );
+    assert.equal(check.status, 0, `${name}: ${check.stdout}${check.stderr}`);
+    assert.ok(!check.stdout.includes("no lock entry"), check.stdout);
+    assert.ok(!check.stdout.includes("outdated:"), check.stdout);
+  }
+  console.log("PASS: both exports ship a lock that matches their files and check clean.");
 }
 
 /** Every file under `dir`, as paths relative to it. @param {string} dir - From checkLocks. */

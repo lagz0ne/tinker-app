@@ -208,7 +208,13 @@ function lockDiffOf(root, name, entry) {
   const files = entry.files ?? {};
   const lines = [];
   for (const [path, hash] of Object.entries(files)) {
-    const file = join(root, path);
+    const safe = appPath(`~/${path}`);
+    if (safe === null) {
+      lines.push(`bad lock path: ${path}`);
+      continue;
+    }
+
+    const file = join(root, safe);
     if (!existsSync(file)) lines.push(`missing: ${path}`);
     else if (digest(readFileSync(file)) !== hash) lines.push(`changed: ${path}`);
   }
@@ -324,17 +330,22 @@ async function swapFolder(root, name, files, ops) {
   const work = join(root, ".tinker/update");
   const fresh = join(work, `${name}.new`);
   const old = join(work, `${name}.old`);
+  let moved = false;
 
   await ops.mkdir(work, { recursive: true });
   await ops.mkdir(dirname(target), { recursive: true });
   try {
     await fillFolder(fresh, files, ops);
-    if (existsSync(target)) await ops.rename(target, old);
+    if (existsSync(target)) {
+      await ops.rename(target, old);
+      moved = true;
+    }
     await ops.rename(fresh, target);
   } catch (error) {
-    await undoSwap(root, name, ops);
+    await undoSwap(root, name, ops, moved);
     throw error;
   }
+  return moved;
 }
 
 /**
@@ -353,23 +364,41 @@ async function dropOld(root, name, ops) {
 }
 
 /**
- * Undo a swap: the old folder comes back and the staging folder goes. The lock is left as it was.
+ * Undo a swap this run made: rename the new folder aside, put the old one back, then delete the
+ * new one. Nothing is deleted in place, so a kill here always leaves one whole copy.
  * @param {string} root - From a command; why: the app holding `.tinker/update`.
  * @param {string} name - From a command; why: the component to put back.
  * @param {object} ops - From a command; why: the fs ops a test can fail on purpose.
+ * @param {boolean} moved - From swapFolder; why: only an update THIS run moved has a folder to put back.
  */
-async function undoSwap(root, name, ops) {
+async function undoSwap(root, name, ops, moved) {
   const target = folderOf(root, name);
-  const work = join(root, ".tinker/update");
+  const work = workOf(root);
   const old = join(work, `${name}.old`);
+  const undo = join(work, `${name}.undo`);
 
-  if (existsSync(old)) {
-    await ops.rm(target, { recursive: true, force: true }).catch(() => null);
-    await ops.rename(old, target).catch(() => null);
-  }
-
+  if (moved) await restoreSwap(target, ops, old, undo);
   await ops.rm(join(work, `${name}.new`), { recursive: true, force: true }).catch(() => null);
   clearWork(work);
+}
+
+/**
+ * Put the old folder back without deleting anything in place: the new folder is renamed aside
+ * first, so a kill at any point leaves one whole copy (`.undo` + `.old`, or the old folder).
+ * @param {string} target - From undoSwap; why: the component folder.
+ * @param {object} ops - From undoSwap; why: the fs ops a test can fail on purpose.
+ * @param {string} old - From undoSwap; why: the moved-aside previous copy.
+ * @param {string} undo - From undoSwap; why: where the new copy waits while the old one returns.
+ */
+async function restoreSwap(target, ops, old, undo) {
+  if (!existsSync(target)) {
+    if (existsSync(old)) await ops.rename(old, target);
+    return;
+  }
+
+  await ops.rename(target, undo);
+  await ops.rename(old, target);
+  await ops.rm(undo, { recursive: true, force: true }).catch(() => null);
 }
 
 /**
@@ -391,11 +420,11 @@ async function writeAtomic(file, content, ops) {
  * @param {string[]} paths - From a command; why: the registry item's files, for an outside file.
  */
 async function recover(root, name, ops, paths) {
-  const work = join(root, ".tinker/update");
+  const work = workOf(root);
   const target = folderOf(root, name);
   const old = join(work, `${name}.old`);
   const fresh = join(work, `${name}.new`);
-  const lines = [];
+  const lines = await undoStep(root, name, ops);
 
   if (existsSync(old) && !existsSync(target)) {
     await ops.mkdir(dirname(target), { recursive: true });
@@ -409,6 +438,30 @@ async function recover(root, name, ops, paths) {
 
   if (existsSync(fresh)) await ops.rm(fresh, { recursive: true, force: true });
   clearWork(work);
+  return lines;
+}
+
+/**
+ * An undo that died: `.undo` holds the new copy and `.old` the previous one. Put the previous
+ * copy back when the folder is gone, then drop `.undo`; the registry copy is written again.
+ * @param {string} root - From recover; why: the app holding `.tinker/update`.
+ * @param {string} name - From recover; why: the component to clean up.
+ * @param {object} ops - From recover; why: the fs ops a test can fail on purpose.
+ */
+async function undoStep(root, name, ops) {
+  const work = workOf(root);
+  const target = folderOf(root, name);
+  const old = join(work, `${name}.old`);
+  const undo = join(work, `${name}.undo`);
+  if (!existsSync(undo)) return [];
+
+  const lines = [];
+  if (!existsSync(target) && existsSync(old)) {
+    await ops.mkdir(dirname(target), { recursive: true });
+    await ops.rename(old, target);
+    lines.push(restoredMessage(name));
+  }
+  await ops.rm(undo, { recursive: true, force: true });
   return lines;
 }
 
@@ -722,8 +775,8 @@ function interruptedLines(root) {
   if (!existsSync(work)) return [];
 
   const names = readdirSync(work)
-    .filter((entry) => /\.(old|new)$/.test(entry))
-    .map((entry) => entry.replace(/\.(old|new)$/, ""));
+    .filter((entry) => /\.(old|new|undo)$/.test(entry))
+    .map((entry) => entry.replace(/\.(old|new|undo)$/, ""));
   return [...new Set(names)]
     .sort(byText)
     .map((name) => `interrupted update: ${name}; run tinker update ${name}`);
@@ -909,12 +962,13 @@ async function refuseEdits(root, name, files, options) {
  * @param {string[]} paths - From updateComponent; why: the registry item's files.
  */
 async function replaceWhole(root, name, member, ops, paths) {
+  let moved = false;
   try {
-    await swapFolder(root, name, insideOf(member), ops);
+    moved = await swapFolder(root, name, insideOf(member), ops);
     for (const [path, content] of outsideOf(member)) await writeOutside(root, path, content, ops);
     await recordEntry(root, name, ops, paths);
   } catch (error) {
-    await undoSwap(root, name, ops);
+    await undoSwap(root, name, ops, moved);
     throw error;
   }
 
@@ -965,20 +1019,88 @@ function componentNames(root) {
  * @param {{ components: Record<string, { files: Record<string, string>, start: string }> }} lock - From readLock; why: what was copied.
  */
 async function folderReport(root, name, catalog, lock) {
-  const item = await checkedItem(catalog, name);
-  if (item === null) return [{ line: `unknown component: ${name}`, finding: true }];
-
-  const files = filesOf(item, name);
   const entry = lock.components[name];
-  const diff = entry ? lockDiffOf(root, name, entry) : diffOf(root, name, files);
-  const notes = entry
-    ? outdatedNote(name, entry, files)
-    : [`no lock entry: ${name}; run tinker update ${name} to record it`];
+  const item = await checkedItemOrLine(catalog, name);
+  if (typeof item === "string") return [{ line: item, finding: true }];
+  if (item === null) return [{ line: `unknown component: ${name}`, finding: true }];
+  if (catalog.metas.get(name)?.starterOnly === true) return starterReport(root, name, entry);
+
+  return registryReport(root, name, item, entry);
+}
+
+/**
+ * The item for a folder, or the one `bad item:` line that replaces a registry failure.
+ * @param {{ names: Set<string>, items: Map<string, object> }} catalog - From checkComponents; why: the index.
+ * @param {string} name - From folderReport; why: the folder to look up.
+ */
+async function checkedItemOrLine(catalog, name) {
+  try {
+    return await checkedItem(catalog, name);
+  } catch (error) {
+    return `bad item: ${name}: ${reasonOf(error)}`;
+  }
+}
+
+/** @param {unknown} error - From a check; why: the one line that says what went wrong. */
+function reasonOf(error) {
+  if (error instanceof Refusal) return error.lines.join("; ");
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * A starter-only component is copied with the starter's toolchain, so check measures it against
+ * its lock entry only: no registry fence, no registry compare, no outdated advice.
+ * @param {string} root - From folderReport; why: the app to read.
+ * @param {string} name - From folderReport; why: the starter-only component.
+ * @param {{ files: Record<string, string> }} [entry] - From readLock; why: what it was copied from.
+ */
+function starterReport(root, name, entry) {
+  if (entry === undefined) {
+    return [
+      {
+        line: `no lock entry: ${name} (starter-only; check compares it with the lock only)`,
+        finding: false,
+      },
+    ];
+  }
+
   return [
-    ...diff.map((line) => ({ line: editedLine(line), finding: true })),
-    ...notes.map((line) => ({ line, finding: false })),
+    ...lockDiffOf(root, name, entry).map((line) => ({ line: diffLine(line), finding: true })),
     ...missingRequires(root, name).map((line) => ({ line, finding: true })),
   ];
+}
+
+/**
+ * A normal component: the lock it was copied from, then the registry it would come from now.
+ * @param {string} root - From folderReport; why: the app to read.
+ * @param {string} name - From folderReport; why: the component.
+ * @param {object} item - From checkedItem; why: its registry item.
+ * @param {{ files: Record<string, string>, start: string }} [entry] - From readLock; why: what it was copied from.
+ */
+function registryReport(root, name, item, entry) {
+  try {
+    const files = filesOf(item, name);
+    const diff = entry ? lockDiffOf(root, name, entry) : diffOf(root, name, files);
+    const notes = entry
+      ? outdatedNote(name, entry, files)
+      : [`no lock entry: ${name}; run tinker update ${name} to record it`];
+    return [
+      ...diff.map((line) => ({ line: diffLine(line), finding: true })),
+      ...notes.map((line) => ({ line, finding: false })),
+      ...missingRequires(root, name).map((line) => ({ line, finding: true })),
+    ];
+  } catch (error) {
+    return [{ line: `bad item: ${name}: ${reasonOf(error)}`, finding: true }];
+  }
+}
+
+/**
+ * Rewrite one diff line for check: a `changed:`/`missing:`/`added:` line becomes `edited:`,
+ * anything else (a `bad lock path:`) stays as it is.
+ * @param {string} line - From a diff; why: one line to print.
+ */
+function diffLine(line) {
+  return /^(changed|missing|added): /.test(line) ? editedLine(line) : line;
 }
 
 /**

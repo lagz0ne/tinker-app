@@ -161,13 +161,27 @@ export const mV2 = {
   "~/drizzle/1_m/migration.sql": "-- 1_m v2\n",
 };
 
-/** The fixture registry's items: a -> b -> c, an outside file, and `u` for version bumps. */
+/** A starter-only item that owns a `migrations/` file, as G0's SQLite items do. */
+export const starterFiles = {
+  "~/tinker/components/s-starter/component.json": '{ "requires": [] }\n',
+  "~/tinker/components/s-starter/index.ts": 'export const sStarterValue = "s-starter";\n',
+  "~/migrations/1_starter/migration.sql": "-- starter\n",
+};
+
+/** The fixture registry's items: a -> b -> c, an outside file, `u` for bumps, a starter-only item. */
 export const items = {
   a: { files: componentFiles("a", ["b"]) },
   b: { files: componentFiles("b", ["c"]) },
   c: { files: componentFiles("c") },
   m: { files: mV1 },
   u: { files: uV1 },
+  "s-starter": { files: starterFiles, meta: { starterOnly: true } },
+  "bad-item": {
+    files: {
+      "~/tinker/components/bad-item/component.json": '{ "requires": [] }\n',
+      "~/src/z.ts": "export const z = 1;\n",
+    },
+  },
 };
 
 /**
@@ -199,7 +213,11 @@ export function makeRegistry(tweaks = {}) {
   const specs = { ...items, ...tweaks };
   const index = {
     name: "tinker-test",
-    items: Object.keys(specs).map((name) => ({ name, type: "registry:component" })),
+    items: Object.entries(specs).map(([name, spec]) => ({
+      name,
+      type: "registry:component",
+      ...(spec.meta ? { meta: spec.meta } : {}),
+    })),
   };
 
   writeFileSync(join(dir, "registry.json"), `${JSON.stringify(index, null, 2)}\n`);
