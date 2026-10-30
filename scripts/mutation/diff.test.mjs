@@ -581,7 +581,7 @@ test("config-only PRs run unconditional gate contracts and actions are immutable
   }
   assert.match(
     workflow,
-    /group: mutation-\$\{\{ github.event_name \}\}-\$\{\{ github.ref \}\}\n  cancel-in-progress: true/,
+    /group: mutation-\$\{\{ github.event_name \}\}-\$\{\{ github.sha \}\}\n  cancel-in-progress: true/,
   );
 });
 
