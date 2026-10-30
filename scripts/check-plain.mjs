@@ -980,9 +980,22 @@ function protocolUnitReference(node, file, name) {
   );
 }
 
+/** The auth set and its SQLite twin own the same mounted protocol exception. */
+const authServerFiles = [
+  "tinker/components/auth/auth.server.ts",
+  "tinker/components/auth-sqlite/auth.server.ts",
+];
+
+const authMountFiles = [
+  "tinker/components/auth/handle.server.ts",
+  "tinker/components/auth/index.server.ts",
+  "tinker/components/auth-sqlite/handle.server.ts",
+  "tinker/components/auth-sqlite/index.server.ts",
+];
+
 function checkRequestHeaders(node) {
   const file = pathOf(node);
-  if (file === "tinker/components/auth/auth.server.ts") return;
+  if (authServerFiles.includes(file)) return;
   if (
     ["start.ts", "headers.server.ts", "index.server.ts"].some(
       (name) => file === `tinker/components/requests/${name}`,
@@ -1012,11 +1025,7 @@ function checkResponse(node) {
 }
 
 function checkMountedAuth(node) {
-  if (
-    pathOf(node) === "tinker/components/auth/handle.server.ts" ||
-    pathOf(node) === "tinker/components/auth/index.server.ts" ||
-    pathOf(node) === "src/routes/api.auth.$.ts"
-  ) {
+  if (authMountFiles.includes(pathOf(node)) || pathOf(node) === "src/routes/api.auth.$.ts") {
     return;
   }
 
@@ -1359,6 +1368,8 @@ function checkPlainFunction(node) {
 /** Named copied entry helpers and the approved server and browser mains keep native contracts. */
 const entryHelpers = {
   "tinker/components/database/database.server.ts": ["queryWithStop"],
+  // The SQLite twin's guarded view: the session owns the write connection until its end.
+  "tinker/components/database-sqlite/database.server.ts": ["guardQuery"],
   "tinker/components/database/lease.server.ts": ["leaseFrom", "logQuery", "query", "release"],
   "tinker/base/main.ts": ["defineMain"],
   "tinker/base/panics.server.ts": [
@@ -1618,10 +1629,7 @@ function checkOperationRun(run) {
 }
 
 function mountedAuthDeclaration(node) {
-  return (
-    pathOf(node) === "tinker/components/auth/handle.server.ts" &&
-    nameOf(node.parent.name) === "handleAuth"
-  );
+  return authMountFiles.includes(pathOf(node)) && nameOf(node.parent.name) === "handleAuth";
 }
 
 function checkOperationWire(node) {

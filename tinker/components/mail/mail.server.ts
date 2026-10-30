@@ -57,7 +57,7 @@ export const mail = resource({
     });
 
     return {
-      async send(message, { signal } = {}) {
+      async send(message, { signal }: { signal?: AbortSignal } = {}) {
         const stopped = signal ? AbortSignal.any([closing, signal]) : closing;
 
         stopped.throwIfAborted();

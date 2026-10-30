@@ -46,7 +46,7 @@ Only cmds/router.ts#getRouter and cmds/server.ts#main have approved cmd entry ex
 
 ## Command wiring
 
-Follow the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) and the actual
+Follow the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md) and the actual
 [server](cmds/server.ts) and [router](cmds/router.ts) commands. They show inline
 config bindings and the full owned close order. Auth imports its sync/mail work
 directly; sync's app readers and records still use required tags.
@@ -140,7 +140,7 @@ The server command accepts LOG_LEVEL as 20 (debug), 30 (info), 40 (warn), or 50 
 A bad value fails start and names telemetry.logLevel.
 
 Auth imports sync and mail directly. authStartup checks authSettings before ready.
-See the [current auth contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md#auth-and-account-streams)
+See the [current auth contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md#auth-and-account-streams)
 for hook calls and their owner.
 Doctor checks component dependencies and imports from JSON; it does not read app config.
 A build starts no Postgres or SMTP client. A running demo needs both services.
@@ -171,13 +171,13 @@ From the workspace root, copy both templates into a new empty output folder:
 node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
-Default exports pin the released Start 0.12.0 host and its matching registry.
+Default exports pin the released Start 0.13.0 host and its matching registry.
 Start 0.9.0 cannot run these templates. Local proofs pass an explicit current
 host pack; the export carries it in vendor and checks its host files against
 this source. Nothing is published.
 
 The export copies source. It never changes template branches or another checkout.
-The golden runtime is `tinker/`. App pull requests use the changed-line mutation
+The golden runtime is `tinker/`. Each push to the trunk runs the changed-line mutation
 gate at floor 60; the weekly full run is a report. `packages/start` stays at 85.
 
 ## Promises tested through app scopes
@@ -242,7 +242,7 @@ Their resources own and close the connection.
 
 `npm start` uses the `tinker serve` host from the `@tinker/start` dev dependency.
 Keep dev dependencies installed on the server; an `npm install --omit=dev` install cannot start it.
-Templates use the Start 0.12.0 contract. Default installs use its released host
+Templates use the Start 0.13.0 contract. Default installs use its released host
 and registry.
 Local registry proofs use a packed Start through `TINKER_PACKAGE_DIR`.
 The standalone export proof supplies a current host pack explicitly.

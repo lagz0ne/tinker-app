@@ -5,7 +5,7 @@ description: Choose the owner of new app code.
 
 # Choose a form
 
-Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/next/docs/decisions/start-decompose.md) first. It owns the rules for
+Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md) first. It owns the rules for
 forms, native boundaries, imports, settings, pure helpers, and the cap of 17.
 Do not copy a second version of those rules into feature code.
 
