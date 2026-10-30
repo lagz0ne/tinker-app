@@ -1,6 +1,6 @@
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import * as fsp from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { listFiles } from "./paths.mjs";
 import { readRegistryJson } from "./registry.mjs";
@@ -28,6 +28,12 @@ function areaOf(name) {
 function manifestOf(name) {
   return `~/tinker/components/${name}/component.json`;
 }
+
+/** Component names are folder names: lower case letters, digits and dashes. */
+const nameShape = /^[a-z0-9][a-z0-9-]*$/;
+
+/** The only folder a component may write outside its own: the migrations it owns. */
+const outsideRoot = "drizzle/";
 
 /**
  * An app-relative path for a registry target, or null when the target would leave the app.
@@ -83,7 +89,9 @@ async function itemOf(catalog, name) {
  * @param {string} name - From a command; why: the item asked for.
  */
 async function componentItem(catalog, name) {
-  if (!catalog.names.has(name)) throw new Refusal([`unknown component: ${name}`]);
+  if (!nameShape.test(name) || !catalog.names.has(name)) {
+    throw new Refusal([`unknown component: ${name}`]);
+  }
 
   const item = await itemOf(catalog, name);
   const files = (item.files ?? []).map((file) => file.target);
@@ -104,10 +112,21 @@ function filesOf(item, name) {
   const files = new Map();
   for (const file of item.files ?? []) {
     const path = appPath(file.target);
-    if (path === null) throw new Refusal([`bad target ${file.target} in ${name}`]);
+    if (path === null || !ownedPath(path, name)) {
+      throw new Refusal([`bad target ${file.target} in ${name}`]);
+    }
     files.set(path, file.content);
   }
   return files;
+}
+
+/**
+ * Whether a target lands in the component's own folder, or under the one outside folder allowed.
+ * @param {string} path - From filesOf; why: the app-relative target.
+ * @param {string} name - From filesOf; why: the component that would write it.
+ */
+function ownedPath(path, name) {
+  return path.startsWith(areaOf(name)) || path.startsWith(outsideRoot);
 }
 
 /**
@@ -237,29 +256,36 @@ async function writeFolder(root, name, files, ops) {
   const work = join(root, ".tinker/update");
   const fresh = join(work, `${name}.new`);
   const old = join(work, `${name}.old`);
+  let moved = false;
 
   await ops.mkdir(work, { recursive: true });
   await ops.mkdir(dirname(target), { recursive: true });
   try {
     await fillFolder(fresh, files, ops);
-    if (!existsSync(target)) {
-      await ops.rename(fresh, target);
-      return;
-    }
-
-    await ops.rename(target, old);
-    try {
-      await ops.rename(fresh, target);
-    } catch (error) {
-      await ops.rename(old, target);
-      await ops.rm(fresh, { recursive: true, force: true });
-      throw error;
-    }
-
-    await ops.rm(old, { recursive: true, force: true });
-  } finally {
+    moved = existsSync(target);
+    if (moved) await ops.rename(target, old);
+    await ops.rename(fresh, target);
+  } catch (error) {
+    if (moved) await ops.rename(old, target).catch(() => null);
+    await ops.rm(fresh, { recursive: true, force: true });
     clearWork(work);
+    throw error;
   }
+
+  await dropOld(old, ops);
+  clearWork(work);
+}
+
+/**
+ * Delete the moved-aside folder. Best effort: the folder is already the registry copy, and the
+ * next add or update recovery drops a leftover `.old`.
+ * @param {string} old - From writeFolder; why: the folder that held the previous copy.
+ * @param {object} ops - From writeFolder; why: the fs ops a test can fail on purpose.
+ */
+async function dropOld(old, ops) {
+  if (!existsSync(old)) return;
+
+  await ops.rm(old, { recursive: true, force: true }).catch(() => null);
 }
 
 /**
@@ -303,14 +329,59 @@ async function recover(root, name, ops) {
 /**
  * The names a component index file exports at runtime, sorted; a type-only export is left out.
  * @param {string} file - From pasteLines; why: an index file that was just written.
+ * @param {Set<string>} [seen] - From starExports; why: a cycle of `export *` ends.
  */
-function runtimeExports(file) {
+function runtimeExports(file, seen = new Set()) {
+  if (seen.has(file)) return [];
+  seen.add(file);
+
   const names = new Set();
   for (const node of parseSource(file).program.body) {
-    if (node.type !== "ExportNamedDeclaration" || node.exportKind === "type") continue;
-    for (const name of declaredExports(node)) names.add(name);
+    for (const name of statementNames(file, node, seen)) names.add(name);
   }
   return [...names].sort(byText);
+}
+
+/**
+ * The runtime names one top-level statement adds: its own, or the ones a local star re-exports.
+ * @param {string} file - From runtimeExports; why: the file holding the statement.
+ * @param {object} node - From runtimeExports; why: one top-level statement.
+ * @param {Set<string>} seen - From runtimeExports; why: a cycle of stars ends.
+ */
+function statementNames(file, node, seen) {
+  if (node.type === "ExportAllDeclaration") return starExports(file, node, seen);
+  if (node.type !== "ExportNamedDeclaration" || node.exportKind === "type") return [];
+
+  return declaredExports(node);
+}
+
+/**
+ * The names `export * as x` or `export * from "./file"` add; a star from a package adds none.
+ * @param {string} file - From runtimeExports; why: the file holding the statement.
+ * @param {object} node - From runtimeExports; why: one ExportAllDeclaration.
+ * @param {Set<string>} seen - From runtimeExports; why: a cycle of stars ends.
+ */
+function starExports(file, node, seen) {
+  if (node.exported) return [node.exported.name ?? node.exported.value];
+  const target = localFile(file, node.source.value);
+  if (target === null) return [];
+
+  return runtimeExports(target, seen).filter((name) => name !== "default");
+}
+
+/**
+ * The file a relative module path names, or null for a package or a missing file.
+ * @param {string} from - From starExports; why: resolve the path from this file.
+ * @param {string} name - From an export statement; why: the module path it names.
+ */
+function localFile(from, name) {
+  if (!name.startsWith(".")) return null;
+  const base = resolve(dirname(from), name);
+  const ends = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx"];
+  return (
+    ends.map((end) => base + end).find((path) => existsSync(path) && statSync(path).isFile()) ??
+    null
+  );
 }
 
 /**
@@ -319,14 +390,29 @@ function runtimeExports(file) {
  */
 function declaredExports(node) {
   const declared = (node.declaration?.declarations ?? []).flatMap((item) =>
-    item.id.type === "ObjectPattern"
-      ? item.id.properties.map((field) => field.value.name)
-      : [item.id.name],
+    namesOfPattern(item.id),
   );
   const specifiers = (node.specifiers ?? [])
     .filter((item) => item.exportKind !== "type")
     .map((item) => item.exported.name ?? item.exported.value);
   return [...declared, node.declaration?.id?.name, ...specifiers].filter(Boolean);
+}
+
+/**
+ * The binding names a destructuring pattern names; a pattern it cannot name adds nothing.
+ * @param {object} id - From declaredExports; why: the pattern a declaration binds.
+ */
+function namesOfPattern(id) {
+  if (id === null || id === undefined) return [];
+  if (id.type === "Identifier") return [id.name];
+  if (id.type === "AssignmentPattern") return namesOfPattern(id.left);
+  if (id.type === "RestElement") return namesOfPattern(id.argument);
+  if (id.type === "ArrayPattern") return id.elements.flatMap((item) => namesOfPattern(item));
+  if (id.type !== "ObjectPattern") return [];
+
+  return id.properties.flatMap((field) =>
+    namesOfPattern(field.type === "RestElement" ? field.argument : field.value),
+  );
 }
 
 /** @param {string} file - From a member; why: `index.server.ts` imports as `index.server`. */
@@ -366,7 +452,7 @@ function mergeDeps(root, items) {
   const path = join(root, "package.json");
   const before = readFileSync(path, "utf8");
   const pkg = JSON.parse(before);
-  const lines = [];
+  const lines = new Set();
 
   for (const item of items) {
     const sections = [
@@ -374,15 +460,18 @@ function mergeDeps(root, items) {
       ["devDependencies", item.devDependencies ?? []],
     ];
     for (const [field, specs] of sections) {
-      for (const spec of specs) lines.push(...keepDep(pkg, field, splitDep(spec)));
+      for (const spec of specs) {
+        for (const line of keepDep(pkg, field, splitDep(spec))) lines.add(line);
+      }
     }
   }
 
+  const notes = [...lines];
   const after = `${JSON.stringify(pkg, null, 2)}\n`;
-  if (after === before) return lines;
+  if (after === before) return notes;
 
   writeFileSync(path, after);
-  return [...lines, "run your package manager's install (npm install / pnpm install)"];
+  return [...notes, "run your package manager's install (npm install / pnpm install)"];
 }
 
 /**
@@ -400,6 +489,20 @@ function keepDep(pkg, field, dep) {
   }
   if (section[dep.name] === dep.spec) return [];
   return [`kept ${dep.name}@${section[dep.name]} (registry: ${dep.spec})`];
+}
+
+/**
+ * Recover every component the closure touches, so a killed update never blocks an add.
+ * @param {string} root - From addComponent; why: the app holding `.tinker/update`.
+ * @param {string[]} closure - From closureOf; why: the members, requires first.
+ * @param {object} ops - From addComponent; why: the fs ops a test can fail on purpose.
+ */
+async function recoverAll(root, closure, ops) {
+  const lines = [];
+  for (const member of closure) {
+    if (await recover(root, member, ops)) lines.push(restoredMessage(member));
+  }
+  return lines;
 }
 
 /**
@@ -514,11 +617,12 @@ function splitKept(root, members, lines) {
  * Write one member's folder and its outside files.
  * @param {string} root - From addComponent; why: the app to write in.
  * @param {object[]} fresh - From splitKept; why: the members to land.
+ * @param {object} ops - From addComponent; why: the fs ops a test can fail on purpose.
  */
-async function copyAll(root, fresh) {
+async function copyAll(root, fresh, ops) {
   for (const member of fresh) {
-    await writeFolder(root, member.name, insideOf(member), fsp);
-    for (const [path, content] of outsideOf(member)) await writeOutside(root, path, content);
+    await writeFolder(root, member.name, insideOf(member), ops);
+    for (const [path, content] of outsideOf(member)) await writeOutside(root, path, content, ops);
   }
 }
 
@@ -527,12 +631,13 @@ async function copyAll(root, fresh) {
  * @param {string} root - From a command; why: the app to write in.
  * @param {string} path - From a member; why: the app-relative file.
  * @param {string} content - From the registry; why: the bytes.
+ * @param {object} ops - From copyAll; why: the fs ops a test can fail on purpose.
  */
-async function writeOutside(root, path, content) {
+async function writeOutside(root, path, content, ops) {
   const file = join(root, path);
   if (existsSync(file) && readFileSync(file, "utf8") === content) return;
 
-  await writeAtomic(file, content, fsp);
+  await writeAtomic(file, content, ops);
 }
 
 /**
@@ -547,21 +652,20 @@ export async function addComponent(root, name, base) {
 
   refuseStarterOnly(catalog, closure);
   const members = await membersOf(catalog, closure);
-  const restored = await recover(root, name, fsp);
+  const lines = await recoverAll(root, closure, fsp);
   if (existsSync(folderOf(root, name))) {
-    throw new Refusal([`${name} is already added; use tinker update ${name}`]);
+    throw new Refusal([...lines, `${name} is already added; use tinker update ${name}`]);
   }
 
-  const lines = restored ? [restoredMessage(name)] : [];
   const fresh = splitKept(root, members, lines);
   const conflicts = conflictsOf(root, fresh);
   if (conflicts.length > 0) throw new Refusal([...lines, ...conflicts]);
 
-  await copyAll(root, fresh);
+  await copyAll(root, fresh, fsp);
   lines.push(
     ...mergeDeps(
       root,
-      fresh.map((member) => member.item),
+      members.map((member) => member.item),
     ),
   );
   lines.push(
@@ -587,12 +691,13 @@ export async function updateComponent(root, name, base, options = {}) {
   const item = await componentItem(catalog, name);
 
   refuseStarterOnly(catalog, [name]);
+  const files = filesOf(item, name);
   const restored = await recover(root, name, ops);
   if (!existsSync(folderOf(root, name))) {
     throw new Refusal([`${name} is not added; use tinker add ${name}`]);
   }
 
-  const member = { name, item, files: filesOf(item, name) };
+  const member = { name, item, files };
   const diff = diffOf(root, name, member.files);
   if (diff.length > 0 && !options.force && !restored) {
     throw new Refusal([
@@ -602,7 +707,7 @@ export async function updateComponent(root, name, base, options = {}) {
   }
 
   await writeFolder(root, name, insideOf(member), ops);
-  for (const [path, content] of outsideOf(member)) await writeOutside(root, path, content);
+  for (const [path, content] of outsideOf(member)) await writeOutside(root, path, content, ops);
 
   const lines = restored ? [restoredMessage(name)] : [];
   lines.push(...mergeDeps(root, [item]));

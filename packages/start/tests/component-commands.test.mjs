@@ -25,7 +25,11 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { rename as renameAsync, writeFile as writeFileAsync } from "node:fs/promises";
+import {
+  rename as renameAsync,
+  rm as rmAsync,
+  writeFile as writeFileAsync,
+} from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -177,7 +181,7 @@ const items = {
     files: componentFiles("s"),
     meta: { starterOnly: true, starterOnlyWhy: "it runs only inside the starter" },
   },
-  sDefault: { files: componentFiles("sDefault"), meta: { starterOnly: true } },
+  "s-default": { files: componentFiles("s-default"), meta: { starterOnly: true } },
   t: { files: componentFiles("t", ["s"]) },
   m: {
     files: {
@@ -196,6 +200,20 @@ const items = {
       "~/../x": "export const escape = 1;\n",
     },
   },
+  "bad-src": {
+    files: {
+      "~/tinker/components/bad-src/component.json": '{ "requires": [] }\n',
+      "~/src/z.ts": "export const z = 1;\n",
+    },
+  },
+  "bad-other": {
+    files: {
+      "~/tinker/components/bad-other/component.json": '{ "requires": [] }\n',
+      "~/tinker/components/a/index.ts": "export const aRuntime = 1;\n",
+    },
+  },
+  Upper: { files: componentFiles("Upper") },
+  up: { files: componentFiles("up", ["Upper"]) },
 };
 
 /**
@@ -572,9 +590,9 @@ test("A3 add refuses starter-only items, asked for or required", () => {
   expect(askS.code).toBe(1);
   expect(askS.lines).toEqual(["s is starter-only: it runs only inside the starter"]);
 
-  const askDefault = tinker(direct, "add", "sDefault", "--registry", registry);
+  const askDefault = tinker(direct, "add", "s-default", "--registry", registry);
   expect(askDefault.code).toBe(1);
-  expect(askDefault.lines).toEqual(["sDefault is starter-only: it needs the starter's toolchain"]);
+  expect(askDefault.lines).toEqual(["s-default is starter-only: it needs the starter's toolchain"]);
 
   const askT = tinker(required, "add", "t", "--registry", registry);
   expect(askT.code).toBe(1);
@@ -903,4 +921,182 @@ test("E3 update writes a changed outside file and leaves no temp file behind", (
   expect(read(root, "tinker/components/m/index.ts")).toBe('export const mValue = "m2";\n');
   expect(listFiles(root).filter((file) => file.includes(".tinker-new"))).toEqual([]);
   expect(existsSync(join(root, ".tinker/update"))).toBe(false);
+});
+
+test("F1 add merges the deps of the whole closure, and prints a kept dep once", () => {
+  const keptRegistry = makeRegistry();
+  const kept = app(componentFiles("b", ["c"]));
+
+  const first = tinker(kept, "add", "a", "--registry", keptRegistry);
+  expect(first.code).toBe(0);
+  expect(readPackage(kept).dependencies["@scope/bee"]).toBe("2.0.0");
+
+  const twiceRegistry = makeRegistry({
+    b: { files: componentFiles("b", ["c"]), dependencies: ["@scope/bee@2.0.0"] },
+    c: { files: componentFiles("c"), dependencies: ["@scope/bee@2.0.0"] },
+  });
+  const twice = app({ "package.json": packageJson({ dependencies: { "@scope/bee": "1.0.0" } }) });
+
+  const second = tinker(twice, "add", "a", "--registry", twiceRegistry);
+  expect(second.code).toBe(0);
+  expect(second.lines.filter((line) => line.startsWith("kept @scope/bee"))).toEqual([
+    "kept @scope/bee@1.0.0 (registry: 2.0.0)",
+  ]);
+  expect(readPackage(twice).dependencies["@scope/bee"]).toBe("1.0.0");
+});
+
+test("F2 add refuses an outside file outside drizzle/", () => {
+  const registry = makeRegistry();
+  const src = app({ ".tinker/update/bad-src.old/component.json": '{ "requires": [] }\n' });
+  const before = snapshot(src);
+
+  const run = tinker(src, "add", "bad-src", "--registry", registry);
+  expect(run.code).toBe(1);
+  expect(run.lines).toEqual(["bad target ~/src/z.ts in bad-src"]);
+  expect(snapshot(src)).toEqual(before);
+
+  const other = app();
+  const otherBefore = snapshot(other);
+  const clash = tinker(other, "add", "bad-other", "--registry", registry);
+  expect(clash.code).toBe(1);
+  expect(clash.lines).toEqual(["bad target ~/tinker/components/a/index.ts in bad-other"]);
+  expect(snapshot(other)).toEqual(otherBefore);
+});
+
+test("F2 refuses a name that is not a folder name", () => {
+  const registry = makeRegistry();
+  const root = app();
+  const before = snapshot(root);
+
+  const viaRequires = tinker(root, "add", "up", "--registry", registry);
+  expect(viaRequires.code).toBe(1);
+  expect(viaRequires.lines).toEqual(["unknown component: Upper"]);
+
+  const viaArgv = tinker(root, "add", "Upper", "--registry", registry);
+  expect(viaArgv.code).toBe(1);
+  expect(viaArgv.lines).toEqual(["unknown component: Upper"]);
+  expect(snapshot(root)).toEqual(before);
+});
+
+test("F3a a failed first rename leaves no temp folder", async () => {
+  const registry = makeRegistry({ u: { files: uV2 } });
+  const root = app(uV1);
+  const folder = join(root, "tinker/components/u");
+  const before = snapshot(folder);
+  const fs = {
+    async rename(from, to) {
+      if (String(to).endsWith("u.old")) throw new Error("EBUSY: simulated first rename");
+      return renameAsync(from, to);
+    },
+  };
+
+  await expect(updateComponent(root, "u", registry, { force: true, fs })).rejects.toThrow(
+    "simulated first rename",
+  );
+
+  expect(snapshot(folder)).toEqual(before);
+  expect(existsSync(join(root, ".tinker/update"))).toBe(false);
+});
+
+test("F3b a failed cleanup after the swap still finishes the update", async () => {
+  const registry = makeRegistry({
+    m: {
+      files: {
+        "~/tinker/components/m/component.json": '{ "requires": [] }\n',
+        "~/tinker/components/m/index.ts": 'export const mValue = "m2";\n',
+        "~/drizzle/1_m/migration.sql": "-- 1_m v2\n",
+      },
+      dependencies: ["migrate-tool@1.0.0"],
+    },
+  });
+  const root = app(items.m.files);
+  const fs = {
+    async rm(path, options) {
+      if (String(path).endsWith("m.old")) throw new Error("EPERM: simulated cleanup");
+      return rmAsync(path, options);
+    },
+  };
+
+  const result = await updateComponent(root, "m", registry, { force: true, fs });
+
+  expect(result.code).toBe(0);
+  expect(read(root, "drizzle/1_m/migration.sql")).toBe("-- 1_m v2\n");
+  expect(readPackage(root).dependencies["migrate-tool"]).toBe("1.0.0");
+  expect(existsSync(join(root, ".tinker/update/m.old"))).toBe(true);
+});
+
+test("F4 paste lines survive a rest element and follow a local export star", () => {
+  const files = {
+    "~/tinker/components/f4/component.json": '{ "requires": [] }\n',
+    "~/tinker/components/f4/index.ts":
+      'export const { a, ...rest } = obj;\nexport const [first, second] = pair;\nexport * from "./more";\n',
+    "~/tinker/components/f4/more.ts": "export const moreOne = 1;\nexport type MoreType = string;\n",
+  };
+  const registry = makeRegistry({ f4: { files } });
+  const root = app();
+
+  const run = tinker(root, "add", "f4", "--registry", registry);
+
+  expect(run.code).toBe(0);
+  expect(run.lines).toContain('import { a, first, moreOne, rest, second } from "~/components/f4";');
+});
+
+test("F5 add recovers every member it keeps", () => {
+  const registry = makeRegistry();
+  const root = app({
+    ".tinker/update/b.old/component.json": '{ "requires": ["c"] }\n',
+    ".tinker/update/b.old/index.ts": 'export const bValue = "b";\n',
+  });
+
+  const run = tinker(root, "add", "a", "--registry", registry);
+
+  expect(run.code).toBe(0);
+  expect(run.lines.slice(0, 2)).toEqual([
+    "restored tinker/components/b from an interrupted update",
+    "kept tinker/components/b (already here)",
+  ]);
+  expect(run.lines.at(-1)).toBe("tinker add: added c, a");
+  expect(existsSync(join(root, "tinker/components/c/index.ts"))).toBe(true);
+  expect(existsSync(join(root, ".tinker/update"))).toBe(false);
+});
+
+test("K1 recovery keeps a folder when the swap already finished", () => {
+  const registry = makeRegistry();
+  const root = app({ ...uV1, ".tinker/update/u.old/index.ts": "export const uVersion = 0;\n" });
+
+  const run = tinker(root, "update", "u", "--registry", registry);
+
+  expect(run.code).toBe(0);
+  expect(read(root, "tinker/components/u/index.ts")).toBe("export const uVersion = 1;\n");
+  expect(existsSync(join(root, ".tinker/update"))).toBe(false);
+});
+
+test("K2 add keeps the restored line when it then refuses the component it put back", () => {
+  const registry = makeRegistry();
+  const root = app({
+    ".tinker/update/c.old/component.json": '{ "requires": [] }\n',
+    ".tinker/update/c.old/index.ts": 'export const cValue = "c";\n',
+  });
+
+  const run = tinker(root, "add", "c", "--registry", registry);
+
+  expect(run.code).toBe(1);
+  expect(run.lines).toEqual([
+    "restored tinker/components/c from an interrupted update",
+    "c is already added; use tinker update c",
+  ]);
+});
+
+test("K4 check reports a leftover temp copy alone", () => {
+  const registry = makeRegistry();
+  const root = app(items.c.files);
+  writeFiles(root, { ".tinker/update/c.new/index.ts": 'export const cValue = "x";\n' });
+
+  const run = tinker(root, "check", "--registry", registry);
+
+  expect(run.code).toBe(1);
+  expect(run.lines).toEqual([
+    "interrupted update: c; run tinker update c",
+    "tinker check: 1 findings",
+  ]);
 });

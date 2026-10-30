@@ -80,6 +80,8 @@ and it skips that refusal when it just restored a killed update.
 Check prints `edited: <path>`, `unknown component:`, `missing requires:`, and
 `interrupted update:` lines, exits 1 on any finding, and writes nothing.
 A registry item marked `meta.starterOnly` is refused, alone or inside a `requires` closure.
+A component may write only its own folder and `drizzle/`; any other target is `bad target ...`.
+Component names are folder names: lower case letters, digits, and dashes.
 
 ## Copied code
 
