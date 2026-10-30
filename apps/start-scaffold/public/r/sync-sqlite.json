@@ -170,6 +170,8 @@
   ],
   "meta": {
     "ownership": "userland",
-    "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app."
+    "update": "Review whole owned components. Planned Start add/update/check stops on local edits; app edits stay owned by the app.",
+    "starterOnly": true,
+    "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
   }
 }
