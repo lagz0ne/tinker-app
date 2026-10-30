@@ -1,0 +1,68 @@
+{
+  "components": {
+    "errors": {
+      "files": {
+        "tinker/components/errors/component.json": "848d04cf28232878bb5bcee9e2825d509d2839b2d97d2fd489d6032506778624",
+        "tinker/components/errors/errors.ts": "5ec110fdb180d3bb81273d9b28e3c6013362edd35aba97573e7f335022d25a90",
+        "tinker/components/errors/index.ts": "5d62a81540ba7520ab11df97092550befa7e2c56bf988258fcf3a5660f0597af"
+      },
+      "start": "0.13.2"
+    },
+    "health": {
+      "files": {
+        "tinker/components/health/component.json": "d98b7295d38f255ee0a9a25a1e586f3a368d85b4e0a2805ca1bcee016ec63ec0",
+        "tinker/components/health/health.ts": "20d1c5d99e77807d7f9d6352d6ac520c0d5c366a547f74b4d6fc02d2ae29c554",
+        "tinker/components/health/index.ts": "685abcc6e83c98156e779d500034687486bd1bf6c231586a277b836316a0a28d"
+      },
+      "start": "0.13.2"
+    },
+    "http": {
+      "files": {
+        "tinker/components/http/backend.ts": "f627154e4e6bd988c98d3913ff4d7a7ce80a66cf980aca437d06a00c1049f420",
+        "tinker/components/http/component.json": "5042fd3eef6d43a0daa3803b370ff15e018c44206af63b627c7c66279ddbf6fd",
+        "tinker/components/http/http.server.ts": "bbf2248a912f1a5bb0188c4ff177e28a838e0137a301200715422900af29ed67",
+        "tinker/components/http/index.server.ts": "1f5a396ebe9bdfe8820d31b6f00b1e7ae3d9a1166af0e1a370b5929c638813c2",
+        "tinker/components/http/index.ts": "296f86524c80069a4de1d7eb5f8387a97cdc53ed7ac8a2f1336592fadf7ac222"
+      },
+      "start": "0.13.2"
+    },
+    "requests": {
+      "files": {
+        "tinker/components/requests/body.server.ts": "527b368986b86f6ef645090c3a4fe11d7d3a069d3bfd90379a4a8fd0def0dbad",
+        "tinker/components/requests/component.json": "2c82f99a429fa1c1ebb63d1e180543fc96d6378671982c256b99f2adc519cbb3",
+        "tinker/components/requests/headers.server.ts": "c0c61aec5fa321ee7e1663a50ea481d218663ef0ab112a5b31e9a5610f6d86ce",
+        "tinker/components/requests/index.server.ts": "8a0038646644d9c9d9d75decc2beff7863262c13acb6f3d0379d75f370bbf81e",
+        "tinker/components/requests/index.ts": "2dfd80c4eb99de8bb1fe478a3e609618de317c2fa047aa99ac1288cbb787e09a",
+        "tinker/components/requests/lifetime.server.ts": "37fa324b4a7cce3f05e5dc0b038a00b8dbcb8599e8b844ac8b85bc02fc58cd66",
+        "tinker/components/requests/lifetime.ts": "18ce37d2c18164d439abbfc7fa74c3f57e089a77031d3e1d3f4089c714bcc420",
+        "tinker/components/requests/modules.server.ts": "cebe44e4e06a6d8c0fb762018e128b20cc7dd6126a59a99abcdc691f8e69ef74",
+        "tinker/components/requests/render-lifetime.server.ts": "7bc4dd2bb6b19853a555cb34b8ff084fed8ef36d2816848b2f3cc317517cd38a",
+        "tinker/components/requests/request-body.server.ts": "fe58e9d6d21926270ee1b18b6f0f5bf67a72186cc918a101c498cb48bdbfab4f",
+        "tinker/components/requests/result.server.ts": "086cb645e8bcb34757adf2fa32e4a8f1feb865008af56a62caba16df52b55541",
+        "tinker/components/requests/start.ts": "458fc6e7f5dc647a39ad4e8de3782a9b8d55f206c2b1d549dab76dfe0bad39d9"
+      },
+      "start": "0.13.2"
+    },
+    "telemetry": {
+      "files": {
+        "tinker/components/telemetry/component.json": "beba2e1b1a349d85da789afddf81d75a9d735e42a40d01d46f748afa063154aa",
+        "tinker/components/telemetry/console.ts": "6470da803b4553686636ef8fa7860255d6e5bf00c1136c1a19c7a496ddcd1b36",
+        "tinker/components/telemetry/delivery.ts": "a478f4c984b5d2dda05c7a832354f829ee7490dd1f9fe0561a83f3f67d8327fd",
+        "tinker/components/telemetry/drain.server.ts": "7feb214e2c2e1cb0c48dda401539ff1771bf8b6f9b72adb1652321eb6798b7ae",
+        "tinker/components/telemetry/health.ts": "384f3ca755de9dfb8db8ab0bd7d2e0e43da6b9d092f432a9e7ec73eae787267f",
+        "tinker/components/telemetry/index.server.ts": "03a75f661ccd0705335822dd6fb6b0e68bfe191fa543a801040bc99945c101de",
+        "tinker/components/telemetry/index.ts": "e8b60baf1cbf38a65cf392887415fbc08bc8ee2631b9cefc3884adc650910171",
+        "tinker/components/telemetry/ingest.server.ts": "b096045ec3782b904dab10b2457cac447e47cdf0c7b4ff00716319592a893607",
+        "tinker/components/telemetry/modules.server.ts": "7e8cbaed81e70e83eb188245d0efad30b8884d588cea6a93ec3d752838bd8cb2",
+        "tinker/components/telemetry/observer.ts": "a99ce2c9b636267f30d08e0c8695a27847b324d6b59095d9f4966debe45200b2",
+        "tinker/components/telemetry/queue.ts": "266b6bef066e3e84a3b49040358ef7cd32500d81f27f92f9ae4fa000fc0799a3",
+        "tinker/components/telemetry/records.server.ts": "84ec464c92e0a339fb14ac7f13238a5be638a423bcf349f886e7e121137ccd3c",
+        "tinker/components/telemetry/records.ts": "895ff980fa4b941f9ca3e0ef8255d0fe85df7e2fe646a16269a77c51cb16cbcd",
+        "tinker/components/telemetry/settings.ts": "fccabf2e7686b011df36621386a2498d42a020a8905db3b03443a6ce1ab93556",
+        "tinker/components/telemetry/thread.server.ts": "b08d1467ce64426b5cd06ccc9509aa5dc83a1ec38376cb2f41e42ceb3fa280c7"
+      },
+      "start": "0.13.2"
+    }
+  },
+  "version": 1
+}
