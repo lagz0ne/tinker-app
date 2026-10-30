@@ -60,6 +60,27 @@ NODE_OPTIONS=--experimental-async-context-frame tinker serve
 
 The flag is experimental on Node 22. Node 24 refuses it, so leave it out of shared scripts.
 
+## Components
+
+```bash
+tinker add <name>
+tinker update <name> [--force]
+tinker check
+```
+
+The registry is the release tag's `public/r` folder for this version. `--registry <path|url>`
+points at another one: a folder, a `registry.json` file, or an `https://` base.
+Add copies `tinker/components/<name>/` and every component its `requires` names, transitively.
+It also writes the files a component owns outside its folder (mail's `drizzle/` migrations),
+merges the npm deps into `package.json` without changing a spec the app already pins, and
+prints the import lines to paste into `cmds/*.ts`. It never writes `cmds/` or `src/`.
+Update replaces one folder whole through `.tinker/update/`, so a failed or killed update leaves
+the old folder intact. It refuses when the folder has local edits unless you pass `--force`,
+and it skips that refusal when it just restored a killed update.
+Check prints `edited: <path>`, `unknown component:`, `missing requires:`, and
+`interrupted update:` lines, exits 1 on any finding, and writes nothing.
+A registry item marked `meta.starterOnly` is refused, alone or inside a `requires` closure.
+
 ## Copied code
 
 ```text
@@ -80,9 +101,10 @@ Copied route files target `src/routes/`. App source remains user code.
 
 ## Updates
 
-Start currently has prepare, doctor, and serve. Per-component registry items
-already exist. The planned add/update/check CLI will replace whole components
-and stop on local edits. Until then, review source and keep app-owned edits.
+Start has prepare, doctor, serve, add, update, and check. Registry items copy the golden
+source in `apps/start-scaffold/tinker/`, one item per component; each item's
+`registryDependencies` equal its direct `requires`. Update replaces whole components and
+stops on local edits. App-owned source stays app-owned.
 See the [current contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md#d3-tooling-and-copied-updates).
 
 ## Checks

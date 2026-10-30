@@ -8,6 +8,7 @@ import { serve as listen } from "@hono/node-server";
 
 import { generatorBlocked, staleTree } from "../lib/checks/generated.mjs";
 import { serverProblems } from "../lib/checks/named.mjs";
+import { componentCommand, usage } from "../lib/component-cli.mjs";
 import { compressResponse } from "../lib/compression.mjs";
 import { doctor } from "../lib/doctor.mjs";
 import { writeResponse } from "../lib/host-response.mjs";
@@ -148,6 +149,16 @@ async function serve(root) {
 const [command, ...rest] = process.argv.slice(2);
 const root = process.cwd();
 
+/**
+ * Run one component command and print what it says.
+ * @param {string} name - From the command table; why: which component command ran.
+ */
+async function componentLines(name) {
+  const { lines, code } = await componentCommand(name, root, rest);
+  if (lines.length > 0) console.log(lines.join("\n"));
+  return code;
+}
+
 const commands = {
   prepare: async () => {
     const missing = serverProblems(root);
@@ -180,9 +191,12 @@ const commands = {
     return code;
   },
   serve: () => serve(root),
+  add: () => componentLines("add"),
+  update: () => componentLines("update"),
+  check: () => componentLines("check"),
 };
 
 if (!existsSync(join(root, "package.json")) || !(command in commands)) {
-  console.log("usage: tinker prepare | doctor [--fix] | serve");
+  console.log(usage);
   process.exitCode = 64;
 } else process.exitCode = await commands[command]();
