@@ -1,5 +1,28 @@
 # Upgrade
 
+## 0.14.0
+
+Start 0.14.0 is released from `lagz0ne/tinker-app`, tag `start-v0.14.0`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.14.0/tinker-start-0.14.0.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.14.0/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.14.0.
+
+- New component `blobs-sqlite` (SQLite set, starter-only like the other SQLite items): a blob
+  store. Bytes are named by their sha256 and kept once under `blobFolder/<2 hex>/<sha256>`;
+  rows live in the new migration `20261031000000_blobs.sql`. Operations: `putBlob`, `readBlob`,
+  `openSlot`, `fillSlot` (an upload slot the client PUTs a byte stream to), and `takeSlot`
+  (once, for the slot's owner). A write goes to a temp file, is fsynced, then renamed, so a half
+  upload is never readable. A slot expires after `blobSlotTtl` (one hour) and has a size cap
+  (`blobMaxBytes`, 25 MiB). `blobUnpackMax` (100 MiB) caps `putBlob` and is the unpacked-size cap
+  an app's zip reader passes to inflate. Bind `blobFolder` (an absolute path) in
+  `cmds/server.ts`. See `docs/decisions/blob-store.md`. Hedl asked for it (TG3).
+- `errors` gains seven kinds: `BlobTooBig`, `BlobEmpty`, `BlobNotBytes`, `SlotMissing`,
+  `SlotExpired`, `SlotUsed`, `SlotEmpty`. An app on 0.13.4 sees `errors` as outdated until it
+  runs `tinker update errors`.
+
 ## 0.13.4
 
 Start 0.13.4 is released from `lagz0ne/tinker-app`, tag `start-v0.13.4`.

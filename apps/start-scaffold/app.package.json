@@ -22,7 +22,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.13.4/tinker-start-0.13.4.tgz",
+    "@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.14.0/tinker-start-0.14.0.tgz",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",

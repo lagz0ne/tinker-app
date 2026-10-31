@@ -8,7 +8,7 @@ export const app = resolve(import.meta.dirname, "..");
 export const root = resolve(app, "../..");
 
 /** The new main/host contract first ships together in this release. */
-export const templateHostVersion = "0.13.4";
+export const templateHostVersion = "0.14.0";
 
 /** Examples may add files, but never replace the app template or another item's files. */
 function checkTargets(registry) {
