@@ -50,10 +50,10 @@ try {
       "  probe.toolsClosed = tools.closed; probe.abort = () => stop.app.abort(abortReasons.closed);\n  await tools.ready;",
     )
     .replace(
-      /(\s+)const closed = app.closed/,
-      "$1probe.appClosed = app.closed;$1const closed = app.closed",
-    )
-    .replace("    void closed.catch", "    probe.closed = closed;\n    void closed.catch")}`;
+      "    await app.ready;\n",
+      "    probe.appClosed = app.closed;\n    probe.closed = closed;\n    await app.ready;\n",
+    )}`;
+  assert.ok(source.includes("probe.closed = closed;"), "plant must hold the command's closed");
   const routerFile = join(
     fixture,
     appFiles(fixture).find((file) => file.option === "routerEntry").file,
