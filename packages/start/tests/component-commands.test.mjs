@@ -177,12 +177,36 @@ const items = {
   },
   b: { files: componentFiles("b", ["c"]), dependencies: ["@scope/bee@2.0.0"] },
   c: { files: componentFiles("c") },
-  s: {
-    files: componentFiles("s"),
-    meta: { starterOnly: true, starterOnlyWhy: "it runs only inside the starter" },
+  "tool-a": {
+    files: componentFiles("tool-a", [], {
+      "~/tinker/components/tool-a/index.ts": 'export const toolAValue = "a";\n',
+    }),
+    meta: {
+      toolchain: {
+        "package.json": ['"scripts": { "typecheck": "tsc --runExternalCode" }'],
+        "vite.config.ts": ['import tool from "tool/vite";'],
+      },
+    },
   },
-  "s-default": { files: componentFiles("s-default"), meta: { starterOnly: true } },
-  t: { files: componentFiles("t", ["s"]) },
+  "tool-b": {
+    files: componentFiles("tool-b", ["tool-a"], {
+      "~/tinker/components/tool-b/index.ts": 'export const toolBValue = "b";\n',
+    }),
+    meta: {
+      toolchain: {
+        "vite.config.ts": ['import tool from "tool/vite";', "plugins: [tool(), ...]"],
+        ".tool.yaml": ["direct_url: file:./dev.db"],
+      },
+    },
+  },
+  sq: {
+    files: {
+      "~/tinker/components/sq/component.json": '{ "requires": [] }\n',
+      "~/tinker/components/sq/index.ts": 'export const sqValue = "sq";\n',
+      "~/migrations/1_sq.sql": "-- 1_sq\n",
+      "~/maintain/sq-dev-db.mjs": "export default async () => {};\n",
+    },
+  },
   m: {
     files: {
       "~/tinker/components/m/component.json": '{ "requires": [] }\n',
@@ -233,12 +257,13 @@ function writeItem(dir, name, spec) {
     })),
     ...(spec.dependencies ? { dependencies: spec.dependencies } : {}),
     ...(spec.devDependencies ? { devDependencies: spec.devDependencies } : {}),
+    ...(spec.meta ? { meta: spec.meta } : {}),
   };
   writeFileSync(join(dir, `${name}.json`), `${JSON.stringify(item, null, 2)}\n`);
 }
 
 /**
- * The fixture registry's index: what exists, and which items are starter-only.
+ * The fixture registry's index: what exists, with each item's `meta`.
  * @param {string} dir - From makeRegistry; why: the registry folder.
  * @param {Record<string, { meta?: object }>} specs - From makeRegistry; why: the item list.
  */
@@ -580,25 +605,105 @@ test("A3 add refuses an item that is not a component", () => {
   expect(snapshot(root)).toEqual(before);
 });
 
-test("A3 add refuses starter-only items, asked for or required", () => {
+test("T1 add prints the closure's toolchain once, after the paste lines, and writes no config", () => {
   const registry = makeRegistry();
-  const direct = app();
-  const required = app();
-  const before = [snapshot(direct), snapshot(required)];
+  const root = app();
+  const pkg = read(root, "package.json");
 
-  const askS = tinker(direct, "add", "s", "--registry", registry);
-  expect(askS.code).toBe(1);
-  expect(askS.lines).toEqual(["s is starter-only: it runs only inside the starter"]);
+  const run = tinker(root, "add", "tool-b", "--registry", registry);
 
-  const askDefault = tinker(direct, "add", "s-default", "--registry", registry);
-  expect(askDefault.code).toBe(1);
-  expect(askDefault.lines).toEqual(["s-default is starter-only: it needs the starter's toolchain"]);
+  expect(run.code).toBe(0);
+  expect(run.lines).toEqual([
+    "Paste what you use into cmds/*.ts (tinker add writes no wiring):",
+    'import { toolAValue } from "~/components/tool-a";',
+    'import { toolBValue } from "~/components/tool-b";',
+    "Paste into your toolchain (tinker add writes no config):",
+    "package.json:",
+    '  "scripts": { "typecheck": "tsc --runExternalCode" }',
+    "vite.config.ts:",
+    '  import tool from "tool/vite";',
+    "  plugins: [tool(), ...]",
+    ".tool.yaml:",
+    "  direct_url: file:./dev.db",
+    "tinker add: added tool-a, tool-b",
+  ]);
+  expect(read(root, "package.json")).toBe(pkg);
+  expect(existsSync(join(root, "vite.config.ts"))).toBe(false);
+  expect(existsSync(join(root, ".tool.yaml"))).toBe(false);
 
-  const askT = tinker(required, "add", "t", "--registry", registry);
-  expect(askT.code).toBe(1);
-  expect(askT.lines).toEqual(["s is starter-only: it runs only inside the starter"]);
+  const kept = app(items["tool-a"].files);
+  const more = tinker(kept, "add", "tool-b", "--registry", registry);
+  expect(more.code).toBe(0);
+  expect(more.lines).toEqual([
+    "kept tinker/components/tool-a (already here)",
+    "Paste what you use into cmds/*.ts (tinker add writes no wiring):",
+    'import { toolBValue } from "~/components/tool-b";',
+    "Paste into your toolchain (tinker add writes no config):",
+    "vite.config.ts:",
+    '  import tool from "tool/vite";',
+    "  plugins: [tool(), ...]",
+    ".tool.yaml:",
+    "  direct_url: file:./dev.db",
+    "tinker add: added tool-b",
+  ]);
+});
 
-  expect([snapshot(direct), snapshot(required)]).toEqual(before);
+test("T2a add refuses each bad meta.toolchain shape and writes nothing", () => {
+  const shapes = [
+    { toolchain: ["vite.config.ts"], problem: "it must be an object of file -> lines" },
+    { toolchain: { "../vite.config.ts": ["x"] }, problem: 'bad file "../vite.config.ts"' },
+    { toolchain: { "~/vite.config.ts": ["x"] }, problem: 'bad file "~/vite.config.ts"' },
+    {
+      toolchain: { "vite.config.ts": "x" },
+      problem: "vite.config.ts must be a list of one-line strings",
+    },
+    {
+      toolchain: { "vite.config.ts": [] },
+      problem: "vite.config.ts must be a list of one-line strings",
+    },
+    {
+      toolchain: { "vite.config.ts": ["a\nb"] },
+      problem: "vite.config.ts must be a list of one-line strings",
+    },
+    {
+      toolchain: { "vite.config.ts": [" "] },
+      problem: "vite.config.ts must be a list of one-line strings",
+    },
+  ];
+  for (const { toolchain, problem } of shapes) {
+    const registry = makeRegistry({
+      "bad-tool": { files: componentFiles("bad-tool"), meta: { toolchain } },
+    });
+    const root = app();
+    const before = snapshot(root);
+
+    const add = tinker(root, "add", "bad-tool", "--registry", registry);
+
+    expect(add.code).toBe(1);
+    expect(add.lines).toEqual([`bad meta.toolchain in bad-tool: ${problem}`]);
+    expect(snapshot(root)).toEqual(before);
+  }
+});
+
+test("T2b update and check refuse a bad meta.toolchain shape too", () => {
+  const line = 'bad meta.toolchain in bad-tool: bad file "../vite.config.ts"';
+  const registry = makeRegistry({
+    "bad-tool": {
+      files: componentFiles("bad-tool"),
+      meta: { toolchain: { "../vite.config.ts": ["x"] } },
+    },
+  });
+  const root = app(componentFiles("bad-tool"));
+  const before = snapshot(root);
+
+  const update = tinker(root, "update", "bad-tool", "--registry", registry);
+  expect(update.code).toBe(1);
+  expect(update.lines).toEqual([line]);
+  expect(snapshot(root)).toEqual(before);
+
+  const check = tinker(root, "check", "--registry", registry);
+  expect(check.code).toBe(1);
+  expect(check.lines).toEqual([`bad item: bad-tool: ${line}`, "tinker check: 1 findings"]);
 });
 
 test("A3 add refuses a component that is already here", () => {
@@ -970,7 +1075,25 @@ test("F1 add merges the deps of the whole closure, and prints a kept dep once", 
   expect(readPackage(twice).dependencies["@scope/bee"]).toBe("1.0.0");
 });
 
-test("F2 add refuses an outside file outside drizzle/", () => {
+test("A4b add writes the migrations/ and maintain/ files a component owns", () => {
+  const registry = makeRegistry();
+  const root = app();
+
+  const run = tinker(root, "add", "sq", "--registry", registry);
+
+  expect(run.code).toBe(0);
+  expect(read(root, "migrations/1_sq.sql")).toBe("-- 1_sq\n");
+  expect(read(root, "maintain/sq-dev-db.mjs")).toBe("export default async () => {};\n");
+  const lock = JSON.parse(read(root, "tinker/components.lock"));
+  expect(Object.keys(lock.components.sq.files).sort()).toEqual([
+    "maintain/sq-dev-db.mjs",
+    "migrations/1_sq.sql",
+    "tinker/components/sq/component.json",
+    "tinker/components/sq/index.ts",
+  ]);
+});
+
+test("F2 add refuses an outside file outside drizzle/, migrations/ and maintain/", () => {
   const registry = makeRegistry();
   const src = app({ ".tinker/update/bad-src.old/component.json": '{ "requires": [] }\n' });
   const before = snapshot(src);

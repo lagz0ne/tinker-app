@@ -28,6 +28,42 @@ export function registryBase(root, flag) {
 }
 
 /**
+ * What is wrong with an item's `meta.toolchain`, or null when it is absent or well shaped:
+ * an object from an app file path to the lines the user pastes into that file.
+ * @param {unknown} toolchain - From an item's `meta`; why: the field to check before printing it.
+ */
+export function toolchainProblem(toolchain) {
+  if (toolchain === undefined) return null;
+  if (toolchain === null || typeof toolchain !== "object" || Array.isArray(toolchain)) {
+    return "it must be an object of file -> lines";
+  }
+
+  for (const [file, lines] of Object.entries(toolchain)) {
+    const problem = toolchainEntryProblem(file, lines);
+    if (problem !== null) return problem;
+  }
+  return null;
+}
+
+/**
+ * What is wrong with one `meta.toolchain` entry, or null: an app-relative file, then one or more
+ * one-line strings.
+ * @param {string} file - From toolchainProblem; why: the key, where the lines go.
+ * @param {unknown} lines - From toolchainProblem; why: the value, what the user pastes.
+ */
+function toolchainEntryProblem(file, lines) {
+  if (!/^[\w.-]+(\/[\w.-]+)*$/.test(file) || file.split("/").includes("..")) {
+    return `bad file ${JSON.stringify(file)}`;
+  }
+
+  const text = (line) => typeof line === "string" && line.trim() !== "" && !line.includes("\n");
+  if (!Array.isArray(lines) || lines.length === 0 || !lines.every(text)) {
+    return `${file} must be a list of one-line strings`;
+  }
+  return null;
+}
+
+/**
  * One JSON file from the registry, by name, without its base.
  * @param {string} base - From registryBase; why: the folder or URL holding the files.
  * @param {string} name - From a caller; why: `registry.json` or `<component>.json`.

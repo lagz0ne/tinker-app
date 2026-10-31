@@ -43,7 +43,7 @@ import {
   shaFile,
   sha,
   snapshot,
-  starterFiles,
+  sqlFiles,
   tinker,
   uV1,
   uV2,
@@ -462,11 +462,13 @@ test("K-roll-add add finishes a killed update for a closure member", () => {
   }
 });
 
-test("B1a check measures a starter-only component by its lock, with no fence and no advice", () => {
+test("B1a check measures a component with a migrations/ file by its lock and the registry", () => {
   const registry = makeRegistry();
+  const entry = entryFor(sqlFiles, "s-sql");
+  const sqlEntry = { ...entry, files: { ...entry.files, ...hashesOf(sqlFiles, "migrations") } };
   const locked = app({
-    ...starterFiles,
-    [lockPath]: lockText({ "s-starter": entryFor(starterFiles, "s-starter") }),
+    ...sqlFiles,
+    [lockPath]: lockText({ "s-sql": sqlEntry }),
   });
 
   const run = tinker(locked, "check", "--registry", registry);
@@ -475,22 +477,22 @@ test("B1a check measures a starter-only component by its lock, with no fence and
   expect(run.lines).toEqual([`tinker check: 1 components match registry ${registry}`]);
 
   const edited = app({
-    ...starterFiles,
-    "~/tinker/components/s-starter/index.ts": "export const sStarterValue = 'mine';\n",
-    [lockPath]: lockText({ "s-starter": entryFor(starterFiles, "s-starter") }),
+    ...sqlFiles,
+    "~/tinker/components/s-sql/index.ts": "export const sSqlValue = 'mine';\n",
+    [lockPath]: lockText({ "s-sql": sqlEntry }),
   });
   const changed = tinker(edited, "check", "--registry", registry);
   expect(changed.code).toBe(1);
   expect(changed.lines).toEqual([
-    "edited: tinker/components/s-starter/index.ts (changed)",
+    "edited: tinker/components/s-sql/index.ts (changed)",
     "tinker check: 1 findings",
   ]);
 
-  const unlocked = app(starterFiles);
+  const unlocked = app(sqlFiles);
   const noted = tinker(unlocked, "check", "--registry", registry);
   expect(noted.code).toBe(0);
   expect(noted.lines).toEqual([
-    "no lock entry: s-starter (starter-only; check compares it with the lock only)",
+    "no lock entry: s-sql; run tinker update s-sql to record it",
     `tinker check: 1 components match registry ${registry}`,
   ]);
 });
