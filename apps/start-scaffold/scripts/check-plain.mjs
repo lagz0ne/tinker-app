@@ -1594,6 +1594,17 @@ function checkCommandImport(node) {
   if (message) fail(node, `command-import: ${message}`);
 }
 
+/** A named function inside an operation's run belongs to that run, not to the module. */
+function runNested(node) {
+  if (!functionName(node)) return false;
+  for (let owner = enclosingFunction(node); owner; owner = enclosingFunction(owner)) {
+    if (!optionsMember(owner) || nameOf(functionName(owner)) !== "run") continue;
+    const member = ts.isPropertyAssignment(owner.parent) ? owner.parent : owner;
+    if (coreSymbol(member.parent.parent.expression, "operation")) return true;
+  }
+  return false;
+}
+
 function checkFunction(node) {
   if (!isFunction(node) || !node.body) return;
   if (ts.isClassDeclaration(node.parent) || ts.isClassExpression(node.parent)) return;
@@ -1607,7 +1618,7 @@ function checkFunction(node) {
     return;
   }
 
-  if ([optionsMember, ownedMethod, nativeCallback].some((rule) => rule(node))) return;
+  if ([runNested, optionsMember, ownedMethod, nativeCallback].some((rule) => rule(node))) return;
   checkPlainFunction(node);
 }
 
@@ -2910,6 +2921,16 @@ if (process.argv.includes("--prove")) {
       "module-set-mutated",
       "module-effect",
       'export const words = new Set(["a"]);\nwords.add("b");',
+    ],
+    [
+      "run-nested-recursion-allowed",
+      null,
+      'import {operation} from "@tinker/core"; export const probe = operation({run: () => { function depth(n: number): number { return n <= 0 ? 0 : 1 + depth(n - 1); } return depth(3); }});',
+    ],
+    [
+      "module-recursion-still-helper",
+      "two-sites",
+      "export function depth(n: number): number { return n <= 0 ? 0 : 1 + depth(n - 1); }",
     ],
     ...[
       "new Date()",
