@@ -161,14 +161,14 @@ export const mV2 = {
   "~/drizzle/1_m/migration.sql": "-- 1_m v2\n",
 };
 
-/** An item that owns a `migrations/` file, as G0's SQLite items do. */
+/** An item that owns a `sqlite/migrations/` file, as G0's SQLite items do. */
 export const sqlFiles = {
   "~/tinker/components/s-sql/component.json": '{ "requires": [] }\n',
   "~/tinker/components/s-sql/index.ts": 'export const sSqlValue = "s-sql";\n',
-  "~/migrations/1_sql/migration.sql": "-- sql\n",
+  "~/sqlite/migrations/1_sql.sql": "-- sql\n",
 };
 
-/** The fixture registry's items: a -> b -> c, an outside file, `u` for bumps, a `migrations/` item. */
+/** The fixture registry's items: a -> b -> c, an outside file, `u` for bumps, a `sqlite/migrations/` item. */
 export const items = {
   a: { files: componentFiles("a", ["b"]) },
   b: { files: componentFiles("b", ["c"]) },

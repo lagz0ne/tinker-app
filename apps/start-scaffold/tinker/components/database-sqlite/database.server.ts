@@ -70,7 +70,7 @@ export const databaseMigrationTimeout = tag<number>({
  */
 export const databaseMigrationsFolder = tag<string>({
   label: "database.migrationsFolder",
-  default: "migrations",
+  default: "sqlite/migrations",
   parse: z.string().min(1),
 });
 
