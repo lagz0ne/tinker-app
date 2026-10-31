@@ -46,10 +46,17 @@ const result = z.union([
   }),
 ]);
 
+const commentAdd = z.object({ kind: z.literal("comment.add"), comment: commentRecord });
+const issueUpsert = z.object({ kind: z.literal("issue.upsert"), issue: issueRecord });
+const issueRemove = z.object({ kind: z.literal("issue.remove"), id: z.uuid() });
+
+/** The arms of `change` one saved board row sends to every team stream. */
+export const rowChange = z.discriminatedUnion("kind", [commentAdd, issueUpsert, issueRemove]);
+
 const change = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("comment.add"), comment: commentRecord }),
-  z.object({ kind: z.literal("issue.upsert"), issue: issueRecord }),
-  z.object({ kind: z.literal("issue.remove"), id: z.uuid() }),
+  commentAdd,
+  issueUpsert,
+  issueRemove,
   z.object({ kind: z.literal("teams"), rows: z.array(teamRecord) }),
   z.object({ kind: z.literal("counter"), value: z.number() }),
   z.object({ kind: z.literal("profile"), profile: profileRecord }),
