@@ -1,7 +1,7 @@
 import { resource, tag } from "@tinker/core";
 import { z } from "zod";
 
-import { raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 
 import { blobCrypto, blobFs, blobPath } from "./modules";
 import { blobSlotTtl } from "./tags";
@@ -18,83 +18,87 @@ export const blobFolder = tag({
 const blobSteps = resource({
   label: "blobs.steps",
   depends: { folder: blobFolder, fs: blobFs, crypto: blobCrypto, path: blobPath },
-  factory: async ({ folder, fs, crypto, path }) => ({
-    /** Copy the stream into a new temp file, hashing as it goes, and fsync it before close. */
-    async copy(
-      reader: ReadableStreamDefaultReader<Uint8Array>,
-      temp: string,
-      maxBytes: number,
-      signal: AbortSignal,
-    ) {
-      const hasher = crypto.createHash("sha256");
+  factory: async ({ folder, fs, crypto, path }, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
 
-      const file = await fs.open(temp, "wx");
+    return {
+      /** Copy the stream into a new temp file, hashing as it goes, and fsync it before close. */
+      async copy(
+        reader: ReadableStreamDefaultReader<Uint8Array>,
+        temp: string,
+        maxBytes: number,
+        signal: AbortSignal,
+      ) {
+        const hasher = crypto.createHash("sha256");
 
-      let size = 0;
+        const file = await fs.open(temp, "wx");
 
-      try {
-        while (true) {
-          const chunk = await reader.read();
-
-          signal.throwIfAborted();
-
-          if (chunk.done) break;
-
-          // A chunk with no byte length would slip past the cap.
-          if (!(chunk.value instanceof Uint8Array)) raise("BlobNotBytes", {});
-
-          size += chunk.value.byteLength;
-
-          if (size > maxBytes) raise("BlobTooBig", { maxBytes });
-
-          hasher.update(chunk.value);
-
-          for (let offset = 0; offset < chunk.value.byteLength;) {
-            offset += (await file.write(chunk.value, offset)).bytesWritten;
-          }
-        }
-
-        if (size === 0) raise("BlobEmpty", {});
-
-        await file.sync();
-      } finally {
-        await file.close();
-      }
-
-      return { hash: hasher.digest("hex"), size };
-    },
-
-    /** Rename a whole temp to its hash path; the same bytes already in place stay untouched. */
-    async place(temp: string, hash: string) {
-      const final = path.join(folder, hash.slice(0, 2), hash);
-
-      const shelf = path.dirname(final);
-
-      const present = await fs.stat(final).then(
-        () => true,
-        () => false,
-      );
-
-      if (present) {
-        await fs.rm(temp, { force: true });
-      } else {
-        await fs.mkdir(shelf, { recursive: true });
-        await fs.rename(temp, final);
-      }
-
-      // The file and its shelf are durable only once both folders are fsynced. A file that
-      // was already there may be another writer's rename that is not fsynced yet.
-      for (const dir of [shelf, folder]) {
-        const handle = await fs.open(dir, "r");
+        let size = 0;
 
         try {
-          await handle.sync();
+          while (true) {
+            const chunk = await reader.read();
+
+            signal.throwIfAborted();
+
+            if (chunk.done) break;
+
+            // A chunk with no byte length would slip past the cap.
+            if (!(chunk.value instanceof Uint8Array)) raise("BlobNotBytes", {});
+
+            size += chunk.value.byteLength;
+
+            if (size > maxBytes) raise("BlobTooBig", { maxBytes });
+
+            hasher.update(chunk.value);
+
+            for (let offset = 0; offset < chunk.value.byteLength;) {
+              offset += (await file.write(chunk.value, offset)).bytesWritten;
+            }
+          }
+
+          if (size === 0) raise("BlobEmpty", {});
+
+          await file.sync();
         } finally {
-          await handle.close();
+          await file.close();
         }
-      }
-    },
-  }),
+
+        return { hash: hasher.digest("hex"), size };
+      },
+
+      /** Rename a whole temp to its hash path; the same bytes already in place stay untouched. */
+      async place(temp: string, hash: string) {
+        const final = path.join(folder, hash.slice(0, 2), hash);
+
+        const shelf = path.dirname(final);
+
+        const present = await fs.stat(final).then(
+          () => true,
+          () => false,
+        );
+
+        if (present) {
+          await fs.rm(temp, { force: true });
+        } else {
+          await fs.mkdir(shelf, { recursive: true });
+          await fs.rename(temp, final);
+        }
+
+        // The file and its shelf are durable only once both folders are fsynced. A file that
+        // was already there may be another writer's rename that is not fsynced yet.
+        for (const dir of [shelf, folder]) {
+          const handle = await fs.open(dir, "r");
+
+          try {
+            await handle.sync();
+          } finally {
+            await handle.close();
+          }
+        }
+      },
+    };
+  },
 });
 
 /**

@@ -2,7 +2,7 @@ import { operation } from "@tinker/core";
 import { z } from "zod";
 
 import { database, transaction } from "~/components/database-sqlite/index.server";
-import { raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 
 import { blobBytes } from "./bytes.server";
 import { blobCrypto } from "./modules";
@@ -29,7 +29,9 @@ export const putBlob = operation({
   label: "blobs.put",
   input: z.strictObject({ bytes: z.instanceof(Uint8Array) }),
   depends: { store: blobBytes, transaction, maxBytes: blobUnpackMax },
-  run: async ({ store, transaction, maxBytes }, { input, clock, signal }) => {
+  run: async ({ store, transaction, maxBytes }, { input, clock, signal, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     if (input.bytes.byteLength > maxBytes) raise("BlobTooBig", { maxBytes });
 
     if (input.bytes.byteLength === 0) raise("BlobEmpty", {});
@@ -79,7 +81,9 @@ export const openSlot = operation({
     maxBytes: z.number().int().min(1).optional(),
   }),
   depends: { transaction, crypto: blobCrypto, limit: blobMaxBytes, ttl: blobSlotTtl },
-  run: async ({ transaction, crypto, limit, ttl }, { input, clock }) => {
+  run: async ({ transaction, crypto, limit, ttl }, { input, clock, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const maxBytes = input.maxBytes ?? limit;
 
     if (maxBytes > limit) raise("BlobTooBig", { maxBytes: limit });
@@ -117,7 +121,9 @@ export const fillSlot = operation({
     name: z.string().max(200).nullable().default(null),
   }),
   depends: { database, transaction, store: blobBytes },
-  run: async ({ database, transaction, store }, { input, clock, signal }) => {
+  run: async ({ database, transaction, store }, { input, clock, signal, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     if (!slotId.test(input.id)) raise("SlotMissing", {});
 
     const slot = readSlot.runSync(database.reader, { id: input.id });
@@ -164,7 +170,9 @@ export const takeSlot = operation({
   label: "blobs.takeSlot",
   input: z.strictObject({ id: z.string(), owner: z.string().min(1).max(200) }),
   depends: { transaction },
-  run: async ({ transaction }, { input, clock }) => {
+  run: async ({ transaction }, { input, clock, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     if (!slotId.test(input.id)) raise("SlotMissing", {});
 
     const connection = await transaction.db();
