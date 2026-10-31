@@ -95,7 +95,7 @@
     {
       "path": "sqlite/migrations/20261031000000_blobs.sql",
       "type": "registry:file",
-      "target": "~/migrations/20261031000000_blobs.sql",
+      "target": "~/sqlite/migrations/20261031000000_blobs.sql",
       "content": "-- The blob store's two tables. A blob row is written only after its file is in place.\ncreate table blob (\n  hash text primary key,\n  size integer not null,\n  created_at integer not null\n);\n\ncreate table blob_slot (\n  id text primary key,\n  owner text not null,\n  max_bytes integer not null,\n  expires_at integer not null,\n  name text,\n  hash text,\n  size integer,\n  filled_at integer\n);\n"
     }
   ],

@@ -198,7 +198,7 @@ export async function pasteToolchain(consumer, toolchain) {
   }
 }
 
-/** A user's own database test: migrate the copied migrations, then notify and hear it. */
+/** A user's own database test: migrate the copied migrations by default, then notify and hear it. */
 export const sqliteAppTest = `import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -210,7 +210,7 @@ import { expect, test } from "vite-plus/test";
 
 import {
   database,
-  databaseMigrationsFolder,
+  databaseFolder,
   databaseUrl,
   migrate,
   transaction,
@@ -219,8 +219,9 @@ import {
 test("the copied SQLite set migrates, and a committed notify is heard", async () => {
   const home = await mkdtemp(join(tmpdir(), "sqlite-app-"));
   const file = join(home, "app.db");
-  const folder = fileURLToPath(new URL("../migrations", import.meta.url));
-  const root = createScope({ tags: [databaseUrl(pathToFileURL(file)), databaseMigrationsFolder(folder)] });
+  // No migrations folder binding: the default, \`sqlite/migrations\`, is where tinker add put them.
+  const app = fileURLToPath(new URL("..", import.meta.url));
+  const root = createScope({ tags: [databaseUrl(pathToFileURL(file)), databaseFolder(app)] });
 
   await root.run(migrate);
   const db = await root.resolve(database);

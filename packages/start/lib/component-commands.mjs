@@ -41,9 +41,10 @@ const nameShape = /^[a-z0-9][a-z0-9-]*$/;
 
 /**
  * The only folders a component may write outside its own: the migrations it owns (`drizzle/` for
- * Postgres, `migrations/` for SQLite) and the maintenance scripts it owns (SQLite's dev database).
+ * Postgres, `sqlite/migrations/` for SQLite) and the maintenance scripts it owns (SQLite's dev
+ * database).
  */
-const outsideRoots = ["drizzle/", "migrations/", "maintain/"];
+const outsideRoots = ["drizzle/", "sqlite/migrations/", "maintain/"];
 
 /**
  * An app-relative path for a registry target, or null when the target would leave the app.

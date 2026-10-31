@@ -340,8 +340,9 @@ released 0.9.0 installer path is recorded in UPGRADE.md.
 dependencies, and prints the lines to paste into `cmds/*.ts`, then the
 `meta.toolchain` lines to paste into config files. It never edits `cmds/`,
 `src/`, or a config file. It writes only the component folder and the
-`drizzle/`, `migrations/` and `maintain/` files the component owns.
-`tinker update` replaces one folder whole and stops on local edits. `tinker check` is read-only and exits 1 on a finding.
+`drizzle/`, `sqlite/migrations/` and `maintain/` files the component owns.
+`tinker update` replaces one folder whole and stops on local edits. `tinker check`
+is read-only and exits 1 on a finding.
 
 `tinker/components.lock` records a hash per file and the Start version each
 component came from, so a user edit and a Start release are told apart. Update

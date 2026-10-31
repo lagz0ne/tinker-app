@@ -14,16 +14,18 @@
 - A registry item declares that need in `meta.toolchain`: an object of app file -> lines.
   Add, update and check refuse a bad shape with `bad meta.toolchain in <name>: ...`.
   `meta.starterOnly` and its refusal are gone; no item uses it.
-- A component may now write `migrations/` and `maintain/` as well as `drizzle/`.
-  `database-sqlite` ships `maintain/sqlite-dev-db.mjs`, the dev database builder; the SQLite
-  items ship their migrations to `migrations/`. A file there with other bytes is a `conflict:`.
+- The SQLite items ship their migrations to `sqlite/migrations/`, where the demo keeps them
+  (the registry said `migrations/`, which no app could install). `databaseMigrationsFolder`
+  now defaults to `sqlite/migrations`, relative to `databaseFolder`. An app made from the demo
+  that binds `databaseMigrationsFolder("sqlite/migrations")` (`## 0.13.0`, step 3) can keep or
+  drop that line. An app that relies on the old default `migrations` binds
+  `databaseMigrationsFolder("migrations")` or moves the files.
+- A component may now write `sqlite/migrations/` and `maintain/` as well as `drizzle/`.
+  `database-sqlite` ships `maintain/sqlite-dev-db.mjs`, the dev database builder. A file there
+  with other bytes is a `conflict:`.
 - `database-sqlite` ships `sql.d.ts`: a `declare module "*.sql"` fallback, so tsgolint (the
   type-aware lint, TypeScript 7.0, no content mappers) reads each `.sql` import as a Reylo
   query. The type check (TypeScript 7.1, `--runExternalCode`) still uses Reylo's real types.
-- An app made from the demo keeps its migrations in `sqlite/migrations`. `tinker check` there
-  now notes the SQLite items as `outdated:` (a note, exit 0), and `tinker update database-sqlite`
-  also writes copies of its migrations to `migrations/`. Keep taking the SQLite set by the
-  template update there.
 
 ## 0.16.0
 

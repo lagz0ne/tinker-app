@@ -21,7 +21,7 @@ Reylo toolchain. The `app` item has none of it:
   dev database and runs `--runExternalCode`.
 - `.reylo.yaml`, which names the dev database.
 - `maintain/sqlite-dev-db.mjs`, which builds
-  the dev database from `migrations/`.
+  the dev database from `sqlite/migrations/`.
 
 So `tinker add` refused them
 (`meta.starterOnly`).
@@ -114,11 +114,20 @@ vite.config.ts:
   pastes the `vite.config.ts` lines there too.
 
 Files the item owns ship as registry files:
-the migrations in `migrations/` and
+the migrations in `sqlite/migrations/` and
 `maintain/sqlite-dev-db.mjs`. A component may
-now write `drizzle/`, `migrations/` and
+now write `drizzle/`, `sqlite/migrations/` and
 `maintain/`. A file there with other bytes
 is still a `conflict:`.
+
+The migrations go to `sqlite/migrations/`,
+where the demo, Hedl and UPGRADE 0.13.0
+already keep them. Before, the registry
+said `migrations/`, but no app could get
+that copy: `tinker add` refused the items.
+The `databaseMigrationsFolder` default is
+now `sqlite/migrations` to match, so an
+added set migrates with no folder binding.
 The starter block ships the same
 `maintain/sqlite-dev-db.mjs`. The registry
 lets two items share a `maintain/` target
@@ -152,10 +161,12 @@ assignable to type 'string'`.
 ## Not decided here
 
 - shadcn's `docs` field. `npx shadcn add`
-  does not print `meta.toolchain`.
+  prints `docs`, not `meta.toolchain`.
+  Copying the lines into `docs` too would
+  show them there; not done.
 - A toolchain change on `tinker update`.
-- The demo keeps its migrations in
-  `sqlite/migrations`. `tinker update
-database-sqlite` there writes copies to
-  `migrations/` too, and `tinker check`
-  notes the item as outdated.
+- An offline proof. The proof needs the
+  network (shadcn, npm install). A
+  composition in `maintain/check-registry.mjs`
+  could run offline on the scaffold's
+  `node_modules`. Not built.

@@ -462,10 +462,13 @@ test("K-roll-add add finishes a killed update for a closure member", () => {
   }
 });
 
-test("B1a check measures a component with a migrations/ file by its lock and the registry", () => {
+test("B1a check measures a component with a sqlite/migrations/ file by its lock and the registry", () => {
   const registry = makeRegistry();
   const entry = entryFor(sqlFiles, "s-sql");
-  const sqlEntry = { ...entry, files: { ...entry.files, ...hashesOf(sqlFiles, "migrations") } };
+  const sqlEntry = {
+    ...entry,
+    files: { ...entry.files, ...hashesOf(sqlFiles, "sqlite/migrations") },
+  };
   const locked = app({
     ...sqlFiles,
     [lockPath]: lockText({ "s-sql": sqlEntry }),
