@@ -10,6 +10,7 @@ import type { Sync } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
 
 import { readProfileCommand } from "@/demo/contracts/commands";
+import { readProfileInput } from "@/demo/contracts/profile-contract";
 import type { Profile } from "@/demo/contracts/profile-contract";
 import { readFeatureResult } from "@/demo/contracts/sync";
 import { raise } from "@/demo/errors";
@@ -109,6 +110,7 @@ export const saveProfile = operation({
     notify: notificationWork,
   },
   run: async ({ orm, currentUser, database, history, notify }, { input, clock }) => {
+    const profile = readProfileInput.parse(input.profile);
     const { eq } = orm;
 
     await database.transaction(async (tx) => {
@@ -118,7 +120,7 @@ export const saveProfile = operation({
       const saved = (
         await tx
           .update(user)
-          .set({ name: input.profile.name, updatedAt: new Date(clock.currentTimeMillis()) })
+          .set({ name: profile.name, updatedAt: new Date(clock.currentTimeMillis()) })
           .where(eq(user.id, currentUser.id))
           .returning({
             id: user.id,

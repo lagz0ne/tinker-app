@@ -1,4 +1,4 @@
-import { createScope, isError as isCoreError } from "@tinker/core";
+import { createScope } from "@tinker/core";
 import { test, expect } from "vite-plus/test";
 
 import { authStartup } from "~/components/auth/index.server";
@@ -174,9 +174,17 @@ test("todo changes reject empty titles, long titles, and caller-selected owners"
     tags: [requestBindings, tags],
     extensions: [startRequests, authStartup],
     signal: stop.signal,
+    presets: [proofDatabase, proofMail],
   });
   await root.ready;
   try {
+    await root.run(migrate);
+    const ada = readHeaders(
+      await root.run(handleAuth, {
+        input: signupRequest("Ada"),
+        tags: requestHeaders(new Headers()),
+      }),
+    );
     for (const rawInput of [
       { kind: "add", title: "   " },
       { kind: "add", title: "x".repeat(201) },
@@ -184,13 +192,13 @@ test("todo changes reject empty titles, long titles, and caller-selected owners"
     ]) {
       const result = await settleWrite(root, changeTodo, {
         rawInput: { executionId: crypto.randomUUID(), change: rawInput },
+        tags: requestHeaders(ada),
       });
       if (result.status !== "failed") raise("BadInput", { reason: "expected input refusal" });
-      if (!isCoreError(result.error, "DataValidationFailed")) throw result.error;
-
-      const cause = result.error.payload.cause;
-      if (!isError(cause, "BadInput")) throw cause;
-      expect(cause.payload.reason).toContain("valid todo change");
+      if (!isError(result.error, "BadInput")) throw result.error;
+      expect(result.error.payload.reason).toBe(
+        "Use a title with 1 to 200 characters and a valid todo change.",
+      );
     }
   } finally {
     stop.abort();
