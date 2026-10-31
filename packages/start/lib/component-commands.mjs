@@ -5,7 +5,7 @@ import { dirname, join, resolve, sep } from "node:path";
 
 import { entryOf, readLock, writeLock } from "./lock.mjs";
 import { basePackage, listFiles } from "./paths.mjs";
-import { readRegistryJson } from "./registry.mjs";
+import { readRegistryJson, toolchainProblem } from "./registry.mjs";
 import { parseSource } from "./source.mjs";
 
 /** A refusal: the lines to print and exit 1, with no write behind it. */
@@ -39,8 +39,11 @@ function manifestOf(name) {
 /** Component names are folder names: lower case letters, digits and dashes. */
 const nameShape = /^[a-z0-9][a-z0-9-]*$/;
 
-/** The only folder a component may write outside its own: the migrations it owns. */
-const outsideRoot = "drizzle/";
+/**
+ * The only folders a component may write outside its own: the migrations it owns (`drizzle/` for
+ * Postgres, `migrations/` for SQLite) and the maintenance scripts it owns (SQLite's dev database).
+ */
+const outsideRoots = ["drizzle/", "migrations/", "maintain/"];
 
 /**
  * An app-relative path for a registry target, or null when the target would leave the app.
@@ -73,7 +76,6 @@ async function catalogOf(base) {
   return {
     base,
     names: new Set(items.map((item) => item.name)),
-    metas: new Map(items.map((item) => [item.name, item.meta ?? {}])),
     items: new Map(),
   };
 }
@@ -133,7 +135,7 @@ function filesOf(item, name) {
  * @param {string} name - From filesOf; why: the component that would write it.
  */
 function ownedPath(path, name) {
-  return path.startsWith(areaOf(name)) || path.startsWith(outsideRoot);
+  return path.startsWith(areaOf(name)) || outsideRoots.some((root) => path.startsWith(root));
 }
 
 /**
@@ -169,18 +171,17 @@ async function closureOf(catalog, name) {
 }
 
 /**
- * Refuse a closure that holds a starter-only item.
- * @param {{ metas: Map<string, object> }} catalog - From catalogOf; why: the index `meta`.
- * @param {string[]} closure - From closureOf; why: every member that would land.
+ * The `file -> lines` pairs an item asks the user to paste into the app's toolchain config, or the
+ * refusal for a bad shape. Data only: nothing here writes a config file.
+ * @param {object} item - From componentItem; why: its `meta.toolchain`.
+ * @param {string} name - From a command; why: the item's name, for the message.
  */
-function refuseStarterOnly(catalog, closure) {
-  for (const member of closure) {
-    const meta = catalog.metas.get(member) ?? {};
-    if (meta.starterOnly !== true) continue;
+function toolchainOf(item, name) {
+  const toolchain = item.meta?.toolchain;
+  const problem = toolchainProblem(toolchain);
+  if (problem !== null) throw new Refusal([`bad meta.toolchain in ${name}: ${problem}`]);
 
-    const why = meta.starterOnlyWhy ?? "it needs the starter's toolchain";
-    throw new Refusal([`${member} is starter-only: ${why}`]);
-  }
+  return Object.entries(toolchain ?? {});
 }
 
 /**
@@ -637,6 +638,31 @@ function pasteLines(root, members) {
 }
 
 /**
+ * The lines the user pastes into the toolchain config, once per closure: each file in the order
+ * the members first name it, each line once under it.
+ * @param {{ toolchain: [string, string[]][] }[]} members - From addComponent; why: the new components, requires first.
+ */
+function toolchainLines(members) {
+  const files = new Map();
+  for (const member of members) {
+    for (const [file, lines] of member.toolchain) {
+      const seen = files.get(file) ?? new Set();
+      for (const line of lines) seen.add(line);
+      files.set(file, seen);
+    }
+  }
+
+  if (files.size === 0) return [];
+  return [
+    "Paste into your toolchain (tinker add writes no config):",
+    ...[...files].flatMap(([file, lines]) => [
+      `${file}:`,
+      ...[...lines].map((line) => `  ${line}`),
+    ]),
+  ];
+}
+
+/**
  * Merge the npm deps of the items just copied into the app's package.json, keeping app specs.
  * @param {string} root - From a command; why: the app whose package.json changes.
  * @param {object[]} items - From a command; why: the items that landed.
@@ -791,7 +817,7 @@ async function membersOf(catalog, closure) {
   const members = [];
   for (const name of closure) {
     const item = await itemOf(catalog, name);
-    members.push({ name, item, files: filesOf(item, name) });
+    members.push({ name, item, files: filesOf(item, name), toolchain: toolchainOf(item, name) });
   }
   return members;
 }
@@ -872,8 +898,6 @@ async function writeOutside(root, path, content, ops) {
 export async function addComponent(root, name, base) {
   const catalog = await catalogOf(base);
   const closure = await closureOf(catalog, name);
-
-  refuseStarterOnly(catalog, closure);
   const members = await membersOf(catalog, closure);
   const lines = await recoverAll(root, members, fsp);
   if (existsSync(folderOf(root, name))) {
@@ -898,6 +922,7 @@ export async function addComponent(root, name, base) {
       fresh.map((member) => member.name),
     ),
   );
+  lines.push(...toolchainLines(fresh));
   lines.push(`tinker add: added ${fresh.map((member) => member.name).join(", ")}`);
   return { lines, code: 0 };
 }
@@ -913,9 +938,8 @@ export async function updateComponent(root, name, base, options = {}) {
   const ops = { ...fsp, ...options.fs };
   const catalog = await catalogOf(base);
   const item = await componentItem(catalog, name);
-
-  refuseStarterOnly(catalog, [name]);
   const files = filesOf(item, name);
+  toolchainOf(item, name);
   const paths = [...files.keys()];
   const lines = await recover(root, name, ops, paths);
   if (!existsSync(folderOf(root, name))) {
@@ -1023,7 +1047,6 @@ async function folderReport(root, name, catalog, lock) {
   const item = await checkedItemOrLine(catalog, name);
   if (typeof item === "string") return [{ line: item, finding: true }];
   if (item === null) return [{ line: `unknown component: ${name}`, finding: true }];
-  if (catalog.metas.get(name)?.starterOnly === true) return starterReport(root, name, entry);
 
   return registryReport(root, name, item, entry);
 }
@@ -1048,29 +1071,6 @@ function reasonOf(error) {
 }
 
 /**
- * A starter-only component is copied with the starter's toolchain, so check measures it against
- * its lock entry only: no registry fence, no registry compare, no outdated advice.
- * @param {string} root - From folderReport; why: the app to read.
- * @param {string} name - From folderReport; why: the starter-only component.
- * @param {{ files: Record<string, string> }} [entry] - From readLock; why: what it was copied from.
- */
-function starterReport(root, name, entry) {
-  if (entry === undefined) {
-    return [
-      {
-        line: `no lock entry: ${name} (starter-only; check compares it with the lock only)`,
-        finding: false,
-      },
-    ];
-  }
-
-  return [
-    ...lockDiffOf(root, name, entry).map((line) => ({ line: diffLine(line), finding: true })),
-    ...missingRequires(root, name).map((line) => ({ line, finding: true })),
-  ];
-}
-
-/**
  * A normal component: the lock it was copied from, then the registry it would come from now.
  * @param {string} root - From folderReport; why: the app to read.
  * @param {string} name - From folderReport; why: the component.
@@ -1080,6 +1080,7 @@ function starterReport(root, name, entry) {
 function registryReport(root, name, item, entry) {
   try {
     const files = filesOf(item, name);
+    toolchainOf(item, name);
     const diff = entry ? lockDiffOf(root, name, entry) : diffOf(root, name, files);
     const notes = entry
       ? outdatedNote(name, entry, files)

@@ -74,6 +74,9 @@ Add copies `tinker/components/<name>/` and every component its `requires` names,
 It also writes the files a component owns outside its folder (mail's `drizzle/` migrations),
 merges the npm deps into `package.json` without changing a spec the app already pins, and
 prints the import lines to paste into `cmds/*.ts`. It never writes `cmds/` or `src/`.
+An item's `meta.toolchain` (`{ "<file>": ["<line>", ...] }`) is printed once per closure after
+those lines, under `Paste into your toolchain (tinker add writes no config):`. Add writes none
+of those files; a bad shape is refused (ADR `docs/decisions/registry-toolchain.md`).
 Update replaces one folder whole through `.tinker/update/`, so a failed or killed update leaves
 the old folder intact. It refuses when the folder has local edits unless you pass `--force`,
 and it skips that refusal when it just restored a killed update.
@@ -81,8 +84,8 @@ and it skips that refusal when it just restored a killed update.
 edit and a Start release are told apart: update measures a folder against the lock, and check
 prints `edited:`, `outdated:`, `no lock entry:`, `missing component:`, `missing requires:`, and
 `interrupted update:` lines. Check exits 1 on a finding and writes nothing.
-A registry item marked `meta.starterOnly` is refused, alone or inside a `requires` closure.
-A component may write only its own folder and `drizzle/`; any other target is `bad target ...`.
+A component may write only its own folder, `drizzle/`, `migrations/` and `maintain/`; any other
+target is `bad target ...`.
 Component names are folder names: lower case letters, digits, and dashes.
 
 ## Copied code
