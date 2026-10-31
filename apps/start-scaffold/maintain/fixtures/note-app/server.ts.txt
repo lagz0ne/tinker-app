@@ -1,4 +1,4 @@
-import { createScope } from "@tinker/core";
+import { createScope, type Scope } from "@tinker/core";
 
 import { defineMain } from "~/base/main";
 import { renderObservation } from "~/base/observe";
@@ -60,6 +60,8 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
 
     await tools.ready;
 
+    let closed: Promise<Scope.Result[]> | undefined;
+
     try {
       const app = createScope({
         signal: appStop,
@@ -82,22 +84,13 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       });
 
       // The host fails the run with the first failure in these results, app first.
-      const closed = app.closed.then(async function closeRoots(appEnd) {
+      closed = app.closed.then(async function closeRoots(appEnd) {
         stop.tools.abort(abortReasons.closed);
         return [appEnd, await tools.closed];
       });
 
-      try {
-        await app.ready;
-        signal.throwIfAborted(); // Aborted during start: app is closing, so no handler.
-      } catch (error) {
-        const appEnd = (await closed)[0];
-        const cleanup = appEnd.status === "failed" ? appEnd.error : appEnd.teardownErrors?.[0];
-        if (cleanup !== undefined && cleanup !== error) {
-          stderr.write(`close failed: ${String(cleanup)}\n`);
-        }
-        throw error;
-      }
+      await app.ready;
+      signal.throwIfAborted(); // Aborted during start: app is closing, so no handler.
       app.onClose(observeServerPanics(exit.bind(null, 1), closed, stderr));
       return {
         fetch: createServerHandler(
@@ -107,12 +100,20 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
         closed,
       };
     } catch (error) {
+      // Startup failed: close both roots, then print the first cleanup failure that is not this error.
+      stop.app.abort(error);
       stop.tools.abort(error);
-      const toolsEnd = await tools.closed;
-      const cleanup = toolsEnd.status === "failed" ? toolsEnd.error : toolsEnd.teardownErrors?.[0];
-      if (cleanup !== undefined && cleanup !== error) {
-        stderr.write(`close failed: ${String(cleanup)}\n`);
-      }
+
+      const ended = await (closed ?? tools.closed.then((end) => [end]));
+
+      const cleanup = ended
+        .flatMap((end) => [
+          ...(end.status === "failed" ? [end.error] : []),
+          ...(end.teardownErrors ?? []),
+        ])
+        .find((failure) => failure !== error);
+      if (cleanup !== undefined) stderr.write(`close failed: ${String(cleanup)}\n`);
+
       throw error;
     }
   } catch (error) {

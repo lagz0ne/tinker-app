@@ -1811,6 +1811,11 @@
           "target": "~/tests/command-exits.test.mjs"
         },
         {
+          "path": "tests/server-close.test.mjs",
+          "type": "registry:file",
+          "target": "~/tests/server-close.test.mjs"
+        },
+        {
           "path": "tests/database-adapter.test.ts",
           "type": "registry:file",
           "target": "~/tests/database-adapter.test.ts"
