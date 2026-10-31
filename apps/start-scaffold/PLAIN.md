@@ -98,6 +98,11 @@ Tests and generated files do not count.
     - `tinker/components/auth/stream.server.ts#lease.check`
     - `tinker/components/auth/stream.server.ts#lease.open`
     - `tinker/components/auth/stream.server.ts#lease.wait`
+    - `tinker/components/blobs-sqlite/blobs.server.ts#fillSlot.run`
+    - `tinker/components/blobs-sqlite/blobs.server.ts#openSlot.run`
+    - `tinker/components/blobs-sqlite/blobs.server.ts#putBlob.run`
+    - `tinker/components/blobs-sqlite/blobs.server.ts#takeSlot.run`
+    - `tinker/components/blobs-sqlite/bytes.server.ts#bytes.copy`
     - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
     - `tinker/components/requests/render-lifetime.server.ts#retain`
     - `tinker/components/requests/start.ts#middleware.callback`

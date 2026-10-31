@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -101,6 +101,10 @@ function bytesOf(text: string) {
   return encoder.encode(text);
 }
 
+function randomBytesOf(length: number) {
+  return new Uint8Array(randomBytes(length));
+}
+
 function sha256(bytes: Uint8Array) {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -168,7 +172,7 @@ async function pausedFill(root: Scope.Handle, id: string, first: Uint8Array, sig
   const body = feed();
 
   const result = write(root, fillSlot, {
-    input: { id, body: body.body, name: "photo.png" },
+    rawInput: { id, body: body.body, name: "photo.png" },
     signal,
   });
 
@@ -212,23 +216,25 @@ async function slotRow(root: Scope.Handle, id: string) {
 }
 
 async function open(root: Scope.Handle, owner = "project-1", maxBytes?: number) {
-  return write(root, openSlot, { input: maxBytes === undefined ? { owner } : { owner, maxBytes } });
+  return write(root, openSlot, {
+    rawInput: maxBytes === undefined ? { owner } : { owner, maxBytes },
+  });
 }
 
 async function fill(root: Scope.Handle, id: string, bytes: Uint8Array, name = "photo.png") {
-  return write(root, fillSlot, { input: { id, body: bodyOf(bytes), name } });
+  return write(root, fillSlot, { rawInput: { id, body: bodyOf(bytes), name } });
 }
 
 async function take(root: Scope.Handle, id: string, owner = "project-1") {
-  return write(root, takeSlot, { input: { id, owner } });
+  return write(root, takeSlot, { rawInput: { id, owner } });
 }
 
 async function put(root: Scope.Handle, bytes: Uint8Array) {
-  return write(root, putBlob, { input: { bytes } });
+  return write(root, putBlob, { rawInput: { bytes } });
 }
 
 async function read(root: Scope.Handle, hash: string) {
-  return write(root, readBlob, { input: { hash } });
+  return write(root, readBlob, { rawInput: { hash } });
 }
 
 /** The real `node:fs/promises`, with each call and each file handle call written to `log`. */
@@ -265,9 +271,14 @@ async function recordingFs(log: unknown[][], probe: (entry: unknown[]) => void) 
         log.push(entry);
         probe(entry);
 
-        const result = await Reflect.apply(value, target, args);
+        if (key === "open") {
+          return wrapHandle(
+            await fs.open(...(args as Parameters<typeof fs.open>)),
+            String(args[0]),
+          );
+        }
 
-        return key === "open" ? wrapHandle(result, String(args[0])) : result;
+        return Reflect.apply(value, target, args);
       };
     },
   }) as typeof fs;
@@ -398,11 +409,7 @@ test("I2: two puts and a fill of the same bytes give one hash, one row, one file
 test("I3: every stored blob reads back as bytes whose sha256 and length match its hash and size", async () => {
   const { root } = await sandbox();
 
-  const samples = [
-    new Uint8Array([7]),
-    crypto.getRandomValues(new Uint8Array(1000)),
-    crypto.getRandomValues(new Uint8Array(65_536)),
-  ];
+  const samples = [new Uint8Array([7]), randomBytesOf(1000), randomBytesOf(65_536)];
 
   for (const bytes of samples) {
     const { hash, size } = await put(root, bytes);
@@ -416,7 +423,7 @@ test("I3: every stored blob reads back as bytes whose sha256 and length match it
   }
 
   // A fill fed in many chunks hashes the whole stream, not one chunk.
-  const big = crypto.getRandomValues(new Uint8Array(70_000));
+  const big = randomBytesOf(70_000);
 
   const chunks = Array.from({ length: 7 }, (_, index) =>
     big.subarray(index * 10_000, (index + 1) * 10_000),
@@ -424,7 +431,9 @@ test("I3: every stored blob reads back as bytes whose sha256 and length match it
 
   const slot = await open(root);
 
-  const filled = await write(root, fillSlot, { input: { id: slot.id, body: bodyOf(...chunks) } });
+  const filled = await write(root, fillSlot, {
+    rawInput: { id: slot.id, body: bodyOf(...chunks) },
+  });
 
   expect(filled.hash).toBe(sha256(big));
   expect(filled.size).toBe(big.length);
@@ -488,7 +497,7 @@ test("I5: a slot expires at open time + blobSlotTtl; fill is refused before read
   const body = feed();
 
   await expect(
-    write(root, fillSlot, { input: { id: slot.id, body: body.body } }),
+    write(root, fillSlot, { rawInput: { id: slot.id, body: body.body } }),
   ).rejects.toMatchObject({ kind: "SlotExpired" });
 
   expect(body.pulls()).toBe(0);
@@ -521,7 +530,7 @@ test("I6: a fill stops reading past the slot cap, cancels the body, and leaves t
 
   const body = feed();
 
-  const result = write(root, fillSlot, { input: { id: slot.id, body: body.body } });
+  const result = write(root, fillSlot, { rawInput: { id: slot.id, body: body.body } });
 
   result.catch(() => {});
 
@@ -562,7 +571,7 @@ test("I7: an empty fill and an empty put are refused; the slot stays open", asyn
   const slot = await open(root);
 
   await expect(
-    write(root, fillSlot, { input: { id: slot.id, body: bodyOf() } }),
+    write(root, fillSlot, { rawInput: { id: slot.id, body: bodyOf() } }),
   ).rejects.toMatchObject({ kind: "BlobEmpty" });
 
   await expect(put(root, new Uint8Array(0))).rejects.toMatchObject({ kind: "BlobEmpty" });
@@ -604,7 +613,7 @@ test("I8: a fill with no name takes back a null name", async () => {
 
   const slot = await open(root);
 
-  await write(root, fillSlot, { input: { id: slot.id, body: bodyOf(bytesOf("nameless")) } });
+  await write(root, fillSlot, { rawInput: { id: slot.id, body: bodyOf(bytesOf("nameless")) } });
 
   expect(await take(root, slot.id)).toMatchObject({ name: null });
 });
@@ -797,7 +806,7 @@ test("C: take during a fill is SlotEmpty; after the fill commits, take gives the
 test("D: two puts of the same bytes at once give the same hash, one row, one file", async () => {
   const { root, folder } = await sandbox();
 
-  const bytes = crypto.getRandomValues(new Uint8Array(200_000));
+  const bytes = randomBytesOf(200_000);
 
   const [one, two] = await Promise.all([put(root, bytes), put(root, bytes)]);
 
@@ -894,7 +903,7 @@ test("the blob tags have their defaults, and a test can bind blobUnpackMax", asy
   const limits = operation({
     label: "proof.blobLimits",
     depends: { max: blobMaxBytes, ttl: blobSlotTtl, unpack: blobUnpackMax },
-    run: ({ max, ttl, unpack }) => ({ max, ttl, unpack }),
+    run: async ({ max, ttl, unpack }) => ({ max, ttl, unpack }),
   });
 
   const plain = createScope({ tags: [] });
