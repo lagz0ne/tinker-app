@@ -117,8 +117,15 @@ Files the item owns ship as registry files:
 the migrations in `sqlite/migrations/` and
 `maintain/sqlite-dev-db.mjs`. A component may
 now write `drizzle/`, `sqlite/migrations/` and
-`maintain/`. A file there with other bytes
-is still a `conflict:`.
+the one file `maintain/sqlite-dev-db.mjs`.
+The rest of `maintain/` is the app's own
+scripts, and `tinker prepare` runs that file,
+so the fence names the file, not the folder.
+On add, a file there with other bytes is a
+`conflict:`. On update, an outside file that
+the lock does not list (an older lock) and
+that has other bytes is a `conflict:` too.
+Update refuses it unless `--force`.
 
 The migrations go to `sqlite/migrations/`,
 where the demo, Hedl and UPGRADE 0.13.0
@@ -158,6 +165,19 @@ the file does not resolve. So:
   failed: `Type '{ id: number; }' is not
 assignable to type 'string'`.
 
+The fallback is for tsgolint only. Its risk:
+without the pasted `contentMappers` line,
+tsc 7.1 would use the fallback too, and a
+wrong query type would pass on `any`.
+`maintain/sqlite-dev-db.mjs` closes that gap.
+The type check and the tests run it first.
+When `database-sqlite` is installed and
+`tsconfig.json` has no Reylo `contentMappers`,
+it stops with an error. The proof has a red
+control for each: a wrongly typed query line
+fails the type check, and so does a
+`tsconfig.json` without the mapper.
+
 ## Not decided here
 
 - shadcn's `docs` field. `npx shadcn add`
@@ -165,6 +185,10 @@ assignable to type 'string'`.
   Copying the lines into `docs` too would
   show them there; not done.
 - A toolchain change on `tinker update`.
+- A command that prints the toolchain block
+  again. Lost `tinker add` output means
+  reading `meta.toolchain` in the registry
+  JSON. A known gap.
 - An offline proof. The proof needs the
   network (shadcn, npm install). A
   composition in `maintain/check-registry.mjs`

@@ -20,9 +20,21 @@
   that binds `databaseMigrationsFolder("sqlite/migrations")` (`## 0.13.0`, step 3) can keep or
   drop that line. An app that relies on the old default `migrations` binds
   `databaseMigrationsFolder("migrations")` or moves the files.
-- A component may now write `sqlite/migrations/` and `maintain/` as well as `drizzle/`.
-  `database-sqlite` ships `maintain/sqlite-dev-db.mjs`, the dev database builder. A file there
-  with other bytes is a `conflict:`.
+- A component may now write `sqlite/migrations/` and the one file `maintain/sqlite-dev-db.mjs`
+  as well as `drizzle/`. `database-sqlite` ships that file, the dev database builder. A file
+  there with other bytes is a `conflict:`.
+- `tinker update` now refuses an outside file that the lock does not list and that has other
+  bytes than the registry copy: it prints `conflict: <path>` and keeps the file. `--force` still
+  replaces it. Before, such a file was overwritten with no warning.
+- `maintain/sqlite-dev-db.mjs` stops with `tsconfig.json has no Reylo "contentMappers" entry`
+  when `database-sqlite` is installed and the mapper line is missing. Without it, tsc reads
+  each `.sql` import as `any` and passes.
+- An app made from the demo before this release has a lock without the SQLite items'
+  `sqlite/migrations/` files and `maintain/sqlite-dev-db.mjs`, so `tinker check` prints
+  `outdated: database-sqlite`, `outdated: auth-sqlite` and `outdated: sync-sqlite` (notes,
+  exit 0). Run `tinker update database-sqlite`, then `auth-sqlite` and `sync-sqlite`, to record
+  them. If update prints `conflict: maintain/sqlite-dev-db.mjs` and you did not edit that file,
+  rerun with `--force`; if you did, keep your copy and leave the note.
 - `database-sqlite` ships `sql.d.ts`: a `declare module "*.sql"` fallback, so tsgolint (the
   type-aware lint, TypeScript 7.0, no content mappers) reads each `.sql` import as a Reylo
   query. The type check (TypeScript 7.1, `--runExternalCode`) still uses Reylo's real types.

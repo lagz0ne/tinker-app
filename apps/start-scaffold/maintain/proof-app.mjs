@@ -253,3 +253,13 @@ test("the copied SQLite set migrates, and a committed notify is heard", async ()
   ]);
 }, 30_000);
 `;
+
+/** A user line that misreads a query's row: tsc must reject it when Reylo's types are in use. */
+export const wrongQueryType = `import type { DatabaseSync } from "node:sqlite";
+
+import lastIdQuery from "../tinker/components/database-sqlite/queries/last_id.sql";
+
+declare const db: DatabaseSync;
+
+export const wrong: string = lastIdQuery.runSync(db, { channel: "proof" });
+`;
