@@ -6,7 +6,7 @@ description: Choose the owner of new app code.
 # Choose a form
 
 Read the [current authoring contract](https://github.com/lagz0ne/tinker-app/blob/main/docs/decisions/start-decompose.md) first. It owns the rules for
-forms, native boundaries, imports, settings, pure helpers, and the cap of 17.
+forms, native boundaries, imports, settings, and the no-helper rule.
 Do not copy a second version of those rules into feature code.
 
 Choose a tag for an injected value, data for visible state, a resource for an
@@ -28,5 +28,5 @@ values; map status/body to a feature value or typed error. Tests replace
 httpBackend through the HTTP public entry. Native Request/Response values
 belong to routes, server functions, and the named auth mount.
 
-Review `PLAIN.md` when keeping a pure helper. Run both plain checks after
+Shared work is an operation, never a plain helper function. Run both plain checks after
 changing its rules. The script is the full checked declaration/callback list.

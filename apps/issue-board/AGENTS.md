@@ -12,10 +12,9 @@ local checklist; each release's changes stay in UPGRADE.md.
    App code uses component public entries. Start ships tools and hosts.
 3. **Declare work and owner.** Use tags, data, resources, and operations for their
    named jobs. Native bridges and extension hooks keep their owned contracts.
-   No authored classes or live module clients. Pure helpers have at most three
-   plain value inputs, at least two real callers, TSDoc, and a PLAIN.md entry.
-   The cap stays **17**. Owned resource methods and native callbacks are not
-   permission to pass a context bag through a plain helper.
+   No authored classes, live module clients, or plain helper functions: shared
+   work is an operation. Owned resource methods and native callbacks are not
+   permission to hide a helper or pass a context bag.
 4. **Bind only real seams.** Bind host config inline and validate startup values
    before ready. Bind request inputs per call. App readers, cross-root values,
    and native/test IO can use tags. Import mandatory component work directly.

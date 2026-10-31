@@ -41,18 +41,17 @@ when that resource owns their work. This does not permit a plain helper to take
 a scope, session, context bag, controller, clock, signal, or IO object. Named
 base entries, driver bridges, request middleware, and extension hooks are
 explicit native boundaries. A new helper in one of those files gets no blanket
-exception. React views render data and invoke operations; their helpers still
-follow the plain rule.
+exception. React views render data and invoke operations.
 
-Plain helpers are pure, have at most three plain value inputs, and have at
-least two distinct real callers. Tests, repeated calls from one caller, and
-self-calls do not count. Each helper has a name and TSDoc explaining where each
-input comes from and why it is needed. List every kept helper in `PLAIN.md`.
-The cap is **17**, including mainErrorCode and checkClosed when kept. A one-caller
-mapping stays inline. Do not raise the cap. Do not use unknown-to-handle casts,
-callback bags, hidden object methods, or wrappers to evade it. Plain helpers
-cannot do IO, await, read time or random, or retain state. Door readers and error
-guards may take unknown. React props do not carry Core handles or signals.
+App code has no plain helper functions (tinker-app #44). Work that more than
+one place needs is an operation: each call is a span, and its dependencies come
+through `depends`. A body raises with `ctx.raise`; a caller reads an error's
+`kind` and `payload` from `settle` or with a declared schema. A door reader is a
+schema. A command's exit code and close results belong to the Start host, since
+no scope exists there. `check-plain` refuses any other function with
+"plain-function: make it an operation". Do not use unknown-to-handle casts,
+callback bags, hidden object methods, or wrappers to hide a function. React
+props do not carry Core handles or signals.
 
 ## Bind only real seams
 

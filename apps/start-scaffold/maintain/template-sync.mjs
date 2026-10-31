@@ -128,7 +128,6 @@ async function copyDemoFiles(target) {
     "compose.yml",
     ".env.example",
     "AGENTS.md",
-    "PLAIN.md",
     "README.md",
     ".agents",
     "vitest.config.ts",
