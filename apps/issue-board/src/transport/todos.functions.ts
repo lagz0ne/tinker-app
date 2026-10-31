@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 
 import { startRequests } from "~/components/requests";
-import { readResult } from "~/components/requests/index.server";
+import { cancelledCall } from "~/components/requests/index.server";
 
 import { listTodos, changeTodo } from "@/demo/backend/todos.server";
 import { readTodoCommand } from "@/demo/contracts/commands";
@@ -13,7 +13,10 @@ export const getTodos = createServerFn({ method: "GET" })
   .middleware([startRequests.middleware])
   .handler(async ({ context }) => {
     setResponseHeader("Cache-Control", "no-store");
-    return readResult(await context.session.settle(listTodos, { signal: context.signal }));
+    const result = await context.session.settle(listTodos, { signal: context.signal });
+    if (result.status === "failed") throw result.error;
+    if (result.status === "cancelled") return context.session.run(cancelledCall);
+    return result.value;
   });
 
 export const updateTodo = createServerFn({ method: "POST" })

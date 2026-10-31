@@ -35,23 +35,6 @@ export declare namespace Errors {
 }
 
 /**
- * @param kind - From a failed base action; why: choose the managed error.
- * @param payload - From that action; why: keep its failure facts.
- */
-export function raise<N extends Errors.Name>(kind: N, payload: Errors.Payloads[N]): never {
-  throw fail(kind, payload);
-}
-
-/**
- * The managed error itself, for a caller that rejects a promise with it instead of throwing.
- * @param kind - From a failed base action; why: choose the managed error.
- * @param payload - From that action; why: keep its failure facts.
- */
-export function fail<N extends Errors.Name>(kind: N, payload: Errors.Payloads[N]): Errors.Of<N> {
-  return Object.assign(new Error(kind), { kind, payload });
-}
-
-/**
  * @param error - From a caught failure; why: narrow its payload.
  * @param kind - From the caller; why: select the expected error.
  */

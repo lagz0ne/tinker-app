@@ -106,16 +106,21 @@ export const proofFunction = createMiddleware({type: "function"})
       `
 import { createServerFn } from "@tanstack/react-start";
 import { proofRequest, proofFunction } from "./proof-middleware";
-import { readResult } from "~/components/requests/index.server";
+import { cancelledCall } from "~/components/requests/index.server";
 import { readProofUser } from "./proof.server";
 export const readProof = createServerFn({method: "GET"})
   .middleware([proofRequest, proofFunction, proofFunction])
-  .handler(async ({context}) => ({
-    user: readResult(await context.session.settle(readProofUser, {signal: context.signal})),
+  .handler(async ({context}) => {
+    const user = await context.session.settle(readProofUser, {signal: context.signal});
+    if (user.status === "failed") throw user.error;
+    if (user.status === "cancelled") return context.session.run(cancelledCall);
+    return {
+    user: user.value,
     sameSession: context.session === context.proofSession,
     requestRuns: Number(context.proofRequest.headers.get("x-proof-requests")),
     functionRuns: Number(context.proofRequest.headers.get("x-proof-functions")),
-  }));
+    };
+  });
 `,
     );
 
@@ -165,10 +170,15 @@ export const startInstance = createStart(() => ({requestMiddleware: [proofReques
 import { createFileRoute } from "@tanstack/react-router";
 import { incrementCounter } from "@/demo/index.server";
 import { startRequests } from "~/components/requests";
-import { readResult } from "~/components/requests/index.server";
+import { cancelledCall } from "~/components/requests/index.server";
 export const Route = createFileRoute("/proof/write")({server: {
   middleware: [startRequests.middleware], handlers: {
-    POST: async ({context}) => Response.json(readResult(await context.session.settle(incrementCounter, {input: {executionId: crypto.randomUUID()}, signal: context.signal}))),
+    POST: async ({context}) => {
+      const result = await context.session.settle(incrementCounter, {input: {executionId: crypto.randomUUID()}, signal: context.signal});
+      if (result.status === "failed") throw result.error;
+      if (result.status === "cancelled") return context.session.run(cancelledCall);
+      return Response.json(result.value);
+    },
   },
 }});
 `,

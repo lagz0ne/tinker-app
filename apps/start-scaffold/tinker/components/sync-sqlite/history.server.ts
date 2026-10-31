@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { Database } from "~/components/database-sqlite/index.server";
 import { transaction } from "~/components/database-sqlite/index.server";
-import { raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 import type { Sync } from "~/components/sync-sqlite/envelopes";
 
 import bumpStream from "./queries/bump_stream.sql";
@@ -28,11 +28,11 @@ type Execution = {
  */
 export const eventHistory = resource({
   label: "sync.history",
-  factory: () => ({
+  factory: (_deps, { raise }) => ({
     async read(tx: Database.SessionTransaction, id: string) {
       const row = readStream.runSync(await tx.db(), { id });
 
-      if (!row) raise("StreamMissing", {});
+      if (!row) return raise("StreamMissing", {} satisfies Errors.Payloads["StreamMissing"]);
 
       return row.revision;
     },
@@ -44,7 +44,7 @@ export const eventHistory = resource({
 
       const row = readStream.runSync(connection, { id });
 
-      if (!row) raise("StreamMissing", {});
+      if (!row) return raise("StreamMissing", {} satisfies Errors.Payloads["StreamMissing"]);
 
       return row.revision;
     },
@@ -55,7 +55,9 @@ export const eventHistory = resource({
     ): Promise<Execution | undefined> {
       const row = readExecution.runSync(await tx.db(), { id });
 
-      if (row && row.stream !== owner) raise("StreamDenied", {});
+      if (row && row.stream !== owner) {
+        return raise("StreamDenied", {} satisfies Errors.Payloads["StreamDenied"]);
+      }
 
       if (!row) return undefined;
 
@@ -76,7 +78,7 @@ export const eventHistory = resource({
 
       const row = bumpStream.runSync(connection, { count: payloads.length, id: owner });
 
-      if (!row) raise("StreamMissing", {});
+      if (!row) return raise("StreamMissing", {} satisfies Errors.Payloads["StreamMissing"]);
 
       const first = row.revision - payloads.length + 1;
 

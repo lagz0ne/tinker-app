@@ -4,7 +4,6 @@ import {
 } from "@tanstack/react-start/server";
 import type { Scope } from "@tinker/core";
 
-import { raise } from "~/components/errors";
 import { renderFrames } from "~/components/requests/index.server";
 
 import { devErrorPage } from "./panics";
@@ -25,13 +24,14 @@ export function createServerHandler(app: ServerEntry.Handle, { dev }: { dev: boo
     const router: typeof context.router & {
       close?: Awaited<ReturnType<typeof createRouterEntry>>["close"];
     } = context.router;
-    if (typeof router.close !== "function") raise("StartScopeMissing", {});
-    app.requestContext.scope.resolve(renderFrames).retain(context.request, router.close);
+    const close = app.requestContext.scope
+      .resolve(renderFrames)
+      .retain(context.request, router.close);
 
     try {
       return await renderStream(context);
     } catch (error) {
-      await router.close();
+      await close();
       throw error;
     }
   });

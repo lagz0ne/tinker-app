@@ -9,7 +9,7 @@ import { goodApp, write } from "../fixture.mjs";
 test("passes when src/ reaches the base only through its entries", () => {
   const root = goodApp({
     "src/backend/greet.ts":
-      'import { readResult } from "~/components/requests/index.server";\nimport { x } from "./x";\n',
+      'import { cancelledCall } from "~/components/requests/index.server";\nimport { x } from "./x";\n',
     "src/frontend/tab.ts": 'import { syncClient } from "~/components/sync";\n',
   });
   expect(imports(root)).toEqual({

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { startRequests } from "~/components/requests";
-import { readResult } from "~/components/requests/index.server";
+import { cancelledCall } from "~/components/requests/index.server";
 import { readRetry } from "~/components/sync";
 
 import { readProfile, saveProfile, retryNotification } from "@/demo/backend/profile.server";
@@ -11,9 +11,12 @@ import { readReceipt } from "./result.server";
 
 export const getProfile = createServerFn({ method: "GET" })
   .middleware([startRequests.middleware])
-  .handler(async ({ context }) =>
-    readResult(await context.session.settle(readProfile, { signal: context.signal })),
-  );
+  .handler(async ({ context }) => {
+    const result = await context.session.settle(readProfile, { signal: context.signal });
+    if (result.status === "failed") throw result.error;
+    if (result.status === "cancelled") return context.session.run(cancelledCall);
+    return result.value;
+  });
 
 export const updateProfile = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])

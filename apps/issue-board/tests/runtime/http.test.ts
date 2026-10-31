@@ -1,7 +1,7 @@
 import { createScope, operation } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
+import { z } from "zod";
 
-import { isError, raise } from "~/components/errors";
 import { httpBackend } from "~/components/http";
 import { httpRequest } from "~/components/http/index.server";
 import { http } from "~/components/http/index.server";
@@ -10,6 +10,9 @@ import { backendStop } from "~/components/requests";
 import { requestStop, startRequests } from "~/components/requests";
 
 const requestBindings = requestHostStop(new AbortController().signal);
+
+/** A settled HTTP failure: the kind, and its payload as raised. */
+const httpFailure = z.object({ kind: z.literal("HttpRequestFailed"), payload: z.unknown() });
 
 const post = operation({
   label: "test.post",
@@ -25,7 +28,7 @@ function createHeldBackend() {
     started: started.promise,
     binding: httpBackend((_url, init) => {
       const signal = init?.signal;
-      if (!signal) raise("StartScopeMissing", {});
+      if (!signal) return expect.unreachable("http passes its signal");
       signal.throwIfAborted();
       return new Promise<Response>((_done, reject) => {
         signal.addEventListener("abort", () => reject(signal.reason), { once: true });
@@ -45,7 +48,7 @@ test("closing the HTTP resource aborts a request still in flight", async () => {
         (_url, init) =>
           new Promise<Response>((_done, reject) => {
             const signal = init?.signal;
-            if (!signal) raise("StartScopeMissing", {});
+            if (!signal) return expect.unreachable("http passes its signal");
             signal.addEventListener("abort", () => reject(signal.reason), { once: true });
             started.resolve(signal);
           }),
@@ -162,8 +165,8 @@ test("network failures keep method, path, and only cause name and code", async (
         rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
       });
       if (result.status !== "failed") throw result;
-      if (!isError(result.error, "HttpRequestFailed")) throw result.error;
-      expect(result.error.payload).toEqual({
+      const failure = httpFailure.parse(result.error);
+      expect(failure.payload).toEqual({
         method: "GET",
         path: "/x",
         cause,
@@ -191,8 +194,8 @@ test("an abort failure keeps its numeric code without its message", async () => 
       rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
     });
     if (result.status !== "failed") throw result;
-    if (!isError(result.error, "HttpRequestFailed")) throw result.error;
-    expect(result.error.payload).toEqual({
+    const failure = httpFailure.parse(result.error);
+    expect(failure.payload).toEqual({
       method: "GET",
       path: "/x",
       cause: { name: "AbortError", code: 20 },
@@ -224,8 +227,8 @@ test("a string cause keeps the outer error name and code without private text", 
       rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
     });
     if (result.status !== "failed") throw result;
-    if (!isError(result.error, "HttpRequestFailed")) throw result.error;
-    expect(result.error.payload).toEqual({
+    const failure = httpFailure.parse(result.error);
+    expect(failure.payload).toEqual({
       method: "GET",
       path: "/x",
       cause: { name: "TypeError", code: "ENOTFOUND" },
@@ -270,8 +273,8 @@ test("network failures keep readable cause fields when the other field has a wro
         rawInput: { url: "https://example.test/x?token=hidden", method: "GET" },
       });
       if (result.status !== "failed") throw result;
-      if (!isError(result.error, "HttpRequestFailed")) throw result.error;
-      expect(result.error.payload).toEqual({ method: "GET", path: "/x", cause });
+      const failure = httpFailure.parse(result.error);
+      expect(failure.payload).toEqual({ method: "GET", path: "/x", cause });
     }
   } finally {
     stop.abort();
@@ -288,7 +291,7 @@ test("closing the caller aborts HTTP body reading", async () => {
     tags: [
       httpBackend(async (_url, init) => {
         const signal = init?.signal;
-        if (!signal) raise("StartScopeMissing", {});
+        if (!signal) return expect.unreachable("http passes its signal");
         return new Response(
           new ReadableStream(
             {
@@ -437,9 +440,9 @@ test("backend stop settles a server function's signalled HTTP call", async () =>
   const closing = session.close({ graceful: true });
   const result = await sending;
   if (result.status !== "failed") throw result;
-  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  const failure = httpFailure.parse(result.error);
 
-  expect(result.error.payload).toMatchObject({ method: "POST", path: "/x" });
+  expect(failure.payload).toMatchObject({ method: "POST", path: "/x" });
   expect(call.signal.aborted).toBe(false);
   expect(await closing).toEqual({ status: "success" });
   expect(await scope.closed).toEqual({ status: "success" });
@@ -466,9 +469,9 @@ for (const shape of ["signal", "tags"]) {
 
     const result = await sending;
     if (result.status !== "failed") throw result;
-    if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+    const failure = httpFailure.parse(result.error);
 
-    expect(result.error.payload).toMatchObject({ method: "GET", path: "/x" });
+    expect(failure.payload).toMatchObject({ method: "GET", path: "/x" });
     expect(call.signal.aborted).toBe(false);
     expect(await scope.closed).toEqual({ status: "success" });
   }, 2000);
@@ -501,9 +504,9 @@ test("request end settles its tagged HTTP call and leaves siblings open", async 
   request.abort();
   const result = await sending;
   if (result.status !== "failed") throw result;
-  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  const failure = httpFailure.parse(result.error);
 
-  expect(result.error.payload).toMatchObject({ method: "GET", path: "/x" });
+  expect(failure.payload).toMatchObject({ method: "GET", path: "/x" });
   expect(await session.close({ graceful: true })).toEqual({ status: "success" });
   expect(siblingFinished).toBe(false);
 
@@ -554,8 +557,8 @@ for (const end of [backendStop, requestStop]) {
         tags: end(ended.signal),
       });
       if (result.status !== "failed") throw result;
-      if (!isError(result.error, "HttpRequestFailed")) throw result.error;
-      expect(result.error.payload).toMatchObject({ method: "GET", path: "/late" });
+      const failure = httpFailure.parse(result.error);
+      expect(failure.payload).toMatchObject({ method: "GET", path: "/late" });
       expect(sent).toBe(0);
     } finally {
       stop.abort();
@@ -625,7 +628,7 @@ test("backend stop settles HTTP while other running work finishes", async () => 
   stop.abort();
   const result = await sending;
   if (result.status !== "failed") throw result;
-  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  httpFailure.parse(result.error);
 
   expect(signal.aborted).toBe(false);
   expect(closed).toBe(false);
@@ -649,9 +652,9 @@ test("a direct graceful session close settles a hung HTTP send without stop tags
 
   const result = await sending;
   if (result.status !== "failed") throw result;
-  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  const failure = httpFailure.parse(result.error);
 
-  expect(result.error.payload).toEqual({
+  expect(failure.payload).toEqual({
     method: "POST",
     path: "/x",
     cause: { name: "AbortError", code: 20 },
@@ -676,9 +679,9 @@ test("a direct graceful root close reaches a session's hung HTTP send without st
 
   const result = await sending;
   if (result.status !== "failed") throw result;
-  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  const failure = httpFailure.parse(result.error);
 
-  expect(result.error.payload).toEqual({
+  expect(failure.payload).toEqual({
     method: "POST",
     path: "/x",
     cause: { name: "AbortError", code: 20 },
@@ -704,9 +707,9 @@ test("backendStop ends a pending HTTP send without closing its root", async () =
 
   const result = await sending;
   if (result.status !== "failed") throw result;
-  if (!isError(result.error, "HttpRequestFailed")) throw result.error;
+  const failure = httpFailure.parse(result.error);
 
-  expect(result.error.payload).toEqual({
+  expect(failure.payload).toEqual({
     method: "POST",
     path: "/x",
     cause: { name: "AbortError", code: 20 },
