@@ -1,6 +1,9 @@
 import type { Scope } from "@tinker/core";
 
-/** The host supplies inputs and owns process stop. Commands choose exit codes. */
+/**
+ * The host supplies inputs and owns process stop. A command picks its own exit codes. A startup
+ * throw exits 78 for a config error, else 1; the host maps it, so a command just lets it throw.
+ */
 export type MainContext = {
   env: Readonly<Record<string, string | undefined>>;
   args: readonly string[];
@@ -12,23 +15,13 @@ export type MainContext = {
   exit: (code: number, reason?: unknown) => void;
 };
 
+/**
+ * What `closed` gives the host: the root close results, app first, then tools. Root by root, the
+ * host exits 1 with a failed root's error, else that root's first teardown error.
+ */
+export type MainClosed = Promise<void | Scope.Result | readonly Scope.Result[]>;
+
 /** Type-only entry marker, with no startup, state, or hidden error policy. */
-export const defineMain = <R extends { closed: Promise<void> }>(
+export const defineMain = <R extends { closed: MainClosed }>(
   main: (ctx: MainContext) => Promise<R>,
 ) => main;
-
-/** @param error - From command startup; why: map only known config errors to 78. */
-export function mainErrorCode(error: unknown) {
-  if (!error || typeof error !== "object") return 1;
-  if ("kind" in error && ["MissingTag", "DataValidationFailed"].includes(String(error.kind))) {
-    return 78;
-  }
-  if ("code" in error && error.code === "ERR_INVALID_URL") return 78;
-  return 1;
-}
-
-/** @param result - From a closed root; why: surface work and cleanup errors before exit. */
-export function checkClosed(result: Scope.Result) {
-  if (result.status === "failed") throw result.error;
-  if (result.teardownErrors?.length) throw result.teardownErrors[0];
-}

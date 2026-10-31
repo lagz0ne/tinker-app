@@ -10,9 +10,6 @@ import { deliverMailBatch, outboxWake } from "~/components/mail/index.server";
 import { queueDailyDigests } from "@/backend/digest.server";
 import { runMailWorker } from "@/backend/outbox.server";
 
-// oxlint-disable-next-line import/no-relative-parent-imports -- Test the native command seam; app source aliases intentionally exclude cmds.
-import main from "../cmds/worker";
-
 // The endpoint accepts TCP then refuses PostgreSQL. It never receives mail or needs a database.
 test("worker connect attempts stay bounded across late end events and clock ticks", async () => {
   let accepts = 0;
@@ -238,33 +235,6 @@ test("digest failure logs its own event and still delivers alerts", async () => 
     stop.abort();
     await running;
     expect((await root.closed).status).toBe("success");
-  }
-});
-
-test("blank digest hour maps startup to bad-config exit 78", async () => {
-  for (const hour of ["", " "]) {
-    const stop = new AbortController();
-    const codes: number[] = [];
-    const worker = await main({
-      env: {
-        DIGEST_HOUR_UTC: hour,
-        SMTP_URL: "smtp://127.0.0.1:11026",
-        SMTP_FROM: "board@example.test",
-      },
-      args: [],
-      cwd: import.meta.dirname,
-      signal: stop.signal,
-      stdout: { write: () => {} },
-      stderr: { write: () => {} },
-      exit: (code) => {
-        codes.push(code);
-        stop.abort();
-      },
-    });
-
-    await worker.closed;
-    expect(codes).toEqual([78]);
-    stop.abort();
   }
 });
 

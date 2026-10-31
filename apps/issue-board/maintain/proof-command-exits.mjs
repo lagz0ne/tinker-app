@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { createMainHost } from "@tinker/start/main-host";
 import pg from "pg";
 import { createServer } from "vite-plus";
 
@@ -69,15 +70,11 @@ try {
     try {
       const { default: main } = await vite.ssrLoadModule(`/cmds/${trial.command}.ts`);
 
-      const stopping = new AbortController();
-
-      const codes = [];
-
       let errors = "";
 
       let output = "";
 
-      const app = await main({
+      const host = createMainHost(main, {
         env: {
           DATABASE_URL: url.href,
           SMTP_URL: "smtp://localhost:11026",
@@ -87,12 +84,13 @@ try {
           trial.command === "worker"
             ? []
             : ["--file", "proof.csv", "--team", "ENG", "--actor", "proof@example.test"],
-        signal: stopping.signal,
         stdout: {
           write(text) {
             output += text;
 
-            if (text.includes('"proof.waiting"')) stopping.abort();
+            if (text.includes('"proof.waiting"')) {
+              host.stop(130, new DOMException("SIGINT", "AbortError"));
+            }
           },
         },
         stderr: {
@@ -100,16 +98,17 @@ try {
             errors += text;
           },
         },
-        exit(code) {
-          codes.push(code);
-        },
       });
 
-      await app.closed;
+      const code = await host.closed;
 
-      assert.deepEqual(codes, trial.cancel ? [] : [trial.code], trial.name);
+      assert.equal(code, trial.cancel ? 130 : trial.code, trial.name);
 
-      if (trial.cancel) assert.equal(errors, "", trial.name);
+      if (trial.cancel) {
+        assert.equal(errors, "", trial.name);
+      } else {
+        assert(errors.startsWith(`command failed (exit ${trial.code}): ${trial.kind}: `), errors);
+      }
 
       if (trial.command === "worker") assert(output.includes("outbox worker stopped"));
 

@@ -1806,9 +1806,9 @@
           "target": "~/tests/bootstrap-read.test.ts"
         },
         {
-          "path": "tests/commands.test.ts",
+          "path": "tests/command-exits.test.mjs",
           "type": "registry:file",
-          "target": "~/tests/commands.test.ts"
+          "target": "~/tests/command-exits.test.mjs"
         },
         {
           "path": "tests/database-adapter.test.ts",
@@ -2099,11 +2099,6 @@
           "path": "maintain/proof-migration-contract-controls.mjs",
           "type": "registry:file",
           "target": "~/maintain/proof-migration-contract-controls.mjs"
-        },
-        {
-          "path": "tests/worker-telemetry-command.test.ts",
-          "type": "registry:file",
-          "target": "~/tests/worker-telemetry-command.test.ts"
         },
         {
           "path": "maintain/sqlite-dev-db.mjs",

@@ -124,17 +124,22 @@ try {
     console.log("PASS good host and broken exit control: " + trial.name);
   }
 
-  assert(server.includes("exit(1, error);"));
+  // The server returns its root close results; the host reads them. A host that skips them fails.
+  assert(server.includes("return [appEnd, await tools.closed];"));
 
-  const copy = join(directory, "server.ts");
+  const closeRead = "const [failure] = closeFailures(await app.closed);";
 
-  writeFileSync(copy, server.replace("exit(1, error);", "void error;"));
+  assert(source.includes(closeRead));
+
+  const copy = join(directory, "host.mjs");
+
+  writeFileSync(copy, source.replace(closeRead, "await app.closed; const failure = undefined;"));
 
   const run = spawnSync(
     process.execPath,
     [fileURLToPath(new URL("proof-server-close.mjs", import.meta.url))],
     {
-      env: { ...process.env, BOARD_EXIT_SERVER_COPY: copy },
+      env: { ...process.env, BOARD_EXIT_HOST_COPY: copy },
       encoding: "utf8",
       timeout: 30000,
     },
@@ -144,7 +149,7 @@ try {
 
   assert(run.stderr.includes("served server close failure must exit 1"), run.stderr);
 
-  console.log("PASS broken served-server close control: missing exit fails.");
+  console.log("PASS broken served-server close control: a host that skips close results fails.");
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }
