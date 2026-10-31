@@ -1,6 +1,6 @@
 import { createScope } from "@tinker/core";
 
-import { defineMain, mainErrorCode, checkClosed } from "~/base/main";
+import { defineMain } from "~/base/main";
 import {
   databaseSetup,
   databaseMigrationTimeout,
@@ -30,62 +30,59 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
     exit(64);
     return { closed: Promise.resolve() };
   }
+  const root = createScope({
+    signal,
+    extensions: [databaseSetup],
+    // Room for the 60 s max migration-owner wait, plus connect and DDL.
+    startTimeout: 70_000,
+    observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
+    tags: [
+      env.DATABASE_MIGRATION_TIMEOUT_MS !== undefined &&
+        databaseMigrationTimeout(Number(env.DATABASE_MIGRATION_TIMEOUT_MS)),
+      env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
+      importFile(options["--file"]!),
+      importTeam(options["--team"]!),
+      importActor(options["--actor"]!),
+    ],
+  });
   try {
-    const root = createScope({
-      signal,
-      extensions: [databaseSetup],
-      // Room for the 60 s max migration-owner wait, plus connect and DDL.
-      startTimeout: 70_000,
-      observe: { history: 32, log: (entry) => stdout.write(`${JSON.stringify(entry)}\n`) },
-      tags: [
-        env.DATABASE_MIGRATION_TIMEOUT_MS !== undefined &&
-          databaseMigrationTimeout(Number(env.DATABASE_MIGRATION_TIMEOUT_MS)),
-        env.DATABASE_URL !== undefined && databaseUrl(new URL(env.DATABASE_URL)),
-        importFile(options["--file"]!),
-        importTeam(options["--team"]!),
-        importActor(options["--actor"]!),
-      ],
-    });
-    try {
-      await root.ready;
-      root.resolve(databaseUrl);
-    } catch (error) {
-      await root.close();
-      throw error;
-    }
-    const closed = root
-      .run(runImport, { signal })
-      .then(
-        async (result) => {
-          const ended = await root.close({ graceful: true });
-          checkClosed(ended);
-          stdout.write(`Imported ${result.rows} rows; ${result.changed} changed.\n`);
-          exit(0);
-        },
-        // oxlint-disable-next-line complexity -- The command maps each typed import failure to its exit code.
-        async (error) => {
-          await root.close();
-          if (signal.aborted && error === signal.reason) return;
-
-          const kind =
-            error && typeof error === "object" && "kind" in error ? String(error.kind) : "";
-
-          const code =
-            kind === "TeamChanged"
-              ? 75
-              : ["BadInput", "InvalidAssignee", "NotTeamMember"].includes(kind)
-                ? 65
-                : 1;
-
-          exit(code, error);
-        },
-      )
-      .catch((error) => {
-        exit(1, error);
-      });
-    return { closed };
+    await root.ready;
+    root.resolve(databaseUrl);
   } catch (error) {
-    exit(mainErrorCode(error), error);
-    return { closed: Promise.resolve() };
+    await root.close();
+    throw error;
   }
+  const closed = root
+    .run(runImport, { signal })
+    .then(
+      async (result) => {
+        // The host fails the run with this result's failure; only a clean close reports rows.
+        const ended = await root.close({ graceful: true });
+        if (ended.status === "failed" || ended.teardownErrors?.length) return ended;
+        stdout.write(`Imported ${result.rows} rows; ${result.changed} changed.\n`);
+        exit(0);
+        return ended;
+      },
+      // oxlint-disable-next-line complexity -- The command maps each typed import failure to its exit code.
+      async (error) => {
+        await root.close();
+        if (signal.aborted && error === signal.reason) return;
+
+        const kind =
+          error && typeof error === "object" && "kind" in error ? String(error.kind) : "";
+
+        const code =
+          kind === "TeamChanged"
+            ? 75
+            : ["BadInput", "InvalidAssignee", "NotTeamMember"].includes(kind)
+              ? 65
+              : 1;
+
+        exit(code, error);
+      },
+    )
+    .catch((error) => {
+      exit(1, error);
+    });
+  return { closed };
 });

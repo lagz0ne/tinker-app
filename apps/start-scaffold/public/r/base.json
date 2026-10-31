@@ -32,7 +32,7 @@
       "path": "tinker/base/panics.server.ts",
       "type": "registry:file",
       "target": "~/tinker/base/panics.server.ts",
-      "content": "import { inspect } from \"node:util\";\n\n/** Report unhandled work, close through the caller, then leave with failure. */\nexport function observeServerPanics(\n  abort: (error: unknown) => void,\n  closed: Promise<void>,\n  stderr: { write(chunk: string): unknown },\n): () => void {\n  const fail = async (error: unknown) => {\n    try {\n      abort(error);\n      await closed;\n    } catch (cleanup) {\n      stderr.write(`server close failed: ${inspect(cleanup)}\\n`);\n    }\n  };\n  process.on(\"unhandledRejection\", fail);\n  return process.off.bind(process, \"unhandledRejection\", fail);\n}\n"
+      "content": "import { inspect } from \"node:util\";\n\n/** Report unhandled work, close through the caller, then leave with failure. */\nexport function observeServerPanics(\n  abort: (error: unknown) => void,\n  closed: Promise<unknown>,\n  stderr: { write(chunk: string): unknown },\n): () => void {\n  const fail = async (error: unknown) => {\n    try {\n      abort(error);\n      await closed;\n    } catch (cleanup) {\n      stderr.write(`server close failed: ${inspect(cleanup)}\\n`);\n    }\n  };\n  process.on(\"unhandledRejection\", fail);\n  return process.off.bind(process, \"unhandledRejection\", fail);\n}\n"
     },
     {
       "path": "tinker/base/panics.tsx",

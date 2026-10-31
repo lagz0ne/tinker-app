@@ -1,34 +1,9 @@
-import { createScope, type Scope } from "@tinker/core";
+import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
-import { checkClosed } from "~/base/main";
 import { observeServerPanics } from "~/base/panics.server";
 import { requestClose, requestLifetime } from "~/components/requests/lifetime.server";
 import { renderFrames } from "~/components/requests/render-lifetime.server";
-
-test("checkClosed keeps failure before teardown and accepts an empty teardown list", () => {
-  const failed = new Error("work failed");
-  const cleanup = new Error("close failed");
-  const second = new Error("later close failed");
-
-  expect(() => checkClosed({ status: "success" } as Scope.Result)).not.toThrow();
-  expect(() =>
-    checkClosed({ status: "success", teardownErrors: [] } as unknown as Scope.Result),
-  ).not.toThrow();
-  expect(() =>
-    checkClosed({
-      status: "failed",
-      error: failed,
-      teardownErrors: [cleanup],
-    } as unknown as Scope.Result),
-  ).toThrow(failed);
-  expect(() =>
-    checkClosed({
-      status: "success",
-      teardownErrors: [cleanup, second],
-    } as unknown as Scope.Result),
-  ).toThrow(cleanup);
-});
 
 for (const phase of ["work", "close"] as const) {
   test(`server panic observer reports ${phase} cleanup failure and unhooks itself`, async () => {
