@@ -6,6 +6,7 @@ import type { Sync } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
 
 import { readTodoCommand } from "@/demo/contracts/commands";
+import { readTodoChange } from "@/demo/contracts/todos-contract";
 import type { Todos } from "@/demo/contracts/todos-contract";
 import { raise } from "@/demo/errors";
 
@@ -30,6 +31,7 @@ export const changeTodo = operation({
   input: readTodoCommand,
   depends: { orm: drizzleOrm, currentUser, tx: transaction, history: eventHistory },
   run: async ({ orm, currentUser, tx, history }, { input }) => {
+    const change = readTodoChange.parse(input.change);
     const { and, asc, eq } = orm;
 
     await history.lock(tx, currentUser.id);
@@ -37,7 +39,6 @@ export const changeTodo = operation({
       return { executionId: input.executionId };
     }
 
-    const change = input.change;
     let changed = true;
     if (change.kind === "add") {
       await tx.insert(todo).values({ ownerId: currentUser.id, title: change.title });
