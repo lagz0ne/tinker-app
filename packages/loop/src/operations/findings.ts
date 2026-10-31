@@ -13,8 +13,8 @@ import { print } from "@/tags";
 export const findings = operation({
   label: "loop.findings",
   input: z.object({ open: z.boolean(), rules: z.boolean() }),
-  depends: { store, startRules, print },
-  run: ({ store: files, startRules: found, print: say }, { input }) => {
+  depends: { store, startRules, findingLine, print },
+  run: ({ store: files, startRules: found, findingLine: lineOf, print: say }, { input }) => {
     const book = input.rules ? found.read().rules : null;
     const texts = new Map(
       (book ?? []).map((rule) => [
@@ -33,7 +33,7 @@ export const findings = operation({
       }))
       .toSorted((a, b) => a.rank - b.rank);
     const lines = sorted.flatMap(({ f, rule }) => [
-      `${f.status} ${f.severity} ${findingLine(f)} (round ${f.round})`,
+      `${f.status} ${f.severity} ${lineOf.run({ input: f })} (round ${f.round})`,
       ...(book ? [`  rule: ${rule}`] : []),
       ...(f.status === "answered" ? [`  reason: ${f.reason}`] : []),
       ...(f.status === "fixed" && f.sha ? [`  fixed at ${f.sha.slice(0, 12)}`] : []),

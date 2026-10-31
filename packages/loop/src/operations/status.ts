@@ -11,8 +11,8 @@ const reviewRoundsForPerson = 3;
 /** Why the last check does not count as green for the work tree as it is now; none when it does. */
 export const checkReasons = operation({
   label: "loop.checkReasons",
-  depends: { store, git },
-  run: ({ store: files, git: answers }) => {
+  depends: { store, git, shortSha, count },
+  run: ({ store: files, git: answers, shortSha: at, count: countOf }) => {
     const last = files.lastCheck();
     if (!last) return ["no check has run; run tinker-loop check"];
 
@@ -22,14 +22,16 @@ export const checkReasons = operation({
     return [
       ...(last.sha !== head
         ? [
-            `the last check ran at ${shortSha(last.sha)}, but HEAD is ${shortSha(head)}; run tinker-loop check`,
+            `the last check ran at ${at.run({ input: last.sha })}, but HEAD is ${at.run({ input: head })}; run tinker-loop check`,
           ]
         : []),
       ...(last.sha === head && last.tree !== tree
         ? ["the tree changed since the last check; run tinker-loop check"]
         : []),
       ...(red.length > 0
-        ? [`${count(red.length, "gate")} red in the last check: ${red.join(", ")}`]
+        ? [
+            `${countOf.run({ input: { n: red.length, noun: "gate" } })} red in the last check: ${red.join(", ")}`,
+          ]
         : []),
     ];
   },
@@ -43,8 +45,10 @@ export const checkReasons = operation({
  */
 export const status = operation({
   label: "loop.status",
-  depends: { store, git, checkReasons, print },
-  run: ({ store: files, git: answers, checkReasons: checks, print: say }) => {
+  depends: { store, git, checkReasons, findingLine, shortSha, count, print },
+  run: (deps) => {
+    const { store: files, git: answers, checkReasons: checks, print: say } = deps;
+    const { findingLine: lineOf, shortSha: at, count: countOf } = deps;
     const findings = files.findings();
     const open = findings.filter((f) => f.status === "open" && f.severity === "important");
     const reviewOpen = open.filter((f) => f.source === "review");
@@ -56,18 +60,22 @@ export const status = operation({
     );
     const reasons = [
       ...checks.run(),
-      ...(open.length > 0 ? [`${count(open.length, "important finding")} open`] : []),
+      ...(open.length > 0
+        ? [`${countOf.run({ input: { n: open.length, noun: "important finding" } })} open`]
+        : []),
     ];
 
-    for (const f of open) say(`open important ${findingLine(f)}`);
+    for (const f of open) say(`open important ${lineOf.run({ input: f })}`);
     if (reasons.length === 0) {
-      say(`done: all gates green at ${shortSha(answers.headSha())}, no important finding open`);
+      say(
+        `done: all gates green at ${at.run({ input: answers.headSha() })}, no important finding open`,
+      );
       return "done" as const;
     }
 
     if (reviewOpen.length > 0 && rounds.size >= reviewRoundsForPerson) {
       say(
-        `needs a person: ${count(rounds.size, "review round")}, and ${count(reviewOpen.length, "important review finding")} still open`,
+        `needs a person: ${countOf.run({ input: { n: rounds.size, noun: "review round" } })}, and ${countOf.run({ input: { n: reviewOpen.length, noun: "important review finding" } })} still open`,
       );
       return "needsPerson" as const;
     }

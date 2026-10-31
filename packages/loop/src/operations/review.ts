@@ -18,10 +18,11 @@ import { recordReview } from "./record";
  */
 export const review = operation({
   label: "loop.review",
-  depends: { baseRef, store, git, scan, reviewer, recordReview, print, warn, stop },
+  depends: { baseRef, store, git, scan, reviewer, recordReview, summary, print, warn, stop },
   run: async (deps) => {
     const { baseRef: wanted, store: files, git: answers, scan: scanner } = deps;
-    const { reviewer: asker, recordReview: record, print: say, warn: complain } = deps;
+    const { reviewer: asker, recordReview: record, summary: summarize } = deps;
+    const { print: say, warn: complain } = deps;
     const signal = deps.stop;
     const rules = asker.rules();
     const range = scanner.range();
@@ -69,7 +70,7 @@ export const review = operation({
     say(
       `tinker-loop review, round ${recorded.round}: ${reported.length} reported, ${fixed.length} rechecked fixed`,
     );
-    for (const line of summary(recorded.merged)) say(line);
+    for (const line of summarize.run({ input: recorded.merged })) say(line);
     return "done" as const;
   },
 });

@@ -16,10 +16,10 @@ import { recordCheck } from "./record";
  */
 export const check = operation({
   label: "loop.check",
-  depends: { store, git, scan, gates, recordCheck, print, stop },
+  depends: { store, git, scan, gates, recordCheck, summary, print, stop },
   run: async (deps) => {
     const { store: files, git: answers, scan: scanner, gates: runGates } = deps;
-    const { recordCheck: record, print: say, stop: signal } = deps;
+    const { recordCheck: record, summary: summarize, print: say, stop: signal } = deps;
     files.folder();
     const before = answers.tree();
     const results = await runGates.run();
@@ -43,7 +43,7 @@ export const check = operation({
     say(
       `tinker-loop check, round ${recorded.round}: ${results.length - red.length} gates green, ${red.length} red`,
     );
-    for (const line of summary(recorded.merged)) say(line);
+    for (const line of summarize.run({ input: recorded.merged })) say(line);
     return red.length > 0 ? ("red" as const) : ("done" as const);
   },
 });

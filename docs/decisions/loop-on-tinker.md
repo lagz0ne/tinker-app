@@ -405,8 +405,10 @@ packages/loop
     appDir, baseRef, childEnv,
     reviewModel, print, warn, stop
   src/report.ts
-    the one plain helper: finding lines,
-    the summary, the severity order
+    report.findingLine, report.summary,
+    report.shortSha, report.count: the
+    lines more than one command prints,
+    and the severity and status order
   src/resources/
     processes  child groups (S4, S6)
     store      findings, rounds, last check,
@@ -684,21 +686,27 @@ In order. Each ticket is one commit or PR.
    the user approves it, and an install of a
    tarball never runs `prepare`. Doctor accepts
    either script.
-   Status: `check-plain` on the loop counts 4
+   Status: `check-plain` on the loop counts 0
    plain functions, under the cap of 17.
    CI runs it as `pnpm --dir packages/loop run
-   check-plain`, with the scaffold's script.
+check-plain`, with the scaffold's script.
 10. **Reshape for check-plain** — the closures
-   inside units become graph work.
-   - A resource returns one object; its
-     methods call each other by name.
-   - Lock work is `findingsLock.take` and
-     `release`, inside the record operations.
-   - The command line is the `commandLine`
-     resource; `runCommand` picks the command.
-   - What is left plain: the 4 report lines.
-   Verify: `check-plain` passes. The 120 frozen
-   tests are unchanged and pass.
+    inside units become graph work.
+
+- A resource returns one object; its
+  methods call each other by name.
+- Lock work is `findingsLock.take` and
+  `release`, inside the record operations.
+- The command line is the `commandLine`
+  resource; `runCommand` picks the command.
+- The 4 report lines are operations too
+  (`report.findingLine`, `report.summary`,
+  `report.shortSha`, `report.count`), so a
+  call lands on a span and `summary` names
+  `findingLine` as a dependency. Nothing is
+  left plain.
+  Verify: `check-plain` passes. The 120 frozen
+  tests are unchanged and pass.
 
 ## Decided
 
