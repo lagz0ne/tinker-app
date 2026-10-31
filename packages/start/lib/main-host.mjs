@@ -1,6 +1,8 @@
 /**
  * Host-owned command lifetime. Only the command receives exit; OS signals use stop.
  * First clean stop wins. A late thrown error is logged without changing that code.
+ * A command that throws at startup exits 78 for a config error, else 1. Its closed may
+ * resolve to root close results; the first failure among them exits 1.
  * @param {function} main - The app command.
  * @param {object} options - Host inputs (env, args, and cwd, which defaults to the process
  *   folder), start/stop hooks, and the hard-stop deadline.
@@ -132,19 +134,46 @@ async function settleMain(started, options, signal, stop) {
 
     if (!signal.aborted) await options.onStart?.(app, signal);
 
-    await app.closed;
+    const [failure] = closeFailures(await app.closed);
 
-    return false;
+    if (failure === undefined) return false;
+    stop(1, failure);
+
+    return true;
   } catch (error) {
     return failedMain(error, app, signal, stop);
   }
+}
+
+/**
+ * Root close results, in the order the command returned them: a failed root gives its error,
+ * any other root its teardown errors. A closed with no results (an older command) gives none.
+ * @param {unknown} ended - The value the command's closed resolved to.
+ */
+function closeFailures(ended) {
+  return [ended ?? []]
+    .flat()
+    .flatMap((result) =>
+      result.status === "failed" ? [result.error] : (result.teardownErrors ?? []),
+    );
+}
+
+/**
+ * Sysexits EX_CONFIG (78) for a startup error from config: a missing tag, a tag value that
+ * failed its schema, or a bad URL. Any other error exits 1.
+ * @param {unknown} error - Thrown by the command before it returned.
+ */
+function startupCode(error) {
+  if (["MissingTag", "DataValidationFailed"].includes(error?.kind)) return 78;
+
+  return error?.code === "ERR_INVALID_URL" ? 78 : 1;
 }
 
 /** Keep a late failure visible, and still join the app's cleanup when it has one. */
 async function failedMain(error, app, signal, stop) {
   let failed = !signal.aborted || error !== signal.reason;
 
-  if (failed) stop(1, error);
+  if (failed) stop(app ? 1 : startupCode(error), error);
   if (!(app?.closed instanceof Promise)) return failed;
 
   await app.closed.catch((cleanup) => {
