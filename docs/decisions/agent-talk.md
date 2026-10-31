@@ -139,10 +139,13 @@ These are Hedl's domain, not a Tinker gap:
 4. One run per talk at a time. A second
    `run` returns `busy` at once.
 
-## Not decided here
+## Settled questions
 
-- The demo template now installs the SDK
-  (it copies every component). See the L6
-  report for Duke's call on its size.
-- A CI live step needs a paid key in CI.
-  The live proof runs by hand until then.
+- Duke, 2026-10-31: "Ship it in the demo".
+  The demo template copies every component,
+  so a new demo app installs the SDK and one
+  platform binary (about 256 MB), as the
+  SQLite parts ship.
+- The live proof needs a paid key. CI has
+  none, so `test:agent-live` runs by hand.
+  With no key it prints "not run" and exits 0.
