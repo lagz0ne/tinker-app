@@ -34,10 +34,9 @@ Delete this fixture when that skill lands on next; the test then reads the skill
 - `O1` No authored classes. No live client, timer,
   queue, or watcher at module scope.
 - `O2` A resource releases its owned work with defer.
-- `O3` A plain helper is pure, has at most three plain
-  value inputs and two real callers, TSDoc,
-  and a `PLAIN.md` entry. The cap stays 17.
-- `O4` No helper takes a scope, session, context bag,
+- `O3` No plain helper functions: shared work is an
+  operation, called through `depends`.
+- `O4` No function takes a scope, session, context bag,
   controller, clock, signal, or IO object.
 - `O5` React props carry no Core handles or signals.
 
