@@ -49,7 +49,7 @@
   ```
 
   `renderFrames.retain(request, close)` now takes `close` as `(() => Promise<void>) |
-  undefined`, raises `StartScopeMissing` when it is missing, and returns it. The server entry
+undefined`, raises `StartScopeMissing` when it is missing, and returns it. The server entry
   uses the returned close.
 
 ## 0.16.1
