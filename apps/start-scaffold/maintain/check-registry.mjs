@@ -65,6 +65,7 @@ for (const name of [
   "telemetry",
   "sync",
   "mail",
+  "agent-talk",
   "demo",
   "base",
 ]) {

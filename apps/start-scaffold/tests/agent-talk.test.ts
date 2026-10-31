@@ -54,7 +54,7 @@ function talkScope(
       agentConfigDir("/data/claude"),
       agentMaxRunning(max),
     ],
-    presets: [preset(agentSdk, () => fake.sdk), preset(agentFiles, () => fake.files)],
+    presets: [preset(agentSdk, async () => fake.sdk), preset(agentFiles, async () => fake.files)],
     observe: { log: (entry) => logs.push(entry) },
   });
 }
@@ -195,7 +195,7 @@ test("R5 an API key goes as ANTHROPIC_API_KEY alone, and agentPath sets PATH", a
       agentConfigDir("/data/claude"),
       agentPath("/opt/bin:/usr/bin"),
     ],
-    presets: [preset(agentSdk, () => fake.sdk), preset(agentFiles, () => fake.files)],
+    presets: [preset(agentSdk, async () => fake.sdk), preset(agentFiles, async () => fake.files)],
   });
 
   try {
@@ -775,7 +775,9 @@ for (const graceful of [true, false]) {
 
     const closed = await root.close({ graceful });
 
-    expect(closed.status).toBe("success");
+    expect(closed.status, "Core: a forced close settles cancelled").toBe(
+      graceful ? "success" : "cancelled",
+    );
 
     expect(fake.calls.map((call) => [call.ended, call.closed])).toEqual([
       [true, 1],

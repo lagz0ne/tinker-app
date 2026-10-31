@@ -31,7 +31,7 @@ function warmScope(fake: ReturnType<typeof fakeAgentSdk>, max = 3) {
       agentConfigDir("/data/claude"),
       agentMaxRunning(max),
     ],
-    presets: [preset(agentSdk, () => fake.sdk), preset(agentFiles, () => fake.files)],
+    presets: [preset(agentSdk, async () => fake.sdk), preset(agentFiles, async () => fake.files)],
   });
 
   return { clock, root };
@@ -255,7 +255,7 @@ test("R13 run while a ping is in flight aborts it; the run's query starts after 
   };
 
   const runScript: FakeScript = async function* (kit) {
-    order.push("run started");
+    order.push(fake.calls[0]!.ended ? "run started" : "run started before the ping ended");
     yield init(kit.session);
     yield success(kit.session);
   };
@@ -401,7 +401,9 @@ for (const graceful of [true, false]) {
 
     expect(fake.calls).toHaveLength(1);
 
-    expect((await root.close({ graceful })).status).toBe("success");
+    expect((await root.close({ graceful })).status, "Core: a forced close settles cancelled").toBe(
+      graceful ? "success" : "cancelled",
+    );
 
     expect(fake.calls[0]!.ended).toBe(true);
 
