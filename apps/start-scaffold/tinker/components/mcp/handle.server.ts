@@ -66,7 +66,7 @@ export const mcpRuns = extension({
           return { status: "notDone", why: issues.join("; ") };
         }
 
-        event.log.error("mcp tool failed", { tool: call.name });
+        event.log.error("mcp tool failed", { tool: call.name, error });
 
         return { status: "notDone", why: "the tool failed." };
       });

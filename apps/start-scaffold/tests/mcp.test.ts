@@ -286,7 +286,10 @@ test("M8: any other failure says the tool failed, hides detail, and logs the too
     content: [{ type: "text", text: "Not done: the tool failed." }],
   });
   expect(JSON.stringify(reply)).not.toContain("secret");
-  expect(app.lines.filter((line) => line.attributes.tool === "boom")).toHaveLength(1);
+  const logged = app.lines.filter((line) => line.attributes.tool === "boom");
+
+  expect(logged).toHaveLength(1);
+  expect(logged[0].attributes.error).toEqual(new Error("secret detail"));
 
   await client.close();
   await app.scope.close();

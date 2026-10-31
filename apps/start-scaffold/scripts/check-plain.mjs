@@ -1025,12 +1025,23 @@ const builtinResponse = checker.resolveName("Response", undefined, ts.SymbolFlag
 assert.ok(builtinResponse, "the project must declare built-in Response");
 const responseDeclarations = new Set(builtinResponse.declarations);
 
+/** Only the body of the `handleMcp` declaration may build a reply; the rest of its file may not. */
+function insideMountedMcp(node) {
+  if (pathOf(node) !== "tinker/components/mcp/handle.server.ts") return false;
+
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (ts.isVariableDeclaration(parent)) return nameOf(parent.name) === "handleMcp";
+  }
+
+  return false;
+}
+
 function checkResponse(node) {
   const file = pathOf(node);
   if (file.startsWith("src/routes/")) return;
   if (file === "tinker/components/requests/body.server.ts") return;
   if (["tinker/base/server-entry.ts", "tinker/base/panics.tsx"].includes(file)) return;
-  if (mcpMountFiles.includes(file)) return;
+  if (insideMountedMcp(node)) return;
 
   if (nativeReference(node, responseDeclarations)) {
     fail(node, "protocol-response: replies belong to routes or the base");
@@ -1047,6 +1058,7 @@ function checkMountedAuth(node) {
   }
 }
 
+/** Any route may use `handleMcp` until the app names its one MCP route file, as auth's. */
 function checkMountedMcp(node) {
   if (mcpMountFiles.includes(pathOf(node)) || pathOf(node).startsWith("src/routes/")) return;
 
@@ -2026,6 +2038,12 @@ if (process.argv.includes("--prove")) {
       "mcp-mount-other-operation",
       "operation-wire-input",
       "const probe = operation({input: z.instanceof(Request), run: () => true});",
+      "tinker/components/mcp/handle.server.ts",
+    ],
+    [
+      "mcp-handle-response-outside",
+      "protocol-response",
+      "export const probe = () => new Response(null, { status: 405 });",
       "tinker/components/mcp/handle.server.ts",
     ],
     [
