@@ -708,6 +708,7 @@ function zodDeclaration(node, file) {
       "uuid",
       "object",
       "strictObject",
+      "looseObject",
       "literal",
       "enum",
       "array",
@@ -2793,6 +2794,11 @@ if (process.argv.includes("--prove")) {
       "module-zod-parse",
       "module-effect",
       'import {z} from "zod"; const probe = z.string().parse("x");',
+    ],
+    [
+      "zod-loose-object-allowed",
+      null,
+      'import { z } from "zod"; export const Probe = z.looseObject({ a: z.string() });',
     ],
     ...[
       "new Date()",
