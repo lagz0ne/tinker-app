@@ -6,7 +6,7 @@ import { z } from "zod";
 import { syncClient } from "~/components/sync";
 
 import { readTodoChange } from "@/demo/contracts/todos-contract";
-import { isError } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 import { todos, profile } from "@/demo/frontend/state";
 import { updateTodo } from "@/transport/todos.functions";
 
@@ -35,12 +35,19 @@ const saveTodo = operation({
   },
 });
 
+/** A todo the contract refused: the managed BadInput with its reason. */
+const badInput = z.object({
+  kind: z.literal("BadInput" satisfies Errors.Name),
+  payload: z.object({ reason: z.string() }),
+});
+
 const showFailure = operation({
   label: "todos.showFailure",
   input(error: unknown) {
     const cause = isCoreError(error, "DataValidationFailed") ? error.payload.cause : error;
-    return isError(cause, "BadInput")
-      ? cause.payload.reason
+    const refused = badInput.safeParse(cause);
+    return refused.success
+      ? refused.data.payload.reason
       : "That change did not finish. Try again or reload the page.";
   },
   depends: { flow: flow.controller },

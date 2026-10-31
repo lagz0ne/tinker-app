@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
@@ -27,9 +26,6 @@ const vite = await createServer({
       name: "proof:close-failure",
       enforce: "pre",
       transform(code, id) {
-        if (id.endsWith("/cmds/server.ts") && process.env.BOARD_EXIT_SERVER_COPY) {
-          return readFileSync(process.env.BOARD_EXIT_SERVER_COPY, "utf8");
-        }
         if (!id.endsWith("/tinker/components/database/database.server.ts")) return;
         const start = code.indexOf("export const databaseSetup =");
         const end = code.indexOf("/** The call's session", start);

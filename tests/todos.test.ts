@@ -1,4 +1,4 @@
-import { createScope, isError as isCoreError } from "@tinker/core";
+import { createScope } from "@tinker/core";
 import { test, expect } from "vite-plus/test";
 
 import { authStartup } from "~/components/auth/index.server";
@@ -11,7 +11,6 @@ import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 import { readAccount } from "@/demo/backend/auth.server";
 import { bootstrap } from "@/demo/backend/sync.server";
 import { listTodos, changeTodo } from "@/demo/backend/todos.server";
-import { raise, isError } from "@/demo/errors";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
@@ -84,7 +83,7 @@ test("two real accounts can change only their own saved todos", async () => {
 
     const adaRows = await root.run(listTodos, { tags: requestHeaders(ada) });
     const adaTodo = adaRows.at(0);
-    if (!adaTodo) raise("BadInput", { reason: "missing saved todo" });
+    if (!adaTodo) return expect.unreachable("missing saved todo");
     expect(adaRows).toEqual([{ id: adaTodo.id, title: "Write code", done: false }]);
     const graceRows = await root.run(listTodos, { tags: requestHeaders(grace) });
     expect(graceRows.map((row) => row.title)).toEqual(["Find a bug"]);
@@ -98,10 +97,11 @@ test("two real accounts can change only their own saved todos", async () => {
           input: { executionId: crypto.randomUUID(), change: input },
           tags: requestHeaders(grace),
         });
-        if (result.status !== "failed") {
-          raise("BadInput", { reason: "expected private todo refusal" });
-        }
-        if (!isError(result.error, "TodoMissing")) throw result.error;
+        expect(result).toMatchObject({
+          status: "failed",
+          kind: "error",
+          error: { kind: "TodoMissing" },
+        });
       }
     }
 
@@ -156,12 +156,18 @@ test("signed-out todo reads and writes are refused", async () => {
       input: { executionId: crypto.randomUUID(), change: { kind: "add", title: "No account" } },
       tags: requestHeaders(new Headers()),
     });
-    if (result.status !== "failed") raise("BadInput", { reason: "expected sign-in refusal" });
-    if (!isError(result.error, "SignInRequired")) throw result.error;
+    expect(result).toMatchObject({
+      status: "failed",
+      kind: "error",
+      error: { kind: "SignInRequired" },
+    });
 
     const read = await root.settle(listTodos, { tags: requestHeaders(new Headers()) });
-    if (read.status !== "failed") raise("BadInput", { reason: "expected private list refusal" });
-    if (!isError(read.error, "SignInRequired")) throw read.error;
+    expect(read).toMatchObject({
+      status: "failed",
+      kind: "error",
+      error: { kind: "SignInRequired" },
+    });
   } finally {
     stop.abort();
     expect((await root.closed).status).toBe("success");
@@ -174,9 +180,17 @@ test("todo changes reject empty titles, long titles, and caller-selected owners"
     tags: [requestBindings, tags],
     extensions: [startRequests, authStartup],
     signal: stop.signal,
+    presets: [proofDatabase, proofMail],
   });
   await root.ready;
   try {
+    await root.run(migrate);
+    const ada = readHeaders(
+      await root.run(handleAuth, {
+        input: signupRequest("Ada"),
+        tags: requestHeaders(new Headers()),
+      }),
+    );
     for (const rawInput of [
       { kind: "add", title: "   " },
       { kind: "add", title: "x".repeat(201) },
@@ -184,13 +198,16 @@ test("todo changes reject empty titles, long titles, and caller-selected owners"
     ]) {
       const result = await settleWrite(root, changeTodo, {
         rawInput: { executionId: crypto.randomUUID(), change: rawInput },
+        tags: requestHeaders(ada),
       });
-      if (result.status !== "failed") raise("BadInput", { reason: "expected input refusal" });
-      if (!isCoreError(result.error, "DataValidationFailed")) throw result.error;
-
-      const cause = result.error.payload.cause;
-      if (!isError(cause, "BadInput")) throw cause;
-      expect(cause.payload.reason).toContain("valid todo change");
+      expect(result).toMatchObject({
+        status: "failed",
+        kind: "error",
+        error: expect.objectContaining({
+          kind: "BadInput",
+          payload: { reason: "Use a title with 1 to 200 characters and a valid todo change." },
+        }),
+      });
     }
   } finally {
     stop.abort();

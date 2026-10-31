@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { extension, operation, resource, tag } from "@tinker/core";
 import { z } from "zod";
 
-import { fail } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 
 import { sqlite, sqliteFs, sqlitePath, sqliteUrl } from "./modules";
 import lastIdQuery from "./queries/last_id.sql";
@@ -105,11 +105,15 @@ export const databaseFile = resource({
   label: "database.file",
   target: "scope",
   depends: { url: databaseUrl, folder: databaseFolder, urls: sqliteUrl, paths: sqlitePath },
-  factory: async ({ url, folder, urls, paths }): Promise<string> => {
+  factory: async ({ url, folder, urls, paths }, { raise: coreRaise }): Promise<string> => {
+    const raise: Errors.Raise = coreRaise;
+
     if (typeof url !== "string") return urls.fileURLToPath(url);
 
     // A command that forgot the folder fails loud; it never opens the disk-root file.
-    if (folder === undefined) throw fail("DatabaseFolderMissing", {});
+    if (folder === undefined) {
+      return raise("DatabaseFolderMissing", {});
+    }
 
     // WHATWG reference resolution (RFC 3986 section 5) from the app folder, which pathToFileURL
     // percent-encodes: `%`, `#`, and `?` in the folder name stay part of the folder name.
@@ -345,8 +349,10 @@ export const migrate = operation({
   },
   run: async (
     { file, sqlite, fs, paths, busyTimeout, app, folder, timeout },
-    { clock, defer, signal },
+    { clock, defer, signal, raise: coreRaise },
   ) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { DatabaseSync } = sqlite;
     const connection = new DatabaseSync(file);
 
@@ -374,7 +380,9 @@ export const migrate = operation({
 
         if ((code & 0xff) !== 5) throw error;
 
-        if (clock.currentTimeMillis() >= deadline) throw fail("MigrationBusy", { timeout });
+        if (clock.currentTimeMillis() >= deadline) {
+          return raise("MigrationBusy", { timeout });
+        }
 
         await clock.sleep(Math.max(1, Math.min(50, deadline - clock.currentTimeMillis())), signal);
       }
@@ -440,8 +448,10 @@ export const transaction = resource({
   depends: { database },
   factory: async (
     { database },
-    { closing, clock, defer, signal },
+    { closing, clock, defer, signal, raise: coreRaise },
   ): Promise<Database.SessionTransaction> => {
+    const raise: Errors.Raise = coreRaise;
+
     // A call that stops before its first use must still leave the process's write turn.
     const stopped = AbortSignal.any([closing, signal]);
 
@@ -462,7 +472,9 @@ export const transaction = resource({
         }
 
         return function guardQuery(...args: unknown[]) {
-          if (state === "committed" || state === "rolledBack") throw fail("TransactionEnded", {});
+          if (state === "committed" || state === "rolledBack") {
+            return raise("TransactionEnded", {});
+          }
 
           return Reflect.apply(Reflect.get(target, key, target), target, args);
         };
@@ -472,7 +484,9 @@ export const transaction = resource({
     const tx: Database.SessionTransaction & { take(): Promise<DatabaseSync> } = {
       /** The lazy start: the first use takes the write turn, then opens the transaction. */
       async take() {
-        if (state === "committed" || state === "rolledBack") throw fail("TransactionEnded", {});
+        if (state === "committed" || state === "rolledBack") {
+          return raise("TransactionEnded", {});
+        }
 
         if (state === "idle") {
           state = "open";
@@ -482,7 +496,9 @@ export const transaction = resource({
               release = releaseTurn;
 
               // The session ended while it waited: its end opened nothing, so this must not.
-              if (state !== "open") throw fail("TransactionEnded", {});
+              if (state !== "open") {
+                return raise("TransactionEnded", {});
+              }
 
               database.client.exec("BEGIN IMMEDIATE");
 
@@ -518,7 +534,7 @@ export const transaction = resource({
       },
 
       transaction() {
-        throw fail("NestedTransaction", {});
+        return raise("NestedTransaction", {});
       },
 
       commit() {

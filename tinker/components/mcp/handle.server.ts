@@ -1,7 +1,7 @@
 import { extension, isError as isCoreError, operation, parse } from "@tinker/core";
 import { z } from "zod";
 
-import { isError, raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 
 import { sdkServerModule, sdkTransportModule, sdkTypesModule } from "./modules";
 import { mcpServer, mcpTools } from "./tools.server";
@@ -15,6 +15,12 @@ type ToolEnd =
 
 const toolCall = z.object({ name: z.string(), arguments: z.unknown() });
 
+/** A managed refusal a tool raised: its message is the reply's reason. */
+const refused = z.object({
+  kind: z.literal("Refused" satisfies Errors.Name),
+  payload: z.object({ message: z.string() }),
+});
+
 /**
  * One tool call. An operation body cannot run an operation it picks at run time, so the
  * `mcpRuns` extension answers this call: it runs the tool in the caller's layer, with the
@@ -23,7 +29,11 @@ const toolCall = z.object({ name: z.string(), arguments: z.unknown() });
 const callTool = operation({
   label: "mcp.tool",
   input: toolCall,
-  run: async (): Promise<ToolEnd> => raise("McpNotInstalled", {}),
+  run: async (_deps, { raise: coreRaise }): Promise<ToolEnd> => {
+    const raise: Errors.Raise = coreRaise;
+
+    return raise("McpNotInstalled", {});
+  },
 });
 
 /**
@@ -53,7 +63,8 @@ export const mcpRuns = extension({
         if (result.status !== "failed") return result;
 
         const { error } = result;
-        if (isError(error, "Refused")) return { status: "notDone", why: error.payload.message };
+        const refusal = refused.safeParse(error);
+        if (refusal.success) return { status: "notDone", why: refusal.data.payload.message };
 
         const cause = isCoreError(error, "DataValidationFailed") ? error.payload : undefined;
         if (cause?.label === tool.run.label && isCoreError(cause.cause, "SchemaRejected")) {

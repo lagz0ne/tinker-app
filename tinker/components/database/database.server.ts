@@ -2,7 +2,7 @@ import { extension, operation, resource, tag } from "@tinker/core";
 import type { PoolClient } from "pg";
 import { z } from "zod";
 
-import { fail } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 
 import { leaseFrom } from "./lease.server";
 import { postgres, drizzlePostgres, drizzlePgCore, drizzleMigrator, drizzleOrm } from "./modules";
@@ -223,7 +223,12 @@ export const migrate = operation({
     orm: drizzleOrm,
     timeout: databaseMigrationTimeout,
   },
-  run: async ({ database, pgCore, migrator, orm, timeout }, { clock, signal }) => {
+  run: async (
+    { database, pgCore, migrator, orm, timeout },
+    { clock, signal, raise: coreRaise },
+  ) => {
+    const raise: Errors.Raise = coreRaise;
+
     if (!database.checkout) throw new Error("Migration requires a dedicated connection");
     const lease = await database.checkout();
     const lock = orm.sql`SELECT pg_try_advisory_lock(${migrationLockKey[0]}, ${migrationLockKey[1]}) AS owned`;
@@ -244,7 +249,9 @@ export const migrate = operation({
           .object({ rows: z.array(z.object({ owned: z.boolean() })) })
           .parse(await lease.db.execute(lock));
         if (result.rows[0]!.owned) break;
-        if (clock.currentTimeMillis() >= deadline) throw fail("MigrationBusy", { timeout });
+        if (clock.currentTimeMillis() >= deadline) {
+          return raise("MigrationBusy", { timeout });
+        }
         await clock.sleep(Math.min(50, deadline - clock.currentTimeMillis()), signal);
       }
       // Checkout has completed. An abort can now destroy this exact connection.
@@ -288,8 +295,10 @@ export const transaction = resource({
   },
   factory: async (
     { database, lockTimeout, statementTimeout },
-    { defer },
+    { defer, raise: coreRaise },
   ): Promise<Database.SessionTransaction> => {
+    const raise: Errors.Raise = coreRaise;
+
     if (!database.checkout) throw new Error("Database preset must supply checkout for writes");
     let state: "idle" | "open" | "committed" | "rolledBack" = "idle";
     let starting: Promise<unknown> | undefined;
@@ -300,10 +309,14 @@ export const transaction = resource({
 
     const lease = await database.checkout({
       check() {
-        if (state === "committed" || state === "rolledBack") throw fail("TransactionEnded", {});
+        if (state === "committed" || state === "rolledBack") {
+          return raise("TransactionEnded", {});
+        }
       },
       async begin() {
-        if (state === "committed" || state === "rolledBack") throw fail("TransactionEnded", {});
+        if (state === "committed" || state === "rolledBack") {
+          return raise("TransactionEnded", {});
+        }
         if (state === "idle") {
           state = "open";
 
@@ -322,7 +335,7 @@ export const transaction = resource({
     });
     const tx = Object.assign(lease.db, {
       transaction() {
-        throw fail("NestedTransaction", {});
+        return raise("NestedTransaction", {});
       },
       commit() {
         if (state === "committed" || state === "rolledBack") return Promise.resolve();

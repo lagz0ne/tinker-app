@@ -1,10 +1,13 @@
 import { createScope } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
+import { saveProfile } from "@/demo/backend/profile.server";
+import { changeTodo } from "@/demo/backend/todos.server";
 import { readProfileCommand, readTodoCommand } from "@/demo/contracts/commands";
 import { credentials } from "@/demo/contracts/credentials";
-import { readProfileInput } from "@/demo/contracts/profile-contract";
+import { profileRefusal, readProfileInput } from "@/demo/contracts/profile-contract";
 import { readFeatureEvents, readFeatureResult, readSnapshot } from "@/demo/contracts/sync";
+import { readTodoChange, todoRefusal } from "@/demo/contracts/todos-contract";
 import { records } from "@/demo/frontend/records";
 import { counter, nameDraft, profile, profileResult, todos } from "@/demo/frontend/state";
 
@@ -20,7 +23,7 @@ test("credentials accept both modes and their name/password limits", () => {
   }
 });
 
-test("profile input trims names, rejects extra keys and keeps the exact refusal", () => {
+test("profile input trims names, rejects extra keys and names the exact refusal", () => {
   expect(readProfileInput.parse({ name: " Ada " })).toEqual({ name: "Ada" });
 
   expect(readProfileInput.parse({ name: "n".repeat(80) })).toEqual({ name: "n".repeat(80) });
@@ -31,24 +34,77 @@ test("profile input trims names, rejects extra keys and keeps the exact refusal"
     { name: "n".repeat(81) },
     { name: "Ada", extra: true },
   ]) {
-    expect(() => readProfileInput.parse(input)).toThrow(
-      expect.objectContaining({
-        kind: "BadInput",
-        payload: { reason: "Use a name with 1 to 80 letters." },
-      }),
-    );
+    expect(readProfileInput.safeParse(input).success).toBe(false);
   }
+  expect(profileRefusal).toBe("Use a name with 1 to 80 letters.");
+  expect(todoRefusal).toBe("Use a title with 1 to 200 characters and a valid todo change.");
+});
+
+test("the command schemas keep one execution ID and hand the body to its own contract", () => {
   const executionId = "00000000-0000-4000-8000-000000000001";
-  expect(readProfileCommand({ executionId, profile: { name: " Ada " } })).toEqual({
+
+  expect(readProfileCommand.parse({ executionId, profile: { name: " Ada " } })).toEqual({
     executionId,
-    profile: { name: "Ada" },
+    profile: { name: " Ada " },
   });
-  expect(() => readProfileCommand({ executionId, profile: { name: "Ada" }, extra: 1 })).toThrow();
-  expect(() => readProfileCommand({ executionId: "bad", profile: { name: "Ada" } })).toThrow();
-  expect(readTodoCommand({ executionId, change: { kind: "add", title: " Task " } })).toEqual({
+  expect(readTodoCommand.parse({ executionId, change: { kind: "add", title: " Task " } })).toEqual({
     executionId,
-    change: { kind: "add", title: "Task" },
+    change: { kind: "add", title: " Task " },
   });
+  expect(readTodoChange.parse({ kind: "add", title: " Task " })).toEqual({
+    kind: "add",
+    title: "Task",
+  });
+});
+
+test("saveProfile and changeTodo refuse a bad execution ID and an extra key at the input door", async () => {
+  const root = createScope();
+  const executionId = "00000000-0000-4000-8000-000000000001";
+
+  try {
+    for (const shape of [
+      {
+        rawInput: { executionId, profile: { name: "Ada" }, extra: 1 },
+        issue: { code: "unrecognized_keys", keys: ["extra"] },
+      },
+      {
+        rawInput: { executionId: "bad", profile: { name: "Ada" } },
+        issue: { code: "invalid_format", path: ["executionId"] },
+      },
+    ]) {
+      const refused = await root.settle(saveProfile, { rawInput: shape.rawInput });
+      if (refused.status !== "failed") return expect.unreachable("expected a shape refusal");
+
+      expect(refused.error).toMatchObject({
+        kind: "DataValidationFailed",
+        payload: {
+          label: "saveProfile",
+          cause: {
+            kind: "SchemaRejected",
+            payload: { issues: [expect.objectContaining(shape.issue)] },
+          },
+        },
+      });
+    }
+
+    const todo = await root.settle(changeTodo, {
+      rawInput: { executionId, change: { kind: "add", title: "Fine" }, extra: 1 },
+    });
+    if (todo.status !== "failed") return expect.unreachable("expected a shape refusal");
+
+    expect(todo.error).toMatchObject({
+      kind: "DataValidationFailed",
+      payload: {
+        label: "changeTodo",
+        cause: {
+          kind: "SchemaRejected",
+          payload: { issues: [expect.objectContaining({ code: "unrecognized_keys" })] },
+        },
+      },
+    });
+  } finally {
+    await root.close();
+  }
 });
 
 test("feature events preserve each change and result variant", () => {

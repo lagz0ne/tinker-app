@@ -2,14 +2,18 @@ import { operation, resource } from "@tinker/core";
 
 import { principal } from "~/components/auth/index.server";
 
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 
 export const currentUser = resource({
   label: "request.currentUser",
   target: "session",
   depends: { principal },
-  factory: async ({ principal }) => {
-    if (principal === null) raise("SignInRequired", {});
+  factory: async ({ principal }, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
+    if (principal === null) {
+      return raise("SignInRequired", {});
+    }
     return principal;
   },
 });

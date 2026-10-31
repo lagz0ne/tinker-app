@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { Database } from "~/components/database-sqlite/index.server";
 import { transaction } from "~/components/database-sqlite/index.server";
-import { raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 import type { Sync } from "~/components/sync-sqlite/envelopes";
 
 import bumpStream from "./queries/bump_stream.sql";
@@ -28,101 +28,107 @@ type Execution = {
  */
 export const eventHistory = resource({
   label: "sync.history",
-  factory: () => ({
-    async read(tx: Database.SessionTransaction, id: string) {
-      const row = readStream.runSync(await tx.db(), { id });
+  factory: (_deps, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
 
-      if (!row) raise("StreamMissing", {});
+    return {
+      async read(tx: Database.SessionTransaction, id: string) {
+        const row = readStream.runSync(await tx.db(), { id });
 
-      return row.revision;
-    },
-    async lock(tx: Database.SessionTransaction, id: string) {
-      const connection = await tx.db();
+        if (!row) return raise("StreamMissing", {});
 
-      // No `FOR UPDATE`: the write turn already makes this the only writer of the stream row.
-      insertStream.runSync(connection, { id });
+        return row.revision;
+      },
+      async lock(tx: Database.SessionTransaction, id: string) {
+        const connection = await tx.db();
 
-      const row = readStream.runSync(connection, { id });
+        // No `FOR UPDATE`: the write turn already makes this the only writer of the stream row.
+        insertStream.runSync(connection, { id });
 
-      if (!row) raise("StreamMissing", {});
+        const row = readStream.runSync(connection, { id });
 
-      return row.revision;
-    },
-    async find(
-      tx: Database.SessionTransaction,
-      id: string,
-      owner: string,
-    ): Promise<Execution | undefined> {
-      const row = readExecution.runSync(await tx.db(), { id });
+        if (!row) return raise("StreamMissing", {});
 
-      if (row && row.stream !== owner) raise("StreamDenied", {});
+        return row.revision;
+      },
+      async find(
+        tx: Database.SessionTransaction,
+        id: string,
+        owner: string,
+      ): Promise<Execution | undefined> {
+        const row = readExecution.runSync(await tx.db(), { id });
 
-      if (!row) return undefined;
+        if (row && row.stream !== owner) {
+          return raise("StreamDenied", {});
+        }
 
-      return {
-        id: row.id,
-        stream: row.stream,
-        notification: row.notification === null ? null : JSON.parse(row.notification),
-        result: row.result === null ? null : JSON.parse(row.result),
-      };
-    },
-    async append(
-      tx: Database.SessionTransaction,
-      owner: string,
-      executionId: string,
-      payloads: Sync.Payload[],
-    ) {
-      const connection = await tx.db();
+        if (!row) return undefined;
 
-      const row = bumpStream.runSync(connection, { count: payloads.length, id: owner });
-
-      if (!row) raise("StreamMissing", {});
-
-      const first = row.revision - payloads.length + 1;
-
-      // The committed insert wakes every listener; a rolled-back append wakes nobody.
-      payloads.forEach((payload, offset) => {
-        insertEvent.runSync(connection, {
-          stream: owner,
-          revision: first + offset,
-          execution_id: executionId,
-          payload: JSON.stringify(payload),
-        });
-      });
-
-      for (const payload of payloads) {
-        if (payload.kind !== "result") continue;
-
-        writeResult.runSync(connection, {
-          id: executionId,
-          result: JSON.stringify(payload.result ?? null),
-        });
-      }
-
-      await tx.notify("start_sync", "sync_event");
-    },
-    /** The events a replay frame reads, the replacement for the Postgres `event` table. */
-    async events(
-      tx: Database.SessionTransaction,
-      owner: string,
-      after: number,
-    ): Promise<Sync.Event[]> {
-      const rows = readEvents.runSync(await tx.db(), { stream: owner, after });
-
-      const events: Sync.Event[] = [];
-
-      for (const row of rows) {
-        events.push({
+        return {
+          id: row.id,
           stream: row.stream,
-          revision: row.revision,
-          executionId: row.execution_id,
-          payload: JSON.parse(row.payload) as Sync.Payload,
-        });
-      }
+          notification: row.notification === null ? null : JSON.parse(row.notification),
+          result: row.result === null ? null : JSON.parse(row.result),
+        };
+      },
+      async append(
+        tx: Database.SessionTransaction,
+        owner: string,
+        executionId: string,
+        payloads: Sync.Payload[],
+      ) {
+        const connection = await tx.db();
 
-      return events;
-    },
-  }),
+        const row = bumpStream.runSync(connection, { count: payloads.length, id: owner });
+
+        if (!row) return raise("StreamMissing", {});
+
+        const first = row.revision - payloads.length + 1;
+
+        // The committed insert wakes every listener; a rolled-back append wakes nobody.
+        payloads.forEach((payload, offset) => {
+          insertEvent.runSync(connection, {
+            stream: owner,
+            revision: first + offset,
+            execution_id: executionId,
+            payload: JSON.stringify(payload),
+          });
+        });
+
+        for (const payload of payloads) {
+          if (payload.kind !== "result") continue;
+
+          writeResult.runSync(connection, {
+            id: executionId,
+            result: JSON.stringify(payload.result ?? null),
+          });
+        }
+
+        await tx.notify("start_sync", "sync_event");
+      },
+      /** The events a replay frame reads, the replacement for the Postgres `event` table. */
+      async events(
+        tx: Database.SessionTransaction,
+        owner: string,
+        after: number,
+      ): Promise<Sync.Event[]> {
+        const rows = readEvents.runSync(await tx.db(), { stream: owner, after });
+
+        const events: Sync.Event[] = [];
+
+        for (const row of rows) {
+          events.push({
+            stream: row.stream,
+            revision: row.revision,
+            executionId: row.execution_id,
+            payload: JSON.parse(row.payload) as Sync.Payload,
+          });
+        }
+
+        return events;
+      },
+    };
+  },
 });
 
 /** Better Auth awaits this idempotent insert after its own user transaction. */

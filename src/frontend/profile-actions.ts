@@ -4,7 +4,7 @@ import { z } from "zod";
 import { syncClient } from "~/components/sync";
 
 import { readProfileInput } from "@/demo/contracts/profile-contract";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 import { nameDraft, pending, notice, profileResult } from "@/demo/frontend/state";
 import { updateProfile, retryProfileNotification } from "@/transport/profile.functions";
 
@@ -21,7 +21,12 @@ export const saveName = operation({
     notice: notice.controller,
     result: profileResult.controller,
   },
-  run: async ({ sync, draft, pending, notice, result }, { defer, random, input, signal }) => {
+  run: async (
+    { sync, draft, pending, notice, result },
+    { defer, random, input, signal, raise: coreRaise },
+  ) => {
+    const raise: Errors.Raise = coreRaise;
+
     pending.set(true);
     notice.set("");
     defer(() => pending.set(false));
@@ -34,7 +39,11 @@ export const saveName = operation({
     );
 
     result.set({ executionId, result: completed });
-    if (completed.kind === "failed") raise("WriteRejected", { message: completed.message });
+    if (completed.kind === "failed") {
+      return raise("WriteRejected", {
+        message: completed.message,
+      });
+    }
 
     draft.set(undefined);
     notice.set(

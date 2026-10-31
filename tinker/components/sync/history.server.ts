@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { database, drizzleOrm } from "~/components/database/index.server";
 import type { Database } from "~/components/database/index.server";
-import { raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 import type { Sync } from "~/components/sync/envelopes";
 import { stream, event, execution } from "~/components/sync/schema";
 
@@ -14,23 +14,27 @@ import { stream, event, execution } from "~/components/sync/schema";
 export const eventHistory = resource({
   label: "sync.history",
   depends: { orm: drizzleOrm },
-  factory: async ({ orm }) => {
+  factory: async ({ orm }, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { eq, sql } = orm;
     return {
       async read(tx: Database.Transaction, id: string) {
         const [row] = await tx.select().from(stream).where(eq(stream.id, id));
-        if (!row) raise("StreamMissing", {});
+        if (!row) return raise("StreamMissing", {});
         return row.revision;
       },
       async lock(tx: Database.Transaction, id: string) {
         await tx.insert(stream).values({ id }).onConflictDoNothing();
         const row = (await tx.select().from(stream).where(eq(stream.id, id)).for("update")).at(0);
-        if (!row) raise("StreamMissing", {});
+        if (!row) return raise("StreamMissing", {});
         return row.revision;
       },
       async find(tx: Database.Transaction, id: string, owner: string) {
         const row = (await tx.select().from(execution).where(eq(execution.id, id))).at(0);
-        if (row && row.stream !== owner) raise("StreamDenied", {});
+        if (row && row.stream !== owner) {
+          return raise("StreamDenied", {});
+        }
         return row;
       },
       async append(
@@ -46,7 +50,7 @@ export const eventHistory = resource({
             .where(eq(stream.id, owner))
             .returning()
         ).at(0);
-        if (!row) raise("StreamMissing", {});
+        if (!row) return raise("StreamMissing", {});
         await tx.insert(event).values(
           payloads.map((payload, offset) => ({
             stream: owner,

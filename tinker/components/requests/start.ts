@@ -1,8 +1,8 @@
 import { createMiddleware } from "@tanstack/react-start";
-import { extension } from "@tinker/core";
+import { extension, operation } from "@tinker/core";
 import type { Scope } from "@tinker/core";
 
-import { raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 
 import { responseBodies } from "./body.server";
 import { requestHeaders } from "./headers.server";
@@ -16,12 +16,29 @@ declare module "@tanstack/react-start" {
   }
 }
 
+/** A request that already carries a session went through this middleware twice. */
+const sessionTaken = operation({
+  label: "request.sessionTaken",
+  run: (_deps, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
+    return raise("StartSessionAlreadySet", {});
+  },
+});
+
 /** This root middleware uses only fetch context, before global middleware has run. */
 const middleware = createMiddleware().server(async ({ context, request, next }) => {
-  if ("session" in context && context.session !== undefined) raise("StartSessionAlreadySet", {});
-
   const scope = context.scope;
-  if (scope === undefined) raise("StartScopeMissing", {});
+  // No scope means no Core ctx and nothing to run on, so this one check builds the managed
+  // error Core's raise makes.
+  if (scope === undefined) {
+    throw Object.assign(new Error("StartScopeMissing"), {
+      kind: "StartScopeMissing",
+      payload: {} satisfies Errors.Payloads["StartScopeMissing"],
+    });
+  }
+
+  if ("session" in context && context.session !== undefined) scope.run(sessionTaken);
 
   const session = scope.createSession({
     tags: [

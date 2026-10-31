@@ -1,7 +1,7 @@
 import { operation, resource } from "@tinker/core";
 import type { Operation } from "@tinker/core";
 
-import { fail, raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 import { accountOwner } from "~/components/sync-sqlite/client/owner";
 import type { Sync } from "~/components/sync-sqlite/envelopes";
 import { readBatchSlot, readBootstrapSlot, syncStartup } from "~/components/sync-sqlite/slots";
@@ -13,18 +13,27 @@ import { readBatchSlot, readBootstrapSlot, syncStartup } from "~/components/sync
 export const syncClient = resource({
   label: "sync.client",
   depends: { owner: accountOwner, records: syncStartup },
-  factory: ({ owner, records: appRecords }, { defer, log, clock }) => {
-    if (appRecords === undefined) raise("StreamMissing", {});
+  factory: ({ owner, records: appRecords }, { defer, log, clock, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
+    if (appRecords === undefined) {
+      return raise("StreamMissing", {});
+    }
     const records: Sync.Records = appRecords;
     let accountId: string | null = null;
     const cursors = new Map<string, number>();
     cursors.set("public", -1);
     const local = new Set<string>();
     const results = new Map<string, Sync.Result>();
-    const waiters = new Map<string, ReturnType<typeof Promise.withResolvers<Sync.Result>>>();
+    // A cancelled wait resolves this mark; `wait` raises Cancelled with the client's own ctx.
+    const cancelled = Symbol("sync.waitCancelled");
+    const waiters = new Map<
+      string,
+      ReturnType<typeof Promise.withResolvers<Sync.Result | typeof cancelled>>
+    >();
 
     defer(() => {
-      for (const waiting of waiters.values()) waiting.reject(fail("Cancelled", {}));
+      for (const waiting of waiters.values()) waiting.resolve(cancelled);
       waiters.clear();
       results.clear();
       local.clear();
@@ -50,7 +59,7 @@ export const syncClient = resource({
         accountId = null;
         records.resetPrivate();
 
-        for (const waiting of waiters.values()) waiting.reject(fail("Cancelled", {}));
+        for (const waiting of waiters.values()) waiting.resolve(cancelled);
         waiters.clear();
         results.clear();
         local.clear();
@@ -96,17 +105,23 @@ export const syncClient = resource({
         }
       },
       async wait(executionId: string, version: number, signal: AbortSignal): Promise<Sync.Result> {
-        if (version !== owner.version() || signal.aborted) raise("Cancelled", {});
+        if (version !== owner.version() || signal.aborted) {
+          return raise("Cancelled", {});
+        }
         const completed = results.get(executionId);
         if (completed) return completed;
 
-        const waiting = Promise.withResolvers<Sync.Result>();
+        const waiting = Promise.withResolvers<Sync.Result | typeof cancelled>();
         waiters.set(executionId, waiting);
-        const stop = () => waiting.reject(fail("Cancelled", {}));
+        const stop = () => waiting.resolve(cancelled);
         signal.addEventListener("abort", stop, { once: true });
 
         try {
-          return await waiting.promise;
+          const result = await waiting.promise;
+          if (result === cancelled) {
+            return raise("Cancelled", {});
+          }
+          return result;
         } finally {
           signal.removeEventListener("abort", stop);
           waiters.delete(executionId);
@@ -129,7 +144,9 @@ export const syncClient = resource({
         local.add(executionId);
         try {
           for (;;) {
-            if (signal.aborted) raise("Cancelled", {});
+            if (signal.aborted) {
+              return raise("Cancelled", {});
+            }
             let reply: Sync.Reply;
             try {
               reply = await request.send({ data: request.data, signal });
@@ -139,10 +156,16 @@ export const syncClient = resource({
               await clock.sleep(500, signal);
               continue;
             }
-            if (reply.kind === "rejected") raise("WriteRejected", { message: reply.message });
+            if (reply.kind === "rejected") {
+              return raise("WriteRejected", {
+                message: reply.message,
+              });
+            }
 
             const result = await client.wait(executionId, token.version, signal);
-            if (signal.aborted) raise("Cancelled", {});
+            if (signal.aborted) {
+              return raise("Cancelled", {});
+            }
             return result;
           }
         } finally {

@@ -41,7 +41,7 @@ Imports omit TypeScript file endings. Keep blank-line steps in function bodies.
 Choose tags for fixed inputs, data for changing records, resources for owned clients,
 and operations for actions. Read [AGENTS.md](AGENTS.md) and the copied skills before editing.
 No module owns an app scope outside commands or copied entry code.
-The plain-function cap is 17. Only named entry functions have exceptions.
+App code has no plain helper functions. Only named entry functions have exceptions.
 Only cmds/router.ts#getRouter and cmds/server.ts#main have approved cmd entry exceptions; no component or src function is skipped.
 
 ## Command wiring
@@ -199,7 +199,7 @@ From the workspace root, copy both templates into a new empty output folder:
 node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
-Default exports pin the released Start 0.16.1 host and its matching registry.
+Default exports pin the released Start 0.17.0 host and its matching registry.
 Start 0.9.0 cannot run these templates. Local proofs pass an explicit current
 host pack; the export carries it in vendor and checks its host files against
 this source. Nothing is published.
@@ -270,7 +270,7 @@ Their resources own and close the connection.
 
 `npm start` uses the `tinker serve` host from the `@tinker/start` dev dependency.
 Keep dev dependencies installed on the server; an `npm install --omit=dev` install cannot start it.
-Templates use the Start 0.16.1 contract. Default installs use its released host
+Templates use the Start 0.17.0 contract. Default installs use its released host
 and registry.
 Local registry proofs use a packed Start through `TINKER_PACKAGE_DIR`.
 The standalone export proof supplies a current host pack explicitly.

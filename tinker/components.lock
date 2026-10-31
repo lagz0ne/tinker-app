@@ -8,7 +8,7 @@
         "tinker/components/agent-talk/settings.ts": "1f319d7951d4050a2e2df765f40b4c64a0b8930d043f03f21b549393a1d5010f",
         "tinker/components/agent-talk/talk.server.ts": "a3ef829d5f4d7bbf8c4d63104420b1c674dbffdd5011dab050a580d83c02cf58"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "auth": {
       "files": {
@@ -19,9 +19,9 @@
         "tinker/components/auth/modules.ts": "d3dc2ef6b058ec765223138b6da0a7329763eddf4d36ec698803aa403deaf39d",
         "tinker/components/auth/schema.server.ts": "eb3402a0de9230a3c707a22f573d5df940d0719c607c13f71cf54ff562099f49",
         "tinker/components/auth/settings.server.ts": "b254eacae87972f0f269adced235db04f0e2ecab8d3ab4003b36e175fd692d2e",
-        "tinker/components/auth/stream.server.ts": "379a8c3bbaf0fd16e8e503cd15e2334bce1c7828226d8c392a65c939b8c4ee28"
+        "tinker/components/auth/stream.server.ts": "d08ca9a22c7432924c721e313ff57a886f80f874db5b3897002a7339990532e7"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "auth-sqlite": {
       "files": {
@@ -37,16 +37,16 @@
         "tinker/components/auth-sqlite/plugins.server.ts": "821ffb6c95732b106210af1e67a8077acc4ee3b7b1ade61613dd0f9535c678de",
         "tinker/components/auth-sqlite/queries/read_frame.sql": "9ec38b9ff4053ffc34edb4a57bc8aaace365be1a01134655dee48cc7a2d2ec8c",
         "tinker/components/auth-sqlite/settings.server.ts": "402b8fdc01164c2f76ef3130739c88b6f567baded2743222e09ea285157e47fb",
-        "tinker/components/auth-sqlite/signin.server.ts": "4d5a9e3f93c1200522d5e5edff376273178c10498267c8a7712d5fce637953cf",
-        "tinker/components/auth-sqlite/stream.server.ts": "37d0b6658d7d088ec21008d157612065b2d7b5dec99766d87888066675229563"
+        "tinker/components/auth-sqlite/signin.server.ts": "cbeb6fbed0c587434228f0629036501a8a0e9f36c52cad6022ec119edbcb032c",
+        "tinker/components/auth-sqlite/stream.server.ts": "e4591479fe7a3cf95b9734d5a691b976242d9536bd7d21a21619aa0f639a08cd"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "blobs-sqlite": {
       "files": {
         "sqlite/migrations/20261031000000_blobs.sql": "2bbe2f0e7dc8ac1d3e58dc4e17ade3b793cbb94ac40a176f681d33f9eab7e558",
-        "tinker/components/blobs-sqlite/blobs.server.ts": "d25f81a8ebbdde4a425fd52500352666ec3c03e1186f154610790d23f54e512b",
-        "tinker/components/blobs-sqlite/bytes.server.ts": "1974553ff1e228904f16cab4d3179524bcf44e3e9ca7de1601cd94c55eb34d8f",
+        "tinker/components/blobs-sqlite/blobs.server.ts": "79aa6b6d09ac46f13b1df59de8f5d24da45a6b6c0a1614af3f2ee26b47dec6ba",
+        "tinker/components/blobs-sqlite/bytes.server.ts": "c3f37c328653d2948805c67cdc86e2ea13cd0a10fbc1f80c941f66e77c141f7a",
         "tinker/components/blobs-sqlite/component.json": "96184df06865c17e501d3f13ca70ca2121cb722869a4a02125280a7b96430d6f",
         "tinker/components/blobs-sqlite/index.server.ts": "5fd5be81148b90130f7c3e8c22b664cb09c9908e82f057c352e2359e1da55388",
         "tinker/components/blobs-sqlite/modules.ts": "bc250a7d7478c676a22cc68cf8edfa74dcc25eb96fc878a9693ffb2048cbff97",
@@ -59,26 +59,26 @@
         "tinker/components/blobs-sqlite/queries/read_slot.sql": "5d4e387d71d642473e6c6b4baa90c3bbd69be3ad609ca2c8bbc9829986cec130",
         "tinker/components/blobs-sqlite/tags.ts": "101365120d928daa0a9edc88be9dae6e5617f696e4dfa4fc9b85d0434984fa61"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "database": {
       "files": {
         "tinker/components/database/component.json": "92f04a2d814a3e5c806d23b255ed7e34c7e96b7feff28366efac327de1ccd8db",
-        "tinker/components/database/database.server.ts": "e5deb6b63a86886d5799284acdd24a616ce4a9da24cb5066d68605d55e7858c0",
+        "tinker/components/database/database.server.ts": "1cc99cf24123b76a70d774f1a31d24a8d176432747f750b0160987f98435ea53",
         "tinker/components/database/index.server.ts": "f9701be901183d22728835cbd50f9ac76de1ef7ac4cc5e1fdf327032ee0abb9a",
         "tinker/components/database/index.ts": "757a6f572a3300f9541f23253b51ca66d49af115e550eeadf53bbd3da6755d4e",
         "tinker/components/database/lease.server.ts": "646dcb3b876f221a80e776452b96bf8b1fb596a4adaffce1dd9123ea22c77755",
         "tinker/components/database/modules.ts": "fad53ded30ff3a435f3d503a6129bfdfe25df77ae735b9f72dfe4ee26c92685f",
         "tinker/components/database/types.ts": "d8a75664ce3337e67c491b67287c5f1b1c536368af6ee2fa4c7cbb01b9532229"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "database-sqlite": {
       "files": {
         "maintain/sqlite-dev-db.mjs": "cb89de790bf6526f1e1c91a4adc8163f15c11a0decf5a6243fc1a38f512a3a2d",
         "sqlite/migrations/20261028000000_start_notify.sql": "e24bbff0c423b47d69cbc7916e3a4344ebba98003638c0f25a1166a19925b130",
         "tinker/components/database-sqlite/component.json": "92f04a2d814a3e5c806d23b255ed7e34c7e96b7feff28366efac327de1ccd8db",
-        "tinker/components/database-sqlite/database.server.ts": "3ec287913eabd5d6f80e03e3e59e8090249803308406d8fe848259a3b39db23e",
+        "tinker/components/database-sqlite/database.server.ts": "62df7441efc4519c79e01174059304a5130b3cae07b30a17d111fde29be879c5",
         "tinker/components/database-sqlite/index.server.ts": "9e113b8e5dfdd3d4fdbd59fcb1ef31fec29da6187c6bbf31815dfa76e3234f2c",
         "tinker/components/database-sqlite/index.ts": "757a6f572a3300f9541f23253b51ca66d49af115e550eeadf53bbd3da6755d4e",
         "tinker/components/database-sqlite/modules.ts": "9a1c977114aea1ab8178baea521b5645fe6c430fe9f66623159a3311f1f8e724",
@@ -89,33 +89,33 @@
         "tinker/components/database-sqlite/sql.d.ts": "53d63f415ba94b2bbb9c712a358ad99ee10cbb7189786eb56d0181b90f774c7c",
         "tinker/components/database-sqlite/types.ts": "b7a3bd9d43c9abb2ef5329c239cb694f8adf891e42f326a9f6e2ac2e2bdb14db"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "errors": {
       "files": {
         "tinker/components/errors/component.json": "848d04cf28232878bb5bcee9e2825d509d2839b2d97d2fd489d6032506778624",
-        "tinker/components/errors/errors.ts": "b424b0bc1849435b8b904fd4fdff48f5c2f259b4000050f471785cbacdf6143b",
-        "tinker/components/errors/index.ts": "5d62a81540ba7520ab11df97092550befa7e2c56bf988258fcf3a5660f0597af"
+        "tinker/components/errors/errors.ts": "e2e1875025c7a21c6d9143cabede37df83fc184acaf79008d7ab0d09982b24e3",
+        "tinker/components/errors/index.ts": "daf3665b3372ed347bcf7d581dfe74ef619a4d98222531fdcd4084fd5d2b50fa"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "health": {
       "files": {
         "tinker/components/health/component.json": "d98b7295d38f255ee0a9a25a1e586f3a368d85b4e0a2805ca1bcee016ec63ec0",
-        "tinker/components/health/health.ts": "bdd5d0fc7dfb121c86df9f62de79321db11c8a1a3af1a450f7c0e5fa1228ef26",
+        "tinker/components/health/health.ts": "799f9753bd90c0e3160a35dfbf27e1ecb88a5f7629194b7bdbd2ae7c53f21f29",
         "tinker/components/health/index.ts": "685abcc6e83c98156e779d500034687486bd1bf6c231586a277b836316a0a28d"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "http": {
       "files": {
         "tinker/components/http/backend.ts": "f627154e4e6bd988c98d3913ff4d7a7ce80a66cf980aca437d06a00c1049f420",
         "tinker/components/http/component.json": "5042fd3eef6d43a0daa3803b370ff15e018c44206af63b627c7c66279ddbf6fd",
-        "tinker/components/http/http.server.ts": "bbf2248a912f1a5bb0188c4ff177e28a838e0137a301200715422900af29ed67",
+        "tinker/components/http/http.server.ts": "3416b02466472b3f425e4703daad40d2d4b50b352f8559e3a1ebcfbb8549a9e7",
         "tinker/components/http/index.server.ts": "1f5a396ebe9bdfe8820d31b6f00b1e7ae3d9a1166af0e1a370b5929c638813c2",
         "tinker/components/http/index.ts": "296f86524c80069a4de1d7eb5f8387a97cdc53ed7ac8a2f1336592fadf7ac222"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "mail": {
       "files": {
@@ -132,57 +132,57 @@
         "tinker/components/mail/settings.ts": "20beab20accd0915677f6dccaa54a61499ad6d4ae7daa6c8d37c6bb62678251a",
         "tinker/components/mail/sockets.server.ts": "c7f0d754ef8b59fa53b11d2fa45d5f05495215ceb40966dfdc7767cc6cface52"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "mcp": {
       "files": {
         "tinker/components/mcp/component.json": "2c82f99a429fa1c1ebb63d1e180543fc96d6378671982c256b99f2adc519cbb3",
-        "tinker/components/mcp/handle.server.ts": "1611c3ed38f969d12abcee7df5349ce45caf666dc853b4ba31728a4c5e8ed131",
+        "tinker/components/mcp/handle.server.ts": "1dec9dcc23964518414cb910e101a9b06f1cc20c8621cfb374eb64ffb014c0cc",
         "tinker/components/mcp/index.server.ts": "5f1d26398120f9783ffd65b2315c453fdc3bb88146e58bf47eb9ef02b16de60a",
         "tinker/components/mcp/modules.ts": "83978a6d423f5b048efaf22788f1166fcc119115b7ab4bd30052c920d405c92c",
         "tinker/components/mcp/tools.server.ts": "ad226e33d8dd7226c988314a89da472c64fe0a763788884fe58072ae501d335f"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "requests": {
       "files": {
         "tinker/components/requests/body.server.ts": "527b368986b86f6ef645090c3a4fe11d7d3a069d3bfd90379a4a8fd0def0dbad",
         "tinker/components/requests/component.json": "2c82f99a429fa1c1ebb63d1e180543fc96d6378671982c256b99f2adc519cbb3",
         "tinker/components/requests/headers.server.ts": "c0c61aec5fa321ee7e1663a50ea481d218663ef0ab112a5b31e9a5610f6d86ce",
-        "tinker/components/requests/index.server.ts": "8a0038646644d9c9d9d75decc2beff7863262c13acb6f3d0379d75f370bbf81e",
+        "tinker/components/requests/index.server.ts": "f1b2fbb0ab45147038727bcdf47e8c89d6a672f7e9daa6a57a328c3f8002b0b1",
         "tinker/components/requests/index.ts": "2dfd80c4eb99de8bb1fe478a3e609618de317c2fa047aa99ac1288cbb787e09a",
         "tinker/components/requests/lifetime.server.ts": "37fa324b4a7cce3f05e5dc0b038a00b8dbcb8599e8b844ac8b85bc02fc58cd66",
         "tinker/components/requests/lifetime.ts": "18ce37d2c18164d439abbfc7fa74c3f57e089a77031d3e1d3f4089c714bcc420",
         "tinker/components/requests/modules.server.ts": "cebe44e4e06a6d8c0fb762018e128b20cc7dd6126a59a99abcdc691f8e69ef74",
-        "tinker/components/requests/render-lifetime.server.ts": "7bc4dd2bb6b19853a555cb34b8ff084fed8ef36d2816848b2f3cc317517cd38a",
+        "tinker/components/requests/render-lifetime.server.ts": "ad10af5657f3c322f55bbce7556b34ab5620d6d921d473629fae4dc289a03a82",
         "tinker/components/requests/request-body.server.ts": "fe58e9d6d21926270ee1b18b6f0f5bf67a72186cc918a101c498cb48bdbfab4f",
-        "tinker/components/requests/result.server.ts": "086cb645e8bcb34757adf2fa32e4a8f1feb865008af56a62caba16df52b55541",
-        "tinker/components/requests/start.ts": "458fc6e7f5dc647a39ad4e8de3782a9b8d55f206c2b1d549dab76dfe0bad39d9"
+        "tinker/components/requests/result.server.ts": "b6b56fd4615fe3d60364fb38d5f7657b55ac06df8469ad1e6d95e2a1b4252c78",
+        "tinker/components/requests/start.ts": "c62c213b2d53a3aea2c14cdbaa4bc025d612774afa53aa44100a767ece7ae352"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "sync": {
       "files": {
         "tinker/components/sync/client/events.ts": "6a538897a3653a5891de67745d853bb3f4ca47c44ec529d1598db79fc6e0685b",
         "tinker/components/sync/client/owner.ts": "1b20395144da88808a93504247695e443836b6eb8fa8e40dd671e61ab5919e64",
         "tinker/components/sync/client/router.ts": "e5803162c694cdd699666958a1085857291bdaa420d3383633b3e39c1707935a",
-        "tinker/components/sync/client/sync.ts": "a4631dff45b3d6bca0d660a5e5dadf93f1d0e5716177f8d2da8b5f446c090664",
+        "tinker/components/sync/client/sync.ts": "29058642848238186afb0abe8d6ef7874680dba59ea1c18d4cadadf4e739b1f8",
         "tinker/components/sync/client/tab.ts": "2fbcb1309df68d22ef9980a7449470f8273a716b2550c6b8fce76554489316e0",
         "tinker/components/sync/component.json": "37ee6920ae9144b9c59dc20c61d759d3a4a5164f4e64b97083fb205bf168ffc7",
         "tinker/components/sync/envelopes.ts": "2d25b2e23eee50b24afde735a19032b8415100004556fbb342875142d23de059",
-        "tinker/components/sync/functions.ts": "8657a27ed2a8cca7129ad7cd312a09e2db0588e32d8bcbcd92d983b8dcf43a2f",
-        "tinker/components/sync/history.server.ts": "ddef88344d9a3f76bbab49fb782555207b57638d965979c7ee47c95cd2bea9a2",
+        "tinker/components/sync/functions.ts": "32cbe2430e02eb3068fccdf165cba191541efc7128c3fec059fbdc4b1f81a98f",
+        "tinker/components/sync/history.server.ts": "b9cf78e53e37bd0e7583b42788afd686afd1b15fc6cf41e9b4f03f373946cbc1",
         "tinker/components/sync/index.server.ts": "2d2cb1cff6e98e107614269d7beca90cabd72d6adc35daa32ceca2e78766b005",
         "tinker/components/sync/index.ts": "ae51e2cd1878c5286c70df347604a0204256c13c06a4d18320f432bd54b311a5",
-        "tinker/components/sync/notice.ts": "2500f4842ceebba164805bcf192d6c1479d220e71d6d45869b7f81b428a70a69",
-        "tinker/components/sync/notifications.server.ts": "7f248bbe607bbb36783274a1fbcd37e9cbc963bfc667cd45cac1fe24db4736f5",
+        "tinker/components/sync/notice.ts": "2f1d8788d4da8791926ec69cd81d95d933729e233129549d913e8724017f2db7",
+        "tinker/components/sync/notifications.server.ts": "f591b9566415f9b754e76104323c563a319b64ee5c3510754bc5076a419f4165",
         "tinker/components/sync/part.ts": "b10095eb0fe08b3e8d3f4fec6e95a85a9e05ec667f652e379c06f5d33c8c5a6a",
         "tinker/components/sync/protocol.ts": "a61268cbeddf78655bd3bf9550f4518327bb2133d59290df3b0c6ab4684ac4da",
-        "tinker/components/sync/publish.server.ts": "728df0f2627a0ff2d878cb0918ab6eb1bcaf793ffd9395337aa2b62fdd7dc50d",
+        "tinker/components/sync/publish.server.ts": "5073c9cbd8ec47a46923219472807331537d4e33442ea1b08ae8e0f0aacd6ab9",
         "tinker/components/sync/schema.ts": "76df85602bd4cee238e36fc1157c48648243b974dfbe7872ac8acca7564f3a7c",
         "tinker/components/sync/slots.ts": "48dd54ccbea5d069c5ae4d9873a4d8ca6397c399c48851a1ecd7b78fca2c55b7"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "sync-sqlite": {
       "files": {
@@ -191,19 +191,19 @@
         "tinker/components/sync-sqlite/client/events.ts": "a8ddcb3ff0988c3d956478ee69e06e8bc0e47d831dc13040123f56864c2819ad",
         "tinker/components/sync-sqlite/client/owner.ts": "01e3d4dfd45c040dcc9492139e977ed094cb79917ee4bff68430247dd28ffbd5",
         "tinker/components/sync-sqlite/client/router.ts": "ade9e28fac9af0d80a180b2030374864e17184d60bb97dd4f3f7bb4202a32873",
-        "tinker/components/sync-sqlite/client/sync.ts": "a9864b037cc4f54913c22f960a44025218fec1177435d5537131b54963d8ce72",
+        "tinker/components/sync-sqlite/client/sync.ts": "8d30b6d66042de71404d4d160818cb41c580af8ce41e5c728ed4b9eccdb2fd72",
         "tinker/components/sync-sqlite/client/tab.ts": "2fbcb1309df68d22ef9980a7449470f8273a716b2550c6b8fce76554489316e0",
         "tinker/components/sync-sqlite/component.json": "3312614a3c0df3c48fb8ac67dafa30b8a81a2ac0a81cf8dbcb147f5e0d42d58d",
         "tinker/components/sync-sqlite/envelopes.ts": "2d25b2e23eee50b24afde735a19032b8415100004556fbb342875142d23de059",
-        "tinker/components/sync-sqlite/functions.ts": "e25ff6cd86d24453ad97e5602ac691e6c97771072f65a3baee97eebdb08baf93",
-        "tinker/components/sync-sqlite/history.server.ts": "15d267ce352c55962dd64743f0be552cb74588a1f86d4175f8ab9084878a6857",
+        "tinker/components/sync-sqlite/functions.ts": "cd178f92fb85ede08844a7638890bb20639b67471882c1dbda09fdbcc7ad4b61",
+        "tinker/components/sync-sqlite/history.server.ts": "08a0f7e40c804608d7edfca03bcfd9a9e4fadeba2739b7e21b2e73cddfb3f604",
         "tinker/components/sync-sqlite/index.server.ts": "c359adae00327292c20f9b2ebbb3333a3bae124c1b8cb5dbc64e53fcc363c801",
         "tinker/components/sync-sqlite/index.ts": "d9bae6fa5aa95fa6a4112cf2c78129fbfb13baefaa08b2d0902a047f3ac26293",
-        "tinker/components/sync-sqlite/notice.ts": "2500f4842ceebba164805bcf192d6c1479d220e71d6d45869b7f81b428a70a69",
-        "tinker/components/sync-sqlite/notifications.server.ts": "a3f499cf2c2a53109f9a33c2d63a40cd542d6e77980d3d185f88ae0a73bb3005",
+        "tinker/components/sync-sqlite/notice.ts": "2f1d8788d4da8791926ec69cd81d95d933729e233129549d913e8724017f2db7",
+        "tinker/components/sync-sqlite/notifications.server.ts": "7ab4f24ffe4b3d091746c7109ef343d97cb8944cd9fa5336de7ed9f9ac9f945f",
         "tinker/components/sync-sqlite/part.ts": "be75971e842b83a73e5003cff4d7f238b6f8de536fd9fbcb1da221528a8aa2ef",
         "tinker/components/sync-sqlite/protocol.ts": "a61268cbeddf78655bd3bf9550f4518327bb2133d59290df3b0c6ab4684ac4da",
-        "tinker/components/sync-sqlite/publish.server.ts": "210567f9aa81227cf9f5d30f905afa55eed94639603a17613de3bdf0b0d72292",
+        "tinker/components/sync-sqlite/publish.server.ts": "c6bdeed91422a103a5f7267fe72a8cf9ccbde29f700cae245a0bdfe97dea2d06",
         "tinker/components/sync-sqlite/queries/bump_stream.sql": "677f951b4efdf23470d6703e12f8696a02a7f1518b3ef3cd89fb1c9ce6293419",
         "tinker/components/sync-sqlite/queries/insert_event.sql": "dc3ee3f6ea89d6f7c185b9cdb142832d0bb1bd745c4cfdcec037d65de5ea4306",
         "tinker/components/sync-sqlite/queries/insert_stream.sql": "bfb545ba7a3f47229b0dfe9787a72fc725d528082af972e28a492f90f19b71c3",
@@ -213,27 +213,27 @@
         "tinker/components/sync-sqlite/queries/write_result.sql": "66c6fe4ed978d90fdc8da6d6fda4751ed1d4d526aba47507221c733f30923677",
         "tinker/components/sync-sqlite/slots.ts": "0c955ae6b55b1845b3a46dc0bcb584f6c056e0da3ffa47f47d36b16bbf277335"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     },
     "telemetry": {
       "files": {
         "tinker/components/telemetry/component.json": "beba2e1b1a349d85da789afddf81d75a9d735e42a40d01d46f748afa063154aa",
         "tinker/components/telemetry/console.ts": "6470da803b4553686636ef8fa7860255d6e5bf00c1136c1a19c7a496ddcd1b36",
         "tinker/components/telemetry/delivery.ts": "a478f4c984b5d2dda05c7a832354f829ee7490dd1f9fe0561a83f3f67d8327fd",
-        "tinker/components/telemetry/drain.server.ts": "7feb214e2c2e1cb0c48dda401539ff1771bf8b6f9b72adb1652321eb6798b7ae",
+        "tinker/components/telemetry/drain.server.ts": "ccde2e35ee2406187bddbff83435a68c28be66e75b34a8824c453e360b297213",
         "tinker/components/telemetry/health.ts": "384f3ca755de9dfb8db8ab0bd7d2e0e43da6b9d092f432a9e7ec73eae787267f",
         "tinker/components/telemetry/index.server.ts": "03a75f661ccd0705335822dd6fb6b0e68bfe191fa543a801040bc99945c101de",
         "tinker/components/telemetry/index.ts": "e8b60baf1cbf38a65cf392887415fbc08bc8ee2631b9cefc3884adc650910171",
-        "tinker/components/telemetry/ingest.server.ts": "b096045ec3782b904dab10b2457cac447e47cdf0c7b4ff00716319592a893607",
+        "tinker/components/telemetry/ingest.server.ts": "a002d249ea5399b81929dc501a579d7f9d8569f9e07eba7dbb9f8c017b4f8687",
         "tinker/components/telemetry/modules.server.ts": "7e8cbaed81e70e83eb188245d0efad30b8884d588cea6a93ec3d752838bd8cb2",
-        "tinker/components/telemetry/observer.ts": "a99ce2c9b636267f30d08e0c8695a27847b324d6b59095d9f4966debe45200b2",
+        "tinker/components/telemetry/observer.ts": "32c7b2bf54a4874ce353f6d96395c456b6c062f33617cc8fd809149c9a833f55",
         "tinker/components/telemetry/queue.ts": "266b6bef066e3e84a3b49040358ef7cd32500d81f27f92f9ae4fa000fc0799a3",
         "tinker/components/telemetry/records.server.ts": "84ec464c92e0a339fb14ac7f13238a5be638a423bcf349f886e7e121137ccd3c",
-        "tinker/components/telemetry/records.ts": "895ff980fa4b941f9ca3e0ef8255d0fe85df7e2fe646a16269a77c51cb16cbcd",
+        "tinker/components/telemetry/records.ts": "320d430dd30d4163b904bfbd738cf6a4899093329eccb681fdbf3d260bec8e66",
         "tinker/components/telemetry/settings.ts": "fccabf2e7686b011df36621386a2498d42a020a8905db3b03443a6ce1ab93556",
-        "tinker/components/telemetry/thread.server.ts": "b08d1467ce64426b5cd06ccc9509aa5dc83a1ec38376cb2f41e42ceb3fa280c7"
+        "tinker/components/telemetry/thread.server.ts": "ffd3b5f2961d576103d18c7e3d129c5a83aabbcb18c3c7c1db23996d39656ec7"
       },
-      "start": "0.16.1"
+      "start": "0.17.0"
     }
   },
   "version": 1

@@ -6,7 +6,7 @@ import { health } from "~/components/health";
 import { backendStop as requestHostStop } from "~/components/requests";
 import { startRequests } from "~/components/requests";
 import { responseBodies } from "~/components/requests/index.server";
-import { readResult } from "~/components/requests/index.server";
+import { cancelledCall } from "~/components/requests/index.server";
 
 const requestBindings = requestHostStop(new AbortController().signal);
 
@@ -23,30 +23,41 @@ const refuse = operation({
   run: (_deps, { raise }) => raise("Refused", { why: "test" }),
 });
 
-test("readResult returns a settled value and throws a settled failure as is", async () => {
+test("a boundary throws a settled failure as is and the root stays fine", async () => {
   const root = createScope({ tags: [greetingName("Ada")] });
-  expect(readResult(root.settle(greet))).toBe("Hello, Ada.");
+  expect(root.settle(greet)).toEqual({ status: "success", value: "Hello, Ada." });
 
   const failed = root.settle(refuse);
-  expect(failed.status).toBe("failed");
-  expect(() => readResult(failed)).toThrow(failed.status === "failed" ? failed.error : undefined);
+  expect(failed).toMatchObject({
+    status: "failed",
+    kind: "error",
+    error: { kind: "Refused", payload: { why: "test" } },
+  });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
-test("readResult turns a cancelled call into the base's Cancelled error", async () => {
-  const root = createScope();
+test("a cancelled boundary call runs request.cancelled, which raises the base's Cancelled", async () => {
+  const root = createScope({ observe: { history: 4 } });
   const stop = new AbortController();
   stop.abort();
   const cancelled = await root.settle(greet, { signal: stop.signal });
-
   expect(cancelled.status).toBe("cancelled");
-  expect(() => readResult(cancelled)).toThrow(expect.objectContaining({ kind: "Cancelled" }));
+
+  expect(() => root.run(cancelledCall)).toThrow(
+    expect.objectContaining({ message: "Cancelled", kind: "Cancelled", payload: {} }),
+  );
+  expect(root.settle(cancelledCall)).toMatchObject({
+    status: "failed",
+    kind: "error",
+    origin: { label: "request.cancelled" },
+  });
+  expect(root.spans().filter(({ name }) => name === "request.cancelled")).toHaveLength(2);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
 test("the base's health operation reports the base version", async () => {
   const root = createScope();
-  expect(readResult(root.settle(health))).toEqual({ ok: true, base: "0.16.1" });
+  expect(root.settle(health)).toEqual({ status: "success", value: { ok: true, base: "0.17.0" } });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
@@ -54,6 +65,29 @@ test("the start extension hands each request its root scope", async () => {
   const root = createScope({ tags: requestBindings, extensions: [startRequests] });
   await root.ready;
   expect(root.resolve(startRequests).scope).toBe(root);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("a request that already has a session is refused by its root's own operation", async () => {
+  const run = startRequests.middleware.options.server;
+  const root = createScope({ observe: { history: 4 } });
+  let called = false;
+
+  await expect(
+    run?.({
+      request: new Request("http://app/"),
+      pathname: "/",
+      handlerType: "router",
+      context: { scope: root, session: root.createSession() },
+      next() {
+        called = true;
+        return expect.unreachable("next must not run");
+      },
+    }),
+  ).rejects.toMatchObject({ kind: "StartSessionAlreadySet", payload: {} });
+
+  expect(called).toBe(false);
+  expect(root.spans().map(({ name }) => name)).toEqual(["request.sessionTaken"]);
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 

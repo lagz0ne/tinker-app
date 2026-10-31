@@ -4,7 +4,7 @@ import { z } from "zod";
 import { syncClient, snapshotLoader } from "~/components/sync";
 
 import { credentials } from "@/demo/contracts/credentials";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 import { pending, notice, authMode } from "@/demo/frontend/state";
 
 import { betterAuthReact } from "./modules";
@@ -36,11 +36,7 @@ export const authClient = resource({
 
 export const signIn = operation({
   label: "signIn",
-  input: (raw: unknown) => {
-    const parsed = credentials.safeParse(raw);
-    if (!parsed.success) raise("BadInput", { reason: "Check your email and password." });
-    return parsed.data;
-  },
+  input: credentials,
   depends: {
     client: authClient,
     sync: syncClient,
@@ -48,7 +44,12 @@ export const signIn = operation({
     pending: pending.controller,
     notice: notice.controller,
   },
-  run: async ({ client, sync, snapshots, pending, notice }, { defer, input, signal, log }) => {
+  run: async (
+    { client, sync, snapshots, pending, notice },
+    { defer, input, signal, log, raise: coreRaise },
+  ) => {
+    const raise: Errors.Raise = coreRaise;
+
     pending.set(true);
     notice.set("");
     defer(() => pending.set(false));
@@ -61,7 +62,11 @@ export const signIn = operation({
       input.mode === "signup"
         ? await client.signUp.email(input, { signal: signal })
         : await client.signIn.email(input, { signal: signal });
-    if (result.error) raise("AuthFailed", { message: result.error.message ?? "Sign in failed." });
+    if (result.error) {
+      return raise("AuthFailed", {
+        message: result.error.message ?? "Sign in failed.",
+      });
+    }
 
     await snapshots.completeAccountChange(signal, change);
     notice.set("You are signed in. Open your profile or private list.");
@@ -72,9 +77,15 @@ export const signIn = operation({
 export const signOut = operation({
   label: "signOut",
   depends: { client: authClient, sync: syncClient, notice: notice.controller },
-  run: async ({ client, sync, notice }, { signal }) => {
+  run: async ({ client, sync, notice }, { signal, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const result = await client.signOut({ fetchOptions: { signal: signal } });
-    if (result.error) raise("AuthFailed", { message: result.error.message ?? "Sign out failed." });
+    if (result.error) {
+      return raise("AuthFailed", {
+        message: result.error.message ?? "Sign out failed.",
+      });
+    }
     sync.leave();
     notice.set("You are signed out. Committed changes remain saved.");
   },

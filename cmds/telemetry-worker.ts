@@ -1,6 +1,5 @@
 import { createScope } from "@tinker/core";
 
-import { checkClosed } from "~/base/main";
 import { serveTelemetryWorker, telemetryWorkerInput } from "~/base/telemetry-worker";
 import {
   consoleOutput,
@@ -33,4 +32,8 @@ await tools.ready;
 
 await serveTelemetryWorker(tools.resolve(threadDrain));
 
-checkClosed(await tools.close({ graceful: true }));
+const ended = await tools.close({ graceful: true });
+
+// A throw ends this thread with an error event; the server's telemetryThread then stops failed.
+if (ended.status === "failed") throw ended.error;
+if (ended.teardownErrors?.length) throw ended.teardownErrors[0];

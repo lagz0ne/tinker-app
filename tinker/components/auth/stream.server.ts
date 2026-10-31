@@ -2,7 +2,7 @@ import { operation, resource } from "@tinker/core";
 import type { Operation } from "@tinker/core";
 
 import { database, drizzleOrm } from "~/components/database/index.server";
-import { raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 import { backendStop, requestStop, startRequests } from "~/components/requests";
 import { notifications, streamCursor, streamRequest, event } from "~/components/sync/index.server";
 import type { Stream } from "~/components/sync/index.server";
@@ -61,8 +61,10 @@ const streamLease = resource({
   depends: { notifications, account: liveAccount.controller, backendStop, requestStop },
   factory: async (
     { notifications, account, backendStop, requestStop },
-    { signal: cleanup, defer, clock },
+    { signal: cleanup, defer, clock, raise: coreRaise },
   ) => {
+    const raise: Errors.Raise = coreRaise;
+
     const stop = new AbortController();
     const signal = AbortSignal.any([stop.signal, backendStop, requestStop, cleanup]);
     const done = Symbol("sync.waitDone");
@@ -84,16 +86,20 @@ const streamLease = resource({
         subscription = await notifications.subscribe(stop.abort.bind(stop, done), expectedAccount);
         if (signal.aborted) {
           notifications.close(subscription);
-          raise("Cancelled", {});
+          return raise("Cancelled", {});
         }
 
         const current = await account.run();
-        if (initial.private && initial.private.accountId !== current) raise("StreamDenied", {});
+        if (initial.private && initial.private.accountId !== current) {
+          return raise("StreamDenied", {});
+        }
         deadline = clock.currentTimeMillis() + 30_000;
         if (current !== expectedAccount) subscription.stale = true;
       },
       async check(): Promise<number> {
-        if (!subscription) raise("StreamDisconnected", {});
+        if (!subscription) {
+          return raise("StreamDisconnected", {});
+        }
         if (notifications.ended(subscription) || clock.currentTimeMillis() >= deadline) {
           lease.close();
           return notifications.revision();
@@ -119,7 +125,9 @@ const streamLease = resource({
       async wait(after: number) {
         await lease.check();
         if (signal.aborted) return false;
-        if (!subscription) raise("StreamDisconnected", {});
+        if (!subscription) {
+          return raise("StreamDisconnected", {});
+        }
 
         const heartbeat = await notifications.wait(subscription, after, deadline);
         await lease.check();

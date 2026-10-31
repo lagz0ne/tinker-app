@@ -2,8 +2,7 @@ import { resource } from "@tinker/core";
 import type { RunResult } from "@tinker/core";
 
 import { database } from "~/components/database-sqlite/index.server";
-import { raise } from "~/components/errors";
-import { readResult } from "~/components/requests/index.server";
+import type { Errors } from "~/components/errors";
 import { accountNotice } from "~/components/sync-sqlite/notice";
 import type { Stream } from "~/components/sync-sqlite/protocol";
 
@@ -124,9 +123,11 @@ const notificationWheel = resource({
 /** One native listener wakes all request subscribers; reconnect replaces a broken listener. */
 export const notifications = resource({
   label: "sync.notifications",
-  depends: { database, wheel: notificationWheel },
-  factory: async ({ database, wheel }, { defer }) => {
-    const accountPrefix = accountNotice("");
+  depends: { database, wheel: notificationWheel, notice: accountNotice },
+  factory: async ({ database, wheel, notice }, { defer, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
+    const accountPrefix = notice.run({ input: "" });
 
     let revision = 0;
     let broken = false;
@@ -208,7 +209,9 @@ export const notifications = resource({
         const opened = connection;
         const connected = await opened;
         if (connected.kind === "failed") throw connected.error;
-        if (broken || opened !== connection) raise("StreamDisconnected", {});
+        if (broken || opened !== connection) {
+          return raise("StreamDisconnected", {});
+        }
 
         const subscriber: Subscriber = {
           opened,
@@ -236,7 +239,13 @@ export const notifications = resource({
 
         const at = reads;
         const started = Promise.resolve(read({ input: cursor }))
-          .then(readResult)
+          .then((result) => {
+            if (result.status === "failed") throw result.error;
+            if (result.status === "cancelled") {
+              return raise("Cancelled", {});
+            }
+            return result.value;
+          })
           .catch((error) => {
             at.delete(key);
             throw error;
