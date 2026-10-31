@@ -753,7 +753,7 @@ for (const code of [1, 65, 75]) {
     expect(await host.closed).toBe(code);
 
     const detail = code === 1 ? error.stack : `${error.kind}: ${JSON.stringify(error.payload)}`;
-    expect(errors).toBe(`command failed (exit ${code}): ${detail}\n`);
+    expect(errors).toBe(`command failed (exit ${String(code)}): ${detail}\n`);
   });
 }
 
@@ -1180,4 +1180,129 @@ test("only the registered command finishes the dev socket, and detach forgets on
   expect(server.closes).toBe(1);
   old.stop(0);
   host.stop(0);
+});
+
+/** A Core-shaped error: kind plus payload, as `ctx.raise` and a missing tag make. */
+const kinded = (kind, payload) => Object.assign(new Error(kind), { kind, payload });
+
+const urlError = (() => {
+  try {
+    return new URL("not a url");
+  } catch (error) {
+    return error;
+  }
+})();
+
+for (const [name, error, code] of [
+  ["a missing tag", kinded("MissingTag", { tag: "database.url" }), 78],
+  ["a tag value that failed its schema", kinded("DataValidationFailed", { tag: "log.level" }), 78],
+  ["a bad URL", urlError, 78],
+  ["another kind", kinded("BadInput", { field: "file" }), 1],
+  ["a plain error", new Error("plain"), 1],
+  ["a string", "text", 1],
+  ["null", null, 1],
+]) {
+  for (const form of ["throws", "exits itself"]) {
+    test(`a command that ${form} at startup with ${String(name)} exits ${String(code)}, printed once`, async () => {
+      const { code: exitCode, printed } = await hosted(async ({ exit }) => {
+        if (form === "throws") throw error;
+        // An older copied base maps the code itself and returns a closed with no results.
+        exit(code, error);
+        return { closed: Promise.resolve() };
+      });
+
+      expect(exitCode).toBe(code);
+      const detail =
+        code === 78 && error.kind
+          ? `${error.kind}: ${JSON.stringify(error.payload)}`
+          : (error?.stack ?? String(error));
+      expect(printed).toBe(
+        error == null ? "" : `command failed (exit ${String(code)}): ${detail}\n`,
+      );
+    });
+  }
+}
+
+test("a config error after startup, from closed, exits 1", async () => {
+  const error = kinded("MissingTag", { tag: "late" });
+
+  const { code, printed } = await hosted(async () => ({ closed: Promise.reject(error) }));
+
+  expect(code).toBe(1);
+  expect(printed).toBe(`command failed (exit 1): ${error.stack}\n`);
+});
+
+const failedRoot = (error, teardownErrors) => ({ status: "failed", error, teardownErrors });
+
+const cleanRoot = (teardownErrors) => ({ status: "success", teardownErrors });
+
+const work = new Error("work failed");
+const appCleanup = new Error("app cleanup failed");
+const toolsWork = new Error("tools failed");
+const toolsCleanup = new Error("tools cleanup failed");
+
+/** @type {[string, unknown, Error | undefined][]} */
+const closings = [
+  ["no results", undefined, undefined],
+  ["one clean result", cleanRoot(), undefined],
+  ["clean results with empty teardown lists", [cleanRoot([]), cleanRoot([])], undefined],
+  [
+    "a cancelled root with no teardown errors",
+    [{ status: "cancelled", reason: "stop" }, cleanRoot()],
+    undefined,
+  ],
+  ["one failed result", failedRoot(work, [appCleanup]), work],
+  ["a failed app before a failed tools root", [failedRoot(work), failedRoot(toolsWork)], work],
+  [
+    "an app teardown error before a failed tools root",
+    [cleanRoot([appCleanup, toolsCleanup]), failedRoot(toolsWork)],
+    appCleanup,
+  ],
+  [
+    "a cancelled app's teardown error before tools",
+    [{ status: "cancelled", reason: "stop", teardownErrors: [appCleanup] }, failedRoot(toolsWork)],
+    appCleanup,
+  ],
+  [
+    "a tools teardown error after a clean app",
+    [cleanRoot(), cleanRoot([toolsCleanup])],
+    toolsCleanup,
+  ],
+];
+
+for (const [name, ended, first] of closings) {
+  test(`closed with ${name} exits ${first ? 1 : 0}`, async () => {
+    const { code, printed } = await hosted(async () => ({ closed: Promise.resolve(ended) }));
+
+    expect(code).toBe(first ? 1 : 0);
+    expect(printed).toBe(first ? `command failed (exit 1): ${first.stack}\n` : "");
+  });
+}
+
+test("a close failure after an OS stop keeps the stop's code and is printed after it", async () => {
+  const finish = Promise.withResolvers();
+
+  const errors = capture();
+  const host = createMainHost(async () => ({ closed: finish.promise }), {
+    env: {},
+    stdout: quiet,
+    stderr: errors.stream,
+  });
+
+  await host.started;
+  host.stop(143, new DOMException("SIGTERM", "AbortError"));
+  finish.resolve([cleanRoot([toolsCleanup])]);
+
+  expect(await host.closed).toBe(143);
+  expect(errors.text()).toBe(`after exit 143: ${toolsCleanup.stack}\n`);
+});
+
+test("a close failure after the command's own exit keeps that code", async () => {
+  const { code, printed } = await hosted(async ({ exit }) => {
+    exit(0);
+    return { closed: Promise.resolve(failedRoot(work)) };
+  });
+
+  expect(code).toBe(0);
+  expect(printed).toBe(`after exit 0: ${work.stack}\n`);
 });
