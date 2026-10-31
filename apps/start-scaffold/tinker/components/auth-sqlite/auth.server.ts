@@ -7,7 +7,7 @@ import { createAccountStream, publishAccountNotice } from "~/components/sync-sql
 
 import { betterAuthModule, betterAuthStart, kyselyModule, nodeSqliteDialect } from "./modules";
 import { codeSignin, mcpProvider } from "./plugins.server";
-import { authSettings } from "./settings.server";
+import { authRateLimit, authSettings } from "./settings.server";
 
 /** The Postgres `session` trigger has no trigger here: each committed change says so itself. */
 const publishSessionChange = operation({
@@ -86,6 +86,7 @@ export const auth = resource({
   depends: {
     database,
     settings: authSettings,
+    limits: authRateLimit,
     writer: authDriver,
     dialect: nodeSqliteDialect,
     kysely: kyselyModule,
@@ -101,6 +102,7 @@ export const auth = resource({
     {
       database,
       settings,
+      limits,
       writer,
       dialect,
       kysely,
@@ -183,6 +185,12 @@ export const auth = resource({
         enabled: true,
       },
       hooks: { before: oauth.clientCheck },
+      // Where the limiter is on (production, by Better Auth's default), a code start is held to
+      // 5 per IP in 10 minutes; every other path keeps Better Auth's own limits.
+      rateLimit: {
+        enabled: limits.enabled,
+        customRules: { "/signin/code": { window: 600, max: 5 } },
+      },
       plugins: [...oauth.plugins, ...codes, tanstackStartCookies()],
     });
 

@@ -9,6 +9,7 @@ import { afterEach, expect, test } from "vite-plus/test";
 
 import {
   approveSignin,
+  authRateLimit,
   authSettings,
   endSignin,
   handleAuth,
@@ -40,7 +41,7 @@ afterEach(async () => {
 });
 
 /** A migrated temp database, with auth configured and a clock the test moves. */
-async function sandbox() {
+async function sandbox(site = origin) {
   const home = await mkdtemp(join(tmpdir(), "tinker-auth-signin-"));
 
   homes.push(home);
@@ -65,7 +66,9 @@ async function sandbox() {
       databaseMigrationsFolder(folder),
       databaseBusyTimeout(20),
       databaseMigrationTimeout(10_000),
-      authSettings({ origin, secret: "test-secret-with-at-least-thirty-two-letters" }),
+      authSettings({ origin: site, secret: "test-secret-with-at-least-thirty-two-letters" }),
+      // Better Auth limits only in production by its default; these tests prove the limits.
+      authRateLimit({ enabled: true }),
     ],
   });
 
@@ -73,19 +76,36 @@ async function sandbox() {
 
   const db = await root.resolve(database);
 
-  return { root, clock, db };
+  return { root, clock, db, site };
 }
 
 type Sandbox = Awaited<ReturnType<typeof sandbox>>;
 
-/** One request through the component's auth mount, as the route hands it over. */
-function send(box: Sandbox, path: string, init: { body?: object; cookie?: string } = {}) {
-  const headers = new Headers({ origin, "user-agent": chrome, cookie: init.cookie ?? "" });
+let hosts = 0;
+
+/**
+ * One request through the component's auth mount, as the route hands it over. Each request
+ * comes from its own address unless the test names one, so Better Auth's per-IP limits hold
+ * only where a test means them to.
+ */
+function send(
+  box: Sandbox,
+  path: string,
+  init: { body?: object; cookie?: string; ip?: string } = {},
+) {
+  hosts += 1;
+
+  const headers = new Headers({
+    origin: box.site,
+    "user-agent": chrome,
+    cookie: init.cookie ?? "",
+    "x-forwarded-for": init.ip ?? `10.0.${Math.floor(hosts / 250) % 250}.${hosts % 250}`,
+  });
 
   if (init.body) headers.set("content-type", "application/json");
 
   return box.root.run(handleAuth, {
-    input: new Request(`${origin}/api/auth/${path}`, {
+    input: new Request(`${box.site}/api/auth/${path}`, {
       method: init.body ? "POST" : "GET",
       headers,
       body: init.body ? JSON.stringify(init.body) : undefined,
@@ -121,8 +141,8 @@ async function signUp(box: Sandbox, name: string) {
 type Person = Awaited<ReturnType<typeof signUp>>;
 
 /** A browser asks for a code: the shown code, the device cookie, and the reply. */
-async function start(box: Sandbox, body: object = {}) {
-  const response = await send(box, "signin/code", { body });
+async function start(box: Sandbox, body: object = {}, ip?: string) {
+  const response = await send(box, "signin/code", { body, ip });
 
   const json = (await response.json()) as { user_code: string; expires_in: number };
 
@@ -252,7 +272,10 @@ test("A2: with 50 codes waiting a start answers 429 slow_down; expired codes do 
 
   expect((await send(box, "signin/code", { body: {} })).status).toBe(200);
 
-  expect(deviceRows(box)).toHaveLength(51);
+  // The start swept the ended code before it counted.
+  expect(deviceRows(box)).toHaveLength(50);
+
+  expect(deviceRows(box).map((row) => row.userCode)).not.toContain(first.code.replace("-", ""));
 
   await box.root.close({ graceful: true });
 });
@@ -344,10 +367,12 @@ test("A7: of two approves of one code at once, one wins and the row names the wi
   await box.root.close({ graceful: true });
 });
 
-test("A8, A9: a wrong or expired code is a miss; ten misses lock approvals for 15 minutes", async () => {
+test("A8, A9: a wrong or expired code is a miss; ten misses lock that caller for 15 minutes", async () => {
   const box = await sandbox();
 
   const u = await signUp(box, "ursa");
+
+  const v = await signUp(box, "vale");
 
   const old = await start(box);
 
@@ -376,10 +401,43 @@ test("A8, A9: a wrong or expired code is a miss; ten misses lock approvals for 1
     userId: null,
   });
 
+  // U's misses do not lock V.
+  const other = await start(box);
+
+  expect((await approve(box, v, other.code)).text).toMatch(`Approved code ${other.code}`);
+
   // 15 minutes after the first miss, it leaves the window: nine misses are under the cap.
   box.clock.advance(15 * 60_000 - 9000);
 
   expect((await approve(box, u, code)).text).toMatch(`Approved code ${code}`);
+
+  await box.root.close({ graceful: true });
+});
+
+test("A9: 100 misses from many callers in 15 minutes lock approvals for everyone", async () => {
+  const box = await sandbox();
+
+  const fresh = await signUp(box, "wren");
+
+  for (let caller = 0; caller < 10; caller++) {
+    const who = { id: `guesser-${caller}`, cookie: "", clientId: "client-guesser" };
+
+    for (let i = 0; i < 10; i++) {
+      await expect(approve(box, who, "ZZZZ-ZZZZ")).rejects.toMatchObject(
+        refused(/^No sign-in waits for code /),
+      );
+    }
+  }
+
+  const { code } = await start(box);
+
+  await expect(approve(box, fresh, code)).rejects.toMatchObject(
+    refused(/^Too many wrong codes\. Wait 15 minutes/),
+  );
+
+  box.clock.advance(15 * 60_000);
+
+  expect((await approve(box, fresh, code)).text).toMatch(`Approved code ${code}`);
 
   await box.root.close({ graceful: true });
 });
@@ -455,16 +513,36 @@ test("A11, A12, A14: finish signs in the approver once, marks the session, and k
     box.db.reader.prepare(`SELECT id FROM "session" WHERE signinCode IS NOT NULL`).all(),
   ).toHaveLength(1);
 
-  for (const next of ["//evil", "https://x", "/\\x"]) {
+  // A tab, newline, or space is dropped by the browser's URL parser, so "/\t/x" would leave the site.
+  for (const next of [
+    "//evil",
+    "https://x",
+    "/\\x",
+    "/\t/evil.com",
+    "/\n/evil.com",
+    "/ /evil.com",
+  ]) {
     const other = await start(box, { next });
 
     await approve(box, u, other.code);
 
-    expect(await (await finish(box, other.device)).json()).toEqual({
+    expect(await (await finish(box, other.device)).json(), JSON.stringify(next)).toEqual({
       state: "signed_in",
       next: "/",
     });
   }
+
+  // An escaped tab stays a path on this site, as the browser reads it.
+  expect(new URL("/%09/evil.com", origin).href).toBe(`${origin}/%09/evil.com`);
+
+  const escaped = await start(box, { next: "/%09/evil.com" });
+
+  await approve(box, u, escaped.code);
+
+  expect(await (await finish(box, escaped.device)).json()).toEqual({
+    state: "signed_in",
+    next: "/%09/evil.com",
+  });
 
   await box.root.close({ graceful: true });
 });
@@ -526,23 +604,18 @@ test("A16: the list shows live codes, the code only to its approver, and only th
 
   const shown = await list(box, u);
 
-  const waiting = shown.data.waiting;
+  // Only the code U approved is listed; the others are a count with no detail.
+  expect(shown.data.waiting).toEqual([
+    {
+      at: expect.any(String),
+      browser: "Chrome on Mac",
+      kind: "web",
+      approved: true,
+      code: mine.code,
+    },
+  ]);
 
-  expect(waiting).toHaveLength(3);
-
-  expect(waiting).toEqual(
-    expect.arrayContaining([
-      {
-        at: expect.any(String),
-        browser: "Chrome on Mac",
-        kind: "web",
-        approved: true,
-        code: mine.code,
-      },
-      { at: expect.any(String), browser: "Chrome on Mac", kind: "web", approved: true },
-      { at: expect.any(String), browser: "Chrome on Mac", kind: "web", approved: false },
-    ]),
-  );
+  expect(shown.data.others).toBe(2);
 
   expect(JSON.stringify(shown)).not.toContain(theirs.code);
 
@@ -562,7 +635,9 @@ test("A16: the list shows live codes, the code only to its approver, and only th
     },
   ]);
 
-  expect(shown.text).toMatch(/^Waiting codes: .+\.\nSigned in with a code: .+\.$/);
+  expect(shown.text).toMatch(
+    /^Waiting codes you approved: .+\. Other codes waiting: 2\.\nSigned in with a code: .+\.$/,
+  );
 
   expect(shown.text).toContain(`${own.id}: Chrome on Mac, since `);
 
@@ -681,6 +756,55 @@ test("the approver tools need the caller tag", async () => {
     kind: "MissingTag",
     payload: { label: "auth.mcpCaller" },
   });
+
+  await box.root.close({ graceful: true });
+});
+
+test("a start is held to 5 per IP in 10 minutes; another IP still starts", async () => {
+  const box = await sandbox();
+
+  for (let i = 0; i < 5; i++) {
+    expect((await start(box, {}, "203.0.113.7")).response.status).toBe(200);
+  }
+
+  const held = await send(box, "signin/code", { body: {}, ip: "203.0.113.7" });
+
+  expect(held.status).toBe(429);
+
+  expect(deviceRows(box)).toHaveLength(5);
+
+  expect((await start(box, {}, "203.0.113.8")).response.status).toBe(200);
+
+  await box.root.close({ graceful: true });
+});
+
+test("on https the device cookie is __Host-tinker_device: Secure, Path=/, no Domain", async () => {
+  const box = await sandbox("https://app.example.com");
+
+  const response = await send(box, "signin/code", { body: {} });
+
+  expect(response.status).toBe(200);
+
+  const set = response.headers
+    .getSetCookie()
+    .find((value) => value.startsWith("__Host-tinker_device="));
+
+  expect(set).toMatch(/^__Host-tinker_device=[^;]{30,};/);
+
+  expect(set).toMatch(/; Secure/i);
+
+  expect(set).toMatch(/; Path=\//);
+
+  expect(set).not.toMatch(/; Domain=/i);
+
+  expect(response.headers.getSetCookie().join()).not.toMatch(/(^|, )tinker_device=/);
+
+  const device = set?.split(";").at(0) ?? "";
+
+  expect(await stateOf(box, device)).toBe("waiting");
+
+  // The plain name is not read on https, so a cookie planted under it finds nothing.
+  expect(await stateOf(box, device.replace("__Host-", ""))).toBe("gone");
 
   await box.root.close({ graceful: true });
 });

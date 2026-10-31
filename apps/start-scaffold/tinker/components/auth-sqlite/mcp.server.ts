@@ -22,6 +22,18 @@ const tokenClaims = z.object({
   scope: z.string().default(""),
 });
 
+/** The user and the OAuth client a token names must both exist; the client must be enabled. */
+const liveRows = z.object({
+  user: z.object({ id: z.string() }),
+  client: z.object({
+    disabled: z
+      .boolean()
+      .nullable()
+      .optional()
+      .refine((off) => !off),
+  }),
+});
+
 /**
  * The parts of an MCP request a token check reads, as Better Auth's `requestToResourceInput`
  * names them. The route reads them off its `Request`; replies stay with the route too.
@@ -77,7 +89,11 @@ export const checkMcpToken = operation({
       const payload = await oauth2
         .verifyJwsAccessToken(authorization.token, {
           jwksFetch: async () => keys,
-          verifyOptions: { issuer: context.baseURL, audience: resource },
+          verifyOptions: {
+            issuer: context.baseURL,
+            audience: resource,
+            requiredClaims: ["exp", "iat"],
+          },
         })
         .catch(() => {
           throw new APIError("UNAUTHORIZED", { message: "invalid access token" });
@@ -88,6 +104,22 @@ export const checkMcpToken = operation({
 
       if (!claims.success) {
         throw new APIError("UNAUTHORIZED", { message: "access token names no user" });
+      }
+
+      // The token is a JWT with no store behind it: one read stops a deleted user or client, and
+      // a disabled client, at once. A sign-out or a revoke ends at the token's 5-minute end.
+      const [user, client] = await Promise.all([
+        context.internalAdapter.findUserById(claims.data.sub),
+        context.adapter.findOne({
+          model: "oauthClient",
+          where: [{ field: "clientId", value: claims.data.azp }],
+        }),
+      ]);
+
+      if (!liveRows.safeParse({ user, client }).success) {
+        throw new APIError("UNAUTHORIZED", {
+          message: "access token speaks for no live user or app",
+        });
       }
 
       const scopes = claims.data.scope.split(" ").filter(Boolean);

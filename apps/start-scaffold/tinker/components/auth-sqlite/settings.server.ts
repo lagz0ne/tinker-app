@@ -34,6 +34,16 @@ export const authMcp = tag({
   },
 });
 
+/**
+ * Better Auth's rate limiter: on in production by its own default, off elsewhere. Bind
+ * `{ enabled: true }` to turn it on anywhere (a test of the limits does); `false` turns it off.
+ */
+export const authRateLimit = tag({
+  label: "auth.rateLimit",
+  parse: z.object({ enabled: z.boolean().optional() }),
+  default: {},
+});
+
 /** Check the required auth config before serving. */
 export const authStartup = extension({
   label: "auth",

@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -76,13 +76,30 @@ async function sandbox() {
 
 type Sandbox = Awaited<ReturnType<typeof sandbox>>;
 
-/** One request through the component's auth mount, as the route hands it over. */
+let hosts = 0;
+
+/**
+ * One request through the component's auth mount, as the route hands it over. Each request
+ * comes from its own address, so Better Auth's per-IP limits stay out of these tests.
+ */
 function send(
   box: Sandbox,
   path: string,
-  init: { body?: object; form?: Record<string, string>; cookie?: string } = {},
+  init: {
+    body?: object;
+    form?: Record<string, string>;
+    cookie?: string;
+    headers?: Record<string, string>;
+  } = {},
 ) {
-  const headers = new Headers({ origin, cookie: init.cookie ?? "" });
+  hosts += 1;
+
+  const headers = new Headers({
+    origin,
+    cookie: init.cookie ?? "",
+    "x-forwarded-for": `10.1.${Math.floor(hosts / 250) % 250}.${hosts % 250}`,
+    ...init.headers,
+  });
 
   if (init.body) headers.set("content-type", "application/json");
 
@@ -174,7 +191,12 @@ async function consent(box: Sandbox, cookie: string, oauth_query: string) {
 }
 
 /** The full flow for one signed-in person: register, authorize, consent, token. */
-async function tokens(box: Sandbox, cookie: string, scope = "mcp offline_access") {
+async function tokens(
+  box: Sandbox,
+  cookie: string,
+  scope = "mcp offline_access",
+  proof?: (htm: string, htu: string) => Promise<string>,
+) {
   const { body: client } = await register(box);
 
   const { query, verifier } = authorizeQuery(client.client_id, scope);
@@ -190,6 +212,7 @@ async function tokens(box: Sandbox, cookie: string, scope = "mcp offline_access"
   expect(back.searchParams.get("state")).toBe("s1");
 
   const response = await send(box, "/api/auth/oauth2/token", {
+    headers: proof ? { dpop: await proof("POST", `${origin}/api/auth/oauth2/token`) } : {},
     form: {
       grant_type: "authorization_code",
       code: back.searchParams.get("code") ?? "",
@@ -212,10 +235,10 @@ async function tokens(box: Sandbox, cookie: string, scope = "mcp offline_access"
 }
 
 /** The route's part: read the request's parts in, and send a challenge back as the reply. */
-async function check(box: Sandbox, authorization?: string) {
+async function check(box: Sandbox, authorization?: string, dpop?: string) {
   const request = new Request(resource, {
     method: "POST",
-    headers: authorization ? { authorization } : {},
+    headers: { ...(authorization ? { authorization } : {}), ...(dpop ? { dpop } : {}) },
   });
 
   const answer = await box.root.run(checkMcpToken, {
@@ -232,6 +255,36 @@ async function check(box: Sandbox, authorization?: string) {
     response: answer.challenge
       ? new Response(JSON.stringify(answer.challenge.body), answer.challenge)
       : undefined,
+  };
+}
+
+/** A DPoP key (RFC 9449) made with Web Crypto: it signs one proof JWT per request. */
+async function dpopKey() {
+  const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+    "verify",
+  ]);
+
+  const { kty, crv, x, y } = await crypto.subtle.exportKey("jwk", pair.publicKey);
+
+  const part = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+
+  return async (htm: string, htu: string, accessToken?: string) => {
+    const input = `${part({ typ: "dpop+jwt", alg: "ES256", jwk: { kty, crv, x, y } })}.${part({
+      jti: randomUUID(),
+      htm,
+      htu,
+      iat: Math.floor(Date.now() / 1000),
+      ...(accessToken ? { ath: createHash("sha256").update(accessToken).digest("base64url") } : {}),
+    })}`;
+
+    const signature = await crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      pair.privateKey,
+      new TextEncoder().encode(input),
+    );
+
+    return `${input}.${Buffer.from(signature).toString("base64url")}`;
   };
 }
 
@@ -446,6 +499,10 @@ test("B4, B5: the full OAuth flow gives a resource-bound JWT and a refresh token
 
   expect(issued.refresh_token).toEqual(expect.any(String));
 
+  const life = claimsOf(issued.access_token);
+
+  expect(Number(life.exp) - Number(life.iat)).toBe(300);
+
   expect(claimsOf(issued.access_token)).toMatchObject({
     aud: resource,
     iss: `${origin}/api/auth`,
@@ -579,6 +636,10 @@ test("A15: a code sign-in from the OAuth login page goes on to the OAuth redirec
 
     expect(approved.text).toContain(`"Allow access" for Claude`);
 
+    expect(approved.text).toContain(
+      "It signs that browser in as you and allows Claude to act for you.",
+    );
+
     const finished = await send(box, "/api/auth/signin/code/finish", {
       body: { oauth_query },
       cookie: device,
@@ -640,6 +701,186 @@ test("a start with a forged oauth_query is refused before any code is made", asy
   expect(await response.json()).toMatchObject({ error: "invalid_signature" });
 
   expect(box.db.reader.prepare(`SELECT id FROM "deviceCode"`).all()).toEqual([]);
+
+  await box.root.close({ graceful: true });
+});
+
+test("a token of a deleted user, a deleted or disabled client, or with no iat answers 401", async () => {
+  const box = await sandbox();
+
+  const instance = await box.root.resolve(auth);
+
+  const write = (sql: string, ...values: string[]) => box.db.client.prepare(sql).run(...values);
+
+  const refusedNow = async (name: string, token: string) => {
+    const answer = await check(box, `Bearer ${token}`);
+
+    expect(answer.caller, name).toBeUndefined();
+
+    expect(answer.response?.status, name).toBe(401);
+  };
+
+  const u = await signUp(box, "ursa");
+
+  const kept = await tokens(box, u.cookie);
+
+  expect((await check(box, `Bearer ${kept.access_token}`)).caller?.userId).toBe(u.id);
+
+  // Signed with the auth's own key, with every claim but iat.
+  const { iat: _iat, ...rest } = claimsOf(kept.access_token);
+
+  const noIat = await instance.api.signJWT({ body: { payload: rest } });
+
+  expect(claimsOf(noIat.token).iat).toBeUndefined();
+
+  await refusedNow("no iat", noIat.token);
+
+  write(`UPDATE "oauthClient" SET disabled = 1 WHERE clientId = ?`, kept.clientId);
+
+  await refusedNow("disabled client", kept.access_token);
+
+  const other = await tokens(box, u.cookie);
+
+  write(`DELETE FROM "oauthClient" WHERE clientId = ?`, other.clientId);
+
+  await refusedNow("deleted client", other.access_token);
+
+  const v = await signUp(box, "vale");
+
+  const gone = await tokens(box, v.cookie);
+
+  write(`DELETE FROM "user" WHERE id = ?`, v.id);
+
+  await refusedNow("deleted user", gone.access_token);
+
+  await box.root.close({ graceful: true });
+});
+
+test("a DPoP-bound token works only with the DPoP scheme and a proof for this request", async () => {
+  const box = await sandbox();
+
+  const u = await signUp(box, "ursa");
+
+  const proof = await dpopKey();
+
+  const issued = await tokens(box, u.cookie, "mcp offline_access", proof);
+
+  expect(claimsOf(issued.access_token).cnf).toEqual({ jkt: expect.any(String) });
+
+  const bearer = await check(box, `Bearer ${issued.access_token}`);
+
+  expect(bearer.response?.status).toBe(401);
+
+  const bare = await check(box, `DPoP ${issued.access_token}`);
+
+  expect(bare.response?.status).toBe(401);
+
+  const otherKey = await dpopKey();
+
+  const wrong = await check(
+    box,
+    `DPoP ${issued.access_token}`,
+    await otherKey("POST", resource, issued.access_token),
+  );
+
+  expect(wrong.response?.status).toBe(401);
+
+  const bound = await check(
+    box,
+    `DPoP ${issued.access_token}`,
+    await proof("POST", resource, issued.access_token),
+  );
+
+  expect(bound.caller?.userId).toBe(u.id);
+
+  await box.root.close({ graceful: true });
+});
+
+test("a code from the OAuth login page finishes only for the client it started for", async () => {
+  const box = await sandbox();
+
+  const u = await signUp(box, "ursa");
+
+  const { body: first } = await register(box);
+
+  const { body: second } = await register(box);
+
+  const approver = { userId: u.id, clientId: "client-ursa", scopes: ["mcp"] };
+
+  const signed = async (clientId: string) =>
+    (await pageQuery(box, authorizeQuery(clientId).query)).oauth_query;
+
+  const startFor = async (oauth_query?: string) => {
+    const started = await send(box, "/api/auth/signin/code", { body: { oauth_query } });
+
+    const { user_code } = (await started.json()) as { user_code: string };
+
+    await box.root.run(approveSignin, { input: { code: user_code }, tags: mcpCaller(approver) });
+
+    return (
+      started.headers
+        .getSetCookie()
+        .find((value) => value.startsWith("tinker_device="))
+        ?.split(";")
+        .at(0) ?? ""
+    );
+  };
+
+  const rows = () =>
+    box.db.reader.prepare(`SELECT status FROM "deviceCode"`).all() as { status: string }[];
+
+  const sessions = () => box.db.reader.prepare(`SELECT id FROM "session"`).all().length;
+
+  const before = sessions();
+
+  const forFirst = await startFor(await signed(first.client_id));
+
+  const forNone = await startFor();
+
+  for (const [name, device, oauth_query] of [
+    ["another client", forFirst, await signed(second.client_id)],
+    ["no client at finish", forFirst, undefined],
+    ["a client the start had not", forNone, await signed(first.client_id)],
+  ] as const) {
+    const finished = await send(box, "/api/auth/signin/code/finish", {
+      body: { oauth_query },
+      cookie: device,
+    });
+
+    expect(finished.status, name).toBe(400);
+
+    expect(sessionCookie(finished), name).toBe("");
+  }
+
+  expect(sessions()).toBe(before);
+
+  expect(rows()).toEqual([{ status: "approved" }, { status: "approved" }]);
+
+  await box.root.close({ graceful: true });
+});
+
+test("the admin client paths: create is server-only over HTTP; a bad redirect is refused on the server call", async () => {
+  const box = await sandbox();
+
+  const { cookie } = await signUp(box, "ursa");
+
+  const over = await send(box, "/api/auth/admin/oauth2/create-client", {
+    body: { client_name: "Admin", redirect_uris: ["https://evil.example/cb"] },
+    cookie,
+  });
+
+  expect(over.status).toBe(404);
+
+  const instance = await box.root.resolve(auth);
+
+  await expect(
+    instance.api.adminCreateOAuthClient({
+      body: { client_name: "Admin", redirect_uris: ["https://evil.example/cb"] },
+      headers: new Headers({ cookie }),
+    }),
+  ).rejects.toMatchObject({ body: { error: "invalid_redirect_uri" } });
+
+  expect(box.db.reader.prepare(`SELECT id FROM "oauthClient"`).all()).toEqual([]);
 
   await box.root.close({ graceful: true });
 });
