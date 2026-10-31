@@ -920,10 +920,10 @@ async function appFolder() {
   homes.push(dir);
 
   await mkdir(join(dir, "data"));
-  await mkdir(join(dir, "migrations"));
+  await mkdir(join(dir, "sqlite", "migrations"), { recursive: true });
 
   await writeFile(
-    join(dir, "migrations", "20261028000000_proof.sql"),
+    join(dir, "sqlite", "migrations", "20261028000000_proof.sql"),
     "create table proof_relative (id integer)",
   );
 
@@ -982,7 +982,7 @@ test("a folder name with percent, hash, and question mark keeps the file inside 
   const folder = join(parent, "a%b#c?d");
 
   await mkdir(join(folder, "data"), { recursive: true });
-  await mkdir(join(folder, "migrations"));
+  await mkdir(join(folder, "sqlite", "migrations"), { recursive: true });
 
   const root = createScope({
     tags: [databaseUrl("file:./data/app.db"), databaseFolder(folder), databaseBusyTimeout(20)],
