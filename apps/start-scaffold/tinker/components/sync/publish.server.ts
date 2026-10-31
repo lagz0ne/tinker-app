@@ -8,10 +8,10 @@ import { accountNotice } from "~/components/sync/notice";
 export const publishAccountNotice = operation({
   label: "sync.accountNotice",
   input: z.strictObject({ accountId: z.string() }).brand<"AccountNotice">(),
-  depends: { database, orm: drizzleOrm },
-  run: async ({ database, orm }, { input }) => {
+  depends: { database, orm: drizzleOrm, notice: accountNotice },
+  run: async ({ database, orm, notice }, { input }) => {
     await database.execute(
-      orm.sql`select pg_notify('start_sync', ${accountNotice(input.accountId)})`,
+      orm.sql`select pg_notify('start_sync', ${notice.run({ input: input.accountId })})`,
     );
   },
 });

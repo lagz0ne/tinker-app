@@ -339,7 +339,7 @@ test("a held stream whose account signs out sends the account frame, then no sav
 
   const held = reader.read();
   accounts.delete("ada");
-  await root.run(notify, { input: accountNotice("ada") });
+  await root.run(notify, { input: root.run(accountNotice, { input: "ada" }) });
   await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["secret"] } });
 
   expect(await text(held)).toBe(account);
@@ -426,7 +426,7 @@ test("a quiet stream sends a heartbeat each 10 s, closes at its 30 s lease, and 
   const held = own.read();
   await settledFirst(held);
   accounts.delete("ada");
-  await root.run(notify, { input: accountNotice("ada") });
+  await root.run(notify, { input: root.run(accountNotice, { input: "ada" }) });
 
   expect(await text(held)).toBe(account);
   expect((await own.read()).done).toBe(true);
@@ -1054,7 +1054,7 @@ test("a notice checks the account before the rows read, so a sign-out whose rows
 
   const held = reader.read();
   await root.run(dropEvents);
-  notice("ada");
+  notice(root, "ada");
 
   expect(await text(held)).toBe(account);
   expect((await reader.read()).done).toBe(true);
@@ -1102,7 +1102,7 @@ test("only the check after the rows read can stop rows of an account that signed
   const { db, wake, notice } = handWoken((query) => {
     if (!armed || !query.startsWith("select") || !query.includes("sync_event")) return;
     armed = false;
-    notice("ada");
+    notice(root, "ada");
   });
   let reads = 0;
   const stop = new AbortController();
@@ -1198,7 +1198,7 @@ test("a notice re-reads only its account's streams; the one whose own session en
   );
 
   live.delete("ada-one");
-  notice("ada");
+  notice(root, "ada");
   expect(await text(readers[0]!.read())).toBe(account);
 
   await root.run(publish, { input: { stream: "ada", executionId: ids[0], changes: ["ada two"] } });
@@ -1246,7 +1246,7 @@ test("a notice that keeps its account sends no frame; the next save is the strea
   expect(await text(reader.read())).toBe(": connected\n\n");
 
   const held = reader.read();
-  notice("ada");
+  notice(root, "ada");
   for (let turn = 0; turn < 100; turn += 1) await Promise.resolve();
   expect(reads.reads()).toBe(2);
   expect(await settledFirst(held)).toBe("pending");
@@ -1296,7 +1296,7 @@ test("a notice takes its stream off the wheel: closing the other waiter stops th
   const graceWaiting = feed.wait(grace, feed.revision(), 30_000);
   expect(pending()).toBe(1);
 
-  notice("ada");
+  notice(root, "ada");
   expect(await adaWaiting).toBe(false);
 
   feed.close(grace);
@@ -1669,7 +1669,7 @@ test("a sign-out frame is each stream's own copy", async () => {
   ]);
 
   const held = readers.map((reader) => reader.read());
-  notice("ada");
+  notice(root, "ada");
   const [one, two] = await Promise.all(held);
   one.value?.fill(0);
 
@@ -1815,12 +1815,12 @@ test("a quiet stream reads no account at its heartbeats; each notice reads it on
 
   held = reader.read();
   await settledFirst(held);
-  notice("ada");
+  notice(root, "ada");
   for (let turn = 0; turn < 100 && reads.reads() < 2; turn += 1) await Promise.resolve();
   expect(reads.reads()).toBe(2);
   expect(await settledFirst(held)).toBe("pending");
 
-  notice("ada");
+  notice(root, "ada");
   expect(await text(held)).toBe(account);
   expect((await reader.read()).done).toBe(true);
   expect(reads.reads()).toBe(3);
@@ -1927,7 +1927,7 @@ test("a notice closes a stream whose client stopped reading", async () => {
   ).getReader();
   expect(await text(reader.read())).toBe(": connected\n\n");
 
-  await root.run(notify, { input: accountNotice("ada") });
+  await root.run(notify, { input: root.run(accountNotice, { input: "ada" }) });
   expect(await text(reader.read())).toBe(account);
   expect((await reader.read()).done).toBe(true);
   expect(reads.reads()).toBe(2);
@@ -2033,7 +2033,7 @@ test("shared private rows keep accounts apart and check each session after sign-
   );
 
   live.delete("ada-one");
-  notice("ada");
+  notice(root, "ada");
   await root.run(publish, {
     input: { stream: "ada", executionId: ids[0], changes: ["ada secret"] },
   });
