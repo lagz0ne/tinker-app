@@ -7,8 +7,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { createScope, operation } from "@tinker/core";
 import type { Scope } from "@tinker/core";
-import { preset } from "@tinker/core/testing";
-import { afterEach, expect, test, vi } from "vite-plus/test";
+import { makeTestClock, preset } from "@tinker/core/testing";
+import { afterEach, expect, test } from "vite-plus/test";
 
 import {
   blobFolder,
@@ -40,8 +40,6 @@ const homes: string[] = [];
 const roots: Scope.Handle[] = [];
 
 afterEach(async () => {
-  vi.useRealTimers();
-
   for (const root of roots.splice(0)) await root.close({ graceful: true });
 
   for (const home of homes.splice(0)) await rm(home, { recursive: true, force: true });
@@ -50,9 +48,20 @@ afterEach(async () => {
 type Options = {
   home?: string;
   maxBytes?: number;
+  unpackMax?: number;
   ttl?: number;
+  now?: number;
   fs?: typeof import("node:fs/promises");
 };
+
+/** The blob limits a test binds; the others keep their defaults. */
+function limitTags(options: Options) {
+  return [
+    options.maxBytes !== undefined && blobMaxBytes(options.maxBytes),
+    options.unpackMax !== undefined && blobUnpackMax(options.unpackMax),
+    options.ttl !== undefined && blobSlotTtl(options.ttl),
+  ];
+}
 
 /** A migrated temp database and a temp blob folder; pass `home` for a second root on them. */
 async function sandbox(options: Options = {}) {
@@ -75,15 +84,18 @@ async function sandbox(options: Options = {}) {
 
   const fs = options.fs;
 
+  // Core's test clock; it starts at wall time so the crash clean-up can compare disk mtimes.
+  const clock = makeTestClock({ now: options.now ?? Date.now() });
+
   const root = createScope({
+    clock,
     tags: [
       databaseUrl(pathToFileURL(join(home, "app.db"))),
       databaseMigrationsFolder(join(home, "migrations")),
       databaseBusyTimeout(5000),
       databaseMigrationTimeout(10_000),
       blobFolder(join(home, "blobs")),
-      options.maxBytes !== undefined && blobMaxBytes(options.maxBytes),
-      options.ttl !== undefined && blobSlotTtl(options.ttl),
+      ...limitTags(options),
     ],
     presets: fs ? [preset(blobFs, async () => fs)] : [],
   });
@@ -92,7 +104,7 @@ async function sandbox(options: Options = {}) {
 
   await root.run(migrate);
 
-  return { root, home, folder: join(home, "blobs") };
+  return { root, home, clock, folder: join(home, "blobs") };
 }
 
 const encoder = new TextEncoder();
@@ -351,11 +363,18 @@ test("I1: a blob file appears only by renaming a fully written, fsynced temp; th
   expect(writeAt).toBeLessThan(syncAt);
   expect(syncAt).toBeLessThan(closeAt);
   expect(closeAt).toBeLessThan(renameAt);
-  expect(folderSyncAt).toBeGreaterThan(renameAt);
+  // A new shelf is an entry in blobFolder, so blobFolder is fsynced too.
+  const rootSyncAt = log.findIndex(
+    (entry, index) => index > renameAt && entry[0] === "handle.sync" && entry[1] === folder,
+  );
 
-  // The row is not there when the file lands, nor when the folder is fsynced.
+  expect(folderSyncAt).toBeGreaterThan(renameAt);
+  expect(rootSyncAt).toBeGreaterThan(renameAt);
+
+  // The row is not there when the file lands, nor when the folders are fsynced.
   expect(rowsAt.get(log[renameAt]!)).toBe(0);
   expect(rowsAt.get(log[folderSyncAt]!)).toBe(0);
+  expect(rowsAt.get(log[rootSyncAt]!)).toBe(0);
 
   expect(await blobRows(root)).toEqual([{ hash, size: bytes.length }]);
 
@@ -475,10 +494,7 @@ test("I4: an unknown hash, and a row whose file is gone, read undefined", async 
 // I5: slot expires.
 
 test("I5: a slot expires at open time + blobSlotTtl; fill is refused before reading the body, take too", async () => {
-  vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(1_000_000);
-
-  const { root } = await sandbox({ ttl: 1000 });
+  const { root, clock } = await sandbox({ ttl: 1000, now: 1_000_000 });
 
   const slot = await open(root);
 
@@ -488,11 +504,11 @@ test("I5: a slot expires at open time + blobSlotTtl; fill is refused before read
 
   await fill(root, filled.id, bytesOf("filled in time"));
 
-  vi.setSystemTime(1_000_999);
+  clock.setTime(1_000_999);
 
   const late = await open(root);
 
-  vi.setSystemTime(1_001_000);
+  clock.setTime(1_001_000);
 
   const body = feed();
 
@@ -551,16 +567,19 @@ test("I6: a fill stops reading past the slot cap, cancels the body, and leaves t
   expect(await fill(root, slot.id, bytesOf("12345678"))).toMatchObject({ size: 8 });
 });
 
-test("I6: putBlob refuses more than blobMaxBytes", async () => {
-  const { root, folder } = await sandbox({ maxBytes: 64 });
+test("I6: putBlob caps at blobUnpackMax, not blobMaxBytes", async () => {
+  const { root, folder } = await sandbox({ maxBytes: 10, unpackMax: 20 });
 
-  await expect(put(root, new Uint8Array(65))).rejects.toMatchObject({
+  // A zip entry may pass the slot cap: obelisk puts entries with no cap.
+  expect(await put(root, new Uint8Array(11).fill(1))).toMatchObject({ size: 11 });
+  expect(await put(root, new Uint8Array(20).fill(2))).toMatchObject({ size: 20 });
+
+  await expect(put(root, new Uint8Array(21))).rejects.toMatchObject({
     kind: "BlobTooBig",
-    payload: { maxBytes: 64 },
+    payload: { maxBytes: 20 },
   });
 
-  expect(await put(root, new Uint8Array(64).fill(1))).toMatchObject({ size: 64 });
-  expect(await blobFiles(folder)).toHaveLength(1);
+  expect(await blobFiles(folder)).toHaveLength(2);
 });
 
 // I7: empty refused.
@@ -685,6 +704,27 @@ test("I9: an abort mid-stream rethrows the abort reason, cancels the body, and l
   expect(await fill(root, slot.id, bytesOf("whole"))).toMatchObject({ id: slot.id });
 });
 
+test("a body chunk that is not bytes is BlobNotBytes and leaves the slot open and empty", async () => {
+  const { root, folder } = await sandbox();
+
+  const slot = await open(root);
+
+  const text = new ReadableStream<string>({
+    start(controller) {
+      controller.enqueue("not bytes");
+      controller.close();
+    },
+  });
+
+  await expect(
+    write(root, fillSlot, { rawInput: { id: slot.id, body: text } }),
+  ).rejects.toMatchObject({ kind: "BlobNotBytes" });
+
+  expect(await tempFiles(folder)).toEqual([]);
+  expect(await blobRows(root)).toEqual([]);
+  expect(await slotRow(root, slot.id)).toEqual({ hash: null, size: null, name: null });
+});
+
 // I10: the slot survives a restart.
 
 test("I10: a slot opened in one root is filled and taken in a new root on the same file and folder", async () => {
@@ -764,16 +804,13 @@ test.each([
 );
 
 test("B: a fill that starts before expiry and ends after it is SlotExpired, and so is take", async () => {
-  vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(5_000_000);
-
-  const { root, folder } = await sandbox({ ttl: 1000 });
+  const { root, folder, clock } = await sandbox({ ttl: 1000, now: 5_000_000 });
 
   const slot = await open(root);
 
   const { body, result } = await pausedFill(root, slot.id, bytesOf("too slow"));
 
-  vi.setSystemTime(slot.expiresAt);
+  clock.setTime(slot.expiresAt);
 
   body.end();
 
@@ -781,6 +818,45 @@ test("B: a fill that starts before expiry and ends after it is SlotExpired, and 
   await expect(take(root, slot.id)).rejects.toMatchObject({ kind: "SlotExpired" });
   expect(await slotRow(root, slot.id)).toEqual({ hash: null, size: null, name: null });
   expect(await tempFiles(folder)).toEqual([]);
+});
+
+test("B: a fill whose slot is pruned mid-stream is SlotExpired", async () => {
+  const { root, clock } = await sandbox({ ttl: 1000, now: 5_000_000 });
+
+  const slot = await open(root);
+
+  const { body, result } = await pausedFill(root, slot.id, bytesOf("pruned under me"));
+
+  // One more TTL past expiry: the next openSlot deletes the row while the fill streams.
+  clock.setTime(slot.expiresAt + 1000);
+
+  await open(root);
+
+  expect(await slotRow(root, slot.id)).toBeUndefined();
+
+  body.end();
+
+  await expect(result).rejects.toMatchObject({ kind: "SlotExpired" });
+});
+
+test("openSlot prunes a slot only one TTL after it expired; until then take is SlotExpired", async () => {
+  const { root, clock } = await sandbox({ ttl: 1000, now: 7_000_000 });
+
+  const slot = await open(root);
+
+  clock.setTime(slot.expiresAt + 999);
+
+  await open(root);
+
+  expect(await slotRow(root, slot.id)).toEqual({ hash: null, size: null, name: null });
+  await expect(take(root, slot.id)).rejects.toMatchObject({ kind: "SlotExpired" });
+
+  clock.setTime(slot.expiresAt + 1000);
+
+  await open(root);
+
+  expect(await slotRow(root, slot.id)).toBeUndefined();
+  await expect(take(root, slot.id)).rejects.toMatchObject({ kind: "SlotMissing" });
 });
 
 test("C: take during a fill is SlotEmpty; after the fill commits, take gives the blob", async () => {
@@ -923,4 +999,9 @@ test("the blob tags have their defaults, and a test can bind blobUnpackMax", asy
   expect(await bound.run(limits)).toMatchObject({ unpack: 5 });
 
   expect(() => blobUnpackMax(0)).toThrow();
+
+  // The folder fsync opens a folder, which POSIX allows: only POSIX absolute paths bind.
+  expect(() => blobFolder("C:\\blobs")).toThrow();
+  expect(() => blobFolder("blobs")).toThrow();
+  expect(() => blobFolder("/srv/blobs")).not.toThrow();
 });

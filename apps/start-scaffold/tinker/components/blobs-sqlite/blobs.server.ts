@@ -13,16 +13,22 @@ import insertSlot from "./queries/insert_slot.sql";
 import pruneSlots from "./queries/prune_slots.sql";
 import readBlobQuery from "./queries/read_blob.sql";
 import readSlot from "./queries/read_slot.sql";
-import { blobMaxBytes, blobSlotTtl } from "./tags";
+import { blobMaxBytes, blobSlotTtl, blobUnpackMax } from "./tags";
 
 /** A blob's name: its sha256 as lower-case hex. Anything else never reaches the file system. */
 const blobHash = /^[0-9a-f]{64}$/;
 
-/** Store `bytes` once under their sha256. The row is written after the file is in place. */
+/** A slot id: `up_` and 12 random bytes as hex, as obelisk makes them. */
+const slotId = /^up_[0-9a-f]{24}$/;
+
+/**
+ * Store `bytes` once under their sha256. The row is written after the file is in place. The cap
+ * is `blobUnpackMax`: obelisk puts zip entries with no cap, and the unpacked total bounds them.
+ */
 export const putBlob = operation({
   label: "blobs.put",
   input: z.strictObject({ bytes: z.instanceof(Uint8Array) }),
-  depends: { store: blobBytes, transaction, maxBytes: blobMaxBytes },
+  depends: { store: blobBytes, transaction, maxBytes: blobUnpackMax },
   run: async ({ store, transaction, maxBytes }, { input, clock, signal }) => {
     if (input.bytes.byteLength > maxBytes) raise("BlobTooBig", { maxBytes });
 
@@ -62,7 +68,10 @@ export const readBlob = operation({
   },
 });
 
-/** Open an upload slot for `owner`. Expired slots are deleted in the same transaction. */
+/**
+ * Open an upload slot for `owner`. Slots expired for one more TTL are deleted in the same
+ * transaction, so an expired slot reads SlotExpired, not SlotMissing, for that long.
+ */
 export const openSlot = operation({
   label: "blobs.openSlot",
   input: z.strictObject({
@@ -83,7 +92,7 @@ export const openSlot = operation({
 
     const connection = await transaction.db();
 
-    pruneSlots.runSync(connection, { now });
+    pruneSlots.runSync(connection, { now, ttl });
 
     insertSlot.runSync(connection, {
       id,
@@ -105,11 +114,12 @@ export const fillSlot = operation({
   input: z.strictObject({
     id: z.string(),
     body: z.instanceof(ReadableStream<Uint8Array>),
-    name: z.string().max(200).optional(),
+    name: z.string().max(200).nullable().default(null),
   }),
   depends: { database, transaction, store: blobBytes },
   run: async ({ database, transaction, store }, { input, clock, signal }) => {
-    // A bad id finds no row, so it reads the same as an unknown one.
+    if (!slotId.test(input.id)) raise("SlotMissing", {});
+
     const slot = readSlot.runSync(database.reader, { id: input.id });
 
     if (!slot) raise("SlotMissing", {});
@@ -130,18 +140,17 @@ export const fillSlot = operation({
       id: input.id,
       hash: stored.hash,
       size: stored.size,
-      name: input.name ?? null,
+      name: input.name,
       filled_at: now,
       now,
     });
 
     if (!filled) {
-      // The update found no open slot: say why, from what the slot holds now.
+      // The update found no open slot: say why. Only the prune of an expired slot deletes its
+      // row while a fill streams, so a missing row reads as expired.
       const current = readSlot.runSync(connection, { id: input.id });
 
-      if (!current) raise("SlotMissing", {});
-
-      if (current.hash !== null) raise("SlotUsed", {});
+      if (current && current.hash !== null) raise("SlotUsed", {});
 
       raise("SlotExpired", {});
     }
@@ -156,6 +165,8 @@ export const takeSlot = operation({
   input: z.strictObject({ id: z.string(), owner: z.string().min(1).max(200) }),
   depends: { transaction },
   run: async ({ transaction }, { input, clock }) => {
+    if (!slotId.test(input.id)) raise("SlotMissing", {});
+
     const connection = await transaction.db();
 
     const slot = readSlot.runSync(connection, { id: input.id });

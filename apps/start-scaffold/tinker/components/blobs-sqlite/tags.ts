@@ -1,7 +1,7 @@
 import { tag } from "@tinker/core";
 import { z } from "zod";
 
-/** The most bytes one blob may hold: 25 MiB, obelisk's `MAX_UPLOAD`. */
+/** The default and the top cap of an upload slot: 25 MiB, obelisk's `MAX_UPLOAD`. */
 export const blobMaxBytes = tag<number>({
   label: "blobs.maxBytes",
   default: 26_214_400,
@@ -15,7 +15,10 @@ export const blobSlotTtl = tag<number>({
   parse: z.number().int().positive(),
 });
 
-/** The most bytes a zip may unpack to, all entries together. The app's zip reader reads it. */
+/**
+ * The top cap of `putBlob`, and of a zip's unpacked total: an entry is never bigger than the
+ * total. The app's zip reader reads it.
+ */
 export const blobUnpackMax = tag<number>({
   label: "blobs.unpackMax",
   default: 104_857_600,
