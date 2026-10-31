@@ -10,6 +10,7 @@ export declare namespace Errors {
     Cancelled: Record<string, never>;
 
     MigrationBusy: { timeout: number };
+    DatabaseFolderMissing: Record<string, never>;
 
     NestedTransaction: Record<string, never>;
 
