@@ -2,7 +2,7 @@ import { LEVELS, resource } from "@tinker/core";
 
 import { exportHealth } from "./health";
 import { queue } from "./queue";
-import { encodeValue, spanBody } from "./records";
+import { encodeValue, quiet, spanBody } from "./records";
 import type { Telemetry } from "./records";
 import { telemetryService } from "./settings";
 
@@ -16,8 +16,14 @@ type LogLine = Extract<Telemetry.Wire, [tag: "l", ...rest: unknown[]]>;
  */
 export const threadDrain = resource({
   label: "telemetry.drain",
-  depends: { queue, service: telemetryService, health: exportHealth.controller },
-  factory: ({ queue, service, health }, ctx) => {
+  depends: {
+    queue,
+    service: telemetryService,
+    health: exportHealth.controller,
+    encodeValue,
+    spanBody,
+  },
+  factory: ({ queue, service, health, encodeValue, spanBody }, ctx) => {
     let bad = 0;
     let changes = 0;
     let reported = -1;
@@ -86,7 +92,11 @@ export const threadDrain = resource({
           attributes,
           events,
         };
-        queue.add("trace", side, spanBody(span, encoded === 1));
+        queue.add(
+          "trace",
+          side,
+          spanBody.run({ input: { span, encoded: encoded === 1 }, ns: quiet }),
+        );
 
         const record: Telemetry.Log = {
           level: LEVELS.info,
@@ -114,7 +124,7 @@ export const threadDrain = resource({
           attributes: Object.fromEntries(
             Object.entries(attributes).map(([key, value]) => [
               key.slice(0, 256),
-              encoded ? (value as string) : encodeValue(value),
+              encoded ? (value as string) : encodeValue.run({ input: value, ns: quiet }),
             ]),
           ),
           msg: message.slice(0, 2048),
