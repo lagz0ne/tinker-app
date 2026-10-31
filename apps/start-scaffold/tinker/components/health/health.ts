@@ -1,7 +1,7 @@
 import { operation } from "@tinker/core";
 
 /** The copied base version; it changes when this component is updated. */
-export const baseVersion = "0.15.0";
+export const baseVersion = "0.15.1";
 
 export const health = operation({
   label: "tinker.health",
