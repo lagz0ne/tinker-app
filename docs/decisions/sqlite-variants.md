@@ -105,7 +105,9 @@ Same public names as `database`:
 
 - Driver: `node:sqlite` (`DatabaseSync`).
   Queries are Reylo `.sql` files.
-- `databaseUrl` is a `file:` URL.
+- `databaseUrl` takes a `file:` URL,
+  or a string it resolves against
+  `databaseFolder` (the app folder).
 - On open: WAL, `synchronous = NORMAL`,
   `busy_timeout`, `foreign_keys = ON`.
 - `transaction` (session resource):

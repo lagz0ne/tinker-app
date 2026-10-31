@@ -12,10 +12,11 @@ Exports refuse a tooling version below 0.13.3.
 
 - `database-sqlite`'s `databaseUrl` now takes a string as well as a `file:` URL, and resolves a
   relative one against the new `databaseFolder` tag: the app folder, which the command binds from
-  `defineMain`'s `cwd`. Before, `DATABASE_URL=file:./data/app.db` opened `/data/app.db`, and the
-  fix in `## 0.13.0`, step 2, broke when the folder name held `%`, `#`, or `?`. A database string
-  with no `databaseFolder` fails with `DatabaseFolderMissing` before it opens any file. Bind both
-  values in `cmds/server.ts`, and in `cmds/worker.ts` if your app has one:
+  `defineMain`'s `cwd`. Before, `DATABASE_URL=file:./data/app.db` opened `/data/app.db`. The fix in
+  `## 0.13.0`, step 2, needs `node:url` in the command. Hedl's own `file://${cwd}/` base broke
+  when the folder name held `%`, `#`, or `?`. A database string with no `databaseFolder` fails
+  with `DatabaseFolderMissing` before it opens any file, and an empty string is refused. Bind
+  both values in `cmds/server.ts`, and in `cmds/worker.ts` if your app has one:
 
   ```ts
   env.DATABASE_URL !== undefined && databaseUrl(env.DATABASE_URL),
