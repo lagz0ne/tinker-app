@@ -8,7 +8,7 @@ export const app = resolve(import.meta.dirname, "..");
 export const root = resolve(app, "../..");
 
 /** The new main/host contract first ships together in this release. */
-export const templateHostVersion = "0.16.0";
+export const templateHostVersion = "0.16.1";
 
 /**
  * One owner per target. A maintenance script (SQLite's dev database) may ship in two items as

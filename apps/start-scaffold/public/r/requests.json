@@ -9,7 +9,7 @@
     "@tanstack/react-start@1.168.60"
   ],
   "registryDependencies": [
-    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.16.0/apps/start-scaffold/public/r/errors.json"
+    "https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.16.1/apps/start-scaffold/public/r/errors.json"
   ],
   "files": [
     {

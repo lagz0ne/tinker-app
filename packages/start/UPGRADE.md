@@ -1,7 +1,19 @@
 # Upgrade
 
-## Unreleased
+## 0.16.1
 
+Start 0.16.1 is released from `lagz0ne/tinker-app`, tag `start-v0.16.1`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.16.1/tinker-start-0.16.1.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.16.1/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.16.1.
+
+- `database-sqlite` retries its WAL switch (#52). Two processes that migrate one fresh file no
+  longer fail with `database is locked`: `migrate` retries the switch inside its schema-lock
+  loop until the migration deadline, and each connection retries it in 50 ms steps until
+  `busy_timeout`. A `busy_timeout` of 0 still fails at once.
 - The SQLite set installs onto an app made from the `app` item. `tinker add database-sqlite`
   (and `auth-sqlite`, `sync-sqlite` and `blobs-sqlite`, which require it) no longer refuses
   with `is starter-only`.
