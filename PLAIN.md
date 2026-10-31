@@ -123,6 +123,7 @@ Tests and generated files do not count.
   - `kind`: `N`. From a failed base action; why: choose the managed error.
   - `payload`: `Errors.Payloads[N]`. From that action; why: keep its failure facts.
   - Callers:
+    - `tinker/components/database-sqlite/database.server.ts#databaseFile.factory`
     - `tinker/components/database-sqlite/database.server.ts#guardQuery`
     - `tinker/components/database-sqlite/database.server.ts#migrate.run`
     - `tinker/components/database-sqlite/database.server.ts#tx.take`

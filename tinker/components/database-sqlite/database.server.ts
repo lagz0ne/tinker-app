@@ -12,12 +12,36 @@ import pollQuery from "./queries/poll.sql";
 import trimQuery from "./queries/trim.sql";
 import type { Database } from "./types";
 
-/** Where the SQLite file is. A `file:` URL, so every process opens the same path. */
-export const databaseUrl = tag({
+/**
+ * Where the SQLite file is: a `file:` URL, or a URL reference resolved against `databaseFolder`.
+ * `file:./data/app.db`, `file:data/app.db`, and `./data/app.db` all name the same relative path.
+ * A string follows URL rules, so `#` starts a fragment and `%20` decodes: a path that holds those
+ * characters is written as a `file:` URL from `pathToFileURL`. An empty string is refused.
+ */
+export const databaseUrl = tag<URL | string>({
   label: "database.url",
-  parse: z
-    .instanceof(URL)
-    .refine((url) => url.protocol === "file:", { error: "SQLite needs a file: URL" }),
+  parse: z.union([
+    z
+      .instanceof(URL)
+      .refine((url) => url.protocol === "file:", { error: "SQLite needs a file: URL" }),
+    z
+      .string()
+      .min(1)
+      .refine((value) => URL.parse(value, "file:///")?.protocol === "file:", {
+        error: "SQLite needs a file: URL",
+      }),
+  ]),
+});
+
+/**
+ * The app folder: the command passes `defineMain`'s `cwd`.
+ * A relative `databaseUrl` string and a relative `databaseMigrationsFolder` resolve against it,
+ * so a process started from another folder still opens the app's file.
+ */
+export const databaseFolder = tag<string | undefined>({
+  label: "database.folder",
+  default: undefined,
+  parse: z.string().min(1).optional(),
 });
 
 /** Worker-only stop cancels the startup migration and its ownership wait. */
@@ -40,7 +64,10 @@ export const databaseMigrationTimeout = tag<number>({
   parse: z.number().int().positive().max(60000),
 });
 
-/** The folder `migrate` reads numbered `.sql` files from, relative to the working directory. */
+/**
+ * The folder `migrate` reads numbered `.sql` files from: relative to `databaseFolder` when it is
+ * bound, and to the working directory when it is not.
+ */
 export const databaseMigrationsFolder = tag<string>({
   label: "database.migrationsFolder",
   default: "migrations",
@@ -64,30 +91,51 @@ export const databaseNotifyRetention = tag<number>({
 /** The same channel names the Postgres set accepts, so a payload name survives the move. */
 const channelName = z.string().regex(/^[a-z_][a-z0-9_]{0,62}$/);
 
-/** `node:sqlite` fails with an `errcode`; SQLITE_BUSY is 5, and an extended code keeps those bits. */
-const sqliteError = z.object({ errcode: z.number() });
+/**
+ * `node:sqlite` fails with an `errcode`; SQLITE_BUSY is 5, and an extended code keeps those bits.
+ * Any other failure reads as 0, so it rethrows instead of waiting on a lock.
+ */
+const sqliteError = z.object({ errcode: z.number() }).catch({ errcode: 0 });
+
+/**
+ * One owner resolves the bound value to the absolute file path: a `URL` is used as given, and a
+ * string is a reference resolved against `databaseFolder` (Rails and Prisma resolve it that way).
+ */
+export const databaseFile = resource({
+  label: "database.file",
+  target: "scope",
+  depends: { url: databaseUrl, folder: databaseFolder, urls: sqliteUrl, paths: sqlitePath },
+  factory: async ({ url, folder, urls, paths }): Promise<string> => {
+    if (typeof url !== "string") return urls.fileURLToPath(url);
+
+    // A command that forgot the folder fails loud; it never opens the disk-root file.
+    if (folder === undefined) throw fail("DatabaseFolderMissing", {});
+
+    // WHATWG reference resolution (RFC 3986 section 5) from the app folder, which pathToFileURL
+    // percent-encodes: `%`, `#`, and `?` in the folder name stay part of the folder name.
+    return urls.fileURLToPath(new URL(url, urls.pathToFileURL(paths.join(folder, "/"))));
+  },
+});
 
 /** Feature code gets the two owned connections, the write turn, and notify delivery. */
 export const database = resource({
   label: "database",
   depends: {
-    url: databaseUrl,
+    file: databaseFile,
     sqlite,
-    urls: sqliteUrl,
     busyTimeout: databaseBusyTimeout,
     pollInterval: databasePollInterval,
     retention: databaseNotifyRetention,
   },
   factory: async (
-    { url, sqlite, urls, busyTimeout, pollInterval, retention },
+    { file, sqlite, busyTimeout, pollInterval, retention },
     { closing, clock, defer, log },
   ): Promise<Database.Handle> => {
     const { DatabaseSync } = sqlite;
-    const path = urls.fileURLToPath(url);
 
     // A writer and a reader each own one connection; WAL lets the reader run beside the writer.
     const [client, reader] = [0, 1].map(() => {
-      const connection = new DatabaseSync(path);
+      const connection = new DatabaseSync(file);
 
       // busy_timeout first: switching a fresh file to WAL can meet another process's lock.
       connection.exec(`PRAGMA busy_timeout = ${busyTimeout}`);
@@ -266,21 +314,21 @@ export const database = resource({
 export const migrate = operation({
   label: "migrate",
   depends: {
-    url: databaseUrl,
+    file: databaseFile,
     sqlite,
     fs: sqliteFs,
     paths: sqlitePath,
-    urls: sqliteUrl,
     busyTimeout: databaseBusyTimeout,
+    app: databaseFolder,
     folder: databaseMigrationsFolder,
     timeout: databaseMigrationTimeout,
   },
   run: async (
-    { url, sqlite, fs, paths, urls, busyTimeout, folder, timeout },
+    { file, sqlite, fs, paths, busyTimeout, app, folder, timeout },
     { clock, defer, signal },
   ) => {
     const { DatabaseSync } = sqlite;
-    const connection = new DatabaseSync(urls.fileURLToPath(url));
+    const connection = new DatabaseSync(file);
 
     defer(() => connection.close());
 
@@ -300,7 +348,7 @@ export const migrate = operation({
 
         break;
       } catch (error) {
-        const code = sqliteError.safeParse(error).data?.errcode ?? 0;
+        const code = sqliteError.parse(error).errcode;
 
         if ((code & 0xff) !== 5) throw error;
 
@@ -334,14 +382,17 @@ export const migrate = operation({
       "INSERT INTO start_migrations (name, applied_at) VALUES (?, ?)",
     );
 
-    const names = (await fs.readdir(folder)).filter(
+    // A relative folder resolves against the app folder, as the database file does.
+    const source = paths.resolve(app ?? ".", folder);
+
+    const names = (await fs.readdir(source)).filter(
       (name) => name.endsWith(".sql") && !applied.has(name),
     );
 
     for (const name of names.sort((left, right) => left.localeCompare(right))) {
       signal.throwIfAborted();
 
-      connection.exec(await fs.readFile(paths.join(folder, name), "utf8"));
+      connection.exec(await fs.readFile(paths.join(source, name), "utf8"));
       record.run(name, clock.currentTimeMillis());
     }
 
