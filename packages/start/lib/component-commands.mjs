@@ -41,10 +41,15 @@ const nameShape = /^[a-z0-9][a-z0-9-]*$/;
 
 /**
  * The only folders a component may write outside its own: the migrations it owns (`drizzle/` for
- * Postgres, `sqlite/migrations/` for SQLite) and the maintenance scripts it owns (SQLite's dev
- * database).
+ * Postgres, `sqlite/migrations/` for SQLite).
  */
-const outsideRoots = ["drizzle/", "sqlite/migrations/", "maintain/"];
+const outsideRoots = ["drizzle/", "sqlite/migrations/"];
+
+/**
+ * The only single files a component may write outside its own folder: SQLite's dev database
+ * builder, which `tinker prepare` runs. The rest of `maintain/` is the app's.
+ */
+const outsideFiles = ["maintain/sqlite-dev-db.mjs"];
 
 /**
  * An app-relative path for a registry target, or null when the target would leave the app.
@@ -136,7 +141,8 @@ function filesOf(item, name) {
  * @param {string} name - From filesOf; why: the component that would write it.
  */
 function ownedPath(path, name) {
-  return path.startsWith(areaOf(name)) || outsideRoots.some((root) => path.startsWith(root));
+  if (path.startsWith(areaOf(name)) || outsideFiles.includes(path)) return true;
+  return outsideRoots.some((root) => path.startsWith(root));
 }
 
 /**
@@ -967,7 +973,9 @@ export async function updateComponent(root, name, base, options = {}) {
 async function refuseEdits(root, name, files, options) {
   const lock = await readLock(root);
   const entry = lock.components[name];
-  const diff = entry ? lockDiffOf(root, name, entry) : diffOf(root, name, files);
+  const diff = entry
+    ? [...lockDiffOf(root, name, entry), ...unlockedConflicts(root, name, entry, files)]
+    : diffOf(root, name, files);
   const edits = entry ? diff.filter((line) => !alreadyNew(root, line, files)) : diff;
   if (edits.length === 0 || options.force || options.recovered) return;
 
@@ -975,6 +983,27 @@ async function refuseEdits(root, name, files, options) {
     ...edits,
     `tinker update: ${name} has local edits; rerun with --force to replace them`,
   ]);
+}
+
+/**
+ * `conflict:` lines for the registry's outside files that the lock entry does not list but the app
+ * holds with other bytes: an older lock (from before the item shipped that file) cannot tell an
+ * edit from the old copy, so update keeps the file unless --force.
+ * @param {string} root - From refuseEdits; why: the app to read.
+ * @param {string} name - From refuseEdits; why: the component, whose own folder the lock diff covers.
+ * @param {{ files: Record<string, string> }} entry - From readLock; why: the paths it records.
+ * @param {Map<string, string>} files - From filesOf; why: the registry copy.
+ */
+function unlockedConflicts(root, name, entry, files) {
+  const locked = entry.files ?? {};
+  const lines = [];
+  for (const [path, content] of files) {
+    if (path.startsWith(areaOf(name)) || locked[path] !== undefined) continue;
+
+    const file = join(root, path);
+    if (existsSync(file) && readFileSync(file, "utf8") !== content) lines.push(`conflict: ${path}`);
+  }
+  return lines;
 }
 
 /**
