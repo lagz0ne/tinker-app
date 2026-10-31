@@ -24,7 +24,6 @@ export type TalkOptions = Pick<
   | "effort"
   | "cwd"
   | "resume"
-  | "settings"
 >;
 
 /** One turn: one `query()` with a string prompt; `onEvent` sees its stream until the result settles. */
@@ -124,6 +123,10 @@ type Stream = {
   streamed: Set<string>;
   messageId: string;
   texting: boolean;
+  /** Redacted text held back while it may be the start of the credential. */
+  pending: string;
+  tools: number;
+  measured: Set<string>;
   sessionId?: string;
   done?: TurnResult;
   ended?: { text: string; maxTurns: boolean };
@@ -176,6 +179,8 @@ export const agentTalk = resource({
       ...(credentials && "apiKey" in credentials ? { ANTHROPIC_API_KEY: credentials.apiKey } : {}),
     };
     const notSignedIn = "Not signed in: agentCredentials is unbound";
+    const ended = new AbortController();
+    const stopping = AbortSignal.any([closing, ended.signal]);
 
     await files.mkdir(tmp, { recursive: true });
 
@@ -236,10 +241,9 @@ export const agentTalk = resource({
 
         const granted = Promise.withResolvers<boolean>();
         const leave = () => {
-          waiters.splice(
-            waiters.findIndex((waiter) => waiter.granted === granted),
-            1,
-          );
+          const index = waiters.findIndex((waiter) => waiter.granted === granted);
+
+          if (index >= 0) waiters.splice(index, 1);
           granted.resolve(false);
         };
 
@@ -277,6 +281,9 @@ export const agentTalk = resource({
           streamed: new Set(),
           messageId: "",
           texting: false,
+          pending: "",
+          tools: 0,
+          measured: new Set(),
         };
         const abort = () => controller.abort(signal.reason);
         let thrown: { error: unknown } | undefined;
@@ -294,6 +301,7 @@ export const agentTalk = resource({
               strictMcpConfig: true,
               persistSession: true,
               includePartialMessages: true,
+              settings: { disableClaudeAiConnectors: true },
               abortController: controller,
               env,
             },
@@ -364,18 +372,51 @@ export const agentTalk = resource({
       streamText(stream: Stream, event: SDKPartialAssistantMessage["event"]) {
         if (!stream.texting) return;
 
-        const messageId = stream.messageId;
-
         if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-          owned.emit(stream.listener, {
-            type: "text",
-            messageId,
-            delta: owned.redact(event.delta.text),
-          });
+          owned.carry(stream, event.delta.text, false);
         } else if (event.type === "content_block_stop") {
+          owned.carry(stream, "", true);
           stream.texting = false;
-          owned.emit(stream.listener, { type: "text-end", messageId });
+          owned.emit(stream.listener, { type: "text-end", messageId: stream.messageId });
         }
+      },
+      /** Emits redacted text, holding back a tail that may be the start of a split credential. */
+      carry(stream: Stream, text: string, flush: boolean) {
+        const redacted = owned.redact(stream.pending + text);
+        const cut = redacted.length - (flush ? 0 : owned.held(redacted));
+        const delta = redacted.slice(0, cut);
+
+        stream.pending = redacted.slice(cut);
+
+        if (delta) {
+          owned.emit(stream.listener, { type: "text", messageId: stream.messageId, delta });
+        }
+      },
+      /** The longest end of `text` that starts the credential. */
+      held(text: string) {
+        if (!secret) return 0;
+
+        for (let size = Math.min(secret.length - 1, text.length); size > 0; size--) {
+          if (text.endsWith(secret.slice(0, size))) return size;
+        }
+
+        return 0;
+      },
+      /** Every string inside a value, redacted; the shape stays. */
+      scrub(value: unknown): unknown {
+        if (!secret) return value;
+
+        if (typeof value === "string") return owned.redact(value);
+
+        if (Array.isArray(value)) return value.map((item) => owned.scrub(item));
+
+        if (value && typeof value === "object") {
+          return Object.fromEntries(
+            Object.entries(value).map(([key, item]) => [key, owned.scrub(item)]),
+          );
+        }
+
+        return value;
       },
       assistant(stream: Stream, message: SDKAssistantMessage) {
         const id = message.message.id;
@@ -383,7 +424,9 @@ export const agentTalk = resource({
 
         for (const block of message.message.content) owned.block(stream, id, block);
 
-        if (!usage) return;
+        if (!usage || stream.measured.has(id)) return;
+
+        stream.measured.add(id);
 
         const contextTokens = [
           usage.input_tokens,
@@ -392,7 +435,12 @@ export const agentTalk = resource({
           usage.output_tokens,
         ].reduce<number>((sum, tokens) => sum + (tokens ?? 0), 0);
 
-        owned.emit(stream.listener, { type: "usage", messageId: id, contextTokens, usage });
+        owned.emit(stream.listener, {
+          type: "usage",
+          messageId: id,
+          contextTokens,
+          usage: owned.scrub(usage),
+        });
       },
       /** Assistant text not already streamed, and each tool call. */
       block(stream: Stream, id: string, block: SDKAssistantMessage["message"]["content"][number]) {
@@ -403,11 +451,12 @@ export const agentTalk = resource({
             text: owned.redact(block.text),
           });
         } else if (block.type === "tool_use") {
+          stream.tools++;
           owned.emit(stream.listener, {
             type: "tool-start",
             id: block.id,
             name: block.name,
-            input: block.input,
+            input: owned.scrub(block.input),
           });
         }
       },
@@ -435,15 +484,19 @@ export const agentTalk = resource({
       result(stream: Stream, message: SDKResultMessage) {
         stream.sessionId = message.session_id || stream.sessionId;
 
-        if (message.subtype === "success" && !message.is_error) {
+        if (
+          message.subtype === "success" &&
+          !message.is_error &&
+          !owned.signedOutReply(stream, message.result)
+        ) {
           stream.done = {
             status: "done",
             sessionId: message.session_id,
             costUsd: message.total_cost_usd,
-            usage: message.usage,
+            usage: owned.scrub(message.usage),
             numTurns: message.num_turns,
             durationMs: message.duration_ms,
-            denials: message.permission_denials,
+            denials: owned.scrub(message.permission_denials) as unknown[],
           };
         } else {
           stream.ended = {
@@ -453,6 +506,10 @@ export const agentTalk = resource({
             maxTurns: message.subtype === "error_max_turns",
           };
         }
+      },
+      /** Claude Code's not-signed-in answer can come as a success; a turn that ran a tool is real work. */
+      signedOutReply(stream: Stream, text: string) {
+        return stream.tools === 0 && signedOut.test(text);
       },
       /** The query's outcome: a listener throw, a result, an abort, then an error text. */
       settle(stream: Stream, signal: AbortSignal, fallback: string): Played {
@@ -484,11 +541,12 @@ export const agentTalk = resource({
         return {
           result: { status: "failed", error, message: text, ...session },
           lost: error === "claude" && lostSession.test(text),
+          ...session,
         };
       },
       async turn(talk: string, entry: { stop: AbortController }, turn: Turn): Promise<TurnResult> {
         const listener: Listener = { onEvent: turn.onEvent, controller: new AbortController() };
-        const signal = AbortSignal.any([closing, entry.stop.signal, listener.controller.signal]);
+        const signal = AbortSignal.any([stopping, entry.stop.signal, listener.controller.signal]);
         const ticket = owned.enter(talk, signal);
         let played: Played | undefined;
         let granted = false;
@@ -521,7 +579,7 @@ export const agentTalk = resource({
 
         owned.emit(listener, { type: "session-lost" });
 
-        if (signal.aborted) return played;
+        if (signal.aborted) return played.sessionId ? { sessionId: played.sessionId } : {};
 
         const { resume: _lost, ...fresh } = turn.options;
 
@@ -544,7 +602,9 @@ export const agentTalk = resource({
 
         const session = played?.sessionId ? { sessionId: played.sessionId } : {};
 
-        return { status: entry.stop.signal.aborted ? "stopped" : "closed", ...session };
+        const status = entry.stop.signal.aborted && !stopping.aborted ? "stopped" : "closed";
+
+        return { status, ...session };
       },
       /** One quiet ping in the cap and the talk's line; undefined when the plan ended first. */
       async ping(
@@ -578,7 +638,7 @@ export const agentTalk = resource({
         plan.stop.abort();
       },
       async keep(talk: string, entry: Plan, plan: WarmPlan): Promise<WarmResult> {
-        const signal = AbortSignal.any([closing, entry.stop.signal]);
+        const signal = AbortSignal.any([stopping, entry.stop.signal]);
         const start = clock.currentTimeMillis();
         const count = { pings: 0 };
 
@@ -638,7 +698,7 @@ export const agentTalk = resource({
         return undefined;
       },
       run(talk: string, turn: Turn): { result: Promise<TurnResult> } {
-        if (closing.aborted) return { result: Promise.resolve({ status: "closed" }) };
+        if (stopping.aborted) return { result: Promise.resolve({ status: "closed" }) };
 
         if (runs.has(talk)) return { result: Promise.resolve({ status: "busy" }) };
 
@@ -677,7 +737,13 @@ export const agentTalk = resource({
         owned.endPlan(talk, "stopped");
       },
       warm(talk: string, plan: WarmPlan): { done: Promise<WarmResult> } {
-        if (closing.aborted) return { done: Promise.resolve({ status: "closed", pings: 0 }) };
+        if (stopping.aborted) return { done: Promise.resolve({ status: "closed", pings: 0 }) };
+
+        if (!(Number.isFinite(plan.everyMs) && plan.everyMs > 0 && Number.isFinite(plan.untilMs))) {
+          const message = "warm needs a finite everyMs above 0 and a finite untilMs";
+
+          return { done: Promise.resolve({ status: "failed", pings: 0, message }) };
+        }
 
         owned.endPlan(talk, "replaced");
 
@@ -700,7 +766,9 @@ export const agentTalk = resource({
       },
     };
 
+    // Close aborts through `closing`; a release has no closing, so `ended` aborts the same work.
     defer(async () => {
+      ended.abort();
       await Promise.all(inflight);
     });
 
