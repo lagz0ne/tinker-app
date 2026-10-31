@@ -19,6 +19,13 @@ export declare namespace Errors {
     StreamDenied: Record<string, never>;
     StreamDisconnected: Record<string, never>;
     WriteRejected: { message: string };
+
+    BlobTooBig: { maxBytes: number };
+    BlobEmpty: Record<string, never>;
+    SlotMissing: Record<string, never>;
+    SlotExpired: Record<string, never>;
+    SlotUsed: Record<string, never>;
+    SlotEmpty: Record<string, never>;
   };
   type Name = keyof Payloads;
   type Of<N extends Name> = Error & { kind: N; payload: Payloads[N] };

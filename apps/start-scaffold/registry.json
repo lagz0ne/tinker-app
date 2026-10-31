@@ -1101,6 +1101,96 @@
       }
     },
     {
+      "name": "blobs-sqlite",
+      "type": "registry:lib",
+      "title": "blobs-sqlite",
+      "description": "Copied SQLite blob store component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
+      "dependencies": [
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+        "reylo@0.6.0",
+        "zod@catalog:"
+      ],
+      "registryDependencies": ["@tinker-start/errors", "@tinker-start/database-sqlite"],
+      "files": [
+        {
+          "path": "tinker/components/blobs-sqlite/blobs.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/blobs.server.ts"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/bytes.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/bytes.server.ts"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/component.json"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/index.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/index.server.ts"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/modules.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/modules.ts"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/queries/delete_slot.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/queries/delete_slot.sql"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/queries/fill_slot.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/queries/fill_slot.sql"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/queries/insert_blob.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/queries/insert_blob.sql"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/queries/insert_slot.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/queries/insert_slot.sql"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/queries/prune_slots.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/queries/prune_slots.sql"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/queries/read_blob.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/queries/read_blob.sql"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/queries/read_slot.sql",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/queries/read_slot.sql"
+        },
+        {
+          "path": "tinker/components/blobs-sqlite/tags.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/blobs-sqlite/tags.ts"
+        },
+        {
+          "path": "sqlite/migrations/20261031000000_blobs.sql",
+          "type": "registry:file",
+          "target": "~/migrations/20261031000000_blobs.sql"
+        }
+      ],
+      "meta": {
+        "ownership": "userland",
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
+        "starterOnly": true,
+        "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
+      }
+    },
+    {
       "name": "telemetry",
       "type": "registry:lib",
       "title": "telemetry",
