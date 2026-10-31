@@ -1,5 +1,33 @@
 # Upgrade
 
+## 0.13.3
+
+Start 0.13.3 is released from `lagz0ne/tinker-app`, tag `start-v0.13.3`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.13.3/tinker-start-0.13.3.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.3/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.13.3.
+
+- `database-sqlite`'s `databaseUrl` now takes a string as well as a `file:` URL, and resolves a
+  relative one against the new `databaseFolder` tag: the app folder, which the command binds from
+  `defineMain`'s `cwd`. Before, `DATABASE_URL=file:./data/app.db` opened `/data/app.db`, and the
+  fix in `## 0.13.0`, step 2, broke when the folder name held `%`, `#`, or `?`. A database string
+  with no `databaseFolder` fails with `DatabaseFolderMissing` before it opens any file. Bind both
+  values in `cmds/server.ts`, and in `cmds/worker.ts` if your app has one:
+
+  ```ts
+  env.DATABASE_URL !== undefined && databaseUrl(env.DATABASE_URL),
+  databaseFolder(cwd),
+  ```
+
+  A `databaseUrl(url)` binding still works as given, so a command that builds its own
+  `pathToFileURL` keeps working. `databaseMigrationsFolder` also resolves against
+  `databaseFolder` when it is bound, and against the working directory when it is not.
+  Hedl found it. The SQLite items are starter-only, so an app made from the demo takes this by
+  the template update from `demo-v0.13.2` to `demo-v0.13.3`.
+
 ## 0.13.2
 
 Start 0.13.2 is released from `lagz0ne/tinker-app`, tag `start-v0.13.2`.

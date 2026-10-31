@@ -21,7 +21,7 @@
       "path": "tinker/components/health/health.ts",
       "type": "registry:file",
       "target": "~/tinker/components/health/health.ts",
-      "content": "import { operation } from \"@tinker/core\";\n\n/** The copied base version; it changes when this component is updated. */\nexport const baseVersion = \"0.13.2\";\n\nexport const health = operation({\n  label: \"tinker.health\",\n  run: () => ({ ok: true, base: baseVersion }),\n});\n"
+      "content": "import { operation } from \"@tinker/core\";\n\n/** The copied base version; it changes when this component is updated. */\nexport const baseVersion = \"0.13.3\";\n\nexport const health = operation({\n  label: \"tinker.health\",\n  run: () => ({ ok: true, base: baseVersion }),\n});\n"
     },
     {
       "path": "tinker/components/health/index.ts",
