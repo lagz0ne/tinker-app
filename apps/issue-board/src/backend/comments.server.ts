@@ -47,9 +47,10 @@ export const addComment = operation({
     lock: lockTeamWrite.controller,
     save: saveComment.controller,
     alerts: queueAlerts.controller,
+    fanDeliveries: rowDeliveries.controller,
     publish: fanOut.controller,
   },
-  run: async ({ currentUser, lock, save, alerts, publish }, { input }) => {
+  run: async ({ currentUser, lock, save, alerts, fanDeliveries, publish }, { input }) => {
     const locked = await lock.run({
       input: {
         teamId: input.comment.teamId,
@@ -73,11 +74,13 @@ export const addComment = operation({
       input: {
         executionId: input.executionId,
         owner: currentUser.id,
-        deliveries: rowDeliveries(
-          locked.members,
-          { kind: "comment.add", comment: saved.added },
-          currentUser.id,
-        ),
+        deliveries: fanDeliveries.run({
+          input: {
+            members: locked.members,
+            change: { kind: "comment.add", comment: saved.added },
+            actorId: currentUser.id,
+          },
+        }),
       },
     });
     return { executionId: input.executionId };
