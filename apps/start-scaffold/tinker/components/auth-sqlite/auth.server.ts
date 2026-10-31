@@ -6,6 +6,7 @@ import { requestHeaders } from "~/components/requests/index.server";
 import { createAccountStream, publishAccountNotice } from "~/components/sync-sqlite/index.server";
 
 import { betterAuthModule, betterAuthStart, kyselyModule, nodeSqliteDialect } from "./modules";
+import { codeSignin, mcpProvider } from "./plugins.server";
 import { authSettings } from "./settings.server";
 
 /** The Postgres `session` trigger has no trigger here: each committed change says so itself. */
@@ -76,7 +77,9 @@ const authDriver = resource({
  * A session delete sends the account notice after its commit: sign-out, a revoked or deleted
  * session, and a deleted user (its sessions go through the same delete) all end here.
  * The SQLite set has no mail component, so sign-in is the only email-password flow: no reset
- * mail and no verification mail.
+ * mail and no verification mail. A code sign-in marks its session with the code, the browser,
+ * and the OAuth client that approved it; the stock device routes are off, as the component
+ * serves its own.
  */
 export const auth = resource({
   label: "auth",
@@ -91,9 +94,24 @@ export const auth = resource({
     changed: publishSessionChange,
     auth: betterAuthModule,
     start: betterAuthStart,
+    codes: codeSignin,
+    oauth: mcpProvider,
   },
   factory: async (
-    { database, settings, writer, dialect, kysely, created, deleted, changed, auth, start },
+    {
+      database,
+      settings,
+      writer,
+      dialect,
+      kysely,
+      created,
+      deleted,
+      changed,
+      auth,
+      start,
+      codes,
+      oauth,
+    },
     { closing, log },
   ) => {
     const { Kysely } = kysely;
@@ -111,11 +129,25 @@ export const auth = resource({
     const { betterAuth } = auth;
     const { tanstackStartCookies } = start;
 
-    return betterAuth({
+    const instance = betterAuth({
       baseURL: settings.origin,
       secret: settings.secret,
       database: { db, type: "sqlite" },
-      session: { deferSessionRefresh: true },
+      session: {
+        deferSessionRefresh: true,
+        additionalFields: {
+          signinCode: { type: "string", required: false, input: false },
+          signinBrowser: { type: "string", required: false, input: false },
+          signinApprovedBy: { type: "string", required: false, input: false },
+        },
+      },
+      disabledPaths: [
+        "/device/code",
+        "/device/token",
+        "/device",
+        "/device/approve",
+        "/device/deny",
+      ],
       databaseHooks: {
         user: {
           create: {
@@ -150,8 +182,15 @@ export const auth = resource({
       emailAndPassword: {
         enabled: true,
       },
-      plugins: [tanstackStartCookies()],
+      hooks: { before: oauth.clientCheck },
+      plugins: [...oauth.plugins, ...codes, tanstackStartCookies()],
     });
+
+    // Plugin start-up writes (the OAuth provider seeds its MCP resource row) end before the
+    // resource is ready, so a scope that closes early never closes the database under them.
+    await instance.$context;
+
+    return instance;
   },
 });
 
