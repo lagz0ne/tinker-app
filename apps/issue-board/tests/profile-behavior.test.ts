@@ -109,6 +109,35 @@ test("saving for a removed account rolls back the receipt and change", async () 
   await root.close({ graceful: true });
 });
 
+test("a bad name is refused as input before the receipt or the change is written", async () => {
+  const root = createScope({
+    presets: [
+      proofDatabase,
+      preset(principal, async () => person),
+      preset(mail, async () => ({ send: async () => expect.unreachable("no name, no mail") })),
+    ],
+  });
+
+  await root.ready;
+  await root.run(migrate);
+  const db = await root.resolve(database);
+  await db.insert(user).values(person);
+  for (const name of ["", "   ", "n".repeat(81)]) {
+    expect(
+      await root.settle(saveProfile, {
+        input: { executionId: crypto.randomUUID(), profile: { name } },
+      }),
+    ).toMatchObject({
+      status: "failed",
+      error: { kind: "BadInput", payload: { reason: "Use a name with 1 to 80 letters." } },
+    });
+  }
+  expect(await db.select().from(execution)).toEqual([]);
+  expect(await db.select().from(event)).toEqual([]);
+  expect(await root.run(readProfile)).toMatchObject({ name: "Ada" });
+  await root.close({ graceful: true });
+});
+
 test("replaying a completed profile receipt changes no profile and sends no second mail", async () => {
   const messages: Mail.Message[] = [];
   const logs: Observe.Log[] = [];
