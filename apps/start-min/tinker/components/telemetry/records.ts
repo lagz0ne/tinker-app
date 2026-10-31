@@ -1,3 +1,4 @@
+import { namespace, operation } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 import type { z } from "zod";
 
@@ -69,74 +70,94 @@ export declare namespace Telemetry {
     | [tag: "b", batch: Batch];
 }
 
-/** Core attributes may contain bigint or cycles; one bad field must not lose its record.
- * @param value - From a span or log attribute; why: bound and safely encode its wire value.
+/**
+ * The exporter's own bucket: work run in it makes no span or log line (ADR 0119).
+ * Telemetry encodes inside Core's export callback; a traced encode would export itself again.
  */
-export function encodeValue(value: unknown): string {
-  switch (typeof value) {
-    case "string":
-    case "number":
-    case "boolean":
-      return JSON.stringify(value).slice(0, 2048);
-    case "bigint":
-      return value.toString().slice(0, 2048);
-    case "undefined":
-      return "undefined";
-  }
-  try {
-    return (
-      JSON.stringify(value, (_key, entry) =>
-        typeof entry === "bigint" ? entry.toString() : entry,
-      ) ?? "undefined"
-    ).slice(0, 2048);
-  } catch {
-    return "[Unserializable]";
-  }
-}
+export const quiet = namespace({ observe: false });
+
+/** Bounds one attribute value to its wire string; a bigint or a cycle still encodes. */
+export const encodeValue = operation({
+  label: "telemetry.encodeValue",
+  input: (raw: unknown) => raw,
+  run: (_deps, ctx): string => {
+    const value = ctx.input;
+    switch (typeof value) {
+      case "string":
+      case "number":
+      case "boolean":
+        return JSON.stringify(value).slice(0, 2048);
+      case "bigint":
+        return value.toString().slice(0, 2048);
+      case "undefined":
+        return "undefined";
+    }
+    try {
+      return (
+        JSON.stringify(value, (_key, entry) =>
+          typeof entry === "bigint" ? entry.toString() : entry,
+        ) ?? "undefined"
+      ).slice(0, 2048);
+    } catch {
+      return "[Unserializable]";
+    }
+  },
+});
 
 /**
- * The OTLP body of one span; the in-process observer and the worker drain share it.
- * @param span - From Core's export callback or a worker line; why: the fields to shape.
- * @param encoded - From a worker line's flag; why: its values are already `encodeValue` output.
+ * Shapes one span into its OTLP body; the in-process observer and the worker drain share it.
+ * `encoded` comes from a worker line's flag: its values are already `encodeValue` output.
  */
-export function spanBody(span: Telemetry.SpanFields, encoded: boolean): Telemetry.SpanBody {
-  const [startTimeUnixNano, endTimeUnixNano] = [span.start, span.end ?? span.start].map((time) => {
-    const millis = Math.trunc(time);
-    return millis === 0 ? "0" : `${millis}000000`;
-  });
-  const attributes = Object.entries(span.attributes)
-    .slice(0, 31)
-    .map(([key, value]) => ({
-      key: key.slice(0, 256),
-      value: { stringValue: encoded ? (value as string) : encodeValue(value) },
-    }));
-  attributes.push({ key: "tinker.kind", value: { stringValue: span.kind } });
-  return {
-    traceId: span.traceId,
-    spanId: span.spanId,
-    parentSpanId: span.parentSpanId,
-    flags: span.sampled ? 1 : 0,
-    name: span.name.slice(0, 256),
-    kind: 1,
-    startTimeUnixNano: startTimeUnixNano!,
-    endTimeUnixNano: endTimeUnixNano!,
-    attributes,
-    events: span.events.slice(0, 32).map((event) => {
-      const millis = Math.trunc(event.time);
-      return {
-        name: event.name.slice(0, 256),
-        timeUnixNano: millis === 0 ? "0" : `${millis}000000`,
-        attributes: Object.entries(event.attributes)
-          .slice(0, 31)
-          .map(([key, value]) => ({
-            key: key.slice(0, 256),
-            value: { stringValue: encoded ? (value as string) : encodeValue(value) },
-          })),
-      };
-    }),
-    status:
-      span.status === "failed"
-        ? { code: 2, message: String(span.error).slice(0, 2048) }
-        : { code: 1 },
-  };
-}
+export const spanBody = operation({
+  label: "telemetry.spanBody",
+  depends: { encodeValue },
+  input: (raw: unknown) => raw as { span: Telemetry.SpanFields; encoded: boolean },
+  run: ({ encodeValue }, ctx): Telemetry.SpanBody => {
+    const { span, encoded } = ctx.input;
+    const [startTimeUnixNano, endTimeUnixNano] = [span.start, span.end ?? span.start].map(
+      (time) => {
+        const millis = Math.trunc(time);
+        return millis === 0 ? "0" : `${millis}000000`;
+      },
+    );
+
+    const attributes = Object.entries(span.attributes)
+      .slice(0, 31)
+      .map(([key, value]) => ({
+        key: key.slice(0, 256),
+        value: { stringValue: encoded ? (value as string) : encodeValue.run({ input: value }) },
+      }));
+    attributes.push({ key: "tinker.kind", value: { stringValue: span.kind } });
+
+    return {
+      traceId: span.traceId,
+      spanId: span.spanId,
+      parentSpanId: span.parentSpanId,
+      flags: span.sampled ? 1 : 0,
+      name: span.name.slice(0, 256),
+      kind: 1,
+      startTimeUnixNano: startTimeUnixNano!,
+      endTimeUnixNano: endTimeUnixNano!,
+      attributes,
+      events: span.events.slice(0, 32).map((event) => {
+        const millis = Math.trunc(event.time);
+        return {
+          name: event.name.slice(0, 256),
+          timeUnixNano: millis === 0 ? "0" : `${millis}000000`,
+          attributes: Object.entries(event.attributes)
+            .slice(0, 31)
+            .map(([key, value]) => ({
+              key: key.slice(0, 256),
+              value: {
+                stringValue: encoded ? (value as string) : encodeValue.run({ input: value }),
+              },
+            })),
+        };
+      }),
+      status:
+        span.status === "failed"
+          ? { code: 2, message: String(span.error).slice(0, 2048) }
+          : { code: 1 },
+    };
+  },
+});
