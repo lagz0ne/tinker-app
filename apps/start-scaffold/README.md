@@ -41,7 +41,7 @@ Imports omit TypeScript file endings. Keep blank-line steps in function bodies.
 Choose tags for fixed inputs, data for changing records, resources for owned clients,
 and operations for actions. Read [AGENTS.md](AGENTS.md) and the copied skills before editing.
 No module owns an app scope outside commands or copied entry code.
-The plain-function cap is 17. Only named entry functions have exceptions.
+App code has no plain helper functions. Only named entry functions have exceptions.
 Only cmds/router.ts#getRouter and cmds/server.ts#main have approved cmd entry exceptions; no component or src function is skipped.
 
 ## Command wiring
