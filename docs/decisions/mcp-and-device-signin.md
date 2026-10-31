@@ -137,6 +137,25 @@ authMcp({
   the bad fields. Any other error is logged,
   and the reply says the tool failed,
   with no detail.
+- Changed while building (2026-10-31):
+  an operation body cannot run an operation
+  it picks at run time; only a scope verb
+  can. So the component also ships the
+  `mcpRuns` extension. The app installs it
+  on the root, beside `startRequests`.
+  Its run hook answers each `mcp.tool` call:
+  it runs the tool with `event.settle`
+  in the caller's layer, so the caller's
+  tags reach the tool. The tool's span sits
+  under one `mcp.tool` span, under
+  `handleMcp`. Without the extension,
+  `mcp.tool` raises `McpNotInstalled`.
+- The managed error with a message is
+  `Refused: { message }`. Other managed
+  errors (such as `MissingTag`) say only
+  that the tool failed.
+- `mcp` requires only `errors`: it uses
+  nothing from `requests`.
 
 `mcpServer` tag: `{ name, version, instructions? }`.
 

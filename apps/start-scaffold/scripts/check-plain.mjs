@@ -998,6 +998,12 @@ const authMountFiles = [
   "tinker/components/auth-sqlite/index.server.ts",
 ];
 
+/** The MCP set owns ADR 0103's second mounted protocol exception: the SDK's Streamable HTTP. */
+const mcpMountFiles = [
+  "tinker/components/mcp/handle.server.ts",
+  "tinker/components/mcp/index.server.ts",
+];
+
 function checkRequestHeaders(node) {
   const file = pathOf(node);
   if (authServerFiles.includes(file)) return;
@@ -1024,6 +1030,8 @@ function checkResponse(node) {
   if (file.startsWith("src/routes/")) return;
   if (file === "tinker/components/requests/body.server.ts") return;
   if (["tinker/base/server-entry.ts", "tinker/base/panics.tsx"].includes(file)) return;
+  if (mcpMountFiles.includes(file)) return;
+
   if (nativeReference(node, responseDeclarations)) {
     fail(node, "protocol-response: replies belong to routes or the base");
   }
@@ -1036,6 +1044,14 @@ function checkMountedAuth(node) {
 
   if (protocolUnitReference(node, "tinker/components/auth/handle.server.ts", "handleAuth")) {
     fail(node, "protocol-auth: only the auth route may use the mounted handler");
+  }
+}
+
+function checkMountedMcp(node) {
+  if (mcpMountFiles.includes(pathOf(node)) || pathOf(node).startsWith("src/routes/")) return;
+
+  if (protocolUnitReference(node, "tinker/components/mcp/handle.server.ts", "handleMcp")) {
+    fail(node, "protocol-mcp: only a route may use the mounted MCP handler");
   }
 }
 
@@ -1803,13 +1819,17 @@ function checkOperationRun(run) {
   if (response) fail(run, "operation-wire-output: replies belong to the protocol layer");
 }
 
-function mountedAuthDeclaration(node) {
-  return authMountFiles.includes(pathOf(node)) && nameOf(node.parent.name) === "handleAuth";
+/** The two named mounts: auth's `handleAuth` and the MCP set's `handleMcp`. */
+function mountedDeclaration(node) {
+  const name = nameOf(node.parent.name);
+  if (authMountFiles.includes(pathOf(node))) return name === "handleAuth";
+
+  return mcpMountFiles.includes(pathOf(node)) && name === "handleMcp";
 }
 
 function checkOperationWire(node) {
   if (!ts.isCallExpression(node) || !coreSymbol(node.expression, "operation")) return;
-  if (mountedAuthDeclaration(node)) return;
+  if (mountedDeclaration(node)) return;
 
   const options = node.arguments[0];
   if (
@@ -1839,6 +1859,7 @@ for (const source of sources) {
     checkRequestHeaders(node);
     checkResponse(node);
     checkMountedAuth(node);
+    checkMountedMcp(node);
     checkHttpImport(node);
 
     checkService(node);
@@ -2000,6 +2021,24 @@ if (process.argv.includes("--prove")) {
       "operation-wire-input",
       "const probe = operation({input: z.instanceof(Request), run: () => true});",
       "tinker/components/auth/handle.server.ts",
+    ],
+    [
+      "mcp-mount-other-operation",
+      "operation-wire-input",
+      "const probe = operation({input: z.instanceof(Request), run: () => true});",
+      "tinker/components/mcp/handle.server.ts",
+    ],
+    [
+      "mcp-mount-response-elsewhere",
+      "protocol-response",
+      "export const probe = () => new Response(null, { status: 405 });",
+      "tinker/components/mcp/tools.server.ts",
+    ],
+    [
+      "mounted-mcp-userland",
+      "protocol-mcp",
+      'import {operation} from "@tinker/core"; import {handleMcp} from "~/components/mcp/index.server"; const probe = operation({depends: {mounted: handleMcp.controller}, run: () => 1});',
+      "src/backend/plain-probe.ts",
     ],
     [
       "http-owner-extra-fetch",
