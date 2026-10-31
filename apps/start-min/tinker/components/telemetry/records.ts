@@ -111,6 +111,7 @@ export const encodeValue = operation({
 export const spanBody = operation({
   label: "telemetry.spanBody",
   depends: { encodeValue },
+  // Trusted: only the exporter calls it, with a Core span or a worker line it already read.
   input: (raw: unknown) => raw as { span: Telemetry.SpanFields; encoded: boolean },
   run: ({ encodeValue }, ctx): Telemetry.SpanBody => {
     const { span, encoded } = ctx.input;
