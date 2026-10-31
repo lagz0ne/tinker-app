@@ -1,7 +1,7 @@
 [
   {
-    "name": "readResult hides a failure",
-    "file": "tinker/components/requests/result.server.ts",
+    "name": "a boundary hides a failure",
+    "file": "tinker/components/sync/functions.ts",
     "find": "if (result.status === \"failed\") throw result.error;",
     "replace": ""
   },
@@ -62,8 +62,8 @@
   {
     "name": "a rejected write succeeds",
     "file": "tinker/components/sync/client/sync.ts",
-    "find": "if (reply.kind === \"rejected\") raise(\"WriteRejected\", { message: reply.message });",
-    "replace": ""
+    "find": "if (reply.kind === \"rejected\") {\n              return raise(\"WriteRejected\", {",
+    "replace": "if (false) {\n              return raise(\"WriteRejected\", {"
   },
   {
     "name": "the tab stop leaves account work running",
