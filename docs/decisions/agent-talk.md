@@ -137,7 +137,23 @@ These are Hedl's domain, not a Tinker gap:
    results, stops and warm plans stay apart.
    Two scopes never share a run.
 4. One run per talk at a time. A second
-   `run` returns `busy` at once.
+   `run` returns `busy` at once. A `run`
+   right after `stop` is `busy` until the
+   stopped run settles.
+
+Known limits:
+
+- `release(agentTalk)` aborts and joins its
+  runs, but Core's `release` returns before
+  that join. A `resolve` at once makes a new
+  talk set, whose cap and lines start fresh,
+  so for a moment the old and new queries can
+  overlap. Release is for shutdown, not for
+  a swap while live.
+- Redaction holds back a credential's start
+  only inside one text block. A credential
+  split across two blocks gets through the
+  per-block deltas.
 
 ## Settled questions
 
