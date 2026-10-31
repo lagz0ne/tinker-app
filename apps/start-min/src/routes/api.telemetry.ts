@@ -1,12 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { startRequests } from "~/components/requests";
-import { cancelledCall } from "~/components/requests/index.server";
-import {
-  receiveTelemetry,
-  telemetryBody,
-  telemetryOrigin,
-} from "~/components/telemetry/index.server";
+import { telemetryBody, telemetryOrigin } from "~/components/telemetry/index.server";
+
+import { telemetryReceive } from "@/transport/telemetry.server";
 
 const previewOrigin = /^http:(\/\/[^/:]+\.preview\.tini\.works)$/;
 
@@ -33,14 +30,11 @@ export const Route = createFileRoute("/api/telemetry")({
         const batch = await context.session.resolve(telemetryBody).read(body);
         if (typeof batch === "number") return new Response(null, { status: batch });
 
-        const result = await context.session.settle(receiveTelemetry, {
-          input: batch,
-          signal: request.signal,
-        });
+        const result = await context.session.settle(telemetryReceive, { input: batch });
         if (result.status === "success") {
           return new Response(null, { status: 202, headers: { "Cache-Control": "no-store" } });
         }
-        if (result.status === "cancelled") return context.session.run(cancelledCall);
+        if (result.status === "cancelled") throw result.reason;
         if (Object(result.error).kind === "Cancelled") return new Response(null, { status: 503 });
         throw result.error;
       },
