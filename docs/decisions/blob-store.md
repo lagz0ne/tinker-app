@@ -49,12 +49,14 @@ It requires `errors` and `database-sqlite`.
 Tags:
 
 - `blobFolder`: the absolute folder for the bytes.
-- `blobMaxBytes`: the most one blob may hold.
-  Default 25 MiB (obelisk `MAX_UPLOAD`).
+- `blobMaxBytes`: the default and top cap of
+  one upload slot. Default 25 MiB (obelisk `MAX_UPLOAD`).
 - `blobSlotTtl`: how long a slot lives, in ms.
   Default one hour (obelisk).
 - `blobUnpackMax`: the most bytes a zip may unpack to,
-  all entries together. Default 100 MiB.
+  all entries together, and the top cap of `putBlob`.
+  Default 100 MiB. Obelisk puts zip entries with no cap;
+  the unpacked total bounds each one.
   The component does not read zips. Hedl's zip reader
   reads this tag and passes the bytes left as
   `maxOutputLength`.
@@ -82,6 +84,10 @@ Storage:
   `readBlob` needs the row and the file.
 - The write turn is held only for the row write,
   never while bytes stream in.
+- A slot expires at open time + `blobSlotTtl`.
+  Fill and take both refuse it then.
+  `openSlot` deletes a slot row one more TTL later,
+  so an expired slot reads `SlotExpired`, not missing.
 
 The invariants and their tests are in the commit
 that adds the component.
@@ -101,10 +107,29 @@ that adds the component.
   would add a `url` to the slot and check the bytes
   on take. Not built until an app asks.
 
+## What Hedl changes
+
+Found in review, against obelisk `000f8c7`:
+
+- Take after expiry fails. Obelisk let a filled slot
+  be taken until the next `slot()` pruned it.
+  A PUT at 59:59 and `put_file` at 60:01 now fails.
+  The ask was "a slot expires", so the store keeps it.
+- `name` over 200 characters is refused.
+  Hedl's PUT route slices it to 200 first, as obelisk did.
+- `fillSlot` gives no format. Hedl reads the blob
+  and runs `formatOf` for the PUT reply.
+- A too-big stream stops before its full size is known.
+  `BlobTooBig` names the cap, not the size.
+  Hedl's message names the cap.
+- `readBlob` gives a `Uint8Array`, not a `Buffer`.
+
 ## Not decided here
 
 - Delete and garbage collection. Obelisk never
   deletes a blob; neither does this store.
+  A fill that loses a race or expires at commit
+  can leave a file with no row. It is never read.
 - A Postgres `blobs` copy: on a second asker.
 - A streaming read: on an asker. Obelisk reads
   whole buffers up to 25 MB.
