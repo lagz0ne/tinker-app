@@ -278,7 +278,7 @@ test("B1, B2: registration takes listed and loopback redirects and refuses the r
     expect(body.client_id).toEqual(expect.any(String));
   }
 
-  const web = await register(box, ["http://127.0.0.1:5555/callback"]);
+  const web = await register(box, ["http://127.0.0.1:5555/callback"], { application_type: "web" });
 
   expect(web.response.status).toBe(400);
 
@@ -356,6 +356,38 @@ test("B1, B2: registration takes listed and loopback redirects and refuses the r
       .prepare(`SELECT name, redirectUris FROM "oauthClient" WHERE clientId = ?`)
       .get(client_id),
   ).toEqual({ name: "Still mine", redirectUris: JSON.stringify([claude]) });
+
+  await box.root.close({ graceful: true });
+});
+
+test("S2: a loopback client that names no application type registers as native, as Claude Code does", async () => {
+  const box = await sandbox();
+
+  // Exactly obelisk's scripts/mcp-run.mjs: no application_type, no response_types.
+  const response = await send(box, "/api/auth/oauth2/register", {
+    body: {
+      client_name: "hedl mcp-run",
+      redirect_uris: ["http://127.0.0.1:9999/callback"],
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+    },
+  });
+
+  expect(response.status).toBe(201);
+
+  expect(await response.json()).toMatchObject({
+    client_id: expect.any(String),
+    application_type: "native",
+  });
+
+  // A listed https redirect with no type stays a web client.
+  const listed = await send(box, "/api/auth/oauth2/register", {
+    body: { client_name: "Claude", redirect_uris: [claude], token_endpoint_auth_method: "none" },
+  });
+
+  expect(listed.status).toBe(201);
+
+  expect(await listed.json()).toMatchObject({ application_type: "web" });
 
   await box.root.close({ graceful: true });
 });
