@@ -30,10 +30,12 @@ export const changeTodo = operation({
   label: "changeTodo",
   input: readTodoCommand,
   depends: { orm: drizzleOrm, currentUser, tx: transaction, history: eventHistory },
-  run: async ({ orm, currentUser, tx, history }, { input, raise }) => {
+  run: async ({ orm, currentUser, tx, history }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const parsed = readTodoChange.safeParse(input.change);
     if (!parsed.success) {
-      return raise("BadInput", { reason: todoRefusal } satisfies Errors.Payload<"BadInput">);
+      return raise("BadInput", { reason: todoRefusal });
     }
     const change = parsed.data;
     const { and, asc, eq } = orm;
@@ -50,7 +52,7 @@ export const changeTodo = operation({
       const owned = and(eq(todo.id, change.id), eq(todo.ownerId, currentUser.id));
       const row = (await tx.select().from(todo).where(owned)).at(0);
       if (!row) {
-        return raise("TodoMissing", {} satisfies Errors.Payload<"TodoMissing">);
+        return raise("TodoMissing", {});
       }
       if (change.kind === "delete") await tx.delete(todo).where(owned);
       else if (row.done !== change.done) {

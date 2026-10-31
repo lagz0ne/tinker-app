@@ -1,14 +1,16 @@
 import { z } from "zod";
 
+import type { Errors } from "@/demo/errors";
+
 /** A failed action that names its own text: an auth or write refusal carries a message. */
 const messageFailure = z.object({
-  kind: z.enum(["AuthFailed", "WriteRejected"]),
+  kind: z.enum(["AuthFailed", "WriteRejected"] satisfies readonly Errors.Name[]),
   payload: z.object({ message: z.string() }),
 });
 
 /** A refused input carries its reason. */
 const reasonFailure = z.object({
-  kind: z.literal("BadInput"),
+  kind: z.literal("BadInput" satisfies Errors.Name),
   payload: z.object({ reason: z.string() }),
 });
 

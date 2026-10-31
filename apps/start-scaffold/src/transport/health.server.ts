@@ -10,6 +10,7 @@ export const healthRead = operation({
   depends: { read: health.controller, stop: requestStop.required },
   run: async ({ read, stop }, { raise: coreRaise }) => {
     const raise: Errors.Raise = coreRaise;
+
     const result = await read.settle({ signal: stop });
 
     if (result.status === "failed") throw result.error;

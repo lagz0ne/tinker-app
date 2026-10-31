@@ -44,7 +44,9 @@ const saveIssue = operation({
   label: "issues.save",
   input: issueChange,
   depends: { sync: syncClient, pending: pending.controller, editor: editor.controller },
-  run: async ({ sync, pending, editor }, { input, random, signal, defer, raise }) => {
+  run: async ({ sync, pending, editor }, { input, random, signal, defer, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     pending.set(true);
     defer(() => pending.set(false));
 
@@ -55,7 +57,7 @@ const saveIssue = operation({
       signal,
     );
     if (result.kind === "failed") {
-      return raise("BadInput", { reason: result.message } satisfies Errors.Payload<"BadInput">);
+      return raise("BadInput", { reason: result.message });
     }
     editor.set(null);
   },

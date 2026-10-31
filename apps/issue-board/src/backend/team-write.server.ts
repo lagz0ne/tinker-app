@@ -35,7 +35,9 @@ export const lockTeamWrite = operation({
     history: eventHistory,
     seen: executionSeen.controller,
   },
-  run: async ({ tx, orm, history, seen }, { input, raise }) => {
+  run: async ({ tx, orm, history, seen }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { eq, sql } = orm;
     const members = await tx
       .select({ id: teamMember.userId, email: user.email })
@@ -44,11 +46,11 @@ export const lockTeamWrite = operation({
       .where(eq(teamMember.teamId, input.teamId))
       .orderBy(sql`${teamMember.userId} collate "C"`);
     if (!members.some((member) => member.id === input.actorId)) {
-      return raise("NotTeamMember", {} satisfies Errors.Payload<"NotTeamMember">);
+      return raise("NotTeamMember", {});
     }
     for (const member of members) await history.lock(tx, member.id);
     if (input.assigneeId != null && !members.some((member) => member.id === input.assigneeId)) {
-      return raise("InvalidAssignee", {} satisfies Errors.Payload<"InvalidAssignee">);
+      return raise("InvalidAssignee", {});
     }
 
     if (
@@ -64,7 +66,7 @@ export const lockTeamWrite = operation({
       .from(teamMember)
       .where(eq(teamMember.teamId, input.teamId));
     if (current.some((member) => !members.some((locked) => locked.id === member.id))) {
-      return raise("TeamChanged", {} satisfies Errors.Payload<"TeamChanged">);
+      return raise("TeamChanged", {});
     }
     const [locked] = await tx
       .select()

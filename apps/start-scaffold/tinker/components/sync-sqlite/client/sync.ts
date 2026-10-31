@@ -13,9 +13,11 @@ import { readBatchSlot, readBootstrapSlot, syncStartup } from "~/components/sync
 export const syncClient = resource({
   label: "sync.client",
   depends: { owner: accountOwner, records: syncStartup },
-  factory: ({ owner, records: appRecords }, { defer, log, clock, raise }) => {
+  factory: ({ owner, records: appRecords }, { defer, log, clock, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     if (appRecords === undefined) {
-      return raise("StreamMissing", {} satisfies Errors.Payloads["StreamMissing"]);
+      return raise("StreamMissing", {});
     }
     const records: Sync.Records = appRecords;
     let accountId: string | null = null;
@@ -104,7 +106,7 @@ export const syncClient = resource({
       },
       async wait(executionId: string, version: number, signal: AbortSignal): Promise<Sync.Result> {
         if (version !== owner.version() || signal.aborted) {
-          return raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]);
+          return raise("Cancelled", {});
         }
         const completed = results.get(executionId);
         if (completed) return completed;
@@ -117,7 +119,7 @@ export const syncClient = resource({
         try {
           const result = await waiting.promise;
           if (result === cancelled) {
-            return raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]);
+            return raise("Cancelled", {});
           }
           return result;
         } finally {
@@ -143,7 +145,7 @@ export const syncClient = resource({
         try {
           for (;;) {
             if (signal.aborted) {
-              return raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]);
+              return raise("Cancelled", {});
             }
             let reply: Sync.Reply;
             try {
@@ -157,12 +159,12 @@ export const syncClient = resource({
             if (reply.kind === "rejected") {
               return raise("WriteRejected", {
                 message: reply.message,
-              } satisfies Errors.Payloads["WriteRejected"]);
+              });
             }
 
             const result = await client.wait(executionId, token.version, signal);
             if (signal.aborted) {
-              return raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]);
+              return raise("Cancelled", {});
             }
             return result;
           }

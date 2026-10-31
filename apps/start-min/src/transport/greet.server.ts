@@ -11,6 +11,7 @@ export const greetRead = operation({
   depends: { read: greet.controller, stop: requestStop.required },
   run: async ({ read, stop }, { raise: coreRaise }) => {
     const raise: Errors.Raise = coreRaise;
+
     const result = await read.settle({ input: { name: "world" }, signal: stop });
 
     if (result.status === "failed") throw result.error;
