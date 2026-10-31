@@ -95,7 +95,8 @@ try {
       hardStop: () => hard.resolve("hard-stop"),
     });
 
-    await host.started;
+    // A startup error throws from main; the host owns its exit code, read below from closed.
+    await host.started.catch(() => {});
 
     if (mode !== "work-error") {
       await Promise.race([
