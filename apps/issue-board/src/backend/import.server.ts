@@ -5,7 +5,7 @@ import { user } from "~/components/auth/index.server";
 import { transaction, drizzleOrm } from "~/components/database/index.server";
 
 import { issueRecord } from "@/contracts/issues";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 
 import { issue, issueRowFields, team, teamMember } from "./board.schema.server";
 import { fractionalIndex, csvParser } from "./modules";
@@ -20,21 +20,27 @@ export const readImport = operation({
   label: "import.read",
   input: z.string(),
   depends: { csv: csvParser },
-  run: async ({ csv }, { input }) => {
+  run: async ({ csv }, { input, raise }) => {
     let records: string[][];
     try {
       records = csv.parse(input, { bom: true, skip_empty_lines: false });
     } catch (error) {
-      raise("BadInput", { reason: String(error) });
+      return raise("BadInput", { reason: String(error) } satisfies Errors.Payload<"BadInput">);
     }
 
     const headers = records.shift() ?? [];
 
     if (new Set(headers).size !== headers.length) {
-      raise("BadInput", { reason: "CSV: duplicate header" });
+      return raise("BadInput", {
+        reason: "CSV: duplicate header",
+      } satisfies Errors.Payload<"BadInput">);
     }
     for (const name of ["ID", "Title"]) {
-      if (!headers.includes(name)) raise("BadInput", { reason: `CSV: missing ${name}` });
+      if (!headers.includes(name)) {
+        return raise("BadInput", {
+          reason: `CSV: missing ${name}`,
+        } satisfies Errors.Payload<"BadInput">);
+      }
     }
 
     const seen = new Set<string>();
@@ -42,13 +48,23 @@ export const readImport = operation({
     return records
       .map((cells, index) => {
         if (cells.length !== headers.length) {
-          raise("BadInput", { reason: `CSV row ${index + 2}: wrong cell count` });
+          return raise("BadInput", {
+            reason: `CSV row ${index + 2}: wrong cell count`,
+          } satisfies Errors.Payload<"BadInput">);
         }
         const row = Object.fromEntries(headers.map((name, column) => [name, cells[column]!]));
         const externalId = row.ID!.trim();
 
-        if (externalId === "") raise("BadInput", { reason: "CSV: empty ID" });
-        if (seen.has(externalId)) raise("BadInput", { reason: `CSV: repeated ID ${externalId}` });
+        if (externalId === "") {
+          return raise("BadInput", {
+            reason: "CSV: empty ID",
+          } satisfies Errors.Payload<"BadInput">);
+        }
+        if (seen.has(externalId)) {
+          return raise("BadInput", {
+            reason: `CSV: repeated ID ${externalId}`,
+          } satisfies Errors.Payload<"BadInput">);
+        }
         seen.add(externalId);
         return { row, externalId, index };
       })
@@ -75,7 +91,9 @@ export const readImport = operation({
 
         const priority = priorities[Priority] ?? Number(Priority);
         if (!Object.hasOwn(states, Status)) {
-          raise("BadInput", { reason: `CSV row ${index + 2}: unknown Status` });
+          return raise("BadInput", {
+            reason: `CSV row ${index + 2}: unknown Status`,
+          } satisfies Errors.Payload<"BadInput">);
         }
         const parsed = z
           .object({
@@ -84,7 +102,9 @@ export const readImport = operation({
           })
           .safeParse({ title: row.Title, priority });
         if (!parsed.success) {
-          raise("BadInput", { reason: `CSV row ${index + 2}: bad Title or Priority` });
+          return raise("BadInput", {
+            reason: `CSV row ${index + 2}: bad Title or Priority`,
+          } satisfies Errors.Payload<"BadInput">);
         }
         return {
           externalId,
@@ -117,7 +137,7 @@ export const importBatchInput = z.object({
 export const importTarget = operation({
   label: "import.target",
   depends: { tx: transaction, orm: drizzleOrm, key: importTeam, email: importActor },
-  run: async ({ tx, orm, key, email }) => {
+  run: async ({ tx, orm, key, email }, { raise }) => {
     const { eq, and, sql } = orm;
 
     const [target] = await tx
@@ -127,7 +147,9 @@ export const importTarget = operation({
       .innerJoin(user, eq(user.id, teamMember.userId))
       .where(and(eq(team.key, key), sql`lower(${user.email}) = ${email.toLowerCase()}`));
 
-    if (!target) raise("NotTeamMember", {});
+    if (!target) {
+      return raise("NotTeamMember", {} satisfies Errors.Payload<"NotTeamMember">);
+    }
 
     return target;
   },
@@ -290,7 +312,7 @@ export const importBatch = operation({
   },
   run: async (
     { target, lock, save, alerts, fanDeliveries, publish },
-    { input, random, signal },
+    { input, random, signal, raise },
   ) => {
     const writer = await target.run();
 
@@ -307,7 +329,9 @@ export const importBatch = operation({
     for (const row of input.rows) {
       signal.throwIfAborted();
       const assigneeId = ids.get(row.assignee);
-      if (assigneeId === undefined) raise("InvalidAssignee", {});
+      if (assigneeId === undefined) {
+        return raise("InvalidAssignee", {} satisfies Errors.Payload<"InvalidAssignee">);
+      }
       const saved = await save.run({
         input: {
           teamId: writer.teamId,

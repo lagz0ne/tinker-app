@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import { raise } from "@/demo/errors";
-
 export declare namespace Profile {
   type Value = { id: string; name: string; email: string; emailVerified: boolean };
   type Input = { name: string };
@@ -9,7 +7,8 @@ export declare namespace Profile {
 
 const profileInput = z.object({ name: z.string().trim().min(1).max(80) }).strict();
 
-/** The schema keeps the same managed refusal at each input door. */
-export const readProfileInput = profileInput.catch(() =>
-  raise("BadInput", { reason: "Use a name with 1 to 80 letters." }),
-);
+/** The name a profile save accepts; the operation that parses it raises the refusal. */
+export const readProfileInput = profileInput;
+
+/** The BadInput reason for a name the contract refuses. */
+export const profileRefusal = "Use a name with 1 to 80 letters.";

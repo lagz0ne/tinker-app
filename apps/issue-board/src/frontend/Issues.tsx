@@ -12,7 +12,7 @@ import {
   issuePriorities,
 } from "@/contracts/issues";
 import type { Issue } from "@/contracts/issues";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 import { issues, profile, teams } from "@/demo/frontend/state";
 import { updateIssue } from "@/transport/issues.functions";
 
@@ -44,7 +44,7 @@ const saveIssue = operation({
   label: "issues.save",
   input: issueChange,
   depends: { sync: syncClient, pending: pending.controller, editor: editor.controller },
-  run: async ({ sync, pending, editor }, { input, random, signal, defer }) => {
+  run: async ({ sync, pending, editor }, { input, random, signal, defer, raise }) => {
     pending.set(true);
     defer(() => pending.set(false));
 
@@ -54,7 +54,9 @@ const saveIssue = operation({
       { send: updateIssue, data: { executionId, change: input } },
       signal,
     );
-    if (result.kind === "failed") raise("BadInput", { reason: result.message });
+    if (result.kind === "failed") {
+      return raise("BadInput", { reason: result.message } satisfies Errors.Payload<"BadInput">);
+    }
     editor.set(null);
   },
 });

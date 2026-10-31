@@ -5,7 +5,7 @@ import { transaction } from "~/components/database/index.server";
 import { readExecution } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
 
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 
 import { counter } from "./sync.schema.server";
 
@@ -13,7 +13,7 @@ export const incrementCounter = operation({
   label: "incrementCounter",
   input: readExecution,
   depends: { orm: drizzleOrm, tx: transaction, history: eventHistory },
-  run: async ({ orm, tx, history }, { input }) => {
+  run: async ({ orm, tx, history }, { input, raise }) => {
     const { eq, sql } = orm;
 
     await history.lock(tx, "public");
@@ -31,7 +31,9 @@ export const incrementCounter = operation({
         .where(eq(counter.id, 1))
         .returning()
     ).at(0);
-    if (!row) raise("StreamMissing", {});
+    if (!row) {
+      return raise("StreamMissing", {} satisfies Errors.Payload<"StreamMissing">);
+    }
 
     await history.append(tx, "public", input.executionId, [
       { kind: "change", change: { kind: "counter", value: row.value } },

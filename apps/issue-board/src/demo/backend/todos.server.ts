@@ -6,9 +6,9 @@ import type { Sync } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
 
 import { readTodoCommand } from "@/demo/contracts/commands";
-import { readTodoChange } from "@/demo/contracts/todos-contract";
+import { readTodoChange, todoRefusal } from "@/demo/contracts/todos-contract";
 import type { Todos } from "@/demo/contracts/todos-contract";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 
 import { currentUser } from "./auth.server";
 import { todo } from "./todos.schema.server";
@@ -30,8 +30,12 @@ export const changeTodo = operation({
   label: "changeTodo",
   input: readTodoCommand,
   depends: { orm: drizzleOrm, currentUser, tx: transaction, history: eventHistory },
-  run: async ({ orm, currentUser, tx, history }, { input }) => {
-    const change = readTodoChange.parse(input.change);
+  run: async ({ orm, currentUser, tx, history }, { input, raise }) => {
+    const parsed = readTodoChange.safeParse(input.change);
+    if (!parsed.success) {
+      return raise("BadInput", { reason: todoRefusal } satisfies Errors.Payload<"BadInput">);
+    }
+    const change = parsed.data;
     const { and, asc, eq } = orm;
 
     await history.lock(tx, currentUser.id);
@@ -45,7 +49,9 @@ export const changeTodo = operation({
     } else {
       const owned = and(eq(todo.id, change.id), eq(todo.ownerId, currentUser.id));
       const row = (await tx.select().from(todo).where(owned)).at(0);
-      if (!row) raise("TodoMissing", {});
+      if (!row) {
+        return raise("TodoMissing", {} satisfies Errors.Payload<"TodoMissing">);
+      }
       if (change.kind === "delete") await tx.delete(todo).where(owned);
       else if (row.done !== change.done) {
         await tx.update(todo).set({ done: change.done }).where(owned);

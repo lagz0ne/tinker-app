@@ -10,7 +10,7 @@ import { eventHistory, event } from "~/components/sync/index.server";
 
 import { team, teamMember, issue, issueFields, comment } from "@/backend/board.schema.server";
 import { readFeatureEvents } from "@/demo/contracts/sync";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 
 import { currentUser } from "./auth.server";
 import { counter } from "./sync.schema.server";
@@ -37,7 +37,7 @@ export const bootstrapPublic = operation({
 export const bootstrapPrivate = operation({
   label: "bootstrapPrivate",
   depends: { orm: drizzleOrm, currentUser, database, history: eventHistory },
-  run: ({ orm, currentUser, database, history }) => {
+  run: ({ orm, currentUser, database, history }, { raise }) => {
     const { asc, eq, sql } = orm;
     return database.transaction(
       async (tx) => {
@@ -53,7 +53,9 @@ export const bootstrapPrivate = operation({
             .from(user)
             .where(eq(user.id, currentUser.id))
         ).at(0);
-        if (!profile) raise("SignInRequired", {});
+        if (!profile) {
+          return raise("SignInRequired", {} satisfies Errors.Payload<"SignInRequired">);
+        }
         const todos = await tx
           .select({ id: todo.id, title: todo.title, done: todo.done })
           .from(todo)
@@ -120,7 +122,7 @@ export const replayPublic = operation({
   label: "replayPublic",
   input: readCursor,
   depends: { orm: drizzleOrm, database, principal },
-  run: async ({ orm, database, principal }, { input }) => {
+  run: async ({ orm, database, principal }, { input, raise }) => {
     const { and, asc, eq, gt } = orm;
     const events = readFeatureEvents.safeParse(
       await database
@@ -130,7 +132,9 @@ export const replayPublic = operation({
         .orderBy(asc(event.revision))
         .limit(200),
     );
-    if (!events.success) raise("StoredDataInvalid", {});
+    if (!events.success) {
+      return raise("StoredDataInvalid", {} satisfies Errors.Payload<"StoredDataInvalid">);
+    }
     return { accountId: principal?.id ?? null, events: events.data };
   },
 });
@@ -139,9 +143,11 @@ export const replayPrivate = operation({
   label: "replayPrivate",
   input: readPrivateCursor,
   depends: { orm: drizzleOrm, currentUser, database },
-  run: async ({ orm, currentUser, database }, { input }) => {
+  run: async ({ orm, currentUser, database }, { input, raise }) => {
     const { and, asc, eq, gt } = orm;
-    if (input.accountId !== currentUser.id) raise("StreamDenied", {});
+    if (input.accountId !== currentUser.id) {
+      return raise("StreamDenied", {} satisfies Errors.Payload<"StreamDenied">);
+    }
     const events = readFeatureEvents.safeParse(
       await database
         .select()
@@ -150,7 +156,9 @@ export const replayPrivate = operation({
         .orderBy(asc(event.revision))
         .limit(200),
     );
-    if (!events.success) raise("StoredDataInvalid", {});
+    if (!events.success) {
+      return raise("StoredDataInvalid", {} satisfies Errors.Payload<"StoredDataInvalid">);
+    }
     return events.data;
   },
 });

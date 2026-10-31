@@ -24,7 +24,6 @@ import { saveProfile } from "@/demo/backend/profile.server";
 import { bootstrapPrivate } from "@/demo/backend/sync.server";
 import { bootstrap } from "@/demo/backend/sync.server";
 import { streamMessage } from "@/demo/contracts/sync";
-import { isError, raise } from "@/demo/errors";
 
 import { clientBindings } from "./presets";
 import { handleAuth } from "./presets";
@@ -62,7 +61,7 @@ function headers(response: Response) {
 const rollBackEvent = operation({
   label: "test.rollbackEvent",
   depends: { database },
-  run: async ({ database }) => {
+  run: async ({ database }, { raise }) => {
     const { sql } = await import("drizzle-orm");
     await database.transaction(async (tx) => {
       await tx.execute(
@@ -90,7 +89,7 @@ test("SQL notifications wake after commit, stay silent on rollback, and survive 
     const before = feed.revision();
 
     const refused = await root.settle(rollBackEvent);
-    if (refused.status !== "failed" || !isError(refused.error, "Rollback")) throw refused;
+    expect(refused).toMatchObject({ status: "failed", kind: "error", error: { kind: "Rollback" } });
     expect(feed.revision()).toBe(before);
 
     await write(root, incrementCounter, { input: { executionId: crypto.randomUUID() } });
@@ -152,7 +151,11 @@ test("SSE replays the supplied cursor and a held reader receives the next commit
     });
     openingStop.abort();
     const aborted = await opening;
-    if (aborted.status !== "failed" || !isError(aborted.error, "Cancelled")) throw aborted;
+    expect(aborted).toMatchObject({
+      status: "failed",
+      kind: "error",
+      error: { kind: "Cancelled" },
+    });
     expect((await openingRequest.close({ graceful: true })).status).toBe("success");
   } finally {
     stop.abort();
@@ -188,7 +191,11 @@ test("private SSE cursors are refused and a revoked held stream sends no saved p
     const refused = await other.settle(openSync, {
       input: { cursor },
     });
-    if (refused.status !== "failed" || !isError(refused.error, "StreamDenied")) throw refused;
+    expect(refused).toMatchObject({
+      status: "failed",
+      kind: "error",
+      error: { kind: "StreamDenied" },
+    });
     await other.close();
 
     const owner = root.createSession({ tags: requestHeaders(ada) });

@@ -5,7 +5,7 @@ import { transaction, drizzleOrm } from "~/components/database/index.server";
 
 import { commentCommand } from "@/contracts/comments";
 import { currentUser } from "@/demo/backend/auth.server";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 
 import { comment, issue } from "./board.schema.server";
 import { lockTeamWrite, queueAlerts, fanOut, rowDeliveries } from "./team-write.server";
@@ -14,14 +14,16 @@ export const saveComment = operation({
   label: "comments.save",
   input: z.object({ command: commentCommand, teamKey: z.string() }),
   depends: { tx: transaction, orm: drizzleOrm, currentUser },
-  run: async ({ tx, orm, currentUser }, { input, random, clock }) => {
+  run: async ({ tx, orm, currentUser }, { input, random, clock, raise }) => {
     const { eq, and } = orm;
     const draft = input.command.comment;
     const [target] = await tx
       .select({ id: issue.id, number: issue.number })
       .from(issue)
       .where(and(eq(issue.id, draft.issueId), eq(issue.teamId, draft.teamId)));
-    if (!target) raise("IssueMissing", {});
+    if (!target) {
+      return raise("IssueMissing", {} satisfies Errors.Payload<"IssueMissing">);
+    }
 
     const [saved] = await tx
       .insert(comment)
