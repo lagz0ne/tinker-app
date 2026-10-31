@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -193,35 +192,6 @@ for (const composition of [
     assert.equal(build.status, 0, build.stdout + build.stderr);
 
     if (composition.includes("starter")) {
-      // This composition retains app's greet route beside the starter's routes.
-      // Its reviewed list has exactly that one extra readResult caller.
-      const saved = await readFile(join(app, "PLAIN.md"), "utf8");
-      const lastRouteCaller = "    - `src/routes/api.telemetry.ts#Route.POST`\n";
-      assert.equal(saved.split(lastRouteCaller).length, 2);
-      // The app also holds variant components this composition does not install, so its list
-      // names files the consumer has no copy of: drop that entry, and the rows for missing files.
-      const missing = (row) => {
-        const file = row.match(/(?:src|cmds|tinker)\/[^`#\s]+/)?.[0];
-        return file !== undefined && !existsSync(join(consumer, file));
-      };
-      const expected = saved
-        .replace(
-          lastRouteCaller,
-          lastRouteCaller + "    - `src/transport/greet.functions.ts#runGreet.callback`\n",
-        )
-        .split("\n\n")
-        .map((entry) => entry.split("\n"))
-        .filter((lines) => !missing(lines[0]))
-        .map((lines) => lines.filter((row) => !missing(row)).join("\n"))
-        .join("\n\n");
-      const census = spawnSync(process.execPath, ["scripts/check-plain.mjs", "--list"], {
-        cwd: consumer,
-        encoding: "utf8",
-      });
-      assert.equal(census.status, 0, census.stdout + census.stderr);
-      assert.equal(census.stdout, expected, "composition has only its known extra caller");
-      await writeFile(join(consumer, "PLAIN.md"), expected);
-
       const plain = spawnSync(process.execPath, ["scripts/check-plain.mjs"], {
         cwd: consumer,
         encoding: "utf8",

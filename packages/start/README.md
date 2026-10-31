@@ -127,7 +127,7 @@ VITEST_MAX_WORKERS=1 VP_RUN_CONCURRENCY_LIMIT=1 vp run -r test
 
 Tooling tests stay here. Runtime tests live in `apps/start-scaffold/tests/runtime/`.
 That folder has a strict type project so the demo's sync bodies do not leak into generic tests.
-The app's `PLAIN.md` has a cap of 17. Only named copied base entry functions have exceptions.
+Apps have no plain helper functions. Only named copied base entry functions have exceptions.
 Components and src have no function skips. Commands allow only the named server and browser mains.
 
 Each push to `main` runs the diff mutation gate at floor 60; the weekly full app

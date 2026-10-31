@@ -1751,11 +1751,6 @@
           "target": "~/AGENTS.md"
         },
         {
-          "path": "PLAIN.md",
-          "type": "registry:file",
-          "target": "~/PLAIN.md"
-        },
-        {
           "path": "README.md",
           "type": "registry:file",
           "target": "~/README.md"
