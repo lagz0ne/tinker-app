@@ -1,5 +1,21 @@
 # Upgrade
 
+## Unreleased
+
+- The Start host now owns a command's exit glue. A command that throws at startup exits 78
+  (sysexits EX_CONFIG) for `MissingTag`, `DataValidationFailed` or `ERR_INVALID_URL`, else 1,
+  and the host prints it once, as `exit(code, error)` did. A command's `closed` may resolve to
+  its root close results (`Scope.Result`, or a list: app first, then tools). Root by root, the
+  host exits 1 with a failed root's error, else that root's first teardown error.
+- The copied `tinker/base/main.ts` drops `mainErrorCode` and `checkClosed` and adds the
+  `MainClosed` type. The scaffold, small and board commands let a startup error throw and
+  return their close results. Copy the new `tinker/base/main.ts` (item `base-main`),
+  `tinker/base/panics.server.ts` (its `closed` is now `Promise<unknown>`), and the new `cmds/`
+  files together. An app that keeps the old base and commands still works: the change to the
+  host is additive, and a closed with no results is clean, as before.
+- `cmds/telemetry-worker.ts` reads its close result inline. A failed close still throws in the
+  worker thread, so the server's `telemetryThread` sees the `error` event and stops failed.
+
 ## 0.16.1
 
 Start 0.16.1 is released from `lagz0ne/tinker-app`, tag `start-v0.16.1`.

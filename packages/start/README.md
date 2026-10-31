@@ -47,6 +47,8 @@ It does not pin copied runtime bytes or choose the order of app wiring.
 
 Serve imports the default entry, serves public and built client assets, and calls its handler.
 The host supplies env, args, signal, stdout, stderr, and exit; the command owns the close order.
+A startup throw exits 78 for a config error (`MissingTag`, `DataValidationFailed`,
+`ERR_INVALID_URL`), else 1. A `closed` that resolves to root close results exits 1 on the first failure.
 The host aborts its signal on SIGINT or SIGTERM and waits for closed. Asset paths, compression, ETags, and conditional
 requests remain covered by the tooling tests. The app must keep the host package installed
 where it runs `tinker serve`.

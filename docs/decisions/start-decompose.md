@@ -116,10 +116,13 @@ starts nothing. Commands read no process globals and load no env file. The host
 owns those inputs, including cwd, the folder the process runs in. Follow the actual [small server](../../apps/start-min/cmds/server.ts)
 or [board commands](../../apps/issue-board/cmds) for complete wiring.
 
-Only the command chooses its error code: operations return results or raise
-errors. An outer catch calls exit(code, error), then returns a stopped result.
-It does not rethrow or print that error again. Internal catches may rethrow to
-join cleanup. Close the app before telemetry; use checkClosed for root results.
+The command chooses its own error codes: operations return results or raise
+errors, and the command calls exit(code, error) for each code it owns. A startup
+error just throws; the host exits 78 (EX_CONFIG) for MissingTag,
+DataValidationFailed or ERR_INVALID_URL, else 1, and prints it once. Internal
+catches may rethrow to join cleanup. Close the app before telemetry. Closed
+resolves to the root close results, app first; root by root, the host exits 1
+with a failed root's error, else that root's first teardown error.
 
 Exit is a clean stop. The host keeps the first code, aborts signal, joins
 closed, flushes stdout/stderr, and sets process.exitCode. It never calls
