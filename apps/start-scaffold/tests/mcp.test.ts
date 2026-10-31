@@ -5,7 +5,7 @@ import type { Observe, Tag } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
-import { raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 import { handleMcp, mcpRuns, mcpServer, mcpTools } from "~/components/mcp/index.server";
 import type { McpTool } from "~/components/mcp/index.server";
 
@@ -48,7 +48,11 @@ const empty = z.object({});
 const refuse = operation({
   label: "tool.refuse",
   input: empty,
-  run: () => raise("Refused", { message: "x" }),
+  run: (_deps, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
+    return raise("Refused", { message: "x" });
+  },
 });
 
 const boom = operation({

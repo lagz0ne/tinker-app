@@ -1,7 +1,7 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 
-import { raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 
 import { auth } from "./auth.server";
 import { mcpCaller } from "./mcp.server";
@@ -87,7 +87,9 @@ export const approveSignin = operation({
   label: "auth.approveSignin",
   input: approveSigninInput,
   depends: { auth, caller: mcpCaller, misses: signinMisses },
-  run: async ({ auth, caller, misses }, { input, clock }) => {
+  run: async ({ auth, caller, misses }, { input, clock, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const now = clock.currentTimeMillis();
 
     if (misses.locked(caller.userId, now)) {
@@ -228,7 +230,9 @@ export const endSignin = operation({
   label: "auth.endSignin",
   input: endSigninInput,
   depends: { auth, caller: mcpCaller },
-  run: async ({ auth, caller }, { input }) => {
+  run: async ({ auth, caller }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { adapter, internalAdapter } = await auth.$context;
 
     const session = await adapter.findOne<CodeSession>({
