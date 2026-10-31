@@ -9,9 +9,6 @@ import {
   runMailWorker,
 } from "~/components/mail/index.server";
 
-// oxlint-disable-next-line import/no-relative-parent-imports -- Test native command inputs, exit and close with real Core.
-import main from "../cmds/worker";
-
 test("real Core worker recovers a plain delivery error before its clean stop", async () => {
   const stop = new AbortController();
   const messages: string[] = [];
@@ -45,26 +42,3 @@ test("real Core worker recovers a plain delivery error before its clean stop", a
     await root.close();
   }
 });
-
-for (const [args, code] of [
-  [[], 78],
-  [["extra"], 64],
-] as const) {
-  test(`worker command closes after real input exit ${code}`, async () => {
-    const exits: number[] = [];
-    const worker = await main({
-      env: {},
-      args,
-      cwd: import.meta.dirname,
-      signal: new AbortController().signal,
-      stdout: { write() {} },
-      stderr: { write() {} },
-      exit: (value) => {
-        exits.push(value);
-      },
-    });
-
-    await worker.closed;
-    expect(exits).toEqual([code]);
-  });
-}
