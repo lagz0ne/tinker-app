@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 
 import { startRequests } from "~/components/requests";
-import { readResult } from "~/components/requests/index.server";
+import { cancelledCall } from "~/components/requests/index.server";
 
 import { changeIssue, listTeamMembers } from "@/backend/issues.server";
 import { teamInput } from "@/contracts/board";
@@ -16,9 +16,13 @@ export const getTeamMembers = createServerFn({ method: "GET" })
   .handler(async ({ context, data }) => {
     setResponseHeader("Cache-Control", "no-store");
 
-    return readResult(
-      await context.session.settle(listTeamMembers, { input: data, signal: context.signal }),
-    );
+    const result = await context.session.settle(listTeamMembers, {
+      input: data,
+      signal: context.signal,
+    });
+    if (result.status === "failed") throw result.error;
+    if (result.status === "cancelled") return context.session.run(cancelledCall);
+    return result.value;
   });
 
 export const updateIssue = createServerFn({ method: "POST" })

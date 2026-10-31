@@ -1,12 +1,12 @@
-import type { RunResult } from "@tinker/core";
+import { operation } from "@tinker/core";
 
-import { fail } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 
-/** HTTP boundaries handle a settled failure without failing the server root.
- * @param result - From a settled boundary call; why: return its value or raise its failure.
+/**
+ * A boundary's settled call that was cancelled ends as the base's `Cancelled` error. The boundary
+ * throws a settled failure as is, so a failed call never fails the server root.
  */
-export function readResult<T>(result: RunResult<T>): T {
-  if (result.status === "failed") throw result.error;
-  if (result.status === "cancelled") throw fail("Cancelled", {});
-  return result.value;
-}
+export const cancelledCall = operation({
+  label: "request.cancelled",
+  run: (_deps, { raise }) => raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]),
+});

@@ -2,19 +2,18 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { health } from "~/components/health";
 import { startRequests } from "~/components/requests";
-import { readResult } from "~/components/requests/index.server";
+import { cancelledCall } from "~/components/requests/index.server";
 
 export const Route = createFileRoute("/api/health")({
   server: {
     middleware: [startRequests.middleware],
     handlers: {
-      GET: async ({ context }) =>
-        Response.json(
-          readResult(await context.session.settle(health, { signal: context.signal })),
-          {
-            headers: { "Cache-Control": "no-store" },
-          },
-        ),
+      GET: async ({ context }) => {
+        const result = await context.session.settle(health, { signal: context.signal });
+        if (result.status === "failed") throw result.error;
+        if (result.status === "cancelled") return context.session.run(cancelledCall);
+        return Response.json(result.value, { headers: { "Cache-Control": "no-store" } });
+      },
     },
   },
 });

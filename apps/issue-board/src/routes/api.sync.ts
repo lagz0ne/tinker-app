@@ -2,9 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { isError as isCoreError } from "@tinker/core";
 
 import { openSync } from "~/components/auth/index.server";
-import { isError } from "~/components/errors";
 import { startRequests } from "~/components/requests";
-import { readResult } from "~/components/requests/index.server";
+import { cancelledCall } from "~/components/requests/index.server";
 
 /** The copied route owns HTTP; the component owns the request's event stream. */
 export const Route = createFileRoute("/api/sync")({
@@ -27,10 +26,14 @@ export const Route = createFileRoute("/api/sync")({
           ) {
             return new Response(null, { status: 400 });
           }
-          if (isError(result.error, "StreamDenied")) return new Response(null, { status: 403 });
+          if (Object(result.error).kind === "StreamDenied") {
+            return new Response(null, { status: 403 });
+          }
+          throw result.error;
         }
+        if (result.status === "cancelled") return context.session.run(cancelledCall);
 
-        return new Response(readResult(result), {
+        return new Response(result.value, {
           headers: {
             "Content-Type": "text/event-stream; charset=utf-8",
             "Cache-Control": "no-store",

@@ -2,8 +2,7 @@ import { resource } from "@tinker/core";
 import type { RunResult } from "@tinker/core";
 
 import { database } from "~/components/database/index.server";
-import { raise } from "~/components/errors";
-import { readResult } from "~/components/requests/index.server";
+import type { Errors } from "~/components/errors";
 import { accountNotice } from "~/components/sync/notice";
 import type { Stream } from "~/components/sync/protocol";
 
@@ -125,7 +124,7 @@ const notificationWheel = resource({
 export const notifications = resource({
   label: "sync.notifications",
   depends: { database, wheel: notificationWheel, notice: accountNotice },
-  factory: async ({ database, wheel, notice }, { defer }) => {
+  factory: async ({ database, wheel, notice }, { defer, raise }) => {
     const accountPrefix = notice.run({ input: "" });
 
     let revision = 0;
@@ -208,7 +207,9 @@ export const notifications = resource({
         const opened = connection;
         const connected = await opened;
         if (connected.kind === "failed") throw connected.error;
-        if (broken || opened !== connection) raise("StreamDisconnected", {});
+        if (broken || opened !== connection) {
+          return raise("StreamDisconnected", {} satisfies Errors.Payloads["StreamDisconnected"]);
+        }
 
         const subscriber: Subscriber = {
           opened,
@@ -236,7 +237,13 @@ export const notifications = resource({
 
         const at = reads;
         const started = Promise.resolve(read({ input: cursor }))
-          .then(readResult)
+          .then((result) => {
+            if (result.status === "failed") throw result.error;
+            if (result.status === "cancelled") {
+              return raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]);
+            }
+            return result.value;
+          })
           .catch((error) => {
             at.delete(key);
             throw error;
