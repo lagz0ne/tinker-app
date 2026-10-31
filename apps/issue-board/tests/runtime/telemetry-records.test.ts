@@ -3,7 +3,7 @@ import { expect, test } from "vite-plus/test";
 
 import { backendStop, requestStop } from "~/components/requests";
 import { browserTelemetry, receiveTelemetry } from "~/components/telemetry/ingest.server";
-import { encodeValue } from "~/components/telemetry/records";
+import { encodeValue, quiet, spanBody } from "~/components/telemetry/records";
 import type { Telemetry } from "~/components/telemetry/records";
 
 const traceId = "0123456789abcdef0123456789abcdef";
@@ -122,13 +122,144 @@ test("a batch is taken only when every record keeps the wire rules", async () =>
 });
 
 test("a value is cut to 2048 characters; a bigint, undefined, or a cycle still encodes", () => {
-  expect(encodeValue(10n ** 2100n)).toBe((10n ** 2100n).toString().slice(0, 2048));
-  expect(encodeValue("x".repeat(3000))).toBe(`"${"x".repeat(2047)}`);
-  expect(encodeValue({ n: 1n })).toBe('{"n":"1"}');
-  expect(encodeValue(undefined)).toBe("undefined");
+  const root = createScope();
+  const encode = (input: unknown) => root.run(encodeValue, { input, ns: quiet });
+
+  expect(encode(10n ** 2100n)).toBe((10n ** 2100n).toString().slice(0, 2048));
+  expect(encode("x".repeat(3000))).toBe(`"${"x".repeat(2047)}`);
+  expect(encode(7)).toBe("7");
+  expect(encode(true)).toBe("true");
+  expect(encode({ n: 1n })).toBe('{"n":"1"}');
+  expect(encode({ s: "y".repeat(3000) })).toHaveLength(2048);
+  expect(encode(undefined)).toBe("undefined");
+  expect(encode(() => 1)).toBe("undefined");
 
   const cycle: Record<string, unknown> = {};
   cycle.loop = cycle;
 
-  expect(encodeValue(cycle)).toBe("[Unserializable]");
+  expect(encode(cycle)).toBe("[Unserializable]");
+});
+
+const fields: Telemetry.SpanFields = {
+  traceId,
+  spanId,
+  parentSpanId: "fedcba9876543210",
+  sampled: true,
+  name: "n".repeat(300),
+  kind: "operation",
+  start: 12.9,
+  end: undefined,
+  status: "failed",
+  error: "e".repeat(3000),
+  attributes: { ["k".repeat(300)]: 1n, plain: "v", ...wide("a") },
+  events: [
+    { name: "e".repeat(300), time: 0, attributes: { big: 2n, ...wide("b") } },
+    ...Array.from({ length: 32 }, () => ({ name: "more", time: 5, attributes: {} })),
+  ],
+};
+
+/**
+ * Forty attributes, so a body shows its cut at 31.
+ * @param prefix - From a test; why: keep span and event keys apart.
+ */
+function wide(prefix: string) {
+  return Object.fromEntries(Array.from({ length: 40 }, (_, index) => [`${prefix}${index}`, index]));
+}
+
+test("a span becomes its OTLP body: cut names, 31 attributes, 32 events, failed status", () => {
+  const root = createScope();
+  const body = root.run(spanBody, { input: { span: fields, encoded: false }, ns: quiet });
+
+  expect(body).toEqual({
+    traceId,
+    spanId,
+    parentSpanId: "fedcba9876543210",
+    flags: 1,
+    name: "n".repeat(256),
+    kind: 1,
+    startTimeUnixNano: "12000000",
+    endTimeUnixNano: "12000000",
+    attributes: [
+      { key: "k".repeat(256), value: { stringValue: "1" } },
+      { key: "plain", value: { stringValue: '"v"' } },
+      ...Array.from({ length: 29 }, (_, index) => ({
+        key: `a${index}`,
+        value: { stringValue: String(index) },
+      })),
+      { key: "tinker.kind", value: { stringValue: "operation" } },
+    ],
+    events: [
+      {
+        name: "e".repeat(256),
+        timeUnixNano: "0",
+        attributes: [
+          { key: "big", value: { stringValue: "2" } },
+          ...Array.from({ length: 30 }, (_, index) => ({
+            key: `b${index}`,
+            value: { stringValue: String(index) },
+          })),
+        ],
+      },
+      ...Array.from({ length: 31 }, () => ({
+        name: "more",
+        timeUnixNano: "5000000",
+        attributes: [],
+      })),
+    ],
+    status: { code: 2, message: "e".repeat(2048) },
+  });
+});
+
+test("a worker line's encoded values pass as they are; an unsampled ok span keeps its end", () => {
+  const root = createScope();
+  const span: Telemetry.SpanFields = {
+    ...fields,
+    name: "w",
+    sampled: false,
+    start: 0,
+    end: 34,
+    status: "ok",
+    attributes: { k: '"v"' },
+    events: [{ name: "e", time: 56, attributes: { k: "1" } }],
+  };
+
+  expect(root.run(spanBody, { input: { span, encoded: true }, ns: quiet })).toEqual({
+    traceId,
+    spanId,
+    parentSpanId: "fedcba9876543210",
+    flags: 0,
+    name: "w",
+    kind: 1,
+    startTimeUnixNano: "0",
+    endTimeUnixNano: "34000000",
+    attributes: [
+      { key: "k", value: { stringValue: '"v"' } },
+      { key: "tinker.kind", value: { stringValue: "operation" } },
+    ],
+    events: [
+      {
+        name: "e",
+        timeUnixNano: "56000000",
+        attributes: [{ key: "k", value: { stringValue: "1" } }],
+      },
+    ],
+    status: { code: 1 },
+  });
+});
+
+test("the encode runs trace through their dependency, and the quiet bucket makes no span", () => {
+  const root = createScope({ observe: { history: 16 } });
+  const span = { ...fields, attributes: { k: 1 }, events: [] };
+
+  root.run(spanBody, { input: { span, encoded: false } });
+
+  expect(root.spans().map(({ name }) => name)).toEqual([
+    "telemetry.encodeValue",
+    "telemetry.spanBody",
+  ]);
+
+  root.run(spanBody, { input: { span, encoded: false }, ns: quiet });
+  root.run(encodeValue, { input: 1, ns: quiet });
+
+  expect(root.spans()).toHaveLength(2);
 });
