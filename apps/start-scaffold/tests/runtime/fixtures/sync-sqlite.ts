@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
+import type { Scope } from "@tinker/core";
 import { preset } from "@tinker/core/testing";
 
 import { database } from "~/components/database-sqlite/index.server";
@@ -89,6 +90,9 @@ export function handWoken(logRead?: (query: string) => void) {
     emit: (payload: string) => wakes.forEach((wake) => wake(payload)),
     wake: () => wakes.forEach((wake) => wake("sync_event")),
     /** The notice an auth path sends on the sync channel, for one account. */
-    notice: (accountId: string) => wakes.forEach((wake) => wake(accountNotice(accountId))),
+    notice: (root: Scope.Handle, accountId: string) => {
+      const payload = root.run(accountNotice, { input: accountId });
+      wakes.forEach((wake) => wake(payload));
+    },
   };
 }
