@@ -10,6 +10,21 @@ export const root = resolve(app, "../..");
 /** The new main/host contract first ships together in this release. */
 export const templateHostVersion = "0.16.0";
 
+/**
+ * One owner per target. A maintenance script (SQLite's dev database) may ship in two items as
+ * one source file: the starter block and the component that needs it. The bytes are the same,
+ * so neither replaces the other.
+ */
+function checkOwner(owners, item, file) {
+  const owner = owners.get(file.target);
+  const shared = file.target.startsWith("~/maintain/") && owner?.path === file.path;
+  assert.ok(
+    owner === undefined || shared,
+    `${item.name}: ${file.target} is already owned by ${owner?.name}`,
+  );
+  owners.set(file.target, { name: item.name, path: file.path });
+}
+
 /** Examples may add files, but never replace the app template or another item's files. */
 function checkTargets(registry) {
   const protectedFiles = new Set([
@@ -31,11 +46,7 @@ function checkTargets(registry) {
         item.name === "app" || !protectedFiles.has(file.target),
         `${item.name}: protected app file ${file.target}`,
       );
-      assert.ok(
-        !owners.has(file.target),
-        `${item.name}: ${file.target} is already owned by ${owners.get(file.target)}`,
-      );
-      owners.set(file.target, item.name);
+      checkOwner(owners, item, file);
     }
   }
 

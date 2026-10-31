@@ -36,8 +36,9 @@ export default defineConfig({
       // Misreads Vite's `?raw` text imports as missing default exports.
       "import/default": "off",
     },
-    // tsgolint (TypeScript 7.0) has no content mappers, so it cannot resolve Reylo `.sql` imports.
-    // Type errors come from each package's own tsc gate; start-scaffold's runs with --runExternalCode.
+    // tsgolint (TypeScript 7.0) has no content mappers; `database-sqlite/sql.d.ts` gives each Reylo
+    // `.sql` import a query type for it. Type errors come from each package's own tsc gate;
+    // start-scaffold's runs with --runExternalCode.
     options: { typeAware: true, typeCheck: false },
     overrides: [
       // Plain Node scripts have no tsconfig, so `@/` cannot reach them.

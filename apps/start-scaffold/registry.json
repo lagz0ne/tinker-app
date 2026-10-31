@@ -266,7 +266,7 @@
       "name": "auth-sqlite",
       "type": "registry:lib",
       "title": "auth-sqlite",
-      "description": "Copied SQLite auth component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
+      "description": "Copied SQLite auth component. You own its files.",
       "dependencies": [
         "@better-auth/kysely-adapter@1.7.7",
         "@better-auth/mcp@1.7.7",
@@ -359,9 +359,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
-        "starterOnly": true,
-        "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       }
     },
     {
@@ -423,7 +421,7 @@
       "name": "database-sqlite",
       "type": "registry:lib",
       "title": "database-sqlite",
-      "description": "Copied SQLite database component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
+      "description": "Copied SQLite database component. You own its files. tinker add prints the Reylo toolchain lines to paste.",
       "dependencies": [
         "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "reylo@0.6.0",
@@ -477,6 +475,11 @@
           "target": "~/tinker/components/database-sqlite/queries/trim.sql"
         },
         {
+          "path": "tinker/components/database-sqlite/sql.d.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/database-sqlite/sql.d.ts"
+        },
+        {
           "path": "tinker/components/database-sqlite/types.ts",
           "type": "registry:file",
           "target": "~/tinker/components/database-sqlite/types.ts"
@@ -485,13 +488,32 @@
           "path": "sqlite/migrations/20261028000000_start_notify.sql",
           "type": "registry:file",
           "target": "~/migrations/20261028000000_start_notify.sql"
+        },
+        {
+          "path": "maintain/sqlite-dev-db.mjs",
+          "type": "registry:file",
+          "target": "~/maintain/sqlite-dev-db.mjs"
         }
       ],
       "meta": {
         "ownership": "userland",
         "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
-        "starterOnly": true,
-        "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
+        "toolchain": {
+          "package.json": [
+            "\"scripts\": { \"typecheck\": \"node maintain/sqlite-dev-db.mjs && DATABASE_URL=file:.tinker/sqlite-dev.db tsc --noEmit --runExternalCode\" }",
+            "\"devDependencies\": { \"typescript\": \"7.1.0-beta\" }",
+            "\"overrides\": { \"typescript\": \"7.1.0-beta\" }"
+          ],
+          "tsconfig.json": [
+            "\"contentMappers\": [{ \"package\": \"reylo\", \"extensions\": [\".sql\", \".reylo.yaml\", \".reylo.yml\"] }]"
+          ],
+          "vite.config.ts": [
+            "import reylo from \"reylo/vite\";",
+            "plugins: [reylo(), ...]",
+            "test: { globalSetup: [\"./maintain/sqlite-dev-db.mjs\"] }"
+          ],
+          ".reylo.yaml": ["direct_url: file:./.tinker/sqlite-dev.db"]
+        }
       },
       "devDependencies": ["@reylosql/sqlite@0.6.0"]
     },
@@ -1061,7 +1083,7 @@
       "name": "sync-sqlite",
       "type": "registry:lib",
       "title": "sync-sqlite",
-      "description": "Copied SQLite sync component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
+      "description": "Copied SQLite sync component. You own its files.",
       "dependencies": [
         "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
         "@tanstack/react-router@1.170.41",
@@ -1208,9 +1230,7 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
-        "starterOnly": true,
-        "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
       }
     },
     {

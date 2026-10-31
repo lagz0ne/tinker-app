@@ -1,5 +1,30 @@
 # Upgrade
 
+## Unreleased
+
+- The SQLite set installs onto an app made from the `app` item. `tinker add database-sqlite`
+  (and `auth-sqlite`, `sync-sqlite`, which require it) no longer refuses with `is starter-only`.
+  After the `cmds/*.ts` lines it prints the Reylo toolchain once, under
+  `Paste into your toolchain (tinker add writes no config):`. Paste each line into the file it
+  names: `package.json` (the `typecheck` script, TypeScript `7.1.0-beta` in `devDependencies`
+  and `overrides`), `tsconfig.json` (`contentMappers`), `vite.config.ts` (`reylo()` first in the
+  plugins, `test.globalSetup`; also `vitest.config.ts` if you have one), and a new `.reylo.yaml`.
+  Then run `npm install` (or `pnpm install`). Add writes none of those files.
+  ADR `docs/decisions/registry-toolchain.md`.
+- A registry item declares that need in `meta.toolchain`: an object of app file -> lines.
+  Add, update and check refuse a bad shape with `bad meta.toolchain in <name>: ...`.
+  `meta.starterOnly` and its refusal are gone; no item uses it.
+- A component may now write `migrations/` and `maintain/` as well as `drizzle/`.
+  `database-sqlite` ships `maintain/sqlite-dev-db.mjs`, the dev database builder; the SQLite
+  items ship their migrations to `migrations/`. A file there with other bytes is a `conflict:`.
+- `database-sqlite` ships `sql.d.ts`: a `declare module "*.sql"` fallback, so tsgolint (the
+  type-aware lint, TypeScript 7.0, no content mappers) reads each `.sql` import as a Reylo
+  query. The type check (TypeScript 7.1, `--runExternalCode`) still uses Reylo's real types.
+- An app made from the demo keeps its migrations in `sqlite/migrations`. `tinker check` there
+  now notes the SQLite items as `outdated:` (a note, exit 0), and `tinker update database-sqlite`
+  also writes copies of its migrations to `migrations/`. Keep taking the SQLite set by the
+  template update there.
+
 ## 0.16.0
 
 Start 0.16.0 is released from `lagz0ne/tinker-app`, tag `start-v0.16.0`.

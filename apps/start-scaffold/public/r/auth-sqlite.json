@@ -3,7 +3,7 @@
   "name": "auth-sqlite",
   "type": "registry:lib",
   "title": "auth-sqlite",
-  "description": "Copied SQLite auth component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
+  "description": "Copied SQLite auth component. You own its files.",
   "dependencies": [
     "@better-auth/kysely-adapter@1.7.7",
     "@better-auth/mcp@1.7.7",
@@ -110,8 +110,6 @@
   ],
   "meta": {
     "ownership": "userland",
-    "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
-    "starterOnly": true,
-    "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
+    "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
   }
 }

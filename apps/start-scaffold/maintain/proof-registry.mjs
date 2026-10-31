@@ -6,7 +6,14 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-import { proofEnv, wireProofMail, missingMailChild } from "./proof-app.mjs";
+import {
+  proofEnv,
+  wireProofMail,
+  missingMailChild,
+  pasteToolchain,
+  printedToolchain,
+  sqliteAppTest,
+} from "./proof-app.mjs";
 import { app, root } from "./registry-source.mjs";
 
 /** Real shadcn, packed releases, and HTTP; this proof stays outside scope tests. */
@@ -14,7 +21,8 @@ const scratch = await mkdtemp(join(tmpdir(), "start-shadcn-proof-"));
 const packs = join(scratch, "packs");
 const registry = join(scratch, "r");
 const consumer = join(scratch, "app");
-await Promise.all([packs, registry, consumer].map((dir) => mkdir(dir)));
+const sqliteApp = join(scratch, "sqlite-app");
+await Promise.all([packs, registry, consumer, sqliteApp].map((dir) => mkdir(dir)));
 console.log(`Proof folder: ${scratch}`);
 
 const env = {
@@ -112,6 +120,34 @@ try {
       TINKER_REGISTRY_OUT: registry,
     });
   buildRegistry();
+
+  // G0b: the SQLite set lands on the `app` item. The user pastes only what tinker add printed.
+  run(
+    "npx",
+    ["--yes", "shadcn@4.21.0", "add", `${url}/app.json`, "--yes", "--overwrite"],
+    sqliteApp,
+  );
+  run("npm", ["install"], sqliteApp);
+  const sqliteTinker = join(sqliteApp, "node_modules/.bin/tinker");
+  const added = run(sqliteTinker, ["add", "database-sqlite", "--registry", url], sqliteApp);
+  const toolchain = printedToolchain(added);
+  for (const name of ["sync-sqlite", "auth-sqlite"]) {
+    const more = run(sqliteTinker, ["add", name, "--registry", url], sqliteApp);
+    assert.ok(!more.includes("Paste into your toolchain"), `${name}: the toolchain prints once`);
+  }
+  await pasteToolchain(sqliteApp, toolchain);
+  run("npm", ["install"], sqliteApp);
+  await mkdir(join(sqliteApp, "tests"), { recursive: true });
+  await writeFile(join(sqliteApp, "tests/sqlite.test.ts"), sqliteAppTest);
+  run("vp", ["build"], sqliteApp);
+  const typecheck = run("npm", ["run", "typecheck"], sqliteApp);
+  assert.ok(typecheck.includes("--runExternalCode"), "the pasted type check runs Reylo");
+  run("vp", ["test", "--run"], sqliteApp);
+  run(sqliteTinker, ["check", "--registry", url], sqliteApp);
+  run(sqliteTinker, ["doctor"], sqliteApp);
+  console.log(
+    "PASS: an app item app adds database-sqlite, sync-sqlite and auth-sqlite, pastes the printed toolchain, builds, type-checks with --runExternalCode and runs a database test.",
+  );
 
   assert.deepEqual(await readdir(consumer), []);
   run("npx", ["--yes", "shadcn@4.21.0", "add", `${url}/app.json`, "--yes", "--overwrite"]);
