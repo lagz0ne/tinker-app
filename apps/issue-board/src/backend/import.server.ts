@@ -285,9 +285,13 @@ export const importBatch = operation({
     lock: lockTeamWrite.controller,
     save: saveImportRow.controller,
     alerts: queueAlerts.controller,
+    fanDeliveries: rowDeliveries.controller,
     publish: fanOut.controller,
   },
-  run: async ({ target, lock, save, alerts, publish }, { input, random, signal }) => {
+  run: async (
+    { target, lock, save, alerts, fanDeliveries, publish },
+    { input, random, signal },
+  ) => {
     const writer = await target.run();
 
     const locked = await lock.run({ input: { teamId: writer.teamId, actorId: writer.id } });
@@ -329,11 +333,13 @@ export const importBatch = operation({
         input: {
           executionId,
           owner: writer.id,
-          deliveries: rowDeliveries(
-            locked.members,
-            { kind: "issue.upsert", issue: saved },
-            writer.id,
-          ),
+          deliveries: fanDeliveries.run({
+            input: {
+              members: locked.members,
+              change: { kind: "issue.upsert", issue: saved },
+              actorId: writer.id,
+            },
+          }),
         },
       });
       changed += 1;

@@ -7,6 +7,8 @@ import { mailOutbox } from "~/components/mail/index.server";
 import type { Sync } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
 
+import { commentRecord } from "@/contracts/comments";
+import { issueRecord } from "@/contracts/issues";
 import { raise } from "@/demo/errors";
 
 import { team, teamMember } from "./board.schema.server";
@@ -118,27 +120,38 @@ export const fanOut = operation({
   },
 });
 
-/**
- * @param members - From team.lock; why: address each locked stream.
- * @param change - From the saved row; why: send the same change to each member.
- * @param actorId - From the checked actor; why: only the actor gets a result.
- */
-export function rowDeliveries(members: { id: string }[], change: Sync.Change, actorId: string) {
-  return members.map((member) => ({
-    stream: member.id,
-    payloads: [
-      { kind: "change" as const, change },
-      ...(member.id === actorId
-        ? [
-            {
-              kind: "result" as const,
-              result: {
-                kind: "complete" as const,
-                action: change.kind === "comment.add" ? ("comment" as const) : ("issue" as const),
+/** What one saved board row sends: its comment, an upserted issue, or a removed issue. */
+const boardChange = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("comment.add"), comment: commentRecord }),
+  z.object({ kind: z.literal("issue.upsert"), issue: issueRecord }),
+  z.object({ kind: z.literal("issue.remove"), id: z.uuid() }),
+]);
+
+/** The same change to every locked stream; only the actor's stream also gets its result. */
+export const rowDeliveries = operation({
+  label: "streams.rowDeliveries",
+  input: z.object({
+    members: z.array(z.object({ id: z.string() })),
+    change: boardChange,
+    actorId: z.string(),
+  }),
+  run: (_deps, { input }) =>
+    input.members.map((member) => ({
+      stream: member.id,
+      payloads: [
+        { kind: "change" as const, change: input.change },
+        ...(member.id === input.actorId
+          ? [
+              {
+                kind: "result" as const,
+                result: {
+                  kind: "complete" as const,
+                  action:
+                    input.change.kind === "comment.add" ? ("comment" as const) : ("issue" as const),
+                },
               },
-            },
-          ]
-        : []),
-    ],
-  }));
-}
+            ]
+          : []),
+      ],
+    })),
+});

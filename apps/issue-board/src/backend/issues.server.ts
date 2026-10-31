@@ -244,9 +244,10 @@ export const changeIssue = operation({
     save: saveIssue.controller,
     delta: issueDelta.controller,
     alerts: queueAlerts.controller,
+    fanDeliveries: rowDeliveries.controller,
     publish: fanOut.controller,
   },
-  run: async ({ currentUser, lock, save, delta, alerts, publish }, { input }) => {
+  run: async ({ currentUser, lock, save, delta, alerts, fanDeliveries, publish }, { input }) => {
     const change = input.change;
 
     const locked = await lock.run({
@@ -281,7 +282,9 @@ export const changeIssue = operation({
       input: {
         executionId: input.executionId,
         owner: currentUser.id,
-        deliveries: rowDeliveries(locked.members, saved.delta, currentUser.id),
+        deliveries: fanDeliveries.run({
+          input: { members: locked.members, change: saved.delta, actorId: currentUser.id },
+        }),
       },
     });
 
