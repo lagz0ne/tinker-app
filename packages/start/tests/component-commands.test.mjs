@@ -38,6 +38,7 @@ import { expect, onTestFinished, test } from "vite-plus/test";
 
 import { updateComponent } from "../lib/component-commands.mjs";
 import { baseDir, listFiles } from "../lib/paths.mjs";
+import { toolchainProblem } from "../lib/registry.mjs";
 
 const bin = join(baseDir, "bin/tinker.mjs");
 const startMin = resolve(baseDir, "../../apps/start-min");
@@ -204,7 +205,7 @@ const items = {
       "~/tinker/components/sq/component.json": '{ "requires": [] }\n',
       "~/tinker/components/sq/index.ts": 'export const sqValue = "sq";\n',
       "~/sqlite/migrations/1_sq.sql": "-- 1_sq\n",
-      "~/maintain/sq-dev-db.mjs": "export default async () => {};\n",
+      "~/maintain/sqlite-dev-db.mjs": "export default async () => {};\n",
     },
   },
   m: {
@@ -648,29 +649,53 @@ test("T1 add prints the closure's toolchain once, after the paste lines, and wri
   ]);
 });
 
-test("T2a add refuses each bad meta.toolchain shape and writes nothing", () => {
+test("T2a the shape check names each bad meta.toolchain, and add refuses it with no write", () => {
   const shapes = [
     { toolchain: ["vite.config.ts"], problem: "it must be an object of file -> lines" },
     { toolchain: { "../vite.config.ts": ["x"] }, problem: 'bad file "../vite.config.ts"' },
     { toolchain: { "~/vite.config.ts": ["x"] }, problem: 'bad file "~/vite.config.ts"' },
     {
       toolchain: { "vite.config.ts": "x" },
-      problem: "vite.config.ts must be a list of one-line strings",
+      problem: "vite.config.ts must be a list of one-line strings with no control characters",
     },
     {
       toolchain: { "vite.config.ts": [] },
-      problem: "vite.config.ts must be a list of one-line strings",
+      problem: "vite.config.ts must be a list of one-line strings with no control characters",
     },
     {
       toolchain: { "vite.config.ts": ["a\nb"] },
-      problem: "vite.config.ts must be a list of one-line strings",
+      problem: "vite.config.ts must be a list of one-line strings with no control characters",
+    },
+    { toolchain: JSON.parse('{ "__proto__": ["x"] }'), problem: 'bad file "__proto__"' },
+    { toolchain: { constructor: ["x"] }, problem: 'bad file "constructor"' },
+    { toolchain: { ".": ["x"] }, problem: 'bad file "."' },
+    { toolchain: { "a/./b.json": ["x"] }, problem: 'bad file "a/./b.json"' },
+    { toolchain: { "/etc/vite.config.ts": ["x"] }, problem: 'bad file "/etc/vite.config.ts"' },
+    { toolchain: { "C:/vite.config.ts": ["x"] }, problem: 'bad file "C:/vite.config.ts"' },
+    {
+      toolchain: { "vite.config.ts": ["ok\rfake line"] },
+      problem: "vite.config.ts must be a list of one-line strings with no control characters",
+    },
+    {
+      toolchain: { "vite.config.ts": ["\u001b[2Jcleared"] },
+      problem: "vite.config.ts must be a list of one-line strings with no control characters",
+    },
+    {
+      toolchain: { "vite.config.ts": ["a\tb"] },
+      problem: "vite.config.ts must be a list of one-line strings with no control characters",
     },
     {
       toolchain: { "vite.config.ts": [" "] },
-      problem: "vite.config.ts must be a list of one-line strings",
+      problem: "vite.config.ts must be a list of one-line strings with no control characters",
     },
   ];
   for (const { toolchain, problem } of shapes) {
+    expect(toolchainProblem(toolchain)).toBe(problem);
+  }
+  expect(toolchainProblem(undefined)).toBe(null);
+  expect(toolchainProblem({ "vite.config.ts": ['import x from "x";'] })).toBe(null);
+
+  for (const { toolchain, problem } of [shapes[0], shapes.at(-2)]) {
     const registry = makeRegistry({
       "bad-tool": { files: componentFiles("bad-tool"), meta: { toolchain } },
     });
@@ -1075,7 +1100,7 @@ test("F1 add merges the deps of the whole closure, and prints a kept dep once", 
   expect(readPackage(twice).dependencies["@scope/bee"]).toBe("1.0.0");
 });
 
-test("A4b add writes the sqlite/migrations/ and maintain/ files a component owns", () => {
+test("A4b add writes the sqlite/migrations/ files and the dev database script a component owns", () => {
   const registry = makeRegistry();
   const root = app();
 
@@ -1083,17 +1108,17 @@ test("A4b add writes the sqlite/migrations/ and maintain/ files a component owns
 
   expect(run.code).toBe(0);
   expect(read(root, "sqlite/migrations/1_sq.sql")).toBe("-- 1_sq\n");
-  expect(read(root, "maintain/sq-dev-db.mjs")).toBe("export default async () => {};\n");
+  expect(read(root, "maintain/sqlite-dev-db.mjs")).toBe("export default async () => {};\n");
   const lock = JSON.parse(read(root, "tinker/components.lock"));
   expect(Object.keys(lock.components.sq.files).sort()).toEqual([
-    "maintain/sq-dev-db.mjs",
+    "maintain/sqlite-dev-db.mjs",
     "sqlite/migrations/1_sq.sql",
     "tinker/components/sq/component.json",
     "tinker/components/sq/index.ts",
   ]);
 });
 
-test("F2 add refuses an outside file outside drizzle/, sqlite/migrations/ and maintain/", () => {
+test("F2 add refuses an outside file outside drizzle/, sqlite/migrations/ and maintain/sqlite-dev-db.mjs", () => {
   const registry = makeRegistry();
   const src = app({ ".tinker/update/bad-src.old/component.json": '{ "requires": [] }\n' });
   const before = snapshot(src);
@@ -1109,6 +1134,20 @@ test("F2 add refuses an outside file outside drizzle/, sqlite/migrations/ and ma
   expect(clash.code).toBe(1);
   expect(clash.lines).toEqual(["bad target ~/tinker/components/a/index.ts in bad-other"]);
   expect(snapshot(other)).toEqual(otherBefore);
+
+  const script = makeRegistry({
+    "bad-maintain": {
+      files: componentFiles("bad-maintain", [], {
+        "~/maintain/proof-fault.mjs": "export {};\n",
+      }),
+    },
+  });
+  const scripts = app();
+  const scriptsBefore = snapshot(scripts);
+  const maintain = tinker(scripts, "add", "bad-maintain", "--registry", script);
+  expect(maintain.code).toBe(1);
+  expect(maintain.lines).toEqual(["bad target ~/maintain/proof-fault.mjs in bad-maintain"]);
+  expect(snapshot(scripts)).toEqual(scriptsBefore);
 });
 
 test("F2 refuses a name that is not a folder name", () => {

@@ -45,20 +45,38 @@ export function toolchainProblem(toolchain) {
   return null;
 }
 
+/** Keys an object may not take from a registry: they name the prototype, not a file. */
+const prototypeKeys = new Set(["__proto__", "constructor", "prototype"]);
+
 /**
- * What is wrong with one `meta.toolchain` entry, or null: an app-relative file, then one or more
- * one-line strings.
+ * Whether a line holds a control character: a carriage return or an escape sequence can redraw
+ * the terminal, so a printed line could hide or fake the lines around it.
+ * @param {string} line - From toolchainEntryProblem; why: one line the user would paste.
+ */
+function hasControl(line) {
+  for (let index = 0; index < line.length; index += 1) {
+    const code = line.charCodeAt(index);
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return true;
+  }
+  return false;
+}
+
+/**
+ * What is wrong with one `meta.toolchain` entry, or null: a relative app file with no `.` or `..`
+ * segment, then one or more one-line strings with no control characters.
  * @param {string} file - From toolchainProblem; why: the key, where the lines go.
  * @param {unknown} lines - From toolchainProblem; why: the value, what the user pastes.
  */
 function toolchainEntryProblem(file, lines) {
-  if (!/^[\w.-]+(\/[\w.-]+)*$/.test(file) || file.split("/").includes("..")) {
+  const segments = file.split("/");
+  const dots = segments.some((segment) => segment === "." || segment === "..");
+  if (!/^[\w.-]+(\/[\w.-]+)*$/.test(file) || dots || prototypeKeys.has(file)) {
     return `bad file ${JSON.stringify(file)}`;
   }
 
-  const text = (line) => typeof line === "string" && line.trim() !== "" && !line.includes("\n");
+  const text = (line) => typeof line === "string" && line.trim() !== "" && !hasControl(line);
   if (!Array.isArray(lines) || lines.length === 0 || !lines.every(text)) {
-    return `${file} must be a list of one-line strings`;
+    return `${file} must be a list of one-line strings with no control characters`;
   }
   return null;
 }

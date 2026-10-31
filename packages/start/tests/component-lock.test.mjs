@@ -500,6 +500,37 @@ test("B1a check measures a component with a sqlite/migrations/ file by its lock 
   ]);
 });
 
+test("B1c update refuses an outside file the old lock does not list when its bytes differ", () => {
+  const registry = makeRegistry();
+  const outside = "sqlite/migrations/1_sql.sql";
+  const root = app({
+    ...sqlFiles,
+    [`~/${outside}`]: "-- my edit\n",
+    [lockPath]: lockText({ "s-sql": entryFor(sqlFiles, "s-sql") }),
+  });
+  const before = snapshot(root);
+
+  const run = tinker(root, "update", "s-sql", "--registry", registry);
+
+  expect(run.code).toBe(1);
+  expect(run.lines).toEqual([
+    `conflict: ${outside}`,
+    "tinker update: s-sql has local edits; rerun with --force to replace them",
+  ]);
+  expect(snapshot(root)).toEqual(before);
+
+  const same = app({
+    ...sqlFiles,
+    [lockPath]: lockText({ "s-sql": entryFor(sqlFiles, "s-sql") }),
+  });
+  expect(tinker(same, "update", "s-sql", "--registry", registry).code).toBe(0);
+
+  const forced = tinker(root, "update", "s-sql", "--force", "--registry", registry);
+  expect(forced.code).toBe(0);
+  expect(read(root, outside)).toBe("-- sql\n");
+  expect(lockOf(root).components["s-sql"].files[outside]).toBe(shaFile(root, outside));
+});
+
 test("B1b check turns a bad registry item into one finding instead of stopping", () => {
   const registry = makeRegistry();
   const root = app({ ...items.c.files, ...items["bad-item"].files });
