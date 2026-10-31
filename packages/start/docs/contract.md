@@ -45,13 +45,15 @@ exception. React views render data and invoke operations.
 
 App code has no plain helper functions (tinker-app #44). Work that more than
 one place needs is an operation: each call is a span, and its dependencies come
-through `depends`. A body raises with `ctx.raise`; a caller reads an error's
-`kind` and `payload` from `settle` or with a declared schema. A door reader is a
-schema. A command's exit code and close results belong to the Start host, since
-no scope exists there. `check-plain` refuses any other function with
-"plain-function: make it an operation". Do not use unknown-to-handle casts,
-callback bags, hidden object methods, or wrappers to hide a function. React
-props do not carry Core handles or signals.
+through `depends`. A body raises with its ctx's `raise`, typed by
+`const raise: Errors.Raise = ctx.raise`; a caller reads an error's `kind` and
+`payload` from `settle` or with a declared schema. A door reader is a schema. A
+command's exit code and close results belong to the Start host, since no scope
+exists there. `check-plain` refuses any other function with "plain-function:
+make it an operation". The one named view exception is shadcn's `cn`, the
+import its registry writes through `aliases.utils`. Do not use
+unknown-to-handle casts, callback bags, hidden object methods, or wrappers to
+hide a function. React props do not carry Core handles or signals.
 
 ## Bind only real seams
 

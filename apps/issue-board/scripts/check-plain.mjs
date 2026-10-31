@@ -1201,6 +1201,9 @@ const entryHelpers = {
   "tinker/components/database/database.server.ts": ["queryWithStop"],
   "tinker/components/database/lease.server.ts": ["leaseFrom", "logQuery", "query", "release"],
   "tinker/base/main.ts": ["defineMain"],
+  // shadcn's registry contract: components.json `aliases.utils` imports `cn`, so a copied
+  // component keeps that import (tinker-app #44; Duke's A/B choice is pending, B applied).
+  "src/frontend/ui/classes.ts": ["cn"],
   "tinker/base/panics.server.ts": [
     // c55998e createServerEntry: register process panic cleanup without identity wrapping.
     "observeServerPanics",
