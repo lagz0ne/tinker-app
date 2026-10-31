@@ -1,5 +1,38 @@
 # Upgrade
 
+## 0.15.0
+
+Start 0.15.0 is released from `lagz0ne/tinker-app`, tag `start-v0.15.0`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.15.0/tinker-start-0.15.0.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.15.0/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.15.0.
+
+- New component `agent-talk` (ADR `docs/decisions/agent-talk.md`). A scope owns each Claude
+  Agent SDK run (`@anthropic-ai/claude-agent-sdk@0.3.295`). `agentTalk.run(talk, turn)` runs one
+  `query()` per turn and maps its stream to `TalkEvent`s. Its result never rejects: `done`,
+  `failed`, `stopped`, `closed` or `busy`. `stop(talk)` aborts one talk. `warm(talk, plan)` runs
+  quiet ping turns on the scope clock to keep the prompt cache warm. Closing or releasing the
+  scope aborts every run, wait and timer, and joins them before close returns. The component fixes
+  the safe options (`dontAsk`, no setting sources, strict MCP config, its own env) and never reads
+  `process.env`. Bind the credential in the command, OAuth token first:
+
+  ```ts
+  env.CLAUDE_CODE_OAUTH_TOKEN
+    ? agentCredentials({ oauthToken: env.CLAUDE_CODE_OAUTH_TOKEN })
+    : env.ANTHROPIC_API_KEY !== undefined && agentCredentials({ apiKey: env.ANTHROPIC_API_KEY }),
+  agentConfigDir(join(dataDir, "claude")),
+  ```
+
+  With no credential, a run ends `failed` with `not-signed-in` and calls no `query()`. Tests
+  preset `agentSdk` with a fake; `npm run test:agent-live` is a by-hand proof that needs a key and
+  prints `not run` without one. The demo template ships it, so a new demo app installs the SDK and
+  one platform binary of about 256 MB. An app made from the demo takes it by the template update
+  from `demo-v0.14.0` to `demo-v0.15.0`; another app adds it with `tinker add agent-talk`.
+  Hedl asked for it (gap TG2, #41).
+
 ## 0.14.0
 
 Start 0.14.0 is released from `lagz0ne/tinker-app`, tag `start-v0.14.0`.

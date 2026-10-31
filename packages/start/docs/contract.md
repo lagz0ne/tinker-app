@@ -1,6 +1,6 @@
 # Current Start authoring contract
 
-This is the contract for the current source, released as Start 0.14.0.
+This is the contract for the current source, released as Start 0.15.0.
 Each released change set stays in [UPGRADE.md](../UPGRADE.md#0100).
 The golden copied source is `apps/start-scaffold/tinker/`; the small app shares
 its base and selected components. Core and React stay at 0.9.0. Do not patch Core.
@@ -113,8 +113,8 @@ export type MainContext = {
 
 Main returns a closed promise; a server also returns fetch. Importing a command
 starts nothing. Commands read no process globals and load no env file. The host
-owns those inputs, including cwd, the folder the process runs in. Follow the actual [small server](https://github.com/lagz0ne/tinker-app/blob/start-v0.14.0/apps/start-min/cmds/server.ts)
-or [board commands](https://github.com/lagz0ne/tinker-app/blob/start-v0.14.0/apps/issue-board/cmds) for complete wiring.
+owns those inputs, including cwd, the folder the process runs in. Follow the actual [small server](https://github.com/lagz0ne/tinker-app/blob/start-v0.15.0/apps/start-min/cmds/server.ts)
+or [board commands](https://github.com/lagz0ne/tinker-app/blob/start-v0.15.0/apps/issue-board/cmds) for complete wiring.
 
 Only the command chooses its error code: operations return results or raise
 errors. An outer catch calls exit(code, error), then returns a stopped result.
@@ -178,7 +178,7 @@ They are migration work, not examples of the new session transaction. Auth's
 pool hooks stay outside that session transaction. Auth callbacks await a separate
 committed enqueue in the shared mail outbox; board enqueue stays in its write
 transaction. Workers claim batches before SMTP and acknowledge by lease token.
-See [the migration list](https://github.com/lagz0ne/tinker-app/blob/start-v0.14.0/apps/issue-board/maintain/REFACTOR.md).
+See [the migration list](https://github.com/lagz0ne/tinker-app/blob/start-v0.15.0/apps/issue-board/maintain/REFACTOR.md).
 
 ## HTTP and tests
 
