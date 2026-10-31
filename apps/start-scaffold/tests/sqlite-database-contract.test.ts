@@ -563,6 +563,115 @@ test("migrate retries the schema lock until its deadline, in steps of at most 50
   }
 });
 
+// SQLite skips the busy handler when a connection that holds a read lock asks for a write lock:
+// it returns SQLITE_BUSY at once, to avoid a deadlock (sqlite3_busy_handler docs). On a file not
+// yet in WAL, `PRAGMA journal_mode = WAL` reads the header, then writes it in that same way.
+test("migrate on a fresh file retries the WAL switch while another connection holds the write lock", async () => {
+  const { folder, file } = await home();
+
+  // A fresh file in rollback mode; its RESERVED lock lets the switch read but not write.
+  const holder = new DatabaseSync(file);
+
+  holder.exec("BEGIN IMMEDIATE");
+
+  const clock = makeTestClock({ now: 1_000_000 });
+
+  const sleeps: number[] = [];
+
+  const root = createScope({
+    startTimeout: 0,
+    clock: {
+      ...clock,
+      async sleep(ms) {
+        sleeps.push(ms);
+
+        // The other writer commits during the first wait; the next attempt switches the file.
+        if (holder.isTransaction) holder.exec("COMMIT");
+
+        clock.advance(ms);
+      },
+    },
+    tags: [
+      databaseUrl(pathToFileURL(file)),
+      databaseMigrationsFolder(folder),
+      databaseBusyTimeout(5000),
+      databaseMigrationTimeout(1000),
+    ],
+  });
+
+  try {
+    expect(await root.settle(migrate)).toMatchObject({ status: "success" });
+    expect(sleeps).toEqual([50]);
+  } finally {
+    if (holder.isTransaction) holder.exec("COMMIT");
+
+    holder.close();
+
+    await root.close({ graceful: true });
+  }
+
+  const raw = new DatabaseSync(file);
+
+  try {
+    expect(pragma(raw, "journal_mode")).toBe("wal");
+    expect(
+      raw
+        .prepare("SELECT name FROM start_migrations")
+        .all()
+        .map((row) => row.name),
+    ).toEqual(["20261028000000_start_notify.sql"]);
+  } finally {
+    raw.close();
+  }
+});
+
+test("the database opens a fresh file while another connection holds the write lock", async () => {
+  const { file } = await home();
+
+  const holder = new DatabaseSync(file);
+
+  holder.exec("BEGIN IMMEDIATE");
+
+  const clock = makeTestClock({ now: 1_000_000 });
+
+  const waits: number[] = [];
+
+  const root = createScope({
+    clock: {
+      ...clock,
+      sleep(ms, signal) {
+        // The trim timer's long wait stays on the test clock; only the open's retry is short.
+        if (ms > 50) return clock.sleep(ms, signal);
+
+        waits.push(ms);
+
+        if (holder.isTransaction) holder.exec("COMMIT");
+
+        clock.advance(ms);
+
+        return Promise.resolve();
+      },
+    },
+    tags: [databaseUrl(pathToFileURL(file)), databaseBusyTimeout(5000)],
+  });
+
+  try {
+    const db = await root.resolve(database);
+
+    expect(waits).toEqual([50]);
+
+    for (const connection of [db.client, db.reader]) {
+      expect(pragma(connection, "journal_mode")).toBe("wal");
+    }
+  } finally {
+    if (holder.isTransaction) holder.exec("COMMIT");
+
+    holder.close();
+
+    await root.close({ graceful: true });
+  }
+});
+
 test("a stop that lands between migration files applies none of them", async () => {
   const { folder, file } = await home();
 
