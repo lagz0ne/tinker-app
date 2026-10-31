@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { startRequests } from "~/components/requests";
-import { readResult } from "~/components/requests/index.server";
+import { cancelledCall } from "~/components/requests/index.server";
 import {
   receiveTelemetry,
   telemetryBody,
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/api/telemetry")({
             : new URL(origin).origin;
         const refused = [
           [request.headers.get("origin") !== expected, 403],
-          [request.headers.get("content-type")?.split(";")[0] !== "application/json", 415],
+          [String(request.headers.get("content-type")).split(";")[0] !== "application/json", 415],
           [Number(request.headers.get("content-length")) > 65_536, 413],
         ].find(([refused]) => refused);
         if (refused) return new Response(null, { status: Number(refused[1]) });
@@ -37,11 +37,12 @@ export const Route = createFileRoute("/api/telemetry")({
           input: batch,
           signal: request.signal,
         });
-        if (result.status === "failed" && Object(result.error).kind === "Cancelled") {
-          return new Response(null, { status: 503 });
+        if (result.status === "success") {
+          return new Response(null, { status: 202, headers: { "Cache-Control": "no-store" } });
         }
-        readResult(result);
-        return new Response(null, { status: 202, headers: { "Cache-Control": "no-store" } });
+        if (result.status === "cancelled") return context.session.run(cancelledCall);
+        if (Object(result.error).kind === "Cancelled") return new Response(null, { status: 503 });
+        throw result.error;
       },
     },
   },

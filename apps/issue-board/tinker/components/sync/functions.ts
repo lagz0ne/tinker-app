@@ -3,7 +3,7 @@ import { setResponseHeader } from "@tanstack/react-start/server";
 import { resource } from "@tinker/core";
 
 import { startRequests } from "~/components/requests/index";
-import { readResult } from "~/components/requests/index.server";
+import { cancelledCall } from "~/components/requests/index.server";
 import type { Sync } from "~/components/sync/envelopes";
 import { bootstrapSlot, readAccountSlot } from "~/components/sync/slots";
 
@@ -12,11 +12,12 @@ export const getBootstrap = createServerFn({ method: "GET" })
   .middleware([startRequests.middleware])
   .handler(async ({ context }) => {
     setResponseHeader("Cache-Control", "no-store");
-    return readResult(
-      await context.session.settle(context.session.resolve(bootstrapSlot.required), {
-        signal: context.signal,
-      }),
-    );
+    const result = await context.session.settle(context.session.resolve(bootstrapSlot.required), {
+      signal: context.signal,
+    });
+    if (result.status === "failed") throw result.error;
+    if (result.status === "cancelled") return context.session.run(cancelledCall);
+    return result.value;
   });
 
 /** The account this request signs in as, or null: what a tab checks before it trusts a page. */
@@ -24,11 +25,12 @@ export const getAccount = createServerFn({ method: "GET" })
   .middleware([startRequests.middleware])
   .handler(async ({ context }) => {
     setResponseHeader("Cache-Control", "no-store");
-    return readResult(
-      await context.session.settle(context.session.resolve(readAccountSlot.required), {
-        signal: context.signal,
-      }),
-    );
+    const result = await context.session.settle(context.session.resolve(readAccountSlot.required), {
+      signal: context.signal,
+    });
+    if (result.status === "failed") throw result.error;
+    if (result.status === "cancelled") return context.session.run(cancelledCall);
+    return result.value;
   });
 
 /**

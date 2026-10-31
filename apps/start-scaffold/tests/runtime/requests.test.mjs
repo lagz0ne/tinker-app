@@ -6,7 +6,6 @@ import { createScope, operation, resource } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
 
 import { requestStop, startRequests } from "~/components/requests";
-import { readResult } from "~/components/requests/index.server";
 import { requestHeaders, renderFrames } from "~/components/requests/index.server";
 
 /** Runs until its session stops it by force. */
@@ -100,14 +99,17 @@ test("each request runs in its own session, with its headers and stop signal, un
     context: { scope: root },
     async next(options) {
       const context = options?.context ?? expect.unreachable("the middleware passes its context");
-      asked = readResult(context.session.settle(asker));
+      asked = context.session.settle(asker);
       context.session.resolve(recorder);
       running.resolve(context.session.settle(gated));
       return { request, pathname: "/", context, response: new Response("hello") };
     },
   });
 
-  expect(asked).toEqual({ who: "Ada", requestStop: request.signal });
+  expect(asked).toEqual({
+    status: "success",
+    value: { who: "Ada", requestStop: request.signal },
+  });
   if (!result || result instanceof Response) return expect.unreachable("Start's result comes back");
 
   const reading = result.response.text();

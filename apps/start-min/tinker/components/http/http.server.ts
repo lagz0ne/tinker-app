@@ -1,7 +1,8 @@
 import { operation, resource } from "@tinker/core";
 import { z } from "zod";
 
-import { abortReasons, raise } from "~/components/errors";
+import { abortReasons } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 import { backendStop, requestStop } from "~/components/requests";
 
 import { httpBackend } from "./backend";
@@ -72,7 +73,7 @@ export const httpRequest = operation({
   label: "http.request",
   input: requestShape,
   depends: { http },
-  run: ({ http }, { input, obs, signal }) => {
+  run: ({ http }, { input, obs, signal, raise }) => {
     const { url, method, headers, body } = input;
     const path = new URL(url).pathname;
     return obs.child(`http ${method} ${path}`, async (span) => {
@@ -87,21 +88,26 @@ export const httpRequest = operation({
       } catch (cause) {
         signal.throwIfAborted();
         const failure = failureShape.safeParse(cause);
-        if (!failure.success) raise("HttpRequestFailed", { method, path });
+        if (!failure.success) {
+          return raise("HttpRequestFailed", {
+            method,
+            path,
+          } satisfies Errors.Payloads["HttpRequestFailed"]);
+        }
 
         const nested = failureShape.safeParse(failure.data.cause);
         const details = nested.success ? nested.data : failure.data;
         const name = nameShape.optional().catch(undefined);
         const code = codeShape.optional().catch(undefined);
 
-        raise("HttpRequestFailed", {
+        return raise("HttpRequestFailed", {
           method,
           path,
           cause: {
             name: name.parse(details.name) ?? name.parse(failure.data.name),
             code: code.parse(details.code) ?? code.parse(failure.data.code),
           },
-        });
+        } satisfies Errors.Payloads["HttpRequestFailed"]);
       }
     });
   },

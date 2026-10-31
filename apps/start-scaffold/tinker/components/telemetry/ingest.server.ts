@@ -1,6 +1,6 @@
 import { operation, resource, tag } from "@tinker/core";
 
-import { raise } from "~/components/errors";
+import type { Errors } from "~/components/errors";
 import { backendStop, requestStop } from "~/components/requests";
 import { requestBody } from "~/components/requests/index.server";
 
@@ -25,7 +25,9 @@ export const receiveTelemetry = operation({
   },
   input: telemetryBatch,
   run: ({ ingest, backendStop, requestStop }, ctx) => {
-    if (backendStop.aborted || requestStop.aborted || ctx.signal.aborted) raise("Cancelled", {});
+    if (backendStop.aborted || requestStop.aborted || ctx.signal.aborted) {
+      return ctx.raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]);
+    }
     ingest(ctx.input);
   },
 });
