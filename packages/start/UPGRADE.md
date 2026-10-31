@@ -24,6 +24,9 @@ Exports refuse a tooling version below 0.16.1.
   plugins, `test.globalSetup`; also `vitest.config.ts` if you have one), and a new `.reylo.yaml`.
   Then run `npm install` (or `pnpm install`). Add writes none of those files.
   ADR `docs/decisions/registry-toolchain.md`.
+- `tinker add auth-sqlite` also prints `"overrides": { "@better-auth/core": "1.7.7" }` for
+  `package.json`, the pin the starter keeps; without it `npm install` fails with ERESOLVE on
+  `@better-auth/oauth-provider`'s exact `@better-fetch/fetch` peer.
 - A registry item declares that need in `meta.toolchain`: an object of app file -> lines.
   Add, update and check refuse a bad shape with `bad meta.toolchain in <name>: ...`.
   `meta.starterOnly` and its refusal are gone; no item uses it.

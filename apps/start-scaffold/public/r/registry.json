@@ -414,7 +414,10 @@
       ],
       "meta": {
         "ownership": "userland",
-        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
+        "toolchain": {
+          "package.json": ["\"overrides\": { \"@better-auth/core\": \"1.7.7\" }"]
+        }
       }
     },
     {

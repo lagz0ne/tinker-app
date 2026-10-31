@@ -133,12 +133,17 @@ try {
   run("npm", ["install"], sqliteApp);
   const sqliteTinker = join(sqliteApp, "node_modules/.bin/tinker");
   const added = run(sqliteTinker, ["add", "database-sqlite", "--registry", url], sqliteApp);
-  const toolchain = printedToolchain(added);
-  for (const name of ["sync-sqlite", "auth-sqlite", "blobs-sqlite"]) {
+  await pasteToolchain(sqliteApp, printedToolchain(added));
+  for (const name of ["sync-sqlite", "blobs-sqlite"]) {
     const more = run(sqliteTinker, ["add", name, "--registry", url], sqliteApp);
     assert.ok(!more.includes("Paste into your toolchain"), `${name}: the toolchain prints once`);
   }
-  await pasteToolchain(sqliteApp, toolchain);
+  // auth-sqlite prints only its own line: the Better Auth pin the starter keeps in `overrides`.
+  const auth = printedToolchain(
+    run(sqliteTinker, ["add", "auth-sqlite", "--registry", url], sqliteApp),
+  );
+  assert.deepEqual([...auth.keys()], ["package.json"], "auth-sqlite: only its own toolchain");
+  await pasteToolchain(sqliteApp, auth);
   run("npm", ["install"], sqliteApp);
   await mkdir(join(sqliteApp, "tests"), { recursive: true });
   await writeFile(join(sqliteApp, "tests/sqlite.test.ts"), sqliteAppTest);

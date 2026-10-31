@@ -101,6 +101,13 @@ vite.config.ts:
   closure prints it once. `blobs-sqlite`
   needs nothing more: its `.sql` queries use
   the same mapper and dev database.
+- `auth-sqlite` adds one line of its own:
+  `"overrides": { "@better-auth/core": "1.7.7" }`,
+  the pin the starter keeps. Without it npm
+  takes a newer core, whose `@better-fetch/fetch`
+  breaks `@better-auth/oauth-provider` 1.7.7's
+  exact peer (ERESOLVE). Each item prints
+  only the lines not printed yet.
 - The block comes after the `cmds/*.ts` lines.
   Files keep the order the closure first
   names them; a line prints once.
