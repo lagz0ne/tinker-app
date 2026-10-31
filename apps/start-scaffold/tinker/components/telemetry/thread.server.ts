@@ -7,7 +7,7 @@ import { abortReasons } from "~/components/errors";
 import { consoleOutput } from "./console";
 import { exportHealth } from "./health";
 import { workerThreads } from "./modules.server";
-import { encodeValue } from "./records";
+import { encodeValue, quiet } from "./records";
 import type { Telemetry } from "./records";
 import {
   logLevel,
@@ -303,8 +303,9 @@ export const threadObserver = resource({
     side: telemetrySide,
     level: logLevel,
     history: spanHistory,
+    encodeValue,
   },
-  factory: ({ thread, side, level, history }, ctx): Observe.Config => {
+  factory: ({ thread, side, level, history, encodeValue }, ctx): Observe.Config => {
     const owned = {
       history,
       level,
@@ -352,7 +353,7 @@ export const threadObserver = resource({
       },
       encodeAll(values: Record<string, unknown>) {
         const encoded: Record<string, string> = {};
-        for (const key in values) encoded[key] = encodeValue(values[key]);
+        for (const key in values) encoded[key] = encodeValue.run({ input: values[key], ns: quiet });
         return encoded;
       },
       /** Raw span fields for one wire line; `encoded` lines carry `encodeValue` strings. */

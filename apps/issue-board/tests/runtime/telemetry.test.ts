@@ -1,4 +1,4 @@
-import { createScope, LEVELS, operation } from "@tinker/core";
+import { createScope, extension, LEVELS, operation } from "@tinker/core";
 import { makeTestClock } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
@@ -384,6 +384,76 @@ test("closing the telemetry root sends the finished records", async () => {
   expect((await app.close({ graceful: true })).status).toBe("success");
   expect((await tools.close({ graceful: true })).status).toBe("success");
   expect(sent.requests.map(({ url }) => new URL(url).pathname)).toEqual(["/traces", "/logs"]);
+});
+
+/** Taps the observer on its own root, so each encode would trace onto the root it exports from. */
+const selfTap = extension({
+  label: "test.telemetry.selfTap",
+  hooks: {
+    start(event) {
+      event.tap(event.resolve(observer));
+      return event.next();
+    },
+  },
+});
+
+/**
+ * The span names of the first traces body.
+ * @param body - From the storage fake; why: the sent OTLP JSON, or "" when none came.
+ */
+const spanNames = (body: string): string[] =>
+  body === ""
+    ? []
+    : JSON.parse(body).resourceSpans[0].scopeSpans[0].spans.map(
+        (span: { name: string }) => span.name,
+      );
+
+test("one run exports its own spans only: the exporter's encodes trace nothing", async () => {
+  const sent = storage();
+  const tools = createScope({
+    extensions: [telemetryExport, selfTap],
+    tags: [storageTags, telemetrySide("ssr"), httpBackend(sent.backend)],
+  });
+  await tools.ready;
+
+  expect(tools.run(parent)).toBe("saved");
+  await tools.run(flushTelemetry);
+
+  expect(spanNames(sent.bodyOf("http://storage.test/traces"))).toEqual([
+    "test.telemetry.child",
+    "test.telemetry.parent",
+  ]);
+  expect((await tools.close({ graceful: true })).status).toBe("success");
+});
+
+const slow = operation({
+  label: "test.telemetry.slow",
+  run: async (_deps, ctx) => {
+    await ctx.clock.sleep(20);
+    return "late";
+  },
+});
+
+test("a span that ends while the app root closes, graceful or forced, is still sent", async () => {
+  for (const force of [false, true]) {
+    const sent = storage();
+    const tools = createScope({
+      extensions: [telemetryExport],
+      tags: [storageTags, telemetrySide("ssr"), httpBackend(sent.backend)],
+    });
+    await tools.ready;
+    const app = createScope({ observe: tools.resolve(observer) });
+    await app.ready;
+
+    const late = app.run(slow);
+    await app.close(force ? { force: true } : { graceful: true });
+    await late.catch(() => {});
+    expect((await tools.close({ graceful: true })).status).toBe("success");
+
+    expect(spanNames(sent.bodyOf("http://storage.test/traces")), String(force)).toEqual([
+      "test.telemetry.slow",
+    ]);
+  }
 });
 
 test("a server root sends on its own once a second has passed", async () => {

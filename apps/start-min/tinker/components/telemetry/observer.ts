@@ -3,7 +3,7 @@ import type { Observe } from "@tinker/core";
 
 import { logConsole } from "./console";
 import { queue } from "./queue";
-import { encodeValue, spanBody } from "./records";
+import { encodeValue, quiet, spanBody } from "./records";
 import type { Telemetry } from "./records";
 import {
   logLevel,
@@ -65,12 +65,17 @@ export const observer = resource({
     level: logLevel,
     history: spanHistory,
     show: logConsole,
+    encodeValue,
+    spanBody,
   },
-  factory: ({ queue, service, side, level, history, show }, ctx): Observe.Config => ({
+  factory: (
+    { queue, service, side, level, history, show, encodeValue, spanBody },
+    ctx,
+  ): Observe.Config => ({
     history,
     level,
     export(span) {
-      queue.add("trace", side, spanBody(span, false));
+      queue.add("trace", side, spanBody.run({ input: { span, encoded: false }, ns: quiet }));
 
       const record: Telemetry.Log = {
         level: LEVELS.info,
@@ -98,7 +103,7 @@ export const observer = resource({
         attributes: Object.fromEntries(
           Object.entries(entry.attributes).map(([key, value]) => [
             key.slice(0, 256),
-            encodeValue(value),
+            encodeValue.run({ input: value, ns: quiet }),
           ]),
         ),
         msg: entry.message.slice(0, 2048),
