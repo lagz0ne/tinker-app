@@ -19,7 +19,7 @@ const settledWrite = z.discriminatedUnion("status", [
 
 /** A refused input shows its own reason. */
 const badInput = z.object({
-  kind: z.literal("BadInput"),
+  kind: z.literal("BadInput" satisfies Errors.Name),
   payload: z.object({ reason: z.string() }),
 });
 
@@ -32,19 +32,21 @@ const rejections: Partial<Record<string, string>> = {
   TodoMissing: "That todo is not in your list.",
   RetryNotAvailable: "There is no failed notification to retry.",
   StreamDenied: "That execution is not in your stream.",
-};
+} satisfies Partial<Record<Errors.Name, string>>;
 
 /** One settled write becomes its network receipt: accepted, a shown refusal, or its own failure. */
 export const readReceipt = operation({
   label: "transport.receipt",
   input: settledWrite,
-  run: (_deps, { input, raise }) => {
+  run: (_deps, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     if (input.status === "success") {
       return { kind: "accepted" as const, executionId: input.value.executionId };
     }
 
     if (input.status === "cancelled") {
-      return raise("Cancelled", {} satisfies Errors.Payload<"Cancelled">);
+      return raise("Cancelled", {});
     }
 
     const refused = badInput.safeParse(input.error);
@@ -119,6 +121,7 @@ export const profileRead = operation({
   depends: { read: readProfile.controller, stop: requestStop.required },
   run: async ({ read, stop }, { raise: coreRaise }) => {
     const raise: Errors.Raise = coreRaise;
+
     const result = await read.settle({ signal: stop });
 
     if (result.status === "failed") throw result.error;
@@ -133,6 +136,7 @@ export const todoList = operation({
   depends: { read: listTodos.controller, stop: requestStop.required },
   run: async ({ read, stop }, { raise: coreRaise }) => {
     const raise: Errors.Raise = coreRaise;
+
     const result = await read.settle({ signal: stop });
 
     if (result.status === "failed") throw result.error;

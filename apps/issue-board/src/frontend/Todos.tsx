@@ -6,6 +6,7 @@ import { z } from "zod";
 import { syncClient } from "~/components/sync";
 
 import { readTodoChange } from "@/demo/contracts/todos-contract";
+import type { Errors } from "@/demo/errors";
 import { todos, profile } from "@/demo/frontend/state";
 import { updateTodo } from "@/transport/todos.functions";
 
@@ -36,7 +37,7 @@ const saveTodo = operation({
 
 /** A todo the contract refused: the managed BadInput with its reason. */
 const badInput = z.object({
-  kind: z.literal("BadInput"),
+  kind: z.literal("BadInput" satisfies Errors.Name),
   payload: z.object({ reason: z.string() }),
 });
 

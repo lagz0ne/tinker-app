@@ -59,8 +59,10 @@ const streamLease = resource({
   depends: { notifications, account: liveAccount.controller, backendStop, requestStop },
   factory: async (
     { notifications, account, backendStop, requestStop },
-    { signal: cleanup, defer, clock, raise },
+    { signal: cleanup, defer, clock, raise: coreRaise },
   ) => {
+    const raise: Errors.Raise = coreRaise;
+
     const stop = new AbortController();
     const signal = AbortSignal.any([stop.signal, backendStop, requestStop, cleanup]);
     const done = Symbol("sync.waitDone");
@@ -82,19 +84,19 @@ const streamLease = resource({
         subscription = await notifications.subscribe(stop.abort.bind(stop, done), expectedAccount);
         if (signal.aborted) {
           notifications.close(subscription);
-          return raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]);
+          return raise("Cancelled", {});
         }
 
         const current = await account.run();
         if (initial.private && initial.private.accountId !== current) {
-          return raise("StreamDenied", {} satisfies Errors.Payloads["StreamDenied"]);
+          return raise("StreamDenied", {});
         }
         deadline = clock.currentTimeMillis() + 30_000;
         if (current !== expectedAccount) subscription.stale = true;
       },
       async check(): Promise<number> {
         if (!subscription) {
-          return raise("StreamDisconnected", {} satisfies Errors.Payloads["StreamDisconnected"]);
+          return raise("StreamDisconnected", {});
         }
         if (notifications.ended(subscription) || clock.currentTimeMillis() >= deadline) {
           lease.close();
@@ -122,7 +124,7 @@ const streamLease = resource({
         await lease.check();
         if (signal.aborted) return false;
         if (!subscription) {
-          return raise("StreamDisconnected", {} satisfies Errors.Payloads["StreamDisconnected"]);
+          return raise("StreamDisconnected", {});
         }
 
         const heartbeat = await notifications.wait(subscription, after, deadline);

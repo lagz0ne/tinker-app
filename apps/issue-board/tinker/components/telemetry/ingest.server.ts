@@ -25,8 +25,10 @@ export const receiveTelemetry = operation({
   },
   input: telemetryBatch,
   run: ({ ingest, backendStop, requestStop }, ctx) => {
+    const raise: Errors.Raise = ctx.raise;
+
     if (backendStop.aborted || requestStop.aborted || ctx.signal.aborted) {
-      return ctx.raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]);
+      return raise("Cancelled", {});
     }
     ingest(ctx.input);
   },

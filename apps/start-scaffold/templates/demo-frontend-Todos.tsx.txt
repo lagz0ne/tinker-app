@@ -5,6 +5,7 @@ import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import { updateTodo } from "@/transport/todos.functions";
 import { readTodoChange } from "@/demo/contracts/todos-contract";
 import { todos, profile } from "@/demo/frontend/state";
+import type { Errors } from "@/demo/errors";
 import { syncClient } from "~/components/sync";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -29,7 +30,7 @@ const saveTodo = operation({
   },
 });
 /** A todo the contract refused: the managed BadInput with its reason. */
-const badInput = z.object({ kind: z.literal("BadInput"), payload: z.object({ reason: z.string() }) });
+const badInput = z.object({ kind: z.literal("BadInput" satisfies Errors.Name), payload: z.object({ reason: z.string() }) });
 const showFailure = operation({
   label: "todos.showFailure",
   input(error: unknown) {

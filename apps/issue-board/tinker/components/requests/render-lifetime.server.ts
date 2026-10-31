@@ -6,7 +6,9 @@ import type { Errors } from "~/components/errors";
 export const renderFrames = resource({
   label: "request.renders",
   target: "scope",
-  factory: (_deps, { raise }) => {
+  factory: (_deps, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const renders = new WeakMap<Request, { close: (() => Promise<void>) | undefined }>();
 
     return {
@@ -21,12 +23,12 @@ export const renderFrames = resource({
       /** A render with no router close, or with no open request, has no Start scope; a retained render gets its close back. */
       retain(request: Request, close: (() => Promise<void>) | undefined) {
         if (typeof close !== "function") {
-          return raise("StartScopeMissing", {} satisfies Errors.Payloads["StartScopeMissing"]);
+          return raise("StartScopeMissing", {});
         }
 
         const owned = renders.get(request);
         if (owned === undefined) {
-          return raise("StartScopeMissing", {} satisfies Errors.Payloads["StartScopeMissing"]);
+          return raise("StartScopeMissing", {});
         }
         owned.close = close;
         return close;

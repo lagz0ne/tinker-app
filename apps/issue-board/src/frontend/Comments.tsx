@@ -25,7 +25,9 @@ const submitComment = operation({
   label: "comments.submit",
   input: commentDraft,
   depends: { sync: syncClient, pending: pending.controller, drafts: commentDrafts.controller },
-  run: async ({ sync, pending, drafts }, { input, random, signal, defer, raise }) => {
+  run: async ({ sync, pending, drafts }, { input, random, signal, defer, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     pending.set(true);
     defer(() => pending.set(false));
 
@@ -36,7 +38,7 @@ const submitComment = operation({
       signal,
     );
     if (result.kind === "failed") {
-      return raise("BadInput", { reason: result.message } satisfies Errors.Payload<"BadInput">);
+      return raise("BadInput", { reason: result.message });
     }
     drafts.set({ ...drafts.get(), [input.issueId]: "" });
   },

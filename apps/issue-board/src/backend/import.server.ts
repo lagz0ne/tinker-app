@@ -20,12 +20,14 @@ export const readImport = operation({
   label: "import.read",
   input: z.string(),
   depends: { csv: csvParser },
-  run: async ({ csv }, { input, raise }) => {
+  run: async ({ csv }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     let records: string[][];
     try {
       records = csv.parse(input, { bom: true, skip_empty_lines: false });
     } catch (error) {
-      return raise("BadInput", { reason: String(error) } satisfies Errors.Payload<"BadInput">);
+      return raise("BadInput", { reason: String(error) });
     }
 
     const headers = records.shift() ?? [];
@@ -33,13 +35,13 @@ export const readImport = operation({
     if (new Set(headers).size !== headers.length) {
       return raise("BadInput", {
         reason: "CSV: duplicate header",
-      } satisfies Errors.Payload<"BadInput">);
+      });
     }
     for (const name of ["ID", "Title"]) {
       if (!headers.includes(name)) {
         return raise("BadInput", {
           reason: `CSV: missing ${name}`,
-        } satisfies Errors.Payload<"BadInput">);
+        });
       }
     }
 
@@ -50,7 +52,7 @@ export const readImport = operation({
         if (cells.length !== headers.length) {
           return raise("BadInput", {
             reason: `CSV row ${index + 2}: wrong cell count`,
-          } satisfies Errors.Payload<"BadInput">);
+          });
         }
         const row = Object.fromEntries(headers.map((name, column) => [name, cells[column]!]));
         const externalId = row.ID!.trim();
@@ -58,12 +60,12 @@ export const readImport = operation({
         if (externalId === "") {
           return raise("BadInput", {
             reason: "CSV: empty ID",
-          } satisfies Errors.Payload<"BadInput">);
+          });
         }
         if (seen.has(externalId)) {
           return raise("BadInput", {
             reason: `CSV: repeated ID ${externalId}`,
-          } satisfies Errors.Payload<"BadInput">);
+          });
         }
         seen.add(externalId);
         return { row, externalId, index };
@@ -93,7 +95,7 @@ export const readImport = operation({
         if (!Object.hasOwn(states, Status)) {
           return raise("BadInput", {
             reason: `CSV row ${index + 2}: unknown Status`,
-          } satisfies Errors.Payload<"BadInput">);
+          });
         }
         const parsed = z
           .object({
@@ -104,7 +106,7 @@ export const readImport = operation({
         if (!parsed.success) {
           return raise("BadInput", {
             reason: `CSV row ${index + 2}: bad Title or Priority`,
-          } satisfies Errors.Payload<"BadInput">);
+          });
         }
         return {
           externalId,
@@ -137,7 +139,9 @@ export const importBatchInput = z.object({
 export const importTarget = operation({
   label: "import.target",
   depends: { tx: transaction, orm: drizzleOrm, key: importTeam, email: importActor },
-  run: async ({ tx, orm, key, email }, { raise }) => {
+  run: async ({ tx, orm, key, email }, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { eq, and, sql } = orm;
 
     const [target] = await tx
@@ -148,7 +152,7 @@ export const importTarget = operation({
       .where(and(eq(team.key, key), sql`lower(${user.email}) = ${email.toLowerCase()}`));
 
     if (!target) {
-      return raise("NotTeamMember", {} satisfies Errors.Payload<"NotTeamMember">);
+      return raise("NotTeamMember", {});
     }
 
     return target;
@@ -312,8 +316,10 @@ export const importBatch = operation({
   },
   run: async (
     { target, lock, save, alerts, fanDeliveries, publish },
-    { input, random, signal, raise },
+    { input, random, signal, raise: coreRaise },
   ) => {
+    const raise: Errors.Raise = coreRaise;
+
     const writer = await target.run();
 
     const locked = await lock.run({ input: { teamId: writer.teamId, actorId: writer.id } });
@@ -330,7 +336,7 @@ export const importBatch = operation({
       signal.throwIfAborted();
       const assigneeId = ids.get(row.assignee);
       if (assigneeId === undefined) {
-        return raise("InvalidAssignee", {} satisfies Errors.Payload<"InvalidAssignee">);
+        return raise("InvalidAssignee", {});
       }
       const saved = await save.run({
         input: {

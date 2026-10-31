@@ -13,7 +13,9 @@ export const incrementCounter = operation({
   label: "incrementCounter",
   input: readExecution,
   depends: { orm: drizzleOrm, tx: transaction, history: eventHistory },
-  run: async ({ orm, tx, history }, { input, raise }) => {
+  run: async ({ orm, tx, history }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { eq, sql } = orm;
 
     await history.lock(tx, "public");
@@ -32,7 +34,7 @@ export const incrementCounter = operation({
         .returning()
     ).at(0);
     if (!row) {
-      return raise("StreamMissing", {} satisfies Errors.Payload<"StreamMissing">);
+      return raise("StreamMissing", {});
     }
 
     await history.append(tx, "public", input.executionId, [

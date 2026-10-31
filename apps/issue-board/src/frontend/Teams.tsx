@@ -21,7 +21,9 @@ const saveTeam = operation({
   label: "teams.save",
   input: teamChange,
   depends: { sync: syncClient, pending: pending.controller },
-  run: async ({ sync, pending }, { input, random, signal, defer, raise }) => {
+  run: async ({ sync, pending }, { input, random, signal, defer, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     pending.set(true);
     defer(() => pending.set(false));
 
@@ -33,7 +35,7 @@ const saveTeam = operation({
     );
 
     if (result.kind === "failed") {
-      return raise("BadInput", { reason: result.message } satisfies Errors.Payload<"BadInput">);
+      return raise("BadInput", { reason: result.message });
     }
   },
 });

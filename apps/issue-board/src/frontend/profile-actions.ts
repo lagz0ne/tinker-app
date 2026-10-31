@@ -23,8 +23,10 @@ export const saveName = operation({
   },
   run: async (
     { sync, draft, pending, notice, result },
-    { defer, random, input, signal, raise },
+    { defer, random, input, signal, raise: coreRaise },
   ) => {
+    const raise: Errors.Raise = coreRaise;
+
     pending.set(true);
     notice.set("");
     defer(() => pending.set(false));
@@ -40,7 +42,7 @@ export const saveName = operation({
     if (completed.kind === "failed") {
       return raise("WriteRejected", {
         message: completed.message,
-      } satisfies Errors.Payload<"WriteRejected">);
+      });
     }
 
     draft.set(undefined);

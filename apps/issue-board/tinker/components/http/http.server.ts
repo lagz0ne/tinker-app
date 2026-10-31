@@ -73,7 +73,9 @@ export const httpRequest = operation({
   label: "http.request",
   input: requestShape,
   depends: { http },
-  run: ({ http }, { input, obs, signal, raise }) => {
+  run: ({ http }, { input, obs, signal, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { url, method, headers, body } = input;
     const path = new URL(url).pathname;
     return obs.child(`http ${method} ${path}`, async (span) => {
@@ -92,7 +94,7 @@ export const httpRequest = operation({
           return raise("HttpRequestFailed", {
             method,
             path,
-          } satisfies Errors.Payloads["HttpRequestFailed"]);
+          });
         }
 
         const nested = failureShape.safeParse(failure.data.cause);
@@ -107,7 +109,7 @@ export const httpRequest = operation({
             name: name.parse(details.name) ?? name.parse(failure.data.name),
             code: code.parse(details.code) ?? code.parse(failure.data.code),
           },
-        } satisfies Errors.Payloads["HttpRequestFailed"]);
+        });
       }
     });
   },
