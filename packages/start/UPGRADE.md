@@ -13,6 +13,15 @@
   `tinker/base/panics.server.ts` (its `closed` is now `Promise<unknown>`), and the new `cmds/`
   files together. An app that keeps the old base and commands still works: the change to the
   host is additive, and a closed with no results is clean, as before.
+- The new `cmds/` and `base-main` need the Start release that ships this host, or newer.
+  Start 0.13.3 and older ignore the returned close results and do not map a startup throw:
+  there a close failure exits 0 and a config error exits 1, not 78. Install that Start first,
+  then copy the files. `tinker add` and `tinker update` read the registry of the installed
+  Start's tag, and a template export pins its own release, so both already give a matching
+  pair; only a hand copy from `main` can mix them.
+- A failed server start now prints at most one `close failed: <cleanup>` line: the first
+  close failure, app root then tools root, that is not the start error. Before, the app and
+  tools reads were separate, and a tools failure could print twice.
 - `cmds/telemetry-worker.ts` reads its close result inline. A failed close still throws in the
   worker thread, so the server's `telemetryThread` sees the `error` event and stops failed.
 
