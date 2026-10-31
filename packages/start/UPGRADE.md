@@ -1,5 +1,50 @@
 # Upgrade
 
+## 0.16.0
+
+Start 0.16.0 is released from `lagz0ne/tinker-app`, tag `start-v0.16.0`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.16.0/tinker-start-0.16.0.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.16.0/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.16.0.
+
+Two new parts: an MCP server, and sign-in with a code. Hedl found both gaps (#40, #43).
+The design is in `docs/decisions/mcp-and-device-signin.md`.
+
+- New `mcp` item. It serves your tools over stateless Streamable HTTP, POST only, with JSON
+  replies. Each tool is a row in the `mcpTools` tag: a name, words, hints, a zod `input`, and the
+  Core operation to run. Each call is one Core run, so one span. The raw arguments are parsed
+  once, by the operation. A `Refused` error becomes `Not done: <message>`; any other error is
+  logged and the reply says only that the tool failed. Bodies over `maxBody` (2 MB) get 413.
+  Install `mcpRuns` on the root, and bind `mcpServer` and `mcpTools`. The item has no auth
+  inside: your `/mcp` route checks the token first.
+- `auth-sqlite` adds OAuth for MCP with Better Auth's `jwt()` and `@better-auth/mcp`:
+  client registration with the `authMcp` redirect list (the two Claude callbacks and loopback
+  `/callback` by default), PKCE, RFC 9728 metadata, and 5-minute access tokens bound to
+  `<origin>/mcp`. `checkMcpToken` gives the caller, or the 401 or 403 challenge to send. Bind
+  the caller with `mcpCaller` on the `handleMcp` call.
+- `auth-sqlite` adds sign-in with a code (RFC 8628, as obelisk does it). A browser posts
+  `/api/auth/signin/code` and shows the code; a signed-in person approves it through the
+  `approveSignin` operation (an MCP tool); the browser posts `/api/auth/signin/code/finish` and
+  gets that person's session. `listSignins` and `endSignin` list and end code sign-ins.
+  Give `approveSignin`'s tool obelisk's warning text (see the ADR). A code start is held to 5
+  per IP in 10 minutes where Better Auth's limiter is on: in production by its default, and
+  anywhere with `authRateLimit({ enabled: true })`.
+- New migrations: `20261031000200_auth_mcp.sql` and `20261031000300_auth_signin_client.sql`.
+  They add Better Auth's OAuth, JWKS, and device-code tables, and the code sign-in columns.
+- New error kinds: `Refused` and `McpNotInstalled`.
+- An `authSettings.origin` that is plain `http` and not loopback now fails at startup:
+  an MCP resource must be `https`, or `localhost` / `127.0.0.1` for development.
+- Route these paths to `handleAuth`: `/api/auth/*`, `/.well-known/oauth-protected-resource`,
+  `/.well-known/oauth-protected-resource/mcp`, and
+  `/.well-known/oauth-authorization-server/api/auth`. The README part
+  "MCP and sign-in with a code" shows the `/mcp` route.
+
+The SQLite items are starter-only, so an app made from the demo takes this by the template
+update to `demo-v0.16.0`. Postgres `auth` has neither part yet; `mcp` already works with it.
+
 ## 0.15.0
 
 Start 0.15.0 is released from `lagz0ne/tinker-app`, tag `start-v0.15.0`.
