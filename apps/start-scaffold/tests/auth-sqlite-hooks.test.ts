@@ -329,7 +329,14 @@ test("auth carries Start's cookie plugin, so server calls set cookies on the rep
 
   const instance = await root.resolve(auth);
 
-  expect(instance.options.plugins.map((plugin) => plugin.id)).toEqual(["tanstack-start-cookies"]);
+  // Better Auth wants Start's cookie plugin last, after the OAuth and code sign-in plugins.
+  expect(instance.options.plugins.map((plugin) => plugin.id)).toEqual([
+    "jwt",
+    "oauth-provider",
+    "device-authorization",
+    "tinker-code-signin",
+    "tanstack-start-cookies",
+  ]);
 
   await root.close({ graceful: true });
 });
