@@ -9,7 +9,7 @@ import type { Errors } from "@/demo/errors";
 import { comments, commentDrafts } from "@/demo/frontend/state";
 import { postComment } from "@/transport/comments.functions";
 
-import { errorText } from "./error-text";
+import { FailureAlert } from "./failures";
 import { Button } from "./ui/button";
 
 const pending = data({ label: "comments.pending", initial: false });
@@ -103,7 +103,7 @@ export function Comments({
         </label>
         <Button disabled={busy}>{`Add comment to ${label}`}</Button>
       </form>
-      <p role="alert">{errorText(submit.error)}</p>
+      <FailureAlert error={submit.error} />
     </section>
   );
 }

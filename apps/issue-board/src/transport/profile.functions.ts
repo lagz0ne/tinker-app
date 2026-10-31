@@ -22,14 +22,19 @@ export const updateProfile = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
   .validator(readProfileCommand)
   .handler(async ({ context, data }) =>
-    readReceipt(await context.session.settle(saveProfile, { input: data, signal: context.signal })),
+    context.session.run(readReceipt, {
+      input: await context.session.settle(saveProfile, { input: data, signal: context.signal }),
+    }),
   );
 
 export const retryProfileNotification = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
   .validator(readRetry)
   .handler(async ({ context, data }) =>
-    readReceipt(
-      await context.session.settle(retryNotification, { input: data, signal: context.signal }),
-    ),
+    context.session.run(readReceipt, {
+      input: await context.session.settle(retryNotification, {
+        input: data,
+        signal: context.signal,
+      }),
+    }),
   );

@@ -1,39 +1,64 @@
-import type { RunResult } from "@tinker/core";
+import { operation } from "@tinker/core";
+import { z } from "zod";
 
-import { isError, raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 
-const rejections = [
-  ["TeamChanged", "Team membership changed. Try again."],
-  ["IssueConflict", "Someone changed this issue first. Check the board and try again."],
-  ["InvalidPosition", "That position changed. Try the move again."],
-  ["IssueMissing", "That issue is not in this team."],
-  ["InvalidAssignee", "Choose a member of this team."],
-  ["SignInRequired", "Sign in to change private records."],
-  ["NotTeamMember", "You are not on that team."],
-  ["TeamAdminRequired", "Only a team admin can add members."],
-  ["TeamKeyTaken", "That team key is taken."],
-  ["UserNotFound", "That email needs an account first."],
-  ["TodoMissing", "That todo is not in your list."],
-  ["RetryNotAvailable", "There is no failed notification to retry."],
-  ["StreamDenied", "That execution is not in your stream."],
-] as const;
+/** A settled write, as the server function's `settle` returns it. */
+const settledWrite = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("success"), value: z.object({ executionId: z.string() }) }),
+  z.object({ status: z.literal("failed"), error: z.unknown() }),
+  z.object({ status: z.literal("cancelled"), reason: z.unknown() }),
+]);
 
-/**
- * @param result - From a settled mutation; why: turn its result into a network receipt.
- */
-export function readReceipt(result: RunResult<{ executionId: string }>) {
-  if (result.status === "success") {
-    return { kind: "accepted" as const, executionId: result.value.executionId };
-  }
+/** A refused input shows its own reason. */
+const badInput = z.object({
+  kind: z.literal("BadInput"),
+  payload: z.object({ reason: z.string() }),
+});
 
-  if (result.status === "cancelled") raise("Cancelled", {});
+/** Any other managed failure, read by its kind. */
+const managed = z.object({ kind: z.string() });
 
-  const error = result.error;
-  if (isError(error, "BadInput")) {
-    return { kind: "rejected" as const, message: error.payload.reason };
-  }
-  const refusal = rejections.find(([kind]) => isError(error, kind));
-  if (refusal) return { kind: "rejected" as const, message: refusal[1] };
+/** The refusals a browser shows, by kind; any other failure stays the server's error. */
+const rejections: Partial<Record<string, string>> = {
+  TeamChanged: "Team membership changed. Try again.",
+  IssueConflict: "Someone changed this issue first. Check the board and try again.",
+  InvalidPosition: "That position changed. Try the move again.",
+  IssueMissing: "That issue is not in this team.",
+  InvalidAssignee: "Choose a member of this team.",
+  SignInRequired: "Sign in to change private records.",
+  NotTeamMember: "You are not on that team.",
+  TeamAdminRequired: "Only a team admin can add members.",
+  TeamKeyTaken: "That team key is taken.",
+  UserNotFound: "That email needs an account first.",
+  TodoMissing: "That todo is not in your list.",
+  RetryNotAvailable: "There is no failed notification to retry.",
+  StreamDenied: "That execution is not in your stream.",
+};
 
-  throw error;
-}
+/** One settled write becomes its network receipt: accepted, a shown refusal, or its own failure. */
+export const readReceipt = operation({
+  label: "transport.receipt",
+  input: settledWrite,
+  run: (_deps, { input, raise }) => {
+    if (input.status === "success") {
+      return { kind: "accepted" as const, executionId: input.value.executionId };
+    }
+
+    if (input.status === "cancelled") {
+      return raise("Cancelled", {} satisfies Errors.Payload<"Cancelled">);
+    }
+
+    const refused = badInput.safeParse(input.error);
+    if (refused.success) return { kind: "rejected" as const, message: refused.data.payload.reason };
+
+    const kind = managed.safeParse(input.error);
+    const message =
+      kind.success && Object.hasOwn(rejections, kind.data.kind)
+        ? rejections[kind.data.kind]
+        : undefined;
+    if (message !== undefined) return { kind: "rejected" as const, message };
+
+    throw input.error;
+  },
+});

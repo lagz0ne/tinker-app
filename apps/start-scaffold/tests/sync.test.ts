@@ -445,7 +445,7 @@ test("a bad stored event is not shown to the user as a rejected change", async (
       tags: requestHeaders(new Headers()),
     });
     if (result.status !== "failed") return expect.unreachable("expected bad stored event");
-    expect(() => readReceipt(result)).toThrow(
+    expect(() => root.run(readReceipt, { input: result })).toThrow(
       expect.objectContaining({ kind: "StoredDataInvalid", payload: {} }),
     );
   } finally {
