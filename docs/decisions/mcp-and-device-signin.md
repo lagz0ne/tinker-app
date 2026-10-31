@@ -113,8 +113,10 @@ sit in `auth-sqlite`:
   database can finish an approved code
   within its 10 minutes.
 - Limits: 5 code starts per IP in 10 minutes
-  (Better Auth's rate limiter, on in every
-  environment), at most 50 codes waiting,
+  where Better Auth's rate limiter is on
+  (production, by its default; the
+  `authRateLimit` tag turns it on anywhere),
+  at most 50 codes waiting,
   ended codes swept at each start.
   10 wrong codes in 15 minutes lock one
   caller; 100 from everyone lock all.
@@ -131,8 +133,9 @@ sit in `auth-sqlite`:
   as plain values and gives the challenge as
   plain data (status, headers, body).
   The route reads its `Request` and sends the
-  `Response`: only `handleAuth` is a named
-  protocol exception (ADR 0103).
+  `Response`: only `handleAuth` and
+  `handleMcp` are named protocol exceptions
+  (ADR 0103).
 - Access tokens are signed JWTs, checked with
   no token store (Better Auth's model). After
   the signature, one read checks that the
@@ -147,8 +150,11 @@ sit in `auth-sqlite`:
   the caller approved, and a count of the
   others. Obelisk has one owner; Tinker has
   many users.
-- Tables in one new `.sql` migration, in
-  Better Auth 1.7.7's own SQLite shape.
+- Tables in two new `.sql` migrations
+  (`20261031000200_auth_mcp.sql`, and
+  `20261031000300_auth_signin_client.sql`
+  for the start's client id), in Better
+  Auth 1.7.7's own SQLite shape.
 
 New tag: `authMcp`, with defaults:
 
@@ -161,6 +167,8 @@ authMcp({
     "https://claude.com/api/mcp/auth_callback",
   ],
   loopback: true,
+  loginPage: "/signin",
+  consentPage: "/consent",
 });
 ```
 
@@ -184,9 +192,8 @@ authMcp({
   the operation's parse is the only parse.
   The tool list shows that same zod input
   as JSON Schema.
-- Errors: a managed error (with a `kind`)
-  becomes `isError: true` and
-  `Not done: <message>`. Bad input names
+- Errors: a `Refused` error becomes
+  `isError: true` and `Not done: <message>`. Bad input names
   the bad fields. Any other error is logged,
   and the reply says the tool failed,
   with no detail.
@@ -246,3 +253,6 @@ authMcp({
   the flow over HTTP.
 - Obelisk's agent-box service key and IP
   allowlist: Hedl app code.
+- Obelisk's audit line per tool call:
+  Hedl app code. Each call is already one
+  Core span with the tool's label.
