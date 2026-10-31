@@ -1,2 +1,2 @@
 delete from blob_slot
-where expires_at <= :now
+where expires_at + :ttl <= :now

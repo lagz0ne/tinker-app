@@ -22,6 +22,7 @@ export declare namespace Errors {
 
     BlobTooBig: { maxBytes: number };
     BlobEmpty: Record<string, never>;
+    BlobNotBytes: Record<string, never>;
     SlotMissing: Record<string, never>;
     SlotExpired: Record<string, never>;
     SlotUsed: Record<string, never>;
