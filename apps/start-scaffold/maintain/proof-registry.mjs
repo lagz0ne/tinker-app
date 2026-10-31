@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -13,6 +13,7 @@ import {
   pasteToolchain,
   printedToolchain,
   sqliteAppTest,
+  wrongQueryType,
 } from "./proof-app.mjs";
 import { app, root } from "./registry-source.mjs";
 
@@ -37,7 +38,8 @@ const servers = [];
 const mailTarget = "tinker/components/mail/mail.server.ts";
 const original = await readFile(join(app, mailTarget), "utf8");
 
-function run(command, args, cwd = consumer, extra = {}) {
+/** Run a command that must exit 0; `fails` turns it into a red control that must not. */
+function run(command, args, cwd = consumer, extra = {}, fails = false) {
   console.log(`\n$ ${command} ${args.join(" ")} (cwd ${cwd})`);
   const child = spawnSync(command, args, {
     cwd,
@@ -50,7 +52,8 @@ function run(command, args, cwd = consumer, extra = {}) {
   process.stdout.write(child.stderr ?? "");
   console.log(`EXIT ${child.status}`);
 
-  assert.equal(child.status, 0, `${command}: ${child.error ?? "failed"}`);
+  if (fails) assert.notEqual(child.status, 0, `${command}: the red control passed`);
+  else assert.equal(child.status, 0, `${command}: ${child.error ?? "failed"}`);
   return child.stdout + child.stderr;
 }
 
@@ -142,6 +145,24 @@ try {
   run("vp", ["build"], sqliteApp);
   const typecheck = run("npm", ["run", "typecheck"], sqliteApp);
   assert.ok(typecheck.includes("--runExternalCode"), "the pasted type check runs Reylo");
+
+  // Red: the real Reylo row type is in use, not the `sql.d.ts` fallback (any rows).
+  const wrongFile = join(sqliteApp, "tests/wrong-type.ts");
+  await writeFile(wrongFile, wrongQueryType);
+  const wrong = run("npm", ["run", "typecheck"], sqliteApp, {}, true);
+  assert.ok(wrong.includes("Type '{ id: number; }' is not assignable to type 'string'"), wrong);
+  await rm(wrongFile);
+
+  // Red: a missed `contentMappers` paste fails the type check instead of passing on `any`.
+  const tsconfig = join(sqliteApp, "tsconfig.json");
+  const pasted = await readFile(tsconfig, "utf8");
+  const { contentMappers, ...unmapped } = JSON.parse(pasted);
+  assert.ok(contentMappers, "the paste added contentMappers");
+  await writeFile(tsconfig, `${JSON.stringify(unmapped, null, 2)}\n`);
+  const missed = run("npm", ["run", "typecheck"], sqliteApp, {}, true);
+  assert.ok(missed.includes('no Reylo "contentMappers" entry'), missed);
+  await writeFile(tsconfig, pasted);
+  run("npm", ["run", "typecheck"], sqliteApp);
   run("vp", ["test", "--run"], sqliteApp);
   run(sqliteTinker, ["check", "--registry", url], sqliteApp);
   run(sqliteTinker, ["doctor"], sqliteApp);
