@@ -1641,15 +1641,30 @@ function checkCommandImport(node) {
   if (message) fail(node, `command-import: ${message}`);
 }
 
-/** A named function inside an operation's run belongs to that run, not to the module. */
-function runNested(node) {
-  if (!functionName(node)) return false;
+/** Each use of the declared name is a direct call, so the function never leaves its body. */
+function calledOnly(node) {
+  const symbol = symbolOf(node.name);
+  let escaped = false;
+  walk(node.parent, (use) => {
+    if (escaped || !ts.isIdentifier(use) || use === node.name || symbolOf(use) !== symbol) return;
+    if (!ts.isCallExpression(use.parent) || use.parent.expression !== use) escaped = true;
+  });
+  return !escaped;
+}
+
+/** Some enclosing function is the run of an operation. */
+function insideRun(node) {
   for (let owner = enclosingFunction(node); owner; owner = enclosingFunction(owner)) {
     if (!optionsMember(owner) || nameOf(functionName(owner)) !== "run") continue;
     const member = ts.isPropertyAssignment(owner.parent) ? owner.parent : owner;
     if (coreSymbol(member.parent.parent.expression, "operation")) return true;
   }
   return false;
+}
+
+/** A function declared inside an operation's run and only called there belongs to that run. */
+function runNested(node) {
+  return ts.isFunctionDeclaration(node) && !!node.name && calledOnly(node) && insideRun(node);
 }
 
 function checkFunction(node) {
@@ -2998,6 +3013,11 @@ if (process.argv.includes("--prove")) {
       "run-nested-recursion-allowed",
       null,
       'import {operation} from "@tinker/core"; export const probe = operation({run: () => { function depth(n: number): number { return n <= 0 ? 0 : 1 + depth(n - 1); } return depth(3); }});',
+    ],
+    [
+      "run-nested-escape-checked",
+      "plain-effect",
+      'import {operation} from "@tinker/core"; export const probe = operation({run: () => { function read() { return Date.now(); } return { read }; }});',
     ],
     [
       "module-recursion-still-helper",
