@@ -22,7 +22,6 @@ import {
   replayPrivate,
 } from "@/demo/backend/sync.server";
 import { bootstrap } from "@/demo/backend/sync.server";
-import { raise, isError } from "@/demo/errors";
 import { readReceipt } from "@/transport/result.server";
 
 import { handleAuth } from "./presets";
@@ -130,17 +129,21 @@ test("private cursors cannot read another real account's history", async () => {
       input: { accountId: snapshot.stream, after: 0 },
       tags: requestHeaders(grace),
     });
-    if (refused.status !== "failed") {
-      raise("BadInput", { reason: "expected private stream refusal" });
-    }
-    if (!isError(refused.error, "StreamDenied")) throw refused.error;
+    expect(refused).toMatchObject({
+      status: "failed",
+      kind: "error",
+      error: { kind: "StreamDenied" },
+    });
 
     const anonymous = await root.settle(replayPrivate, {
       input: { accountId: snapshot.stream, after: 0 },
       tags: requestHeaders(new Headers()),
     });
-    if (anonymous.status !== "failed") raise("BadInput", { reason: "expected sign-in refusal" });
-    if (!isError(anonymous.error, "SignInRequired")) throw anonymous.error;
+    expect(anonymous).toMatchObject({
+      status: "failed",
+      kind: "error",
+      error: { kind: "SignInRequired" },
+    });
   } finally {
     stop.abort();
     expect((await root.closed).status).toBe("success");
@@ -164,7 +167,12 @@ test("failed notification keeps the saved profile and retry replies before sendi
         send: async (message: Mail.Message) => {
           if (message.subject !== "Your profile was updated") return;
           messages.push(message);
-          if (refuse) raise("NotificationFailed", {});
+          if (refuse) {
+            throw Object.assign(new Error("NotificationFailed"), {
+              kind: "NotificationFailed",
+              payload: {},
+            });
+          }
           sending.resolve();
           await accepted.promise;
         },
@@ -406,9 +414,11 @@ test("a bad stored event returns a stored data failure", async () => {
       input: { after: 0 },
       tags: requestHeaders(new Headers()),
     });
-    if (result.status !== "failed") raise("BadInput", { reason: "expected bad stored event" });
-    if (!isError(result.error, "StoredDataInvalid")) throw result.error;
-    expect(result.error.payload).toEqual({});
+    expect(result).toMatchObject({
+      status: "failed",
+      kind: "error",
+      error: expect.objectContaining({ kind: "StoredDataInvalid", payload: {} }),
+    });
   } finally {
     expect((await root.close({ graceful: true })).status).toBe("success");
   }
@@ -434,7 +444,7 @@ test("a bad stored event is not shown to the user as a rejected change", async (
       input: { after: 0 },
       tags: requestHeaders(new Headers()),
     });
-    if (result.status !== "failed") raise("BadInput", { reason: "expected bad stored event" });
+    if (result.status !== "failed") return expect.unreachable("expected bad stored event");
     expect(() => readReceipt(result)).toThrow(
       expect.objectContaining({ kind: "StoredDataInvalid", payload: {} }),
     );
@@ -471,9 +481,11 @@ test("a bad stored notification result has no retry available", async () => {
       },
       tags: requestHeaders(account),
     });
-    if (result.status !== "failed") raise("BadInput", { reason: "expected bad stored result" });
-    if (!isError(result.error, "RetryNotAvailable")) throw result.error;
-    expect(result.error.payload).toEqual({});
+    expect(result).toMatchObject({
+      status: "failed",
+      kind: "error",
+      error: expect.objectContaining({ kind: "RetryNotAvailable", payload: {} }),
+    });
   } finally {
     expect((await root.close({ graceful: true })).status).toBe("success");
   }

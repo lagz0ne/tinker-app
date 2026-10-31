@@ -11,7 +11,6 @@ import { changeIssue, listTeamMembers } from "@/backend/issues.server";
 import { changeTeam, listTeams } from "@/backend/teams.server";
 import { readAccount } from "@/demo/backend/auth.server";
 import { bootstrap } from "@/demo/backend/sync.server";
-import { isError } from "@/demo/errors";
 
 import { handleAuth, proofDatabase, proofMail, requestHeaders, databaseQueries } from "./presets";
 import { write, settleWrite } from "./write-boundary";
@@ -196,7 +195,8 @@ test("a non-member cannot create, edit an existing or missing issue, or read iss
     });
     expect(result.status).toBe("failed");
     if (result.status !== "failed") throw new Error("Expected membership refusal");
-    expect(isError(result.error, "NotTeamMember")).toBe(true);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error).toMatchObject({ kind: "NotTeamMember" });
   }
   expect((await root.run(bootstrap, { tags: requestHeaders(outsider) })).private?.issues).toEqual(
     [],
@@ -207,7 +207,8 @@ test("a non-member cannot create, edit an existing or missing issue, or read iss
   for (const result of reads) {
     expect(result.status).toBe("failed");
     if (result.status !== "failed") throw new Error("Expected membership refusal");
-    expect(isError(result.error, "NotTeamMember")).toBe(true);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error).toMatchObject({ kind: "NotTeamMember" });
   }
 
   expect((await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!).toEqual(rows);
@@ -256,7 +257,8 @@ test("invalid assignees, states, priorities, and caller-selected creators save n
   });
   expect(assignee.status).toBe("failed");
   if (assignee.status !== "failed") throw new Error("Expected assignee refusal");
-  expect(isError(assignee.error, "InvalidAssignee")).toBe(true);
+  expect(assignee.error).toBeInstanceOf(Error);
+  expect(assignee.error).toMatchObject({ kind: "InvalidAssignee" });
 
   for (const extra of [
     { state: "unknown" },
@@ -292,7 +294,8 @@ test("editing a missing issue is refused without changing the team counter", asy
 
   expect(result.status).toBe("failed");
   if (result.status !== "failed") throw new Error("Expected missing issue refusal");
-  expect(isError(result.error, "IssueMissing")).toBe(true);
+  expect(result.error).toBeInstanceOf(Error);
+  expect(result.error).toMatchObject({ kind: "IssueMissing" });
   expect((await root.run(bootstrap, { tags: requestHeaders(ada) })).private!.issues!).toEqual([]);
   expect((await (await root.resolve(database)).select().from(team))[0]!.issueSeq).toBe(0);
 });
@@ -380,7 +383,8 @@ test("a move between two fractional keys sorts between them; stale saves cannot 
     });
     expect(refused.status).toBe("failed");
     if (refused.status !== "failed") throw new Error("Expected stale version refusal");
-    expect(isError(refused.error, "IssueConflict")).toBe(true);
+    expect(refused.error).toBeInstanceOf(Error);
+    expect(refused.error).toMatchObject({ kind: "IssueConflict" });
   }
   const guardedWrites = databaseQueries.filter((query) =>
     /^(update|delete from) "issue"/.test(query),
@@ -508,5 +512,6 @@ test("a legacy equal-rank gap returns InvalidPosition rather than a plain librar
   });
   expect(result.status).toBe("failed");
   if (result.status !== "failed") throw new Error("Expected invalid gap refusal");
-  expect(isError(result.error, "InvalidPosition")).toBe(true);
+  expect(result.error).toBeInstanceOf(Error);
+  expect(result.error).toMatchObject({ kind: "InvalidPosition" });
 });

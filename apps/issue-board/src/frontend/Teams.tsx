@@ -5,7 +5,7 @@ import { useData, useRun } from "@tinker/react";
 import { syncClient } from "~/components/sync";
 
 import { teamChange } from "@/contracts/board";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 import { profile, teams } from "@/demo/frontend/state";
 import { updateTeam } from "@/transport/teams.functions";
 
@@ -21,7 +21,7 @@ const saveTeam = operation({
   label: "teams.save",
   input: teamChange,
   depends: { sync: syncClient, pending: pending.controller },
-  run: async ({ sync, pending }, { input, random, signal, defer }) => {
+  run: async ({ sync, pending }, { input, random, signal, defer, raise }) => {
     pending.set(true);
     defer(() => pending.set(false));
 
@@ -32,7 +32,9 @@ const saveTeam = operation({
       signal,
     );
 
-    if (result.kind === "failed") raise("BadInput", { reason: result.message });
+    if (result.kind === "failed") {
+      return raise("BadInput", { reason: result.message } satisfies Errors.Payload<"BadInput">);
+    }
   },
 });
 

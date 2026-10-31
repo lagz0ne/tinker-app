@@ -10,7 +10,6 @@ import { changeIssue } from "@/backend/issues.server";
 import { changeTeam, readTeam, listTeams } from "@/backend/teams.server";
 import { readAccount } from "@/demo/backend/auth.server";
 import { bootstrap } from "@/demo/backend/sync.server";
-import { isError } from "@/demo/errors";
 
 import {
   handleAuth,
@@ -90,7 +89,8 @@ test("a non-member reading a team gets NotTeamMember", async () => {
   });
   expect(result.status).toBe("failed");
   if (result.status !== "failed") throw new Error("Expected refusal");
-  expect(isError(result.error, "NotTeamMember")).toBe(true);
+  expect(result.error).toBeInstanceOf(Error);
+  expect(result.error).toMatchObject({ kind: "NotTeamMember" });
   expect(await root.run(listTeams, { tags: requestHeaders(grace) })).toEqual([]);
 });
 
@@ -107,7 +107,8 @@ test("a team key clash is rejected and leaves one team", async () => {
     else {
       expect(result.status).toBe("failed");
       if (result.status !== "failed") throw new Error("Expected key clash");
-      expect(isError(result.error, "TeamKeyTaken")).toBe(true);
+      expect(result.error).toBeInstanceOf(Error);
+      expect(result.error).toMatchObject({ kind: "TeamKeyTaken" });
     }
   }
 
@@ -159,7 +160,8 @@ test("adding an unknown email is rejected without a change", async () => {
   });
   expect(result.status).toBe("failed");
   if (result.status !== "failed") throw new Error("Expected existing account check");
-  expect(isError(result.error, "UserNotFound")).toBe(true);
+  expect(result.error).toBeInstanceOf(Error);
+  expect(result.error).toMatchObject({ kind: "UserNotFound" });
   expect(
     queries.some((query) => query.includes('from "user"') && query.includes('"user"."email" =')),
   ).toBe(true);
@@ -202,7 +204,8 @@ test("a non-admin member is refused before any email lookup", async () => {
     });
     expect(result.status).toBe("failed");
     if (result.status !== "failed") throw new Error("Expected admin check");
-    expect(isError(result.error, "TeamAdminRequired")).toBe(true);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error).toMatchObject({ kind: "TeamAdminRequired" });
   }
 
   expect(
@@ -231,7 +234,8 @@ test("a non-member add gets NotTeamMember before any email lookup", async () => 
     });
     expect(result.status).toBe("failed");
     if (result.status !== "failed") throw new Error("Expected membership check");
-    expect(isError(result.error, "NotTeamMember")).toBe(true);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error).toMatchObject({ kind: "NotTeamMember" });
   }
 
   expect(

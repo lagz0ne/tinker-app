@@ -17,7 +17,6 @@ import { bootstrapSlot, readAccountSlot } from "~/components/sync/index.server";
 import { readAccount } from "@/demo/backend/auth.server";
 import { readProfile, saveProfile } from "@/demo/backend/profile.server";
 import { bootstrap } from "@/demo/backend/sync.server";
-import { raise, isError } from "@/demo/errors";
 
 import { handleAuth } from "./presets";
 import { proofDatabase, proofMail, requestHeaders } from "./presets";
@@ -54,7 +53,7 @@ function readCookie(response: Response) {
 const failAfterSave = operation({
   label: "test.failAfterSave",
   depends: { save: saveProfile },
-  run: async ({ save }) => {
+  run: async ({ save }, { raise }) => {
     await save.run({
       input: {
         executionId: "10000000-0000-4000-8000-000000000001",
@@ -159,8 +158,11 @@ test("a refused save leaves the root usable", async () => {
       },
       tags: requestHeaders(new Headers()),
     });
-    if (result.status !== "failed") raise("BadInput", { reason: "expected refusal" });
-    if (!isError(result.error, "SignInRequired")) throw result.error;
+    expect(result).toMatchObject({
+      status: "failed",
+      kind: "error",
+      error: { kind: "SignInRequired" },
+    });
     expect(await root.run(readProfile, { tags: requestHeaders(new Headers()) })).toBeNull();
   } finally {
     stop.abort();
@@ -191,8 +193,7 @@ test("a later action failure cannot undo a committed profile save", async () => 
     const headers = new Headers({ cookie: readCookie(signup) });
 
     const result = await root.settle(failAfterSave, { tags: requestHeaders(headers) });
-    if (result.status !== "failed") raise("BadInput", { reason: "expected failed action" });
-    if (!isError(result.error, "BadInput")) throw result.error;
+    expect(result).toMatchObject({ status: "failed", kind: "error", error: { kind: "BadInput" } });
 
     expect(await root.run(readProfile, { tags: requestHeaders(headers) })).toMatchObject({
       name: "Discard me",
@@ -286,7 +287,7 @@ test("email check and reset callbacks use the declared mail action", async () =>
     expect(messages.some((message) => message.subject === "Check your email")).toBe(true);
 
     const check = messages.find((message) => message.subject === "Check your email");
-    if (!check) raise("BadInput", { reason: "missing check link" });
+    if (!check) return expect.unreachable("missing check link");
     const checked = await root.run(handleAuth, {
       input: new Request(check.text),
       tags: requestHeaders(new Headers()),
@@ -305,7 +306,7 @@ test("email check and reset callbacks use the declared mail action", async () =>
     expect(messages.some((message) => message.subject === "Reset your password")).toBe(true);
 
     const reset = messages.find((message) => message.subject === "Reset your password");
-    if (!reset) raise("BadInput", { reason: "missing reset link" });
+    if (!reset) return expect.unreachable("missing reset link");
     expect(new URL(reset.text).pathname).toContain("/reset-password/");
   } finally {
     stop.abort();
@@ -356,7 +357,10 @@ test("sign-up commits before held worker mail and records its failed delivery", 
         send: async () => {
           sending.resolve();
           await accepted.promise;
-          raise("NotificationFailed", {});
+          throw Object.assign(new Error("NotificationFailed"), {
+            kind: "NotificationFailed",
+            payload: {},
+          });
         },
       })),
     ],

@@ -7,7 +7,7 @@ import { database, transaction, drizzleOrm } from "~/components/database/index.s
 import { teamInput } from "@/contracts/board";
 import { issueCommand, issueChange, issueRecord } from "@/contracts/issues";
 import { currentUser } from "@/demo/backend/auth.server";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 
 import { issue, issueRowFields, team, teamMember } from "./board.schema.server";
 import { fractionalIndex } from "./modules";
@@ -36,7 +36,7 @@ export const readIssue = operation({
   label: "issues.read",
   input: issueCommand,
   depends: { tx: transaction, orm: drizzleOrm },
-  run: async ({ tx, orm }, { input }) => {
+  run: async ({ tx, orm }, { input, raise }) => {
     const change = input.change;
 
     if (change.kind === "create") return null;
@@ -48,7 +48,9 @@ export const readIssue = operation({
       .from(issue)
       .where(and(eq(issue.id, change.id), eq(issue.teamId, change.teamId)));
 
-    if (!current) raise("IssueMissing", {});
+    if (!current) {
+      return raise("IssueMissing", {} satisfies Errors.Payload<"IssueMissing">);
+    }
 
     return current;
   },
@@ -61,18 +63,22 @@ export const rankIssue = operation({
     beforeId: z.uuid().nullable(),
   }),
   depends: { fractionalIndex },
-  run: async ({ fractionalIndex }, { input }) => {
+  run: async ({ fractionalIndex }, { input, raise }) => {
     const { rows, beforeId } = input;
 
     const position = beforeId === null ? rows.length : rows.findIndex((row) => row.id === beforeId);
 
-    if (position < 0) raise("InvalidPosition", {});
+    if (position < 0) {
+      return raise("InvalidPosition", {} satisfies Errors.Payload<"InvalidPosition">);
+    }
 
     const lower = (rows[position - 1] ?? { rank: null }).rank;
 
     const upper = (rows[position] ?? { rank: null }).rank;
 
-    if (lower === upper && lower !== null) raise("InvalidPosition", {});
+    if (lower === upper && lower !== null) {
+      return raise("InvalidPosition", {} satisfies Errors.Payload<"InvalidPosition">);
+    }
 
     return fractionalIndex.generateKeyBetween(lower, upper);
   },
@@ -151,7 +157,7 @@ export const updateIssue = operation({
     rank: z.string(),
   }),
   depends: { tx: transaction, orm: drizzleOrm },
-  run: async ({ tx, orm }, { input, clock }) => {
+  run: async ({ tx, orm }, { input, clock, raise }) => {
     const { eq, and, sql } = orm;
 
     const { change, rank } = input;
@@ -164,7 +170,9 @@ export const updateIssue = operation({
 
     if (change.kind === "remove") {
       const [removed] = await tx.delete(issue).where(guard).returning(issueRowFields);
-      if (!removed) raise("IssueConflict", {});
+      if (!removed) {
+        return raise("IssueConflict", {} satisfies Errors.Payload<"IssueConflict">);
+      }
       return removed;
     }
 
@@ -186,7 +194,9 @@ export const updateIssue = operation({
 
     const [saved] = await tx.update(issue).set(values).where(guard).returning(issueRowFields);
 
-    if (!saved) raise("IssueConflict", {});
+    if (!saved) {
+      return raise("IssueConflict", {} satisfies Errors.Payload<"IssueConflict">);
+    }
 
     return saved;
   },

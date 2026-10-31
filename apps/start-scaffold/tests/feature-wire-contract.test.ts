@@ -5,10 +5,9 @@ import { saveProfile } from "@/demo/backend/profile.server";
 import { changeTodo } from "@/demo/backend/todos.server";
 import { readProfileCommand, readTodoCommand } from "@/demo/contracts/commands";
 import { credentials } from "@/demo/contracts/credentials";
-import { readProfileInput } from "@/demo/contracts/profile-contract";
+import { profileRefusal, readProfileInput } from "@/demo/contracts/profile-contract";
 import { readFeatureEvents, readFeatureResult, readSnapshot } from "@/demo/contracts/sync";
-import { readTodoChange } from "@/demo/contracts/todos-contract";
-import { raise } from "@/demo/errors";
+import { readTodoChange, todoRefusal } from "@/demo/contracts/todos-contract";
 import { records } from "@/demo/frontend/records";
 import { counter, nameDraft, profile, profileResult, todos } from "@/demo/frontend/state";
 
@@ -24,7 +23,7 @@ test("credentials accept both modes and their name/password limits", () => {
   }
 });
 
-test("profile input trims names, rejects extra keys and keeps the exact refusal", () => {
+test("profile input trims names, rejects extra keys and names the exact refusal", () => {
   expect(readProfileInput.parse({ name: " Ada " })).toEqual({ name: "Ada" });
 
   expect(readProfileInput.parse({ name: "n".repeat(80) })).toEqual({ name: "n".repeat(80) });
@@ -35,13 +34,10 @@ test("profile input trims names, rejects extra keys and keeps the exact refusal"
     { name: "n".repeat(81) },
     { name: "Ada", extra: true },
   ]) {
-    expect(() => readProfileInput.parse(input)).toThrow(
-      expect.objectContaining({
-        kind: "BadInput",
-        payload: { reason: "Use a name with 1 to 80 letters." },
-      }),
-    );
+    expect(readProfileInput.safeParse(input).success).toBe(false);
   }
+  expect(profileRefusal).toBe("Use a name with 1 to 80 letters.");
+  expect(todoRefusal).toBe("Use a title with 1 to 200 characters and a valid todo change.");
 });
 
 test("the command schemas keep one execution ID and hand the body to its own contract", () => {
@@ -77,7 +73,7 @@ test("saveProfile and changeTodo refuse a bad execution ID and an extra key at t
       },
     ]) {
       const refused = await root.settle(saveProfile, { rawInput: shape.rawInput });
-      if (refused.status !== "failed") raise("BadInput", { reason: "expected a shape refusal" });
+      if (refused.status !== "failed") return expect.unreachable("expected a shape refusal");
 
       expect(refused.error).toMatchObject({
         kind: "DataValidationFailed",
@@ -94,7 +90,7 @@ test("saveProfile and changeTodo refuse a bad execution ID and an extra key at t
     const todo = await root.settle(changeTodo, {
       rawInput: { executionId, change: { kind: "add", title: "Fine" }, extra: 1 },
     });
-    if (todo.status !== "failed") raise("BadInput", { reason: "expected a shape refusal" });
+    if (todo.status !== "failed") return expect.unreachable("expected a shape refusal");
 
     expect(todo.error).toMatchObject({
       kind: "DataValidationFailed",
