@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 
 import ts from "typescript-api";
 
-const PLAIN_MAX = 17;
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(process.argv.slice(2).find((arg) => !arg.startsWith("--")) ?? app);
 // TypeScript resolves types from the working folder; run from the project root.
@@ -1352,153 +1351,6 @@ function checkModuleEffect(node) {
   if (!moduleDeclarationCall(node)) fail(node, "module-effect");
 }
 
-function callerOf(use) {
-  let caller = enclosingFunction(use);
-  while (caller && !functionName(caller)) {
-    const call = caller.parent;
-    if (
-      !(ts.isNewExpression(call) && nameOf(call.expression) === "Promise") &&
-      !(
-        ts.isCallExpression(call) &&
-        /\.(?:map|filter|flatMap|reduce|then|catch|finally)$/.test(nameOf(call.expression))
-      )
-    ) {
-      break;
-    }
-    caller = enclosingFunction(caller);
-  }
-  return caller;
-}
-
-function anonymousCallerName(caller) {
-  const owner = enclosingFunction(caller);
-  const siblings = [];
-  walk(owner?.body ?? caller.getSourceFile(), (child) => {
-    if (isFunction(child) && enclosingFunction(child) === owner) siblings.push(child);
-  });
-  return `${owner ? callerName(owner) : "module"}.callback${siblings.indexOf(caller) + 1}`;
-}
-
-function callerName(caller) {
-  const member = nameOf(functionName(caller)) || nameOf(caller.name);
-  for (let parent = caller.parent; parent && !isFunction(parent); parent = parent.parent) {
-    if (ts.isVariableDeclaration(parent)) return `${nameOf(parent.name)}.${member || "callback"}`;
-  }
-  return member || anonymousCallerName(caller);
-}
-
-function calledExpression(use) {
-  return ts.isPropertyAccessExpression(use.parent) && use.parent.name === use ? use.parent : use;
-}
-
-function registeredCaller(expression) {
-  const property = expression.parent;
-  return (
-    ts.isPropertyAssignment(property) &&
-    property.initializer === expression &&
-    optionsMember(property)
-  );
-}
-
-function calledUse(expression) {
-  const call = expression.parent;
-  return (
-    ts.isCallExpression(call) &&
-    (call.expression === expression ||
-      (call.arguments.includes(expression) && callbackArgument(call, expression)))
-  );
-}
-
-function symbolUse(use, name, symbol) {
-  return ts.isIdentifier(use) && use !== name && symbolOf(use) === symbol;
-}
-
-function callerLabel(use, caller) {
-  return `${pathOf(use)}#${caller ? callerName(caller) : "module"}`;
-}
-
-function addCaller(use, name, symbol, node, source, callers) {
-  if (!symbolUse(use, name, symbol)) return;
-
-  const expression = calledExpression(use);
-  const registered = registeredCaller(expression);
-  if (!registered && !calledUse(expression)) return;
-
-  const caller = registered ? expression.parent : callerOf(use);
-  if (caller === node) return;
-
-  callers.set(caller ?? source, callerLabel(use, caller));
-}
-
-function callSites(name, node) {
-  const symbol = symbolOf(name),
-    callers = new Map();
-  for (const source of sources) {
-    walk(source, (use) => addCaller(use, name, symbol, node, source, callers));
-  }
-  return [...callers.values()].sort((a, b) => a.localeCompare(b));
-}
-
-function paramRow(param) {
-  const doc = ts
-    .getJSDocParameterTags(param)
-    .map((tag) => (typeof tag.comment === "string" ? tag.comment.replace(/^-\s*/, "") : ""))
-    .join(" ");
-  if (!/\bFrom\b.+;\s*(?:why|for)\b.+/i.test(doc)) fail(param, "param-doc");
-  const type = checker.getTypeAtLocation(param);
-  if (
-    /^(?:ctx|context|clock|signal|scope|controller)$/i.test(nameOf(param.name)) ||
-    type.flags & ts.TypeFlags.Any ||
-    contains(type, "plain")
-  ) {
-    fail(param, "plain-param");
-  }
-  return `  - \`${nameOf(param.name)}\`: \`${param.type?.getText() ?? checker.typeToString(type)}\`. ${doc}`;
-}
-
-function effectReference(node) {
-  if (ts.isIdentifier(node)) return /^(?:localStorage|sessionStorage)$/.test(node.text);
-  return (
-    ts.isPropertyAccessExpression(node) &&
-    /^(?:crypto\.|console\.|performance\.now$|Date\.now$|globalThis\.fetch$|(?:globalThis\.)?(?:localStorage|sessionStorage)\.)/.test(
-      nameOf(node),
-    )
-  );
-}
-
-function effectCall(node) {
-  if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return false;
-  return (
-    /\.(?:currentTimeMillis|sleep)$/.test(nameOf(node.expression)) ||
-    /^(?:fetch|globalThis\.fetch|Date(?:\.now)?|performance\.now|crypto\..*|console\..*|(?:globalThis\.)?(?:localStorage|sessionStorage)\..*)$/.test(
-      nameOf(node.expression),
-    )
-  );
-}
-
-function checkCast(node) {
-  if (
-    (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) &&
-    contains(checker.getTypeAtLocation(node.type), "plain")
-  ) {
-    fail(node, "plain-cast");
-  }
-}
-
-function checkEffect(node) {
-  if (
-    effectCall(node) ||
-    effectReference(node) ||
-    ts.isAwaitExpression(node) ||
-    serviceAllocation(node)
-  ) {
-    fail(node, "plain-effect");
-  }
-  checkCast(node);
-}
-
-const plain = [];
-
 function checkScopeReturn(node) {
   const signature = checker.getSignatureFromDeclaration(node);
   if (
@@ -1520,26 +1372,12 @@ function checkComponent(node) {
   });
 }
 
+/**
+ * App code has no plain helper functions: each one is an operation, so every call is a span and
+ * its dependencies come through the graph (Duke 2026-10-31, tinker-app #44).
+ */
 function checkPlainFunction(node) {
-  const name = functionName(node);
-  const params = node.parameters.map(paramRow);
-  if (node.parameters.length > 3) fail(node, "three-params");
-
-  walk(node.body, checkEffect);
-
-  if (!name) {
-    fail(node, "unnamed-plain");
-    return;
-  }
-
-  const callers = callSites(name, node);
-  // A copied base helper serves however many commands the app has; one command is a whole app.
-  const floor = pathOf(node).startsWith("tinker/base/") ? 1 : 2;
-  if (callers.length < floor) fail(node, "two-sites");
-
-  plain.push(
-    `- **${pathOf(node)}#${nameOf(name)}**\n${params.join("\n")}\n  - Callers:\n${callers.map((caller) => `    - \`${caller}\``).join("\n")}`,
-  );
+  fail(node, "plain-function: make it an operation");
 }
 
 /** Named copied entry helpers and the approved server and browser mains keep native contracts. */
@@ -1882,37 +1720,12 @@ for (const source of sources) {
   });
 }
 
-if (plain.length > PLAIN_MAX) {
-  failures.push(
-    `PLAIN.md: plain-max ${plain.length} exceeds ${PLAIN_MAX}; raising the cap needs a decision`,
-  );
-}
-
-const list = `# Plain functions\n\nThis list is checked against src, cmds, and tinker.\nCallers include direct calls and typed callback registrations.\nRepeated calls by one caller count once; self-calls do not count.\nTests and generated files do not count.\n\n${plain.join("\n\n")}\n`;
-
-if (process.argv.includes("--list")) process.stdout.write(list);
-else {
-  const saved = await readFile(join(root, "PLAIN.md"), "utf8");
-  if (saved !== list) {
-    const rows = list.split("\n"),
-      savedRows = saved.split("\n");
-    const index = rows.findIndex((row, index) => row !== savedRows[index]);
-    failures.push(
-      `PLAIN.md: plain-list disagrees with code at row ${index + 1}; saved: ${savedRows[index]}; code: ${rows[index]}`,
-    );
-  }
-}
-
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
 
-if (!process.argv.includes("--list")) {
-  console.log(
-    `Plain check passed: ${sources.length} files, ${plain.length} plain functions (cap ${PLAIN_MAX}).`,
-  );
-}
+console.log(`Plain check passed: ${sources.length} files, no plain functions.`);
 
 if (process.argv.includes("--prove")) {
   const planted = await mkdtemp(join(tmpdir(), "start-plain-red-"));
@@ -1925,7 +1738,7 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "unowned-listener-forbidden",
-      "unnamed-plain",
+      "plain-function",
       'import {resource} from "@tinker/core"; const local={listen(_channel:string,heard:()=>void){heard();}}; export const probe=resource({factory:()=>local.listen("probe",()=>{})});',
     ],
     ...["worker", "cli"].map((role) => [
@@ -1959,7 +1772,7 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "local-operation-return-forbidden",
-      "plain-effect",
+      "plain-function",
       'import {operation} from "@tinker/core"; export const probe=operation({label:"probe",run:()=>{const handle=Object.assign({}, {read(){return Date.now();}});return handle.read();}});',
     ],
     [
@@ -1981,7 +1794,7 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "foreign-lease-name-forbidden",
-      "plain-effect",
+      "plain-function",
       "export function leaseFrom(){return Date.now();}",
     ],
 
@@ -2024,7 +1837,7 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "namespace-options-no-callback",
-      "plain-effect",
+      "plain-function",
       'import {namespace} from "@tinker/core"; export const probe = namespace({factory: async () => {await Promise.resolve(); return 1;}});',
     ],
 
@@ -2084,20 +1897,20 @@ if (process.argv.includes("--prove")) {
     ].flatMap(([place, file]) => [
       [
         `${place}-entry-await`,
-        "plain-effect",
+        "plain-function",
         "export async function createStartEntry() { await Promise.resolve(); return {}; }",
         file,
       ],
       [
         `${place}-entry-handle`,
-        "plain-param",
+        "plain-function",
         'import type { Scope } from "@tinker/core"; export function createServerHandler(scope: Scope.Handle) { return scope.resolve; }',
         file,
       ],
     ]),
     [
       "named-base-other-function",
-      "plain-effect",
+      "plain-function",
       "export async function unrelatedFeature() { await Promise.resolve(); }",
       "tinker/base/start-entry.ts",
     ],
@@ -2147,22 +1960,22 @@ if (process.argv.includes("--prove")) {
         "cmds/server.ts",
         `async function ${name}() { await Promise.resolve(); }`,
       ]),
-    ].map(([name, file, code]) => [name, "plain-effect", code, file]),
+    ].map(([name, file, code]) => [name, "plain-function", code, file]),
     [
       "router-command-other-function",
-      "plain-effect",
+      "plain-function",
       "export async function unrelatedFeature() { await Promise.resolve(); }",
       "cmds/router.ts",
     ],
     [
       "router-command-shadowed-getRouter",
-      "plain-effect",
+      "plain-function",
       "function anotherEntry() { return async function getRouter() { await Promise.resolve(); }; }",
       "cmds/router.ts",
     ],
     [
       "router-name-other-command",
-      "plain-effect",
+      "plain-function",
       "export async function getRouter() { await Promise.resolve(); }",
       "cmds/other-router.ts",
     ],
@@ -2174,13 +1987,13 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "fake-start-entry-callback",
-      "plain-effect",
+      "plain-function",
       "function createStartEntry(read: () => Promise<void>) { return read; } export const hidden = createStartEntry(async () => { await Promise.resolve(); });",
       "cmds/start-probe.ts",
     ],
     [
       "fake-once-callback",
-      "plain-effect",
+      "plain-function",
       "function once(action: () => Promise<void>) { return action; } export const hidden = once(async () => { await Promise.resolve(); });",
       "cmds/once-probe.ts",
     ],
@@ -2689,13 +2502,13 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "entry-hidden-fetch",
-      "plain-param",
+      "plain-function",
       "const helpers = {async fetch(signal: AbortSignal) { await Promise.resolve(signal); }};",
       "src/server.ts",
     ],
     [
       "wrapped-factory",
-      "unnamed-plain",
+      "plain-function",
       'import {resource} from "@tinker/core"; const probe = resource({factory: Object.freeze(async (clock: unknown, signal: AbortSignal, a: number, b: number) => { await Promise.resolve(signal); })});',
     ],
     [
@@ -2712,58 +2525,31 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "unit-param",
-      "plain-param",
+      "plain-function",
       'import type {Resource} from "@tinker/core"; function probe(value: Resource.Handle<unknown>) {return value;} probe(null!); probe(null!);',
     ],
     ["class", "no-class", "class Probe {}"],
     [
       "clock",
-      "plain-param",
+      "plain-function",
       'import type { Clock } from "@tinker/core"; function probe(value: Clock.Handle) { return value; } probe(null!); probe(null!);',
     ],
     [
       "signal",
-      "plain-param",
+      "plain-function",
       "type Stop = AbortSignal; function probe(value: Stop) { return value; } probe(null!); probe(null!);",
     ],
     [
       "handle",
-      "plain-param",
+      "plain-function",
       'import type { Scope } from "@tinker/core"; function probe(value: Scope.Handle) { return value; } probe(null!); probe(null!);',
     ],
-    ["ctx", "plain-param", "function probe(ctx: unknown) { return ctx; } probe(1); probe(2);"],
+    ["ctx", "plain-function", "function probe(ctx: unknown) { return ctx; } probe(1); probe(2);"],
     [
       "io",
-      "plain-param",
+      "plain-function",
       'import type { IncomingMessage } from "node:http"; function probe(value: IncomingMessage) { return value; } probe(null!); probe(null!);',
     ],
-    [
-      "four-params",
-      "three-params",
-      "function probe(a: number, b: number, c: number, d: number) { return a+b+c+d; } probe(1,2,3,4); probe(2,3,4,5);",
-    ],
-    ["one-site", "two-sites", "function probe(a: number) { return a; } probe(1);"],
-    [
-      "base-helper-zero-site",
-      "two-sites",
-      "/** @param a - From the probe; why: return it. */ export function probe(a: number) { return a; }",
-      "tinker/base/plain-probe.ts",
-    ],
-    [
-      // The worker stops calling the copied base helper; the server's one call keeps it.
-      "base-helper-one-site-allowed",
-      null,
-      "",
-      "cmds/worker.ts",
-      ["exit(mainErrorCode(error), error);", "exit(1, error);"],
-    ],
-    [
-      "error-registry-one-caller",
-      "two-sites",
-      'import { operation } from "@tinker/core";\n/** @param value - From the operation; why: return its value. */\nexport function raise(value: number) { return value; }\nconst probe = operation({ run: () => raise(1) });',
-      "tinker/components/one-caller/errors.ts",
-    ],
-    ["no-doc", "param-doc", "function probe(a: number) { return a; } probe(1); probe(2);"],
     [
       "scope-factory",
       "scope-entry-only",
@@ -2803,12 +2589,12 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "plain-callback",
-      "plain-param",
+      "plain-function",
       "function probe(value: () => void) { return value; } probe(() => {}); probe(() => {});",
     ],
     [
       "clock-bag",
-      "plain-param",
+      "plain-function",
       'import type { Clock } from "@tinker/core"; type Bag = { clock: Clock.Handle }; function probe(value: Bag) { return value; } probe(null!); probe(null!);',
     ],
     [
@@ -2823,52 +2609,36 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "plain-await",
-      "plain-effect",
+      "plain-function",
       "async function probe(value: number) { return await Promise.resolve(value); } probe(1); probe(2);",
     ],
-    ["zero-site", "two-sites", "function probe(value: number) { return value; }"],
     ["class-expression", "no-class", "const probe = class {};"],
     [
       "object-arrow",
-      "plain-param",
+      "plain-function",
       'import type { Clock } from "@tinker/core"; export const helpers = { tick: async (clock: Clock.Handle, signal: AbortSignal) => { await clock.sleep(1, signal); } };',
     ],
     [
       "object-method",
-      "plain-param",
+      "plain-function",
       'import type { Clock } from "@tinker/core"; export const helpers = { async tick(clock: Clock.Handle, signal: AbortSignal) { await clock.sleep(1, signal); } };',
     ],
     [
       "freeze-arrow",
-      "unnamed-plain",
+      "plain-function",
       'import type { Clock } from "@tinker/core"; export const tick = Object.freeze(async (clock: Clock.Handle, signal: AbortSignal, a: number, b: number) => { await clock.sleep(a+b, signal); });',
     ],
     [
       "hidden-method",
-      "plain-param",
+      "plain-function",
       'import { resource } from "@tinker/core"; export const probe = resource({factory: (_deps, ctx) => { const hidden = {async wait(clock: typeof ctx.clock, signal: AbortSignal, a: number, b: number) { await clock.sleep(a+b, signal); }}; return { go: (s: AbortSignal) => hidden.wait(ctx.clock, s, 1, 2) }; }});',
     ],
-    ["or-arrow", "unnamed-plain", "const probe = undefined || ((v: AbortSignal) => v);"],
-    ["nullish-arrow", "unnamed-plain", "const probe = undefined ?? ((v: AbortSignal) => v);"],
+    ["or-arrow", "plain-function", "const probe = undefined || ((v: AbortSignal) => v);"],
+    ["nullish-arrow", "plain-function", "const probe = undefined ?? ((v: AbortSignal) => v);"],
     [
       "src-callback",
-      "unnamed-plain",
+      "plain-function",
       "function take(v: unknown) { return v; } take((v: AbortSignal) => v);",
-    ],
-    [
-      "one-caller-two-calls",
-      "two-sites",
-      "function probe(v: number) { return v; } function caller() { probe(1); probe(2); } caller();",
-    ],
-    [
-      "self-call",
-      "two-sites",
-      "function probe(v: number): number { return v ? probe(v-1) : v; } function caller() { probe(1); } caller();",
-    ],
-    [
-      "non-call-use",
-      "two-sites",
-      "function probe(v: number) { return v; } String(probe); String(probe);",
     ],
     [
       "cmd-cli-scope",
@@ -2956,26 +2726,30 @@ if (process.argv.includes("--prove")) {
       "exported-scope",
       'import type { Scope } from "@tinker/core"; const holder = {scope: undefined as Promise<Scope.Handle> | undefined}; export const app = {root: () => holder.scope};',
     ],
-    ["plain-any", "plain-param", "function probe(v: any) { return v; } probe(1); probe(2);"],
-    ["plain-generic", "plain-param", "function probe<T>(v: T) { return v; } probe(1); probe(2);"],
+    ["plain-any", "plain-function", "function probe(v: any) { return v; } probe(1); probe(2);"],
+    [
+      "plain-generic",
+      "plain-function",
+      "function probe<T>(v: T) { return v; } probe(1); probe(2);",
+    ],
     [
       "plain-unknown-cast",
-      "plain-cast",
+      "plain-function",
       'import type { Clock } from "@tinker/core"; function probe(v: unknown) { return (v as Clock.Handle).currentTimeMillis(); } probe(1); probe(2);',
     ],
     [
       "request-options",
-      "plain-param",
+      "plain-function",
       "function probe(v: RequestInit) { return v; } probe({}); probe({});",
     ],
     [
       "pick-options",
-      "plain-param",
+      "plain-function",
       'function probe(v: Pick<RequestInit, "signal">) { return v; } probe({}); probe({});',
     ],
     [
       "event-options",
-      "plain-param",
+      "plain-function",
       "function probe(v: AddEventListenerOptions) { return v; } probe({}); probe({});",
     ],
     [
@@ -3078,7 +2852,7 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "module-recursion-still-helper",
-      "two-sites",
+      "plain-function",
       "export function depth(n: number): number { return n <= 0 ? 0 : 1 + depth(n - 1); }",
     ],
     ...[
@@ -3092,30 +2866,14 @@ if (process.argv.includes("--prove")) {
       "console.log(1)",
     ].map((effect, index) => [
       `plain-native-effect-${index}`,
-      "plain-effect",
+      "plain-function",
       `function probe() { return ${effect}; } probe(); probe();`,
     ]),
     [
       "src-resource-callback",
-      "plain-param",
+      "plain-function",
       'import {resource} from "@tinker/core"; const unit = resource({factory: () => ({ call: (fn: (signal: AbortSignal) => unknown) => fn(new AbortController().signal) })}); const callback = resource({depends: {unit}, factory: ({unit}) => unit.call((signal: AbortSignal) => signal)});',
     ],
-    [
-      "plain-cap",
-      "plain-max",
-      'import {operation} from "@tinker/core";\n' +
-        Array.from(
-          { length: PLAIN_MAX + 1 },
-          (_, index) =>
-            `/** @param v - From the caller; why: keep its number. */ function pure${index}(v: number) { return v; }`,
-        ).join("\n") +
-        "\nconst a = operation({run: () => [" +
-        Array.from({ length: PLAIN_MAX + 1 }, (_, index) => `pure${index}(1)`).join(",") +
-        "]}); const b = operation({run: () => [" +
-        Array.from({ length: PLAIN_MAX + 1 }, (_, index) => `pure${index}(2)`).join(",") +
-        "]});",
-    ],
-    ["list", "plain-list", "export const probe = 1;"],
   ];
 
   const names = process.argv
@@ -3141,7 +2899,6 @@ if (process.argv.includes("--prove")) {
       "vite.config.ts",
       "cmds",
       "tinker",
-      "PLAIN.md",
       "package.json",
       ".tinker",
     ]) {
@@ -3163,20 +2920,10 @@ if (process.argv.includes("--prove")) {
       if (replace) assert.ok(original.includes(replace[0]), `${name}: ${file} lacks ${replace[0]}`);
       const base = replace ? original.replace(replace[0], replace[1]) : original;
       await writeFile(path, base + source + "\n");
-      if (name === "list") await writeFile(join(planted, "PLAIN.md"), "wrong list\n");
 
-      const red = spawnSync(
-        process.execPath,
-        [
-          fileURLToPath(import.meta.url),
-          planted,
-          // A new plain helper changes the list; the allowed base case prints it instead of comparing.
-          ...(name === "plain-cap" || name === "base-helper-one-site-allowed" ? ["--list"] : []),
-        ],
-        {
-          encoding: "utf8",
-        },
-      );
+      const red = spawnSync(process.execPath, [fileURLToPath(import.meta.url), planted], {
+        encoding: "utf8",
+      });
       const log = join(tmpdir(), `start-plain-proof-${name}.log`);
       await writeFile(log, red.stdout + red.stderr + `\nEXIT ${red.status}\n`);
 
@@ -3185,11 +2932,6 @@ if (process.argv.includes("--prove")) {
       const line = collectionLines.get(name);
       if (line) {
         assert.ok(red.stderr.split("\n").includes(line), `must fail at ${line}`);
-      }
-      if (name === "error-registry-one-caller") {
-        assert.ok(
-          red.stderr.split("\n").includes("tinker/components/one-caller/errors.ts:3: two-sites"),
-        );
       }
       if (name === "src-base-import" || name === "component-base-import") {
         const owner = name === "src-base-import" ? "src" : "components";
