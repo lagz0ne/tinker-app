@@ -1,6 +1,13 @@
 import { operation } from "@tinker/core";
 import { z } from "zod";
 
+import { requestStop } from "~/components/requests";
+import { readExecution, readRetry } from "~/components/sync";
+
+import { incrementCounter } from "@/demo/backend/counter.server";
+import { readProfile, retryNotification, saveProfile } from "@/demo/backend/profile.server";
+import { changeTodo, listTodos } from "@/demo/backend/todos.server";
+import { readProfileCommand, readTodoCommand } from "@/demo/contracts/commands";
 import type { Errors } from "@/demo/errors";
 
 /** A settled write, as the server function's `settle` returns it. */
@@ -51,5 +58,85 @@ export const readReceipt = operation({
     if (message !== undefined) return { kind: "rejected" as const, message };
 
     throw input.error;
+  },
+});
+
+/** A counter step and its receipt. One request call, so a closing request still gets it. */
+export const counterReceipt = operation({
+  label: "transport.counterReceipt",
+  input: readExecution,
+  depends: {
+    write: incrementCounter.controller,
+    receipt: readReceipt.controller,
+    stop: requestStop.required,
+  },
+  run: async ({ write, receipt, stop }, { input }) =>
+    receipt.run({ input: await write.settle({ input, signal: stop }) }),
+});
+
+/** A saved name and its receipt. One request call, so a closing request still gets it. */
+export const profileReceipt = operation({
+  label: "transport.profileReceipt",
+  input: readProfileCommand,
+  depends: {
+    write: saveProfile.controller,
+    receipt: readReceipt.controller,
+    stop: requestStop.required,
+  },
+  run: async ({ write, receipt, stop }, { input }) =>
+    receipt.run({ input: await write.settle({ input, signal: stop }) }),
+});
+
+/** A notification retry and its receipt. One request call, so a closing request still gets it. */
+export const retryReceipt = operation({
+  label: "transport.retryReceipt",
+  input: readRetry,
+  depends: {
+    write: retryNotification.controller,
+    receipt: readReceipt.controller,
+    stop: requestStop.required,
+  },
+  run: async ({ write, receipt, stop }, { input }) =>
+    receipt.run({ input: await write.settle({ input, signal: stop }) }),
+});
+
+/** A todo change and its receipt. One request call, so a closing request still gets it. */
+export const todoReceipt = operation({
+  label: "transport.todoReceipt",
+  input: readTodoCommand,
+  depends: {
+    write: changeTodo.controller,
+    receipt: readReceipt.controller,
+    stop: requestStop.required,
+  },
+  run: async ({ write, receipt, stop }, { input }) =>
+    receipt.run({ input: await write.settle({ input, signal: stop }) }),
+});
+
+/** The signed-in profile, read for one request. A cancel raises Cancelled; a failure stays as is. */
+export const profileRead = operation({
+  label: "transport.profileRead",
+  depends: { read: readProfile.controller, stop: requestStop.required },
+  run: async ({ read, stop }, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+    const result = await read.settle({ signal: stop });
+
+    if (result.status === "failed") throw result.error;
+    if (result.status === "cancelled") return raise("Cancelled", {});
+    return result.value;
+  },
+});
+
+/** The signed-in todo list, read for one request. A cancel raises Cancelled; a failure stays as is. */
+export const todoList = operation({
+  label: "transport.todoList",
+  depends: { read: listTodos.controller, stop: requestStop.required },
+  run: async ({ read, stop }, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+    const result = await read.settle({ signal: stop });
+
+    if (result.status === "failed") throw result.error;
+    if (result.status === "cancelled") return raise("Cancelled", {});
+    return result.value;
   },
 });
