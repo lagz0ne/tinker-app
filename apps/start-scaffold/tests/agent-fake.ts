@@ -265,6 +265,9 @@ export function fakeAgentSdk(...scripts: FakeScript[]) {
           yield message;
         }
       } finally {
+        // A real process takes a moment to exit; a join that does not wait shows up here.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+
         call.ended = true;
       }
     }

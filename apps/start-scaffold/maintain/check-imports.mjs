@@ -34,15 +34,18 @@ if (import.meta.main) {
         await vite.ssrLoadModule(`/src/demo/backend/${name}`);
       }
       const backend = await vite.ssrLoadModule("/tinker/components/mail/mail.server.ts");
+      await vite.ssrLoadModule("/tinker/components/agent-talk/index.server.ts");
 
       const services = [...loaded].filter((url) =>
-        /\/node_modules\/(?:pg|@electric-sql\/pglite|better-auth|nodemailer)(?:\/|$)/.test(url),
+        /\/node_modules\/(?:pg|@electric-sql\/pglite|better-auth|nodemailer|@anthropic-ai\/claude-agent-sdk)(?:\/|$)/.test(
+          url,
+        ),
       );
 
       assert.deepEqual(
         services,
         [],
-        "A backend module import loaded a native driver, auth library, or mail client",
+        "A backend module import loaded a native driver, auth library, mail client, or agent SDK",
       );
 
       const { createScope } = await import("@tinker/core");
@@ -75,7 +78,7 @@ if (import.meta.main) {
       hooks.deregister();
     }
     process.stdout.write(
-      "PASS: every backend module import leaves drivers, auth, and SMTP unloaded; preset mail records its message.\n",
+      "PASS: every backend module import leaves drivers, auth, SMTP, and the agent SDK unloaded; preset mail records its message.\n",
     );
   } else {
     const result = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--child"], {

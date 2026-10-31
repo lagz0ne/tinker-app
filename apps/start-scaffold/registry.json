@@ -754,6 +754,49 @@
       "devDependencies": ["@types/nodemailer@^7.0.11"]
     },
     {
+      "name": "agent-talk",
+      "type": "registry:lib",
+      "title": "agent-talk",
+      "description": "Copied agent-talk component. You own its files.",
+      "dependencies": [
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+        "@anthropic-ai/claude-agent-sdk@0.3.295",
+        "zod@catalog:"
+      ],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "tinker/components/agent-talk/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/agent-talk/component.json"
+        },
+        {
+          "path": "tinker/components/agent-talk/index.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/agent-talk/index.server.ts"
+        },
+        {
+          "path": "tinker/components/agent-talk/modules.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/agent-talk/modules.server.ts"
+        },
+        {
+          "path": "tinker/components/agent-talk/settings.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/agent-talk/settings.ts"
+        },
+        {
+          "path": "tinker/components/agent-talk/talk.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/agent-talk/talk.server.ts"
+        }
+      ],
+      "meta": {
+        "ownership": "userland",
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
+      }
+    },
+    {
       "name": "requests",
       "type": "registry:lib",
       "title": "requests",
