@@ -2613,6 +2613,13 @@ if (process.argv.includes("--prove")) {
       "async function probe(value: number) { return await Promise.resolve(value); } probe(1); probe(2);",
     ],
     ["class-expression", "no-class", "const probe = class {};"],
+    // A function used only as a value, or only by itself, is still a plain function.
+    ["non-call-use", "plain-function", "function probe(v: number) { return v; } String(probe);"],
+    [
+      "self-call",
+      "plain-function",
+      "function probe(v: number): number { return v ? probe(v - 1) : v; }",
+    ],
     [
       "object-arrow",
       "plain-function",

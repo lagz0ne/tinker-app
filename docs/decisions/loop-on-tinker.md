@@ -399,8 +399,7 @@ packages/loop
     run one operation,
     map its result to an exit code
   tinker/base/main.ts
-    copied base-main: defineMain,
-    checkClosed
+    copied base-main: defineMain
   src/tags.ts
     appDir, baseRef, childEnv,
     reviewModel, print, warn, stop
@@ -504,13 +503,13 @@ The method:
 - Declare a type only at its source:
   the tag, or the Data schema.
   TypeScript infers it everywhere else.
-- An extracted helper takes its types from that
+- An extracted operation takes its types from that
   source too, such as the tag's value type
   (`Tag.Handle<T>` carries it).
   It never declares a new copy.
-- The cap of 17 stays a check, not a target.
-  `check-plain` runs it.
-  `docs/decisions/start-decompose.md:48-55`
+- No plain helpers: `check-plain` refuses each
+  one (tinker-app #44).
+  `docs/decisions/start-decompose.md`
 
 Precedent:
 
@@ -676,8 +675,7 @@ In order. Each ticket is one commit or PR.
    as a scheduled report with floor 60.
    Start stays at 85.
    Verify: CI is green. The diff gate passes.
-   `check-plain` passes, and each plain helper
-   in `PLAIN.md` names its two units.
+   `check-plain` passes: no plain helpers.
    The scheduled full run reports at least 60.
    A real `tinker-loop check` runs in the scaffold.
    Also: the loop runs `tinker prepare` in
@@ -687,26 +685,26 @@ In order. Each ticket is one commit or PR.
    tarball never runs `prepare`. Doctor accepts
    either script.
    Status: `check-plain` on the loop counts 0
-   plain functions, under the cap of 17.
+   plain functions.
    CI runs it as `pnpm --dir packages/loop run
 check-plain`, with the scaffold's script.
 10. **Reshape for check-plain** — the closures
     inside units become graph work.
+    - A resource returns one object; its
+      methods call each other by name.
+    - Lock work is `findingsLock.take` and
+      `release`, inside the record operations.
+    - The command line is the `commandLine`
+      resource; `runCommand` picks the command.
+    - The 4 report lines are operations too
+      (`report.findingLine`, `report.summary`,
+      `report.shortSha`, `report.count`), so a
+      call lands on a span and `summary` names
+      `findingLine` as a dependency. Nothing is
+      left plain.
 
-- A resource returns one object; its
-  methods call each other by name.
-- Lock work is `findingsLock.take` and
-  `release`, inside the record operations.
-- The command line is the `commandLine`
-  resource; `runCommand` picks the command.
-- The 4 report lines are operations too
-  (`report.findingLine`, `report.summary`,
-  `report.shortSha`, `report.count`), so a
-  call lands on a span and `summary` names
-  `findingLine` as a dependency. Nothing is
-  left plain.
-  Verify: `check-plain` passes. The 120 frozen
-  tests are unchanged and pass.
+    Verify: `check-plain` passes. The 120 frozen
+    tests are unchanged and pass.
 
 ## Decided
 
