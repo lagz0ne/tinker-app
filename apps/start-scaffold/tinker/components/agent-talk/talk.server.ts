@@ -5,6 +5,7 @@ import type {
   SDKMessage,
   SDKPartialAssistantMessage,
   SDKResultMessage,
+  SDKResultSuccess,
 } from "@anthropic-ai/claude-agent-sdk";
 import { resource } from "@tinker/core";
 
@@ -487,7 +488,7 @@ export const agentTalk = resource({
         if (
           message.subtype === "success" &&
           !message.is_error &&
-          !owned.signedOutReply(stream, message.result)
+          !owned.signedOutReply(stream, message)
         ) {
           stream.done = {
             status: "done",
@@ -507,9 +508,14 @@ export const agentTalk = resource({
           };
         }
       },
-      /** Claude Code's not-signed-in answer can come as a success; a turn that ran a tool is real work. */
-      signedOutReply(stream: Stream, text: string) {
-        return stream.tools === 0 && signedOut.test(text);
+      /**
+       * Claude Code's not-signed-in answer can come as a success. It runs no tool and bills
+       * nothing; a paid answer that only mentions 401 is real work.
+       */
+      signedOutReply(stream: Stream, message: SDKResultSuccess) {
+        const unpaid = message.total_cost_usd === 0 && !message.usage?.output_tokens;
+
+        return stream.tools === 0 && unpaid && signedOut.test(message.result);
       },
       /** The query's outcome: a listener throw, a result, an abort, then an error text. */
       settle(stream: Stream, signal: AbortSignal, fallback: string): Played {

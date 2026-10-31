@@ -167,7 +167,7 @@ export const compact = (session: string, pre: number, post: number): SDKMessage 
 export const success = (
   session: string,
   cost = 0.25,
-  extra: Partial<Pick<SDKResultSuccess, "result" | "permission_denials">> = {},
+  extra: Partial<Pick<SDKResultSuccess, "result" | "permission_denials" | "usage">> = {},
 ): SDKMessage =>
   ({
     type: "result",
