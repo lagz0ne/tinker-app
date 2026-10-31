@@ -353,14 +353,11 @@ test("sign-up commits before held worker mail and records its failed delivery", 
     },
     presets: [
       proofDatabase,
-      preset(mail, async () => ({
+      preset(mail, async (_deps, { raise }) => ({
         send: async () => {
           sending.resolve();
           await accepted.promise;
-          throw Object.assign(new Error("NotificationFailed"), {
-            kind: "NotificationFailed",
-            payload: {},
-          });
+          return raise("NotificationFailed", {});
         },
       })),
     ],

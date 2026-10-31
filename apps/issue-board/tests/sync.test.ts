@@ -163,15 +163,12 @@ test("failed notification keeps the saved profile and retry replies before sendi
     tags: [requestBindings, tags],
     presets: [
       proofDatabase,
-      preset(mail, async () => ({
+      preset(mail, async (_deps, { raise }) => ({
         send: async (message: Mail.Message) => {
           if (message.subject !== "Your profile was updated") return;
           messages.push(message);
           if (refuse) {
-            throw Object.assign(new Error("NotificationFailed"), {
-              kind: "NotificationFailed",
-              payload: {},
-            });
+            return raise("NotificationFailed", {});
           }
           sending.resolve();
           await accepted.promise;
