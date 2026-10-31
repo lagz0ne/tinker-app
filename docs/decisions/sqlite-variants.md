@@ -121,7 +121,7 @@ Same public names as `database`:
   WAL lets them run beside the writer.
 - `migrate` holds `BEGIN EXCLUSIVE`
   in place of the advisory lock.
-  It runs each new file in `migrations/`
+  It runs each new file in `sqlite/migrations/`
   in name order and records it in
   `start_migrations`.
 - `listen(channel)` polls a `start_notify`
