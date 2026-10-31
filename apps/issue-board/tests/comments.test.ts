@@ -12,7 +12,6 @@ import { changeIssue } from "@/backend/issues.server";
 import { changeTeam, listTeams } from "@/backend/teams.server";
 import { readAccount } from "@/demo/backend/auth.server";
 import { bootstrap, replayPrivate } from "@/demo/backend/sync.server";
-import { isError } from "@/demo/errors";
 
 import { handleAuth, proofDatabase, proofMail, requestHeaders } from "./presets";
 import { write, settleWrite } from "./write-boundary";
@@ -164,7 +163,8 @@ test("a non-member cannot read or add comments, and an issue cannot be addressed
     });
     expect(refused.status).toBe("failed");
     if (refused.status !== "failed") throw new Error("Expected member refusal");
-    expect(isError(refused.error, "NotTeamMember")).toBe(true);
+    expect(refused.error).toBeInstanceOf(Error);
+    expect(refused.error).toMatchObject({ kind: "NotTeamMember" });
   }
   expect((await root.run(bootstrap, { tags: requestHeaders(outsider) })).private!.comments).toEqual(
     [],
@@ -204,7 +204,8 @@ test("a non-member cannot read or add comments, and an issue cannot be addressed
   });
   expect(refused.status).toBe("failed");
   if (refused.status !== "failed") throw new Error("Expected scoped issue refusal");
-  expect(isError(refused.error, "IssueMissing")).toBe(true);
+  expect(refused.error).toBeInstanceOf(Error);
+  expect(refused.error).toMatchObject({ kind: "IssueMissing" });
 });
 
 test("comment input bounds the body and refuses author, metadata, and operation keys", async () => {

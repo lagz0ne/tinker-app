@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import { raise } from "@/demo/errors";
-
 export declare namespace Todos {
   type Row = { id: number; title: string; done: boolean };
   type Change = z.infer<typeof todoChange>;
@@ -21,7 +19,8 @@ const todoChange = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-/** The schema keeps the same managed refusal at each input door. */
-export const readTodoChange = todoChange.catch(() =>
-  raise("BadInput", { reason: "Use a title with 1 to 200 characters and a valid todo change." }),
-);
+/** The change a todo save accepts; the operation that parses it raises the refusal. */
+export const readTodoChange = todoChange;
+
+/** The BadInput reason for a change the contract refuses. */
+export const todoRefusal = "Use a title with 1 to 200 characters and a valid todo change.";

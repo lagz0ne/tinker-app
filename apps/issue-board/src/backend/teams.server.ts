@@ -8,7 +8,7 @@ import { eventHistory } from "~/components/sync/index.server";
 
 import { teamCommand, teamInput } from "@/contracts/board";
 import { currentUser } from "@/demo/backend/auth.server";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 
 import { comment, issue, issueFields, team, teamMember } from "./board.schema.server";
 import { executionSeen, fanOut } from "./team-write.server";
@@ -32,7 +32,7 @@ export const readTeam = operation({
   label: "teams.read",
   input: teamInput,
   depends: { database, orm: drizzleOrm, currentUser },
-  run: async ({ database, orm, currentUser }, { input }) => {
+  run: async ({ database, orm, currentUser }, { input, raise }) => {
     const { eq, and } = orm;
 
     const row = (
@@ -42,7 +42,9 @@ export const readTeam = operation({
         .innerJoin(teamMember, eq(team.id, teamMember.teamId))
         .where(and(eq(team.id, input.teamId), eq(teamMember.userId, currentUser.id)))
     ).at(0);
-    if (!row) raise("NotTeamMember", {});
+    if (!row) {
+      return raise("NotTeamMember", {} satisfies Errors.Payload<"NotTeamMember">);
+    }
 
     return row;
   },
@@ -52,22 +54,32 @@ export const authorizeTeamJoin = operation({
   label: "teams.authorizeJoin",
   input: teamCommand,
   depends: { tx: transaction, orm: drizzleOrm, currentUser },
-  run: async ({ tx, orm, currentUser }, { input }) => {
-    if (input.change.kind !== "addMember") raise("BadInput", { reason: "Expected member join" });
+  run: async ({ tx, orm, currentUser }, { input, raise }) => {
+    if (input.change.kind !== "addMember") {
+      return raise("BadInput", {
+        reason: "Expected member join",
+      } satisfies Errors.Payload<"BadInput">);
+    }
     const { eq, and } = orm;
     const change = input.change;
     const [member] = await tx
       .select()
       .from(teamMember)
       .where(and(eq(teamMember.teamId, change.teamId), eq(teamMember.userId, currentUser.id)));
-    if (!member) raise("NotTeamMember", {});
-    if (member.role !== "admin") raise("TeamAdminRequired", {});
+    if (!member) {
+      return raise("NotTeamMember", {} satisfies Errors.Payload<"NotTeamMember">);
+    }
+    if (member.role !== "admin") {
+      return raise("TeamAdminRequired", {} satisfies Errors.Payload<"TeamAdminRequired">);
+    }
 
     const [target] = await tx
       .select({ id: user.id })
       .from(user)
       .where(eq(user.email, change.email.toLowerCase()));
-    if (!target) raise("UserNotFound", {});
+    if (!target) {
+      return raise("UserNotFound", {} satisfies Errors.Payload<"UserNotFound">);
+    }
     return target.id;
   },
 });
@@ -76,7 +88,7 @@ export const saveTeam = operation({
   label: "teams.save",
   input: z.object({ command: teamCommand, targetId: z.string().optional() }),
   depends: { tx: transaction, currentUser, history: eventHistory, seen: executionSeen.controller },
-  run: async ({ tx, currentUser, history, seen }, { input, random }) => {
+  run: async ({ tx, currentUser, history, seen }, { input, random, raise }) => {
     const { command, targetId } = input;
     const change = command.change;
     const streams = [...new Set([currentUser.id, ...(targetId ? [targetId] : [])])].sort();
@@ -92,7 +104,9 @@ export const saveTeam = operation({
         .values({ id, key: change.key, name: change.name })
         .onConflictDoNothing({ target: team.key })
         .returning();
-      if (!saved.length) raise("TeamKeyTaken", {});
+      if (!saved.length) {
+        return raise("TeamKeyTaken", {} satisfies Errors.Payload<"TeamKeyTaken">);
+      }
       await tx.insert(teamMember).values({ teamId: id, userId: currentUser.id, role: "admin" });
       return { teamId: id, streams };
     }

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { syncClient } from "~/components/sync";
 
 import { commentDraft } from "@/contracts/comments";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 import { comments, commentDrafts } from "@/demo/frontend/state";
 import { postComment } from "@/transport/comments.functions";
 
@@ -25,7 +25,7 @@ const submitComment = operation({
   label: "comments.submit",
   input: commentDraft,
   depends: { sync: syncClient, pending: pending.controller, drafts: commentDrafts.controller },
-  run: async ({ sync, pending, drafts }, { input, random, signal, defer }) => {
+  run: async ({ sync, pending, drafts }, { input, random, signal, defer, raise }) => {
     pending.set(true);
     defer(() => pending.set(false));
 
@@ -35,7 +35,9 @@ const submitComment = operation({
       { send: postComment, data: { executionId, comment: input } },
       signal,
     );
-    if (result.kind === "failed") raise("BadInput", { reason: result.message });
+    if (result.kind === "failed") {
+      return raise("BadInput", { reason: result.message } satisfies Errors.Payload<"BadInput">);
+    }
     drafts.set({ ...drafts.get(), [input.issueId]: "" });
   },
 });
