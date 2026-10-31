@@ -1,13 +1,17 @@
-import { createScope } from "@tinker/core";
+import { createScope, operation } from "@tinker/core";
 import { expect, test } from "vite-plus/test";
+import { z } from "zod";
 
 import { readReceipt } from "@/transport/result.server";
 
 const executionId = "10000000-0000-4000-8000-000000000001";
 
-/** The managed error a refused write settles with. */
-const refusal = (kind: string, payload: object = {}) =>
-  Object.assign(new Error(kind), { kind, payload });
+/** A write that refuses the way the app's writes do: Core's raise with its kind and payload. */
+const refusedWrite = operation({
+  label: "test.refusedWrite",
+  input: z.object({ kind: z.string(), payload: z.record(z.string(), z.string()) }),
+  run: (_deps, { input, raise }) => raise(input.kind, input.payload),
+});
 
 test("an accepted write becomes an accepted receipt with its execution ID", () => {
   const root = createScope({ observe: { history: 4 } });
@@ -20,8 +24,10 @@ test("an accepted write becomes an accepted receipt with its execution ID", () =
 
 test("a refused input shows its own reason", () => {
   const root = createScope();
-  const error = refusal("BadInput", { reason: "Use a name with 1 to 80 letters." });
-  expect(root.run(readReceipt, { input: { status: "failed", error } })).toEqual({
+  const refused = root.settle(refusedWrite, {
+    input: { kind: "BadInput", payload: { reason: "Use a name with 1 to 80 letters." } },
+  });
+  expect(root.run(readReceipt, { input: refused })).toEqual({
     kind: "rejected",
     message: "Use a name with 1 to 80 letters.",
   });
@@ -43,7 +49,8 @@ test.each([
   ["StreamDenied", "That execution is not in your stream."],
 ])("a %s refusal shows its fixed message", (kind, message) => {
   const root = createScope();
-  expect(root.run(readReceipt, { input: { status: "failed", error: refusal(kind) } })).toEqual({
+  const refused = root.settle(refusedWrite, { input: { kind, payload: {} } });
+  expect(root.run(readReceipt, { input: refused })).toEqual({
     kind: "rejected",
     message,
   });
@@ -63,9 +70,10 @@ test("a cancelled write raises the base's Cancelled from the receipt", () => {
 
 test("any other failure is the server's own error, never a shown refusal", async () => {
   const root = createScope();
-  const stored = refusal("StoredDataInvalid");
-  expect(() => root.run(readReceipt, { input: { status: "failed", error: stored } })).toThrow(
-    stored,
+  const stored = root.settle(refusedWrite, { input: { kind: "StoredDataInvalid", payload: {} } });
+  if (stored.status !== "failed") return expect.unreachable("the write must fail");
+  expect(() => root.run(readReceipt, { input: stored })).toThrow(
+    expect.objectContaining({ kind: "StoredDataInvalid", payload: {} }),
   );
 
   const request = root.createSession();
