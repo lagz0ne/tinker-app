@@ -75,7 +75,11 @@ Better Auth owns one instance, so its plugins
 sit in `auth-sqlite`:
 
 - `jwt()` and `mcp()`, with DCR on and the
-  redirect allowlist checked at registration.
+  redirect allowlist checked at every client
+  write (register, create, update).
+  A loopback redirect needs
+  `application_type: "native"`: Better Auth
+  follows RFC 8252 7.3 there.
 - `deviceAuthorization()` with obelisk's code
   rules. Its public `/device*` routes are off.
   The component owns three routes instead:
@@ -85,12 +89,18 @@ sit in `auth-sqlite`:
   through Better Auth, so a code sign-in
   started from the OAuth login page goes on
   to the OAuth redirect.
-- New operations: `mcpCaller` (check the
+- New operations: `checkMcpToken` (check the
   bearer token; give the caller or the 401
   challenge), `approveSignin`, `listSignins`,
-  `endSignin`. The approver is the caller:
-  the browser signs in as the person
-  who approved.
+  `endSignin`. The approver is the caller
+  (the `mcpCaller` tag): the browser signs in
+  as the person who approved.
+- `checkMcpToken` takes the request's parts
+  as plain values and gives the challenge as
+  plain data (status, headers, body).
+  The route reads its `Request` and sends the
+  `Response`: only `handleAuth` is a named
+  protocol exception (ADR 0103).
 - `listSignins` hides the code of a waiting
   code that the caller did not approve.
   Obelisk has one owner; Tinker has many users.
