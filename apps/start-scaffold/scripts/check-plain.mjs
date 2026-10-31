@@ -863,6 +863,10 @@ const navigatorType = checker.resolveName("Navigator", undefined, ts.SymbolFlags
 assert.ok(navigatorType, "the project must declare Navigator");
 const builtinBeacon = checker.getDeclaredTypeOfSymbol(navigatorType).getProperty("sendBeacon");
 assert.ok(builtinBeacon, "Navigator must declare sendBeacon");
+const builtinSet = checker.resolveName("Set", undefined, ts.SymbolFlags.Value, false);
+assert.ok(builtinSet, "the project must declare built-in Set");
+const builtinMap = checker.resolveName("Map", undefined, ts.SymbolFlags.Value, false);
+assert.ok(builtinMap, "the project must declare built-in Map");
 
 const browserHttpDeclarations = new Set([
   ...builtinXhr.declarations,
@@ -1191,18 +1195,75 @@ function collectionEntry(node, kind) {
   return literalValue(node);
 }
 
-/** One added, removed, or set member mutates the binding, so it is no static value. */
-function collectionMutation(use) {
+/** Members that only read a Set or Map. */
+const collectionReads = ["has", "get", "forEach", "keys", "values", "entries"];
+
+/** The built-in Set or Map a new expression calls, so a local Set is refused. */
+function collectionKind(node) {
+  const symbol = locationSymbol(unwrap(node.expression));
+  if (symbol === builtinSet) return "Set";
+  return symbol === builtinMap ? "Map" : undefined;
+}
+
+/** An identifier lifted through a qualified name and its value wrappers. */
+function liftedReference(use) {
+  let ref = use;
+  while (ts.isPropertyAccessExpression(ref.parent) && ref.parent.name === ref) ref = ref.parent;
+  while (
+    ts.isParenthesizedExpression(ref.parent) ||
+    ts.isAsExpression(ref.parent) ||
+    ts.isTypeAssertionExpression(ref.parent) ||
+    ts.isNonNullExpression(ref.parent) ||
+    ts.isSatisfiesExpression(ref.parent)
+  ) {
+    ref = ref.parent;
+  }
+  return ref;
+}
+
+/** Import, export, and type references never read the value at runtime. */
+function nameOnlyUse(use) {
   const parent = use.parent;
-  const member =
-    ts.isPropertyAccessExpression(parent) && parent.expression === use
-      ? parent.name.text
-      : ts.isElementAccessExpression(parent) &&
-          parent.expression === use &&
-          ts.isStringLiteralLike(parent.argumentExpression)
-        ? parent.argumentExpression.text
-        : undefined;
-  return ["add", "delete", "clear", "set"].includes(member);
+  return (
+    ts.isImportSpecifier(parent) ||
+    ts.isImportClause(parent) ||
+    ts.isNamespaceImport(parent) ||
+    ts.isExportSpecifier(parent) ||
+    typeReference(use)
+  );
+}
+
+/** A member access that only reads the binding: size once, the rest as a call. */
+function collectionRead(ref) {
+  const parent = ref.parent;
+  if (!ts.isPropertyAccessExpression(parent) || parent.expression !== ref) return false;
+  if (parent.name.text === "size") return true;
+  if (!collectionReads.includes(parent.name.text)) return false;
+  return ts.isCallExpression(parent.parent) && parent.parent.expression === parent;
+}
+
+/** A member read, an iteration, or a spread keeps the binding a value. */
+function valueUse(ref) {
+  const parent = ref.parent;
+  return (
+    collectionRead(ref) ||
+    (ts.isForOfStatement(parent) && parent.expression === ref) ||
+    (ts.isSpreadElement(parent) && parent.expression === ref)
+  );
+}
+
+/** Every use only reads the binding, so the literal Set or Map stays a static value. */
+function collectionReadOnly(symbol, name) {
+  let escaped = false;
+
+  for (const source of sources) {
+    walk(source, (use) => {
+      if (escaped || !ts.isIdentifier(use) || use === name || symbolOf(use) !== symbol) return;
+      if (!nameOnlyUse(use) && !valueUse(liftedReference(use))) escaped = true;
+    });
+  }
+
+  return !escaped;
 }
 
 /** The module-level const declaration a value initializes, or undefined. */
@@ -1229,37 +1290,23 @@ function moduleConstantDeclaration(node) {
   return declaration;
 }
 
-/** Nothing in the app adds, deletes, clears, or sets a member of the binding. */
-function collectionMutated(symbol, name) {
-  let mutated = false;
-
-  for (const source of sources) {
-    walk(source, (use) => {
-      if (mutated || !ts.isIdentifier(use) || use === name || symbolOf(use) !== symbol) return;
-      if (collectionMutation(use)) mutated = true;
-    });
-  }
-
-  return mutated;
-}
-
-/** One array argument of literals that nothing mutates is a static value. */
-function literalCollection(node, declaration) {
+/** One array argument of literals that nothing reads beyond its members is a value. */
+function literalCollection(node, kind, declaration) {
   const [argument] = node.arguments ?? [];
   if (node.arguments?.length !== 1 || !ts.isArrayLiteralExpression(argument)) return false;
 
-  const kind = nameOf(node.expression);
   if (!argument.elements.every((element) => collectionEntry(element, kind))) return false;
 
-  return !collectionMutated(symbolOf(declaration.name), declaration.name);
+  return collectionReadOnly(symbolOf(declaration.name), declaration.name);
 }
 
 /** A const Set or Map of literals is a static value, like a const lookup table. */
 function staticCollectionValue(node) {
-  if (!ts.isNewExpression(node) || !["Set", "Map"].includes(nameOf(node.expression))) return false;
+  const kind = ts.isNewExpression(node) ? collectionKind(node) : undefined;
+  if (!kind) return false;
 
   const declaration = moduleConstantDeclaration(node);
-  return declaration !== undefined && literalCollection(node, declaration);
+  return declaration !== undefined && literalCollection(node, kind, declaration);
 }
 
 function checkService(node) {
@@ -2923,6 +2970,31 @@ if (process.argv.includes("--prove")) {
       'export const words = new Set(["a"]);\nwords.add("b");',
     ],
     [
+      "module-set-read-allowed",
+      null,
+      'import {operation} from "@tinker/core"; export const words = new Set(["a", "b"]);\nexport const many = [...words].length + words.size;\nexport const probe = operation({run: () => words.has("a")});',
+    ],
+    [
+      "module-set-from-binding",
+      "module-effect",
+      'const base = ["a"];\nexport const words = new Set(base);',
+    ],
+    [
+      "module-set-paren-mutated",
+      "module-effect",
+      'export const words = new Set(["a"]);\nexport function grow() { (words).add("b"); }',
+    ],
+    [
+      "module-set-passed",
+      "module-effect",
+      'export const words = new Set(["a"]);\nexport const probe = [words];',
+    ],
+    [
+      "module-set-local-constructor",
+      "module-effect",
+      'function Set(values: string[]) { return values; }\nexport const words = new Set(["a"]);',
+    ],
+    [
       "run-nested-recursion-allowed",
       null,
       'import {operation} from "@tinker/core"; export const probe = operation({run: () => { function depth(n: number): number { return n <= 0 ? 0 : 1 + depth(n - 1); } return depth(3); }});',
@@ -2973,6 +3045,15 @@ if (process.argv.includes("--prove")) {
     .find((arg) => arg.startsWith("--cases="))
     ?.slice(8)
     .split(",");
+
+  // A literal Set or Map case fails at its own line: the declaration, never the use.
+  const collectionLines = new Map([
+    ["module-set-mutated", "src/plain-probe.ts:1: module-effect"],
+    ["module-set-paren-mutated", "src/plain-probe.ts:1: module-effect"],
+    ["module-set-passed", "src/plain-probe.ts:1: module-effect"],
+    ["module-set-from-binding", "src/plain-probe.ts:2: module-effect"],
+    ["module-set-local-constructor", "src/plain-probe.ts:2: module-effect"],
+  ]);
   const selected = names ? cases.filter(([name]) => names.includes(name)) : cases;
   if (names) assert.equal(selected.length, names.length, "unknown planted case");
 
@@ -3024,11 +3105,9 @@ if (process.argv.includes("--prove")) {
 
       assert.equal(red.status, rule ? 1 : 0, name);
       if (rule) assert.ok(red.stderr.includes(rule), `${name}: must fail by ${rule}`);
-      if (name === "module-set-mutated") {
-        assert.ok(
-          red.stderr.split("\n").includes("src/plain-probe.ts:1: module-effect"),
-          "module-set-mutated: must fail at the new Set line",
-        );
+      const line = collectionLines.get(name);
+      if (line) {
+        assert.ok(red.stderr.split("\n").includes(line), `must fail at ${line}`);
       }
       if (name === "error-registry-one-caller") {
         assert.ok(
