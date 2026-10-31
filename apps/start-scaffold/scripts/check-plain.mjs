@@ -1163,6 +1163,105 @@ function staticProtocolValue(node) {
   return false;
 }
 
+/** A literal value: a string, template, number, negative number, boolean, or null. */
+function literalValue(node) {
+  node = unwrap(node);
+  return (
+    ts.isStringLiteral(node) ||
+    ts.isNoSubstitutionTemplateLiteral(node) ||
+    ts.isNumericLiteral(node) ||
+    (ts.isPrefixUnaryExpression(node) &&
+      node.operator === ts.SyntaxKind.MinusToken &&
+      ts.isNumericLiteral(node.operand)) ||
+    [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(
+      node.kind,
+    )
+  );
+}
+
+/** A Set element is one literal; a Map entry is a two-item array of literals. */
+function collectionEntry(node, kind) {
+  if (kind === "Map") {
+    return (
+      ts.isArrayLiteralExpression(node) &&
+      node.elements.length === 2 &&
+      node.elements.every(literalValue)
+    );
+  }
+  return literalValue(node);
+}
+
+/** One added, removed, or set member mutates the binding, so it is no static value. */
+function collectionMutation(use) {
+  const parent = use.parent;
+  const member =
+    ts.isPropertyAccessExpression(parent) && parent.expression === use
+      ? parent.name.text
+      : ts.isElementAccessExpression(parent) &&
+          parent.expression === use &&
+          ts.isStringLiteralLike(parent.argumentExpression)
+        ? parent.argumentExpression.text
+        : undefined;
+  return ["add", "delete", "clear", "set"].includes(member);
+}
+
+/** The module-level const declaration a value initializes, or undefined. */
+function moduleConstantDeclaration(node) {
+  const declaration = node.parent;
+  if (
+    !ts.isVariableDeclaration(declaration) ||
+    !declaration.initializer ||
+    unwrap(declaration.initializer) !== node
+  ) {
+    return undefined;
+  }
+
+  const list = declaration.parent;
+  if (
+    !ts.isVariableDeclarationList(list) ||
+    (list.flags & ts.NodeFlags.Const) === 0 ||
+    !ts.isVariableStatement(list.parent) ||
+    list.parent.parent !== node.getSourceFile()
+  ) {
+    return undefined;
+  }
+
+  return declaration;
+}
+
+/** Nothing in the app adds, deletes, clears, or sets a member of the binding. */
+function collectionMutated(symbol, name) {
+  let mutated = false;
+
+  for (const source of sources) {
+    walk(source, (use) => {
+      if (mutated || !ts.isIdentifier(use) || use === name || symbolOf(use) !== symbol) return;
+      if (collectionMutation(use)) mutated = true;
+    });
+  }
+
+  return mutated;
+}
+
+/** One array argument of literals that nothing mutates is a static value. */
+function literalCollection(node, declaration) {
+  const [argument] = node.arguments ?? [];
+  if (node.arguments?.length !== 1 || !ts.isArrayLiteralExpression(argument)) return false;
+
+  const kind = nameOf(node.expression);
+  if (!argument.elements.every((element) => collectionEntry(element, kind))) return false;
+
+  return !collectionMutated(symbolOf(declaration.name), declaration.name);
+}
+
+/** A const Set or Map of literals is a static value, like a const lookup table. */
+function staticCollectionValue(node) {
+  if (!ts.isNewExpression(node) || !["Set", "Map"].includes(nameOf(node.expression))) return false;
+
+  const declaration = moduleConstantDeclaration(node);
+  return declaration !== undefined && literalCollection(node, declaration);
+}
+
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
@@ -1174,7 +1273,7 @@ function checkService(node) {
 }
 
 function checkModuleEffect(node) {
-  if (isCommand(node) || staticProtocolValue(node)) return;
+  if (isCommand(node) || staticProtocolValue(node) || staticCollectionValue(node)) return;
   if (!moduleDeclarationCall(node)) fail(node, "module-effect");
 }
 
@@ -2800,6 +2899,18 @@ if (process.argv.includes("--prove")) {
       null,
       'import { z } from "zod"; export const Probe = z.looseObject({ a: z.string() });',
     ],
+    ["module-literal-set-allowed", null, 'export const words = new Set(["a", "b"]);'],
+    ["module-literal-map-allowed", null, 'export const pairs = new Map([["a", 1], ["b", 2]]);'],
+    [
+      "module-set-from-call",
+      "module-effect",
+      'export const words = new Set(["a", "b"].map((w) => w));',
+    ],
+    [
+      "module-set-mutated",
+      "module-effect",
+      'export const words = new Set(["a"]);\nwords.add("b");',
+    ],
     ...[
       "new Date()",
       "Date()",
@@ -2892,6 +3003,12 @@ if (process.argv.includes("--prove")) {
 
       assert.equal(red.status, rule ? 1 : 0, name);
       if (rule) assert.ok(red.stderr.includes(rule), `${name}: must fail by ${rule}`);
+      if (name === "module-set-mutated") {
+        assert.ok(
+          red.stderr.split("\n").includes("src/plain-probe.ts:1: module-effect"),
+          "module-set-mutated: must fail at the new Set line",
+        );
+      }
       if (name === "error-registry-one-caller") {
         assert.ok(
           red.stderr.split("\n").includes("tinker/components/one-caller/errors.ts:3: two-sites"),
