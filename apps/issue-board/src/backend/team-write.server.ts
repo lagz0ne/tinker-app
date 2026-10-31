@@ -8,7 +8,7 @@ import type { Sync } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
 
 import { rowChange } from "@/demo/contracts/sync";
-import { raise } from "@/demo/errors";
+import type { Errors } from "@/demo/errors";
 
 import { team, teamMember } from "./board.schema.server";
 
@@ -35,7 +35,7 @@ export const lockTeamWrite = operation({
     history: eventHistory,
     seen: executionSeen.controller,
   },
-  run: async ({ tx, orm, history, seen }, { input }) => {
+  run: async ({ tx, orm, history, seen }, { input, raise }) => {
     const { eq, sql } = orm;
     const members = await tx
       .select({ id: teamMember.userId, email: user.email })
@@ -43,10 +43,12 @@ export const lockTeamWrite = operation({
       .innerJoin(user, eq(user.id, teamMember.userId))
       .where(eq(teamMember.teamId, input.teamId))
       .orderBy(sql`${teamMember.userId} collate "C"`);
-    if (!members.some((member) => member.id === input.actorId)) raise("NotTeamMember", {});
+    if (!members.some((member) => member.id === input.actorId)) {
+      return raise("NotTeamMember", {} satisfies Errors.Payload<"NotTeamMember">);
+    }
     for (const member of members) await history.lock(tx, member.id);
     if (input.assigneeId != null && !members.some((member) => member.id === input.assigneeId)) {
-      raise("InvalidAssignee", {});
+      return raise("InvalidAssignee", {} satisfies Errors.Payload<"InvalidAssignee">);
     }
 
     if (
@@ -62,7 +64,7 @@ export const lockTeamWrite = operation({
       .from(teamMember)
       .where(eq(teamMember.teamId, input.teamId));
     if (current.some((member) => !members.some((locked) => locked.id === member.id))) {
-      raise("TeamChanged", {});
+      return raise("TeamChanged", {} satisfies Errors.Payload<"TeamChanged">);
     }
     const [locked] = await tx
       .select()
