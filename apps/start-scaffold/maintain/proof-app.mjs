@@ -122,15 +122,14 @@ export async function wireProofMail(consumer) {
 /** A built command must reject before serving when its required binding is omitted. */
 export const missingMailChild = `
 import assert from "node:assert/strict";
+import { createMainHost } from "@tinker/start/main-host";
 const { default: main } = await import("./dist/server/server.js");
-const stop = new AbortController();
-let code;
-let reason;
-const app = await main({ env: process.env, args: [], signal: stop.signal, stdout: process.stdout, stderr: process.stderr, exit(value, error) { code=value; reason=error; stop.abort(error); } });
-await app.closed;
-assert.equal(code, 78);
-assert.equal(reason.kind, "MissingTag");
-assert.equal(reason.payload.label, "mail.from");
+let errors = "";
+// The Start host owns the exit code of a command that throws at startup.
+const host = createMainHost(main, { env: process.env, args: [], stdout: process.stdout, stderr: { write(text) { errors += text; } } });
+await host.started.catch(() => {});
+assert.equal(await host.closed, 78);
+assert.ok(errors.includes('command failed (exit 78): MissingTag: {"label":"mail.from"}'), errors);
 console.log("PASS: command startup rejects MissingTag mail.from before serving.");
 `;
 
