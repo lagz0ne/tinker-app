@@ -5,7 +5,7 @@ import { profile, pending, notice, authMode } from "@/demo/frontend/state";
 
 import { signIn, setAuthMode } from "./auth-actions";
 import { Counter } from "./Counter";
-import { errorText } from "./error-text";
+import { FailureAlert } from "./failures";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Input } from "./ui/input";
@@ -93,9 +93,7 @@ function AccountForm() {
       <Button className="w-full" disabled={busy}>
         {busy ? "Working…" : mode === "signup" ? "Make account" : "Sign in"}
       </Button>
-      <p role="alert" className="text-sm text-destructive">
-        {errorText(action.error)}
-      </p>
+      <FailureAlert error={action.error} className="text-sm text-destructive" />
     </form>
   );
 }

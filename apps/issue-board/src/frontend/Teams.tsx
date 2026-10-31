@@ -10,7 +10,7 @@ import { profile, teams } from "@/demo/frontend/state";
 import { updateTeam } from "@/transport/teams.functions";
 
 import { signOut } from "./auth-actions";
-import { errorText } from "./error-text";
+import { FailureAlert } from "./failures";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Input } from "./ui/input";
@@ -103,7 +103,7 @@ export function Teams() {
           </form>
         </CardContent>
       </Card>
-      <p role="alert">{errorText(save.error) || errorText(exit.error)}</p>
+      <FailureAlert error={save.error || exit.error} />
       {rows.length === 0 && <p>No teams yet. Make your first team.</p>}
       {rows.map((row) => (
         <Card key={row.id}>

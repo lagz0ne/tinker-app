@@ -11,7 +11,10 @@ export const updateCounter = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
   .validator(readExecution)
   .handler(async ({ context, data }) =>
-    readReceipt(
-      await context.session.settle(incrementCounter, { input: data, signal: context.signal }),
-    ),
+    context.session.run(readReceipt, {
+      input: await context.session.settle(incrementCounter, {
+        input: data,
+        signal: context.signal,
+      }),
+    }),
   );
