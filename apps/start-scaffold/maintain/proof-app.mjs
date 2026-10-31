@@ -250,6 +250,7 @@ test("the copied SQLite set migrates, and a committed notify is heard", async ()
     "20261028000100_sync.sql",
     "20261028000200_auth.sql",
     "20261030000000_sync_public.sql",
+    "20261031000000_blobs.sql",
   ]);
 }, 30_000);
 `;

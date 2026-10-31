@@ -134,7 +134,7 @@ try {
   const sqliteTinker = join(sqliteApp, "node_modules/.bin/tinker");
   const added = run(sqliteTinker, ["add", "database-sqlite", "--registry", url], sqliteApp);
   const toolchain = printedToolchain(added);
-  for (const name of ["sync-sqlite", "auth-sqlite"]) {
+  for (const name of ["sync-sqlite", "auth-sqlite", "blobs-sqlite"]) {
     const more = run(sqliteTinker, ["add", name, "--registry", url], sqliteApp);
     assert.ok(!more.includes("Paste into your toolchain"), `${name}: the toolchain prints once`);
   }
@@ -167,7 +167,7 @@ try {
   run(sqliteTinker, ["check", "--registry", url], sqliteApp);
   run(sqliteTinker, ["doctor"], sqliteApp);
   console.log(
-    "PASS: an app item app adds database-sqlite, sync-sqlite and auth-sqlite, pastes the printed toolchain, builds, type-checks with --runExternalCode and runs a database test.",
+    "PASS: an app item app adds database-sqlite, sync-sqlite, auth-sqlite and blobs-sqlite, pastes the printed toolchain, builds, type-checks with --runExternalCode and runs a database test.",
   );
 
   assert.deepEqual(await readdir(consumer), []);
