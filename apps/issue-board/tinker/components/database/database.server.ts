@@ -223,7 +223,12 @@ export const migrate = operation({
     orm: drizzleOrm,
     timeout: databaseMigrationTimeout,
   },
-  run: async ({ database, pgCore, migrator, orm, timeout }, { clock, signal, raise }) => {
+  run: async (
+    { database, pgCore, migrator, orm, timeout },
+    { clock, signal, raise: coreRaise },
+  ) => {
+    const raise: Errors.Raise = coreRaise;
+
     if (!database.checkout) throw new Error("Migration requires a dedicated connection");
     const lease = await database.checkout();
     const lock = orm.sql`SELECT pg_try_advisory_lock(${migrationLockKey[0]}, ${migrationLockKey[1]}) AS owned`;
@@ -245,7 +250,7 @@ export const migrate = operation({
           .parse(await lease.db.execute(lock));
         if (result.rows[0]!.owned) break;
         if (clock.currentTimeMillis() >= deadline) {
-          return raise("MigrationBusy", { timeout } satisfies Errors.Payloads["MigrationBusy"]);
+          return raise("MigrationBusy", { timeout });
         }
         await clock.sleep(Math.min(50, deadline - clock.currentTimeMillis()), signal);
       }
@@ -290,8 +295,10 @@ export const transaction = resource({
   },
   factory: async (
     { database, lockTimeout, statementTimeout },
-    { defer, raise },
+    { defer, raise: coreRaise },
   ): Promise<Database.SessionTransaction> => {
+    const raise: Errors.Raise = coreRaise;
+
     if (!database.checkout) throw new Error("Database preset must supply checkout for writes");
     let state: "idle" | "open" | "committed" | "rolledBack" = "idle";
     let starting: Promise<unknown> | undefined;
@@ -303,12 +310,12 @@ export const transaction = resource({
     const lease = await database.checkout({
       check() {
         if (state === "committed" || state === "rolledBack") {
-          return raise("TransactionEnded", {} satisfies Errors.Payloads["TransactionEnded"]);
+          return raise("TransactionEnded", {});
         }
       },
       async begin() {
         if (state === "committed" || state === "rolledBack") {
-          return raise("TransactionEnded", {} satisfies Errors.Payloads["TransactionEnded"]);
+          return raise("TransactionEnded", {});
         }
         if (state === "idle") {
           state = "open";
@@ -328,7 +335,7 @@ export const transaction = resource({
     });
     const tx = Object.assign(lease.db, {
       transaction() {
-        return raise("NestedTransaction", {} satisfies Errors.Payloads["NestedTransaction"]);
+        return raise("NestedTransaction", {});
       },
       commit() {
         if (state === "committed" || state === "rolledBack") return Promise.resolve();

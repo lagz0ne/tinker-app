@@ -46,8 +46,10 @@ export const signIn = operation({
   },
   run: async (
     { client, sync, snapshots, pending, notice },
-    { defer, input, signal, log, raise },
+    { defer, input, signal, log, raise: coreRaise },
   ) => {
+    const raise: Errors.Raise = coreRaise;
+
     pending.set(true);
     notice.set("");
     defer(() => pending.set(false));
@@ -63,7 +65,7 @@ export const signIn = operation({
     if (result.error) {
       return raise("AuthFailed", {
         message: result.error.message ?? "Sign in failed.",
-      } satisfies Errors.Payload<"AuthFailed">);
+      });
     }
 
     await snapshots.completeAccountChange(signal, change);
@@ -75,12 +77,14 @@ export const signIn = operation({
 export const signOut = operation({
   label: "signOut",
   depends: { client: authClient, sync: syncClient, notice: notice.controller },
-  run: async ({ client, sync, notice }, { signal, raise }) => {
+  run: async ({ client, sync, notice }, { signal, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const result = await client.signOut({ fetchOptions: { signal: signal } });
     if (result.error) {
       return raise("AuthFailed", {
         message: result.error.message ?? "Sign out failed.",
-      } satisfies Errors.Payload<"AuthFailed">);
+      });
     }
     sync.leave();
     notice.set("You are signed out. Committed changes remain saved.");

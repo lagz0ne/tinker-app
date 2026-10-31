@@ -8,5 +8,9 @@ import type { Errors } from "~/components/errors";
  */
 export const cancelledCall = operation({
   label: "request.cancelled",
-  run: (_deps, { raise }) => raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]),
+  run: (_deps, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
+    return raise("Cancelled", {});
+  },
 });

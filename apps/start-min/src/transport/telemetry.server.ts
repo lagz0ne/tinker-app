@@ -12,6 +12,7 @@ export const telemetryReceive = operation({
   depends: { read: receiveTelemetry.controller, stop: requestStop.required },
   run: async ({ read, stop }, { input, raise: coreRaise }) => {
     const raise: Errors.Raise = coreRaise;
+
     const result = await read.settle({ rawInput: input, signal: stop });
 
     if (result.status === "failed") throw result.error;

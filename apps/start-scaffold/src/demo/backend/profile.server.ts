@@ -44,13 +44,15 @@ const notifyProfile = operation({
   label: "notifyProfile",
   input: readExecution,
   depends: { orm: drizzleOrm, database, history: eventHistory, send: sendMail },
-  run: async ({ orm, database, history, send }, { input, raise }) => {
+  run: async ({ orm, database, history, send }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { eq } = orm;
     const stored = (
       await database.select().from(execution).where(eq(execution.id, input.executionId))
     ).at(0);
     if (!stored?.notification) {
-      return raise("RetryNotAvailable", {} satisfies Errors.Payload<"RetryNotAvailable">);
+      return raise("RetryNotAvailable", {});
     }
     if (stored.result) return;
 
@@ -111,10 +113,15 @@ export const saveProfile = operation({
     history: eventHistory,
     notify: notificationWork,
   },
-  run: async ({ orm, currentUser, database, history, notify }, { input, clock, raise }) => {
+  run: async (
+    { orm, currentUser, database, history, notify },
+    { input, clock, raise: coreRaise },
+  ) => {
+    const raise: Errors.Raise = coreRaise;
+
     const parsed = readProfileInput.safeParse(input.profile);
     if (!parsed.success) {
-      return raise("BadInput", { reason: profileRefusal } satisfies Errors.Payload<"BadInput">);
+      return raise("BadInput", { reason: profileRefusal });
     }
     const profile = parsed.data;
     const { eq } = orm;
@@ -136,7 +143,7 @@ export const saveProfile = operation({
           })
       ).at(0);
       if (!saved) {
-        return raise("SignInRequired", {} satisfies Errors.Payload<"SignInRequired">);
+        return raise("SignInRequired", {});
       }
 
       await tx.insert(execution).values({
@@ -168,18 +175,20 @@ export const retryNotification = operation({
     history: eventHistory,
     notify: notificationWork,
   },
-  run: async ({ currentUser, database, history, notify }, { input, raise }) => {
+  run: async ({ currentUser, database, history, notify }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     await database.transaction(async (tx) => {
       await history.lock(tx, currentUser.id);
       if (await history.find(tx, input.executionId, currentUser.id)) return;
 
       const previous = await history.find(tx, input.previousExecutionId, currentUser.id);
       if (!previous?.notification || !previous.result) {
-        return raise("RetryNotAvailable", {} satisfies Errors.Payload<"RetryNotAvailable">);
+        return raise("RetryNotAvailable", {});
       }
       const result = readFeatureResult.safeParse(previous.result);
       if (!result.success || result.data.kind !== "partial") {
-        return raise("RetryNotAvailable", {} satisfies Errors.Payload<"RetryNotAvailable">);
+        return raise("RetryNotAvailable", {});
       }
 
       await tx.insert(execution).values({

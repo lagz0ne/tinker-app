@@ -124,7 +124,9 @@ const notificationWheel = resource({
 export const notifications = resource({
   label: "sync.notifications",
   depends: { database, wheel: notificationWheel, notice: accountNotice },
-  factory: async ({ database, wheel, notice }, { defer, raise }) => {
+  factory: async ({ database, wheel, notice }, { defer, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const accountPrefix = notice.run({ input: "" });
 
     let revision = 0;
@@ -208,7 +210,7 @@ export const notifications = resource({
         const connected = await opened;
         if (connected.kind === "failed") throw connected.error;
         if (broken || opened !== connection) {
-          return raise("StreamDisconnected", {} satisfies Errors.Payloads["StreamDisconnected"]);
+          return raise("StreamDisconnected", {});
         }
 
         const subscriber: Subscriber = {
@@ -240,7 +242,7 @@ export const notifications = resource({
           .then((result) => {
             if (result.status === "failed") throw result.error;
             if (result.status === "cancelled") {
-              return raise("Cancelled", {} satisfies Errors.Payloads["Cancelled"]);
+              return raise("Cancelled", {});
             }
             return result.value;
           })

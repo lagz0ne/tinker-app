@@ -37,7 +37,9 @@ export const bootstrapPublic = operation({
 export const bootstrapPrivate = operation({
   label: "bootstrapPrivate",
   depends: { orm: drizzleOrm, currentUser, database, history: eventHistory },
-  run: ({ orm, currentUser, database, history }, { raise }) => {
+  run: ({ orm, currentUser, database, history }, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { asc, eq, sql } = orm;
     return database.transaction(
       async (tx) => {
@@ -54,7 +56,7 @@ export const bootstrapPrivate = operation({
             .where(eq(user.id, currentUser.id))
         ).at(0);
         if (!profile) {
-          return raise("SignInRequired", {} satisfies Errors.Payload<"SignInRequired">);
+          return raise("SignInRequired", {});
         }
         const todos = await tx
           .select({ id: todo.id, title: todo.title, done: todo.done })
@@ -122,7 +124,9 @@ export const replayPublic = operation({
   label: "replayPublic",
   input: readCursor,
   depends: { orm: drizzleOrm, database, principal },
-  run: async ({ orm, database, principal }, { input, raise }) => {
+  run: async ({ orm, database, principal }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { and, asc, eq, gt } = orm;
     const events = readFeatureEvents.safeParse(
       await database
@@ -133,7 +137,7 @@ export const replayPublic = operation({
         .limit(200),
     );
     if (!events.success) {
-      return raise("StoredDataInvalid", {} satisfies Errors.Payload<"StoredDataInvalid">);
+      return raise("StoredDataInvalid", {});
     }
     return { accountId: principal?.id ?? null, events: events.data };
   },
@@ -143,10 +147,12 @@ export const replayPrivate = operation({
   label: "replayPrivate",
   input: readPrivateCursor,
   depends: { orm: drizzleOrm, currentUser, database },
-  run: async ({ orm, currentUser, database }, { input, raise }) => {
+  run: async ({ orm, currentUser, database }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { and, asc, eq, gt } = orm;
     if (input.accountId !== currentUser.id) {
-      return raise("StreamDenied", {} satisfies Errors.Payload<"StreamDenied">);
+      return raise("StreamDenied", {});
     }
     const events = readFeatureEvents.safeParse(
       await database
@@ -157,7 +163,7 @@ export const replayPrivate = operation({
         .limit(200),
     );
     if (!events.success) {
-      return raise("StoredDataInvalid", {} satisfies Errors.Payload<"StoredDataInvalid">);
+      return raise("StoredDataInvalid", {});
     }
     return events.data;
   },

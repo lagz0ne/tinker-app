@@ -32,7 +32,9 @@ export const readTeam = operation({
   label: "teams.read",
   input: teamInput,
   depends: { database, orm: drizzleOrm, currentUser },
-  run: async ({ database, orm, currentUser }, { input, raise }) => {
+  run: async ({ database, orm, currentUser }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { eq, and } = orm;
 
     const row = (
@@ -43,7 +45,7 @@ export const readTeam = operation({
         .where(and(eq(team.id, input.teamId), eq(teamMember.userId, currentUser.id)))
     ).at(0);
     if (!row) {
-      return raise("NotTeamMember", {} satisfies Errors.Payload<"NotTeamMember">);
+      return raise("NotTeamMember", {});
     }
 
     return row;
@@ -54,11 +56,13 @@ export const authorizeTeamJoin = operation({
   label: "teams.authorizeJoin",
   input: teamCommand,
   depends: { tx: transaction, orm: drizzleOrm, currentUser },
-  run: async ({ tx, orm, currentUser }, { input, raise }) => {
+  run: async ({ tx, orm, currentUser }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     if (input.change.kind !== "addMember") {
       return raise("BadInput", {
         reason: "Expected member join",
-      } satisfies Errors.Payload<"BadInput">);
+      });
     }
     const { eq, and } = orm;
     const change = input.change;
@@ -67,10 +71,10 @@ export const authorizeTeamJoin = operation({
       .from(teamMember)
       .where(and(eq(teamMember.teamId, change.teamId), eq(teamMember.userId, currentUser.id)));
     if (!member) {
-      return raise("NotTeamMember", {} satisfies Errors.Payload<"NotTeamMember">);
+      return raise("NotTeamMember", {});
     }
     if (member.role !== "admin") {
-      return raise("TeamAdminRequired", {} satisfies Errors.Payload<"TeamAdminRequired">);
+      return raise("TeamAdminRequired", {});
     }
 
     const [target] = await tx
@@ -78,7 +82,7 @@ export const authorizeTeamJoin = operation({
       .from(user)
       .where(eq(user.email, change.email.toLowerCase()));
     if (!target) {
-      return raise("UserNotFound", {} satisfies Errors.Payload<"UserNotFound">);
+      return raise("UserNotFound", {});
     }
     return target.id;
   },
@@ -88,7 +92,9 @@ export const saveTeam = operation({
   label: "teams.save",
   input: z.object({ command: teamCommand, targetId: z.string().optional() }),
   depends: { tx: transaction, currentUser, history: eventHistory, seen: executionSeen.controller },
-  run: async ({ tx, currentUser, history, seen }, { input, random, raise }) => {
+  run: async ({ tx, currentUser, history, seen }, { input, random, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { command, targetId } = input;
     const change = command.change;
     const streams = [...new Set([currentUser.id, ...(targetId ? [targetId] : [])])].sort();
@@ -105,7 +111,7 @@ export const saveTeam = operation({
         .onConflictDoNothing({ target: team.key })
         .returning();
       if (!saved.length) {
-        return raise("TeamKeyTaken", {} satisfies Errors.Payload<"TeamKeyTaken">);
+        return raise("TeamKeyTaken", {});
       }
       await tx.insert(teamMember).values({ teamId: id, userId: currentUser.id, role: "admin" });
       return { teamId: id, streams };

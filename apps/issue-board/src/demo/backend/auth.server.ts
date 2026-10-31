@@ -8,9 +8,11 @@ export const currentUser = resource({
   label: "request.currentUser",
   target: "session",
   depends: { principal },
-  factory: async ({ principal }, { raise }) => {
+  factory: async ({ principal }, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     if (principal === null) {
-      return raise("SignInRequired", {} satisfies Errors.Payload<"SignInRequired">);
+      return raise("SignInRequired", {});
     }
     return principal;
   },

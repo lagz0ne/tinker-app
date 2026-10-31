@@ -14,7 +14,9 @@ export const saveComment = operation({
   label: "comments.save",
   input: z.object({ command: commentCommand, teamKey: z.string() }),
   depends: { tx: transaction, orm: drizzleOrm, currentUser },
-  run: async ({ tx, orm, currentUser }, { input, random, clock, raise }) => {
+  run: async ({ tx, orm, currentUser }, { input, random, clock, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { eq, and } = orm;
     const draft = input.command.comment;
     const [target] = await tx
@@ -22,7 +24,7 @@ export const saveComment = operation({
       .from(issue)
       .where(and(eq(issue.id, draft.issueId), eq(issue.teamId, draft.teamId)));
     if (!target) {
-      return raise("IssueMissing", {} satisfies Errors.Payload<"IssueMissing">);
+      return raise("IssueMissing", {});
     }
 
     const [saved] = await tx

@@ -36,7 +36,9 @@ export const readIssue = operation({
   label: "issues.read",
   input: issueCommand,
   depends: { tx: transaction, orm: drizzleOrm },
-  run: async ({ tx, orm }, { input, raise }) => {
+  run: async ({ tx, orm }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const change = input.change;
 
     if (change.kind === "create") return null;
@@ -49,7 +51,7 @@ export const readIssue = operation({
       .where(and(eq(issue.id, change.id), eq(issue.teamId, change.teamId)));
 
     if (!current) {
-      return raise("IssueMissing", {} satisfies Errors.Payload<"IssueMissing">);
+      return raise("IssueMissing", {});
     }
 
     return current;
@@ -63,13 +65,15 @@ export const rankIssue = operation({
     beforeId: z.uuid().nullable(),
   }),
   depends: { fractionalIndex },
-  run: async ({ fractionalIndex }, { input, raise }) => {
+  run: async ({ fractionalIndex }, { input, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { rows, beforeId } = input;
 
     const position = beforeId === null ? rows.length : rows.findIndex((row) => row.id === beforeId);
 
     if (position < 0) {
-      return raise("InvalidPosition", {} satisfies Errors.Payload<"InvalidPosition">);
+      return raise("InvalidPosition", {});
     }
 
     const lower = (rows[position - 1] ?? { rank: null }).rank;
@@ -77,7 +81,7 @@ export const rankIssue = operation({
     const upper = (rows[position] ?? { rank: null }).rank;
 
     if (lower === upper && lower !== null) {
-      return raise("InvalidPosition", {} satisfies Errors.Payload<"InvalidPosition">);
+      return raise("InvalidPosition", {});
     }
 
     return fractionalIndex.generateKeyBetween(lower, upper);
@@ -157,7 +161,9 @@ export const updateIssue = operation({
     rank: z.string(),
   }),
   depends: { tx: transaction, orm: drizzleOrm },
-  run: async ({ tx, orm }, { input, clock, raise }) => {
+  run: async ({ tx, orm }, { input, clock, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { eq, and, sql } = orm;
 
     const { change, rank } = input;
@@ -171,7 +177,7 @@ export const updateIssue = operation({
     if (change.kind === "remove") {
       const [removed] = await tx.delete(issue).where(guard).returning(issueRowFields);
       if (!removed) {
-        return raise("IssueConflict", {} satisfies Errors.Payload<"IssueConflict">);
+        return raise("IssueConflict", {});
       }
       return removed;
     }
@@ -195,7 +201,7 @@ export const updateIssue = operation({
     const [saved] = await tx.update(issue).set(values).where(guard).returning(issueRowFields);
 
     if (!saved) {
-      return raise("IssueConflict", {} satisfies Errors.Payload<"IssueConflict">);
+      return raise("IssueConflict", {});
     }
 
     return saved;

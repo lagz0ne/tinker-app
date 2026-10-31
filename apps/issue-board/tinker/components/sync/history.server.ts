@@ -14,24 +14,26 @@ import { stream, event, execution } from "~/components/sync/schema";
 export const eventHistory = resource({
   label: "sync.history",
   depends: { orm: drizzleOrm },
-  factory: async ({ orm }, { raise }) => {
+  factory: async ({ orm }, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
     const { eq, sql } = orm;
     return {
       async read(tx: Database.Transaction, id: string) {
         const [row] = await tx.select().from(stream).where(eq(stream.id, id));
-        if (!row) return raise("StreamMissing", {} satisfies Errors.Payloads["StreamMissing"]);
+        if (!row) return raise("StreamMissing", {});
         return row.revision;
       },
       async lock(tx: Database.Transaction, id: string) {
         await tx.insert(stream).values({ id }).onConflictDoNothing();
         const row = (await tx.select().from(stream).where(eq(stream.id, id)).for("update")).at(0);
-        if (!row) return raise("StreamMissing", {} satisfies Errors.Payloads["StreamMissing"]);
+        if (!row) return raise("StreamMissing", {});
         return row.revision;
       },
       async find(tx: Database.Transaction, id: string, owner: string) {
         const row = (await tx.select().from(execution).where(eq(execution.id, id))).at(0);
         if (row && row.stream !== owner) {
-          return raise("StreamDenied", {} satisfies Errors.Payloads["StreamDenied"]);
+          return raise("StreamDenied", {});
         }
         return row;
       },
@@ -48,7 +50,7 @@ export const eventHistory = resource({
             .where(eq(stream.id, owner))
             .returning()
         ).at(0);
-        if (!row) return raise("StreamMissing", {} satisfies Errors.Payloads["StreamMissing"]);
+        if (!row) return raise("StreamMissing", {});
         await tx.insert(event).values(
           payloads.map((payload, offset) => ({
             stream: owner,
