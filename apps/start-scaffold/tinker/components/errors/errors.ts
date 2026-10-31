@@ -8,6 +8,7 @@ export declare namespace Errors {
     StartSessionAlreadySet: Record<string, never>;
     StartScopeMissing: Record<string, never>;
     Cancelled: Record<string, never>;
+    McpNotInstalled: Record<string, never>;
 
     MigrationBusy: { timeout: number };
 
@@ -18,6 +19,7 @@ export declare namespace Errors {
     StreamDenied: Record<string, never>;
     StreamDisconnected: Record<string, never>;
     WriteRejected: { message: string };
+    Refused: { message: string };
   };
   type Name = keyof Payloads;
   type Of<N extends Name> = Error & { kind: N; payload: Payloads[N] };

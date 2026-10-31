@@ -60,6 +60,7 @@ for (const name of [
   "requests",
   "health",
   "http",
+  "mcp",
   "database",
   "auth",
   "telemetry",

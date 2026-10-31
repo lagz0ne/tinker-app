@@ -99,6 +99,7 @@ Tests and generated files do not count.
     - `tinker/components/auth/stream.server.ts#lease.open`
     - `tinker/components/auth/stream.server.ts#lease.wait`
     - `tinker/components/http/http.server.ts#httpRequest.run.callback1`
+    - `tinker/components/mcp/handle.server.ts#callTool.run`
     - `tinker/components/requests/render-lifetime.server.ts#retain`
     - `tinker/components/requests/start.ts#middleware.callback`
     - `tinker/components/sync-sqlite/client/sync.ts#client.execute`
@@ -147,6 +148,7 @@ Tests and generated files do not count.
     - `src/frontend/error-text.ts#errorText`
     - `src/routes/api.sync.ts#Route.GET`
     - `src/transport/result.server.ts#readReceipt`
+    - `tinker/components/mcp/handle.server.ts#mcpRuns.run`
 
 - **tinker/components/requests/result.server.ts#readResult**
   - `result`: `RunResult<T>`. From a settled boundary call; why: return its value or raise its failure.

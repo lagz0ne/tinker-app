@@ -675,6 +675,49 @@
       }
     },
     {
+      "name": "mcp",
+      "type": "registry:lib",
+      "title": "mcp",
+      "description": "Copied MCP server component. You own its files. It has no auth: the app checks the caller and binds the caller's tags on the handleMcp call.",
+      "dependencies": [
+        "@modelcontextprotocol/sdk@1.32.2",
+        "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
+        "zod@catalog:"
+      ],
+      "registryDependencies": ["@tinker-start/errors"],
+      "files": [
+        {
+          "path": "tinker/components/mcp/component.json",
+          "type": "registry:file",
+          "target": "~/tinker/components/mcp/component.json"
+        },
+        {
+          "path": "tinker/components/mcp/handle.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mcp/handle.server.ts"
+        },
+        {
+          "path": "tinker/components/mcp/index.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mcp/index.server.ts"
+        },
+        {
+          "path": "tinker/components/mcp/modules.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mcp/modules.ts"
+        },
+        {
+          "path": "tinker/components/mcp/tools.server.ts",
+          "type": "registry:file",
+          "target": "~/tinker/components/mcp/tools.server.ts"
+        }
+      ],
+      "meta": {
+        "ownership": "userland",
+        "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
+      }
+    },
+    {
       "name": "mail",
       "type": "registry:lib",
       "title": "mail",
