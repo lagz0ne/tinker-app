@@ -9,7 +9,8 @@ ADR `sqlite-variants.md` left this open:
 ## Context
 
 The SQLite items (`database-sqlite`,
-`auth-sqlite`, `sync-sqlite`) need the
+`auth-sqlite`, `sync-sqlite`, `blobs-sqlite`)
+need the
 Reylo toolchain. The `app` item has none of it:
 
 - TypeScript `7.1.0-beta`, in
@@ -95,8 +96,11 @@ vite.config.ts:
 ```
 
 - Only `database-sqlite` has the field.
-  `auth-sqlite` and `sync-sqlite` require it,
-  so their closure prints it once.
+  `auth-sqlite`, `sync-sqlite` and
+  `blobs-sqlite` require it, so their
+  closure prints it once. `blobs-sqlite`
+  needs nothing more: its `.sql` queries use
+  the same mapper and dev database.
 - The block comes after the `cmds/*.ts` lines.
   Files keep the order the closure first
   names them; a line prints once.

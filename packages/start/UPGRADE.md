@@ -3,7 +3,8 @@
 ## Unreleased
 
 - The SQLite set installs onto an app made from the `app` item. `tinker add database-sqlite`
-  (and `auth-sqlite`, `sync-sqlite`, which require it) no longer refuses with `is starter-only`.
+  (and `auth-sqlite`, `sync-sqlite` and `blobs-sqlite`, which require it) no longer refuses
+  with `is starter-only`.
   After the `cmds/*.ts` lines it prints the Reylo toolchain once, under
   `Paste into your toolchain (tinker add writes no config):`. Paste each line into the file it
   names: `package.json` (the `typecheck` script, TypeScript `7.1.0-beta` in `devDependencies`
@@ -31,9 +32,8 @@
   each `.sql` import as `any` and passes.
 - An app made from the demo before this release has a lock without the SQLite items'
   `sqlite/migrations/` files and `maintain/sqlite-dev-db.mjs`, so `tinker check` prints
-  `outdated: database-sqlite`, `outdated: auth-sqlite` and `outdated: sync-sqlite` (notes,
-  exit 0). Run `tinker update database-sqlite`, then `auth-sqlite` and `sync-sqlite`, to record
-  them. If update prints `conflict: maintain/sqlite-dev-db.mjs` and you did not edit that file,
+  `outdated:` for `database-sqlite`, `auth-sqlite`, `sync-sqlite` and `blobs-sqlite` (notes,
+  exit 0). Run `tinker update database-sqlite`, then each of the others, to record them. If update prints `conflict: maintain/sqlite-dev-db.mjs` and you did not edit that file,
   rerun with `--force`; if you did, keep your copy and leave the note.
 - `database-sqlite` ships `sql.d.ts`: a `declare module "*.sql"` fallback, so tsgolint (the
   type-aware lint, TypeScript 7.0, no content mappers) reads each `.sql` import as a Reylo
