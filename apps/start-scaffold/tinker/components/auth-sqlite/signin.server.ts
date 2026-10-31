@@ -5,6 +5,7 @@ import { raise } from "~/components/errors";
 
 import { auth } from "./auth.server";
 import { mcpCaller } from "./mcp.server";
+import { codeSeconds, webClient } from "./plugins.server";
 
 /** The code's row, with the code sign-in's own columns. */
 type Waiting = {
@@ -29,19 +30,46 @@ type CodeSession = {
   signinApprovedBy: string | null;
 };
 
-/** A code waits 10 minutes, so it was asked for 10 minutes before it ends. */
-const codeMs = 600_000;
+/** A code was asked for one code life before it ends. */
+const codeMs = codeSeconds * 1000;
 
-/** Ten wrong codes in 15 minutes lock approvals, as obelisk. */
+/**
+ * Ten wrong codes in 15 minutes lock one caller's approvals, as obelisk did for its one owner.
+ * Many users share this server, so one caller's misses lock only that caller; 100 misses from
+ * everyone lock all approvals, a stop for a guess across many accounts (20^8 codes).
+ */
 const missWindowMs = 900_000;
 
-const missCap = 10;
+const callerCap = 10;
 
-/** This process's wrong codes: when each came, by Core's clock. */
+const everyoneCap = 100;
+
+/** This process's wrong codes: when each came, by Core's clock, for each caller and for all. */
 const signinMisses = resource({
   label: "auth.signinMisses",
   target: "scope",
-  factory: () => ({ times: [] as number[] }),
+  factory: () => {
+    const byCaller = new Map<string, number[]>();
+
+    let everyone: number[] = [];
+
+    return {
+      locked(userId: string, now: number) {
+        everyone = everyone.filter((at) => now - at < missWindowMs);
+
+        const own = (byCaller.get(userId) ?? []).filter((at) => now - at < missWindowMs);
+
+        byCaller.set(userId, own);
+
+        return own.length >= callerCap || everyone.length >= everyoneCap;
+      },
+      miss(userId: string, now: number) {
+        everyone.push(now);
+
+        byCaller.set(userId, [...(byCaller.get(userId) ?? []), now]);
+      },
+    };
+  },
 });
 
 export const approveSigninInput = z.object({ code: z.string().max(20) });
@@ -62,9 +90,7 @@ export const approveSignin = operation({
   run: async ({ auth, caller, misses }, { input, clock }) => {
     const now = clock.currentTimeMillis();
 
-    misses.times = misses.times.filter((at) => now - at < missWindowMs);
-
-    if (misses.times.length >= missCap) {
+    if (misses.locked(caller.userId, now)) {
       raise("Refused", {
         message: "Too many wrong codes. Wait 15 minutes, then ask for a new code.",
       });
@@ -77,13 +103,13 @@ export const approveSignin = operation({
       model: "deviceCode",
       where: [
         { field: "userCode", value: input.code.toUpperCase().replace(/[^A-Z]/g, "") },
-        { field: "clientId", value: "web" },
+        { field: "clientId", value: webClient },
       ],
     });
 
     // The row's end is Better Auth's own time, so it is read by the wall clock it was set with.
     if (!row || row.expiresAt <= new Date()) {
-      misses.times.push(now);
+      misses.miss(caller.userId, now);
 
       raise("Refused", {
         message: `No sign-in waits for code "${input.code.slice(0, 12)}". A code works for 10 minutes; ask for the code on the page again.`,
@@ -109,15 +135,20 @@ export const approveSignin = operation({
 
     const what = row.signinClient ? `"Allow access" for ${row.signinClient}` : "sign-in";
 
+    // An "Allow access" code gives that browser a session too: the OAuth request resumes on it.
+    const grants = row.signinClient
+      ? ` It signs that browser in as you and allows ${row.signinClient} to act for you.`
+      : "";
+
     return {
-      text: `Approved code ${shown} (${row.signinBrowser ?? "a browser"}, ${what}, asked at ${asked} UTC). That page goes on by itself within a few seconds. The code is used up once it does.`,
+      text: `Approved code ${shown} (${row.signinBrowser ?? "a browser"}, ${what}, asked at ${asked} UTC).${grants} That page goes on by itself within a few seconds. The code is used up once it does.`,
     };
   },
 });
 
 /**
- * The codes that wait, and the caller's own code sign-ins. A waiting code shows only to the one
- * who approved it: many users share one server, and a code is a key until it is used.
+ * The codes the caller approved that still wait, a count of the other live codes, and the
+ * caller's own code sign-ins. Many users share one server, so the others get no detail.
  */
 export const listSignins = operation({
   label: "auth.listSignins",
@@ -131,20 +162,23 @@ export const listSignins = operation({
     const rows = await adapter.findMany<Waiting>({
       model: "deviceCode",
       where: [
-        { field: "clientId", value: "web" },
+        { field: "clientId", value: webClient },
         { field: "expiresAt", operator: "gt", value: now },
       ],
     });
 
-    const waiting = rows.map((row) => ({
+    // Only an approved row has an owner: the caller who approved it.
+    const own = rows.filter((row) => row.userId === caller.userId);
+
+    const waiting = own.map((row) => ({
       at: new Date(row.expiresAt.getTime() - codeMs).toISOString(),
       browser: row.signinBrowser ?? "a browser",
       kind: row.signinClient ? ("oauth" as const) : ("web" as const),
-      approved: row.status === "approved",
-      ...(row.status === "approved" && row.userId === caller.userId
-        ? { code: `${row.userCode.slice(0, 4)}-${row.userCode.slice(4)}` }
-        : {}),
+      approved: true,
+      code: `${row.userCode.slice(0, 4)}-${row.userCode.slice(4)}`,
     }));
+
+    const others = rows.length - own.length;
 
     const sessions = await adapter.findMany<CodeSession>({
       model: "session",
@@ -165,7 +199,7 @@ export const listSignins = operation({
       ? waiting
           .map(
             (item) =>
-              `${item.code ?? "a code"} (${item.browser}, ${item.kind === "oauth" ? "Allow access" : "sign-in"}, asked ${item.at.slice(11, 16)} UTC${item.approved ? ", approved" : ""})`,
+              `${item.code} (${item.browser}, ${item.kind === "oauth" ? "Allow access" : "sign-in"}, asked ${item.at.slice(11, 16)} UTC, approved by you)`,
           )
           .join("; ")
       : "none";
@@ -180,8 +214,8 @@ export const listSignins = operation({
       : "none";
 
     return {
-      text: `Waiting codes: ${codes}.\nSigned in with a code: ${signedIn}.`,
-      data: { waiting, active },
+      text: `Waiting codes you approved: ${codes}. Other codes waiting: ${others}.\nSigned in with a code: ${signedIn}.`,
+      data: { waiting, others, active },
     };
   },
 });

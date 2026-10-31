@@ -15,14 +15,15 @@ import { authMcp, authSettings } from "./settings.server";
 const letters = "BCDFGHJKLMNPQRSTVWXZ";
 
 /** The one device client: the browser that asks for a code. */
-const webClient = "web";
-
-const deviceCookie = "tinker_device";
+export const webClient = "web";
 
 /** A code waits 10 minutes; at most 50 wait at once. */
-const codeSeconds = 600;
+export const codeSeconds = 600;
 
 const waitingCap = 50;
+
+/** One leading slash, then no slash or backslash; no control character, space, or backslash. */
+const sitePath = /^\/(?![/\\])[^\\\s\p{Cc}]*$/u;
 
 /** The first match names the browser; Chrome's agent also says Safari, so Chrome comes first. */
 const browsers = [
@@ -62,15 +63,17 @@ export const codeSignin = resource({
     const { setSessionCookie } = cookies;
     const { deviceAuthorization, redeemDeviceCode } = device;
 
-    const half = {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      secure: settings.origin.startsWith("https:"),
-    } as const;
+    const secure = settings.origin.startsWith("https:");
+
+    const half = { httpOnly: true, sameSite: "lax", path: "/", secure } as const;
+
+    // On https the `__Host-` prefix keeps a sibling subdomain from planting its own device half.
+    const deviceCookie = secure ? "__Host-tinker_device" : "tinker_device";
+
+    const origin = new URL(settings.origin).origin;
 
     const codes = deviceAuthorization({
-      expiresIn: "10m",
+      expiresIn: `${codeSeconds}s`,
       validateClient: (clientId) => clientId === webClient,
       generateUserCode: () => {
         const picked: string[] = [];
@@ -94,6 +97,7 @@ export const codeSignin = resource({
             signinBrowser: { type: "string", required: false, input: false },
             signinNext: { type: "string", required: false, input: false },
             signinClient: { type: "string", required: false, input: false },
+            signinClientId: { type: "string", required: false, input: false },
             signinApprovedBy: { type: "string", required: false, input: false },
           },
         },
@@ -104,11 +108,12 @@ export const codeSignin = resource({
           {
             method: "POST",
             body: z.object({
-              // Obelisk's safeNext: one leading slash and no backslash, else the home page.
+              // Obelisk's safeNext, and the browser's own reading must stay on this site.
               next: z
                 .string()
                 .max(2000)
-                .regex(/^\/(?!\/)[^\\]*$/)
+                .regex(sitePath)
+                .refine((next) => new URL(next, origin).origin === origin)
                 .catch("/"),
               oauth_query: z.string().max(8000).optional(),
             }),
@@ -116,6 +121,12 @@ export const codeSignin = resource({
           },
           async (ctx) => {
             const { adapter } = ctx.context;
+
+            // Obelisk swept ended codes each minute; here each start sweeps them first.
+            await adapter.deleteMany({
+              model: "deviceCode",
+              where: [{ field: "expiresAt", operator: "lte", value: new Date() }],
+            });
 
             const waiting = await adapter.count({
               model: "deviceCode",
@@ -162,6 +173,7 @@ export const codeSignin = resource({
                 signinBrowser: `${browser} on ${system}`,
                 signinNext: ctx.body.next,
                 signinClient: client && (client.name ?? "an app"),
+                signinClientId: query.get("client_id"),
               },
             });
 
@@ -209,6 +221,7 @@ export const codeSignin = resource({
               userCode: string;
               signinNext: string;
               signinBrowser: string | null;
+              signinClientId: string | null;
               signinApprovedBy: string | null;
             }>({
               model: "deviceCode",
@@ -223,6 +236,14 @@ export const codeSignin = resource({
               ctx.setStatus(410);
 
               return ctx.json({ state: "gone" });
+            }
+
+            // The OAuth request goes on only for the client the start named, and the approver saw.
+            if (new URLSearchParams(ctx.body.oauth_query).get("client_id") !== row.signinClientId) {
+              throw new APIError("BAD_REQUEST", {
+                error: "invalid_request",
+                error_description: "This code was asked for another app.",
+              });
             }
 
             // Checked before the redeem: a redeem of a waiting code would start its poll interval.
@@ -350,6 +371,8 @@ export const mcpProvider = resource({
         grantTypes: ["authorization_code", "refresh_token"],
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
+        // A token is a signed JWT, checked without a store; a short life bounds a revoke.
+        accessTokenExpiresIn: 300,
       }),
     ] as const;
 

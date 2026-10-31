@@ -350,6 +350,11 @@
           "path": "sqlite/migrations/20261031000000_auth_mcp.sql",
           "type": "registry:file",
           "target": "~/migrations/20261031000000_auth_mcp.sql"
+        },
+        {
+          "path": "sqlite/migrations/20261031000100_auth_signin_client.sql",
+          "type": "registry:file",
+          "target": "~/migrations/20261031000100_auth_signin_client.sql"
         }
       ],
       "meta": {
