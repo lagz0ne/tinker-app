@@ -34,29 +34,37 @@ const toolRow = z.strictObject({
     ),
 });
 
-export type McpTool = z.output<typeof toolRow>;
+/** The listed input is the one its operation parses, so the list cannot drift from the parse. */
+const listedRow = toolRow.refine((row) => row.input === row.run.input, {
+  path: ["input"],
+  error: "A tool's input must be the schema its operation parses (the same object).",
+});
+
+export type McpTool = z.output<typeof listedRow>;
 
 /** Only the names, to say which one a list repeats. */
 const toolNames = z.array(z.object({ name: z.string() }));
 
-/** What the server tells a client at initialize. */
+/** What the server tells a client at initialize, and its body cap (default 2_000_000 bytes). */
 export const mcpServer = tag({
   label: "mcp.server",
   parse: z.strictObject({
     name: z.string().min(1),
     version: z.string().min(1),
     instructions: z.string().optional(),
+    /** The largest request body in bytes; obelisk's `express.json` limit is 2 MB. */
+    maxBody: z.number().int().positive().optional(),
   }),
 });
 
 /**
  * The tools, as data: each row's zod `input` is both the listed JSON Schema and the one parse of
- * its operation. Names are unique and checked when the tag is bound.
+ * its operation (the same object, checked). Names are unique. Both are checked when the tag is bound.
  */
 export const mcpTools = tag({
   label: "mcp.tools",
   parse: z
-    .array(toolRow)
+    .array(listedRow)
     .refine(
       (rows) =>
         rows.every(({ name }, index) => rows.findIndex((row) => row.name === name) === index),
