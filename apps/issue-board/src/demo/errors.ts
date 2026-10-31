@@ -28,11 +28,3 @@ export declare namespace Errors {
       : never;
   type Of<N extends Name> = Error & { kind: N; payload: Payload<N> };
 }
-
-/**
- * @param kind - From the failing caller; why: choose the managed error.
- * @param payload - From the failing caller; why: keep facts for that error.
- */
-export function raise<N extends Errors.Name>(kind: N, payload: Errors.Payload<N>): never {
-  throw Object.assign(new Error(kind), { kind, payload });
-}
