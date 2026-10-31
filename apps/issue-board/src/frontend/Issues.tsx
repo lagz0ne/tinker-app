@@ -17,7 +17,7 @@ import { issues, profile, teams } from "@/demo/frontend/state";
 import { updateIssue } from "@/transport/issues.functions";
 
 import { Comments } from "./Comments";
-import { errorText } from "./error-text";
+import { FailureAlert } from "./failures";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -130,7 +130,7 @@ export function Issues({
           </form>
         </CardContent>
       </Card>
-      <p role="alert">{errorText(save.error)}</p>
+      <FailureAlert error={save.error} />
       {draft && (
         <Card>
           <CardHeader>

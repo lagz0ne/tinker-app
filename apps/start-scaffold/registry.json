@@ -1609,9 +1609,9 @@
           "target": "~/drizzle/20261010090000_drop_session_wake/snapshot.json"
         },
         {
-          "path": "src/frontend/error-text.ts",
+          "path": "src/frontend/failures.tsx",
           "type": "registry:file",
-          "target": "~/src/frontend/error-text.ts"
+          "target": "~/src/frontend/failures.tsx"
         },
         {
           "path": "src/frontend/ui/button.tsx",

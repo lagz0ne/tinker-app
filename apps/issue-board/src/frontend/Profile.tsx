@@ -5,7 +5,7 @@ import type { Profile } from "@/demo/contracts/profile-contract";
 import { profile, nameDraft, pending, notice, profileResult } from "@/demo/frontend/state";
 
 import { signOut } from "./auth-actions";
-import { errorText } from "./error-text";
+import { FailureAlert } from "./failures";
 import { saveName, editName, retryMail } from "./profile-actions";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/card";
@@ -74,9 +74,7 @@ function ProfileForm({ value }: { value: Profile.Value }) {
           Open my todos
         </Link>
       </Button>
-      <p role="alert" className="text-sm text-destructive">
-        {errorText(save.error || leave.error)}
-      </p>
+      <FailureAlert error={save.error || leave.error} className="text-sm text-destructive" />
     </form>
   );
 }

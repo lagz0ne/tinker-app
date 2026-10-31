@@ -34,14 +34,6 @@ export declare namespace Errors {
   type Of<N extends Name> = Error & { kind: N; payload: Payloads[N] };
 }
 
-/**
- * @param error - From a caught failure; why: narrow its payload.
- * @param kind - From the caller; why: select the expected error.
- */
-export function isError<N extends Errors.Name>(error: unknown, kind: N): error is Errors.Of<N> {
-  return error instanceof Error && "kind" in error && error.kind === kind;
-}
-
 /** Abort consumers keep the native AbortError name and code without a per-call stack. */
 export const abortReasons = {
   closed: new DOMException("The owner closed", "AbortError"),

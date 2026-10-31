@@ -11,10 +11,10 @@ export const updateTeam = createServerFn({ method: "POST" })
   .middleware([startRequests.middleware])
   .validator(teamCommand)
   .handler(async ({ context, data }) =>
-    readReceipt(
-      await context.session.settle(changeTeam, {
+    context.session.run(readReceipt, {
+      input: await context.session.settle(changeTeam, {
         input: data,
         signal: context.signal,
       }),
-    ),
+    }),
   );

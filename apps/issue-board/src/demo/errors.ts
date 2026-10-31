@@ -36,11 +36,3 @@ export declare namespace Errors {
 export function raise<N extends Errors.Name>(kind: N, payload: Errors.Payload<N>): never {
   throw Object.assign(new Error(kind), { kind, payload });
 }
-
-/**
- * @param error - From a caught failure; why: narrow its payload.
- * @param kind - From the caller; why: select the expected error.
- */
-export function isError<N extends Errors.Name>(error: unknown, kind: N): error is Errors.Of<N> {
-  return error instanceof Error && "kind" in error && error.kind === kind;
-}
