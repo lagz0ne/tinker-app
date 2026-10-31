@@ -70,7 +70,11 @@ const answer = await root.run(checkMcpToken, {
 });
 if (answer.challenge) return new Response(JSON.stringify(answer.challenge.body), answer.challenge);
 
-return root.run(handleMcp, { input: request, tags: mcpCaller(answer.caller), signal: request.signal });
+return root.run(handleMcp, {
+  input: request,
+  tags: mcpCaller(answer.caller),
+  signal: request.signal,
+});
 ```
 
 `tests/mcp-live-sqlite.test.ts` runs all of it over a real socket.
