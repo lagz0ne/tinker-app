@@ -80,12 +80,24 @@ async function requireMapper() {
   );
   if (installed === null) return;
 
-  const config = await readFile(join(app, "tsconfig.json"), "utf8").catch(() => "");
-  if (/"contentMappers"[\s\S]*"reylo"/.test(config)) return;
+  if (/"contentMappers"[\s\S]*"reylo"/.test(await nearestConfig(app))) return;
 
   throw new Error(
     'sqlite dev db: tsconfig.json has no Reylo "contentMappers" entry; paste the tsconfig.json line tinker add printed',
   );
+}
+
+/**
+ * The tsconfig.json tsc and Vite read for the app: the nearest one at or above its folder. A
+ * Stryker sandbox copies the app without its tsconfig.json, so there it is the app's own, above.
+ * @param {string} folder - From the app folder; why: where the lookup starts.
+ */
+async function nearestConfig(folder) {
+  for (let dir = folder; ; dir = dirname(dir)) {
+    const config = await readFile(join(dir, "tsconfig.json"), "utf8").catch(() => null);
+    if (config !== null) return config;
+    if (dirname(dir) === dir) return "";
+  }
 }
 
 export default buildDevDatabase;
