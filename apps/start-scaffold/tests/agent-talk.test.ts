@@ -1,4 +1,4 @@
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { SDKMessage, SDKResultSuccess } from "@anthropic-ai/claude-agent-sdk";
 import { createScope } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
@@ -1118,11 +1118,36 @@ for (const how of ["stop", "close"] as const) {
   });
 }
 
+const unpaid = { input_tokens: 0, output_tokens: 0 };
+
+test("R5 a paid answer with no tool that mentions 401 is done, not a sign-in failure", async () => {
+  const fake = fakeAgentSdk(async function* ({ session }: FakeKit) {
+    yield init(session);
+    yield success(session, 0.002, {
+      result: "HTTP 401 means the request lacked valid credentials.",
+      usage: { ...usage, output_tokens: 12 } as unknown as SDKResultSuccess["usage"],
+    });
+  });
+
+  const root = talkScope(fake);
+
+  try {
+    const talk = await root.resolve(agentTalk);
+
+    expect((await talk.run("a", { prompt: "what is 401?", options }).result).status).toBe("done");
+  } finally {
+    await root.close();
+  }
+});
+
 test("R5 a success result whose text says not signed in fails not-signed-in, unless a tool ran", async () => {
   const fake = fakeAgentSdk(
     async function* ({ session }: FakeKit) {
       yield init(session);
-      yield success(session, 0, { result: "Invalid API key · Please run /login" });
+      yield success(session, 0, {
+        result: "Not logged in · Please run /login",
+        usage: unpaid as unknown as SDKResultSuccess["usage"],
+      });
     },
     async function* ({ session }: FakeKit) {
       yield init(session);
