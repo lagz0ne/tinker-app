@@ -1,6 +1,14 @@
 # Upgrade
 
-## Unreleased
+## 0.15.1
+
+Start 0.15.1 is released from `lagz0ne/tinker-app`, tag `start-v0.15.1`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.15.1/tinker-start-0.15.1.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.15.1/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.15.1.
 
 - The SQLite set installs onto an app made from the `app` item. `tinker add database-sqlite`
   (and `auth-sqlite`, `sync-sqlite` and `blobs-sqlite`, which require it) no longer refuses
