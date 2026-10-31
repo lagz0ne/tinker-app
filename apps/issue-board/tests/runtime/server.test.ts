@@ -68,6 +68,29 @@ test("the start extension hands each request its root scope", async () => {
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 
+test("a request that already has a session is refused by its root's own operation", async () => {
+  const run = startRequests.middleware.options.server;
+  const root = createScope({ observe: { history: 4 } });
+  let called = false;
+
+  await expect(
+    run?.({
+      request: new Request("http://app/"),
+      pathname: "/",
+      handlerType: "router",
+      context: { scope: root, session: root.createSession() },
+      next() {
+        called = true;
+        return expect.unreachable("next must not run");
+      },
+    }),
+  ).rejects.toMatchObject({ kind: "StartSessionAlreadySet", payload: {} });
+
+  expect(called).toBe(false);
+  expect(root.spans().map(({ name }) => name)).toEqual(["request.sessionTaken"]);
+  expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
 test("a request with no root scope fails before any work runs", async () => {
   const run = startRequests.middleware.options.server;
   let called = false;
