@@ -13,6 +13,7 @@ import { afterEach, expect, test } from "vite-plus/test";
 import {
   database,
   databaseBusyTimeout,
+  databaseFolder,
   databaseMigrationTimeout,
   databaseMigrationsFolder,
   databaseNotifyRetention,
@@ -799,6 +800,163 @@ test("a commit that overtakes a waiting first use resolves and opens nothing", a
 
   expect(await running).toMatchObject({ status: "success", value: "TransactionEnded" });
   expect(db.client.isTransaction).toBe(false);
+
+  await root.close({ graceful: true });
+});
+
+/** A temp app folder that holds the `data` folder a relative URL names, and one migration. */
+async function appFolder() {
+  const dir = await mkdtemp(join(tmpdir(), "tinker-sqlite-"));
+
+  homes.push(dir);
+
+  await mkdir(join(dir, "data"));
+  await mkdir(join(dir, "migrations"));
+
+  await writeFile(
+    join(dir, "migrations", "20261028000000_proof.sql"),
+    "create table proof_relative (id integer)",
+  );
+
+  return dir;
+}
+
+function startRows(file: string) {
+  const connection = new DatabaseSync(file);
+
+  try {
+    return connection
+      .prepare("SELECT name FROM start_migrations ORDER BY name")
+      .all()
+      .map((row) => row.name);
+  } finally {
+    connection.close();
+  }
+}
+
+test("a relative database URL string resolves against the app folder, not the disk root", async () => {
+  const folder = await appFolder();
+
+  const root = createScope({
+    tags: [databaseUrl("file:./data/app.db"), databaseFolder(folder), databaseBusyTimeout(20)],
+  });
+
+  expect(await root.settle(migrate)).toMatchObject({ status: "success" });
+
+  expect(existsSync(join(folder, "data", "app.db")), "inside the app folder").toBe(true);
+  expect(existsSync("/data/app.db"), "never at the disk root").toBe(false);
+
+  await root.close({ graceful: true });
+});
+
+test("plain path, file: path, and file: ./ path strings all land in the app folder", async () => {
+  for (const raw of ["file:./data/app.db", "data/app.db", "file:data/app.db"]) {
+    const folder = await appFolder();
+
+    const root = createScope({
+      tags: [databaseUrl(raw), databaseFolder(folder), databaseBusyTimeout(20)],
+    });
+
+    expect(await root.settle(migrate)).toMatchObject({ status: "success" });
+
+    expect(existsSync(join(folder, "data", "app.db")), raw).toBe(true);
+
+    await root.close({ graceful: true });
+  }
+});
+
+test("a folder name with percent, hash, and question mark keeps the file inside it", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "tinker-sqlite-"));
+
+  homes.push(parent);
+
+  const folder = join(parent, "a%b#c?d");
+
+  await mkdir(join(folder, "data"), { recursive: true });
+  await mkdir(join(folder, "migrations"));
+
+  const root = createScope({
+    tags: [databaseUrl("file:./data/app.db"), databaseFolder(folder), databaseBusyTimeout(20)],
+  });
+
+  expect(await root.settle(migrate)).toMatchObject({ status: "success" });
+
+  expect(existsSync(join(folder, "data", "app.db"))).toBe(true);
+
+  await root.close({ graceful: true });
+});
+
+test("an absolute file URL ignores the app folder", async () => {
+  const { file } = await home();
+
+  const folder = await appFolder();
+
+  const root = createScope({
+    tags: [databaseUrl(pathToFileURL(file)), databaseFolder(folder), databaseBusyTimeout(20)],
+  });
+
+  expect(await root.settle(migrate)).toMatchObject({ status: "success" });
+
+  expect(existsSync(file), "the file the URL names").toBe(true);
+  expect(existsSync(join(folder, "data", "app.db")), "nothing in the app folder").toBe(false);
+  expect(existsSync(join(folder, "app.db")), "nothing in the app folder").toBe(false);
+
+  await root.close({ graceful: true });
+});
+
+test("an absolute file URL string ignores the app folder", async () => {
+  const { file } = await home();
+
+  const folder = await appFolder();
+
+  const root = createScope({
+    tags: [databaseUrl(pathToFileURL(file).href), databaseFolder(folder), databaseBusyTimeout(20)],
+  });
+
+  expect(await root.settle(migrate)).toMatchObject({ status: "success" });
+
+  expect(existsSync(file), "the file the URL names").toBe(true);
+  expect(existsSync(join(folder, "data", "app.db")), "nothing in the app folder").toBe(false);
+
+  await root.close({ graceful: true });
+});
+
+test("a non-file database value is refused before any file opens", async () => {
+  const folder = await appFolder();
+
+  for (const refused of ["postgres://u:p@h/db", new URL("postgres://u:p@h/db")]) {
+    expect(
+      () => databaseUrl(refused as unknown as URL | string),
+      `refused: ${String(refused)}`,
+    ).toThrow(expect.objectContaining({ kind: "DataValidationFailed" }));
+  }
+
+  expect(existsSync(join(folder, "data", "app.db")), "no file was created").toBe(false);
+});
+
+test("a relative database URL string with no app folder fails loud", async () => {
+  const root = createScope({ tags: [databaseUrl("file:./data/app.db")] });
+
+  expect(await root.settle(migrate)).toMatchObject({
+    status: "failed",
+    error: { kind: "DatabaseFolderMissing" },
+  });
+
+  expect(existsSync("/data/app.db"), "never the disk-root file").toBe(false);
+
+  await root.close({ graceful: true });
+});
+
+test("a relative migrations folder resolves against the app folder, not the working directory", async () => {
+  const folder = await appFolder();
+
+  const root = createScope({
+    tags: [databaseUrl("file:./data/app.db"), databaseFolder(folder), databaseBusyTimeout(20)],
+  });
+
+  expect(await root.settle(migrate)).toMatchObject({ status: "success" });
+
+  expect(startRows(join(folder, "data", "app.db"))).toEqual(["20261028000000_proof.sql"]);
 
   await root.close({ graceful: true });
 });
