@@ -2854,7 +2854,7 @@ if (process.argv.includes("--prove")) {
     ],
     [
       "run-nested-escape-checked",
-      "plain-effect",
+      "plain-function",
       'import {operation} from "@tinker/core"; export const probe = operation({run: () => { function read() { return Date.now(); } return { read }; }});',
     ],
     [
