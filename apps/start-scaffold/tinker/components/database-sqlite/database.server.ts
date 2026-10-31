@@ -15,6 +15,8 @@ import type { Database } from "./types";
 /**
  * Where the SQLite file is: a `file:` URL, or a URL reference resolved against `databaseFolder`.
  * `file:./data/app.db`, `file:data/app.db`, and `./data/app.db` all name the same relative path.
+ * A string follows URL rules, so `#` starts a fragment and `%20` decodes: a path that holds those
+ * characters is written as a `file:` URL from `pathToFileURL`. An empty string is refused.
  */
 export const databaseUrl = tag<URL | string>({
   label: "database.url",
@@ -22,9 +24,12 @@ export const databaseUrl = tag<URL | string>({
     z
       .instanceof(URL)
       .refine((url) => url.protocol === "file:", { error: "SQLite needs a file: URL" }),
-    z.string().refine((value) => URL.parse(value, "file:///")?.protocol === "file:", {
-      error: "SQLite needs a file: URL",
-    }),
+    z
+      .string()
+      .min(1)
+      .refine((value) => URL.parse(value, "file:///")?.protocol === "file:", {
+        error: "SQLite needs a file: URL",
+      }),
   ]),
 });
 

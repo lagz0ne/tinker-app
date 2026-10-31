@@ -921,17 +921,24 @@ test("an absolute file URL string ignores the app folder", async () => {
   await root.close({ graceful: true });
 });
 
-test("a non-file database value is refused before any file opens", async () => {
+test("a non-file or empty database value is refused before any file opens", async () => {
   const folder = await appFolder();
 
-  for (const refused of ["postgres://u:p@h/db", new URL("postgres://u:p@h/db")]) {
+  for (const refused of ["postgres://u:p@h/db", new URL("postgres://u:p@h/db"), ""]) {
     expect(
       () => databaseUrl(refused as unknown as URL | string),
-      `refused: ${String(refused)}`,
-    ).toThrow(expect.objectContaining({ kind: "DataValidationFailed" }));
+      `refused: ${JSON.stringify(String(refused))}`,
+    ).toThrow(
+      expect.objectContaining({
+        kind: "DataValidationFailed",
+        payload: expect.objectContaining({ label: "database.url" }),
+      }),
+    );
   }
 
+  // The refusal lands on the binding, so no scope holds a value that could open a file.
   expect(existsSync(join(folder, "data", "app.db")), "no file was created").toBe(false);
+  expect(existsSync(folder), "the app folder itself is untouched").toBe(true);
 });
 
 test("a relative database URL string with no app folder fails loud", async () => {
