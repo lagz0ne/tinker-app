@@ -3,7 +3,7 @@
   "name": "blobs-sqlite",
   "type": "registry:lib",
   "title": "blobs-sqlite",
-  "description": "Copied SQLite blob store component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
+  "description": "Copied SQLite blob store component. You own its files.",
   "dependencies": [
     "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
     "reylo@0.6.0",
@@ -101,8 +101,6 @@
   ],
   "meta": {
     "ownership": "userland",
-    "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
-    "starterOnly": true,
-    "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
+    "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies."
   }
 }
