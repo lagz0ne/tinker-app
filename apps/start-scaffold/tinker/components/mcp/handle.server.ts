@@ -102,9 +102,11 @@ export const handleMcp = operation({
       { name: info.name, version: info.version },
       { capabilities: { tools: {} }, instructions: info.instructions },
     );
+    // The SDK reads the body: a Content-Length over the cap, or a stream past it, gets 413.
     const transport = new web.WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
+      maxRequestBodySize: info.maxBody ?? 2_000_000,
     });
 
     server.setRequestHandler(types.ListToolsRequestSchema, () => ({

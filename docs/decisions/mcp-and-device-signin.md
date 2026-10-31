@@ -174,6 +174,16 @@ authMcp({
   that the tool failed.
 - `mcp` requires only `errors`: it uses
   nothing from `requests`.
+- Body cap: `mcpServer.maxBody`, default
+  2 000 000 bytes, as obelisk's
+  `express.json({ limit: "2mb" })`. The SDK
+  1.32.2 transport reads the body under
+  `maxRequestBodySize`: a Content-Length
+  over it, or a stream past it, gets 413;
+  bad JSON gets its -32700 reply.
+- A tool row's `input` must be the same
+  object as its operation's `input`, so
+  the list cannot drift from the parse.
 
 `mcpServer` tag: `{ name, version, instructions? }`.
 

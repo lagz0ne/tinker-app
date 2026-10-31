@@ -427,3 +427,130 @@ test("M14: a cancelled request aborts the tool and settles handleMcp", async () 
 
   await app.scope.close();
 });
+
+const accept = {
+  accept: "application/json, text/event-stream",
+  "content-type": "application/json",
+};
+
+const listing = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+
+test("C1: a body over 2 MB by Content-Length gets 413 before it is read", async () => {
+  const app = await root();
+  const read = { pulls: 0 };
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        read.pulls += 1;
+        controller.enqueue(new TextEncoder().encode(listing));
+        controller.close();
+      },
+    },
+    { highWaterMark: 0 },
+  );
+
+  // Node needs `duplex` for a stream body; the DOM RequestInit type does not name it.
+  const init = {
+    method: "POST",
+    headers: { ...accept, "content-length": "2000001" },
+    body,
+    duplex: "half",
+  };
+  const reply = await app.scope.run(handleMcp, { input: new Request("http://app.test/mcp", init) });
+
+  expect(reply.status).toBe(413);
+  expect(read.pulls).toBe(0);
+
+  await app.scope.close();
+});
+
+test("C2: a chunked body with no length stops being read past 2 MB and gets 413", async () => {
+  const app = await root();
+  const read = { bytes: 0 };
+  const chunk = new Uint8Array(64 * 1024).fill(0x20);
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      read.bytes += chunk.byteLength;
+      controller.enqueue(chunk);
+    },
+  });
+
+  const init = { method: "POST", headers: accept, body, duplex: "half" };
+  const reply = await app.scope.run(handleMcp, { input: new Request("http://app.test/mcp", init) });
+
+  expect(reply.status).toBe(413);
+  expect(read.bytes).toBeLessThan(2_000_000 + 3 * chunk.byteLength);
+
+  await app.scope.close();
+});
+
+test("C3: a body of 2 MB less one byte is served", async () => {
+  const app = await root();
+  const body = listing + " ".repeat(2_000_000 - 1 - listing.length);
+
+  expect(new TextEncoder().encode(body).byteLength).toBe(1_999_999);
+
+  const reply = await app.scope.run(handleMcp, {
+    input: new Request("http://app.test/mcp", { method: "POST", headers: accept, body }),
+  });
+
+  expect(reply.status).toBe(200);
+  expect((await reply.json()).result.tools).toHaveLength(7);
+
+  await app.scope.close();
+});
+
+test("C4: a server binds its own cap, and bad JSON gets the SDK's parse error", async () => {
+  const scope = createScope({
+    extensions: [mcpRuns],
+    tags: [mcpServer({ name: "small", version: "1", maxBody: 100 }), tools],
+  });
+
+  await scope.ready;
+
+  const over = await scope.run(handleMcp, {
+    input: new Request("http://app.test/mcp", {
+      method: "POST",
+      headers: accept,
+      body: listing + " ".repeat(101 - listing.length),
+    }),
+  });
+
+  expect(over.status).toBe(413);
+
+  const bad = await scope.run(handleMcp, {
+    input: new Request("http://app.test/mcp", { method: "POST", headers: accept, body: "{nope" }),
+  });
+
+  expect(bad.status).toBe(400);
+  expect(await bad.json()).toMatchObject({ jsonrpc: "2.0", error: { code: -32700 } });
+
+  await scope.close();
+});
+
+test("D1: a tool row's input must be the schema its operation parses", () => {
+  const other = z.object({ name: z.string() });
+
+  expect(() =>
+    mcpTools([
+      { name: "greet", title: "Greet", description: "Say hello.", input: other, run: greet },
+    ]),
+  ).toThrow(
+    expect.objectContaining({
+      kind: "DataValidationFailed",
+      payload: expect.objectContaining({
+        label: "mcp.tools",
+        cause: expect.objectContaining({
+          payload: {
+            issues: [
+              expect.objectContaining({
+                path: [0, "input"],
+                message: expect.stringContaining("the schema its operation parses"),
+              }),
+            ],
+          },
+        }),
+      }),
+    }),
+  );
+});
