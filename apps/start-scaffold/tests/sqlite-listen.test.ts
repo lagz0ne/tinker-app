@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { createScope, operation } from "@tinker/core";
+import { type Clock, createScope, operation } from "@tinker/core";
+import { makeTestClock } from "@tinker/core/testing";
 import { afterEach, expect, test } from "vite-plus/test";
 
 import {
@@ -28,7 +29,7 @@ afterEach(async () => {
 });
 
 /** A migrated temp database with a poll interval and retention the proof can wait on. */
-async function sandbox(options: { poll?: number; retention?: number } = {}) {
+async function sandbox(options: { poll?: number; retention?: number; clock?: Clock.Handle } = {}) {
   const home = await mkdtemp(join(tmpdir(), "tinker-sqlite-"));
 
   homes.push(home);
@@ -43,6 +44,7 @@ async function sandbox(options: { poll?: number; retention?: number } = {}) {
   );
 
   const root = createScope({
+    clock: options.clock,
     tags: [
       databaseUrl(pathToFileURL(join(home, "app.db"))),
       databaseMigrationsFolder(folder),
@@ -297,11 +299,36 @@ test("stop and a caller's abort both end delivery", async () => {
 });
 
 test("notify rows past the retention are trimmed", async () => {
-  const root = await sandbox({ poll: 40, retention: 100 });
+  // A test clock: a trim pass runs only when the proof moves time, so a slow box cannot age the
+  // fresh row past the retention before the first pass (#53).
+  const clock = makeTestClock({ now: 1_000_000 });
+
+  let sleeps = 0;
+
+  const root = await sandbox({
+    poll: 40,
+    retention: 100,
+    clock: {
+      ...clock,
+      sleep(ms, signal) {
+        if (ms === 50) sleeps++;
+
+        return clock.sleep(ms, signal);
+      },
+    },
+  });
 
   const db = await root.resolve(database);
 
-  const old = Date.now() - 60_000;
+  const payloads = () =>
+    db.reader
+      .prepare("SELECT payload FROM start_notify ORDER BY id")
+      .all()
+      .map((row) => String(row.payload));
+
+  await until(() => sleeps === 1);
+
+  const old = clock.currentTimeMillis() - 60_000;
 
   db.client
     .prepare("INSERT INTO start_notify (channel, payload, created_at) VALUES (?, ?, ?)")
@@ -316,17 +343,28 @@ test("notify rows past the retention are trimmed", async () => {
   });
 
   await root.settle(fresh, { signal: new AbortController().signal });
-  await until(
-    () =>
-      db.reader.prepare("SELECT * FROM start_notify WHERE payload = 'stale'").all().length === 0,
-  );
 
-  expect(
-    db.reader
-      .prepare("SELECT payload FROM start_notify ORDER BY id")
-      .all()
-      .map((row) => String(row.payload)),
-  ).toEqual(["fresh"]);
+  expect(payloads()).toEqual(["stale", "fresh"]);
+
+  // Each pass sleeps half the retention, then trims; the next sleep starts once the pass is done.
+  clock.advance(50);
+
+  await until(() => sleeps === 2);
+
+  expect(payloads()).toEqual(["fresh"]);
+
+  // A row exactly the retention old is kept: the trim takes rows older than now - retention.
+  clock.advance(50);
+
+  await until(() => sleeps === 3);
+
+  expect(payloads()).toEqual(["fresh"]);
+
+  clock.advance(50);
+
+  await until(() => sleeps === 4);
+
+  expect(payloads()).toEqual([]);
 
   await root.close({ graceful: true });
 });
