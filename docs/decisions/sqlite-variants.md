@@ -156,10 +156,8 @@ Same public names as `database`:
   after the SQLite set proves it.
 - Hedl's own tables: app code, not Start.
 - A `mail-sqlite` variant: on a second asker.
-- A toolchain registry item. Until it
-  exists, the SQLite items are
-  starter-only: they need the starter's
-  Reylo toolchain (TypeScript 7.1 beta,
-  `reylo/vite`, `contentMappers`,
-  `sqlite-dev-db`), so they do not
-  install onto the `app` item yet.
+- The toolchain the SQLite items need:
+  decided in `registry-toolchain.md`.
+  `database-sqlite` declares it in
+  `meta.toolchain`; `tinker add` prints it,
+  so the set installs onto the `app` item.
