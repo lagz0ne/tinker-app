@@ -133,18 +133,38 @@ export const database = resource({
   ): Promise<Database.Handle> => {
     const { DatabaseSync } = sqlite;
 
+    const deadline = clock.currentTimeMillis() + busyTimeout;
+
     // A writer and a reader each own one connection; WAL lets the reader run beside the writer.
-    const [client, reader] = [0, 1].map(() => {
-      const connection = new DatabaseSync(file);
+    const [client, reader] = await Promise.all(
+      [0, 1].map(async () => {
+        const connection = new DatabaseSync(file);
 
-      // busy_timeout first: switching a fresh file to WAL can meet another process's lock.
-      connection.exec(`PRAGMA busy_timeout = ${busyTimeout}`);
-      connection.exec("PRAGMA journal_mode = WAL");
-      connection.exec("PRAGMA synchronous = NORMAL");
-      connection.exec("PRAGMA foreign_keys = ON");
+        connection.exec(`PRAGMA busy_timeout = ${busyTimeout}`);
+        connection.exec("PRAGMA synchronous = NORMAL");
+        connection.exec("PRAGMA foreign_keys = ON");
 
-      return connection;
-    });
+        // On a file not yet in WAL the switch reads the header, then writes it. SQLite skips the
+        // busy handler for that read-to-write step and fails at once while another connection
+        // holds the write lock, so retry until busy_timeout has passed.
+        while (true) {
+          try {
+            connection.exec("PRAGMA journal_mode = WAL");
+
+            return connection;
+          } catch (error) {
+            const code = sqliteError.parse(error).errcode;
+
+            if ((code & 0xff) !== 5 || clock.currentTimeMillis() >= deadline) throw error;
+
+            await clock.sleep(
+              Math.max(1, Math.min(50, deadline - clock.currentTimeMillis())),
+              closing,
+            );
+          }
+        }
+      }),
+    );
 
     if (!client || !reader) throw new Error("SQLite needs a write and a read connection");
 
@@ -333,17 +353,19 @@ export const migrate = operation({
     defer(() => connection.close());
 
     connection.exec(`PRAGMA busy_timeout = ${busyTimeout}`);
-    connection.exec("PRAGMA journal_mode = WAL");
     connection.exec("PRAGMA synchronous = NORMAL");
     connection.exec("PRAGMA foreign_keys = ON");
 
     const deadline = clock.currentTimeMillis() + timeout;
 
     // EXCLUSIVE stands in for the advisory lock: one process owns the schema at a time.
+    // The WAL switch retries here too: on a fresh file SQLite fails its read-to-write step at
+    // once, without busy_timeout, while another process holds the write lock.
     while (true) {
       signal.throwIfAborted();
 
       try {
+        connection.exec("PRAGMA journal_mode = WAL");
         connection.exec("BEGIN EXCLUSIVE");
 
         break;

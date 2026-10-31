@@ -34,12 +34,19 @@ export function handWoken(logRead?: (query: string) => void) {
     const home = await mkdtemp(join(tmpdir(), "tinker-sync-sqlite-fixture-"));
     const file = join(home, "app.db");
     const client = new DatabaseSync(file);
+    const reader = new DatabaseSync(file);
+
+    // As the component opens them: WAL with NORMAL sync commits without a disk sync each time.
+    for (const connection of [client, reader]) {
+      connection.exec("PRAGMA busy_timeout = 5000");
+      connection.exec("PRAGMA journal_mode = WAL");
+      connection.exec("PRAGMA synchronous = NORMAL");
+      connection.exec("PRAGMA foreign_keys = ON");
+    }
 
     for (const name of (await readdir(migrations)).sort()) {
       client.exec(await readFile(join(migrations, name), "utf8"));
     }
-
-    const reader = new DatabaseSync(file);
 
     defer(async () => {
       client.close();

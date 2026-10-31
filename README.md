@@ -51,6 +51,34 @@ Follow the [current authoring contract](https://github.com/lagz0ne/tinker-app/bl
 config bindings and the full owned close order. Auth imports its sync/mail work
 directly; sync's app readers and records still use required tags.
 
+## MCP and sign-in with a code
+
+`mcp` serves tools to MCP clients such as Claude. `auth-sqlite` gives them OAuth and the
+`approve_signin`, `list_signins`, and `end_signin` operations. Bind `mcpServer` and `mcpTools`
+on the root, and install `mcpRuns` there. Each tool row names the operation and its own input.
+Send `/api/auth/*`, `/.well-known/oauth-protected-resource*`, and
+`/.well-known/oauth-authorization-server/api/auth` to `handleAuth`. Wire `/mcp` like this:
+
+```ts
+const answer = await root.run(checkMcpToken, {
+  input: {
+    authorizationHeader: request.headers.get("authorization"),
+    dpopProofJwt: request.headers.get("dpop"),
+    method: request.method,
+    url: request.url,
+  },
+});
+if (answer.challenge) return new Response(JSON.stringify(answer.challenge.body), answer.challenge);
+
+return root.run(handleMcp, {
+  input: request,
+  tags: mcpCaller(answer.caller),
+  signal: request.signal,
+});
+```
+
+`tests/mcp-live-sqlite.test.ts` runs all of it over a real socket.
+
 ## Registry items and app ownership
 
 Build JSON from the actual app source:
@@ -171,7 +199,7 @@ From the workspace root, copy both templates into a new empty output folder:
 node apps/start-scaffold/maintain/template-sync.mjs /tmp/tinker-app-export
 ```
 
-Default exports pin the released Start 0.13.3 host and its matching registry.
+Default exports pin the released Start 0.16.0 host and its matching registry.
 Start 0.9.0 cannot run these templates. Local proofs pass an explicit current
 host pack; the export carries it in vendor and checks its host files against
 this source. Nothing is published.
@@ -242,7 +270,7 @@ Their resources own and close the connection.
 
 `npm start` uses the `tinker serve` host from the `@tinker/start` dev dependency.
 Keep dev dependencies installed on the server; an `npm install --omit=dev` install cannot start it.
-Templates use the Start 0.13.3 contract. Default installs use its released host
+Templates use the Start 0.16.0 contract. Default installs use its released host
 and registry.
 Local registry proofs use a packed Start through `TINKER_PACKAGE_DIR`.
 The standalone export proof supplies a current host pack explicitly.

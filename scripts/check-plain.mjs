@@ -708,6 +708,7 @@ function zodDeclaration(node, file) {
       "uuid",
       "object",
       "strictObject",
+      "looseObject",
       "literal",
       "enum",
       "array",
@@ -862,6 +863,10 @@ const navigatorType = checker.resolveName("Navigator", undefined, ts.SymbolFlags
 assert.ok(navigatorType, "the project must declare Navigator");
 const builtinBeacon = checker.getDeclaredTypeOfSymbol(navigatorType).getProperty("sendBeacon");
 assert.ok(builtinBeacon, "Navigator must declare sendBeacon");
+const builtinSet = checker.resolveName("Set", undefined, ts.SymbolFlags.Value, false);
+assert.ok(builtinSet, "the project must declare built-in Set");
+const builtinMap = checker.resolveName("Map", undefined, ts.SymbolFlags.Value, false);
+assert.ok(builtinMap, "the project must declare built-in Map");
 
 const browserHttpDeclarations = new Set([
   ...builtinXhr.declarations,
@@ -993,6 +998,12 @@ const authMountFiles = [
   "tinker/components/auth-sqlite/index.server.ts",
 ];
 
+/** The MCP set owns ADR 0103's second mounted protocol exception: the SDK's Streamable HTTP. */
+const mcpMountFiles = [
+  "tinker/components/mcp/handle.server.ts",
+  "tinker/components/mcp/index.server.ts",
+];
+
 function checkRequestHeaders(node) {
   const file = pathOf(node);
   if (authServerFiles.includes(file)) return;
@@ -1014,11 +1025,24 @@ const builtinResponse = checker.resolveName("Response", undefined, ts.SymbolFlag
 assert.ok(builtinResponse, "the project must declare built-in Response");
 const responseDeclarations = new Set(builtinResponse.declarations);
 
+/** Only the body of the `handleMcp` declaration may build a reply; the rest of its file may not. */
+function insideMountedMcp(node) {
+  if (pathOf(node) !== "tinker/components/mcp/handle.server.ts") return false;
+
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (ts.isVariableDeclaration(parent)) return nameOf(parent.name) === "handleMcp";
+  }
+
+  return false;
+}
+
 function checkResponse(node) {
   const file = pathOf(node);
   if (file.startsWith("src/routes/")) return;
   if (file === "tinker/components/requests/body.server.ts") return;
   if (["tinker/base/server-entry.ts", "tinker/base/panics.tsx"].includes(file)) return;
+  if (insideMountedMcp(node)) return;
+
   if (nativeReference(node, responseDeclarations)) {
     fail(node, "protocol-response: replies belong to routes or the base");
   }
@@ -1031,6 +1055,15 @@ function checkMountedAuth(node) {
 
   if (protocolUnitReference(node, "tinker/components/auth/handle.server.ts", "handleAuth")) {
     fail(node, "protocol-auth: only the auth route may use the mounted handler");
+  }
+}
+
+/** Any route may use `handleMcp` until the app names its one MCP route file, as auth's. */
+function checkMountedMcp(node) {
+  if (mcpMountFiles.includes(pathOf(node)) || pathOf(node).startsWith("src/routes/")) return;
+
+  if (protocolUnitReference(node, "tinker/components/mcp/handle.server.ts", "handleMcp")) {
+    fail(node, "protocol-mcp: only a route may use the mounted MCP handler");
   }
 }
 
@@ -1162,6 +1195,148 @@ function staticProtocolValue(node) {
   return false;
 }
 
+/** A literal value: a string, template, number, negative number, boolean, or null. */
+function literalValue(node) {
+  node = unwrap(node);
+  return (
+    ts.isStringLiteral(node) ||
+    ts.isNoSubstitutionTemplateLiteral(node) ||
+    ts.isNumericLiteral(node) ||
+    (ts.isPrefixUnaryExpression(node) &&
+      node.operator === ts.SyntaxKind.MinusToken &&
+      ts.isNumericLiteral(node.operand)) ||
+    [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(
+      node.kind,
+    )
+  );
+}
+
+/** A Set element is one literal; a Map entry is a two-item array of literals. */
+function collectionEntry(node, kind) {
+  if (kind === "Map") {
+    return (
+      ts.isArrayLiteralExpression(node) &&
+      node.elements.length === 2 &&
+      node.elements.every(literalValue)
+    );
+  }
+  return literalValue(node);
+}
+
+/** Members that only read a Set or Map. */
+const collectionReads = ["has", "get", "forEach", "keys", "values", "entries"];
+
+/** The built-in Set or Map a new expression calls, so a local Set is refused. */
+function collectionKind(node) {
+  const symbol = locationSymbol(unwrap(node.expression));
+  if (symbol === builtinSet) return "Set";
+  return symbol === builtinMap ? "Map" : undefined;
+}
+
+/** An identifier lifted through a qualified name and its value wrappers. */
+function liftedReference(use) {
+  let ref = use;
+  while (ts.isPropertyAccessExpression(ref.parent) && ref.parent.name === ref) ref = ref.parent;
+  while (
+    ts.isParenthesizedExpression(ref.parent) ||
+    ts.isAsExpression(ref.parent) ||
+    ts.isTypeAssertionExpression(ref.parent) ||
+    ts.isNonNullExpression(ref.parent) ||
+    ts.isSatisfiesExpression(ref.parent)
+  ) {
+    ref = ref.parent;
+  }
+  return ref;
+}
+
+/** Import, export, and type references never read the value at runtime. */
+function nameOnlyUse(use) {
+  const parent = use.parent;
+  return (
+    ts.isImportSpecifier(parent) ||
+    ts.isImportClause(parent) ||
+    ts.isNamespaceImport(parent) ||
+    ts.isExportSpecifier(parent) ||
+    typeReference(use)
+  );
+}
+
+/** A member access that only reads the binding: size once, the rest as a call. */
+function collectionRead(ref) {
+  const parent = ref.parent;
+  if (!ts.isPropertyAccessExpression(parent) || parent.expression !== ref) return false;
+  if (parent.name.text === "size") return true;
+  if (!collectionReads.includes(parent.name.text)) return false;
+  return ts.isCallExpression(parent.parent) && parent.parent.expression === parent;
+}
+
+/** A member read, an iteration, or a spread keeps the binding a value. */
+function valueUse(ref) {
+  const parent = ref.parent;
+  return (
+    collectionRead(ref) ||
+    (ts.isForOfStatement(parent) && parent.expression === ref) ||
+    (ts.isSpreadElement(parent) && parent.expression === ref)
+  );
+}
+
+/** Every use only reads the binding, so the literal Set or Map stays a static value. */
+function collectionReadOnly(symbol, name) {
+  let escaped = false;
+
+  for (const source of sources) {
+    walk(source, (use) => {
+      if (escaped || !ts.isIdentifier(use) || use === name || symbolOf(use) !== symbol) return;
+      if (!nameOnlyUse(use) && !valueUse(liftedReference(use))) escaped = true;
+    });
+  }
+
+  return !escaped;
+}
+
+/** The module-level const declaration a value initializes, or undefined. */
+function moduleConstantDeclaration(node) {
+  const declaration = node.parent;
+  if (
+    !ts.isVariableDeclaration(declaration) ||
+    !declaration.initializer ||
+    unwrap(declaration.initializer) !== node
+  ) {
+    return undefined;
+  }
+
+  const list = declaration.parent;
+  if (
+    !ts.isVariableDeclarationList(list) ||
+    (list.flags & ts.NodeFlags.Const) === 0 ||
+    !ts.isVariableStatement(list.parent) ||
+    list.parent.parent !== node.getSourceFile()
+  ) {
+    return undefined;
+  }
+
+  return declaration;
+}
+
+/** One array argument of literals that nothing reads beyond its members is a value. */
+function literalCollection(node, kind, declaration) {
+  const [argument] = node.arguments ?? [];
+  if (node.arguments?.length !== 1 || !ts.isArrayLiteralExpression(argument)) return false;
+
+  if (!argument.elements.every((element) => collectionEntry(element, kind))) return false;
+
+  return collectionReadOnly(symbolOf(declaration.name), declaration.name);
+}
+
+/** A const Set or Map of literals is a static value, like a const lookup table. */
+function staticCollectionValue(node) {
+  const kind = ts.isNewExpression(node) ? collectionKind(node) : undefined;
+  if (!kind) return false;
+
+  const declaration = moduleConstantDeclaration(node);
+  return declaration !== undefined && literalCollection(node, kind, declaration);
+}
+
 function checkService(node) {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return;
   if (!enclosingFunction(node)) {
@@ -1173,7 +1348,7 @@ function checkService(node) {
 }
 
 function checkModuleEffect(node) {
-  if (isCommand(node) || staticProtocolValue(node)) return;
+  if (isCommand(node) || staticProtocolValue(node) || staticCollectionValue(node)) return;
   if (!moduleDeclarationCall(node)) fail(node, "module-effect");
 }
 
@@ -1494,6 +1669,32 @@ function checkCommandImport(node) {
   if (message) fail(node, `command-import: ${message}`);
 }
 
+/** Each use of the declared name is a direct call, so the function never leaves its body. */
+function calledOnly(node) {
+  const symbol = symbolOf(node.name);
+  let escaped = false;
+  walk(node.parent, (use) => {
+    if (escaped || !ts.isIdentifier(use) || use === node.name || symbolOf(use) !== symbol) return;
+    if (!ts.isCallExpression(use.parent) || use.parent.expression !== use) escaped = true;
+  });
+  return !escaped;
+}
+
+/** Some enclosing function is the run of an operation. */
+function insideRun(node) {
+  for (let owner = enclosingFunction(node); owner; owner = enclosingFunction(owner)) {
+    if (!optionsMember(owner) || nameOf(functionName(owner)) !== "run") continue;
+    const member = ts.isPropertyAssignment(owner.parent) ? owner.parent : owner;
+    if (coreSymbol(member.parent.parent.expression, "operation")) return true;
+  }
+  return false;
+}
+
+/** A function declared inside an operation's run and only called there belongs to that run. */
+function runNested(node) {
+  return ts.isFunctionDeclaration(node) && !!node.name && calledOnly(node) && insideRun(node);
+}
+
 function checkFunction(node) {
   if (!isFunction(node) || !node.body) return;
   if (ts.isClassDeclaration(node.parent) || ts.isClassExpression(node.parent)) return;
@@ -1507,7 +1708,7 @@ function checkFunction(node) {
     return;
   }
 
-  if ([optionsMember, ownedMethod, nativeCallback].some((rule) => rule(node))) return;
+  if ([runNested, optionsMember, ownedMethod, nativeCallback].some((rule) => rule(node))) return;
   checkPlainFunction(node);
 }
 
@@ -1630,13 +1831,17 @@ function checkOperationRun(run) {
   if (response) fail(run, "operation-wire-output: replies belong to the protocol layer");
 }
 
-function mountedAuthDeclaration(node) {
-  return authMountFiles.includes(pathOf(node)) && nameOf(node.parent.name) === "handleAuth";
+/** The two named mounts: auth's `handleAuth` and the MCP set's `handleMcp`. */
+function mountedDeclaration(node) {
+  const name = nameOf(node.parent.name);
+  if (authMountFiles.includes(pathOf(node))) return name === "handleAuth";
+
+  return mcpMountFiles.includes(pathOf(node)) && name === "handleMcp";
 }
 
 function checkOperationWire(node) {
   if (!ts.isCallExpression(node) || !coreSymbol(node.expression, "operation")) return;
-  if (mountedAuthDeclaration(node)) return;
+  if (mountedDeclaration(node)) return;
 
   const options = node.arguments[0];
   if (
@@ -1666,6 +1871,7 @@ for (const source of sources) {
     checkRequestHeaders(node);
     checkResponse(node);
     checkMountedAuth(node);
+    checkMountedMcp(node);
     checkHttpImport(node);
 
     checkService(node);
@@ -1827,6 +2033,30 @@ if (process.argv.includes("--prove")) {
       "operation-wire-input",
       "const probe = operation({input: z.instanceof(Request), run: () => true});",
       "tinker/components/auth/handle.server.ts",
+    ],
+    [
+      "mcp-mount-other-operation",
+      "operation-wire-input",
+      "const probe = operation({input: z.instanceof(Request), run: () => true});",
+      "tinker/components/mcp/handle.server.ts",
+    ],
+    [
+      "mcp-handle-response-outside",
+      "protocol-response",
+      "export const probe = () => new Response(null, { status: 405 });",
+      "tinker/components/mcp/handle.server.ts",
+    ],
+    [
+      "mcp-mount-response-elsewhere",
+      "protocol-response",
+      "export const probe = () => new Response(null, { status: 405 });",
+      "tinker/components/mcp/tools.server.ts",
+    ],
+    [
+      "mounted-mcp-userland",
+      "protocol-mcp",
+      'import {operation} from "@tinker/core"; import {handleMcp} from "~/components/mcp/index.server"; const probe = operation({depends: {mounted: handleMcp.controller}, run: () => 1});',
+      "src/backend/plain-probe.ts",
     ],
     [
       "http-owner-extra-fetch",
@@ -2794,6 +3024,63 @@ if (process.argv.includes("--prove")) {
       "module-effect",
       'import {z} from "zod"; const probe = z.string().parse("x");',
     ],
+    [
+      "zod-loose-object-allowed",
+      null,
+      'import { z } from "zod"; export const Probe = z.looseObject({ a: z.string() });',
+    ],
+    ["module-literal-set-allowed", null, 'export const words = new Set(["a", "b"]);'],
+    ["module-literal-map-allowed", null, 'export const pairs = new Map([["a", 1], ["b", 2]]);'],
+    [
+      "module-set-from-call",
+      "module-effect",
+      'export const words = new Set(["a", "b"].map((w) => w));',
+    ],
+    [
+      "module-set-mutated",
+      "module-effect",
+      'export const words = new Set(["a"]);\nwords.add("b");',
+    ],
+    [
+      "module-set-read-allowed",
+      null,
+      'import {operation} from "@tinker/core"; export const words = new Set(["a", "b"]);\nexport const many = [...words].length + words.size;\nexport const probe = operation({run: () => words.has("a")});',
+    ],
+    [
+      "module-set-from-binding",
+      "module-effect",
+      'const base = ["a"];\nexport const words = new Set(base);',
+    ],
+    [
+      "module-set-paren-mutated",
+      "module-effect",
+      'export const words = new Set(["a"]);\nexport function grow() { (words).add("b"); }',
+    ],
+    [
+      "module-set-passed",
+      "module-effect",
+      'export const words = new Set(["a"]);\nexport const probe = [words];',
+    ],
+    [
+      "module-set-local-constructor",
+      "module-effect",
+      'function Set(values: string[]) { return values; }\nexport const words = new Set(["a"]);',
+    ],
+    [
+      "run-nested-recursion-allowed",
+      null,
+      'import {operation} from "@tinker/core"; export const probe = operation({run: () => { function depth(n: number): number { return n <= 0 ? 0 : 1 + depth(n - 1); } return depth(3); }});',
+    ],
+    [
+      "run-nested-escape-checked",
+      "plain-effect",
+      'import {operation} from "@tinker/core"; export const probe = operation({run: () => { function read() { return Date.now(); } return { read }; }});',
+    ],
+    [
+      "module-recursion-still-helper",
+      "two-sites",
+      "export function depth(n: number): number { return n <= 0 ? 0 : 1 + depth(n - 1); }",
+    ],
     ...[
       "new Date()",
       "Date()",
@@ -2835,6 +3122,15 @@ if (process.argv.includes("--prove")) {
     .find((arg) => arg.startsWith("--cases="))
     ?.slice(8)
     .split(",");
+
+  // A literal Set or Map case fails at its own line: the declaration, never the use.
+  const collectionLines = new Map([
+    ["module-set-mutated", "src/plain-probe.ts:1: module-effect"],
+    ["module-set-paren-mutated", "src/plain-probe.ts:1: module-effect"],
+    ["module-set-passed", "src/plain-probe.ts:1: module-effect"],
+    ["module-set-from-binding", "src/plain-probe.ts:2: module-effect"],
+    ["module-set-local-constructor", "src/plain-probe.ts:2: module-effect"],
+  ]);
   const selected = names ? cases.filter(([name]) => names.includes(name)) : cases;
   if (names) assert.equal(selected.length, names.length, "unknown planted case");
 
@@ -2886,6 +3182,10 @@ if (process.argv.includes("--prove")) {
 
       assert.equal(red.status, rule ? 1 : 0, name);
       if (rule) assert.ok(red.stderr.includes(rule), `${name}: must fail by ${rule}`);
+      const line = collectionLines.get(name);
+      if (line) {
+        assert.ok(red.stderr.split("\n").includes(line), `must fail at ${line}`);
+      }
       if (name === "error-registry-one-caller") {
         assert.ok(
           red.stderr.split("\n").includes("tinker/components/one-caller/errors.ts:3: two-sites"),
