@@ -8,9 +8,9 @@ import { accountNotice } from "~/components/sync-sqlite/notice";
 export const publishAccountNotice = operation({
   label: "sync.accountNotice",
   input: z.strictObject({ accountId: z.string() }).brand<"AccountNotice">(),
-  depends: { transaction },
-  run: async ({ transaction }, { input }) => {
+  depends: { transaction, notice: accountNotice },
+  run: async ({ transaction, notice }, { input }) => {
     // The notify row rides in this call's transaction, so its commit is what wakes listeners.
-    await transaction.notify("start_sync", accountNotice(input.accountId));
+    await transaction.notify("start_sync", notice.run({ input: input.accountId }));
   },
 });
