@@ -158,8 +158,8 @@ try {
     },
     {
       name: "query-after-end",
-      from: 'if (state === "committed" || state === "rolledBack") throw fail("TransactionEnded", {});',
-      to: 'if (false) throw fail("TransactionEnded", {});',
+      from: 'check() {\n        if (state === "committed" || state === "rolledBack") {',
+      to: "check() {\n        if (false) {",
       expected: "query after explicit end must throw TransactionEnded",
     },
   ];
