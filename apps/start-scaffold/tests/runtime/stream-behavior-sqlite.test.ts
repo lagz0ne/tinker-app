@@ -49,7 +49,7 @@ for (const stopped of [false, true]) {
     const reader = body.getReader();
     expect(new TextDecoder().decode((await reader.read()).value)).toBe(": connected\n\n");
     const pending = reader.read();
-    hand.notice("Ada");
+    hand.notice(root, "Ada");
     await checked.promise;
     if (stopped) stop.abort();
     release.reject(error);

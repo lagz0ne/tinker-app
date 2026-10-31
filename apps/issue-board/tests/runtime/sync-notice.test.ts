@@ -8,17 +8,22 @@ import { notifications } from "~/components/sync/notifications.server";
 import { proofServices } from "./fixtures/app.server";
 import { handWoken } from "./fixtures/sync";
 
+/** One row the listener hears: an account notice, or a raw payload another table's wake sends. */
+type Wake = { notice: string } | { raw: string };
+
 /** Test notice decoding through the real listener owner, including non-notice table wakes. */
-async function checkPayloads(rows: [string, string | null][]) {
+async function checkPayloads(rows: [Wake, string | null][]) {
   const { db, emit } = handWoken();
   const root = createScope({ presets: [...proofServices((): Scope.Handle => root), db] });
   const feed = await root.resolve(notifications);
 
-  for (const [payload, account] of rows) {
+  for (const [wake, account] of rows) {
     const subscribers = await Promise.all(
       ["ada", "tenant:ada", "grace"].map((id) => feed.subscribe(undefined, id)),
     );
     const before = feed.revision();
+    const payload = "notice" in wake ? root.run(accountNotice, { input: wake.notice }) : wake.raw;
+    if ("notice" in wake) expect(payload).toBe(`account:${wake.notice}`);
     emit(payload);
 
     expect(feed.revision(), payload).toBe(before + Number(account === null));
@@ -33,18 +38,17 @@ async function checkPayloads(rows: [string, string | null][]) {
 }
 
 test("a notice payload names its account, and a table wake names none", async () => {
-  expect(accountNotice("ada")).toBe("account:ada");
   await checkPayloads([
-    [accountNotice("ada"), "ada"],
-    ["sync_event", null],
-    ["session", null],
+    [{ notice: "ada" }, "ada"],
+    [{ raw: "sync_event" }, null],
+    [{ raw: "session" }, null],
   ]);
 });
 
 test("an account ID keeps its own colons, and a name that only starts alike names none", async () => {
   await checkPayloads([
-    [accountNotice("tenant:ada"), "tenant:ada"],
-    ["accounts:ada", null],
-    ["", null],
+    [{ notice: "tenant:ada" }, "tenant:ada"],
+    [{ raw: "accounts:ada" }, null],
+    [{ raw: "" }, null],
   ]);
 });

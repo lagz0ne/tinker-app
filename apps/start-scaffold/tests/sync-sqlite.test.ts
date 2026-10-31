@@ -19,7 +19,6 @@ import {
   transaction,
 } from "~/components/database-sqlite/index.server";
 import {
-  accountNotice,
   createAccountStream,
   eventHistory,
   notifications,
@@ -251,7 +250,7 @@ test("publishAccountNotice delivers the account notice it names", async () => {
   await write(root, publishAccountNotice, { rawInput: { accountId: "acct-1" } });
   await until(() => heard.length === 1);
 
-  expect(heard).toEqual([accountNotice("acct-1")]);
+  expect(heard).toEqual(["account:acct-1"]);
 
   stop();
 

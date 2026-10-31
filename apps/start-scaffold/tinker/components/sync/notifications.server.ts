@@ -124,9 +124,9 @@ const notificationWheel = resource({
 /** One native listener wakes all request subscribers; reconnect replaces a broken listener. */
 export const notifications = resource({
   label: "sync.notifications",
-  depends: { database, wheel: notificationWheel },
-  factory: async ({ database, wheel }, { defer }) => {
-    const accountPrefix = accountNotice("");
+  depends: { database, wheel: notificationWheel, notice: accountNotice },
+  factory: async ({ database, wheel, notice }, { defer }) => {
+    const accountPrefix = notice.run({ input: "" });
 
     let revision = 0;
     let broken = false;

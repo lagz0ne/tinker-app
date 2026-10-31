@@ -93,7 +93,7 @@ test("account notices affect only that account and preserve the shared public wa
   const graceWait = feed.wait(grace, 0);
 
   const held = feed.share("public", async () => ({ status: "success", value: frame }), cursor);
-  heard(accountNotice("Ada"));
+  heard(root.run(accountNotice, { input: "Ada" }));
   expect(await adaWait).toBe(false);
   expect(ada.stale).toBe(true);
   expect(grace.stale).toBe(false);
