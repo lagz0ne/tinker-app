@@ -80,6 +80,14 @@ sit in `auth-sqlite`:
   A loopback redirect needs
   `application_type: "native"`: Better Auth
   follows RFC 8252 7.3 there.
+  Claude Code and obelisk's `mcp-run.mjs`
+  send no `application_type`, and Better
+  Auth 1.7.7 then says "web" and refuses.
+  1.7.7 has no option to change that
+  default, so the register hook sets
+  "native" when every redirect is loopback
+  and no type is given. An explicit "web"
+  with a loopback redirect is still refused.
 - `deviceAuthorization()` with obelisk's code
   rules. Its public `/device*` routes are off.
   The component owns three routes instead:

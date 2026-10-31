@@ -292,13 +292,11 @@ export const mcpProvider = resource({
   factory: async ({ settings, mcp, api, jwt, provider }) => {
     const { APIError, createAuthMiddleware } = api;
 
+    const loopback = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/callback$/;
+
     const allowed = z
       .string()
-      .refine(
-        (uri) =>
-          mcp.redirects.includes(uri) ||
-          (mcp.loopback && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/callback$/.test(uri)),
-      );
+      .refine((uri) => mcp.redirects.includes(uri) || (mcp.loopback && loopback.test(uri)));
 
     // A register names its redirect URIs at the top; an update may keep them, or name new ones.
     const writes = new Map<string, z.ZodType>([
@@ -315,7 +313,17 @@ export const mcpProvider = resource({
       ],
     ]);
 
-    /** Better Auth's app-level hook: it sees every client write before the provider stores it. */
+    // Claude Code and obelisk's mcp-run register a loopback redirect and name no application type.
+    const untypedLoopback = z.object({
+      application_type: z.undefined().optional(),
+      redirect_uris: z.array(z.string().regex(loopback)).min(1),
+    });
+
+    /**
+     * Better Auth's app-level hook: it sees every client write before the provider stores it.
+     * A registration with only loopback redirects and no application type is a native client
+     * (RFC 8252 7.3); Better Auth 1.7.7 would default it to web and refuse its redirect.
+     */
     const clientCheck = createAuthMiddleware(async (ctx) => {
       const shape = writes.get(ctx.path ?? "");
 
@@ -324,6 +332,10 @@ export const mcpProvider = resource({
           error: "invalid_redirect_uri",
           error_description: "Each redirect URI must be one this server allows, and one is needed.",
         });
+      }
+
+      if (ctx.path === "/oauth2/register" && untypedLoopback.safeParse(ctx.body).success) {
+        return { context: { body: { ...ctx.body, application_type: "native" } } };
       }
     });
 
