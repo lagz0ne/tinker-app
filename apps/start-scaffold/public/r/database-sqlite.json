@@ -3,7 +3,7 @@
   "name": "database-sqlite",
   "type": "registry:lib",
   "title": "database-sqlite",
-  "description": "Copied SQLite database component. You own its files. Needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db); not installable onto the `app` item yet.",
+  "description": "Copied SQLite database component. You own its files. tinker add prints the Reylo toolchain lines to paste.",
   "dependencies": [
     "@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/start-v0.9.0/tinker-core-0.9.0.tgz",
     "reylo@0.6.0",
@@ -68,6 +68,12 @@
       "content": "delete from start_notify\nwhere created_at < :before\n"
     },
     {
+      "path": "tinker/components/database-sqlite/sql.d.ts",
+      "type": "registry:file",
+      "target": "~/tinker/components/database-sqlite/sql.d.ts",
+      "content": "// The fallback type of a Reylo `.sql` import, for tools without content mappers: tsgolint\n// (TypeScript 7.0) reads a query as a Reylo query of any row. The type check (TypeScript 7.1 with\n// --runExternalCode) resolves each `.sql` file through Reylo first, so this never replaces the\n// real params and row types there.\ndeclare module \"*.sql\" {\n  import type { Cardinality, Query } from \"reylo\";\n\n  const query: Query<any, any, Cardinality, \"sqlite\">;\n  export default query;\n}\n"
+    },
+    {
       "path": "tinker/components/database-sqlite/types.ts",
       "type": "registry:file",
       "target": "~/tinker/components/database-sqlite/types.ts",
@@ -78,13 +84,33 @@
       "type": "registry:file",
       "target": "~/migrations/20261028000000_start_notify.sql",
       "content": "create table start_notify (\n  id integer primary key autoincrement,\n  channel text not null,\n  payload text not null,\n  created_at integer not null\n);\n\ncreate index start_notify_channel_id on start_notify (channel, id);\n"
+    },
+    {
+      "path": "maintain/sqlite-dev-db.mjs",
+      "type": "registry:file",
+      "target": "~/maintain/sqlite-dev-db.mjs",
+      "content": "import { mkdir, readFile, readdir, rm } from \"node:fs/promises\";\nimport { dirname, join, resolve } from \"node:path\";\nimport { DatabaseSync } from \"node:sqlite\";\nimport { fileURLToPath } from \"node:url\";\n\n/** The app folder: this file lives in `maintain/`. */\nconst app = resolve(dirname(fileURLToPath(import.meta.url)), \"..\");\n\n/** Rebuild the SQLite dev database that the Reylo type check and the `.sql` imports read. */\nexport async function buildDevDatabase() {\n  const file = join(app, \".tinker\", \"sqlite-dev.db\");\n\n  // This repo keeps its SQLite migrations in `sqlite/`; an installed component ships them to `migrations/`.\n  const folders = [join(app, \"sqlite\", \"migrations\"), join(app, \"migrations\")];\n\n  let folder = folders[0];\n\n  let names = [];\n\n  for (const candidate of folders) {\n    names = (await readdir(candidate).catch(() => [])).filter((name) => name.endsWith(\".sql\"));\n\n    if (names.length > 0) {\n      folder = candidate;\n\n      break;\n    }\n  }\n\n  await mkdir(dirname(file), { recursive: true });\n\n  for (const suffix of [\"\", \"-wal\", \"-shm\"]) await rm(file + suffix, { force: true });\n\n  const db = new DatabaseSync(file);\n\n  db.exec(\"PRAGMA busy_timeout = 5000\");\n  db.exec(\"PRAGMA journal_mode = WAL\");\n  db.exec(\"PRAGMA foreign_keys = ON\");\n\n  // The same bookkeeping table the `migrate` operation creates before it applies files.\n  db.exec(\n    \"CREATE TABLE IF NOT EXISTS start_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)\",\n  );\n\n  for (const name of names.sort((left, right) => left.localeCompare(right))) {\n    db.exec(\"BEGIN EXCLUSIVE\");\n\n    try {\n      db.exec(await readFile(join(folder, name), \"utf8\"));\n\n      db.prepare(\"INSERT INTO start_migrations (name, applied_at) VALUES (?, ?)\").run(\n        name,\n        Date.now(),\n      );\n\n      db.exec(\"COMMIT\");\n    } catch (error) {\n      db.exec(\"ROLLBACK\");\n\n      throw error;\n    }\n  }\n\n  db.close();\n\n  console.log(`sqlite dev db: ${names.length} migrations applied to .tinker/sqlite-dev.db`);\n}\n\nexport default buildDevDatabase;\n\nif (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {\n  await buildDevDatabase();\n}\n"
     }
   ],
   "meta": {
     "ownership": "userland",
     "update": "Run tinker update <name> to replace the whole folder; it stops on local edits recorded in tinker/components.lock. tinker check reports edits and outdated copies.",
-    "starterOnly": true,
-    "starterOnlyWhy": "it needs the starter's Reylo toolchain (TypeScript 7.1 beta, reylo/vite, contentMappers, sqlite-dev-db)"
+    "toolchain": {
+      "package.json": [
+        "\"scripts\": { \"typecheck\": \"node maintain/sqlite-dev-db.mjs && DATABASE_URL=file:.tinker/sqlite-dev.db tsc --noEmit --runExternalCode\" }",
+        "\"devDependencies\": { \"typescript\": \"7.1.0-beta\" }",
+        "\"overrides\": { \"typescript\": \"7.1.0-beta\" }"
+      ],
+      "tsconfig.json": [
+        "\"contentMappers\": [{ \"package\": \"reylo\", \"extensions\": [\".sql\", \".reylo.yaml\", \".reylo.yml\"] }]"
+      ],
+      "vite.config.ts": [
+        "import reylo from \"reylo/vite\";",
+        "plugins: [reylo(), ...]",
+        "test: { globalSetup: [\"./maintain/sqlite-dev-db.mjs\"] }"
+      ],
+      ".reylo.yaml": ["direct_url: file:./.tinker/sqlite-dev.db"]
+    }
   },
   "devDependencies": ["@reylosql/sqlite@0.6.0"]
 }
