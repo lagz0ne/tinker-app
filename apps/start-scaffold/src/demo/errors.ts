@@ -18,4 +18,6 @@ export declare namespace Errors {
       ? BaseErrors.Payloads[N]
       : never;
   type Of<N extends Name> = Error & { kind: N; payload: Payload<N> };
+  /** Core's `ctx.raise`, typed to this registry: the kind picks the payload. */
+  type Raise = <N extends Name>(kind: N, payload: Payload<N>) => never;
 }
