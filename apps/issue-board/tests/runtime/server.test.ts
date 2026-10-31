@@ -57,7 +57,7 @@ test("a cancelled boundary call runs request.cancelled, which raises the base's 
 
 test("the base's health operation reports the base version", async () => {
   const root = createScope();
-  expect(root.settle(health)).toEqual({ status: "success", value: { ok: true, base: "0.16.1" } });
+  expect(root.settle(health)).toEqual({ status: "success", value: { ok: true, base: "0.17.0" } });
   expect((await root.close({ graceful: true })).status).toBe("success");
 });
 

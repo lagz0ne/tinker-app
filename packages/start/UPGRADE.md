@@ -1,7 +1,23 @@
 # Upgrade
 
-## Unreleased
+## 0.17.0
 
+Start 0.17.0 is released from `lagz0ne/tinker-app`, tag `start-v0.17.0`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.17.0/tinker-start-0.17.0.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.17.0/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.17.0.
+
+- No plain helper functions in app code (tinker-app #44). The demo's `scripts/check-plain.mjs`
+  refuses every plain function with `plain-function: make it an operation`; the cap of 17,
+  `PLAIN.md` and its `--list` are gone. Each helper Start shipped is now an operation (a span
+  per call, deps through `depends`) or a Core feature: telemetry's `encodeValue` and
+  `spanBody` run in a `namespace({ observe: false })`, `accountNotice` is `sync.notice`,
+  errors use the ctx's typed `raise`, and the exit glue moved to the host (below). The one named
+  view exception is shadcn's `cn`. Delete your `PLAIN.md` and turn each refused helper into an
+  operation the callers depend on.
 - The Start host now owns a command's exit glue. A command that throws at startup exits 78
   (sysexits EX_CONFIG) for `MissingTag`, `DataValidationFailed` or `ERR_INVALID_URL`, else 1,
   and the host prints it once, as `exit(code, error)` did. A command's `closed` may resolve to
@@ -14,7 +30,7 @@
   files together. An app that keeps the old base and commands still works: the change to the
   host is additive, and a closed with no results is clean, as before.
 - The new `cmds/` and `base-main` need the Start release that ships this host, or newer.
-  Start 0.13.3 and older ignore the returned close results and do not map a startup throw:
+  Start 0.16.1 and older ignore the returned close results and do not map a startup throw:
   there a close failure exits 0 and a config error exits 1, not 78. Install that Start first,
   then copy the files. `tinker add` and `tinker update` read the registry of the installed
   Start's tag, and a template export pins its own release, so both already give a matching
