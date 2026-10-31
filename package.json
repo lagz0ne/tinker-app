@@ -55,7 +55,7 @@
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@tailwindcss/vite": "4.3.3",
-    "@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.16.0/tinker-start-0.16.0.tgz",
+    "@tinker/start": "https://github.com/lagz0ne/tinker-app/releases/download/start-v0.16.1/tinker-start-0.16.1.tgz",
     "@types/node": "^24",
     "@types/nodemailer": "^7.0.11",
     "@types/pg": "^8.15.6",

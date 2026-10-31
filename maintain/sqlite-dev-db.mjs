@@ -8,9 +8,11 @@ const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Rebuild the SQLite dev database that the Reylo type check and the `.sql` imports read. */
 export async function buildDevDatabase() {
+  await requireMapper();
+
   const file = join(app, ".tinker", "sqlite-dev.db");
 
-  // This repo keeps its SQLite migrations in `sqlite/`; an installed component ships them to `migrations/`.
+  // The SQLite components ship their migrations to `sqlite/migrations`; an older app may use `migrations`.
   const folders = [join(app, "sqlite", "migrations"), join(app, "migrations")];
 
   let folder = folders[0];
@@ -64,6 +66,26 @@ export async function buildDevDatabase() {
   db.close();
 
   console.log(`sqlite dev db: ${names.length} migrations applied to .tinker/sqlite-dev.db`);
+}
+
+/**
+ * Stop when the app holds the SQLite set but its tsconfig.json has no Reylo content mapper. Then
+ * tsc reads each `.sql` import through `database-sqlite/sql.d.ts` (any params and rows) and
+ * passes, so a missed `contentMappers` paste would hide every query type. The type check and
+ * the tests run this script first, so they fail here instead.
+ */
+async function requireMapper() {
+  const installed = await readdir(join(app, "tinker", "components", "database-sqlite")).catch(
+    () => null,
+  );
+  if (installed === null) return;
+
+  const config = await readFile(join(app, "tsconfig.json"), "utf8").catch(() => "");
+  if (/"contentMappers"[\s\S]*"reylo"/.test(config)) return;
+
+  throw new Error(
+    'sqlite dev db: tsconfig.json has no Reylo "contentMappers" entry; paste the tsconfig.json line tinker add printed',
+  );
 }
 
 export default buildDevDatabase;
