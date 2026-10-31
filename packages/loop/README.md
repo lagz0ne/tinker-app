@@ -312,7 +312,8 @@ Other apps use only its bin; the package exports no code.
 - `src/resources/` holds the work that touches the outside: child processes,
   the `.loop/` files and the lock, git, the app's Start rules, `loop.json`,
   the change scan, and the reviewer. Operations read no file themselves.
-- `src/report.ts` is the one plain helper: the finding line and the summary.
+- `src/report.ts` holds the report lines more than one command prints, as operations
+  (`report.findingLine`, `report.summary`, `report.shortSha`, `report.count`).
 - `bin/tinker-loop.mjs` runs the built `dist-cli/cli.js` with Start's `runMain`.
   `prepare` runs `tinker prepare`, then builds `dist-cli`.
 
