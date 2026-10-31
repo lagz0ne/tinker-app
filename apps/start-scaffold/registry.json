@@ -50,6 +50,21 @@
           "target": "~/src/transport/greet.functions.ts"
         },
         {
+          "path": "../start-min/src/transport/greet.server.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/greet.server.ts"
+        },
+        {
+          "path": "../start-min/src/transport/health.server.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/health.server.ts"
+        },
+        {
+          "path": "../start-min/src/transport/telemetry.server.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/telemetry.server.ts"
+        },
+        {
           "path": "../start-min/src/routes/index.tsx",
           "type": "registry:file",
           "target": "~/src/routes/index.tsx"
@@ -1692,6 +1707,11 @@
           "path": "src/routes/api.sync.ts",
           "type": "registry:file",
           "target": "~/src/routes/api.sync.ts"
+        },
+        {
+          "path": "src/transport/stream.server.ts",
+          "type": "registry:file",
+          "target": "~/src/transport/stream.server.ts"
         }
       ],
       "meta": {

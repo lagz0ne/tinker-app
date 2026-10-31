@@ -54,6 +54,24 @@
       "content": "import { createServerFn } from \"@tanstack/react-start\";\n\nimport { startRequests } from \"~/components/requests\";\n\nimport { greetRead } from \"./greet.server\";\n\nexport const runGreet = createServerFn({ method: \"GET\" })\n  .middleware([startRequests.middleware])\n  .handler(async ({ context }) => context.session.run(greetRead));\n"
     },
     {
+      "path": "../start-min/src/transport/greet.server.ts",
+      "type": "registry:file",
+      "target": "~/src/transport/greet.server.ts",
+      "content": "import { operation } from \"@tinker/core\";\n\nimport type { Errors } from \"~/components/errors\";\nimport { requestStop } from \"~/components/requests\";\n\nimport { greet } from \"@/backend/greet\";\n\n/** The greeting, read for one request. A cancel raises Cancelled; a failure stays as is. */\nexport const greetRead = operation({\n  label: \"transport.greet\",\n  depends: { read: greet.controller, stop: requestStop.required },\n  run: async ({ read, stop }, { raise: coreRaise }) => {\n    const raise: Errors.Raise = coreRaise;\n\n    const result = await read.settle({ input: { name: \"world\" }, signal: stop });\n\n    if (result.status === \"failed\") throw result.error;\n    if (result.status === \"cancelled\") return raise(\"Cancelled\", {});\n    return result.value;\n  },\n});\n"
+    },
+    {
+      "path": "../start-min/src/transport/health.server.ts",
+      "type": "registry:file",
+      "target": "~/src/transport/health.server.ts",
+      "content": "import { operation } from \"@tinker/core\";\n\nimport type { Errors } from \"~/components/errors\";\nimport { health } from \"~/components/health\";\nimport { requestStop } from \"~/components/requests\";\n\n/** The base health, read for one request. A cancel raises Cancelled; a failure stays as is. */\nexport const healthRead = operation({\n  label: \"transport.health\",\n  depends: { read: health.controller, stop: requestStop.required },\n  run: async ({ read, stop }, { raise: coreRaise }) => {\n    const raise: Errors.Raise = coreRaise;\n\n    const result = await read.settle({ signal: stop });\n\n    if (result.status === \"failed\") throw result.error;\n    if (result.status === \"cancelled\") return raise(\"Cancelled\", {});\n    return result.value;\n  },\n});\n"
+    },
+    {
+      "path": "../start-min/src/transport/telemetry.server.ts",
+      "type": "registry:file",
+      "target": "~/src/transport/telemetry.server.ts",
+      "content": "import { operation } from \"@tinker/core\";\nimport { z } from \"zod\";\n\nimport type { Errors } from \"~/components/errors\";\nimport { requestStop } from \"~/components/requests\";\nimport { receiveTelemetry } from \"~/components/telemetry/index.server\";\n\n/** One browser batch, received for one request. A cancel raises Cancelled; a failure stays as is. */\nexport const telemetryReceive = operation({\n  label: \"transport.telemetry\",\n  input: z.unknown(),\n  depends: { read: receiveTelemetry.controller, stop: requestStop.required },\n  run: async ({ read, stop }, { input, raise: coreRaise }) => {\n    const raise: Errors.Raise = coreRaise;\n\n    const result = await read.settle({ rawInput: input, signal: stop });\n\n    if (result.status === \"failed\") throw result.error;\n    if (result.status === \"cancelled\") return raise(\"Cancelled\", {});\n    return result.value;\n  },\n});\n"
+    },
+    {
       "path": "../start-min/src/routes/index.tsx",
       "type": "registry:file",
       "target": "~/src/routes/index.tsx",
