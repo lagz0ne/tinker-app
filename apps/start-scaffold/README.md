@@ -51,6 +51,30 @@ Follow the [current authoring contract](https://github.com/lagz0ne/tinker-app/bl
 config bindings and the full owned close order. Auth imports its sync/mail work
 directly; sync's app readers and records still use required tags.
 
+## MCP and sign-in with a code
+
+`mcp` serves tools to MCP clients such as Claude. `auth-sqlite` gives them OAuth and the
+`approve_signin`, `list_signins`, and `end_signin` operations. Bind `mcpServer` and `mcpTools`
+on the root, and install `mcpRuns` there. Each tool row names the operation and its own input.
+Send `/api/auth/*`, `/.well-known/oauth-protected-resource*`, and
+`/.well-known/oauth-authorization-server/api/auth` to `handleAuth`. Wire `/mcp` like this:
+
+```ts
+const answer = await root.run(checkMcpToken, {
+  input: {
+    authorizationHeader: request.headers.get("authorization"),
+    dpopProofJwt: request.headers.get("dpop"),
+    method: request.method,
+    url: request.url,
+  },
+});
+if (answer.challenge) return new Response(JSON.stringify(answer.challenge.body), answer.challenge);
+
+return root.run(handleMcp, { input: request, tags: mcpCaller(answer.caller), signal: request.signal });
+```
+
+`tests/mcp-live-sqlite.test.ts` runs all of it over a real socket.
+
 ## Registry items and app ownership
 
 Build JSON from the actual app source:
