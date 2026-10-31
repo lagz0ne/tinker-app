@@ -7,8 +7,7 @@ import { mailOutbox } from "~/components/mail/index.server";
 import type { Sync } from "~/components/sync";
 import { eventHistory, execution } from "~/components/sync/index.server";
 
-import { commentRecord } from "@/contracts/comments";
-import { issueRecord } from "@/contracts/issues";
+import { rowChange } from "@/demo/contracts/sync";
 import { raise } from "@/demo/errors";
 
 import { team, teamMember } from "./board.schema.server";
@@ -120,19 +119,12 @@ export const fanOut = operation({
   },
 });
 
-/** What one saved board row sends: its comment, an upserted issue, or a removed issue. */
-const boardChange = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("comment.add"), comment: commentRecord }),
-  z.object({ kind: z.literal("issue.upsert"), issue: issueRecord }),
-  z.object({ kind: z.literal("issue.remove"), id: z.uuid() }),
-]);
-
 /** The same change to every locked stream; only the actor's stream also gets its result. */
 export const rowDeliveries = operation({
   label: "streams.rowDeliveries",
   input: z.object({
     members: z.array(z.object({ id: z.string() })),
-    change: boardChange,
+    change: rowChange,
     actorId: z.string(),
   }),
   run: (_deps, { input }) =>
