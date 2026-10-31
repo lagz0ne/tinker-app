@@ -1,10 +1,16 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
+import { pathToFileURL } from "node:url";
+
 import { createScope } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
 import { expect, test } from "vite-plus/test";
 
 import { liveAccount } from "~/components/auth-sqlite/index.server";
 import { openSync } from "~/components/auth-sqlite/index.server";
-import { database } from "~/components/database-sqlite/index.server";
+import { database, databaseUrl } from "~/components/database-sqlite/index.server";
 import { backendStop, requestStop, startRequests } from "~/components/requests";
 import { requestHeaders } from "~/components/requests/index.server";
 import { notifications } from "~/components/sync-sqlite/notifications.server";
@@ -121,6 +127,31 @@ test("a quiet stream sends a heartbeat each lease tick and ends when its lease r
 
   expect((await session.close({ graceful: true })).status).toBe("success");
   expect((await root.close({ graceful: true })).status).toBe("success");
+});
+
+test("the hand-woken file opens both connections as the component does, so a commit waits on no disk sync", async () => {
+  const home = await mkdtemp(join(tmpdir(), "tinker-stream-sqlite-"));
+  const real = createScope({ tags: [databaseUrl(pathToFileURL(join(home, "app.db")))] });
+  const fixture = createScope({ presets: [handWoken().db] });
+
+  const settings = (connection: DatabaseSync) =>
+    ["journal_mode", "synchronous", "busy_timeout", "foreign_keys"].map(
+      (name) => Object.values(connection.prepare(`PRAGMA ${name}`).get() ?? {})[0],
+    );
+
+  try {
+    const component = await real.resolve(database);
+    const hand = await fixture.resolve(database);
+
+    // Rollback journal with FULL sync costs several disk syncs per commit; under disk load
+    // the 150-row backlog below then outlasts the test timeout.
+    expect(settings(hand.client)).toEqual(settings(component.client));
+    expect(settings(hand.reader)).toEqual(settings(component.reader));
+  } finally {
+    await fixture.close({ graceful: true });
+    await real.close({ graceful: true });
+    await rm(home, { recursive: true, force: true });
+  }
 });
 
 test("a backlog past one page is sent as full pages before the stream says it is connected", async () => {
