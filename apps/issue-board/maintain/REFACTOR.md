@@ -56,7 +56,8 @@ The pool keeps databaseConnectTimeout at 5,000 ms on the server too. Failing
 fast beats a hung request; this uses pg's connectionTimeoutMillis. A server
 write waits at most 5 seconds for a free connection, then fails. This bounds
 pool checkout, not the SQL query or the whole call. The server has no special
-retryable response for that timeout: readReceipt throws the unknown error.
+retryable response for that timeout: the `transport.receipt` operation rethrows the
+unknown error.
 No new error mapping is added.
 
 Reads keep database. Digest enqueue is still one atomic SQL statement on that
@@ -178,12 +179,9 @@ settle call below opens the child because it carries signal. It waits for
 that child's defers before returning. It is already the server function shape:
 
 ```ts
-return readReceipt(
-  await context.session.settle(changeIssue, {
-    input: data,
-    signal: context.signal,
-  }),
-);
+// src/transport/result.server.ts: the server function runs this with its data
+run: async ({ write, receipt, stop }, { input }) =>
+  receipt.run({ input: await write.settle({ input, signal: stop }) }),
 ```
 
 The import runner uses batch.settle({ rawInput: { rows }, signal }) and reports

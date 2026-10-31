@@ -25,6 +25,33 @@
 - `cmds/telemetry-worker.ts` reads its close result inline. A failed close still throws in the
   worker thread, so the server's `telemetryThread` sees the `error` event and stops failed.
 
+- Copied items: errors are raised with Core's `ctx.raise`, and a boundary makes one request
+  call. `errors` no longer exports `raise`, `fail` or `isError`; it adds the `Errors.Raise`
+  type. Bind it in a run or factory and read an error back with a zod shape:
+
+  ```ts
+  run: (deps, { raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise; // the kind picks the payload
+    return raise("StreamMissing", {});
+  },
+  // reading: z.object({ kind: z.literal("BadInput"), payload: z.object({ reason: z.string() }) })
+  ```
+
+  `requests` drops `readResult` and adds `cancelledCall`. A boundary that runs one operation
+  makes one session call: an operation that depends on the work as a controller, settles it
+  with `requestStop`, throws a failure as is and raises `Cancelled` (see
+  `src/transport/*.server.ts`). Where the work cannot be a dependency, settle it and then:
+
+  ```ts
+  if (result.status === "failed") throw result.error;
+  if (result.status === "cancelled") return context.session.run(cancelledCall);
+  return result.value;
+  ```
+
+  `renderFrames.retain(request, close)` now takes `close` as `(() => Promise<void>) |
+  undefined`, raises `StartScopeMissing` when it is missing, and returns it. The server entry
+  uses the returned close.
+
 ## 0.16.1
 
 Start 0.16.1 is released from `lagz0ne/tinker-app`, tag `start-v0.16.1`.
