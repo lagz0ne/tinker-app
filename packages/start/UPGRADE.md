@@ -1,5 +1,41 @@
 # Upgrade
 
+## 0.13.4
+
+Start 0.13.4 is released from `lagz0ne/tinker-app`, tag `start-v0.13.4`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.13.4/tinker-start-0.13.4.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.4/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.13.4.
+
+The demo's `scripts/check-plain.mjs` accepts three more forms. Hedl found each one.
+
+- A module-level zod 4 `z.looseObject({...})` is a schema declaration, like `z.object` and
+  `z.strictObject`. Before, it failed `module-effect`.
+- A module-level `const` that holds a literal `new Set([...])` or `new Map([[key, value], ...])`
+  is a static value, like a const lookup table:
+
+  ```ts
+  const stopWords = new Set(["a", "an", "the"]);
+  ```
+
+  Every element must be a literal, and `Set` and `Map` must be the built-in ones. Each use must
+  only read the value: `has`, `get`, `forEach`, `keys`, `values`, or `entries` as a call, `size`,
+  `for...of`, or a spread. Any other use, such as `add`, passing it to a function, or putting it in
+  an object, still fails `module-effect` at the declaration.
+
+- A function declaration inside an operation's `run` is part of that run, not a plain helper,
+  when each use of its name is a direct call. A recursive function there no longer fails
+  `two-sites`, and `PLAIN.md` does not list it. A method, a function value, or a declaration
+  that is returned or passed still gets the plain checks. A module-level function still needs
+  two callers.
+
+New `--prove` cases cover each form and its refused twins. An app made from the demo takes the new
+`scripts/check-plain.mjs` by the template update from `demo-v0.13.3` to `demo-v0.13.4`, or copies it
+from tag `start-v0.13.4`.
+
 ## 0.13.3
 
 Start 0.13.3 is released from `lagz0ne/tinker-app`, tag `start-v0.13.3`.
