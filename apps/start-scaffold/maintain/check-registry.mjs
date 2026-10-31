@@ -55,6 +55,19 @@ duplicate.items
 
 await assert.rejects(registryItems({ registry: duplicate }), /already owned/);
 
+const otherScript = structuredClone(registry);
+
+otherScript.items
+  .find((item) => item.name === "database-sqlite")
+  .files.push({
+    path: "maintain/worker.mjs",
+    type: "registry:file",
+    target: "~/maintain/proof-fault.mjs",
+  });
+
+await assert.rejects(registryItems({ registry: otherScript }), /already owned/);
+console.log("PASS: a maintain/ target two items share must be the same source file.");
+
 for (const name of [
   "errors",
   "requests",

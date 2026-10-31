@@ -133,3 +133,122 @@ assert.equal(reason.kind, "MissingTag");
 assert.equal(reason.payload.label, "mail.from");
 console.log("PASS: command startup rejects MissingTag mail.from before serving.");
 `;
+
+/**
+ * The toolchain block `tinker add` printed, as `file -> lines`, read from its stdout alone.
+ * @param {string} output - From `tinker add`; why: the printed lines are all the user gets.
+ */
+export function printedToolchain(output) {
+  const lines = output.split("\n");
+  const start = lines.indexOf("Paste into your toolchain (tinker add writes no config):");
+  assert.ok(start >= 0, "tinker add prints a toolchain block");
+
+  const files = new Map();
+  let file;
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith("  ")) files.get(file).push(line.slice(2));
+    else if (/^[\w./-]+:$/.test(line)) files.set((file = line.slice(0, -1)), []);
+    else break;
+  }
+  return files;
+}
+
+/**
+ * Merge one printed JSON line (`"key": value`) into a JSON value, objects key by key.
+ * @param {object} into - From pasteToolchain; why: the parsed file.
+ * @param {object} line - From pasteToolchain; why: the printed fragment, parsed.
+ */
+function mergeJson(into, line) {
+  for (const [key, value] of Object.entries(line)) {
+    const both = [into[key], value].every((item) => item && typeof item === "object");
+    into[key] = both && !Array.isArray(value) ? mergeJson({ ...into[key] }, value) : value;
+  }
+  return into;
+}
+
+/**
+ * Paste the printed lines as a person would: a JSON line merges into its JSON file, an `import`
+ * goes on top of a config, `plugins: [x, ...]` puts `x` first in the plugins, any other
+ * `key: value` goes into `defineConfig({`, and a new file is the lines themselves.
+ * @param {string} consumer - From the proof; why: the app the user pastes into.
+ * @param {Map<string, string[]>} toolchain - From printedToolchain; why: the printed lines only.
+ */
+export async function pasteToolchain(consumer, toolchain) {
+  for (const [file, lines] of toolchain) {
+    const path = join(consumer, file);
+    const text = await readFile(path, "utf8").catch(() => null);
+    if (text === null) {
+      await writeFile(path, `${lines.join("\n")}\n`);
+    } else if (file.endsWith(".json")) {
+      const value = lines.reduce((json, line) => mergeJson(json, JSON.parse(`{${line}}`)), {
+        ...JSON.parse(text),
+      });
+      await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+    } else {
+      let source = text;
+      for (const line of lines) {
+        const plugin = line.match(/^plugins: \[(.+), \.\.\.\]$/);
+        if (line.startsWith("import ")) source = `${line}\n${source}`;
+        else if (plugin) source = source.replace("plugins: [", `plugins: [${plugin[1]}, `);
+        else source = source.replace("defineConfig({", `defineConfig({\n  ${line},`);
+      }
+      assert.notEqual(source, text, `${file}: the printed lines change it`);
+      await writeFile(path, source);
+    }
+  }
+}
+
+/** A user's own database test: migrate the copied migrations, then notify and hear it. */
+export const sqliteAppTest = `import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { createScope, operation } from "@tinker/core";
+import { expect, test } from "vite-plus/test";
+
+import {
+  database,
+  databaseMigrationsFolder,
+  databaseUrl,
+  migrate,
+  transaction,
+} from "~/components/database-sqlite/index.server";
+
+test("the copied SQLite set migrates, and a committed notify is heard", async () => {
+  const home = await mkdtemp(join(tmpdir(), "sqlite-app-"));
+  const file = join(home, "app.db");
+  const folder = fileURLToPath(new URL("../migrations", import.meta.url));
+  const root = createScope({ tags: [databaseUrl(pathToFileURL(file)), databaseMigrationsFolder(folder)] });
+
+  await root.run(migrate);
+  const db = await root.resolve(database);
+  const heard: string[] = [];
+  const stop = await db.listen("app_proof", (payload) => heard.push(payload), () => {});
+  const save = operation({
+    label: "app.proofNotify",
+    depends: { tx: transaction },
+    run: async ({ tx }) => {
+      await tx.notify("app_proof", "wake");
+    },
+  });
+  await root.settle(save, { signal: new AbortController().signal });
+  while (heard.length === 0) await new Promise((resolve) => setTimeout(resolve, 10));
+  stop();
+  await root.close({ graceful: true });
+
+  const reader = new DatabaseSync(file);
+  const rows = reader.prepare("SELECT name FROM start_migrations ORDER BY name").all();
+  reader.close();
+  await rm(home, { recursive: true, force: true });
+
+  expect(heard).toEqual(["wake"]);
+  expect(rows.map((row) => row.name)).toEqual([
+    "20261028000000_start_notify.sql",
+    "20261028000100_sync.sql",
+    "20261028000200_auth.sql",
+    "20261030000000_sync_public.sql",
+  ]);
+}, 30_000);
+`;

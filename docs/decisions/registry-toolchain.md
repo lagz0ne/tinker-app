@@ -1,0 +1,161 @@
+# A registry item declares its toolchain
+
+Date: 2026-10-31. Status: accepted.
+Asked by: Hedl on Tinker, gap G0b.
+Duke, 2026-10-26: "SQLite is just fine".
+ADR `sqlite-variants.md` left this open:
+"A toolchain registry item."
+
+## Context
+
+The SQLite items (`database-sqlite`,
+`auth-sqlite`, `sync-sqlite`) need the
+Reylo toolchain. The `app` item has none of it:
+
+- TypeScript `7.1.0-beta`, in
+  `devDependencies` and `overrides`.
+- `reylo()` from `reylo/vite`
+  in the Vite plugins.
+- `contentMappers` in `tsconfig.json`.
+- A `typecheck` script that builds the
+  dev database and runs `--runExternalCode`.
+- `.reylo.yaml`, which names the dev database.
+- `maintain/sqlite-dev-db.mjs`, which builds
+  the dev database from `migrations/`.
+
+So `tinker add` refused them
+(`meta.starterOnly`).
+
+Start's rule: nothing generates wiring.
+`tinker add` prints the `cmds/*.ts` lines
+and writes none of them.
+
+## Precedent
+
+A shadcn registry item has fields for
+what it needs beyond its files:
+
+- `dependencies`, `devDependencies`:
+  packages. Start already merges these.
+- `tailwind`, `cssVars`: config the item
+  needs, keyed by where it goes.
+- `envVars`: an object of name -> value.
+- `docs`: text shown after install.
+- `meta`: free data for the registry's own tools.
+
+shadcn writes `tailwind`, `cssVars` and
+`envVars` into the app. Start does not write
+config, so it only takes their shape:
+an object keyed by where the lines go.
+
+## Decision
+
+One field, `meta.toolchain`:
+an object of app file -> lines to paste.
+`tinker add` prints it; it writes none
+of those files.
+
+Filled in for `database-sqlite`:
+
+```json
+"toolchain": {
+  "package.json": [
+    "\"scripts\": { \"typecheck\": \"node maintain/sqlite-dev-db.mjs && DATABASE_URL=file:.tinker/sqlite-dev.db tsc --noEmit --runExternalCode\" }",
+    "\"devDependencies\": { \"typescript\": \"7.1.0-beta\" }",
+    "\"overrides\": { \"typescript\": \"7.1.0-beta\" }"
+  ],
+  "tsconfig.json": [
+    "\"contentMappers\": [{ \"package\": \"reylo\", \"extensions\": [\".sql\", \".reylo.yaml\", \".reylo.yml\"] }]"
+  ],
+  "vite.config.ts": [
+    "import reylo from \"reylo/vite\";",
+    "plugins: [reylo(), ...]",
+    "test: { globalSetup: [\"./maintain/sqlite-dev-db.mjs\"] }"
+  ],
+  ".reylo.yaml": ["direct_url: file:./.tinker/sqlite-dev.db"]
+}
+```
+
+`tinker add database-sqlite` prints:
+
+```text
+Paste into your toolchain (tinker add writes no config):
+package.json:
+  "scripts": { "typecheck": "node maintain/sqlite-dev-db.mjs && DATABASE_URL=file:.tinker/sqlite-dev.db tsc --noEmit --runExternalCode" }
+  "devDependencies": { "typescript": "7.1.0-beta" }
+  "overrides": { "typescript": "7.1.0-beta" }
+tsconfig.json:
+  "contentMappers": [{ "package": "reylo", "extensions": [".sql", ".reylo.yaml", ".reylo.yml"] }]
+vite.config.ts:
+  import reylo from "reylo/vite";
+  plugins: [reylo(), ...]
+  test: { globalSetup: ["./maintain/sqlite-dev-db.mjs"] }
+.reylo.yaml:
+  direct_url: file:./.tinker/sqlite-dev.db
+```
+
+- Only `database-sqlite` has the field.
+  `auth-sqlite` and `sync-sqlite` require it,
+  so their closure prints it once.
+- The block comes after the `cmds/*.ts` lines.
+  Files keep the order the closure first
+  names them; a line prints once.
+- It prints for the components that land.
+  A kept `database-sqlite` prints nothing.
+- `tinker update` prints nothing.
+  A release that changes the toolchain
+  says so in UPGRADE.md.
+- `packages/start/lib/registry.mjs` checks
+  the shape. Add, update and check refuse
+  a bad one: `bad meta.toolchain in <name>: ...`.
+- `meta` is shadcn's free field, so the
+  registry format does not change.
+- An app with its own `vitest.config.ts`
+  pastes the `vite.config.ts` lines there too.
+
+Files the item owns ship as registry files:
+the migrations in `migrations/` and
+`maintain/sqlite-dev-db.mjs`. A component may
+now write `drizzle/`, `migrations/` and
+`maintain/`. A file there with other bytes
+is still a `conflict:`.
+The starter block ships the same
+`maintain/sqlite-dev-db.mjs`. The registry
+lets two items share a `maintain/` target
+only as one source file.
+
+`meta.starterOnly` is gone. No item used it
+after the SQLite items.
+
+### tsgolint and `.sql` imports
+
+The lint (`vp check`, type-aware) runs tsgolint
+on TypeScript 7.0. It has no content mappers.
+`vp lint --type-aware --type-check` on the
+SQLite components gave `TS2307: Cannot find
+module './queries/last_id.sql'` for each import.
+
+`database-sqlite/sql.d.ts` declares
+`declare module "*.sql"` as a Reylo
+`Query<any, any, Cardinality, "sqlite">`.
+TypeScript uses a wildcard module only when
+the file does not resolve. So:
+
+- tsgolint reads each query as a Reylo query.
+  The same lint exits 0.
+- `tsc --runExternalCode` (7.1) still resolves
+  the file through Reylo first. A probe that
+  put `last_id.sql`'s row in a `string`
+  failed: `Type '{ id: number; }' is not
+assignable to type 'string'`.
+
+## Not decided here
+
+- shadcn's `docs` field. `npx shadcn add`
+  does not print `meta.toolchain`.
+- A toolchain change on `tinker update`.
+- The demo keeps its migrations in
+  `sqlite/migrations`. `tinker update
+database-sqlite` there writes copies to
+  `migrations/` too, and `tinker check`
+  notes the item as outdated.
