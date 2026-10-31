@@ -1,7 +1,21 @@
 # Upgrade
 
-## Unreleased
+## 0.13.4
 
+Start 0.13.4 is released from `lagz0ne/tinker-app`, tag `start-v0.13.4`.
+The tag holds the Start tarball only. Core and React stay on 0.9.0.
+Change the Start URL in your `package.json` to
+`https://github.com/lagz0ne/tinker-app/releases/download/start-v0.13.4/tinker-start-0.13.4.tgz`,
+then run `pnpm install`. The registry now reads from
+`https://raw.githubusercontent.com/lagz0ne/tinker-app/start-v0.13.4/apps/start-scaffold/public/r`.
+Exports refuse a tooling version below 0.13.4.
+
+- `database-sqlite` retries its WAL switch (#52). Two processes that migrate one fresh file no
+  longer fail with `database is locked`: `migrate` retries the switch inside its schema-lock
+  loop until the migration deadline, and each connection retries it in 50 ms steps until
+  `busy_timeout`. A `busy_timeout` of 0 still fails at once. An app made from the demo takes it
+  by the template update from `demo-v0.13.3` to `demo-v0.13.4`; an app that added the item runs
+  `tinker update database-sqlite`.
 - The SQLite set installs onto an app made from the `app` item. `tinker add database-sqlite`
   (and `auth-sqlite`, `sync-sqlite`, which require it) no longer refuses with `is starter-only`.
   After the `cmds/*.ts` lines it prints the Reylo toolchain once, under

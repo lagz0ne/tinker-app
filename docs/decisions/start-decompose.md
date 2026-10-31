@@ -1,6 +1,6 @@
 # Current Start authoring contract
 
-This is the contract for the current source, released as Start 0.13.3.
+This is the contract for the current source, released as Start 0.13.4.
 Each released change set stays in [UPGRADE.md](../../packages/start/UPGRADE.md#0100).
 Each installed `@tinker/start` ships this contract as `docs/contract.md`.
 The golden copied source is `apps/start-scaffold/tinker/`; the small app shares
