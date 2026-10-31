@@ -418,3 +418,86 @@ for (const graceful of [true, false]) {
     expect(await talk.warm("c", plan()).done).toEqual({ status: "closed", pings: 0 });
   });
 }
+
+test("R12 a ping that runs past the next fire waits for the fire after it: no burst", async () => {
+  const gate = Promise.withResolvers<void>();
+
+  const started: number[] = [];
+
+  const { clock, root } = warmScope(
+    fakeAgentSdk(
+      async function* (kit: FakeKit) {
+        started.push(clock.currentTimeMillis() / minute);
+        yield init(kit.session);
+        await kit.wait(gate.promise);
+        yield success(kit.session);
+      },
+      async function* (kit: FakeKit) {
+        started.push(clock.currentTimeMillis() / minute);
+        yield init(kit.session);
+        yield success(kit.session);
+      },
+    ),
+  );
+
+  try {
+    const talk = await root.resolve(agentTalk);
+
+    const warm = talk.warm("a", plan());
+
+    await advance(clock, 120 * minute);
+
+    gate.resolve();
+
+    await tick();
+
+    await tick();
+
+    expect(started).toEqual([50]);
+
+    await advance(clock, 29 * minute);
+
+    expect(started).toEqual([50]);
+
+    await advance(clock, 1 * minute);
+
+    expect(started).toEqual([50, 150]);
+
+    await advance(clock, 50 * minute);
+
+    expect(await warm.done).toEqual({ status: "ended", pings: 2 });
+  } finally {
+    await root.close();
+  }
+});
+
+for (const [name, bad] of [
+  ["everyMs 0", { everyMs: 0 }],
+  ["everyMs below 0", { everyMs: -1 }],
+  ["everyMs NaN", { everyMs: Number.NaN }],
+  ["everyMs Infinity", { everyMs: Number.POSITIVE_INFINITY }],
+  ["untilMs NaN", { untilMs: Number.NaN }],
+  ["untilMs Infinity", { untilMs: Number.POSITIVE_INFINITY }],
+] as const) {
+  test(`R12 a plan with ${name} fails at once and sets no timer`, async () => {
+    const fake = fakeAgentSdk();
+
+    const { clock, root } = warmScope(fake);
+
+    try {
+      const talk = await root.resolve(agentTalk);
+
+      const done = await talk.warm("a", plan(bad)).done;
+
+      expect(done).toMatchObject({ status: "failed", pings: 0 });
+
+      expect(typeof done.message).toBe("string");
+
+      await advance(clock, 300 * minute, 10 * minute);
+
+      expect(fake.calls).toHaveLength(0);
+    } finally {
+      await root.close();
+    }
+  });
+}

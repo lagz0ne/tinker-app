@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,25 +59,32 @@ if (!oauthToken && !apiKey) {
     }
 
     const second = open();
-    const talk = await second.resolve(component.agentTalk);
     const closed = Promise.withResolvers();
     let asked = false;
     let started = 0;
+    let result;
 
-    const result = await talk.run("live", {
-      prompt: "Count slowly from 1 to 300, one number per line, with a short word after each.",
-      options,
-      onEvent: (event) => {
-        if (event.type !== "text" || asked) return;
+    try {
+      const talk = await second.resolve(component.agentTalk);
 
-        asked = true;
-        started = performance.now();
-        closed.resolve(second.close());
-      },
-    }).result;
+      result = await talk.run("live", {
+        prompt: "Count slowly from 1 to 300, one number per line, with a short word after each.",
+        options,
+        onEvent: (event) => {
+          if (event.type !== "text" || asked) return;
+
+          asked = true;
+          started = performance.now();
+          closed.resolve(second.close());
+        },
+      }).result;
+    } finally {
+      // Joins the close the listener asked for; closes the scope when it never asked.
+      if (!asked) closed.resolve(second.close());
+      await closed.promise;
+    }
 
     assert.ok(asked, "the turn streamed text before it ended");
-    await closed.promise;
 
     const ms = performance.now() - started;
 
@@ -86,6 +93,27 @@ if (!oauthToken && !apiKey) {
     console.log(
       `PASS: closing the scope mid-stream ended the turn closed in ${Math.round(ms)} ms.`,
     );
+
+    if (process.platform !== "linux") {
+      console.log("process check: not run (not Linux)");
+    } else {
+      // Only a match count is printed; env contents never are.
+      const marker = `CLAUDE_CONFIG_DIR=${configDir}`;
+      const left = [];
+
+      for (const pid of (await readdir("/proc")).filter((name) => /^\d+$/.test(name))) {
+        try {
+          const environ = await readFile(`/proc/${pid}/environ`, "utf8");
+
+          if (environ.split("\0").includes(marker)) left.push(pid);
+        } catch (error) {
+          if (!["EACCES", "ENOENT", "ESRCH"].includes(error.code)) throw error;
+        }
+      }
+
+      assert.deepEqual(left, [], "a Claude Code process outlived the closed scope");
+      console.log("PASS: no process with this config dir is left after close.");
+    }
   } finally {
     await vite.close();
     await rm(configDir, { recursive: true, force: true });

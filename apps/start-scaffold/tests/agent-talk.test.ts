@@ -1,3 +1,4 @@
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { createScope } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 import { makeTestClock, preset } from "@tinker/core/testing";
@@ -25,6 +26,7 @@ import {
   notLoggedIn,
   reply,
   say,
+  spell,
   success,
   toolResult,
   usage,
@@ -144,7 +146,6 @@ test("R5 the component fixes the safe options and the exact env; the OAuth token
       effort: "low" as const,
       cwd: "/data/talk",
       resume: "s-old",
-      settings: { disableClaudeAiConnectors: true },
     };
 
     await talk.run("a", { prompt: "hi", options: appOptions }).result;
@@ -159,6 +160,7 @@ test("R5 the component fixes the safe options and the exact env; the OAuth token
 
     expect(rest).toEqual({
       ...appOptions,
+      settings: { disableClaudeAiConnectors: true },
       permissionMode: "dontAsk",
       settingSources: [],
       strictMcpConfig: true,
@@ -638,16 +640,18 @@ test("R8 a throwing onEvent aborts that query and fails listener", async () => {
   }
 });
 
-test("R9 no event reaches onEvent after stop or after the result settles", async () => {
-  const late = Promise.withResolvers<void>();
+test("R9 no event reaches onEvent after stop, even from an SDK that goes on yielding", async () => {
+  const fake = fakeAgentSdk(async function* (kit: FakeKit) {
+    kit.ignoreAbort = true;
+    yield init(kit.session);
 
-  const fake = fakeAgentSdk(async function* ({ session, signal }: FakeKit) {
-    yield init(session);
-    // A stubborn SDK: it ignores the abort and still yields.
-    await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve()));
-    await late.promise;
-    yield* say(session, "msg_9", "late text");
-    yield success(session);
+    yield assistant(kit.session, "msg_1", [
+      { type: "text", text: "first" },
+      { type: "tool_use", id: "toolu_1", name: "mcp__talk__note", input: {} },
+    ]);
+    await kit.untilAbort();
+    yield* say(kit.session, "msg_9", "late text");
+    yield success(kit.session);
   });
 
   const root = talkScope(fake);
@@ -655,23 +659,22 @@ test("R9 no event reaches onEvent after stop or after the result settles", async
   try {
     const talk = await root.resolve(agentTalk);
 
-    const { events, onEvent } = recorder();
+    const events: TalkEvent[] = [];
 
-    const run = talk.run("a", { prompt: "hi", options, onEvent });
+    const run = talk.run("a", {
+      prompt: "hi",
+      options,
+      onEvent: (event) => {
+        events.push(event);
+        if (event.type === "text-whole") talk.stop("a");
+      },
+    });
+
+    expect(await run.result).toEqual({ status: "stopped", sessionId: "session-1" });
 
     await tick();
 
-    talk.stop("a");
-
-    const seen = events.length;
-
-    late.resolve();
-
-    expect((await run.result).status).toBe("stopped");
-
-    await tick();
-
-    expect(events).toHaveLength(seen);
+    expect(events.map((event) => event.type)).toEqual(["init", "text-whole"]);
   } finally {
     await root.close();
   }
@@ -744,18 +747,23 @@ test("R10 every query is closed in a finally and the result settles after its lo
 
 for (const graceful of [true, false]) {
   test(`R11 I1 ${graceful ? "graceful" : "forced"} close ends a streaming run closed after its generator finally ran`, async () => {
-    const fake = fakeAgentSdk(hangs, async function* ({ session, hang }: FakeKit) {
-      yield init(session);
-      try {
-        await hang();
-      } catch {
-        // The SDK answers an abort with an error result, then the abort.
-        yield failure(session, "error_during_execution", ["Request was aborted."]);
-        throw abortError();
-      }
-    });
+    const stubborn = (end: (session: string) => SDKMessage): FakeScript =>
+      async function* (kit) {
+        kit.ignoreAbort = true;
+        yield init(kit.session);
+        await kit.untilAbort();
+        // A stubborn SDK goes on after the abort: more text, then a result.
+        yield* say(kit.session, "msg_late", "late text");
+        yield end(kit.session);
+      };
 
-    const root = talkScope(fake, { max: 2 });
+    const fake = fakeAgentSdk(
+      hangs,
+      stubborn((session) => failure(session, "error_during_execution", ["Request was aborted."])),
+      stubborn((session) => success(session)),
+    );
+
+    const root = talkScope(fake, { max: 3 });
 
     const talk = await root.resolve(agentTalk);
 
@@ -763,7 +771,11 @@ for (const graceful of [true, false]) {
 
     const streaming = talk.run("a", { prompt: "a", options, onEvent: first.onEvent });
 
-    const erroring = talk.run("b", { prompt: "b", options });
+    const late = recorder();
+
+    const erroring = talk.run("b", { prompt: "b", options, onEvent: late.onEvent });
+
+    const succeeding = talk.run("d", { prompt: "d", options, onEvent: late.onEvent });
 
     const waiting = talk.run("c", { prompt: "c", options });
 
@@ -771,7 +783,7 @@ for (const graceful of [true, false]) {
 
     expect(first.events.some((event) => event.type === "text")).toBe(true);
 
-    expect(fake.calls).toHaveLength(2);
+    expect(fake.calls).toHaveLength(3);
 
     const closed = await root.close({ graceful });
 
@@ -782,20 +794,30 @@ for (const graceful of [true, false]) {
     expect(fake.calls.map((call) => [call.ended, call.closed])).toEqual([
       [true, 1],
       [true, 1],
+      [true, 1],
     ]);
 
-    expect(fake.calls).toHaveLength(2);
+    expect(fake.calls).toHaveLength(3);
 
     expect(await streaming.result).toEqual({ status: "closed", sessionId: "session-1" });
 
     expect(await erroring.result).toEqual({ status: "closed", sessionId: "session-2" });
 
+    expect(await succeeding.result).toEqual({ status: "closed", sessionId: "session-3" });
+
+    expect(late.events.map((event) => event.type)).toEqual(["init", "init"]);
+
     expect(await waiting.result).toEqual({ status: "closed" });
   });
 }
 
-test("R11 a run that settled done stays done after close", async () => {
-  const fake = fakeAgentSdk();
+test("R11 a run that read its success result stays done when close comes before its loop ends", async () => {
+  const fake = fakeAgentSdk(async function* (kit: FakeKit) {
+    yield init(kit.session);
+    yield* say(kit.session, "msg_1", "ok");
+    yield success(kit.session);
+    await kit.hang();
+  });
 
   const root = talkScope(fake);
 
@@ -803,9 +825,11 @@ test("R11 a run that settled done stays done after close", async () => {
 
   const run = talk.run("a", { prompt: "hi", options });
 
-  expect((await run.result).status).toBe("done");
+  await tick();
 
   await root.close();
+
+  expect(fake.calls[0]!.ended).toBe(true);
 
   expect((await run.result).status).toBe("done");
 });
@@ -954,6 +978,242 @@ test("R15 credentials never leave: error text is redacted in results and logs", 
     expect(logs.some((entry) => entry.attributes.talk === "a")).toBe(true);
 
     expect(JSON.stringify(logs)).not.toContain("CLAUDE_CONFIG_DIR");
+  } finally {
+    await root.close();
+  }
+});
+
+test("R15 a token split across one-character deltas, tool input, and denials is redacted", async () => {
+  const fake = fakeAgentSdk(async function* ({ session }: FakeKit) {
+    yield init(session);
+    yield* spell(session, "msg_1", `the key is ${token} ok`);
+    yield assistant(session, "msg_2", [
+      {
+        type: "tool_use",
+        id: "toolu_1",
+        name: "Bash",
+        input: { cmd: `echo ${token}`, list: [token] },
+      },
+    ]);
+    yield success(session, 0.1, {
+      permission_denials: [
+        { tool_name: "Bash", tool_use_id: "toolu_1", tool_input: { cmd: token } },
+      ],
+    });
+  });
+
+  const root = talkScope(fake);
+
+  try {
+    const talk = await root.resolve(agentTalk);
+
+    const { events, onEvent } = recorder();
+
+    const result = await talk.run("a", { prompt: "hi", options, onEvent }).result;
+
+    const text = events.flatMap((event) => (event.type === "text" ? [event.delta] : [])).join("");
+
+    expect(text).toBe("the key is [redacted] ok");
+
+    const tool = events.find((event) => event.type === "tool-start");
+
+    expect(tool).toMatchObject({ input: { cmd: "echo [redacted]", list: ["[redacted]"] } });
+
+    expect(result).toMatchObject({
+      status: "done",
+      denials: [{ tool_name: "Bash", tool_use_id: "toolu_1", tool_input: { cmd: "[redacted]" } }],
+    });
+
+    expect(JSON.stringify({ events, result })).not.toContain(token);
+  } finally {
+    await root.close();
+  }
+});
+
+test("I2 release aborts the talk's runs and plans; a new resolve works", async () => {
+  const fake = fakeAgentSdk(hangs);
+
+  const clock = makeTestClock({ now: 0 });
+
+  const root = createScope({
+    clock,
+    tags: [agentCredentials({ oauthToken: token }), agentConfigDir("/data/claude")],
+    presets: [preset(agentSdk, async () => fake.sdk), preset(agentFiles, async () => fake.files)],
+  });
+
+  try {
+    const talk = await root.resolve(agentTalk);
+
+    const run = talk.run("a", { prompt: "hang", options });
+
+    const warm = talk.warm("b", {
+      options: { ...options, resume: "s-b" },
+      prompt: "ping",
+      everyMs: 60_000,
+      untilMs: 3_600_000,
+    });
+
+    await tick();
+
+    root.release(agentTalk);
+
+    expect(await run.result).toEqual({ status: "closed", sessionId: "session-1" });
+
+    expect(fake.calls[0]!.ended).toBe(true);
+
+    expect(await warm.done).toEqual({ status: "closed", pings: 0 });
+
+    clock.advance(5 * 60_000);
+
+    await tick();
+
+    expect(fake.calls).toHaveLength(1);
+
+    expect(await talk.run("a", { prompt: "old handle", options }).result).toEqual({
+      status: "closed",
+    });
+
+    const fresh = await root.resolve(agentTalk);
+
+    expect((await fresh.run("a", { prompt: "new", options }).result).status).toBe("done");
+  } finally {
+    await root.close();
+  }
+});
+
+for (const how of ["stop", "close"] as const) {
+  test(`R6 a ${how} during session-lost settles ${how === "stop" ? "stopped" : "closed"} and never retries`, async () => {
+    const fake = fakeAgentSdk(async function* ({ session }: FakeKit) {
+      yield init(session);
+      yield failure(session, "error_during_execution", [
+        "No conversation found with session ID: s-gone",
+      ]);
+    });
+
+    const root = talkScope(fake);
+
+    try {
+      const talk = await root.resolve(agentTalk);
+
+      const result = await talk.run("a", {
+        prompt: "hi",
+        options: { ...options, resume: "s-gone" },
+        onEvent: (event) => {
+          if (event.type !== "session-lost") return;
+
+          if (how === "stop") talk.stop("a");
+          else void root.close();
+        },
+      }).result;
+
+      expect(result).toEqual({
+        status: how === "stop" ? "stopped" : "closed",
+        sessionId: "s-gone",
+      });
+
+      expect(fake.calls).toHaveLength(1);
+    } finally {
+      await root.close();
+    }
+  });
+}
+
+test("R5 a success result whose text says not signed in fails not-signed-in, unless a tool ran", async () => {
+  const fake = fakeAgentSdk(
+    async function* ({ session }: FakeKit) {
+      yield init(session);
+      yield success(session, 0, { result: "Invalid API key · Please run /login" });
+    },
+    async function* ({ session }: FakeKit) {
+      yield init(session);
+      yield assistant(session, "msg_1", [
+        { type: "tool_use", id: "toolu_1", name: "WebSearch", input: {} },
+      ]);
+      yield toolResult(session, "toolu_1", "results");
+      yield success(session, 0, { result: "The page said: please run /login" });
+    },
+  );
+
+  const root = talkScope(fake);
+
+  try {
+    const talk = await root.resolve(agentTalk);
+
+    expect(await talk.run("a", { prompt: "1", options }).result).toMatchObject({
+      status: "failed",
+      error: "not-signed-in",
+    });
+
+    expect((await talk.run("a", { prompt: "2", options }).result).status).toBe("done");
+  } finally {
+    await root.close();
+  }
+});
+
+test("R11 stop during close settles closed", async () => {
+  const fake = fakeAgentSdk(hangs);
+
+  const root = talkScope(fake);
+
+  const talk = await root.resolve(agentTalk);
+
+  const run = talk.run("a", { prompt: "hi", options });
+
+  await tick();
+
+  const closing = root.close();
+
+  talk.stop("a");
+
+  await closing;
+
+  expect(await run.result).toEqual({ status: "closed", sessionId: "session-1" });
+});
+
+test("R2 a run right after stop is busy until the stopped run settles", async () => {
+  const fake = fakeAgentSdk(hangs);
+
+  const root = talkScope(fake);
+
+  try {
+    const talk = await root.resolve(agentTalk);
+
+    const first = talk.run("a", { prompt: "1", options });
+
+    await tick();
+
+    talk.stop("a");
+
+    expect(await talk.run("a", { prompt: "2", options }).result).toEqual({ status: "busy" });
+
+    expect((await first.result).status).toBe("stopped");
+
+    expect((await talk.run("a", { prompt: "3", options }).result).status).toBe("done");
+
+    expect(fake.calls.map((call) => call.prompt)).toEqual(["1", "3"]);
+  } finally {
+    await root.close();
+  }
+});
+
+test("usage is emitted once per message id, from its first frame", async () => {
+  const fake = fakeAgentSdk(async function* ({ session }: FakeKit) {
+    yield init(session);
+    yield assistant(session, "msg_1", [{ type: "text", text: "one" }]);
+    yield assistant(session, "msg_1", [{ type: "tool_use", id: "toolu_1", name: "x", input: {} }]);
+    yield success(session);
+  });
+
+  const root = talkScope(fake);
+
+  try {
+    const talk = await root.resolve(agentTalk);
+
+    const { events, onEvent } = recorder();
+
+    await talk.run("a", { prompt: "hi", options, onEvent }).result;
+
+    expect(events.filter((event) => event.type === "usage")).toHaveLength(1);
   } finally {
     await root.close();
   }

@@ -26,6 +26,10 @@ export type FakeKit = {
   signal: AbortSignal;
   hang: () => Promise<never>;
   wait: (gate: Promise<unknown>) => Promise<void>;
+  /** Resolves (not rejects) on abort: for a stubborn SDK that goes on after it. */
+  untilAbort: () => Promise<void>;
+  /** True: the fake keeps yielding after the abort, as a stubborn SDK might. */
+  ignoreAbort: boolean;
 };
 
 /** A scripted turn: yields real SDK message shapes, like obelisk's talk-fake.mjs. */
@@ -104,6 +108,25 @@ export function say(session: string, id: string, text: string): SDKMessage[] {
   ];
 }
 
+/** A streamed text reply cut into one-character deltas. */
+export function spell(session: string, id: string, text: string): SDKMessage[] {
+  const [start, open, , , whole, stop] = say(session, id, text);
+
+  return [
+    start!,
+    open!,
+    ...text.split("").map((char) =>
+      streamEvent(session, {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "text_delta", text: char },
+      }),
+    ),
+    whole!,
+    stop!,
+  ];
+}
+
 export const toolResult = (
   session: string,
   id: string,
@@ -141,7 +164,11 @@ export const compact = (session: string, pre: number, post: number): SDKMessage 
     "type" | "subtype" | "compact_metadata" | "session_id"
   > as unknown as SDKMessage;
 
-export const success = (session: string, cost = 0.25): SDKMessage =>
+export const success = (
+  session: string,
+  cost = 0.25,
+  extra: Partial<Pick<SDKResultSuccess, "result" | "permission_denials">> = {},
+): SDKMessage =>
   ({
     type: "result",
     subtype: "success",
@@ -153,6 +180,7 @@ export const success = (session: string, cost = 0.25): SDKMessage =>
     num_turns: 1,
     duration_ms: 1200,
     permission_denials: [],
+    ...extra,
   }) satisfies Pick<
     SDKResultSuccess,
     | "type"
@@ -247,7 +275,14 @@ export function fakeAgentSdk(...scripts: FakeScript[]) {
       call,
       session,
       signal,
+      ignoreAbort: false,
       hang: () => kit.wait(new Promise(() => {})) as Promise<never>,
+      untilAbort: () =>
+        new Promise<void>((resolve) => {
+          if (signal.aborted) return resolve();
+
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        }),
       wait: (gate) =>
         new Promise<void>((resolve, reject) => {
           if (signal.aborted) return reject(abortError());
@@ -260,7 +295,7 @@ export function fakeAgentSdk(...scripts: FakeScript[]) {
     async function* run() {
       try {
         for await (const message of script(kit)) {
-          if (signal.aborted) throw abortError();
+          if (signal.aborted && !kit.ignoreAbort) throw abortError();
 
           yield message;
         }
