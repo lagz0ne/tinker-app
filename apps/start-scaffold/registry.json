@@ -327,7 +327,7 @@
         {
           "path": "sqlite/migrations/20261028000200_auth.sql",
           "type": "registry:file",
-          "target": "~/migrations/20261028000200_auth.sql"
+          "target": "~/sqlite/migrations/20261028000200_auth.sql"
         }
       ],
       "meta": {
@@ -460,7 +460,7 @@
         {
           "path": "sqlite/migrations/20261028000000_start_notify.sql",
           "type": "registry:file",
-          "target": "~/migrations/20261028000000_start_notify.sql"
+          "target": "~/sqlite/migrations/20261028000000_start_notify.sql"
         },
         {
           "path": "maintain/sqlite-dev-db.mjs",
@@ -1107,12 +1107,12 @@
         {
           "path": "sqlite/migrations/20261028000100_sync.sql",
           "type": "registry:file",
-          "target": "~/migrations/20261028000100_sync.sql"
+          "target": "~/sqlite/migrations/20261028000100_sync.sql"
         },
         {
           "path": "sqlite/migrations/20261030000000_sync_public.sql",
           "type": "registry:file",
-          "target": "~/migrations/20261030000000_sync_public.sql"
+          "target": "~/sqlite/migrations/20261030000000_sync_public.sql"
         }
       ],
       "meta": {

@@ -203,7 +203,7 @@ const items = {
     files: {
       "~/tinker/components/sq/component.json": '{ "requires": [] }\n',
       "~/tinker/components/sq/index.ts": 'export const sqValue = "sq";\n',
-      "~/migrations/1_sq.sql": "-- 1_sq\n",
+      "~/sqlite/migrations/1_sq.sql": "-- 1_sq\n",
       "~/maintain/sq-dev-db.mjs": "export default async () => {};\n",
     },
   },
@@ -1075,25 +1075,25 @@ test("F1 add merges the deps of the whole closure, and prints a kept dep once", 
   expect(readPackage(twice).dependencies["@scope/bee"]).toBe("1.0.0");
 });
 
-test("A4b add writes the migrations/ and maintain/ files a component owns", () => {
+test("A4b add writes the sqlite/migrations/ and maintain/ files a component owns", () => {
   const registry = makeRegistry();
   const root = app();
 
   const run = tinker(root, "add", "sq", "--registry", registry);
 
   expect(run.code).toBe(0);
-  expect(read(root, "migrations/1_sq.sql")).toBe("-- 1_sq\n");
+  expect(read(root, "sqlite/migrations/1_sq.sql")).toBe("-- 1_sq\n");
   expect(read(root, "maintain/sq-dev-db.mjs")).toBe("export default async () => {};\n");
   const lock = JSON.parse(read(root, "tinker/components.lock"));
   expect(Object.keys(lock.components.sq.files).sort()).toEqual([
     "maintain/sq-dev-db.mjs",
-    "migrations/1_sq.sql",
+    "sqlite/migrations/1_sq.sql",
     "tinker/components/sq/component.json",
     "tinker/components/sq/index.ts",
   ]);
 });
 
-test("F2 add refuses an outside file outside drizzle/, migrations/ and maintain/", () => {
+test("F2 add refuses an outside file outside drizzle/, sqlite/migrations/ and maintain/", () => {
   const registry = makeRegistry();
   const src = app({ ".tinker/update/bad-src.old/component.json": '{ "requires": [] }\n' });
   const before = snapshot(src);

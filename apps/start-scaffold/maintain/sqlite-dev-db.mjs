@@ -10,7 +10,7 @@ const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export async function buildDevDatabase() {
   const file = join(app, ".tinker", "sqlite-dev.db");
 
-  // This repo keeps its SQLite migrations in `sqlite/`; an installed component ships them to `migrations/`.
+  // The SQLite components ship their migrations to `sqlite/migrations`; an older app may use `migrations`.
   const folders = [join(app, "sqlite", "migrations"), join(app, "migrations")];
 
   let folder = folders[0];
