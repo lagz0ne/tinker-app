@@ -17,10 +17,20 @@ const provide = tag<Api>({ label: "rpc.provide" });
  * proxy that is `http://<host>`, so the app binds its public `https` origin here. A bound value
  * that is not an http(s) URL fails start with `MissingConfig { key: "origin" }`. */
 const origin = tag<string | null>({ label: "rpc.origin", default: null });
+
 /** The largest call body read, in bytes (1 MiB unset). A bigger one answers 413, and its
  * provider never runs: a `content-length` over it is refused unread, and a body with no length
- * is read only up to it. */
-const maxBody = tag<number>({ label: "rpc.maxBody", default: 1_048_576 });
+ * is read only up to it. It must be a positive whole number, or `Infinity` for no cap; anything
+ * else (NaN from a bad `Number(env.X)`, 0, -1, 1.5) fails start with `DataValidationFailed`. */
+const maxBody = tag<number>({
+  label: "rpc.maxBody",
+  default: 1_048_576,
+  parse: (raw) => {
+    const ok = raw === Infinity || (Number.isSafeInteger(raw) && Number(raw) > 0);
+    if (!ok) throw new TypeError("not a positive whole number of bytes, or Infinity");
+    return Number(raw);
+  },
+});
 
 const local = { role: "handler", explain: "Runs a contract here, on its provider" } as const;
 

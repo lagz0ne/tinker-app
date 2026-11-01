@@ -234,3 +234,33 @@ test("a bound smaller rpc.maxBody is the cap", async () => {
   expect(await call(16)).toBe(200);
   await small.close();
 });
+
+test("an rpc.maxBody that is not a positive whole number or Infinity fails start, naming rpc.maxBody", async () => {
+  const failureOf = async (maxBody: number) => {
+    try {
+      await createScope({ capsules: [server.server({ api, provide, maxBody })] }).close();
+      return { maxBody, kind: undefined, label: undefined };
+    } catch (error) {
+      const { kind, payload } = Object(error);
+      return { maxBody, kind, label: Object(payload).label };
+    }
+  };
+
+  // NaN is what `Number(env.X)` gives for an unset or bad value: it would turn the cap off.
+  const values = [Number.NaN, 0, -1, 1.5];
+  expect(await Promise.all(values.map(failureOf))).toEqual(
+    values.map((maxBody) => ({ maxBody, kind: "DataValidationFailed", label: "rpc.maxBody" })),
+  );
+});
+
+test("rpc.maxBody Infinity has no cap: a 3 MB body answers 200", async () => {
+  const open = createScope({ capsules: [server.server({ api, provide, maxBody: Infinity })] });
+  await open.ready;
+  const response = await open.resolve(server.server)(
+    new Request("http://app.example/rpc/greet", { method: "POST", body: sized(3_000_000) }),
+    open,
+  );
+
+  expect(response?.status).toBe(200);
+  await open.close();
+});
