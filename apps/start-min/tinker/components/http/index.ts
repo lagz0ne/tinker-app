@@ -1,1 +1,0 @@
-export { httpBackend } from "./backend";

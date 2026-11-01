@@ -1,8 +1,0 @@
-import { operation } from "@tinker/core";
-import type { Sync } from "~/components/sync";
-
-export const readAccount = operation({ label: "note.account", run: (): string | null => null });
-export const bootstrap = operation({
-  label: "note.bootstrap",
-  run: (): Sync.Snapshot => ({ public: { stream: "public", revision: 0, note: { text: "hello" } }, private: null }),
-});
