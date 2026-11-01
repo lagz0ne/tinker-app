@@ -126,9 +126,9 @@ copy, `release.yml` skips; delete it if you like.
 Start, the loop, the Start apps and the `tinker`
 CLI were removed on 2026-11-01.
 They live in the tag `start-archive`.
-Old degit links keep working: branches `small`
-and `demo`, tags `small-v*`, `demo-v*`,
-`start-v*`.
+`main` is the only branch.
+Old versions live in tags: `small-v*`,
+`demo-v*`, `start-v*`, `start-archive`.
 
 ```bash
 git checkout start-archive
