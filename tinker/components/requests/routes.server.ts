@@ -29,6 +29,8 @@ const failures: Readonly<Record<string, number>> = { DataValidationFailed: 400, 
  * Each request runs in its own session of `scope`: a valid `traceparent` makes the route's span
  * its child; no header, or a bad one, starts a fresh trace. An early reply leaves that session
  * open until the run ends.
+ * A subflow the route op does not await is cut off when the run ends: Core aborts its signal.
+ * To keep work running past the reply, reply with `reply` and await that work in the op.
  */
 export const routes = capsule({
   label: "routes",

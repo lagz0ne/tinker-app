@@ -198,6 +198,10 @@ words, with a session as the boundary:
   capsule. A route is any operation. A stream
   route calls `routes.reply` with its Response,
   then runs until the body ends.
+  A subflow the op does not await gets its
+  signal aborted when the run ends. To keep
+  work going past the reply, use `reply` and
+  await the work in the op.
 - `tinker/components/telemetry`: the sink
   capsules.
 - `tinker/components/drizzle-pg`,
