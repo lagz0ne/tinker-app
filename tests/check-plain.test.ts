@@ -415,6 +415,23 @@ export const guarded = new Proxy({ a: 1 }, {
   expect(result).toMatchObject({ code: 0, err: "" });
 });
 
+test("a const built on new Proxy is no library: a helper in its call's options fails", async () => {
+  const result = await checkFiles({
+    "tinker/store.ts": `import { appStore } from "./app-store";
+
+export const store = new Proxy(appStore, {});
+store.update({
+  compute(n: number) {
+    return n;
+  },
+});
+`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err.trim()).toBe(hit("tinker/store.ts", 5));
+});
+
 test("a plain helper in the options of a global not on the list fails", async () => {
   const result = await checkFiles({
     "tinker/sink.ts": `export const sink = new WritableStream<string>({

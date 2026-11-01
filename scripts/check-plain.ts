@@ -239,23 +239,32 @@ function stem(path: string) {
 }
 
 /**
- * Platform globals that are libraries, as `Bun` is: the platform calls the functions in their
- * options. Only the ones the app uses; add one with its reason.
+ * Platform classes whose options the platform calls. Only the direct callee counts:
+ * `new ReadableStream({...})` is a library call, but a const built on one is not a library
+ * value (a Proxy returns its app target). Only the ones the app uses; add one with its reason.
  */
 const platformNames = new Set([
-  "Bun",
   // A stream source: the stream calls `start`, `pull` and `cancel`.
   "ReadableStream",
   // A proxy handler: the proxy calls its traps (`get`, `set`, ...).
   "Proxy",
 ]);
 
+/** `new X({...})` with X on the platform list, as the direct callee. */
+function platformCall(call: ts.CallExpression | ts.NewExpression) {
+  return (
+    ts.isNewExpression(call) &&
+    ts.isIdentifier(call.expression) &&
+    platformNames.has(call.expression.text)
+  );
+}
+
 /**
- * A name whose value comes from a library: imported from a package, a platform global, or a
+ * A name whose value comes from a library: imported from a package, the `Bun` global, or a
  * top-level const built on one, here or in the app file it is imported from (no barrels).
  */
 function libraryValue(file: File, name: string, depth = 0): boolean {
-  if (platformNames.has(name) || file.library.has(name)) return true;
+  if (name === "Bun" || file.library.has(name)) return true;
   if (depth > 8) return false;
 
   const value = file.consts.get(name);
@@ -418,8 +427,9 @@ function nativeOption(file: File, fn: Fn) {
   }
 
   const call = node && argumentOf(node);
-  const name = call && calleeRoot(call.expression);
-  return !!name && libraryAt(file, name, call);
+  if (!call) return false;
+  const name = calleeRoot(call.expression);
+  return platformCall(call) || (!!name && libraryAt(file, name, call));
 }
 
 /** A use of a name as a value: not a callee, not a property's receiver or key. */
@@ -542,7 +552,7 @@ function inline(file: File, node: ts.Node): boolean {
  * itself), a Core call, `defineMain`, a library call, or an event registration.
  */
 function callbackCall(file: File, call: ts.CallExpression | ts.NewExpression) {
-  if (enclosingFn(call)) return true;
+  if (enclosingFn(call) || platformCall(call)) return true;
   const name = calleeRoot(call.expression);
   if (name && (file.core.has(name) || file.mains.has(name) || libraryValue(file, name))) {
     return true;
