@@ -189,6 +189,9 @@ words, with a session as the boundary:
 - `cmds/browser.tsx`: the tab root and the router.
 - `cmds/dev.ts`, `cmds/host.ts`: `Bun.serve` for
   dev and for the build.
+  `/api/*` and `/rpc/*` go to the server
+  command. To add more, pass a third argument:
+  `serveMain(main, pages, { paths: ["/mcp"] })`.
 - `tinker/components/rpc`: `rpc.server`,
   `rpc.client`.
 - `tinker/components/requests`: the `routes`

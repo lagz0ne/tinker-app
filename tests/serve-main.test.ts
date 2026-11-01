@@ -74,3 +74,22 @@ test("a command that exits during start still waits for its root to close, and n
   expect(stdout).toContain("closed\n");
   expect(stdout).not.toContain("tinker: listening");
 });
+
+test("extra paths go to the command, beside /api/* and /rpc/*", async () => {
+  const { url } = await host("paths-host.ts");
+  const text = (path: string) => fetch(new URL(path, url)).then((reply) => reply.text());
+
+  expect(await text("/mcp")).toBe("cmd");
+  expect(await text("/.well-known/x")).toBe("cmd");
+  expect(await text("/api/x")).toBe("cmd");
+  expect(await text("/rpc/x")).toBe("cmd");
+  expect(await text("/a/b")).toBe("page");
+});
+
+test("with no extra paths, /mcp gets the page", async () => {
+  const { url } = await host("page-host.ts");
+  const text = (path: string) => fetch(new URL(path, url)).then((reply) => reply.text());
+
+  expect(await text("/mcp")).toBe("page");
+  expect(await text("/api/x")).toBe("cmd");
+});
