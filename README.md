@@ -65,8 +65,9 @@ on each push to `main`, and weekly.
 
 The tab and the server run the same op handle.
 
-- `src/api/`: the contracts, plain ops with no
-  body. `api` lists them, keyed by label.
+- `src/api/`: the contracts. A contract's own
+  body only raises `RpcNoProvider`. `api` lists
+  them, keyed by label.
 - `src/backend/`: the providers. Each ends with
   `satisfies typeof <contract>`.
 - `cmds/server.ts`: `rpc.server` with
@@ -113,9 +114,12 @@ any more.
 
 ## Releases
 
-After green gates on `main`, CI tags `v<version>`
-from `package.json`, when that tag is missing.
-Bump `version` to release.
+This repo only: after green gates on `main`, CI
+tags `v<version>` from `package.json`, when that
+tag is missing. Bump `version` to release. In a
+copy, `release.yml` skips; delete it if you like.
+`trunk-status.yml` opens an issue when your own
+`main` goes red; delete it if you do not want it.
 
 ## Where Start went
 

@@ -3,6 +3,12 @@
 Date: 2026-10-19. Status: accepted.
 Accepted: 2026-10-20 07:35 UTC.
 Duke picked option B, our own worker.
+Note, 2026-11-01: measured on the Start apps.
+start-min, issue-board and `../start-perf` now
+live in the tag `start-archive`. The worker
+design is the one `tinker/base/telemetry-worker.ts`
+runs today.
+
 Builds on: tinkered ADR 0102 (sends are not
 traced), 0113 (outside effects enter at the
 seam), 0119 (an extension taps the hose).
