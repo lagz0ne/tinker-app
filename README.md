@@ -72,6 +72,10 @@ on each push to `main`, and weekly.
   It fails if a server module is in the client
   build: a `*.server.ts` file, `src/backend`,
   a server cmd, or a `node:` or `bun:` import.
+  The name is the only rule: a server module
+  that imports no builtin, such as a module
+  resource that loads a server package, must
+  end in `.server.ts` (`modules.server.ts`).
 
 ## rpc: one op, two places
 
