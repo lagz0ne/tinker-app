@@ -13,7 +13,7 @@ cd my-app && bun install
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-npx degit lagz0ne/tinker-app#v0.19.1 my-app
+npx degit lagz0ne/tinker-app#v0.19.2 my-app
 ```
 
 ## Run
