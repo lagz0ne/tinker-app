@@ -7,11 +7,13 @@ type Main = (ctx: MainContext) => Promise<{
   closed: MainClosed;
 }>;
 
-const signalCodes = { SIGINT: 130, SIGTERM: 143 } as const;
+/** POSIX exit codes for a stop by signal: 128 plus the signal's number. */
+const signalCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 } as const;
 
 /**
  * The host for one server command on Bun.serve. It owns OS signals and the exit code: a startup
  * throw exits 78 for a config error, else 1; a failed root exits 1; a signal exits 128 + its number.
+ * SIGHUP (a closed terminal) stops it like SIGTERM: the port closes, the root closes, exit 129.
  * A command that calls `exit` during start gets that code and no port: the host never listens,
  * but still waits for `closed`. `/api/*`, `/rpc/*` and each of `options.paths` (Bun route
  * patterns, such as `/mcp` or `/.well-known/*`) go to the command; every other path gets the
@@ -32,8 +34,8 @@ export async function serveMain(
     code ||= next;
     stop.abort(reason);
   };
-  for (const name of ["SIGINT", "SIGTERM"] as const) {
-    process.once(name, () => exit(signalCodes[name]));
+  for (const [name, signalCode] of Object.entries(signalCodes)) {
+    process.once(name, () => exit(signalCode));
   }
 
   const started = await main({

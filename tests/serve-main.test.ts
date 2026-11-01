@@ -9,7 +9,17 @@ afterEach(() => {
   for (const child of children.splice(0)) child.kill();
 });
 
-/** Runs a fixture host on a free port; resolves its URL from the `tinker: listening` line. */
+/** Reads a host's stdout lines to their end. */
+const rest = async (lines: ReadableStreamDefaultReader<string>) => {
+  let text = "";
+  for (let next = await lines.read(); !next.done; next = await lines.read()) text += next.value;
+  return text;
+};
+
+/**
+ * Runs a fixture host on a free port; resolves its URL from the `tinker: listening` line. `rest`
+ * reads the host's stdout to its end.
+ */
 const host = async (fixture: string) => {
   const child = Bun.spawn(
     [process.execPath, new URL(`fixtures/${fixture}`, import.meta.url).pathname],
@@ -26,9 +36,9 @@ const host = async (fixture: string) => {
   for (let next = await lines.read(); !next.done; next = await lines.read()) {
     seen += next.value;
     const url = /tinker: listening on (\S+)/.exec(seen)?.[1];
-    if (url) return { child, url: new URL(url), seen };
+    if (url) return { child, url: new URL(url), seen, rest: () => rest(lines) };
   }
-  return { child, url: undefined, seen };
+  return { child, url: undefined, seen, rest: () => rest(lines) };
 };
 
 test("a stream quiet for longer than Bun's 10 s default is not reset", async () => {
@@ -92,4 +102,16 @@ test("with no extra paths, /mcp gets the page", async () => {
 
   expect(await text("/mcp")).toBe("page");
   expect(await text("/api/x")).toBe("cmd");
+});
+
+test("a hang-up (SIGHUP) closes the port and the root, then exits 129", async () => {
+  const { child, url, rest } = await host("page-host.ts");
+  expect(url).toBeDefined();
+
+  child.kill("SIGHUP");
+
+  expect(await child.exited).toBe(129);
+  // Bun's own hang-up exit also reads 129; a kill by the signal sets signalCode.
+  expect(child.signalCode).toBeNull();
+  expect(await rest()).toContain("closed\n");
 });
