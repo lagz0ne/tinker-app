@@ -31,6 +31,10 @@ const migrations = tag<string | false>({
  */
 const opened = data<PgConnection | undefined>({ initial: undefined });
 
+/** The root's own closing signal, written at start. A session resource built with this very
+ * signal was built on the root itself: no call owns it, so it would never end. */
+const rootClosing = data<AbortSignal | undefined>({ initial: undefined });
+
 const connection = resource({
   label: "drizzlePg.connection",
   depends: { opened },
@@ -55,9 +59,14 @@ const db = resource({
 const tx = resource({
   label: "drizzlePg.tx",
   target: "session",
-  depends: { connection },
-  factory: async ({ connection }, { defer, raise: coreRaise }): Promise<PgTx> => {
+  depends: { connection, root: rootClosing },
+  factory: async ({ connection, root }, { closing, defer, raise: coreRaise }): Promise<PgTx> => {
     const raise: Errors.Raise = coreRaise;
+
+    // The boundary rule: a transaction belongs to a call's own session (a request, a call
+    // with `signal` or `tags`, or `createSession()`), never to the root.
+    if (closing === root) return raise("TransactionNeedsSession", { label: "drizzlePg" });
+
     const opened = Promise.withResolvers<PgTx>();
     const ended = Promise.withResolvers<boolean>();
     const done = connection.db
@@ -97,8 +106,11 @@ export const drizzlePg = capsule({
   config: { driver: driver.required, migrations },
   exports: { db, tx, migrate },
   hooks: {
-    async start({ next, run, load, config }) {
+    async start({ next, run, load, config, closing }) {
       await next();
+      load(rootClosing, { role: "state", explain: "Marks the root, for the boundary rule" }).set(
+        closing,
+      );
       const meta = { role: "state", explain: "The driver's Drizzle connection" } as const;
       load(opened, { role: "state", explain: "Hands the connection to db, tx and migrate" }).set(
         await load(config.driver, meta),

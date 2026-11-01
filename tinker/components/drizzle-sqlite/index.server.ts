@@ -35,6 +35,10 @@ const migrations = tag<string | false>({
 /** The bound driver's connection, written once at start (see `drizzlePg`: same Core gap). */
 const opened = data<SqliteConnection | undefined>({ initial: undefined });
 
+/** The root's own closing signal, written at start. A session resource built with this very
+ * signal was built on the root itself: no call owns it, so it would never end. */
+const rootClosing = data<AbortSignal | undefined>({ initial: undefined });
+
 const connection = resource({
   label: "drizzleSqlite.connection",
   depends: { opened },
@@ -75,8 +79,13 @@ const writeTurn = resource({
 const tx = resource({
   label: "drizzleSqlite.tx",
   target: "session",
-  depends: { connection, writeTurn },
-  factory: async ({ connection, writeTurn }, { defer }) => {
+  depends: { connection, writeTurn, root: rootClosing },
+  factory: async ({ connection, writeTurn, root }, { closing, defer, raise: coreRaise }) => {
+    const raise: Errors.Raise = coreRaise;
+
+    // The boundary rule, as in `drizzlePg`.
+    if (closing === root) return raise("TransactionNeedsSession", { label: "drizzleSqlite" });
+
     const release = await writeTurn.take();
     try {
       const { tx, end } = await connection.begin();
@@ -105,8 +114,11 @@ export const drizzleSqlite = capsule({
   config: { driver: driver.required, migrations },
   exports: { db, tx, migrate },
   hooks: {
-    async start({ next, run, load, config }) {
+    async start({ next, run, load, config, closing }) {
       await next();
+      load(rootClosing, { role: "state", explain: "Marks the root, for the boundary rule" }).set(
+        closing,
+      );
       const meta = { role: "state", explain: "The driver's Drizzle connection" } as const;
       load(opened, { role: "state", explain: "Hands the connection to db, tx and migrate" }).set(
         await load(config.driver, meta),

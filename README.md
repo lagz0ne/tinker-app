@@ -126,12 +126,28 @@ run: async ({ tx }, { input }) =>
   tx.insert(notes).values(input),
 ```
 
-- `tx` is one transaction per session.
-- Success commits. A failure rolls back.
-- A forced close rolls back; a graceful
-  close commits.
-- A call with `signal` or `tags` owns its
-  session. So does each rpc call.
+Transactions follow Spring's propagation
+words, with a session as the boundary:
+
+- **Join** (default): depend on `tx`. Every
+  op and subflow in one session shares one
+  transaction.
+- **Own**: run a subflow with `signal`. It
+  gets its own session, so its own
+  transaction. It commits even if the
+  caller fails later. The caller must not
+  depend on `tx` itself (SQLite and PGlite
+  have one writer: that would wait forever).
+- **Boundary**: a transaction needs a
+  session that a call owns: a request, an
+  rpc call, a call with `signal` or `tags`,
+  or `createSession()`. A plain root run
+  that touches `tx` fails with
+  `TransactionNeedsSession`.
+- At the session's end: success commits;
+  a failure rolls back. A forced close
+  rolls back; a graceful close commits.
+
 - Pick one dialect: a Drizzle schema is
   `pgTable` or `sqliteTable`, not both.
 - Make migrations with

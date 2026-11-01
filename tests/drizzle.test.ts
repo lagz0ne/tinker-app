@@ -98,6 +98,20 @@ for (const driver of drivers) {
       expect(await app.run(ops.listNotes)).toHaveLength(12);
     });
 
+    test("own: a subflow with signal commits on its own; the joined rest rolls back", async () => {
+      expect((await app.settle(ops.keepOneThenFail, own())).status).toBe("failed");
+      const titles = (await app.run(ops.listNotes)).map((note) => note.title);
+      expect(titles.filter((title) => title === "kept")).toHaveLength(1);
+      expect(titles).not.toContain("ghost 1");
+    });
+
+    test("boundary: a root run with no session of its own is refused", async () => {
+      const result = await app.settle(ops.addNote, { input: { title: "nowhere" } });
+      expect(result.status === "failed" && Object(result.error).kind).toBe(
+        "TransactionNeedsSession",
+      );
+    });
+
     test("the capsule record shows the driver and migrate as setup", () => {
       const record = app.capsules.find((entry) => entry.label.startsWith("drizzle"))!;
       expect(record.exports).toEqual(["db", "tx", "migrate"]);

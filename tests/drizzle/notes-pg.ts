@@ -57,3 +57,17 @@ export const clearNotes = operation({
   depends: { tx: drizzlePg.tx },
   run: async ({ tx }) => void (await tx.delete(notes)),
 });
+
+/**
+ * The "own" pattern: a subflow called with `signal` gets its own session, so its own
+ * transaction commits at once. The outer op takes no tx itself, so it holds no write turn.
+ */
+export const keepOneThenFail = operation({
+  label: "notes.keepOneThenFail",
+  depends: { add: addNote, fail: addTwoThenFail },
+  run: async ({ add, fail }) => {
+    await add.run({ input: { title: "kept" }, signal: new AbortController().signal });
+
+    return fail.run();
+  },
+});

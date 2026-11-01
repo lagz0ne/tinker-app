@@ -32,6 +32,7 @@ export declare namespace Errors {
 
     DatabaseNotStarted: { label: string };
     TransactionNotOpened: { label: string };
+    TransactionNeedsSession: { label: string };
 
     RpcNoProvider: { label: string };
     RpcFailed: { label: string; status: number };
