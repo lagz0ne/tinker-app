@@ -409,9 +409,11 @@ export const threadObserver = resource({
   },
 });
 
-/** A tab's checked batch goes to the worker as one line, under the server's service. */
+/** A tab's checked batch goes to the worker as one line, under the server's service. Built in
+ * the route's quiet namespace, as `browserIngest` is. */
 export const threadIngest = resource({
   label: "telemetry.threadIngest",
+  target: "namespace",
   depends: { thread: threadRing, service: telemetryService },
   factory: ({ thread, service }) => ({
     ingest(this: void, batch: Telemetry.Batch) {

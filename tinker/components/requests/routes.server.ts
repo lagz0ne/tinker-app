@@ -1,5 +1,5 @@
 import { capsule, tag } from "@tinker/core";
-import type { Operation, RunResult, Scope } from "@tinker/core";
+import type { Ns, Operation, RunResult, Scope } from "@tinker/core";
 
 import { backendStop, requestStop } from "./lifetime";
 import { traceparent } from "./trace.server";
@@ -16,6 +16,12 @@ const request = tag<Request>({ label: "routes.request" });
  */
 const reply = tag<(response: Response) => void>({ label: "routes.reply" });
 
+/**
+ * A row's namespace, bound by the capsule that owns its op: `routes.ns({ op, ns })`. Each
+ * request of that row runs in it; in a quiet one it makes no span or log line, failures too.
+ */
+const ns = tag<{ readonly op: Routes[keyof Routes]; readonly ns: Ns }>({ label: "routes.ns" });
+
 const table = tag<Routes>({ label: "routes.table" });
 
 /** A failure's kind picks its status; any other kind is 500. */
@@ -28,14 +34,14 @@ const failures: Readonly<Record<string, number>> = { DataValidationFailed: 400, 
  * that sent its reply early has answered: how its operation ends later changes no reply.
  * Each request runs in its own session of `scope`: a valid `traceparent` makes the route's span
  * its child; no header, or a bad one, starts a fresh trace. An early reply leaves that session
- * open until the run ends.
+ * open until the run ends. A row whose op has a `routes.ns` binding opens it in that namespace.
  * A subflow the route op does not await is cut off when the run ends: Core aborts its signal.
  * To keep work running past the reply, reply with `reply` and await that work in the op.
  */
 export const routes = capsule({
   label: "routes",
-  config: { table: table.required, stop: backendStop.required },
-  exports: { request, reply, stop: requestStop },
+  config: { table: table.required, stop: backendStop.required, ns: ns.all },
+  exports: { request, reply, ns, stop: requestStop },
   hooks: {
     async start({ config, next }) {
       await next();
@@ -43,7 +49,7 @@ export const routes = capsule({
       const rows = Object.entries(config.table).map(([key, op]) => {
         const [method, pathname] = key.split(" ") as [string, string];
         const pattern = new URLPattern({ pathname: pathname.replaceAll(/\{(\w+)\}/g, ":$1") });
-        return { method, pattern, op };
+        return { method, pattern, op, ns: config.ns.find((row) => row.op === op)?.ns };
       });
 
       return async function fetch(
@@ -62,7 +68,7 @@ export const routes = capsule({
         let session: Scope.Handle | undefined;
         const settled = Promise.resolve()
           .then(() =>
-            (session = scope.createSession({ trace })).settle(row.op, {
+            (session = scope.createSession({ trace, ns: row.ns })).settle(row.op, {
               rawInput: { ...Object.fromEntries(url.searchParams), ...params },
               signal,
               tags: [request(incoming), requestStop(signal), reply(early.resolve)],

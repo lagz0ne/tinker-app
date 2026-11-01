@@ -1,8 +1,11 @@
 import { capsule } from "@tinker/core";
 
+import { routes } from "~/components/requests/index.server";
+
 import { consoleOutput } from "./console";
 import { telemetryOrigin, telemetryRoute } from "./ingest.server";
 import { queueSend, queueSink } from "./observer";
+import { quiet } from "./records";
 import {
   logLevel,
   logsUrl,
@@ -31,20 +34,21 @@ const records = { level: logLevel, history: spanHistory, origin: telemetryOrigin
 /**
  * The server's telemetry. Each is the sink of its own root: list it first, so it closes last.
  * `server` sends on this thread (dev, tests, the worker itself); `thread` sends from a worker.
- * `route` takes the tab's batches; mount it in the route table.
+ * `route` takes the tab's batches; mount it in the route table. It runs quiet (`routes.ns`):
+ * taking a batch makes no span or log line, so a sink never traces its own ingest.
  */
 export const telemetry = {
   server: capsule({
     label: "telemetry",
     config: { ...sends, ...records },
-    tags: [telemetrySide("server")],
+    tags: [telemetrySide("server"), routes.ns({ op: telemetryRoute, ns: quiet })],
     exports: { route: telemetryRoute },
     hooks: queueSink,
   }),
   thread: capsule({
     label: "telemetry",
     config: { ...sends, ...records, worker: telemetryWorker.required },
-    tags: [telemetrySide("server")],
+    tags: [telemetrySide("server"), routes.ns({ op: threadRoute, ns: quiet })],
     exports: { route: threadRoute },
     hooks: threadSink,
   }),

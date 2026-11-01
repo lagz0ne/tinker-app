@@ -26,8 +26,10 @@ export const telemetryOrigin = tag<string | null>({
   },
 });
 
+/** Built in the route's quiet namespace, so its ingest runs quiet too. */
 export const browserIngest = resource({
   label: "telemetry.browserIngest",
+  target: "namespace",
   depends: { ingest: ingestTelemetry.controller, service: telemetryService },
   factory: ({ ingest, service }) => ({
     ingest(this: void, batch: Telemetry.Batch) {

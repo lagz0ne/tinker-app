@@ -206,14 +206,17 @@ words, with a session as the boundary:
   work going past the reply, use `reply` and
   await the work in the op.
 - `tinker/components/telemetry`: the sink
-  capsules.
+  capsules. The tab's batch route runs quiet
+  (`routes.ns`): taking a batch makes no span
+  or log line, a refused one included.
 - `tinker/components/drizzle-pg`,
   `drizzle-sqlite`: the Drizzle facades.
 - `tinker/components/bun-sql`, `bun-sqlite`,
   `pglite`: the drivers.
 - `scripts/`: `check-client`, `check-plain`.
 - `tests/`: `bun test` files for rpc, routes,
-  trace, health, drizzle and `check-plain`,
+  trace, health, drizzle, telemetry ingest and
+  `check-plain`,
   plus `tests/serve-main.test.ts` (the Bun
   host), `tests/server.test.ts` (the server
   command) and `tests/build-client.test.ts`
