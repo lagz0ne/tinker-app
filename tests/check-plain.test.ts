@@ -164,6 +164,16 @@ test("defineMain outside tinker/base/main.ts fails", async () => {
   expect(result.err.trim()).toBe(hit("src/main.ts", 1));
 });
 
+test("an app file at tinker/base/main-host.ts has no exempt names", async () => {
+  const result = await checkFiles({
+    "tinker/base/main-host.ts": `export function createMainHost() {}\n\nexport function runMain() {}\n`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err).toContain(hit("tinker/base/main-host.ts", 1));
+  expect(result.err).toContain(hit("tinker/base/main-host.ts", 3));
+});
+
 test("a function frozen or put in an array at the top level fails", async () => {
   const result = await checkFiles({
     "src/a.ts": "export const shout = Object.freeze((s: string) => `${s}!`);\n",

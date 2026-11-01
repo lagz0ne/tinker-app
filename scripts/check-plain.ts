@@ -59,9 +59,6 @@ const listenNames = new Set([
 const entries: Record<string, readonly string[]> = {
   // The Bun host: it runs before any scope exists, and owns OS signals and the exit code.
   "tinker/base/bun-host.ts": ["serveMain"],
-  // The host for commands with no port (`hedl import`, in-process command tests), and its
-  // process form: like serveMain, they run before any scope and own signals and the exit code.
-  "tinker/base/main-host.ts": ["createMainHost", "runMain"],
   // The process panic hook: it must report even when the root's own close fails.
   "tinker/base/panics.server.ts": ["observeServerPanics"],
   "tinker/base/telemetry-worker.ts": [
