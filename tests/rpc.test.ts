@@ -130,6 +130,28 @@ test("a bound public origin is the one a call must come from, over an http reque
   expect(await call(undefined, { origin: "https://app.example" })).toBe(403);
 });
 
+test("a bound origin that is not an http(s) URL fails start, naming rpc.origin", async () => {
+  const failureOf = async (origin: string) => {
+    const bad = createScope({ capsules: [server.server({ api, provide, origin })] });
+    const failure = await bad.ready.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await bad.close();
+    return { origin, kind: Object(failure).kind, payload: Object(failure).payload };
+  };
+
+  // No scheme, a file URL (its origin is "null"), another scheme, garbage, and "null" itself.
+  const origins = ["app.example", "file:///x", "ftp://app.example", "not a url", "null"];
+  expect(await Promise.all(origins.map(failureOf))).toEqual(
+    origins.map((origin) => ({
+      origin,
+      kind: "MissingConfig",
+      payload: { label: "rpc", key: "origin" },
+    })),
+  );
+});
+
 test("a contract with no provider fails start, naming it; no request is ever served", async () => {
   const missing = createScope({
     capsules: [server.server({ api, provide: { greet: greetHere } as unknown as typeof provide })],

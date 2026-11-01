@@ -14,7 +14,8 @@ export type Providers<A extends Api> = { readonly [K in keyof A]: A[K] };
 const api = tag<Api>({ label: "rpc.api" });
 const provide = tag<Api>({ label: "rpc.provide" });
 /** The public origin a tab calls from. Unset, it is the request URL's own origin; behind a TLS
- * proxy that is `http://<host>`, so the app binds its public `https` origin here. */
+ * proxy that is `http://<host>`, so the app binds its public `https` origin here. A bound value
+ * that is not an http(s) URL fails start with `MissingConfig { key: "origin" }`. */
 const origin = tag<string | null>({ label: "rpc.origin", default: null });
 
 const local = { role: "handler", explain: "Runs a contract here, on its provider" } as const;
@@ -54,8 +55,13 @@ export const rpc = {
           if (contract.label !== key) raise("MissingConfig", { label: "rpc", key: `api.${key}` });
           if (!config.provide[key]) raise("MissingConfig", { label: "rpc", key: `provide.${key}` });
         }
-        // Unset is "": it resolves to the request URL's own origin. A bad URL fails start.
-        const allowed = config.origin === null ? "" : new URL(config.origin).origin;
+        // Unset is "": it resolves to the request URL's own origin. Bound, it must be an
+        // http(s) URL: a bad URL is "undefined", and any other scheme's origin is "null" (what
+        // a sandboxed page sends) or not http(s).
+        const allowed = config.origin === null ? "" : String(URL.parse(config.origin)?.origin);
+        if (!/^(https?:\/\/|$)/.test(allowed)) {
+          raise("MissingConfig", { label: "rpc", key: "origin" });
+        }
         const paths = new Map(
           Object.entries(config.provide).map(([label, provider]) => [`/rpc/${label}`, provider]),
         );

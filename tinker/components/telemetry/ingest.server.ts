@@ -10,7 +10,21 @@ import type { Telemetry } from "./records";
 import { telemetryBatch } from "./records.server";
 import { telemetryService } from "./settings";
 
-export const telemetryOrigin = tag<string | null>({ label: "telemetry.origin", default: null });
+/**
+ * The public origin tab batches must come from; unset, the request URL's own origin. Checked
+ * once, when it is bound: anything but an http(s) URL raises `DataValidationFailed` naming
+ * `telemetry.origin`, since any other URL has the origin "null", which a sandboxed page sends.
+ */
+export const telemetryOrigin = tag<string | null>({
+  label: "telemetry.origin",
+  default: null,
+  parse: (raw) => {
+    if (raw === null) return null;
+    const url = typeof raw === "string" ? URL.parse(raw) : null;
+    if (!url || !/^https?:$/.test(url.protocol)) throw new TypeError("not an http(s) URL");
+    return url.origin;
+  },
+});
 
 export const browserIngest = resource({
   label: "telemetry.browserIngest",
@@ -88,10 +102,7 @@ export const telemetryRoute = operation({
   run: async ({ request, stop, origin, body, sink }, ctx) => {
     const raise: Errors.Raise = ctx.raise;
 
-    const expected =
-      origin === null
-        ? new URL(request.url).origin.replace(previewOrigin, "https:$1")
-        : new URL(origin).origin;
+    const expected = origin ?? new URL(request.url).origin.replace(previewOrigin, "https:$1");
     const refused = [
       [request.headers.get("origin") !== expected, 403],
       [String(request.headers.get("content-type")).split(";")[0] !== "application/json", 415],
