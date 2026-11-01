@@ -47,6 +47,8 @@ export async function serveMain(main: Main, pages: Record<string, HTMLBundle | R
 
   const server = Bun.serve({
     port: Number(process.env.PORT ?? 4318),
+    // Bun's 10 s default resets a quiet stream (SSE); 60 s (max 255) outlasts usual heartbeats.
+    idleTimeout: 60,
     development: process.env.NODE_ENV !== "production" && { hmr: false, console: true },
     routes: {
       "/api/*": async (request) =>
