@@ -58,6 +58,9 @@ on each push to `main`, and weekly.
 
 - `build:client`: `cmds/index.html`, browser
   target, to `dist/client`, with a metafile.
+  `--public-path=/` makes `index.html` load
+  its files from `/`, so a deep link such as
+  `/a/b` works.
 - `build:server`: `cmds/host.ts` and the
   telemetry worker, Bun target, to `dist/server`.
 - `check:client`: reads the client metafile.
