@@ -145,13 +145,59 @@ export const routes = capsule({
   expect(result).toMatchObject({ code: 0, err: "" });
 });
 
-test("cn and defineMain pass by name", async () => {
+test("cn and defineMain pass by name, and defineMain takes the command's main", async () => {
   const result = await checkFiles({
     "src/frontend/ui/classes.ts": `export function cn(...names: string[]) {\n  return names.join(" ");\n}\n`,
     "tinker/base/main.ts": `export const defineMain = <R>(main: () => Promise<R>) => main;\n`,
+    "cmds/server.ts": `import { defineMain } from "~/base/main";\n\nexport default defineMain(async () => ({ closed: Promise.resolve() }));\n`,
   });
 
   expect(result).toMatchObject({ code: 0, err: "" });
+});
+
+test("defineMain outside tinker/base/main.ts fails", async () => {
+  const result = await checkFiles({
+    "src/main.ts": `export const defineMain = <R>(main: () => Promise<R>) => main;\n`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err.trim()).toBe(hit("src/main.ts", 1));
+});
+
+test("a function frozen or put in an array at the top level fails", async () => {
+  const result = await checkFiles({
+    "src/a.ts": "export const shout = Object.freeze((s: string) => `${s}!`);\n",
+    "src/b.ts": `export const [whisper] = [(s: string) => s.toLowerCase()];\n`,
+    "src/c.ts": `export const names = Object.entries({ a: 1 }).map(([name]) => name);\n`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err).toContain(hit("src/a.ts", 1));
+  expect(result.err).toContain(hit("src/b.ts", 1));
+  expect(result.err).toContain(hit("src/c.ts", 1));
+});
+
+test("a callback of a library value passes, here or through an app import", async () => {
+  const result = await checkFiles({
+    "tinker/schema.ts": `import { z } from "zod";\n\nexport const batch = z.object({ n: z.number() });\n`,
+    "tinker/strict.ts": `import { batch } from "./schema";\n\nexport const small = batch.refine((b) => b.n < 9);\n`,
+    "cmds/host.ts": `export const names = [...new Bun.Glob("*").scanSync(".")].filter((n) => n !== "x");\n`,
+  });
+
+  expect(result).toMatchObject({ code: 0, err: "" });
+});
+
+test("a helper in an .mts or .cts file fails; a .d.mts file is skipped", async () => {
+  const result = await checkFiles({
+    "src/util.mts": `export const loud = (s: string) => s.toUpperCase();\n`,
+    "tinker/util.cts": `export function quiet(s: string) {\n  return s;\n}\n`,
+    "src/types.d.mts": `export function typed(s: string) {\n  return s;\n}\n`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err).toContain(hit("src/util.mts", 1));
+  expect(result.err).toContain(hit("tinker/util.cts", 1));
+  expect(result.err).not.toContain("types.d.mts");
 });
 
 test("Bun.serve's fetch and error pass", async () => {

@@ -1,23 +1,25 @@
 /**
  * The plain-function check (Duke 2026-10-31, tinker-app #44). App code has no plain helper
  * functions: every named function is an operation, so every call is a span and its dependencies
- * come through the graph. It reads src/, cmds/ and tinker/ (the syntax tree only, no types) and
- * prints one line per plain function.
+ * come through the graph. It reads `.ts`, `.tsx`, `.mts` and `.cts` files in src/, cmds/ and
+ * tinker/ (the syntax tree only, no types) and prints one line per plain function.
  *
  * A function passes when it is one of these:
- * - inline: no name of its own, written where it is used (an argument, a JSX attribute, a
- *   returned value); an IIFE is not inline;
+ * - inline: no name of its own, written where it is used: a JSX attribute, a returned value, or
+ *   an argument of a call inside a function, a Core call, `defineMain`, a library call, or an
+ *   event registration. An IIFE, `Object.freeze(() => 1)` at the top level, or a function in an
+ *   array bound to a name is not inline;
  * - a graph body: a direct option of a Core `operation`, `resource`, `tag` or `data`, or a hook
  *   of a capsule (in `capsule({ hooks })`, or in an object typed `Capsule.Hooks`);
  * - a native option: inside the options of a library call (`Bun.serve`, `createRoute`, ...);
  * - owned: named inside a passing function that returns it or hands it to a call;
  * - a listener: a top-level function handed to an event registration (`addEventListener`, ...);
  * - a React component: a capitalized function in a .tsx file that returns JSX;
- * - exempt by name (`cn`, `defineMain`), or one of the `entries` below.
+ * - exempt by name (`cn` anywhere, `defineMain` in tinker/base/main.ts), or an `entries` item.
  *
  * Usage: bun scripts/check-plain.ts [root]
  */
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import ts from "typescript-api";
 
@@ -27,8 +29,14 @@ const hookNames = new Set(["start", "resolve", "run", "write", "close", "session
 /** Core calls whose direct options are graph bodies. */
 const unitNames = new Set(["operation", "resource", "tag", "data"]);
 
-/** Exempt by name: shadcn's `cn` (its registry imports it) and the type-only `defineMain`. */
-const exemptNames = new Set(["cn", "defineMain"]);
+/**
+ * Exempt by name, each tied to the file that defines it. shadcn's `cn` (its registry imports it)
+ * has no file yet, so it passes in any file; the type-only `defineMain` only in its own file.
+ */
+const exemptNames: Record<string, string | undefined> = {
+  cn: undefined,
+  defineMain: "tinker/base/main.ts",
+};
 
 /** Calls that register a listener: the event source calls it, never app code by name. */
 const listenNames = new Set([
@@ -68,17 +76,26 @@ type Fn =
   | ts.MethodDeclaration
   | ts.AccessorDeclaration;
 
-/** What one file knows: its path, its Core imports, its library imports, its hooks objects. */
+/**
+ * What one file knows: its path, its Core imports, its library imports, its app imports (by the
+ * file they come from), the `defineMain` it imports, its hooks objects, and its top-level consts.
+ */
 type File = {
   path: string;
   source: ts.SourceFile;
   core: Map<string, string>;
   library: Set<string>;
+  app: Map<string, { from: string; name: string }>;
+  mains: Set<string>;
   hooks: Set<string>;
+  consts: Map<string, ts.Expression>;
 };
 
 const root = resolve(Bun.argv[2] ?? join(import.meta.dir, ".."));
 const verdicts = new Map<ts.Node, boolean>();
+
+/** Every scanned file, by its path without the extension. */
+const files = new Map<string, File>();
 
 function isFn(node: ts.Node): node is Fn {
   return (
@@ -171,12 +188,70 @@ function memberOf(fn: Fn) {
   return isMember && ts.isObjectLiteralExpression(member.parent) ? member.parent : undefined;
 }
 
-/** The identifier a call's callee starts from: `Bun` in `Bun.serve`, `f` in `f<T>()(...)`. */
+/**
+ * The identifier a value is built from: `Bun` in `Bun.serve` or `new Bun.Glob("*").scanSync()`,
+ * `f` in `f<T>()(...)`, the shared root of an array's spreads in `[...xs].map`.
+ */
 function calleeRoot(expression: ts.Expression): string | undefined {
   if (ts.isIdentifier(expression)) return expression.text;
-  if (ts.isPropertyAccessExpression(expression) || ts.isCallExpression(expression)) {
-    return calleeRoot(expression.expression);
-  }
+  if (ts.isArrayLiteralExpression(expression)) return spreadRoot(expression);
+  const next = builtOn(expression);
+  return next && calleeRoot(next);
+}
+
+/** What an expression builds on: a receiver, a called or constructed value, a cast's value. */
+function builtOn(expression: ts.Expression) {
+  const steps =
+    ts.isPropertyAccessExpression(expression) ||
+    ts.isCallExpression(expression) ||
+    ts.isNewExpression(expression) ||
+    ts.isParenthesizedExpression(expression) ||
+    ts.isAsExpression(expression) ||
+    ts.isSatisfiesExpression(expression) ||
+    ts.isNonNullExpression(expression);
+  return steps ? expression.expression : undefined;
+}
+
+/** `[...xs, ...ys]`: the root every spread shares, when each item is a spread. */
+function spreadRoot(array: ts.ArrayLiteralExpression) {
+  const roots = array.elements.map((item) =>
+    ts.isSpreadElement(item) ? calleeRoot(item.expression) : undefined,
+  );
+  const first = roots[0];
+  return first && roots.every((root) => root === first) ? first : undefined;
+}
+
+/** The file an app import names, by its path without the extension. */
+function appFile(file: File, specifier: string) {
+  const path = specifier.startsWith("~/")
+    ? `tinker/${specifier.slice(2)}`
+    : specifier.startsWith("@/")
+      ? `src/${specifier.slice(2)}`
+      : join(dirname(file.path), specifier);
+  return stem(path);
+}
+
+function stem(path: string) {
+  return path.replace(/\.[mc]?tsx?$/, "");
+}
+
+/**
+ * A name whose value comes from a library: imported from a package, the `Bun` global, or a
+ * top-level const built on one, here or in the app file it is imported from (no barrels).
+ */
+function libraryValue(file: File, name: string, depth = 0): boolean {
+  if (name === "Bun" || file.library.has(name)) return true;
+  if (depth > 8) return false;
+
+  const value = file.consts.get(name);
+  const root = value && calleeRoot(value);
+  return root ? libraryValue(file, root, depth + 1) : importedValue(file, name, depth);
+}
+
+function importedValue(file: File, name: string, depth: number) {
+  const from = file.app.get(name);
+  const target = from && (files.get(from.from) ?? files.get(`${from.from}/index`));
+  return !!target && libraryValue(target, from.name, depth + 1);
 }
 
 /** The call this node is a direct argument of. */
@@ -227,7 +302,7 @@ function nativeOption(file: File, fn: Fn) {
 
   const call = node && argumentOf(node);
   const name = call && calleeRoot(call.expression);
-  return name === "Bun" || (!!name && file.library.has(name));
+  return !!name && libraryValue(file, name);
 }
 
 /** A use of a name as a value: not a callee, not a property's receiver or key. */
@@ -329,23 +404,45 @@ function component(file: File, fn: Fn, name: string) {
   return fn.parameters.length <= 1 && !!fn.body && hasJsx(fn.body);
 }
 
-/** Written where it is used: an argument, a JSX attribute, a returned value, an array item. */
-function inline(fn: Fn) {
-  const node = outer(fn);
+/**
+ * Written where it is used: a JSX attribute, a returned value, or an argument of a call that
+ * takes callbacks. An array item stands where its array stands, so `const [f] = [() => 1]` is
+ * named, as is `const f = Object.freeze(() => 1)`.
+ */
+function inline(file: File, node: ts.Node): boolean {
+  node = outer(node);
   const parent = node.parent;
-  if (argumentOf(fn) || ts.isJsxExpression(parent) || ts.isReturnStatement(parent)) return true;
+  if (ts.isArrayLiteralExpression(parent)) return inline(file, parent);
+  if (ts.isJsxExpression(parent) || ts.isReturnStatement(parent)) return true;
+  if (ts.isArrowFunction(parent) && parent.body === node) return true;
+
+  const call = argumentOf(node);
+  return !!call && callbackCall(file, call);
+}
+
+/**
+ * A call that may take an unnamed function: one inside a function (that function is judged
+ * itself), a Core call, `defineMain`, a library call, or an event registration.
+ */
+function callbackCall(file: File, call: ts.CallExpression | ts.NewExpression) {
+  if (enclosingFn(call)) return true;
+  const name = calleeRoot(call.expression);
+  if (name && (file.core.has(name) || file.mains.has(name) || libraryValue(file, name))) {
+    return true;
+  }
   return (
-    ts.isArrayLiteralExpression(parent) || (ts.isArrowFunction(parent) && parent.body === node)
+    ts.isPropertyAccessExpression(call.expression) && listenNames.has(call.expression.name.text)
   );
 }
 
 function exempt(file: File, name: string) {
-  return exemptNames.has(name) || !!entries[file.path]?.includes(name);
+  const home = name in exemptNames ? exemptNames[name] : null;
+  return home === undefined || home === file.path || !!entries[file.path]?.includes(name);
 }
 
 function judge(file: File, fn: Fn) {
   const name = nameOf(fn);
-  if (name === undefined) return inline(fn);
+  if (name === undefined) return inline(file, fn);
   if (exempt(file, name)) return true;
 
   return (
@@ -384,9 +481,26 @@ function readImport(file: File, node: ts.ImportDeclaration) {
   const specifier = (node.moduleSpecifier as ts.StringLiteral).text;
   if (!node.importClause) return;
 
-  for (const [local, imported] of importNames(node.importClause)) {
-    if (specifier === "@tinker/core") file.core.set(local, imported);
+  for (const [local, name] of importNames(node.importClause)) {
+    if (specifier === "@tinker/core") file.core.set(local, name);
     else if (library(specifier)) file.library.add(local);
+    else readAppImport(file, local, { from: appFile(file, specifier), name });
+  }
+}
+
+/** An app import; the `defineMain` of tinker/base/main.ts may take the command's main. */
+function readAppImport(file: File, local: string, from: { from: string; name: string }) {
+  file.app.set(local, from);
+  if (from.name === "defineMain" && from.from === "tinker/base/main") file.mains.add(local);
+}
+
+/** Top-level consts and what they hold: `const batch = z.object({...})`. */
+function readConsts(file: File, node: ts.Statement) {
+  if (!ts.isVariableStatement(node)) return;
+  for (const item of node.declarationList.declarations) {
+    if (ts.isIdentifier(item.name) && item.initializer) {
+      file.consts.set(item.name.text, item.initializer);
+    }
   }
 }
 
@@ -401,10 +515,20 @@ function readHooks(file: File, node: ts.Node) {
 function readFile(path: string, text: string): File {
   const kind = path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, kind);
-  const file: File = { path, source, core: new Map(), library: new Set(), hooks: new Set() };
+  const file: File = {
+    path,
+    source,
+    core: new Map(),
+    library: new Set(),
+    app: new Map(),
+    mains: new Set(),
+    hooks: new Set(),
+    consts: new Map(),
+  };
 
   for (const node of source.statements) {
     if (ts.isImportDeclaration(node)) readImport(file, node);
+    readConsts(file, node);
   }
   walk(source, (node) => readHooks(file, node));
   return file;
@@ -420,15 +544,15 @@ function check(file: File) {
   return hits;
 }
 
-const paths = [...new Bun.Glob("{src,cmds,tinker}/**/*.{ts,tsx}").scanSync({ cwd: root })]
-  .filter((path) => !path.endsWith(".d.ts"))
+const paths = [...new Bun.Glob("{src,cmds,tinker}/**/*.{ts,tsx,mts,cts}").scanSync({ cwd: root })]
+  .filter((path) => !/\.d\.[mc]?ts$/.test(path))
   .sort();
 
-const hits: string[] = [];
-
 for (const path of paths) {
-  hits.push(...check(readFile(path, await Bun.file(join(root, path)).text())));
+  files.set(stem(path), readFile(path, await Bun.file(join(root, path)).text()));
 }
+
+const hits = [...files.values()].flatMap(check);
 
 for (const hit of hits) console.error(hit);
 if (hits.length) process.exit(1);
