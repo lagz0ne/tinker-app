@@ -49,7 +49,12 @@ and oxlint, with rules in `vite.config.ts`.
 `bun run check:plain` bans plain helper
 functions. Every function is an operation or
 a capsule hook. `cn` and `defineMain` are
-exempt.
+exempt. A module resource (a `resource` whose
+factory returns `import("<package>")` on every
+return) counts as a library: the options you
+pass to it are native. `ReadableStream` and
+`Proxy` count only as a direct
+`new X({...})`, not through a const.
 
 `.github/workflows/gates.yml` runs all three
 on each push to `main`, and weekly.
