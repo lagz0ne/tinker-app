@@ -43,7 +43,8 @@ export async function serveMain(main: Main, pages: Record<string, HTMLBundle | R
     );
     exit(config || Object(error).code === "ERR_INVALID_URL" ? 78 : 1, error);
   });
-  if (!started) return process.exit(code);
+  // A command that called `exit` during start (a usage error) gets its code, and no port.
+  if (!started || stop.signal.aborted) return process.exit(code);
 
   const server = Bun.serve({
     port: Number(process.env.PORT ?? 4318),
