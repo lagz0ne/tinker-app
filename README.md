@@ -208,6 +208,13 @@ words, with a session as the boundary:
   signal aborted when the run ends. To keep
   work going past the reply, use `reply` and
   await the work in the op.
+  Only the first reply counts. A second
+  `reply` is dropped. A Response the op
+  returns after `reply` is dropped, and its
+  body is cancelled.
+  Close or error a reply stream in a
+  `finally`: if the op throws first, the
+  client waits for the 60 s idle timeout.
 - `tinker/components/telemetry`: the sink
   capsules. The tab's batch route runs quiet
   (`routes.ns`): taking a batch makes no span

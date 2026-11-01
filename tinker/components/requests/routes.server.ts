@@ -37,6 +37,10 @@ const failures: Readonly<Record<string, number>> = { DataValidationFailed: 400, 
  * open until the run ends. A row whose op has a `routes.ns` binding opens it in that namespace.
  * A subflow the route op does not await is cut off when the run ends: Core aborts its signal.
  * To keep work running past the reply, reply with `reply` and await that work in the op.
+ * Only the first reply counts. After an early `reply`, a second `reply` is dropped; a Response
+ * the op returns is dropped too, and its body is cancelled. An op that replies with a stream must
+ * close or error it in a `finally`: if the op throws first, the client waits for the 60 s idle
+ * timeout.
  */
 export const routes = capsule({
   label: "routes",
@@ -87,7 +91,14 @@ export const routes = capsule({
             return new Response(null, { status: failures[kind] ?? 500 });
           });
 
-        return Promise.race([early.promise, settled]);
+        const winner = await Promise.race([early.promise, settled]);
+        // The reply that loses the race answers no one: cancel its body, so a stream stops.
+        for (const loser of [early.promise, settled]) {
+          void loser.then((late) =>
+            late === winner ? undefined : late.body?.cancel().catch(() => undefined),
+          );
+        }
+        return winner;
       };
     },
   },

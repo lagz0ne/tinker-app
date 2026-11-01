@@ -160,3 +160,29 @@ test("an op that replies early and then fails keeps its reply", async () => {
 
   await app.close();
 });
+
+test("after an early reply, a Response the op returns is dropped and its body cancelled", async () => {
+  const cancelled = Promise.withResolvers<unknown>();
+  const twice = operation({
+    label: "twice",
+    depends: { reply: routes.reply.required },
+    run: async ({ reply }) => {
+      reply(new Response("first", { status: 202 }));
+      await Bun.sleep(5);
+      return new Response(new ReadableStream({ cancel: (reason) => cancelled.resolve(reason) }));
+    },
+  });
+  const app = createScope({
+    capsules: [routes({ stop: new AbortController().signal, table: { "GET /twice": twice } })],
+  });
+  await app.ready;
+
+  const response = await within(app.resolve(routes)(new Request("http://t/twice"), app));
+  expect(response).toBeInstanceOf(Response);
+  if (!(response instanceof Response)) return;
+  expect(response.status).toBe(202);
+  expect(await response.text()).toBe("first");
+  expect(await within(cancelled.promise, 200)).not.toBe("late");
+
+  await app.close();
+});
