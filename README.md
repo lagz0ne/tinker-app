@@ -192,8 +192,15 @@ words, with a session as the boundary:
   `pglite`: the drivers.
 - `scripts/`: `check-client`, `check-plain`.
 - `tests/`: `bun test` files for rpc, routes,
-  trace, health, drizzle and `check-plain`.
-  The Bun.sql tests run when `PG_URL` is set.
+  trace, health, drizzle and `check-plain`,
+  plus `tests/serve-main.test.ts` (the Bun
+  host), `tests/server.test.ts` (the server
+  command) and `tests/build-client.test.ts`
+  (the client build). The Bun.sql tests run
+  when `PG_URL` is set.
+- The idle test holds a stream quiet for 16 s.
+  Bun checks idle timeouts about every 4 s, so
+  a shorter gap passes without the fix.
 
 Components in `tinker/components/` are plain
 folders. Edit them in place. There is no
