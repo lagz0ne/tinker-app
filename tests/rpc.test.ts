@@ -264,3 +264,22 @@ test("rpc.maxBody Infinity has no cap: a 3 MB body answers 200", async () => {
   expect(response?.status).toBe(200);
   await open.close();
 });
+
+test("a call body that errors mid-read answers 400, as bad JSON does", async () => {
+  let pulls = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull: (stream) => {
+      pulls += 1;
+      if (pulls === 1) return stream.enqueue(new TextEncoder().encode('{"name":'));
+      stream.error(new Error("connection reset"));
+    },
+  });
+
+  const response = await answer(
+    new Request(`${http.url}rpc/greet`, { method: "POST", body }),
+    backend,
+  );
+
+  expect(response?.status).toBe(400);
+  expect(await response?.json()).toMatchObject({ kind: "DataValidationFailed" });
+});

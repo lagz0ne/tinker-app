@@ -94,20 +94,23 @@ export const rpc = {
             return new Response(null, { status: 403 });
           }
 
-          // Counts the bytes as they come, so a body with no length stops at the cap.
-          const read = await Promise.resolve(request).then(async ({ headers, body }) => {
-            if (Number(headers.get("content-length")) > config.maxBody) return undefined;
-            const chunks: Uint8Array[] = [];
-            let size = 0;
-            for await (const chunk of body ?? []) {
-              size += chunk.byteLength;
-              if (size > config.maxBody) return undefined;
-              chunks.push(chunk);
-            }
-            return {
-              rawInput: await new Response(Buffer.concat(chunks)).json().catch(() => undefined),
-            };
-          });
+          // Counts the bytes as they come, so a body with no length stops at the cap. A body that
+          // errors mid-read is no input, as bad JSON is: the call answers 400.
+          const read = await Promise.resolve(request)
+            .then(async ({ headers, body }) => {
+              if (Number(headers.get("content-length")) > config.maxBody) return undefined;
+              const chunks: Uint8Array[] = [];
+              let size = 0;
+              for await (const chunk of body ?? []) {
+                size += chunk.byteLength;
+                if (size > config.maxBody) return undefined;
+                chunks.push(chunk);
+              }
+              return {
+                rawInput: await new Response(Buffer.concat(chunks)).json().catch(() => undefined),
+              };
+            })
+            .catch(() => ({ rawInput: undefined }));
           if (!read) return new Response(null, { status: 413 });
 
           const call = {
