@@ -12,7 +12,9 @@ const signalCodes = { SIGINT: 130, SIGTERM: 143 } as const;
 /**
  * The host for one server command on Bun.serve. It owns OS signals and the exit code: a startup
  * throw exits 78 for a config error, else 1; a failed root exits 1; a signal exits 128 + its number.
- * `/api/*` and `/rpc/*` go to the command; every other path gets the page (the router owns it).
+ * A command that calls `exit` during start gets that code and no port: the host never listens,
+ * but still waits for `closed`. `/api/*` and `/rpc/*` go to the command; every other path gets
+ * the page (the router owns it).
  * `pages` are the client's routes: dev passes Bun's HTML import, a build its own files.
  */
 export async function serveMain(main: Main, pages: Record<string, HTMLBundle | Response>) {
