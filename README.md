@@ -26,6 +26,15 @@ cd my-app && npm run setup && npm run dev
 starts the local services, and installs packages.
 Open `http://localhost:4318` when dev starts.
 
+Router + Bun app (no Start: TanStack Router SPA,
+`Bun.serve`, Tinker capsules, one `rpc` capsule
+for both sides). It needs Bun:
+
+```bash
+npx degit lagz0ne/tinker-app/variants/router-bun my-app
+cd my-app && bun install && bun run dev
+```
+
 Pin a release: each release tags every variation
 (`small-vX.Y.Z`, `demo-vX.Y.Z`). Put the tag after `#`:
 
