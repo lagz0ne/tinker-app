@@ -44,7 +44,7 @@ const answer = backend.resolve(server.server);
 
 const http = Bun.serve({
   port: 0,
-  fetch: async (r) => (await answer(r)) ?? new Response(null, { status: 404 }),
+  fetch: async (r) => (await answer(r, backend)) ?? new Response(null, { status: 404 }),
 });
 
 const browser = createScope({

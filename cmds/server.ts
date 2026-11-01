@@ -53,7 +53,7 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
   app.onClose(observeServerPanics(exit.bind(null, 1), app.closed, stderr));
   const [calls, table] = [app.resolve(rpc.server), app.resolve(routes)];
   return {
-    fetch: async (request: Request) => (await calls(request)) ?? table(request),
+    fetch: async (request: Request) => (await calls(request, app)) ?? table(request, app),
     closed: app.closed,
   };
 });

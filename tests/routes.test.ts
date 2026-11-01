@@ -45,7 +45,8 @@ test("each route reply maps to its HTTP status", async () => {
   });
   await app.ready;
   const fetch = app.resolve(routes);
-  const call = (path: string, init?: RequestInit) => fetch(new Request(`http://t${path}`, init));
+  const call = (path: string, init?: RequestInit) =>
+    fetch(new Request(`http://t${path}`, init), app);
 
   const ok = await call("/x/7?q=a");
   expect(ok?.status).toBe(200);

@@ -1,7 +1,8 @@
 import { capsule, tag } from "@tinker/core";
-import type { Operation } from "@tinker/core";
+import type { Operation, Scope } from "@tinker/core";
 
 import { backendStop, requestStop } from "./lifetime";
+import { traceparent } from "./trace.server";
 
 /** One row of the route table: "METHOD /path/{param}" names the operation that answers it. */
 export type Routes = Readonly<Record<`${string} /${string}`, Operation.Handle<any, any>>>;
@@ -11,8 +12,6 @@ const request = tag<Request>({ label: "routes.request" });
 
 const table = tag<Routes>({ label: "routes.table" });
 
-const serve = { role: "handler", explain: "Answers one HTTP request" } as const;
-
 /** A failure's kind picks its status; any other kind is 500. */
 const failures: Readonly<Record<string, number>> = { DataValidationFailed: 400, Cancelled: 503 };
 
@@ -20,13 +19,15 @@ const failures: Readonly<Record<string, number>> = { DataValidationFailed: 400, 
  * The cmd's one route table, compiled once at start: method + URLPattern per row. A route's
  * raw input is its query plus its path params. Its reply: a Response as is, nothing as 204, a
  * value as JSON. Bad input is 400, a cancel 503, anything else 500. No row: undefined.
+ * Each request runs in its own session of `scope`: a valid `traceparent` makes the route's span
+ * its child; no header, or a bad one, starts a fresh trace.
  */
 export const routes = capsule({
   label: "routes",
   config: { table: table.required, stop: backendStop.required },
   exports: { request, stop: requestStop },
   hooks: {
-    async start({ config, settle, next }) {
+    async start({ config, next }) {
       await next();
 
       const rows = Object.entries(config.table).map(([key, op]) => {
@@ -35,22 +36,25 @@ export const routes = capsule({
         return { method, pattern, op };
       });
 
-      return async function fetch(incoming: Request): Promise<Response | undefined> {
+      return async function fetch(
+        incoming: Request,
+        scope: Scope.Handle,
+      ): Promise<Response | undefined> {
         const url = new URL(incoming.url);
         const row = rows.find((row) => row.method === incoming.method && row.pattern.test(url));
         if (!row) return undefined;
 
         const params = row.pattern.exec(url)!.pathname.groups;
         const signal = AbortSignal.any([incoming.signal, config.stop]);
-        const result = await settle(
-          row.op,
-          {
+        const trace = traceparent.safeParse(incoming.headers.get("traceparent")).data ?? null;
+        const session = scope.createSession({ trace });
+        const result = await Promise.resolve(
+          session.settle(row.op, {
             rawInput: { ...Object.fromEntries(url.searchParams), ...params },
             signal,
             tags: [request(incoming), requestStop(signal)],
-          },
-          serve,
-        );
+          }),
+        ).finally(() => session.close());
 
         if (result.status === "success") {
           const value: unknown = result.value;

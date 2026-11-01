@@ -75,4 +75,5 @@ The tab and the server run the same op handle.
   after an edit.
 - No server render.
 - The tab does not check a reply's shape.
-- A trace does not cross from tab to server yet.
+- A trace crosses from tab to server by a W3C
+  `traceparent` header; no header starts a fresh trace.

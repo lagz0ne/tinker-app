@@ -1,8 +1,8 @@
 import { capsule, tag } from "@tinker/core";
-import type { Operation } from "@tinker/core";
+import type { Operation, Scope } from "@tinker/core";
 
 import { requestStop } from "~/components/requests";
-import { routes } from "~/components/requests/index.server";
+import { routes, traceparent } from "~/components/requests/index.server";
 
 /** The app's contracts, each under its own label: `{ greet }` where `greet.label` is "greet". */
 export type Api = Readonly<Record<string, Operation.Handle<any, any>>>;
@@ -14,7 +14,6 @@ export type Providers<A extends Api> = { readonly [K in keyof A]: A[K] };
 const api = tag<Api>({ label: "rpc.api" });
 const provide = tag<Api>({ label: "rpc.provide" });
 
-const answer = { role: "handler", explain: "Runs one call from a tab" } as const;
 const local = { role: "handler", explain: "Runs a contract here, on its provider" } as const;
 
 /** What a failed call answers, by kind; any other raised kind is 422. A panic, or a cancel by
@@ -29,6 +28,8 @@ const statuses: Readonly<Record<string, number>> = {
  * The server side of `rpc`. A run of a contract op, here or from a tab, runs its provider with
  * the same call. Its start value answers `POST /rpc/<label>`: the JSON body is the raw input, the
  * reply is `{ value }`, and a raised failure keeps its kind and payload (400 for bad input).
+ * Each call runs in its own session of `scope`: a valid `traceparent` makes the provider's span
+ * the tab span's child; no header, or a bad one, starts a fresh trace.
  */
 export const rpc = {
   server: capsule({
@@ -43,7 +44,7 @@ export const rpc = {
       },
 
       /** Fails start, before any request, when a contract has no provider or a wrong key. */
-      start({ config, settle, next, raise }) {
+      start({ config, next, raise }) {
         for (const [key, contract] of Object.entries(config.api)) {
           if (contract.label !== key) raise("MissingConfig", { label: "rpc", key: `api.${key}` });
           if (!config.provide[key]) raise("MissingConfig", { label: "rpc", key: `provide.${key}` });
@@ -54,7 +55,7 @@ export const rpc = {
         return next().then(() => fetch);
 
         /** A path or method that is not a call answers undefined; the host makes it 404. */
-        async function fetch(request: Request): Promise<Response | undefined> {
+        async function fetch(request: Request, scope: Scope.Handle): Promise<Response | undefined> {
           const url = new URL(request.url);
           const provider = request.method === "POST" ? paths.get(url.pathname) : undefined;
           if (!provider) return undefined;
@@ -67,7 +68,11 @@ export const rpc = {
             signal: request.signal,
             tags: [routes.request(request), requestStop(request.signal)],
           };
-          const result = await settle(provider, call, answer);
+          const trace = traceparent.safeParse(request.headers.get("traceparent")).data ?? null;
+          const session = scope.createSession({ trace });
+          const result = await Promise.resolve(session.settle(provider, call)).finally(() =>
+            session.close(),
+          );
 
           if (result.status === "success") return Response.json({ value: result.value });
           const { kind, payload } =
