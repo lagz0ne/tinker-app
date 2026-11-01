@@ -1,5 +1,5 @@
 import { capsule, tag } from "@tinker/core";
-import type { Operation, Scope } from "@tinker/core";
+import type { Operation, RunResult, Scope } from "@tinker/core";
 
 import { requestStop } from "~/components/requests";
 import { routes, traceparent } from "~/components/requests/index.server";
@@ -69,10 +69,16 @@ export const rpc = {
             tags: [routes.request(request), requestStop(request.signal)],
           };
           const trace = traceparent.safeParse(request.headers.get("traceparent")).data ?? null;
-          const session = scope.createSession({ trace });
-          const result = await Promise.resolve(session.settle(provider, call)).finally(() =>
-            session.close(),
-          );
+          // A closing root throws `Disposed` from createSession: answer it as a failed call.
+          let session: Scope.Handle | undefined;
+          const result = await Promise.resolve()
+            .then(() => (session = scope.createSession({ trace })).settle(provider, call))
+            .catch((error: unknown): RunResult<never> => ({
+              status: "failed",
+              error,
+              kind: "error",
+            }))
+            .finally(() => session?.close());
 
           if (result.status === "success") return Response.json({ value: result.value });
           const { kind, payload } =

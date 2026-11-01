@@ -1,5 +1,5 @@
 import { capsule, tag } from "@tinker/core";
-import type { Operation, Scope } from "@tinker/core";
+import type { Operation, RunResult, Scope } from "@tinker/core";
 
 import { backendStop, requestStop } from "./lifetime";
 import { traceparent } from "./trace.server";
@@ -47,14 +47,18 @@ export const routes = capsule({
         const params = row.pattern.exec(url)!.pathname.groups;
         const signal = AbortSignal.any([incoming.signal, config.stop]);
         const trace = traceparent.safeParse(incoming.headers.get("traceparent")).data ?? null;
-        const session = scope.createSession({ trace });
-        const result = await Promise.resolve(
-          session.settle(row.op, {
-            rawInput: { ...Object.fromEntries(url.searchParams), ...params },
-            signal,
-            tags: [request(incoming), requestStop(signal)],
-          }),
-        ).finally(() => session.close());
+        // A closing root throws `Disposed` from createSession: answer it as a failed run.
+        let session: Scope.Handle | undefined;
+        const result = await Promise.resolve()
+          .then(() =>
+            (session = scope.createSession({ trace })).settle(row.op, {
+              rawInput: { ...Object.fromEntries(url.searchParams), ...params },
+              signal,
+              tags: [request(incoming), requestStop(signal)],
+            }),
+          )
+          .catch((error: unknown): RunResult<never> => ({ status: "failed", error, kind: "error" }))
+          .finally(() => session?.close());
 
         if (result.status === "success") {
           const value: unknown = result.value;

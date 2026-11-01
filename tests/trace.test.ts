@@ -177,3 +177,35 @@ test("a missing or malformed traceparent starts a fresh trace; the request still
     expect(callSpan.parentSpanId).toBeUndefined();
   }
 });
+
+test("rpc: a call after the root closed answers 422 Disposed, it does not reject", async () => {
+  const closing = createScope({ capsules: [server.server({ api, provide })] });
+
+  await closing.ready;
+  const answer = closing.resolve(server.server);
+  await closing.close();
+
+  const response = await answer(
+    new Request("http://tinker/rpc/greet", {
+      method: "POST",
+      body: JSON.stringify({ name: "late" }),
+      headers: { traceparent: valid },
+    }),
+    closing,
+  );
+  expect(response?.status).toBe(422);
+  expect(Object(await response?.json()).kind).toBe("Disposed");
+});
+
+test("routes: a request after the root closed answers 500, it does not reject", async () => {
+  const closing = createScope({
+    capsules: [routes({ stop: new AbortController().signal, table: { "GET /echo": echo } })],
+  });
+
+  await closing.ready;
+  const answer = closing.resolve(routes);
+  await closing.close();
+
+  const response = await answer(new Request("http://tinker/echo"), closing);
+  expect(response?.status).toBe(500);
+});
