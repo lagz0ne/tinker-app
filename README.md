@@ -195,7 +195,9 @@ words, with a session as the boundary:
 - `tinker/components/rpc`: `rpc.server`,
   `rpc.client`.
 - `tinker/components/requests`: the `routes`
-  capsule. A route is any operation.
+  capsule. A route is any operation. A stream
+  route calls `routes.reply` with its Response,
+  then runs until the body ends.
 - `tinker/components/telemetry`: the sink
   capsules.
 - `tinker/components/drizzle-pg`,

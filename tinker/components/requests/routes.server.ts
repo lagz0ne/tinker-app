@@ -10,6 +10,12 @@ export type Routes = Readonly<Record<`${string} /${string}`, Operation.Handle<an
 /** The request a route operation answers; bound per request, read only by HTTP-aware ops. */
 const request = tag<Request>({ label: "routes.request" });
 
+/**
+ * Sends the reply before the route operation ends. A stream's operation replies with its body,
+ * then keeps running, and so keeps its own session, until the stream ends.
+ */
+const reply = tag<(response: Response) => void>({ label: "routes.reply" });
+
 const table = tag<Routes>({ label: "routes.table" });
 
 /** A failure's kind picks its status; any other kind is 500. */
@@ -18,14 +24,16 @@ const failures: Readonly<Record<string, number>> = { DataValidationFailed: 400, 
 /**
  * The cmd's one route table, compiled once at start: method + URLPattern per row. A route's
  * raw input is its query plus its path params. Its reply: a Response as is, nothing as 204, a
- * value as JSON. Bad input is 400, a cancel 503, anything else 500. No row: undefined.
+ * value as JSON. Bad input is 400, a cancel 503, anything else 500. No row: undefined. A route
+ * that sent its reply early has answered: how its operation ends later changes no reply.
  * Each request runs in its own session of `scope`: a valid `traceparent` makes the route's span
- * its child; no header, or a bad one, starts a fresh trace.
+ * its child; no header, or a bad one, starts a fresh trace. An early reply leaves that session
+ * open until the run ends.
  */
 export const routes = capsule({
   label: "routes",
   config: { table: table.required, stop: backendStop.required },
-  exports: { request, stop: requestStop },
+  exports: { request, reply, stop: requestStop },
   hooks: {
     async start({ config, next }) {
       await next();
@@ -47,27 +55,31 @@ export const routes = capsule({
         const params = row.pattern.exec(url)!.pathname.groups;
         const signal = AbortSignal.any([incoming.signal, config.stop]);
         const trace = traceparent.safeParse(incoming.headers.get("traceparent")).data ?? null;
+        const early = Promise.withResolvers<Response>();
         // A closing root throws `Disposed` from createSession: answer it as a failed run.
         let session: Scope.Handle | undefined;
-        const result = await Promise.resolve()
+        const settled = Promise.resolve()
           .then(() =>
             (session = scope.createSession({ trace })).settle(row.op, {
               rawInput: { ...Object.fromEntries(url.searchParams), ...params },
               signal,
-              tags: [request(incoming), requestStop(signal)],
+              tags: [request(incoming), requestStop(signal), reply(early.resolve)],
             }),
           )
           .catch((error: unknown): RunResult<never> => ({ status: "failed", error, kind: "error" }))
-          .finally(() => session?.close());
+          .finally(() => session?.close())
+          .then((result) => {
+            if (result.status === "success") {
+              const value: unknown = result.value;
+              if (value instanceof Response) return value;
+              if (value === undefined) return new Response(null, { status: 204 });
+              return Response.json(value, { headers: { "Cache-Control": "no-store" } });
+            }
+            const kind = result.status === "cancelled" ? "Cancelled" : Object(result.error).kind;
+            return new Response(null, { status: failures[kind] ?? 500 });
+          });
 
-        if (result.status === "success") {
-          const value: unknown = result.value;
-          if (value instanceof Response) return value;
-          if (value === undefined) return new Response(null, { status: 204 });
-          return Response.json(value, { headers: { "Cache-Control": "no-store" } });
-        }
-        const kind = result.status === "cancelled" ? "Cancelled" : Object(result.error).kind;
-        return new Response(null, { status: failures[kind] ?? 500 });
+        return Promise.race([early.promise, settled]);
       };
     },
   },
