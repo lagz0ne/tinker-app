@@ -43,30 +43,37 @@ export async function serveMain(main: Main, pages: Record<string, HTMLBundle | R
     );
     exit(config || Object(error).code === "ERR_INVALID_URL" ? 78 : 1, error);
   });
-  // A command that called `exit` during start (a usage error) gets its code, and no port.
-  if (!started || stop.signal.aborted) return process.exit(code);
+  if (!started) return process.exit(code);
 
-  const server = Bun.serve({
-    port: Number(process.env.PORT ?? 4318),
-    // Bun's 10 s default resets a quiet stream (SSE); 60 s (max 255) outlasts usual heartbeats.
-    idleTimeout: 60,
-    development: process.env.NODE_ENV !== "production" && { hmr: false, console: true },
-    routes: {
-      "/api/*": async (request) =>
-        (await started.fetch(request)) ?? new Response(null, { status: 404 }),
-      "/rpc/*": async (request) =>
-        (await started.fetch(request)) ?? new Response(null, { status: 404 }),
-      ...pages,
-    },
+  // A command that called `exit` during start (a usage error) gets no port; its root still closes.
+  const server = stop.signal.aborted
+    ? undefined
+    : Bun.serve({
+        port: Number(process.env.PORT ?? 4318),
+        // Bun's 10 s default resets a quiet stream (SSE); 60 s (max 255) outlasts usual heartbeats.
+        idleTimeout: 60,
+        development: process.env.NODE_ENV !== "production" && { hmr: false, console: true },
+        routes: {
+          "/api/*": async (request) =>
+            (await started.fetch(request)) ?? new Response(null, { status: 404 }),
+          "/rpc/*": async (request) =>
+            (await started.fetch(request)) ?? new Response(null, { status: 404 }),
+          ...pages,
+        },
+      });
+  if (server) {
+    console.log(`tinker: listening on ${server.url}`);
+    stop.signal.addEventListener("abort", () => void server.stop());
+  }
+
+  // Root by root: a failed root exits 1 with its error, else its first teardown error.
+  await started.closed.then((closed) => {
+    const failure = [closed ?? []]
+      .flat()
+      .flatMap((end) => (end.status === "failed" ? [end.error] : (end.teardownErrors ?? [])))
+      .at(0);
+    if (failure !== undefined) exit(1, failure);
   });
-  console.log(`tinker: listening on ${server.url}`);
-  stop.signal.addEventListener("abort", () => void server.stop());
-
-  const ended = [(await started.closed) ?? []].flat();
-  const failure = ended
-    .flatMap((end) => (end.status === "failed" ? [end.error] : (end.teardownErrors ?? [])))
-    .at(0);
-  if (failure !== undefined) exit(1, failure);
-  await server.stop();
+  await server?.stop();
   process.exit(code);
 }

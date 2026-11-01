@@ -57,3 +57,20 @@ test("a command that exits during start exits with its code and never listens", 
   expect(await child.exited).toBe(64);
   expect(stdout).not.toContain("tinker: listening");
 });
+
+test("a command that exits during start still waits for its root to close, and never listens", async () => {
+  const child = Bun.spawn(
+    [process.execPath, new URL("fixtures/exit-closed-host.ts", import.meta.url).pathname],
+    {
+      env: { ...process.env, PORT: "0" },
+      stdout: "pipe",
+      stderr: "inherit",
+    },
+  );
+  children.push(child);
+
+  const stdout = await new Response(child.stdout).text();
+  expect(await child.exited).toBe(64);
+  expect(stdout).toContain("closed\n");
+  expect(stdout).not.toContain("tinker: listening");
+});
