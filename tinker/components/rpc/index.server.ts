@@ -17,6 +17,10 @@ const provide = tag<Api>({ label: "rpc.provide" });
  * proxy that is `http://<host>`, so the app binds its public `https` origin here. A bound value
  * that is not an http(s) URL fails start with `MissingConfig { key: "origin" }`. */
 const origin = tag<string | null>({ label: "rpc.origin", default: null });
+/** The largest call body read, in bytes (1 MiB unset). A bigger one answers 413, and its
+ * provider never runs: a `content-length` over it is refused unread, and a body with no length
+ * is read only up to it. */
+const maxBody = tag<number>({ label: "rpc.maxBody", default: 1_048_576 });
 
 const local = { role: "handler", explain: "Runs a contract here, on its provider" } as const;
 
@@ -32,6 +36,7 @@ const statuses: Readonly<Record<string, number>> = {
  * The server side of `rpc`. A run of a contract op, here or from a tab, runs its provider with
  * the same call. Its start value answers `POST /rpc/<label>`: the JSON body is the raw input, the
  * reply is `{ value }`, and a raised failure keeps its kind and payload (400 for bad input).
+ * A body over `maxBody` bytes answers 413 with no provider run.
  * A call with an `Origin` header must come from `origin` when it is bound, else from the request
  * URL's origin; a call with none passes.
  * Each call runs in its own session of `scope`: a valid `traceparent` makes the provider's span
@@ -40,7 +45,7 @@ const statuses: Readonly<Record<string, number>> = {
 export const rpc = {
   server: capsule({
     label: "rpc",
-    config: { api: api.required, provide: provide.required, origin },
+    config: { api: api.required, provide: provide.required, origin, maxBody },
     hooks: {
       /** Sync, one key read: every op of the root passes through here. */
       run({ op, call, next, run, config }) {
@@ -63,21 +68,40 @@ export const rpc = {
           raise("MissingConfig", { label: "rpc", key: "origin" });
         }
         const paths = new Map(
-          Object.entries(config.provide).map(([label, provider]) => [`/rpc/${label}`, provider]),
+          Object.entries(config.provide).map(([label, provider]) => [
+            `POST /rpc/${label}`,
+            provider,
+          ]),
         );
         return next().then(() => fetch);
 
         /** A path or method that is not a call answers undefined; the host makes it 404. */
         async function fetch(request: Request, scope: Scope.Handle): Promise<Response | undefined> {
           const url = new URL(request.url);
-          const provider = request.method === "POST" ? paths.get(url.pathname) : undefined;
+          const provider = paths.get(`${request.method} ${url.pathname}`);
           if (!provider) return undefined;
           if (![null, new URL(allowed, url).origin].includes(request.headers.get("origin"))) {
             return new Response(null, { status: 403 });
           }
 
+          // Counts the bytes as they come, so a body with no length stops at the cap.
+          const read = await Promise.resolve(request).then(async ({ headers, body }) => {
+            if (Number(headers.get("content-length")) > config.maxBody) return undefined;
+            const chunks: Uint8Array[] = [];
+            let size = 0;
+            for await (const chunk of body ?? []) {
+              size += chunk.byteLength;
+              if (size > config.maxBody) return undefined;
+              chunks.push(chunk);
+            }
+            return {
+              rawInput: await new Response(Buffer.concat(chunks)).json().catch(() => undefined),
+            };
+          });
+          if (!read) return new Response(null, { status: 413 });
+
           const call = {
-            rawInput: await request.json().catch(() => undefined),
+            rawInput: read.rawInput,
             signal: request.signal,
             tags: [routes.request(request), requestStop(request.signal)],
           };

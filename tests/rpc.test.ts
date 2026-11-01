@@ -178,3 +178,59 @@ test("a contract under another key than its label fails start", async () => {
   expect(Object(failure).payload).toEqual({ label: "rpc", key: "api.hello" });
   await renamed.close();
 });
+
+/** A greet call whose JSON body is exactly `bytes` long. */
+const sized = (bytes: number) => JSON.stringify({ name: "a".repeat(bytes - '{"name":""}'.length) });
+
+test("a body over rpc.maxBody (1 MiB unset) answers 413 and runs no provider; at the cap is 200", async () => {
+  const post = (body: string) =>
+    fetch(`${http.url}rpc/greet`, {
+      method: "POST",
+      body,
+      headers: { "content-type": "application/json" },
+    });
+
+  spans.length = 0;
+  expect((await post(sized(1_048_577))).status).toBe(413);
+  expect(spans).not.toContain("greet.here");
+
+  expect((await post(sized(1_048_576))).status).toBe(200);
+  expect(spans).toContain("greet.here");
+});
+
+test("a body with no content-length is read only up to rpc.maxBody, then 413", async () => {
+  const chunk = new Uint8Array(65_536).fill(0x20);
+  let pulled = 0;
+  // 4 MiB of JSON whitespace, then `{}`: valid JSON, so only the cap stops it.
+  const body = new ReadableStream<Uint8Array>({
+    pull: (stream) => {
+      if (pulled >= 64 * chunk.byteLength) return stream.close();
+      pulled += chunk.byteLength;
+      stream.enqueue(pulled === 64 * chunk.byteLength ? new TextEncoder().encode("{}") : chunk);
+    },
+  });
+  const request = new Request(`${http.url}rpc/greet`, { method: "POST", body });
+  expect(request.headers.has("content-length")).toBe(false);
+
+  spans.length = 0;
+  const response = await answer(request, backend);
+  expect(response?.status).toBe(413);
+  expect(pulled).toBeLessThanOrEqual(1_048_576 + 2 * chunk.byteLength);
+  expect(spans).not.toContain("greet.here");
+});
+
+test("a bound smaller rpc.maxBody is the cap", async () => {
+  const small = createScope({ capsules: [server.server({ api, provide, maxBody: 16 })] });
+  await small.ready;
+  const call = async (bytes: number) =>
+    (
+      await small.resolve(server.server)(
+        new Request("http://app.example/rpc/greet", { method: "POST", body: sized(bytes) }),
+        small,
+      )
+    )?.status;
+
+  expect(await call(17)).toBe(413);
+  expect(await call(16)).toBe(200);
+  await small.close();
+});

@@ -95,6 +95,9 @@ The tab and the server run the same op handle.
   when a contract has no provider.
 - A failure the provider raises reaches the tab
   with the same kind and payload.
+- A call body over `maxBody` bytes (1 MiB
+  unset) answers 413, and no provider runs.
+  A body with no length is read only up to it.
 
 The tab sends a W3C `traceparent` header, so
 the server span is the tab span's child.
