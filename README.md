@@ -34,6 +34,11 @@ bun run start    # the built server
 A missing one exits 78.
 `.env.example` lists the safe defaults.
 
+A hang-up (SIGHUP) stops the host with exit
+129, as SIGTERM does. So `nohup bun run start &`
+stops when its shell exits. Use `setsid` or a
+process manager (systemd, Docker) instead.
+
 Behind a TLS proxy, set `PUBLIC_ORIGIN` (such
 as `https://app.example`). rpc calls and tab
 telemetry must then come from that origin.
