@@ -257,12 +257,41 @@ test("a failed root or a teardown error exits 1 with the first error", async () 
 });
 
 test("a command that returns no closed promise exits 1 and says so", async () => {
+  // JSON.parse gives `any`, so a null return needs no cast.
+  const nothing = host(async () => JSON.parse("null"));
   const noClosed = host(async () => ({}) as Closed);
 
+  expect(await nothing.closed).toBe(1);
+  expect(nothing.stderr.text()).toMatch(
+    /^command failed \(exit 1\): TypeError: main must return closed\n/,
+  );
   expect(await noClosed.closed).toBe(1);
   expect(noClosed.stderr.text()).toMatch(
     /^command failed \(exit 1\): TypeError: main must return closed\n/,
   );
+});
+
+test("a close result the scan cannot read ([null]) exits 1 with the TypeError line", async () => {
+  const run = host(async () => ({ closed: Promise.resolve(JSON.parse("[null]")) }));
+
+  expect(await run.closed).toBe(1);
+  expect(run.stderr.text()).toMatch(/^command failed \(exit 1\): TypeError: /);
+  expect(run.stderr.text()).not.toContain("after exit");
+});
+
+test("a root failure whose kind getter throws exits 1 and prints the getter's error as late", async () => {
+  const getter = Object.assign(new Error("getter"), { stack: "getter stack" });
+  const failure = {
+    get kind(): string {
+      throw getter;
+    },
+  };
+  const run = host(async () => ({
+    closed: Promise.resolve([{ status: "failed" as const, error: failure }]),
+  }));
+
+  expect(await run.closed).toBe(1);
+  expect(run.stderr.text()).toBe("after exit 1: getter stack\n");
 });
 
 test("an onStart throw exits 1, and a different close error prints after it", async () => {

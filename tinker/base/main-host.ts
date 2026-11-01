@@ -47,7 +47,9 @@ export function createMainHost<R extends { closed: MainClosed }>(
   const controller = new AbortController();
   const printed = new Set<unknown>();
   const hostReasons = new WeakSet<object>();
-  let code: number | undefined;
+  // The first stop's code; `stopped` says there was one.
+  let code = 0;
+  let stopped = false;
   let savedReason: unknown;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let finished = false;
@@ -66,10 +68,16 @@ export function createMainHost<R extends { closed: MainClosed }>(
     }
 
     // The first stop sets the code and prints a failing reason; a later one prints a new reason
-    // as late. Each reason prints once, and a host stop's own reason never.
-    const late = code !== undefined || finished;
+    // as late. Each reason prints once, and a host stop's own reason never. The code is set
+    // before the print, so a stop from inside the print (a getter, a `toJSON`) is late.
+    const late = stopped || finished;
     if (late && reason === savedReason) return;
-    const prefix = late ? `after exit ${code ?? 0}` : `command failed (exit ${next})`;
+    const prefix = late ? `after exit ${code}` : `command failed (exit ${next})`;
+    if (!late) {
+      stopped = true;
+      code = next;
+      savedReason = reason;
+    }
     [reason]
       .filter(
         (given) =>
@@ -104,8 +112,6 @@ export function createMainHost<R extends { closed: MainClosed }>(
       });
     if (late) return;
 
-    code = next;
-    savedReason = reason;
     controller.abort(reason);
   };
 
@@ -116,35 +122,33 @@ export function createMainHost<R extends { closed: MainClosed }>(
   const settled = started.then(
     async (app) => {
       // The first failure in the root close results, app first: a failed root's error, else
-      // that root's first teardown error.
+      // that root's first teardown error. One `catch` covers the whole read, so a throw in the
+      // scan (a result of null, a getter that throws) is a failure too.
       const ended = Promise.resolve().then(async () => {
         if (!(app?.closed instanceof Promise)) throw new TypeError("main must return closed");
         if (!controller.signal.aborted) await options.onStart?.(app, controller.signal);
-        return [(await app.closed) ?? []].flat();
+
+        const failure = [(await app.closed) ?? []]
+          .flat()
+          .flatMap((end) => (end.status === "failed" ? [end.error] : (end.teardownErrors ?? [])))
+          .at(0);
+        if (failure === undefined) return false;
+        stop(1, failure);
+        return true;
       });
 
-      return ended.then(
-        (results) => {
-          const failure = results
-            .flatMap((end) => (end.status === "failed" ? [end.error] : (end.teardownErrors ?? [])))
-            .at(0);
-          if (failure === undefined) return false;
-          stop(1, failure);
-          return true;
-        },
-        async (error: unknown) => {
-          // A stop's own reason is no failure; a close error that is not this error prints late.
-          let failed = !controller.signal.aborted || error !== controller.signal.reason;
-          if (failed) stop(1, error);
-          if (!(app?.closed instanceof Promise)) return failed;
-          await app.closed.catch((cleanup: unknown) => {
-            if (cleanup === error) return;
-            failed = true;
-            stop(1, cleanup);
-          });
-          return failed;
-        },
-      );
+      return ended.catch(async (error: unknown) => {
+        // A stop's own reason is no failure; a close error that is not this error prints late.
+        let failed = !controller.signal.aborted || error !== controller.signal.reason;
+        if (failed) stop(1, error);
+        if (!(app?.closed instanceof Promise)) return failed;
+        await app.closed.catch((cleanup: unknown) => {
+          if (cleanup === error) return;
+          failed = true;
+          stop(1, cleanup);
+        });
+        return failed;
+      });
     },
     (error: unknown) => {
       // A startup throw: 78 for a config error, else 1. A stop's own reason is no failure.
@@ -173,7 +177,8 @@ export function createMainHost<R extends { closed: MainClosed }>(
     }
     finished = true;
     clearTimeout(timer);
-    return code ?? (failed ? 1 : 0);
+    if (stopped) return code;
+    return failed ? 1 : 0;
   });
 
   return {
