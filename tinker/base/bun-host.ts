@@ -45,13 +45,14 @@ export async function serveMain(main: Main, pages: Record<string, HTMLBundle | R
   });
   if (!started) return process.exit(code);
 
-  const notFound = () => new Response(null, { status: 404 });
   const server = Bun.serve({
     port: Number(process.env.PORT ?? 4318),
     development: process.env.NODE_ENV !== "production" && { hmr: false, console: true },
     routes: {
-      "/api/*": async (request) => (await started.fetch(request)) ?? notFound(),
-      "/rpc/*": async (request) => (await started.fetch(request)) ?? notFound(),
+      "/api/*": async (request) =>
+        (await started.fetch(request)) ?? new Response(null, { status: 404 }),
+      "/rpc/*": async (request) =>
+        (await started.fetch(request)) ?? new Response(null, { status: 404 }),
       ...pages,
     },
   });

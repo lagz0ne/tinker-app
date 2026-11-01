@@ -1,0 +1,46 @@
+# Continuous delivery from a green trunk: when the gates pass on a push to
+# main and package.json's version has no tag yet, tag that exact commit.
+# The tag is the template release: `npx degit lagz0ne/tinker-app#vX.Y.Z`.
+# Landing the version bump commit is the release. Own GITHUB_TOKEN only;
+# the one write is the new tag.
+name: template tag
+
+on:
+  workflow_run:
+    workflows: [gates]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: template-tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Tag the version once
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+          if [ -n "$(git ls-remote --tags origin "refs/tags/$TAG")" ]; then
+            echo "$TAG exists on origin; nothing to do."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$SHA" \
+            -m "tinker-app template $TAG: npx degit lagz0ne/tinker-app#$TAG my-app"
+          git push origin "refs/tags/$TAG"
+          echo "$TAG -> $SHA"
