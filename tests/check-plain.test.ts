@@ -223,3 +223,216 @@ test("a React component and a top-level listener pass", async () => {
 
   expect(result).toMatchObject({ code: 0, err: "" });
 });
+
+/** A module resource: Core loads the package, and functions reach it through `depends`. */
+const authModules = `import { resource } from "@tinker/core";
+
+export const authModule = resource({
+  label: "module:better-auth",
+  factory: () => import("better-auth"),
+});
+`;
+
+/** Better Auth's shape: destructure the module, call it with nested option callbacks. */
+const authFile = `import { operation, resource } from "@tinker/core";
+
+import { authModule } from "./modules";
+
+export const auth = resource({
+  label: "auth",
+  depends: { lib: authModule },
+  factory: async ({ lib }) => {
+    const { betterAuth } = lib;
+
+    return betterAuth({
+      databaseHooks: {
+        user: { create: { after: async ({ id }: { id: string }) => console.log(id) } },
+      },
+      hooks: { before: async () => undefined },
+    });
+  },
+});
+
+export const check = operation({
+  label: "check",
+  depends: { authModule },
+  run: async ({ authModule }) => {
+    const verify = authModule.verify;
+
+    return verify("token", { jwksFetch: async () => [] });
+  },
+});
+`;
+
+/** Kysely's shape: \`new x.Kysely({...})\` and \`new Kysely({...})\` with option callbacks. */
+const kyselyFile = `import { resource } from "@tinker/core";
+
+const kyselyModule = resource({
+  label: "module:kysely",
+  factory: () => import("kysely"),
+});
+
+export const db = resource({
+  label: "db",
+  depends: { x: kyselyModule },
+  factory: ({ x }) => {
+    const { Kysely } = x;
+    const plain = new Kysely({ dialect: { createDriver: () => undefined } });
+
+    return [plain, new x.Kysely({ dialect: { createDriver: () => undefined } })];
+  },
+});
+`;
+
+test("a library reached through a module resource passes: betterAuth's options", async () => {
+  const result = await checkFiles({
+    "tinker/auth/modules.ts": authModules,
+    "tinker/auth/auth.ts": authFile,
+  });
+
+  expect(result).toMatchObject({ code: 0, err: "" });
+});
+
+test("new x.Kysely({...}) from a module resource passes, its options are native", async () => {
+  const result = await checkFiles({ "tinker/db.ts": kyselyFile });
+
+  expect(result).toMatchObject({ code: 0, err: "" });
+});
+
+test("a top-level helper beside module-resource calls still fails, on its own line", async () => {
+  const result = await checkFiles({
+    "tinker/auth/modules.ts": authModules,
+    "tinker/auth/auth.ts": authFile,
+    "tinker/db.ts": `${kyselyFile}\nconst helper = (n: number) => n + 1;\n\nexport const two = helper(1);\n`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err.trim()).toBe(hit("tinker/db.ts", 19));
+});
+
+test("a named helper inside a module-resource factory still fails, on its own line", async () => {
+  const result = await checkFiles({
+    "tinker/auth/modules.ts": authModules,
+    "tinker/auth/auth.ts": authFile.replace(
+      "    const { betterAuth } = lib;\n",
+      "    const { betterAuth } = lib;\n    const helper = (n: number) => n + 1;\n    helper(1);\n",
+    ),
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err.trim()).toBe(hit("tinker/auth/auth.ts", 10));
+});
+
+test("a resource that imports an app path is not a library: its options fail", async () => {
+  const result = await checkFiles({
+    "tinker/x.ts": `export const make = (options: object) => options;\n`,
+    "tinker/modules.ts": `import { resource } from "@tinker/core";
+
+export const local = resource({ label: "local", factory: () => import("./x") });
+export const aliased = resource({ label: "aliased", factory: () => import("~/x") });
+`,
+    "tinker/use.ts": `import { resource } from "@tinker/core";
+
+import { aliased, local } from "./modules";
+
+export const used = resource({
+  label: "used",
+  depends: { local, aliased },
+  factory: ({ local, aliased }) => [
+    local.make({ start: () => 1 }),
+    aliased.make({ start: () => 2 }),
+  ],
+});
+`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err.trim()).toBe(
+    [hit("tinker/use.ts", 9), hit("tinker/use.ts", 10), hit("tinker/x.ts", 1)].join("\n"),
+  );
+});
+
+test("a factory that returns a package on one branch and app code on another is no library", async () => {
+  const result = await checkFiles({
+    "tinker/modules.ts": `import { resource } from "@tinker/core";
+
+export const branches = resource({
+  label: "branches",
+  factory: () => {
+    if (Math.random() > 0.5) return import("kysely");
+    return import("./x");
+  },
+});
+`,
+    "tinker/use.ts": `import { resource } from "@tinker/core";
+
+import { branches } from "./modules";
+
+export const used = resource({
+  label: "used",
+  depends: { branches },
+  factory: ({ branches }) => branches.make({ start: (n: number) => n + 1 }),
+});
+`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err.trim()).toBe(hit("tinker/use.ts", 8));
+});
+
+test("a ReadableStream source and a Proxy handler pass: the platform calls them", async () => {
+  const result = await checkFiles({
+    "tinker/stream.ts": `export const body = new ReadableStream<string>({
+  start(controller) {
+    controller.enqueue("a");
+  },
+  pull(controller) {
+    controller.close();
+  },
+  cancel() {
+    return undefined;
+  },
+});
+
+export const guarded = new Proxy({ a: 1 }, {
+  get(target, key) {
+    return Reflect.get(target, key);
+  },
+});
+`,
+  });
+
+  expect(result).toMatchObject({ code: 0, err: "" });
+});
+
+test("a plain helper in the options of a global not on the list fails", async () => {
+  const result = await checkFiles({
+    "tinker/sink.ts": `export const sink = new WritableStream<string>({
+  write(chunk) {
+    console.log(chunk);
+  },
+});
+`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err.trim()).toBe(hit("tinker/sink.ts", 2));
+});
+
+test("a top-level helper beside a ReadableStream and a Proxy still fails, on its own line", async () => {
+  const result = await checkFiles({
+    "tinker/stream.ts": `const helper = (n: number) => n + 1;
+
+export const body = new ReadableStream<number>({
+  start(controller) {
+    controller.enqueue(helper(1));
+  },
+});
+
+export const guarded = new Proxy({ a: 1 }, { get: (target, key) => Reflect.get(target, key) });
+`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err.trim()).toBe(hit("tinker/stream.ts", 1));
+});

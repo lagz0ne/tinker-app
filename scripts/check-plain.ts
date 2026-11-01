@@ -11,7 +11,10 @@
  *   array bound to a name is not inline;
  * - a graph body: a direct option of a Core `operation`, `resource`, `tag` or `data`, or a hook
  *   of a capsule (in `capsule({ hooks })`, or in an object typed `Capsule.Hooks`);
- * - a native option: inside the options of a library call (`Bun.serve`, `createRoute`, ...);
+ * - a native option: inside the options of a library call (`Bun.serve`, `createRoute`, ...).
+ *   A library may come through a module resource (a Core `resource` whose factory returns
+ *   `import("<package>")`): `depends: { x: thatResource }`, then `x.f({...})`,
+ *   `const { f } = x; f({...})` or `new x.C({...})`;
  * - owned: named inside a passing function that returns it or hands it to a call;
  * - a listener: a top-level function handed to an event registration (`addEventListener`, ...);
  * - a React component: a capitalized function in a .tsx file that returns JSX;
@@ -56,6 +59,9 @@ const listenNames = new Set([
 const entries: Record<string, readonly string[]> = {
   // The Bun host: it runs before any scope exists, and owns OS signals and the exit code.
   "tinker/base/bun-host.ts": ["serveMain"],
+  // The host for commands with no port (`hedl import`, in-process command tests), and its
+  // process form: like serveMain, they run before any scope and own signals and the exit code.
+  "tinker/base/main-host.ts": ["createMainHost", "runMain"],
   // The process panic hook: it must report even when the root's own close fails.
   "tinker/base/panics.server.ts": ["observeServerPanics"],
   "tinker/base/telemetry-worker.ts": [
@@ -236,11 +242,23 @@ function stem(path: string) {
 }
 
 /**
- * A name whose value comes from a library: imported from a package, the `Bun` global, or a
+ * Platform globals that are libraries, as `Bun` is: the platform calls the functions in their
+ * options. Only the ones the app uses; add one with its reason.
+ */
+const platformNames = new Set([
+  "Bun",
+  // A stream source: the stream calls `start`, `pull` and `cancel`.
+  "ReadableStream",
+  // A proxy handler: the proxy calls its traps (`get`, `set`, ...).
+  "Proxy",
+]);
+
+/**
+ * A name whose value comes from a library: imported from a package, a platform global, or a
  * top-level const built on one, here or in the app file it is imported from (no barrels).
  */
 function libraryValue(file: File, name: string, depth = 0): boolean {
-  if (name === "Bun" || file.library.has(name)) return true;
+  if (platformNames.has(name) || file.library.has(name)) return true;
   if (depth > 8) return false;
 
   const value = file.consts.get(name);
@@ -252,6 +270,108 @@ function importedValue(file: File, name: string, depth: number) {
   const from = file.app.get(name);
   const target = from && (files.get(from.from) ?? files.get(`${from.from}/index`));
   return !!target && libraryValue(target, from.name, depth + 1);
+}
+
+/**
+ * A library value where `at` stands: a library value of the file, or a local of a function
+ * around it that comes from a module resource, as `x` in `depends: { x: betterAuthModule }`,
+ * `betterAuth` in `const { betterAuth } = x`, or `db` in `const db = new x.Kysely({...})`.
+ */
+function libraryAt(file: File, name: string, at: ts.Node, depth = 0): boolean {
+  if (libraryValue(file, name)) return true;
+  if (depth > 8) return false;
+
+  for (let fn = enclosingFn(at); fn; fn = enclosingFn(fn)) {
+    const bound = bindingIn(file, fn, name);
+    if (bound === undefined) continue;
+    if (typeof bound === "boolean") return bound;
+    const root = calleeRoot(bound.value);
+    return !!root && libraryAt(file, root, bound.at, depth + 1);
+  }
+  return false;
+}
+
+/**
+ * How a function binds a name: a module-resource dependency (true), another parameter (false),
+ * a local built on a value (that value), or not at all (undefined).
+ */
+function bindingIn(file: File, fn: Fn, name: string) {
+  for (const [index, parameter] of fn.parameters.entries()) {
+    const item = bindsName(parameter.name, name);
+    if (!item) continue;
+    return index === 0 && ts.isBindingElement(item) && moduleDependency(file, fn, item);
+  }
+
+  const found: ts.VariableDeclaration[] = [];
+  if (fn.body) {
+    ownWalk(fn.body, (node) => {
+      if (ts.isVariableDeclaration(node) && bindsName(node.name, name)) found.push(node);
+    });
+  }
+  const [local] = found;
+  return local && (local.initializer ? { value: local.initializer, at: local } : false);
+}
+
+/** The binding of a name in `name` or in `{ name }`, if it binds it. */
+function bindsName(binding: ts.BindingName, name: string) {
+  if (ts.isIdentifier(binding)) return binding.text === name ? binding : undefined;
+  if (!ts.isObjectBindingPattern(binding)) return undefined;
+  return binding.elements.find((item) => ts.isIdentifier(item.name) && item.name.text === name);
+}
+
+/** A dependency of a Core unit's option, taken from its first parameter: a module resource. */
+function moduleDependency(file: File, fn: Fn, item: ts.BindingElement) {
+  const object = memberOf(fn);
+  if (!object || !unitNames.has(coreCall(file, object) ?? "")) return false;
+
+  const key = textOf(item.propertyName ?? item.name);
+  const value = property(property(object, "depends"), key);
+  return !!value && ts.isIdentifier(value) && moduleResource(file, value.text);
+}
+
+/** The value of a property of an object literal: `{ name: value }` or `{ name }`. */
+function property(object: ts.Node | undefined, name: string | undefined) {
+  if (!object || !ts.isObjectLiteralExpression(object)) return undefined;
+  for (const item of object.properties) {
+    if (textOf(item.name) !== name) continue;
+    if (ts.isPropertyAssignment(item)) return item.initializer;
+    if (ts.isShorthandPropertyAssignment(item)) return item.name;
+    if (ts.isMethodDeclaration(item)) return item;
+  }
+}
+
+/**
+ * A Core `resource` whose factory returns `import("<package>")`, here or in the app file it is
+ * imported from. An app path (`~/x`, `./x`) is app code, not a library.
+ */
+function moduleResource(file: File, name: string, depth = 0): boolean {
+  if (depth > 8) return false;
+  const value = file.consts.get(name);
+  if (value) return libraryResource(file, value);
+
+  const from = file.app.get(name);
+  const target = from && (files.get(from.from) ?? files.get(`${from.from}/index`));
+  return !!target && moduleResource(target, from.name, depth + 1);
+}
+
+/** A `resource({ factory })` call whose factory returns `import("<package>")` on every return. */
+function libraryResource(file: File, value: ts.Node) {
+  if (!ts.isCallExpression(value) || !ts.isIdentifier(value.expression)) return false;
+  if (file.core.get(value.expression.text) !== "resource") return false;
+
+  // Every return must load a package: one branch of app code makes the whole value app code.
+  const factory = property(value.arguments[0], "factory");
+  const returns = factory && isFn(factory) ? returnsOf(factory) : [];
+  return returns.length > 0 && returns.every(importsLibrary);
+}
+
+/** `import("<package>")` of a bare package specifier. */
+function importsLibrary(node: ts.Node) {
+  if (!ts.isCallExpression(node) || node.expression.kind !== ts.SyntaxKind.ImportKeyword) {
+    return false;
+  }
+  const [specifier] = node.arguments;
+  return !!specifier && ts.isStringLiteral(specifier) && library(specifier.text);
 }
 
 /** The call this node is a direct argument of. */
@@ -302,7 +422,7 @@ function nativeOption(file: File, fn: Fn) {
 
   const call = node && argumentOf(node);
   const name = call && calleeRoot(call.expression);
-  return !!name && libraryValue(file, name);
+  return !!name && libraryAt(file, name, call);
 }
 
 /** A use of a name as a value: not a callee, not a property's receiver or key. */
