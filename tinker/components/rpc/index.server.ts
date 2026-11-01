@@ -13,6 +13,9 @@ export type Providers<A extends Api> = { readonly [K in keyof A]: A[K] };
 
 const api = tag<Api>({ label: "rpc.api" });
 const provide = tag<Api>({ label: "rpc.provide" });
+/** The public origin a tab calls from. Unset, it is the request URL's own origin; behind a TLS
+ * proxy that is `http://<host>`, so the app binds its public `https` origin here. */
+const origin = tag<string | null>({ label: "rpc.origin", default: null });
 
 const local = { role: "handler", explain: "Runs a contract here, on its provider" } as const;
 
@@ -28,13 +31,15 @@ const statuses: Readonly<Record<string, number>> = {
  * The server side of `rpc`. A run of a contract op, here or from a tab, runs its provider with
  * the same call. Its start value answers `POST /rpc/<label>`: the JSON body is the raw input, the
  * reply is `{ value }`, and a raised failure keeps its kind and payload (400 for bad input).
+ * A call with an `Origin` header must come from `origin` when it is bound, else from the request
+ * URL's origin; a call with none passes.
  * Each call runs in its own session of `scope`: a valid `traceparent` makes the provider's span
  * the tab span's child; no header, or a bad one, starts a fresh trace.
  */
 export const rpc = {
   server: capsule({
     label: "rpc",
-    config: { api: api.required, provide: provide.required },
+    config: { api: api.required, provide: provide.required, origin },
     hooks: {
       /** Sync, one key read: every op of the root passes through here. */
       run({ op, call, next, run, config }) {
@@ -49,6 +54,8 @@ export const rpc = {
           if (contract.label !== key) raise("MissingConfig", { label: "rpc", key: `api.${key}` });
           if (!config.provide[key]) raise("MissingConfig", { label: "rpc", key: `provide.${key}` });
         }
+        // Unset is "": it resolves to the request URL's own origin. A bad URL fails start.
+        const allowed = config.origin === null ? "" : new URL(config.origin).origin;
         const paths = new Map(
           Object.entries(config.provide).map(([label, provider]) => [`/rpc/${label}`, provider]),
         );
@@ -59,7 +66,7 @@ export const rpc = {
           const url = new URL(request.url);
           const provider = request.method === "POST" ? paths.get(url.pathname) : undefined;
           if (!provider) return undefined;
-          if (![null, url.origin].includes(request.headers.get("origin"))) {
+          if (![null, new URL(allowed, url).origin].includes(request.headers.get("origin"))) {
             return new Response(null, { status: 403 });
           }
 

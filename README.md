@@ -34,6 +34,10 @@ bun run start    # the built server
 A missing one exits 78.
 `.env.example` lists the safe defaults.
 
+Behind a TLS proxy, set `PUBLIC_ORIGIN` (such
+as `https://app.example`). rpc calls and tab
+telemetry must then come from that origin.
+
 ## Checks
 
 `bun run check` runs tsc, `bun test`, both

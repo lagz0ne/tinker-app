@@ -27,6 +27,8 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
     console: stdout,
     level: env.LOG_LEVEL === undefined ? undefined : Number(env.LOG_LEVEL),
     history: env.SPAN_HISTORY === undefined ? undefined : Number(env.SPAN_HISTORY),
+    // Behind a TLS proxy the request URL is http: tab batches must come from the public origin.
+    origin: env.PUBLIC_ORIGIN,
   };
   const sink =
     env.NODE_ENV === "production"
@@ -37,7 +39,12 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
     signal,
     capsules: [
       sink,
-      rpc.server({ api, provide: { greet: greetHere } satisfies Providers<typeof api> }),
+      rpc.server({
+        api,
+        provide: { greet: greetHere } satisfies Providers<typeof api>,
+        // Behind a TLS proxy the request URL is http: calls must come from the public origin.
+        origin: env.PUBLIC_ORIGIN,
+      }),
       routes({
         stop: signal,
         table: {
