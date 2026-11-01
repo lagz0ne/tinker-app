@@ -150,8 +150,22 @@ words, with a session as the boundary:
 
 - Pick one dialect: a Drizzle schema is
   `pgTable` or `sqliteTable`, not both.
-- Make migrations with
-  `bunx drizzle-kit generate`.
+  Auto migration (dev):
+
+- Add `drizzle.config.ts` at the app root.
+  More than one dialect:
+  `drizzle.<name>.config.ts`.
+- `bun run dev` runs `bun run db:generate`
+  first: drizzle-kit writes a migration when
+  the schema changed, and nothing when not.
+- Start then applies it. So does prod, from
+  the same files. Commit them.
+- No config: no database, the step does
+  nothing.
+- A schema edit while dev runs needs a dev
+  restart (or `bun run db:generate`).
+- A rename makes drizzle-kit ask you in the
+  terminal: rename, or drop and add.
 
 ## Where things are
 

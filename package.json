@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --hot cmds/dev.ts",
+    "dev": "bun run db:generate && bun --hot cmds/dev.ts",
+    "db:generate": "bun scripts/db-generate.ts",
     "build": "rm -rf dist && bun run build:client && bun run build:server && bun run check:client",
     "build:client": "bun build cmds/index.html --target=browser --production --splitting --outdir dist/client --metafile=dist/client-meta.json",
     "build:server": "bun build cmds/host.ts cmds/telemetry-worker.ts --target=bun --production --root cmds --outdir dist/server",
