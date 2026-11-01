@@ -23,7 +23,7 @@ const tinker = createRoute({
   component: () => (
     <main>
       <h1>Tinker base</h1>
-      <p>@tinker/start {baseVersion}</p>
+      <p>tinker-app {baseVersion}</p>
     </main>
   ),
 });
