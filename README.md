@@ -203,6 +203,9 @@ words, with a session as the boundary:
   `/api/*` and `/rpc/*` go to the server
   command. To add more, pass a third argument:
   `serveMain(main, pages, { paths: ["/mcp"] })`.
+- `tinker/base/main-host.ts`: `runMain`, the
+  host for a command with no port, such as an
+  import. Same exit codes as `serveMain`.
 - `tinker/components/rpc`: `rpc.server`,
   `rpc.client`.
 - `tinker/components/requests`: the `routes`

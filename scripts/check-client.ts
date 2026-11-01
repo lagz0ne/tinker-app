@@ -12,7 +12,7 @@ const server = [
   /\.server\.tsx?$/,
   /^cmds\/(server|host|dev|telemetry-worker)\.ts$/,
   /^src\/backend\//,
-  /^tinker\/base\/(bun-host|panics\.server|telemetry-worker)\.ts$/,
+  /^tinker\/base\/(bun-host|main-host|panics\.server|telemetry-worker)\.ts$/,
 ];
 
 const inputs = Object.keys(meta.inputs);
