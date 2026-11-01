@@ -13,7 +13,7 @@ cd my-app && bun install
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-npx degit lagz0ne/tinker-app#v0.18.0 my-app
+npx degit lagz0ne/tinker-app#v0.19.0 my-app
 ```
 
 ## Run
@@ -83,6 +83,60 @@ The tab and the server run the same op handle.
 The tab sends a W3C `traceparent` header, so
 the server span is the tab span's child.
 
+## Database: Drizzle
+
+Off by default. Two capsules per database:
+a driver owns the client, a facade gives
+Drizzle to your operations. Bun first.
+
+- `drizzlePg`: Postgres dialect. Drivers:
+  `bunSql` (Bun.sql), `pglite` (tests).
+- `drizzleSqlite`: SQLite dialect. Driver:
+  `bunSqlite` (bun:sqlite).
+- The facade exports `db`, `tx`, `migrate`.
+- Start runs `migrate` from the drizzle-kit
+  folder (default `drizzle/pg`).
+- No driver: a type error, and `MissingConfig`
+  when the root starts.
+
+In `cmds/server.ts`:
+
+```ts
+capsules: [
+  bunSql({ url: new URL(env.DATABASE_URL) }),
+  drizzlePg({ driver: bunSql.connection }),
+  // ...rpc, routes
+],
+```
+
+In a test, swap the driver:
+
+```ts
+capsules: [
+  pglite(),
+  drizzlePg({ driver: pglite.connection }),
+],
+```
+
+An operation:
+
+```ts
+depends: { tx: drizzlePg.tx },
+run: async ({ tx }, { input }) =>
+  tx.insert(notes).values(input),
+```
+
+- `tx` is one transaction per session.
+- Success commits. A failure rolls back.
+- A forced close rolls back; a graceful
+  close commits.
+- A call with `signal` or `tags` owns its
+  session. So does each rpc call.
+- Pick one dialect: a Drizzle schema is
+  `pgTable` or `sqliteTable`, not both.
+- Make migrations with
+  `bunx drizzle-kit generate`.
+
 ## Where things are
 
 - `cmds/server.ts`: the root, rpc, the table.
@@ -95,9 +149,14 @@ the server span is the tab span's child.
   capsule. A route is any operation.
 - `tinker/components/telemetry`: the sink
   capsules.
+- `tinker/components/drizzle-pg`,
+  `drizzle-sqlite`: the Drizzle facades.
+- `tinker/components/bun-sql`, `bun-sqlite`,
+  `pglite`: the drivers.
 - `scripts/`: `check-client`, `check-plain`.
 - `tests/`: `bun test` files for rpc, routes,
-  trace, health and `check-plain`.
+  trace, health, drizzle and `check-plain`.
+  The Bun.sql tests run when `PG_URL` is set.
 
 Components in `tinker/components/` are plain
 folders. Edit them in place. There is no
