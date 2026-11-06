@@ -3,7 +3,7 @@
 Date: 2026-11-06. Status: accepted shape;
 implementation open.
 Accepted: Duke, step by step, 2026-11-05 23:41
-to 2026-11-06 11:01 UTC (quotes below).
+to 2026-11-06 15:37 UTC (quotes below).
 
 Builds on: tinkered ADR 0048 (sync words:
 transport, codec), 0050 (hooks as an onion),
@@ -52,6 +52,8 @@ limits), 0090 (a call runs in a child session),
   surely be limited by the transport".
 - 11:01: "A, but much better refined naming
   needed, don't invent".
+- 15:37: "Agree, go with B": faults are data,
+  not a throw from a read.
 
 ## Context
 
@@ -85,6 +87,13 @@ one op. The wire is set up once, at the seam.
   401/403, 400, 500, 502.
 - **Rust `Result`, GraphQL errors as data.** A
   domain outcome is a value the op returns.
+- **TanStack Query, SWR.** A read gives
+  `{ data, error }`. The error is data beside
+  the value.
+- **ADR 0089 Limits.** The resolve hook wraps
+  root reads only. "A module must expose
+  explicit setup when it needs readiness
+  before a read."
 - **Koa, TanStack Start.** Middleware is a chain
   with `next`.
 - **Hono.** A duplicate route: the first wins.
@@ -187,19 +196,28 @@ the wire: text
     - `encode`, `decode`: the codec could not
       do its job (`payload.side` says where);
     - `link`: the transport failed.
-11. **Honest.** No fault is silent.
-    - A value that fails `parse`: the read
-      throws `invalid` until a good value comes.
+11. **Faults are data.** `board.faults` is a
+    read view: each key's last fault, until a
+    good value arrives. A read of a key never
+    throws. The cell keeps its last good value,
+    or its initial value.
+    - It is a plain cell read, so the root, a
+      session and a `depends` all see it.
+    - remoteData has no resolve hook.
+12. **Honest.** No fault is silent.
+    - A value that fails `parse`: `faults`
+      shows `invalid` until a good value comes.
     - A service throw: `failed`, logged.
     - An unknown stream address: `link`.
-    - A stream that cannot open: the key throws
-      `link` and tries again with back-off.
+    - A stream that cannot open: `faults`
+      shows `link`; it tries again with
+      back-off.
     - A refused watch: `refused`.
     - A stream that ends is not a fault. The
       catch-up read decides.
     - A fault never fails start, so it never
       closes the scope.
-12. **Client options** (the protocol's, so on
+13. **Client options** (the protocol's, so on
     the transport):
     - `pushes`: "whole" or "delta" (RFC 3229).
     - `streams`: "each" or "one" (one stream,
@@ -207,7 +225,7 @@ the wire: text
     - `meta`: an op whose pairs go as headers.
     - `renew`: runs on `refused`; true means
       try once more. One at a time.
-13. **Trace.** The transport sends its own span
+14. **Trace.** The transport sends its own span
     as `traceparent`. A push carries the
     writer's span; the client links to it.
 
@@ -264,7 +282,9 @@ A feature:
 
 ```ts
 const list = useData(board.todos);
+const why = useData(board.faults).todos;
 const add = useRun(api["todo.add"]);
+if (why) return <SignIn />;
 ```
 
 ## Evidence
@@ -279,23 +299,19 @@ The todo stress app in a scratch copy, Core
 - Two users in real Chromium over SSE.
 - Each silent path from the audit has a test
   that fails before the fix.
+- Faults as data: a session read and an op's
+  `depends` see `refused`. A guest in Chromium
+  sees "Sign in to see the list.".
 - One trace from the client call to the server
   op; pushes linked.
 
 Code: `/mnt/project-files/tinkered/plans/`
-`remote-cell/todo-atscope/`.
+`remote-cell/todo-faults/`.
 Log of each step:
 `.../remote-cell/decision-log.md`.
 
 ## Open
 
-- F45: the resolve hook wraps root reads only
-  (ADR 0089 Limits). A session read or a
-  `depends` reads the initial value on a
-  refused board. A: widen in Core. B (lead's
-  pick): drop the resolve hook; faults are
-  data (`board.faults`, as TanStack Query's
-  `{ data, error }`).
 - F12: one key per project (Hedl). Parked.
 - Home: a tinker-app component that replaces
   `rpc` and `live-read`. Parked.
