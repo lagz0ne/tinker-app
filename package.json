@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.41",
-    "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.10.1/tinker-core-0.10.1.tgz",
-    "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/v0.10.1/tinker-react-0.10.1.tgz",
+    "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.11.0/tinker-core-0.11.0.tgz",
+    "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/v0.11.0/tinker-react-0.11.0.tgz",
     "drizzle-orm": "1.0.0-rc.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

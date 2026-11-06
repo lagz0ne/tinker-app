@@ -4,8 +4,7 @@ import { defineMain } from "~/base/main";
 import { observeServerPanics } from "~/base/panics.server";
 import { health } from "~/components/health";
 import { routes } from "~/components/requests/index.server";
-import { rpc } from "~/components/rpc/index.server";
-import type { Providers } from "~/components/rpc/index.server";
+import { sse } from "~/components/sse/index.server";
 import { telemetry } from "~/components/telemetry/index.server";
 
 import { api } from "@/api";
@@ -41,11 +40,8 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
     signal,
     capsules: [
       sink,
-      rpc.server({
-        api,
-        provide: { greet: greetHere } satisfies Providers<typeof api>,
-        origin,
-      }),
+      api({ implement: { greet: greetHere } }),
+      sse.server({ base: "/rpc", services: [api], origin }),
       routes({
         stop: signal,
         table: {
@@ -59,7 +55,7 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
   await app.ready;
   signal.throwIfAborted(); // Aborted during start: app is closing, so no handler.
   app.onClose(observeServerPanics(exit.bind(null, 1), app.closed, stderr));
-  const [calls, table] = [app.resolve(rpc.server), app.resolve(routes)];
+  const [calls, table] = [app.resolve(sse.server), app.resolve(routes)];
   return {
     fetch: async (request: Request) => (await calls(request, app)) ?? table(request, app),
     closed: app.closed,

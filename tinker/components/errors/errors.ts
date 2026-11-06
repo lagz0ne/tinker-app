@@ -33,9 +33,6 @@ export declare namespace Errors {
     DatabaseNotStarted: { label: string };
     TransactionNotOpened: { label: string };
     TransactionNeedsSession: { label: string };
-
-    RpcNoProvider: { label: string };
-    RpcFailed: { label: string; status: number };
   };
   type Name = keyof Payloads;
   type Of<N extends Name> = Error & { kind: N; payload: Payloads[N] };

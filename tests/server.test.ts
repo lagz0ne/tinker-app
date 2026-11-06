@@ -48,7 +48,7 @@ test("PUBLIC_ORIGIN reaches rpc: a call from the public origin passes behind a T
   const reply = await proxied("/rpc/greet", { name: "Duke" });
 
   expect(reply?.status).toBe(200);
-  expect(await reply?.json()).toEqual({ value: { text: "Hello, Duke." } });
+  expect(await reply?.json()).toEqual({ ok: true, value: { text: "Hello, Duke." } });
 });
 
 test("PUBLIC_ORIGIN reaches telemetry: a tab batch from the public origin is taken", async () => {

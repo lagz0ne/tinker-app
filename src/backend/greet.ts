@@ -1,10 +1,10 @@
 import { operation } from "@tinker/core";
 
-import { greet } from "@/api/greet";
+import { api } from "@/api";
 
-/** The server's work for the greet contract. `satisfies` keeps its input and reply equal. */
+/** The server's work for `api.greet`: the rpc capsule checks its output against the contract. */
 export const greetHere = operation({
   label: "greet.here",
-  input: greet.input,
+  input: api.greet.input,
   run: async (_deps, { input }) => ({ text: `Hello, ${input.name}.` }),
-}) satisfies typeof greet;
+});

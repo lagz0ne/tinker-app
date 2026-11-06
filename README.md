@@ -54,7 +54,9 @@ and oxlint, with rules in `vite.config.ts`.
 `bun run check:plain` bans plain helper
 functions. Every function is an operation or
 a capsule hook. `cn` and `defineMain` are
-exempt. A module resource (a `resource` whose
+exempt. So are the definition makers (`rpc`,
+`remoteData`, `createSse`, `createMemory`):
+they run at module load, before any scope. A module resource (a `resource` whose
 factory returns `import("<package>")` on every
 return) counts as a library: the options you
 pass to it are native. `ReadableStream` and
@@ -82,33 +84,41 @@ on each push to `main`, and weekly.
   resource that loads a server package, must
   end in `.server.ts` (`modules.server.ts`).
 
-## rpc: one op, two places
+## rpc and remote data: one transport
 
-The tab and the server run the same op handle.
+The decision: `docs/decisions/remote-data-and-rpc.md`.
+The client and the server run the same handle.
 
-- `src/api/`: the contracts. A contract's own
-  body only raises `RpcNoProvider`. `api` lists
-  them, keyed by label.
-- `src/backend/`: the providers. Each ends with
-  `satisfies typeof <contract>`.
-- `cmds/server.ts`: `rpc.server` with
-  `{ api, provide }`.
-  `provide` is `satisfies Providers<typeof api>`,
-  so a missing provider is a type error.
-- `cmds/browser.tsx`: `rpc.client({ api })`.
-- The root fails to start with `MissingConfig`
-  when a contract has no provider.
-- A failure the provider raises reaches the tab
-  with the same kind and payload.
+- `src/api/`: `api = rpc({ greet: {...} })`.
+  A key has an `input` and an `output` shape.
+- `src/backend/`: the implementations.
+- `cmds/server.ts`: `api({ implement })`, and
+  `sse.server({ base: "/rpc", services })`.
+- `cmds/browser.tsx`: `sse.client({ base })`,
+  and `api({ remote: sse.client })`.
+- A key with no implementation fails start
+  with `MissingConfig`.
+- A failure is a fault from a fixed set:
+  `refused`, `failed`, `invalid`, `encode`,
+  `decode`, `link`. `api.fault.is(e)` tells.
+- A server throw is `failed`. Its cause stays
+  in the server log.
+- `remoteData({ cells })` reads server cells
+  on the client. `board.faults` holds each
+  key's last fault, as data.
 - A call body over `maxBody` bytes (1 MiB
-  unset) answers 413, and no provider runs.
-  A body with no length is read only up to it.
-  `maxBody` is a positive whole number, or
-  `Infinity` for no cap. NaN, 0, -1 or 1.5
+  unset) answers 413, and no implementation
+  runs. A body with no length is read only up
+  to it. `maxBody` is a positive whole number,
+  or `Infinity` for no cap. NaN, 0, -1 or 1.5
   fail start (`DataValidationFailed`, exit 78).
+- A request with a foreign `Origin` answers 403.
+- `memory` is the same protocol in one
+  process, for tests.
 
-The tab sends a W3C `traceparent` header, so
-the server span is the tab span's child.
+The client sends a W3C `traceparent` header,
+so the server's span is the child of the
+client's `sse.send` span.
 
 ## Database: Drizzle
 
@@ -206,8 +216,15 @@ words, with a session as the boundary:
 - `tinker/base/main-host.ts`: `runMain`, the
   host for a command with no port, such as an
   import. Same exit codes as `serveMain`.
-- `tinker/components/rpc`: `rpc.server`,
-  `rpc.client`.
+- `tinker/components/protocol`: the envelope,
+  the faults, the codec use, the route table.
+- `tinker/components/sse`: `sse.client`
+  (`index.ts`), `sse.server` (`index.server.ts`).
+- `tinker/components/memory`: the in-process
+  transport, for tests.
+- `tinker/components/rpc`: `rpc(contracts)`.
+- `tinker/components/remote-data`:
+  `remoteData(cells)`.
 - `tinker/components/requests`: the `routes`
   capsule. A route is any operation. A stream
   route calls `routes.reply` with its Response,
@@ -232,9 +249,9 @@ words, with a session as the boundary:
 - `tinker/components/bun-sql`, `bun-sqlite`,
   `pglite`: the drivers.
 - `scripts/`: `check-client`, `check-plain`.
-- `tests/`: `bun test` files for rpc, routes,
-  trace, health, drizzle, telemetry ingest and
-  `check-plain`,
+- `tests/`: `bun test` files for rpc, remote
+  data, the transports, routes, trace, health,
+  drizzle, telemetry ingest and `check-plain`,
   plus `tests/serve-main.test.ts` (the Bun
   host), `tests/server.test.ts` (the server
   command) and `tests/build-client.test.ts`

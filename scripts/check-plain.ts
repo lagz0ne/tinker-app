@@ -73,6 +73,13 @@ const entries: Record<string, readonly string[]> = {
     "ringLines",
     "takeLines",
   ],
+  // Definitions: each runs at module load, before any scope exists, and makes the units its
+  // capsules install (one capsule per definition, or a client and a server per transport).
+  "tinker/components/rpc/index.ts": ["rpc"],
+  "tinker/components/remote-data/index.ts": ["remoteData"],
+  "tinker/components/sse/index.ts": ["createSse"],
+  "tinker/components/sse/index.server.ts": ["createSse"],
+  "tinker/components/memory/index.ts": ["createMemory"],
 };
 
 type Fn =

@@ -4,39 +4,57 @@ import { createScope, isError, operation } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 import { z } from "zod";
 
-import type { Errors } from "~/components/errors";
-import { rpc as tab } from "~/components/rpc";
-import { rpc as server } from "~/components/rpc/index.server";
-import type { Providers } from "~/components/rpc/index.server";
+import { step } from "~/components/protocol";
+import { rpc } from "~/components/rpc";
+import { sse as tab } from "~/components/sse";
+import { sse as server } from "~/components/sse/index.server";
 
-import { greet } from "@/api/greet";
+import { api } from "@/api";
 import { greetHere } from "@/backend/greet";
 
-const refuse = operation({
-  label: "refuse",
-  input: z.object({ why: z.string() }),
-  run: async (_deps, { raise }): Promise<void> => raise("RpcNoProvider", { label: "refuse" }),
+// The template app's api over SSE, and the HTTP rules of sse.server: origin, maxBody.
+
+const more = rpc({
+  refuse: { input: z.object({ why: z.string() }), output: z.null() },
+  crash: { input: z.null(), output: z.null() },
+});
+
+/** A middleware that says no: the call answers `refused`, with this payload. */
+const no = operation({
+  label: "no",
+  input: step,
+  run: async (_deps, { input }) => input.refuse({ message: "no" }),
+});
+
+const crashHere = operation({
+  label: "crash.here",
+  input: z.null(),
+  run: async (): Promise<null> => {
+    throw new Error("db password is hunter2");
+  },
 });
 
 const refuseHere = operation({
   label: "refuse.here",
-  input: refuse.input,
-  run: async (_deps, { input, raise: coreRaise }) => {
-    const raise: Errors.Raise = coreRaise;
-
-    return raise("Refused", { message: input.why });
-  },
-}) satisfies typeof refuse;
-
-const api = { greet, refuse };
-const provide = { greet: greetHere, refuse: refuseHere } satisfies Providers<typeof api>;
+  input: more.refuse.input,
+  run: async () => null,
+});
 
 const spans: string[] = [];
-const observe: Observe.Config = { export: (span) => void spans.push(span.name) };
+const lines: string[] = [];
+
+const observe: Observe.Config = {
+  export: (span) => void spans.push(span.name),
+  log: (line) => void lines.push(`${line.message} ${JSON.stringify(line.attributes)}`),
+};
 
 const backend = createScope({
   observe,
-  capsules: [server.server({ api, provide })],
+  capsules: [
+    api({ implement: { greet: greetHere } }),
+    more({ implement: { refuse: { run: refuseHere, use: [no] }, crash: crashHere } }),
+    server.server({ base: "/rpc", services: [api, more] }),
+  ],
 });
 
 await backend.ready;
@@ -48,7 +66,11 @@ const http = Bun.serve({
 });
 
 const browser = createScope({
-  capsules: [tab.client({ api, base: `${http.url}rpc` })],
+  capsules: [
+    tab.client({ base: `${http.url}rpc` }),
+    api({ remote: tab.client }),
+    more({ remote: tab.client }),
+  ],
 });
 
 await browser.ready;
@@ -59,44 +81,72 @@ afterAll(async () => {
   await backend.close();
 });
 
-test("the tab runs the contract; the server's provider does the work", async () => {
+/** A server root with one more bound option, for the HTTP rules. */
+const serverWith = (options: { origin?: string; maxBody?: number }) =>
+  createScope({
+    capsules: [
+      api({ implement: { greet: greetHere } }),
+      server.server({ base: "/rpc", services: [api], ...options }),
+    ],
+  });
+
+test("the client runs api.greet; the server's implementation does the work", async () => {
   spans.length = 0;
-  const reply = await browser.run(greet, { input: { name: "Duke" } });
+  const reply = await browser.run(api.greet, { input: { name: "Duke" } });
 
   expect(reply).toEqual({ text: "Hello, Duke." });
   expect(spans).toContain("greet.here");
 });
 
-test("the server runs the same contract here, on its provider", async () => {
-  expect(await backend.run(greet, { input: { name: "here" } })).toEqual({ text: "Hello, here." });
+test("the server runs the same handle here, on its implementation", async () => {
+  expect(await backend.run(api.greet, { input: { name: "here" } })).toEqual({
+    text: "Hello, here.",
+  });
 });
 
-test("bad input fails with DataValidationFailed on the tab", async () => {
-  const result = await browser.settle(greet, { rawInput: { name: "" } });
-
+test("bad input fails with DataValidationFailed on the client; nothing is sent", async () => {
   spans.length = 0;
+  const result = await browser.settle(api.greet, { rawInput: { name: "" } });
+
   expect(result.status).toBe("failed");
   expect(isError(Object(result).error, "DataValidationFailed")).toBe(true);
   expect(spans).not.toContain("greet.here");
 });
 
-test("a failure the provider raises keeps its kind and payload over the wire", async () => {
-  const result = await browser.settle(refuse, { input: { why: "no" } });
+test("a refusal crosses as the refused fault, with its payload", async () => {
+  const error = await browser.run(more.refuse, { input: { why: "no" } }).then(
+    () => null,
+    (e: unknown) => e,
+  );
 
-  const error = Object(result).error;
-  expect(error.kind).toBe("Refused");
-  expect(error.payload).toEqual({ message: "no" });
+  expect(more.fault.is(error) && [error.fault, error.payload]).toEqual([
+    "refused",
+    { message: "no" },
+  ]);
 });
 
-test("with no rpc capsule, the contract says it has no provider", async () => {
-  const bare = createScope();
-  const result = await bare.settle(greet, { input: { name: "x" } });
+test("a throw on the server is the failed fault; its cause stays in the server log", async () => {
+  const error = await browser.run(more.crash, { input: null }).then(
+    () => null,
+    (e: unknown) => e,
+  );
 
-  expect(Object(result).error.kind).toBe("RpcNoProvider");
+  expect(more.fault.is(error) && [error.fault, error.payload]).toEqual(["failed", {}]);
+  expect(JSON.stringify(error)).not.toContain("hunter2");
+  expect(lines.some((line) => line.startsWith("rpc call failed") && line.includes("hunter2"))).toBe(
+    true,
+  );
+});
+
+test("with no rpc capsule, a run of a key fails loud: CapsuleMissing", async () => {
+  const bare = createScope();
+  const result = await bare.settle(api.greet, { input: { name: "x" } });
+
+  expect(Object(result).error.kind).toBe("CapsuleMissing");
   await bare.close();
 });
 
-test("an unknown label is 404; a foreign origin is 403", async () => {
+test("an unknown address is 404; a foreign origin is 403", async () => {
   const post = (path: string, headers: Record<string, string> = {}) =>
     fetch(`${http.url}rpc/${path}`, { method: "POST", body: "{}", headers });
 
@@ -106,12 +156,12 @@ test("an unknown label is 404; a foreign origin is 403", async () => {
 
 test("a bound public origin is the one a call must come from, over an http request URL", async () => {
   const call = async (origin: string | undefined, headers: Record<string, string>) => {
-    const proxied = createScope({ capsules: [server.server({ api, provide, origin })] });
+    const proxied = serverWith({ origin });
     await proxied.ready;
     const reply = await proxied.resolve(server.server)(
       new Request("http://app.example/rpc/greet", {
         method: "POST",
-        headers: { "content-type": "application/json", ...headers },
+        headers,
         body: JSON.stringify({ name: "Duke" }),
       }),
       proxied,
@@ -130,9 +180,17 @@ test("a bound public origin is the one a call must come from, over an http reque
   expect(await call(undefined, { origin: "https://app.example" })).toBe(403);
 });
 
-test("a bound origin that is not an http(s) URL fails start, naming rpc.origin", async () => {
+test("a watch (GET) checks the origin too", async () => {
+  const reply = await fetch(`${http.url}rpc/greet?text=null`, {
+    headers: { origin: "https://evil.example" },
+  });
+
+  expect(reply.status).toBe(403);
+});
+
+test("a bound origin that is not an http(s) URL fails start, naming origin", async () => {
   const failureOf = async (origin: string) => {
-    const bad = createScope({ capsules: [server.server({ api, provide, origin })] });
+    const bad = serverWith({ origin });
     const failure = await bad.ready.then(
       () => undefined,
       (error: unknown) => error,
@@ -147,14 +205,17 @@ test("a bound origin that is not an http(s) URL fails start, naming rpc.origin",
     origins.map((origin) => ({
       origin,
       kind: "MissingConfig",
-      payload: { label: "rpc", key: "origin" },
+      payload: { label: "sse.server", key: "origin" },
     })),
   );
 });
 
-test("a contract with no provider fails start, naming it; no request is ever served", async () => {
+test("a key with no implementation fails start, naming it; no request is ever served", async () => {
   const missing = createScope({
-    capsules: [server.server({ api, provide: { greet: greetHere } as unknown as typeof provide })],
+    capsules: [
+      more({ implement: { refuse: refuseHere } as never }),
+      server.server({ base: "/rpc", services: [more] }),
+    ],
   });
 
   const failure = await missing.ready.then(
@@ -162,33 +223,15 @@ test("a contract with no provider fails start, naming it; no request is ever ser
     (error: unknown) => error,
   );
   expect(Object(failure).kind).toBe("MissingConfig");
-  expect(Object(failure).payload).toEqual({ label: "rpc", key: "provide.refuse" });
+  expect(Object(failure).payload).toEqual({ label: "rpc", key: "implement.crash" });
   await missing.close();
-});
-
-test("a contract under another key than its label fails start", async () => {
-  const renamed = createScope({
-    capsules: [server.server({ api: { hello: greet }, provide: { hello: greetHere } })],
-  });
-
-  const failure = await renamed.ready.then(
-    () => undefined,
-    (error: unknown) => error,
-  );
-  expect(Object(failure).payload).toEqual({ label: "rpc", key: "api.hello" });
-  await renamed.close();
 });
 
 /** A greet call whose JSON body is exactly `bytes` long. */
 const sized = (bytes: number) => JSON.stringify({ name: "a".repeat(bytes - '{"name":""}'.length) });
 
-test("a body over rpc.maxBody (1 MiB unset) answers 413 and runs no provider; at the cap is 200", async () => {
-  const post = (body: string) =>
-    fetch(`${http.url}rpc/greet`, {
-      method: "POST",
-      body,
-      headers: { "content-type": "application/json" },
-    });
+test("a body over maxBody (1 MiB unset) answers 413 and runs no implementation; at the cap is 200", async () => {
+  const post = (body: string) => fetch(`${http.url}rpc/greet`, { method: "POST", body });
 
   spans.length = 0;
   expect((await post(sized(1_048_577))).status).toBe(413);
@@ -198,7 +241,7 @@ test("a body over rpc.maxBody (1 MiB unset) answers 413 and runs no provider; at
   expect(spans).toContain("greet.here");
 });
 
-test("a body with no content-length is read only up to rpc.maxBody, then 413", async () => {
+test("a body with no content-length is read only up to maxBody, then 413", async () => {
   const chunk = new Uint8Array(65_536).fill(0x20);
   let pulled = 0;
   // 4 MiB of JSON whitespace, then `{}`: valid JSON, so only the cap stops it.
@@ -219,8 +262,8 @@ test("a body with no content-length is read only up to rpc.maxBody, then 413", a
   expect(spans).not.toContain("greet.here");
 });
 
-test("a bound smaller rpc.maxBody is the cap", async () => {
-  const small = createScope({ capsules: [server.server({ api, provide, maxBody: 16 })] });
+test("a bound smaller maxBody is the cap", async () => {
+  const small = serverWith({ maxBody: 16 });
   await small.ready;
   const call = async (bytes: number) =>
     (
@@ -235,10 +278,10 @@ test("a bound smaller rpc.maxBody is the cap", async () => {
   await small.close();
 });
 
-test("an rpc.maxBody that is not a positive whole number or Infinity fails start, naming rpc.maxBody", async () => {
+test("a maxBody that is not a positive whole number or Infinity fails start, naming sse.maxBody", async () => {
   const failureOf = async (maxBody: number) => {
     try {
-      await createScope({ capsules: [server.server({ api, provide, maxBody })] }).close();
+      await serverWith({ maxBody }).close();
       return { maxBody, kind: undefined, label: undefined };
     } catch (error) {
       const { kind, payload } = Object(error);
@@ -249,12 +292,12 @@ test("an rpc.maxBody that is not a positive whole number or Infinity fails start
   // NaN is what `Number(env.X)` gives for an unset or bad value: it would turn the cap off.
   const values = [Number.NaN, 0, -1, 1.5];
   expect(await Promise.all(values.map(failureOf))).toEqual(
-    values.map((maxBody) => ({ maxBody, kind: "DataValidationFailed", label: "rpc.maxBody" })),
+    values.map((maxBody) => ({ maxBody, kind: "DataValidationFailed", label: "sse.maxBody" })),
   );
 });
 
-test("rpc.maxBody Infinity has no cap: a 3 MB body answers 200", async () => {
-  const open = createScope({ capsules: [server.server({ api, provide, maxBody: Infinity })] });
+test("maxBody Infinity has no cap: a 3 MB body answers 200", async () => {
+  const open = serverWith({ maxBody: Infinity });
   await open.ready;
   const response = await open.resolve(server.server)(
     new Request("http://app.example/rpc/greet", { method: "POST", body: sized(3_000_000) }),
@@ -265,7 +308,7 @@ test("rpc.maxBody Infinity has no cap: a 3 MB body answers 200", async () => {
   await open.close();
 });
 
-test("a call body that errors mid-read answers 400, as bad JSON does", async () => {
+test("a call body that errors mid-read answers the decode fault, as bad JSON does", async () => {
   let pulls = 0;
   const body = new ReadableStream<Uint8Array>({
     pull: (stream) => {
@@ -280,6 +323,10 @@ test("a call body that errors mid-read answers 400, as bad JSON does", async () 
     backend,
   );
 
-  expect(response?.status).toBe(400);
-  expect(await response?.json()).toMatchObject({ kind: "DataValidationFailed" });
+  expect(response?.status).toBe(200);
+  expect(await response?.json()).toEqual({
+    ok: false,
+    kind: "decode",
+    payload: { side: "server" },
+  });
 });

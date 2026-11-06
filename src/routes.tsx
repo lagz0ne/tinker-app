@@ -3,7 +3,7 @@ import type { Scope } from "@tinker/core";
 
 import { baseVersion } from "~/components/health";
 
-import { greet } from "@/api/greet";
+import { api } from "@/api";
 
 const root = createRootRouteWithContext<{ scope: Scope.Handle }>()({ component: Outlet });
 
@@ -11,7 +11,7 @@ const index = createRoute({
   getParentRoute: () => root,
   path: "/",
   loader: ({ context, abortController }) =>
-    context.scope.run(greet, { input: { name: "world" }, signal: abortController.signal }),
+    context.scope.run(api.greet, { input: { name: "world" }, signal: abortController.signal }),
   component: function Greeting() {
     return <p>{index.useLoaderData().text}</p>;
   },

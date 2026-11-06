@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 
 import { TinkerError, TinkerNotFound } from "~/base/fallbacks";
 import { abortReasons } from "~/components/errors";
-import { rpc } from "~/components/rpc";
+import { sse } from "~/components/sse";
 import { telemetry } from "~/components/telemetry";
 
 import { api } from "@/api";
@@ -16,7 +16,11 @@ const stop = new AbortController();
 
 const app = createScope({
   signal: stop.signal,
-  capsules: [telemetry.browser({ service: "tinker-browser", console }), rpc.client({ api })],
+  capsules: [
+    telemetry.browser({ service: "tinker-browser", console }),
+    sse.client({ base: "/rpc" }),
+    api({ remote: sse.client }),
+  ],
 });
 
 const close = async () => {

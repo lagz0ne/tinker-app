@@ -192,6 +192,20 @@ test("createMainHost and runMain are exempt only in tinker/base/main-host.ts", a
   expect(result.err).toContain(hit("tinker/base/host.ts", 3));
 });
 
+test("a definition maker is exempt only in its own file; a helper beside it still fails", async () => {
+  const result = await checkFiles({
+    "tinker/components/rpc/index.ts": `export function rpc() {}\n\nexport const shout = (s: string) => s;\n`,
+    "tinker/components/sse/index.ts": `export function createSse() {}\n`,
+    "tinker/components/memory/index.ts": `export function createSse() {}\n`,
+  });
+
+  expect(result.code).toBe(1);
+  expect(result.err.trim().split("\n")).toEqual([
+    hit("tinker/components/memory/index.ts", 1),
+    hit("tinker/components/rpc/index.ts", 3),
+  ]);
+});
+
 test("a function frozen or put in an array at the top level fails", async () => {
   const result = await checkFiles({
     "src/a.ts": "export const shout = Object.freeze((s: string) => `${s}!`);\n",
