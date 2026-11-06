@@ -23,6 +23,8 @@ type ServerConfig = {
   codec?: Codec;
   origin?: string | null;
   maxBody?: number;
+  /** Two services with one address fail start (DuplicateAddress). Unset: the first wins. */
+  strict?: boolean;
 };
 
 /** Makes one SSE server. A scope can hold two (a public base and a signed base). */
@@ -30,6 +32,7 @@ export function createSse() {
   const base = tag<string>({ label: "sse.base" });
   const codec = tag<Codec>({ label: "sse.codec" }).optional;
   const services = tag<readonly Service[]>({ label: "sse.services" }).required;
+  const strict = tag<boolean>({ label: "sse.strict", default: false });
 
   /** The public origin a client calls from. Unset, it is the request URL's own origin; behind a
    * TLS proxy that is `http://<host>`, so the app binds its public `https` origin here. A bound
@@ -81,7 +84,7 @@ export function createSse() {
    */
   const server = capsule({
     label: "sse.server",
-    config: { base: base.required, origin, maxBody, codec, services },
+    config: { base: base.required, origin, maxBody, codec, services, strict },
     hooks: {
       async start({ config, load, next, raise, log }) {
         // Unset is "": it resolves to the request URL's own origin. Bound, it must be an
@@ -92,7 +95,7 @@ export function createSse() {
         }
 
         const p = await load(protocol, kept);
-        const routesOf = p.routesOf(config.services, raise as never);
+        const routesOf = p.routesOf(config.services, raise as never, log, config.strict);
         const side = { codec: p.given(config.codec) ?? p.json, routes: routesOf };
         load(held, kept).set({ side, protocol: p });
         await next();

@@ -123,10 +123,16 @@ export const protocol = resource({
 
     const given = <T>(slot: Maybe<T>): T | undefined => (slot.present ? slot.value : undefined);
 
-    /** The route table: built once at start. Two services with one address fail start. */
+    /**
+     * The route table: built once at start. Two services with one address: the first in the
+     * list wins and start logs a warning, as Hono does (Duke 2026-11-06 04:21). `strict`
+     * makes it fail start with DuplicateAddress instead.
+     */
     const routesOf = (
       services: readonly Service[],
       raise: (kind: string, payload: unknown) => never,
+      log: Observe.Logger,
+      strict: boolean,
     ) => {
       const table = new Map<string, Service>();
       for (const service of services) {
@@ -134,12 +140,21 @@ export const protocol = resource({
           const label = String(service.label);
           if (address === shared) raise("ReservedAddress", { address, service: label });
           const taken = table.get(address);
-          if (taken) {
-            raise("DuplicateAddress", { address, services: [String(taken.label), label] });
+          if (!taken) {
+            table.set(address, service);
+            continue;
           }
-          table.set(address, service);
+
+          const pair = { address, services: [String(taken.label), label] };
+          if (strict) raise("DuplicateAddress", pair);
+          log.warn("protocol duplicate address", {
+            address,
+            winner: pair.services[0],
+            shadowed: label,
+          });
         }
       }
+
       return table;
     };
 

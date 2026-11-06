@@ -164,12 +164,13 @@ export function createMemory() {
     config: {
       codec: tag<Codec>({ label: "memory.codec" }).optional,
       services: tag<readonly Service[]>({ label: "memory.services" }).required,
+      strict: tag<boolean>({ label: "memory.strict", default: false }),
     },
     exports: { serve, serveStream },
     hooks: {
-      async start({ config, load, next, raise }) {
+      async start({ config, load, next, raise, log }) {
         const p = await load(protocol, kept);
-        const routesOf = p.routesOf(config.services, raise as never);
+        const routesOf = p.routesOf(config.services, raise as never, log, config.strict);
         const side = { codec: p.given(config.codec) ?? p.json, routes: routesOf };
         load(serverHeld, kept).set({ side, protocol: p });
         return next();
@@ -193,7 +194,11 @@ export function createMemory() {
     server: server as unknown as Omit<typeof server, never> & {
       readonly serve: TextServe;
       readonly serveStream: TextStream;
-      (values: { codec?: Codec; services: readonly Service[] }): ReturnType<typeof server>;
+      (values: {
+        codec?: Codec;
+        services: readonly Service[];
+        strict?: boolean;
+      }): ReturnType<typeof server>;
     },
   };
 }

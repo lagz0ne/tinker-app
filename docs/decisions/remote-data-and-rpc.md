@@ -151,7 +151,9 @@ the wire: text
    default. Both sides must use the same one.
 5. **Route table.** `sse.server({ services })`
    takes the definitions. A duplicate address:
-   the first in the list wins.
+   the first in the list wins, and start logs a
+   warning. `strict: true` fails start with
+   `DuplicateAddress` instead.
 6. **rpc.** `rpc(contracts)` gives one capsule.
    A contract has `input`, `output` and
    `mode` ("reply" or "stream").

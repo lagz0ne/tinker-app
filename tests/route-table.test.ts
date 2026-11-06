@@ -26,7 +26,32 @@ const startError = async (capsules: NonNullable<Parameters<typeof createScope>[0
   return { kind: Object(error).kind, payload: Object(error).payload };
 };
 
-test("two services with one address: start fails, naming the address and both services", async () => {
+test("two services with one address: the first wins and start warns, as Hono does", async () => {
+  const board = remoteData({ "todo.add": data({ initial: 0 }) });
+  const api = rpc({ "todo.add": { input: z.null(), output: z.null() } });
+  const add = operation({ label: "add", input: z.null(), run: async () => null });
+  const lines: string[] = [];
+  const scope = createScope({
+    observe: { log: (l) => void lines.push(`${l.message} ${JSON.stringify(l.attributes)}`) },
+    capsules: [
+      board({ serve: true }),
+      api({ implement: { "todo.add": add } }),
+      memory.server({ services: [board, api] }),
+    ],
+  });
+  closers.push(() => scope.close());
+  await scope.ready;
+
+  const warned = lines.find((l) => l.startsWith("protocol duplicate address"));
+  expect(warned).toContain('"winner":"remoteData"');
+  expect(warned).toContain('"shadowed":"rpc"');
+  const reply = await scope.run(memory.server.serve, {
+    input: { address: "todo.add", text: "null", meta: {} },
+  });
+  expect(JSON.parse(String(reply))).toEqual({ ok: true, value: 0 }); // the board answered
+});
+
+test("strict: two services with one address fail start, naming the address and both", async () => {
   const board = remoteData({ "todo.add": data({ initial: 0 }) });
   const api = rpc({ "todo.add": { input: z.null(), output: z.null() } });
   const add = operation({ label: "add", input: z.null(), run: async () => null });
@@ -34,27 +59,12 @@ test("two services with one address: start fails, naming the address and both se
     await startError([
       board({ serve: true }),
       api({ implement: { "todo.add": add } }),
-      memory.server({ services: [board, api] }),
+      memory.server({ services: [board, api], strict: true }),
     ]),
   ).toEqual({
     kind: "DuplicateAddress",
     payload: { address: "todo.add", services: ["remoteData", "rpc"] },
   });
-});
-
-test("two definitions over one shape: the same key twice fails start too", async () => {
-  const todos = data({ initial: [] as string[] });
-  const one = remoteData({ todos });
-  const two = remoteData({ todos });
-  expect(
-    (
-      await startError([
-        one({ serve: true }),
-        two({ serve: true }),
-        memory.server({ services: [one, two] }),
-      ])
-    ).kind,
-  ).toBe("DuplicateAddress");
 });
 
 test("the shared stream's address is reserved", async () => {
