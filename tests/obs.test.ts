@@ -115,6 +115,7 @@ test("O2 fixed: a push is a send span in the writer's trace, linked from each re
   const { srv, join } = await boot();
   const duke = await join("duke");
   const ann = await join("ann");
+  await tick(); // both watch streams open, so the write has 2 watchers
   const [d0, a0, s0] = [duke.seen.spans.length, ann.seen.spans.length, srv.spans.length];
   await ann.client.run(api["todo.add"], { input: { title: "From ann" } });
   await tick();

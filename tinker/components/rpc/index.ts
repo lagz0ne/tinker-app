@@ -329,6 +329,9 @@ const steps = resource({
       { address, meta }: z.infer<typeof callInput>,
       input: unknown,
     ) => {
+      // A key answers only in its own mode: a stream key never runs from a call.
+      if (def.contracts[address]!.mode === "stream") return Promise.resolve(null);
+
       const { run, config } = event;
       const entry = config.implement.present ? config.implement.value[address] : undefined;
       const implementation = chain.runOf(entry) as Operation.Handle<unknown, unknown>;
@@ -351,6 +354,10 @@ const steps = resource({
     ) => {
       const { run, config } = event;
       const contract = def.contracts[address]!;
+      // A key answers only in its own mode: a reply key never runs from a stream, a GET that a
+      // link on another site can send with the user's cookies.
+      if (contract.mode !== "stream") return Promise.resolve(false);
+
       const entry = config.implement.present ? config.implement.value[address] : undefined;
       const implementation = chain.runOf(entry) as Operation.Handle<unknown, unknown>;
       const use = chain.chainOf(config.use, entry);

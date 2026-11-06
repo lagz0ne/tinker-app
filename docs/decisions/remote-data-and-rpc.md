@@ -163,6 +163,10 @@ the wire: text
      them.
    - `api["todo.add"]` is the same handle on
      both sides.
+   - A key answers only in its own mode. A GET
+     never runs a reply key, so a link on another
+     site cannot change data. Other methods
+     answer 405.
    - A stream key's op depends on the `channel`
      tag. It sends each output and ends when
      `closed` aborts.
@@ -319,6 +323,8 @@ Log of each step:
   `rpc` and `live-read`. Parked.
 - Serving on tinker-app: `sse.server` should be
   a route of the `bun.server` capsule.
+- A watch's `?text=` has no `maxBody` cap; only
+  the host's URL limit holds it.
 - Core rows: F18 (flat spans), F21 (a refusal
   logs as a crash), F28 (union config by cast),
   F32 (abort disposes depends), F39 (write hook

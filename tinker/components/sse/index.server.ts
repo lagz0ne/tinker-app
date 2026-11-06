@@ -105,6 +105,10 @@ export function createSse() {
         async function handle(req: Request, scope: Scope.Handle): Promise<Response | undefined> {
           const url = new URL(req.url);
           if (!url.pathname.startsWith(`${config.base}/`)) return undefined;
+          // A call is a POST, a watch a GET: any other method changes nothing here.
+          if (!["POST", "GET"].includes(req.method)) {
+            return new Response(null, { status: 405, headers: { allow: "GET, POST" } });
+          }
           if (![null, new URL(allowed, url).origin].includes(req.headers.get("origin"))) {
             return new Response(null, { status: 403 });
           }
@@ -174,7 +178,8 @@ export function createSse() {
                 return new Response(body, { headers: { "content-type": "text/event-stream" } });
               },
               () => new Response(null, { status: 503 }),
-            );
+            )
+            .catch(() => new Response(null, { status: 503 })); // the root closed mid-request
         }
       },
       run({ op, call: invocation, run, log, load, next }): unknown {

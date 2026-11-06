@@ -188,6 +188,17 @@ test("a watch (GET) checks the origin too", async () => {
   expect(reply.status).toBe(403);
 });
 
+test("a reply key never runs from a GET or another method: a link on another site changes nothing", async () => {
+  spans.length = 0;
+  const watch = await fetch(`${http.url}rpc/greet?text=${encodeURIComponent('{"name":"x"}')}`);
+  const stream = await watch.text();
+  const other = await fetch(`${http.url}rpc/greet`, { method: "DELETE", body: '{"name":"x"}' });
+
+  expect(stream).not.toContain("data:"); // not this key's mode: nothing runs, nothing is sent
+  expect(other.status).toBe(405);
+  expect(spans).not.toContain("greet.here");
+});
+
 test("a bound origin that is not an http(s) URL fails start, naming origin", async () => {
   const failureOf = async (origin: string) => {
     const bad = serverWith({ origin });
