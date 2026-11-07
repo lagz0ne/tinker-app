@@ -52,6 +52,11 @@ limits), 0090 (a call runs in a child session),
   surely be limited by the transport".
 - 11:01: "A, but much better refined naming
   needed, don't invent".
+- 11-07 07:02, 07:05: rpc should have a
+  lifecycle, as TanStack Query does: error
+  recovery, error mapping. Promote it over
+  middleware, or sunset middleware.
+- 08:41: "Yeah lifecycle": `use` goes.
 - 15:37: "Agree, go with B": faults are data,
   not a throw from a read.
 
@@ -191,11 +196,13 @@ the wire: text
      op reads `board.project`. A write in a call
      tagged p1 pushes to p1 only. Built in
      9d3a939, 54563b6, 34109e5.
-8. **Middleware.** A plain operation on `step`.
-   `use` wraps every key. An `implement` entry
-   adds its own, or with `inherit: false` runs
-   only its own. A "no" is `refuse(payload)`,
-   a value, never a throw.
+8. **Lifecycle, not middleware** (Duke
+   2026-11-07 08:41; replaces `use`). Words
+   from oRPC (`onStart`, `onSuccess`, `onError`,
+   `onFinish`) and TanStack Query (`retry`; a
+   context from the start hook reaches the
+   later ones). See "The lifecycle" below.
+   Building it is open.
 9. **Outcomes are output.** A todo that is gone
    is `{ kind: "gone" }` in the output shape.
    No error lists. No kind is read off a thrown
@@ -243,6 +250,58 @@ the wire: text
 14. **Trace.** The transport sends its own span
     as `traceparent`. A push carries the
     writer's span; the client links to it.
+
+## The lifecycle
+
+Each hook is a Core operation, as middleware
+was. A capsule config lists them; a list runs
+in order.
+
+```ts
+api({
+  implement,
+  retry: { link: 2 },
+  onStart: [signedIn],
+  onSuccess: [],
+  onError: [refusedAsFault],
+  onFinish: [timing],
+});
+```
+
+What each hook gets and may answer:
+
+- `onStart` gets `{ key, input, meta }`.
+  It answers nothing, `refuse(payload)`, or
+  `{ meta?, tags?, context? }`.
+- `onSuccess` gets `{ key, output, context }`.
+  It may answer a new output.
+- `onError` gets `{ key, error, context }`.
+  It answers `refuse(payload)`, an output
+  (recovery), or throws again.
+- `onFinish` gets `{ key, outcome, context }`.
+  It answers nothing.
+- `retry` names faults and counts. A call
+  runs again only for a fault it names. No
+  default: a write is not safe to send twice.
+
+The same hooks on every capsule:
+
+- rpc, on both sides. An `implement` entry may
+  add hooks for one key, or with
+  `inherit: false` use only its own.
+- remoteData: the same, with no `implement`
+  entry.
+
+Today's middleware, as hooks:
+
+- `signedIn`: `onStart`, refuse or bind the
+  user tag.
+- `refusedAsFault` (Hedl): `onError`.
+- `timing`: `onStart` gives the time as
+  context; `onFinish` reads it.
+
+What goes: a step that calls `next` twice or
+wraps it. Only retry did, and it is an option.
 
 ## The wiring
 
@@ -330,10 +389,8 @@ Log of each step:
 
 ## Open
 
-- Middleware or lifecycle hooks (Duke
-  2026-11-07 07:05): asked whether `use` goes
-  for `onStart`, `onError`, `onFinish` and
-  `retry`.
+- Build the lifecycle (decision 8) in
+  tinker-app, then move Hedl's `use` to it.
 - A key with no input: the JSON codec sends
   `undefined` as `null`, so `z.void()` answers
   `invalid` (Hedl uses a `noInput` shim).
