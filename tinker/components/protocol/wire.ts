@@ -24,7 +24,7 @@ const left = z.custom<AbortSignal>((v) => v instanceof AbortSignal).optional();
 export type Body = {
   readonly type: string;
   stream(): ReadableStream<Uint8Array>;
-  bytes(): Promise<Uint8Array>;
+  bytes(): Promise<Uint8Array<ArrayBuffer>>;
   text(): Promise<string>;
   arrayBuffer(): Promise<ArrayBuffer>;
 };
