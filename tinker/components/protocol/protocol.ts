@@ -1,7 +1,7 @@
 import { resource } from "@tinker/core";
 import type { Observe, Operation, Resource } from "@tinker/core";
 
-import type { Codec, Open, Reply, Send, Service } from "./wire";
+import type { Body, Codec, Open, Reply, Send, Service } from "./wire";
 
 // The protocol: the reply envelope, the fault set, the codec use and the route table. Fixed: any transport carries it (glossary "protocol", ADR 0048). It is not a capsule.
 // Each transport (ws, memory) is one client and one server capsule that speaks it, as each
@@ -188,17 +188,17 @@ export const protocol = resource({
     const callOver = async (
       own: ClientSide,
       hook: Hook,
-      input: { address: string; value: unknown; meta: Record<string, string> },
+      input: { address: string; value: unknown; meta: Record<string, string>; body?: Body },
     ): Promise<Reply> => {
       const { encode, replyOf } = coding(own.codec, "client", hook.log);
-      const { address } = input;
+      const { address, body: bytes } = input;
       const { meta, metaNow, renewed } = await asking(own, hook, input.meta);
       const body = encode(address, input.value);
       if (!body.ok) return body; // nothing is sent
 
       const ask = async (m: Record<string, string>): Promise<Reply> => {
         const text = await run<string>(hook, own.send, {
-          input: { address, text: body.value, meta: m },
+          input: { address, text: body.value, meta: m, ...(bytes ? { body: bytes } : {}) },
           signal: hook.signal,
         }).catch(() => null);
         return text === null ? link : replyOf(address, text);
@@ -258,18 +258,18 @@ export const protocol = resource({
     const serveText = async (
       own: ServerSide,
       hook: Hook,
-      input: { address: string; text: string; meta: Record<string, string> },
+      input: { address: string; text: string; meta: Record<string, string>; body?: Body },
     ): Promise<string | null> => {
       const { codec, routes } = own;
       const { decode, answerText } = coding(codec, "server", hook.log);
-      const { address, meta } = input;
+      const { address, meta, body } = input;
       const read = decode(address, input.text);
       if (!read.ok) return codec.serialize(read);
       const service = routes.get(address);
       if (!service) return null; // no one has this address: the transport says 404
 
       const reply = await run<Reply | null>(hook, service.answer, {
-        input: { address, value: read.value, meta },
+        input: { address, value: read.value, meta, ...(body ? { body } : {}) },
         signal: hook.signal,
       }).catch(broke(hook.log, address));
 

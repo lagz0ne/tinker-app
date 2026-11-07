@@ -9,6 +9,8 @@ import type { MainClosed, MainContext } from "./main";
 type Main = (ctx: MainContext) => Promise<{
   fetch: (request: Request, server: Server<never>) => Promise<Response | null | undefined>;
   websocket?: WebSocketHandler<never>;
+  /** The largest request body Bun takes (its own default is 128 MiB). */
+  maxRequestBodySize?: number;
   closed: MainClosed;
 }>;
 
@@ -70,6 +72,7 @@ export async function serveMain(
           port: Number(process.env.PORT ?? 4318),
           // Bun's 10 s default cuts a slow request; 60 s (max 255) matches the socket idle time.
           idleTimeout: 60,
+          maxRequestBodySize: started.maxRequestBodySize,
           // Bun's types want `fetch` beside `websocket`; unset, Bun reads `websocket` as absent.
           websocket: started.websocket as never,
           fetch: () => new Response(null, { status: 404 }),

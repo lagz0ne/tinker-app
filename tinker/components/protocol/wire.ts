@@ -15,8 +15,32 @@ const meta = z.record(z.string().regex(/^[a-z0-9-]+$/), z.string());
  */
 const left = z.custom<AbortSignal>((v) => v instanceof AbortSignal).optional();
 
+/**
+ * Bytes beside the value: what a Blob gives, read once. A client sends a Blob (a File); the
+ * server hands the implementation a body over the request's own stream, read only when it reads.
+ * They go on their own POST, not in a socket frame: Bun hands a socket message whole, so a frame
+ * would copy every byte into memory (Q7, as tRPC sends files on an HTTP link beside its wsLink).
+ */
+export type Body = {
+  readonly type: string;
+  stream(): ReadableStream<Uint8Array>;
+  bytes(): Promise<Uint8Array>;
+  text(): Promise<string>;
+  arrayBuffer(): Promise<ArrayBuffer>;
+};
+
+/** A Blob, or the server's body over a request stream. */
+export const bodyShape = z.custom<Body>(
+  (v) => typeof Object(v).stream === "function" && typeof Object(v).type === "string",
+);
+
+const body = bodyShape.optional();
+
+/** A bytes field's limits: the most bytes, and the content types it takes (the first is the default). */
+export type BytesLimit = { readonly max: number; readonly types: readonly string[] };
+
 // ---- transport: text
-export const sendInput = z.object({ address: z.string(), text: z.string(), meta });
+export const sendInput = z.object({ address: z.string(), text: z.string(), meta, body });
 
 export const openInput = sendInput.extend({
   push: z.custom<(text: string) => void>((v) => typeof v === "function"),
@@ -52,7 +76,7 @@ export type Reply =
   | { ok: true; value: unknown; meta?: Record<string, string> }
   | { ok: false; kind: Fault; payload: unknown };
 
-export const callInput = z.object({ address: z.string(), value: z.unknown(), meta });
+export const callInput = z.object({ address: z.string(), value: z.unknown(), meta, body });
 
 export const watchInput = callInput.extend({
   push: z.custom<(reply: Reply) => void>((v) => typeof v === "function"),
@@ -73,6 +97,8 @@ export type Service = {
   readonly addresses: readonly string[];
   readonly answer: Answer;
   readonly stream: Stream;
+  /** The addresses that take bytes, with their limits: only these answer a POST. */
+  readonly uploads?: Readonly<Record<string, BytesLimit>>;
 };
 
 /** Server, given by rpc and remoteData: a reply, or null when the address is not theirs. */

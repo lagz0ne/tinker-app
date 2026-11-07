@@ -2,9 +2,11 @@ import { capsule, data, operation, resource, tag } from "@tinker/core";
 import type { Capsule, Operation, Resource, Tag } from "@tinker/core";
 import { z } from "zod";
 
-import { callInput, lifecycle, watchInput } from "~/components/protocol";
+import { bodyShape, callInput, lifecycle, watchInput } from "~/components/protocol";
 import type {
   Answer,
+  Body,
+  BytesLimit,
   Call,
   Entry,
   Fault,
@@ -65,6 +67,31 @@ export const channel = tag<{
   label: "rpc.channel",
 });
 
+const limitKey = Symbol("rpc.bytes");
+
+/**
+ * A field of a key's input that carries bytes, as a file input does: a Blob on the client, a body
+ * read once on the server. The key then goes on its own POST beside the socket, with the rest of
+ * its input as text; the server checks `max` and `types` before it reads one byte.
+ *
+ *   "talk.attach": {
+ *     input: z.object({ name: z.string(), file: bytes({ max: 10 << 20 }) }),
+ *     output: z.object({ id: z.string() }),
+ *   }
+ */
+export const bytes = ({
+  max,
+  types = ["application/octet-stream"],
+}: {
+  max: number;
+  types?: readonly string[];
+}): z.ZodType<Body> & { readonly [limitKey]: BytesLimit } => {
+  if (!Number.isSafeInteger(max) || max <= 0 || types.length === 0) {
+    throw new TypeError("bytes: max is a positive whole number, and types lists one at least");
+  }
+  return Object.assign(bodyShape.clone(), { [limitKey]: { max, types } });
+};
+
 const sent = { role: "handler", explain: "Sends through the protocol" } as const;
 const work = { role: "handler", explain: "Runs the implementation" } as const;
 const held = { role: "state", explain: "The rpc steps of this root" } as const;
@@ -104,6 +131,8 @@ type Def = {
   readonly name: string;
   readonly contracts: Contracts;
   readonly keys: readonly string[];
+  /** The keys with a bytes field: the field's name and its limits. */
+  readonly bytesOf: Readonly<Record<string, BytesLimit & { field: string }>>;
   readonly fault: {
     is(error: unknown): boolean;
     make(address: string, fault: Fault, payload: unknown, traceId: string | undefined): RpcFault;
@@ -208,6 +237,29 @@ const steps = resource({
       };
     };
 
+    /**
+     * Client: a bytes key's input, as the protocol sends it: the value without its bytes field,
+     * and the bytes as a Blob of a type the key takes (its first type when the Blob has another).
+     */
+    const split = (def: Def, address: string, input: unknown) => {
+      const limit = def.bytesOf[address];
+      if (!limit) return { address, value: input };
+
+      const { [limit.field]: file, ...value } = input as Record<string, Body>;
+      const media = file!.type.split(";")[0]!.trim().toLowerCase(); // "text/plain;charset=utf-8"
+      const type = limit.types.includes(media) ? media : limit.types[0]!;
+      const body = file!.type === type ? file! : new Blob([file as Blob], { type });
+
+      return { address, value, body };
+    };
+
+    /** Server: the value with its bytes back in their field; a bytes key with no bytes is `invalid`. */
+    const joined = (def: Def, asked: { address: string; value: unknown; body?: Body }) => {
+      const limit = def.bytesOf[asked.address];
+      if (!limit) return asked.value;
+      return { ...Object(asked.value), [limit.field]: asked.body };
+    };
+
     /** Start: one job, `implement` or `remote`; with `implement`, a run for every key. */
     const check = (def: Def, config: Read, raise: (kind: string, payload: unknown) => never) => {
       if (config.remote.present === config.implement.present) {
@@ -261,7 +313,7 @@ const steps = resource({
             const bind = tags.length ? { tags } : {};
             const signal = invocation?.signal;
             if (reply) {
-              const ask = { input: { address: key, value: input, meta }, signal, ...bind };
+              const ask = { input: { ...split(def, key, input), meta }, signal, ...bind };
               const answer = await run(remote.call, ask, sent);
               if (!answer.ok) throw faulted(answer);
               return answer.value;
@@ -392,7 +444,7 @@ const steps = resource({
         return Promise.resolve(answering ? null : false);
       }
 
-      const parsed = def.contracts[asked.address]!.input.safeParse(asked.value);
+      const parsed = def.contracts[asked.address]!.input.safeParse(joined(def, asked));
       const here = answering ? answerHere : streamHere;
       return parsed.success ? here(def, event, asked, parsed.data) : invalid(answering, asked.push);
     };
@@ -476,6 +528,8 @@ const steps = resource({
     };
 
     return {
+      split,
+      joined,
       faultOf,
       kindOf,
       hooksIn,
@@ -511,6 +565,22 @@ export function rpc<const C extends Contracts>(
   const keys = Object.keys(contracts) as (keyof C & string)[];
   const taken = keys.find((key) => reserved.includes(key));
   if (taken) throw new Error(`${name}: "${taken}" is a reserved key`);
+  const bytesOf = Object.fromEntries(
+    keys.flatMap((key) => {
+      const shape = Object(Object(contracts[key]!.input).shape) as Record<string, unknown>;
+      const fields = Object.keys(shape).filter((field) => Object(shape[field])[limitKey]);
+      if (fields.length > 1 || (fields.length && contracts[key]!.mode === "stream")) {
+        throw new Error(
+          `${name}: "${key}" takes bytes in one field at most, and only as a reply key`,
+        );
+      }
+      const field = fields[0];
+      return field ? [[key, { field, ...Object(shape[field])[limitKey] }]] : [];
+    }),
+  ) as Record<string, BytesLimit & { field: string }>;
+  const uploads: Record<string, BytesLimit> = Object.fromEntries(
+    Object.entries(bytesOf).map(([key, { max, types }]) => [key, { max, types }]),
+  );
   const brand = {}; // this definition's own
   const fault = {
     /** True for a fault from a call of this definition, on this side. */
@@ -580,7 +650,7 @@ export function rpc<const C extends Contracts>(
       return obs.span?.traceId;
     },
   });
-  const def: Def = { name, contracts, keys, fault, answer, stream, receive };
+  const def: Def = { name, contracts, keys, bytesOf, fault, answer, stream, receive };
   const own = data<Steps | null>({ label: `${name}.steps`, initial: null });
 
   const configShape = {
@@ -621,7 +691,7 @@ export function rpc<const C extends Contracts>(
   });
 
   /** One capsule; its call takes a union (Core config is flat: this cast is the gap, F28). */
-  return Object.assign(base, { fault, receive, addresses: keys }) as unknown as Omit<
+  return Object.assign(base, { fault, receive, addresses: keys, uploads }) as unknown as Omit<
     typeof base,
     never
   > &
@@ -632,6 +702,8 @@ export function rpc<const C extends Contracts>(
       readonly receive: typeof receive;
       readonly fault: typeof fault;
       readonly addresses: readonly string[];
+      /** The keys that take bytes, with their limits: the server's POST route reads them. */
+      readonly uploads: Readonly<Record<string, BytesLimit>>;
       readonly contracts: C;
       (values: Config<C>): ReturnType<typeof base>;
     };

@@ -75,7 +75,7 @@ const entries: Record<string, readonly string[]> = {
   ],
   // Definitions: each runs at module load, before any scope exists, and makes the units its
   // capsules install (one capsule per definition, or a client and a server per transport).
-  "tinker/components/rpc/index.ts": ["rpc"],
+  "tinker/components/rpc/index.ts": ["rpc", "bytes"],
   "tinker/components/remote-data/index.ts": ["remoteData"],
   "tinker/components/ws/index.ts": ["createWs"],
   "tinker/components/ws/index.server.ts": ["createWs"],
@@ -258,6 +258,8 @@ const platformNames = new Set([
   "ReadableStream",
   // A proxy handler: the proxy calls its traps (`get`, `set`, ...).
   "Proxy",
+  // A stream step: the stream calls `transform` and `flush`.
+  "TransformStream",
 ]);
 
 /** `new X({...})` with X on the platform list, as the direct callee. */

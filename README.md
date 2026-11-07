@@ -106,13 +106,11 @@ The client and the server run the same handle.
 - `remoteData({ cells })` reads server cells
   on the client. `board.faults` holds each
   key's last fault, as data.
-- A call body over `maxBody` bytes (1 MiB
-  unset) answers 413, and no implementation
-  runs. A body with no length is read only up
-  to it. `maxBody` is a positive whole number,
-  or `Infinity` for no cap. NaN, 0, -1 or 1.5
-  fail start (`DataValidationFailed`, exit 78).
-- A request with a foreign `Origin` answers 403.
+- A socket frame over `maxPayload` (1 MiB
+  unset) closes the socket (1009).
+- A socket from a foreign `Origin` gets 403.
+- Bytes go on their own POST beside the
+  socket: see "Bytes, in code".
 - `memory` is the same protocol in one
   process, for tests.
 
@@ -162,6 +160,52 @@ capsules: [
 
 An op calls `api.greet` the same way on
 either side.
+
+### Bytes, in code
+
+A file is one field of a key's input:
+
+```ts
+"file.put": {
+  input: z.object({
+    name: z.string(),
+    file: bytes({ max: 10 << 20 }),
+  }),
+  output: z.object({ id: z.string() }),
+},
+```
+
+- The tab passes a `Blob` (a `File`).
+- The key then goes as `POST /rpc/file.put`.
+- The rest of the input rides in `x-input`.
+- The implementation gets `file`: read it
+  once, with `bytes()`, `text()` or
+  `stream()`. It is read only then.
+- `types` lists the content types it takes
+  (`application/octet-stream` unset). A Blob
+  of another type goes as the first one.
+
+The server checks, before one byte is read:
+
+- 404: the key has no bytes field.
+- 403: a foreign `Origin`.
+- 400: no `x-input` (a cross-site form
+  cannot set it without a preflight).
+- 431: `x-input` or `x-meta` over 2 KiB.
+- 415: a type the key does not list.
+- 413: `Content-Length` over `max`.
+- 503 + `Retry-After`: `maxUploads` (8) run.
+
+Then:
+
+- `onStart` runs first: a refusal never
+  reads the body.
+- The stream is counted: past `max` is 413,
+  whatever `Content-Length` said.
+- `uploadDeadline` (5 min) cuts a slow body.
+- Bun's `maxRequestBodySize` is the largest
+  `max` (1 MiB at least): `cmds/server.ts`.
+- `memory` carries the Blob as it is.
 
 ### remoteData, in code
 

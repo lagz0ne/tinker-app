@@ -270,6 +270,21 @@ the wire: text
     - Bytes stay a raw-body POST beside the
       socket (Q7): Bun hands a WS message
       whole, so frames would copy it.
+16. **Bytes** (Duke 2026-11-07, Q4 A + Q7 A).
+    - A key's input has one `bytes({ max,
+      types })` field at most; a reply key only.
+    - The client sends the rest as `x-input`,
+      the meta as `x-meta`, the Blob as body.
+    - `POST <path>/<address>`, on `ws.server`.
+    - Guards before a byte is read: 404, 403,
+      400, 431, 415, 413, then 503 past
+      `maxUploads` (Fastify bodyLimit,
+      under-pressure, OWASP file upload).
+    - The body is lazy, counted (413 past
+      `max`), and cut at `uploadDeadline`.
+    - An unread body is cancelled.
+    - The server's body to the implementation
+      reads as a Blob does, once.
 
 ## The lifecycle
 

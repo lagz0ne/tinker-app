@@ -56,13 +56,16 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
   await app.ready;
   signal.throwIfAborted(); // Aborted during start: app is closing, so no handler.
   app.onClose(observeServerPanics(exit.bind(null, 1), app.closed, stderr));
-  const [{ upgrade, websocket }, table] = [app.resolve(ws.server), app.resolve(routes)];
+  const [link, table] = [app.resolve(ws.server), app.resolve(routes)];
   return {
-    websocket: websocket as never,
-    // undefined: not the socket's path, so the route table; null: upgraded; else its answer.
+    websocket: link.websocket as never,
+    // A key's bytes are the largest body; 1 MiB covers the routes' own JSON bodies.
+    maxRequestBodySize: Math.max(link.maxBody, 1_048_576),
+    // The socket's path, then a bytes POST, then the route table. null: upgraded; else the answer.
     fetch: async (request: Request, server: Server<never>) => {
-      const upgraded = upgrade(request, app, server as never);
-      return upgraded === undefined ? table(request, app) : upgraded;
+      const upgraded = link.upgrade(request, app, server as never);
+      if (upgraded !== undefined) return upgraded;
+      return (await link.post(request, app)) ?? table(request, app);
     },
     closed: app.closed,
   };

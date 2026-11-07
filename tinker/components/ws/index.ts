@@ -66,11 +66,30 @@ export function createWs() {
   const send = operation({
     label: "ws.send",
     input: sendInput,
-    depends: { link: link.controller, protocol },
-    run: ({ link, protocol }, { input, signal, obs }) => {
+    depends: { link: link.controller, protocol, url: url.required, headers },
+    run: async ({ link, protocol, url, headers }, { input, signal, obs }) => {
       const own = link.get()!;
       const i = own.next++;
       const m = { ...input.meta, ...protocol.traceparent(obs.span) };
+      if (input.body) {
+        // Bytes go on their own POST beside the socket: `<url>/<address>`, the value as text in
+        // `x-input`, the meta in `x-meta`, the bytes as the body, streamed by fetch.
+        const answer = await fetch(`${url.replace(/^ws/, "http")}/${input.address}`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            ...headers,
+            "content-type": input.body.type,
+            "x-input": input.text,
+            "x-meta": JSON.stringify(m),
+          },
+          body: input.body as Blob,
+          signal,
+        });
+        if (answer.ok) return answer.text();
+        void answer.body?.cancel();
+        throw Object.assign(new Error("TransportFailed"), { payload: { e: answer.status } });
+      }
       return new Promise<string>((got, fail) => {
         own.waits.set(i, (message) => {
           own.waits.delete(i);
