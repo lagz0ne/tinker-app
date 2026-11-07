@@ -86,6 +86,7 @@ const failure = (error: unknown) => (api.fault.is(error) ? [error.fault, error.p
 /** F1: what one hook got, as its schema says it: the key, the input and the meta, on either side. */
 type Got = { side: string; kind: string; key: unknown; input: unknown; meta: unknown };
 const got: Got[] = [];
+
 const saw =
   (side: string, kind: string) =>
   (input: { key: unknown; input: unknown; meta: unknown }): void =>
@@ -128,11 +129,13 @@ const serverSaw = watcher("server");
 
 /** The key, input and meta each hook of one side got, in call order. */
 const was = (side: string, kind: string) =>
-  got.filter((one) => one.side === side && one.kind === kind).map(({ key, input, meta }) => ({
-    key,
-    input,
-    meta,
-  }));
+  got
+    .filter((one) => one.side === side && one.kind === kind)
+    .map(({ key, input, meta }) => ({
+      key,
+      input,
+      meta,
+    }));
 
 test("L1: an onStart that refuses stops the call: no implementation, refused, no onError", async () => {
   let ran = 0;

@@ -252,6 +252,12 @@ const refusedAsFault = operation({
 });
 ```
 
+`onSuccess` gets the output the output shape
+has already checked: a field the schema
+strips never reaches it. A stream has no
+one output, so `onSuccess` does not run for
+it.
+
 `onStart` may leave a context for the later
 hooks, and `onFinish` reads the outcome:
 

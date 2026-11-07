@@ -242,6 +242,10 @@ export const lifecycle = resource({
       return { kind, runs: kind ? (left[kind] ?? 0) : 0 };
     };
 
+    /** The work's value, as the output shape says it: parsed for a reply, as it is for a stream. */
+    const checkedOf = (frame: Frame, output: unknown) =>
+      frame.reply && frame.shape ? frame.shape.parse(output) : output;
+
     /** The work, and only the work, runs again: at most `retry[kind]` more runs after a fault. */
     const workOf = async (frame: Frame, hooks: Hooks, state: State) => {
       const left: Partial<Record<Fault, number>> = { ...hooks.retry };
@@ -260,7 +264,7 @@ export const lifecycle = resource({
         // The output shape checks the work's value here, before `onSuccess` reads it (a stream's
         // pushes carry their own shape). Outside the retry catch: a value that does not fit is
         // never sent again, but it is a throw of this step, so `onError` sees it.
-        state.output = frame.reply && frame.shape ? frame.shape.parse(output) : output;
+        state.output = checkedOf(frame, output);
 
         return;
       }
@@ -406,6 +410,7 @@ export const lifecycle = resource({
         moreOf,
         startOf,
         againOf,
+        checkedOf,
         workOf,
         successOf,
         errorsOf,
