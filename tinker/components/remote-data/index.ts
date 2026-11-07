@@ -9,10 +9,17 @@ type Cells = Readonly<Record<string, Data.Cell<any>>>;
 
 /** The job, picked by the config: serve the cells here, or fill them from a backend. */
 type Job =
-  | { readonly serve: true; readonly read?: never }
+  | { readonly serve: true; readonly fill?: Fill; readonly read?: never }
   | { readonly read: { readonly call: Call; readonly watch: Watch }; readonly serve?: never };
 
 type Config = Job & { readonly use?: readonly Middleware[] };
+
+/**
+ * A keyed definition's first value for one parameter, per key: an op the server runs in a call
+ * tagged with the parameter (`by(p)`), when a client asks for a parameter no write has given yet.
+ * With no fill, the key's initial value goes out.
+ */
+type Fill = Readonly<Record<string, Operation.Handle<unknown, void>>>;
 
 const meta = { role: "state", explain: "Remote data of this root" } as const;
 const brandKey = Symbol("remoteData.fault");
@@ -34,8 +41,26 @@ export type RemoteFault = Error & {
 type Served = {
   roots: Map<string, Scope.DataController<unknown>>;
   copies: Map<string, Scope.DataController<unknown>>;
+  /** By slot: the key, or the key and its parameter (`slot`). */
   watchers: Map<string, Map<(r: Reply) => void, () => void>>;
+  /** A keyed definition: each watched slot's last value, held while a client watches it. */
+  held: Map<string, unknown>;
 };
+
+/** A keyed definition's parameter: its config values, by config key (F12). */
+type Param = Readonly<Record<string, unknown>>;
+
+/** A reading root's values for one parameter, shared by every session that names it. */
+type Entry = {
+  refs: number;
+  values: Map<string, unknown>;
+  faults: Faults;
+  listeners: Set<() => void>;
+  stop: AbortController;
+};
+
+/** Where a reader puts what arrives: the root's own cells (no entry), or one parameter's entry. */
+type Store = { readonly entry: Entry | null; readonly load: StartEvent["load"] };
 
 type Faults = Readonly<Record<string, RemoteFault>>;
 type Read = { readonly call: Call; readonly watch: Watch };
@@ -49,6 +74,10 @@ type Def = {
   readonly state: Data.Cell<Served | null>;
   readonly faults: Data.Cell<Faults>;
   readonly answer: unknown;
+  /** A keyed definition's config (F12): one tag per key, made by the definition; null when not keyed. */
+  readonly by: Readonly<Record<string, Tag.Handle<unknown>>> | null;
+  /** The parameter in the caller's own layer: every config tag's value there, or null. */
+  readonly paramOf: Resource.Handle<Param | null>;
   readonly getting: Operation.Handle<
     Promise<{ value: unknown; traceId: string | undefined }>,
     { key: string; go: () => Promise<unknown> }
@@ -62,6 +91,7 @@ type Def = {
 /** The config every definition's capsule has, as its hooks read it. */
 type Shape = {
   readonly serve: Tag.Presence<true>;
+  readonly fill: Tag.Presence<Fill>;
   readonly read: Tag.Presence<Read>;
   readonly use: readonly Middleware[];
 };
@@ -116,24 +146,49 @@ const steps = resource({
       const roots = new Map(def.keys.map((key) => [key, load(def.cells[key]!, meta)] as const));
       const copies = new Map(def.keys.map((key) => [key, load(def.made[key]!, meta)] as const));
       for (const key of def.keys) copies.get(key)!.set(roots.get(key)!.get());
-      load(def.state, meta).set({ roots, copies, watchers: new Map() });
+      load(def.state, meta).set({ roots, copies, watchers: new Map(), held: new Map() });
       return next();
     };
 
+    /**
+     * One parameter as text: its entries in key order, so equal values name one place. A served
+     * key's place is the key, or the key and this text.
+     */
+    const named = (param: Param) =>
+      JSON.stringify(
+        Object.keys(param)
+          .sort()
+          .map((key) => [key, param[key]]),
+      );
+
+    /** A store's faults now: its entry's, or the root's cell. */
+    const faultsIn = (def: Def, store: Store): Faults =>
+      store.entry ? store.entry.faults : store.load(def.faults, meta).get();
+
     /** A reading root's own steps, for one start: they share its config, signal and log. */
-    const reader = (def: Def, event: StartEvent, { call, watch }: Read) => {
-      const { config, load, run, signal, clock, log } = event;
+    const reader = (
+      def: Def,
+      event: StartEvent,
+      { call, watch }: Read,
+      store: Store,
+      param: Param | null,
+      signal: AbortSignal,
+    ) => {
+      const { config, run, clock, log } = event;
 
       /** A key's last fault, or none: a new object per change, never mutated. */
       const mark = (key: string, error: RemoteFault | null) => {
         if (signal.aborted) return; // the scope is closing: nothing to show
-        const now = load(def.faults, meta);
-        if (!error && !Object.hasOwn(now.get(), key)) return;
-        const next: Record<string, RemoteFault> = { ...now.get() };
+        const now = faultsIn(def, store);
+        if (!error && !Object.hasOwn(now, key)) return;
+        const next: Record<string, RemoteFault> = { ...now };
         if (error) next[key] = error;
         else delete next[key];
 
-        now.set(next);
+        if (store.entry) {
+          store.entry.faults = next;
+          store.entry.listeners.forEach((listener) => listener());
+        } else store.load(def.faults, meta).set(next);
       };
 
       /**
@@ -146,7 +201,10 @@ const steps = resource({
           log.error("remoteData value refused", { address: key, why: checked.why });
           return mark(key, faultOf(def, key, "invalid", { side: "client" }, traceId));
         }
-        load(def.made[key]!, meta).set(checked.value);
+        if (store.entry) {
+          store.entry.values.set(key, checked.value);
+          store.entry.listeners.forEach((listener) => listener());
+        } else store.load(def.made[key]!, meta).set(checked.value);
         mark(key, null);
       };
 
@@ -157,11 +215,19 @@ const steps = resource({
         key: string,
         ask: string,
         last: (meta: Record<string, string>) => Promise<unknown>,
-      ) => chain.runChain(run as never, config.use, key, { op: ask }, {}, (m) => last(m));
+      ) =>
+        chain.runChain(
+          run as never,
+          config.use,
+          key,
+          param === null ? { op: ask } : { op: ask, param },
+          {},
+          (m) => last(m),
+        );
 
       const once = (key: string) =>
         through(key, "get", async (m) => {
-          const asked = { input: { address: key, value: null, meta: m }, signal };
+          const asked = { input: { address: key, value: param, meta: m }, signal };
           const reply = await run(call, asked, send);
           if (!reply.ok) throw faultOf(def, key, reply.kind, reply.payload, undefined);
           return reply.value;
@@ -200,7 +266,7 @@ const steps = resource({
         };
         return Promise.resolve(
           through(key, "watch", (m) =>
-            run(watch, { input: { address: key, value: null, meta: m, push }, signal }, send),
+            run(watch, { input: { address: key, value: param, meta: m, push }, signal }, send),
           ),
         ).then(
           (out) =>
@@ -219,7 +285,7 @@ const steps = resource({
           if (signal.aborted) break;
 
           // Back off while the key is faulted (as EventSource retry); 50 ms after a good round.
-          wait = Object.hasOwn(load(def.faults, meta).get(), key) ? Math.min(wait * 2, 5000) : 50;
+          wait = Object.hasOwn(faultsIn(def, store), key) ? Math.min(wait * 2, 5000) : 50;
           await clock.sleep(wait, signal).catch(() => undefined);
         }
       };
@@ -229,15 +295,81 @@ const steps = resource({
 
     /** Read: fill every cell from the backend, then keep it fresh. */
     const readStart = async (def: Def, event: StartEvent) => {
-      const { config, raise, next } = event;
+      const { config, raise, next, load, signal } = event;
       if (!config.read.present) return raise("MissingConfig", { label: name, key: "read" });
-      const keys = reader(def, event, config.read.value);
+      // A keyed definition reads nothing at the root: each session that names a parameter does.
+      if (def.by) {
+        reading.set(def, { event, read: config.read.value, entries: new Map(), root: null });
+        // Bound at the root: the root reads that parameter, as an unkeyed definition reads.
+        const param = await load(def.paramOf, meta);
+        if (param !== null) {
+          reading.get(def)!.root = named(param);
+          join(def, param, null);
+        }
+        return next();
+      }
+      const store: Store = { entry: null, load };
+      const keys = reader(def, event, config.read.value, store, null, signal);
       // A fault on the first read does not fail start: the cell keeps its initial value, and
       // `board.faults` shows the fault.
       for (const key of def.keys) await keys.read(key);
       await next();
 
       for (const key of def.keys) void keys.loop(key);
+    };
+
+    /** A keyed reading root: its start context, and one entry per parameter some session names. */
+    const reading = new Map<
+      Def,
+      { event: StartEvent; read: Read; entries: Map<string, Entry>; root: string | null }
+    >();
+
+    /**
+     * A session that names a parameter (the `by` tag) gets that parameter's values in its own
+     * layer, as Phoenix joins a topic: the first session starts one read and one watch per key;
+     * later ones share them; the last to close stops them (a reference count, ADR 0059 7).
+     */
+    const join = (def: Def, param: Param, into: Scope.Handle | null, life?: AbortSignal) => {
+      const own = reading.get(def)!;
+      const id = named(param);
+      let entry = own.entries.get(id);
+
+      if (!entry) {
+        const made: Entry = {
+          refs: 0,
+          values: new Map(),
+          faults: {},
+          listeners: new Set(),
+          stop: new AbortController(),
+        };
+        entry = made;
+        own.entries.set(id, made);
+
+        const store: Store = { entry: made, load: own.event.load };
+        const signal = AbortSignal.any([made.stop.signal, own.event.signal]);
+        const keys = reader(def, own.event, own.read, store, param, signal);
+        for (const key of def.keys) void keys.read(key).then(() => keys.loop(key));
+      }
+      const held = entry;
+      // Into the session's own layer, or the root's cells when the root names the parameter.
+      const apply = () => {
+        if (life?.aborted) return; // the session closed: nothing writes there
+
+        for (const [key, value] of held.values) {
+          const cell = def.made[key]!;
+          (into ? into.controller(cell) : own.event.load(cell, meta)).set(value);
+        }
+        (into ? into.controller(def.faults) : own.event.load(def.faults, meta)).set(held.faults);
+      };
+      held.refs++;
+      held.listeners.add(apply);
+      apply();
+      return () => {
+        held.listeners.delete(apply);
+        if (--held.refs > 0) return;
+        held.stop.abort();
+        own.entries.delete(id);
+      };
     };
 
     /** A throw is `failed`, whatever it carries: its kind is never read. The cause stays here, whole. */
@@ -263,35 +395,105 @@ const steps = resource({
       if (!own || !Object.hasOwn(def.cells, asked.address)) {
         return Promise.resolve(op === def.answer ? null : false);
       }
-      return op === def.answer ? answerOne(event, asked, own) : streamOne(event, asked, own);
+      return op === def.answer
+        ? answerOne(def, event, asked, own)
+        : streamOne(def, event, asked, own);
     };
 
-    const answerOne = (event: RunEvent, asked: z.infer<typeof callInput>, own: Served) => {
+    /**
+     * A request's parameter, as each config tag admits it (the tag's own `parse`); undefined when
+     * it does not fit; null when the definition is not keyed.
+     */
+    const paramIn = (def: Def, value: unknown): Param | null | undefined => {
+      if (def.by === null) return null;
+      if (typeof value !== "object" || value === null) return undefined;
+
+      const out: Record<string, unknown> = {};
+      try {
+        for (const [key, t] of Object.entries(def.by)) out[key] = t(Object(value)[key]).value;
+      } catch {
+        return undefined;
+      }
+      return out;
+    };
+
+    const notParam: Reply = { ok: false, kind: "invalid", payload: { side: "server" } };
+
+    /** The value of one slot now: held, else the fill for the parameter, else the initial. */
+    const valueOf = async (
+      def: Def,
+      event: RunEvent,
+      own: Served,
+      key: string,
+      param: Param | null,
+    ) => {
+      if (param === null) return own.roots.get(key)!.get();
+      const at = param === null ? key : `${key}\u0000${named(param)}`;
+      if (own.held.has(at)) return own.held.get(at);
+
+      const fill = event.config.fill.present ? event.config.fill.value[key] : undefined;
+      if (!fill) return def.cells[key]!.initial;
+
+      // The fill runs as one call tagged with the parameter: it reads `by` as any request would.
+      const tags = Object.entries(def.by!).map(([k, t]) => t(param[k]));
+      return event.run(fill as never, { tags } as never, sending);
+    };
+
+    const answerOne = (
+      def: Def,
+      event: RunEvent,
+      asked: z.infer<typeof callInput>,
+      own: Served,
+    ) => {
       const { address, meta: sent } = asked;
-      const root = own.roots.get(address)!;
+      const param = paramIn(def, asked.value);
+      if (param === undefined) return Promise.resolve(notParam);
+      const input = param === null ? { op: "get" } : { op: "get", param };
       return chain
-        .runChain(event.run as never, event.config.use, address, { op: "get" }, sent, async () =>
-          root.get(),
+        .runChain(event.run as never, event.config.use, address, input, sent, () =>
+          valueOf(def, event, own, address, param),
         )
         .then((value): Reply => refusal(value) ?? { ok: true, value }, failedAt(event, address));
     };
 
     /** A watch: the value now, then each write, until the caller leaves. */
-    const streamOne = (event: RunEvent, asked: z.infer<typeof watchInput>, own: Served) => {
+    const streamOne = (
+      def: Def,
+      event: RunEvent,
+      asked: z.infer<typeof watchInput>,
+      own: Served,
+    ) => {
       const { run, config, signal } = event;
       const { address, meta: sent, push, left } = asked;
-      const root = own.roots.get(address)!;
+      const param = paramIn(def, asked.value);
+      if (param === undefined) return (push(notParam), Promise.resolve(true));
+
+      const at = param === null ? address : `${address}\u0000${named(param)}`;
+      const input = param === null ? { op: "watch" } : { op: "watch", param };
       return chain
-        .runChain(run as never, config.use, address, { op: "watch" }, sent, () => {
-          const set = own.watchers.get(address) ?? new Map();
-          own.watchers.set(address, set);
-          push({ ok: true, value: root.get() }); // the value now: a write between read and watch is not lost
+        .runChain(run as never, config.use, address, input, sent, async () => {
+          const set = own.watchers.get(at) ?? new Map();
+          own.watchers.set(at, set);
+
+          // Join first, then read: a write that lands while the fill runs is pushed, not lost.
           const stop = left ?? signal;
-          return new Promise<void>((done) => {
-            const end = () => (set.delete(push), done());
+          const ended = new Promise<void>((done) => {
+            const end = () => {
+              set.delete(push);
+              if (set.size === 0) {
+                own.watchers.delete(at);
+                if (param !== null) own.held.delete(at); // no one watches: nothing to keep
+              }
+              done();
+            };
             set.set(push, end);
             stop.addEventListener("abort", end, { once: true });
           });
+
+          const now = await valueOf(def, event, own, address, param);
+          if (param !== null && set.size > 0 && !own.held.has(at)) own.held.set(at, now);
+          push({ ok: true, value: param === null ? now : (own.held.get(at) ?? now) }); // the value now
+          return ended;
         })
         .then(
           (end) => (refusal(end) && push(refusal(end)!), true),
@@ -306,6 +508,13 @@ const steps = resource({
       serveStart,
       reader,
       readStart,
+      join,
+      named,
+      faultsIn,
+      paramIn,
+      valueOf,
+      isReading: (def: Def) => reading.has(def),
+      rootParam: (def: Def) => reading.get(def)?.root ?? null,
       failedAt,
       refusal,
       serve,
@@ -337,10 +546,28 @@ type Steps = typeof steps extends Resource.Handle<infer T> ? Awaited<T> : never;
  * so it never closes the scope. It is data: `board.faults` holds each key's last fault until a
  * good value arrives; the key's cell keeps its last good value (or its initial).
  */
-export function remoteData<const D extends Cells>(cells: D) {
+export function remoteData<
+  const D extends Cells,
+  const P extends Readonly<Record<string, Tag.Handle<any>>> = {},
+>(cells: D, { config = {} as P }: { readonly config?: P } = {}) {
+  /**
+   * The config: the app's own tags, as a capsule's config takes them (F12). The instance shows
+   * each one (`board.project`), and all use goes through it: userland binds `board.project("p1")`
+   * where it fits (the root, a session, a namespace); a server op reads `depends: { p:
+   * board.project }`. Keyed when it names a tag.
+   */
+  const configKeys = Object.keys(config);
+  const clash = configKeys.filter((key) => key in cells || reserved.includes(key));
+  if (clash.length) {
+    throw new Error(`remoteData: config ${clash.join(", ")} is a cell or reserved key`);
+  }
+
+  const by = configKeys.length > 0 ? (config as Def["by"]) : null;
+
   const keys = Object.keys(cells) as (keyof D & string)[];
   const taken = keys.filter((key) => reserved.includes(key));
   if (taken.length) throw new Error(`remoteData: ${taken.join(", ")} is a reserved key`);
+
   const keyOf = new Map<unknown, string>(keys.map((key) => [cells[key], key]));
   /** This definition's own cells: same shape, new identity. */
   const made = Object.fromEntries(
@@ -352,12 +579,35 @@ export function remoteData<const D extends Cells>(cells: D) {
       ];
     }),
   ) as unknown as D;
+
   const brand = {};
   const fault = {
     is: (error: unknown): error is RemoteFault => Object(error)[brandKey] === brand,
   };
 
   const serveKey = tag<true>({ label: `${name}.serve` });
+  const fillKey = tag<Fill>({ label: `${name}.fill` });
+
+  /** The parameter in the caller's own layer: one build per layer, so a session reads its own tag. */
+  const paramOf = resource({
+    label: `${name}.param`,
+    target: "session",
+    depends: Object.fromEntries(
+      Object.entries(config).map(([key, t]) => [key, (t as Tag.Handle<unknown>).optional]),
+    ),
+    factory: (deps: Readonly<Record<string, Tag.Presence<unknown>>>): Param | null => {
+      if (!by) return null;
+
+      const out: Record<string, unknown> = {};
+      for (const key of configKeys) {
+        if (!deps[key]?.present) return null; // a parameter names every config key
+        out[key] = deps[key]!.value;
+      }
+
+      return out;
+    },
+  });
+
   const readKey = tag<Read>({ label: `${name}.read` });
   const useKey = tag<readonly Middleware[]>({ label: `${name}.use`, default: [] });
 
@@ -481,6 +731,8 @@ export function remoteData<const D extends Cells>(cells: D) {
     state,
     faults: faults as Data.Cell<Faults>,
     answer,
+    by,
+    paramOf,
     getting,
     receive,
   };
@@ -488,7 +740,12 @@ export function remoteData<const D extends Cells>(cells: D) {
 
   const base = capsule({
     label: name,
-    config: { serve: serveKey.optional, read: readKey.optional, use: useKey },
+    config: {
+      serve: serveKey.optional,
+      fill: fillKey.optional,
+      read: readKey.optional,
+      use: useKey,
+    },
     exports: {
       ...made,
       faults,
@@ -517,11 +774,55 @@ export function remoteData<const D extends Cells>(cells: D) {
           .serve(def, event as unknown as RunEvent);
       },
 
+      /** A keyed reading root: a session that names a parameter reads that parameter's values. */
+      async session({ handle, next, load }) {
+        if (!by) return next();
+        const s = load(own, meta).get();
+        if (!s || !s.isReading(def)) return next();
+
+        const param = handle.resolve(paramOf);
+        // No parameter, or the root's own: the session reads the root's cells through.
+        if (param === null || s.rootParam(def) === s.named(param)) return next();
+
+        const life = new AbortController();
+        const leave = s.join(def, param, handle, life.signal);
+        try {
+          return await next();
+        } finally {
+          life.abort();
+          leave();
+        }
+      },
+
       write({ cell, value, next, load, run, log }) {
         const key = keyOf.get(cell);
         if (key === undefined) return next();
         const served = load(state, meta).get();
         if (!served) return next(); // a reading root: nothing to push
+        if (by) {
+          // Keyed: the write stays where the writer made it; the writer's `by` tag names the
+          // parameter, and only that parameter's watchers get it. A write with no parameter has
+          // no one to go to: the log says so.
+          next();
+          void load(paramOf, meta)
+            .then((param) => {
+              if (param === null) {
+                log.error("remoteData keyed write with no parameter", { address: key });
+                return;
+              }
+
+              const at = `${key}\u0000${load(own, meta).get()!.named(param)}`;
+              const watchers = [...(served.watchers.get(at)?.keys() ?? [])];
+              if (!watchers.length) return; // no one watches: the next watch fills afresh
+
+              served.held.set(at, value);
+              return run(publish, { input: { key, value, watchers } }, sending);
+            })
+            .catch((error) =>
+              log.error("remoteData send failed", { address: key, cause: String(error) }),
+            );
+          return;
+        }
         // A request runs in a session, and a session keeps its writes (ADR 0090): the root holds the data.
         // The outer call sends, from the writer's own owner, so the send span is in the writer's trace.
         if (rooting.has(cell)) return next();
@@ -543,8 +844,9 @@ export function remoteData<const D extends Cells>(cells: D) {
 
   type Base = typeof base;
   /** One capsule. Its call takes a union (Core config is flat: this cast is the gap). */
-  return Object.assign(base, { fault, addresses: keys }) as unknown as Omit<Base, never> &
-    Capsule.Shown<D & { faults: typeof faults }> & {
+  return Object.assign(base, { fault, addresses: keys }, config) as unknown as Omit<Base, never> &
+    Capsule.Shown<D & { faults: typeof faults }> &
+    P & {
       readonly answer: Answer;
       readonly stream: Stream;
       readonly drop: typeof drop;

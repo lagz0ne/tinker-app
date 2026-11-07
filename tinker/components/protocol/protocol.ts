@@ -313,11 +313,12 @@ export const protocol = resource({
         waiting.set(own, group);
         setTimeout(() => {
           waiting.delete(own);
-          const byAddress = new Map(group.map((m) => [m.address, m]));
+          // A frame names each member by its place in the list, as an HTTP/2 frame names its
+          // stream: two members can share an address and differ by value (a keyed key, F12).
           const frame = (text: string) => {
             const all = decode(shared, text);
             if (!all.ok) return group.forEach((m) => m.got(codec.serialize(all)));
-            for (const [to, t] of all.value as [string, string][]) byAddress.get(to)?.got(t);
+            for (const [at, t] of all.value as [number, string][]) group[at]?.got(t);
           };
           const list = codec.serialize(group.map((m) => [m.address, m.text]));
           // The shared stream cannot open (or breaks): every member's key gets link.
@@ -434,16 +435,16 @@ export const protocol = resource({
 
       // The shared stream: every address it carries, at once. The pushes of one tick go out as one
       // frame, so the keys one write changed arrive together.
-      let frame: [string, string][] = [];
+      let frame: [number, string][] = [];
       const flush = () => {
         const all = frame;
         frame = [];
         if (all.length && !left?.aborted) push(codec.serialize(all)); // the client may have left this tick
       };
-      const each = (read.value as [string, string][]).map(([to, text]) => {
+      const each = (read.value as [string, string][]).map(([to, text], at) => {
         const into = (pushed: string) => {
           if (frame.length === 0) setTimeout(flush, 0);
-          frame.push([to, pushed]);
+          frame.push([at, pushed]);
         };
         const one = decode(to, text);
         if (!one.ok) return (into(codec.serialize(one)), Promise.resolve(true));
