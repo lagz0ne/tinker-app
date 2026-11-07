@@ -255,9 +255,11 @@ export function createWs() {
             /** Queues one message; the first of a tick schedules the frame. */
             emit(ws, message) {
               if (own.gone.signal.aborted || own.out.push(message) > 1) return;
-              setTimeout(() => {
+              // setImmediate, not setTimeout(0): Bun waits at least 1 ms for a timer (measured: +1.1 ms
+              // and +11% CPU on a lone call). The answers of one tick still go as one frame.
+              setImmediate(() => {
                 if (!own.gone.signal.aborted) ws.send(JSON.stringify(own.out.splice(0)));
-              }, 0);
+              });
             },
             pusher(ws, i) {
               return (t: string) => own.emit(ws, { i, t });
