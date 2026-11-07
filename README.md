@@ -116,6 +116,130 @@ The client and the server run the same handle.
 - `memory` is the same protocol in one
   process, for tests.
 
+- Each implementation runs in its own layer
+  (a call with a `signal`). A `tx` it joins
+  commits when it returns, and rolls back
+  when it throws.
+
+### The layers
+
+- transport: bytes (`sse`, `memory`).
+- protocol: codec, envelope, faults,
+  middleware. Shared code, not a capsule.
+- rpc and remoteData: values.
+
+### rpc, in code
+
+One definition, both sides:
+
+```ts
+export const api = rpc({
+  greet: {
+    input: z.object({ name: z.string() }),
+    output: z.object({ text: z.string() }),
+  },
+});
+```
+
+The server installs it with `implement`:
+
+```ts
+capsules: [
+  api({ implement: { greet: greetHere } }),
+  sse.server({ base: "/rpc", services: [api] }),
+],
+```
+
+The tab installs it with `remote`:
+
+```ts
+capsules: [
+  sse.client({ base: "/rpc" }),
+  api({ remote: sse.client }),
+],
+```
+
+An op calls `api.greet` the same way on
+either side.
+
+### remoteData, in code
+
+The passed cell is a shape. Each definition
+makes its own cells:
+
+```ts
+const todos = data({ initial: [] as string[] });
+export const board = remoteData({ todos });
+```
+
+- Server: `board({ serve: true })`. An op
+  writes `todos.controller`; the capsule
+  copies the write and pushes it.
+- Tab: `board({ read: sse.client })`, then
+  `useData(board.todos)`. Read only.
+- `board.faults`: each key's last fault, as
+  data. A read never throws.
+
+### Middleware and `refused`
+
+A middleware is a plain operation on `step`.
+It calls `next`, or says no with `refuse`:
+
+```ts
+const bearer = operation({
+  input: step,
+  run: async (_, { input: s }) => {
+    const who = whoOf(s.meta.authorization);
+    return who
+      ? s.next({ tags: [user(who)] })
+      : s.refuse({ signIn: true });
+  },
+});
+```
+
+- `use: [bearer]` on `api(...)` or
+  `board(...)` wraps every key.
+- `implement: { key: { run, use } }` adds
+  to it for one key. `inherit: false` drops
+  the capsule's `use`.
+- A refusal is the `refused` fault, with its
+  payload (as HTTP 401/403).
+
+### Tests: the memory transport
+
+The same protocol in one process:
+
+```ts
+const server = createScope({
+  capsules: [
+    board({ serve: true }),
+    memory.server({ services: [board] }),
+  ],
+});
+const tab = createScope({
+  capsules: [
+    memory.client({ peer: server }),
+    board({ read: memory.client }),
+  ],
+});
+```
+
+### A write that must outlive its call
+
+Core 0.12.0: the edge picks the layer. A
+token cache that `renew` fills in a call
+with a `signal` writes the root:
+
+```ts
+depends: { t: token.atScope.controller },
+```
+
+- `cell.controller`: the caller's layer.
+- `cell.atNamespace.controller`: the root,
+  in the caller's namespace.
+- `cell.atScope.controller`: the root, no
+  namespace.
+
 The client sends a W3C `traceparent` header,
 so the server's span is the child of the
 client's `sse.send` span.
