@@ -31,6 +31,11 @@ export type ClientSide = {
   readonly streams?: Streams;
   readonly meta?: MetaOp;
   readonly renew?: RenewOp;
+  /**
+   * The transport's own run, from its start: a shared stream opens on it, so it belongs to the
+   * root, as an HTTP/2 connection belongs to the client, not to the request that opened it.
+   */
+  readonly root?: Hook["run"];
 };
 
 /** What a server transport holds once started: its codec and its route table. */
@@ -350,16 +355,23 @@ export const protocol = resource({
               const stop = new AbortController();
               for (const m of members) m.part = { members, stop };
 
-              // A frame names each member by its place in the list, as an HTTP/2 frame names
-              // its stream: two members can share an address and differ by value (F12).
+              // A frame entry is `[address, text, place]`. The place names the member, as an
+              // HTTP/2 frame names its stream: two members can share an address and differ by
+              // value (F12). A server from before sends `[address, text]`: route by address.
               const frame = (text: string) => {
                 const all = decode(shared, text);
                 if (!all.ok) return members.forEach((m) => m.got(codec.serialize(all)));
-                for (const [at, t] of all.value as [number, string][]) members[at]?.got(t);
+                for (const [to, t, at] of all.value as [string, string, number?][]) {
+                  const m =
+                    at === undefined ? members.find((each) => each.address === to) : members[at];
+                  m?.got(t);
+                }
               };
               const list = codec.serialize(members.map((m) => [m.address, m.text]));
               // The shared stream cannot open (or breaks): every member's key gets link.
-              return run<void>(hook, own.open, {
+              // Not on the lead's run: when the lead leaves, Core would end the stream with it.
+              const holder = own.root ? { ...hook, run: own.root } : hook;
+              return run<void>(holder, own.open, {
                 input: { address: shared, text: list, meta: ask, push: frame },
                 signal: stop.signal,
               })
@@ -479,8 +491,9 @@ export const protocol = resource({
       }
 
       // The shared stream: every address it carries, at once. The pushes of one tick go out as one
-      // frame, so the keys one write changed arrive together.
-      let frame: [number, string][] = [];
+      // frame, so the keys one write changed arrive together. An entry is `[address, text, place]`:
+      // a client from before reads the first two and routes by address, as it did.
+      let frame: [string, string, number][] = [];
       const flush = () => {
         const all = frame;
         frame = [];
@@ -489,7 +502,7 @@ export const protocol = resource({
       const each = (read.value as [string, string][]).map(([to, text], at) => {
         const into = (pushed: string) => {
           if (frame.length === 0) setTimeout(flush, 0);
-          frame.push([at, pushed]);
+          frame.push([to, pushed, at]);
         };
         const one = decode(to, text);
         if (!one.ok) return (into(codec.serialize(one)), Promise.resolve(true));

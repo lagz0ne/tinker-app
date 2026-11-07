@@ -138,7 +138,7 @@ export function createSse() {
     config: { base: base.required, headers, ...keys },
     exports: { call, watch },
     hooks: {
-      async start({ config, load, next }) {
+      async start({ config, load, next, run }) {
         const p = await load(protocol, kept);
         const { codec, pushes, streams, meta, renew } = config;
         load(held, kept).set({
@@ -146,6 +146,7 @@ export function createSse() {
           side: {
             send,
             open,
+            root: run,
             codec: p.given(codec) ?? p.json,
             pushes: p.given(pushes),
             streams: p.given(streams),

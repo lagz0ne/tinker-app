@@ -78,6 +78,8 @@ type Def = {
   readonly by: Readonly<Record<string, Tag.Handle<unknown>>> | null;
   /** The parameter in the caller's own layer: every config tag's value there, or null. */
   readonly paramOf: Resource.Handle<Param | null>;
+  /** The first config tag the caller's layer does not bind, by label; null when all are bound. */
+  readonly missingOf: Resource.Handle<string | null>;
   readonly getting: Operation.Handle<
     Promise<{ value: unknown; traceId: string | undefined }>,
     { key: string; go: () => Promise<unknown> }
@@ -348,7 +350,8 @@ const steps = resource({
         const store: Store = { entry: made, load: own.event.load };
         const signal = AbortSignal.any([made.stop.signal, own.event.signal]);
         const keys = reader(def, own.event, own.read, store, param, signal);
-        for (const key of def.keys) void keys.read(key).then(() => keys.loop(key));
+        // The watch's first push is the value now: no separate read, so the server fills once.
+        for (const key of def.keys) void keys.loop(key);
       }
       const held = entry;
       // Into the session's own layer, or the root's cells when the root names the parameter.
@@ -513,6 +516,23 @@ const steps = resource({
       faultsIn,
       paramIn,
       valueOf,
+      /**
+       * A server op that writes a keyed cell runs only with every config tag bound: with none,
+       * its write would go to no one, so it fails before it runs (`MissingTag`, as Core says it).
+       */
+      guardKeyed: (def: Def, event: RunEvent) => {
+        const cells: readonly unknown[] = Object.values(def.cells);
+        const writes = Object.values(Object(Object(event.op).depends)).some(
+          (d) => Object(d).kind === "controller" && cells.includes(Object(d).target),
+        );
+        if (!writes) return event.next();
+
+        return event
+          .load(def.missingOf, meta)
+          .then((missing) =>
+            missing === null ? event.next() : event.raise("MissingTag", { label: missing }),
+          );
+      },
       isReading: (def: Def) => reading.has(def),
       rootParam: (def: Def) => reading.get(def)?.root ?? null,
       failedAt,
@@ -605,6 +625,18 @@ export function remoteData<
       }
 
       return out;
+    },
+  });
+
+  const missingOf = resource({
+    label: `${name}.missing`,
+    target: "session",
+    depends: Object.fromEntries(
+      Object.entries(config).map(([key, t]) => [key, (t as Tag.Handle<unknown>).optional]),
+    ),
+    factory: (deps: Readonly<Record<string, Tag.Presence<unknown>>>): string | null => {
+      const absent = configKeys.find((key) => !deps[key]?.present);
+      return absent === undefined ? null : (config[absent] as Tag.Handle<unknown>).label;
     },
   });
 
@@ -733,6 +765,7 @@ export function remoteData<
     answer,
     by,
     paramOf,
+    missingOf,
     getting,
     receive,
   };
@@ -767,6 +800,12 @@ export function remoteData<
       },
 
       run(event) {
+        if (by && event.op !== answer && event.op !== stream && event.load(state, meta).get()) {
+          return event
+            .load(own, meta)
+            .get()!
+            .guardKeyed(def, event as unknown as RunEvent);
+        }
         if (event.op !== answer && event.op !== stream) return event.next();
         return event
           .load(own, meta)
@@ -783,6 +822,9 @@ export function remoteData<
         const param = handle.resolve(paramOf);
         // No parameter, or the root's own: the session reads the root's cells through.
         if (param === null || s.rootParam(def) === s.named(param)) return next();
+
+        // Inside a session that joined this parameter (a short call's session): it reads the
+        // ancestor's values through, so it joins nothing.
 
         const life = new AbortController();
         const leave = s.join(def, param, handle, life.signal);

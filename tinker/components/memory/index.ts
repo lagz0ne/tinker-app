@@ -127,7 +127,7 @@ export function createMemory() {
     config: { peer: peer.required, headers, ...keys },
     exports: { call, watch },
     hooks: {
-      async start({ config, load, next }) {
+      async start({ config, load, next, run }) {
         const p = await load(protocol, kept);
         const { codec, pushes, streams, meta, renew } = config;
         load(clientHeld, kept).set({
@@ -135,6 +135,7 @@ export function createMemory() {
           side: {
             send,
             open,
+            root: run,
             codec: p.given(codec) ?? p.json,
             pushes: p.given(pushes),
             streams: p.given(streams),

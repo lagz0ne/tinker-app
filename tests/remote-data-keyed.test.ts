@@ -15,6 +15,11 @@ import { sseClient, sseServer } from "./support/sse";
 
 const closers: Array<() => unknown> = [];
 
+/** A watch the test stops ends in AbortError: that is the end, not a fault. Anything else throws. */
+const stopped = (e: unknown) => {
+  if (Object(e).name !== "AbortError") throw e;
+};
+
 afterEach(async () => {
   for (const c of closers.splice(0).reverse()) await c();
 });
@@ -235,8 +240,9 @@ test("the server fills a project once while it is watched, and forgets it when n
 
   await tick();
 
-  // One read and one watch for p1, not two: one client, one entry per project.
-  expect(app.fills.filter((p) => p === "p1").length).toBe(2); // the read, then the watch's value now
+  // One watch for p1, not two: one client, one entry per project. Its first push is the value
+  // now, so the server fills once.
+  expect(app.fills.filter((p) => p === "p1").length).toBe(1);
   await s1.close();
   await s2.close();
   await tick();
@@ -281,9 +287,10 @@ test("the shared stream routes by place, not address: two values of one address 
 
   const got: Record<string, unknown[]> = { p1: [], p2: [] };
   const stop = new AbortController();
-  closers.unshift(() => stop.abort());
+  const watches: Promise<unknown>[] = [];
+  closers.push(() => (stop.abort(), Promise.all(watches)));
   for (const key of ["p1", "p2"]) {
-    void tab.run(memory.client.watch, {
+    const watch = tab.run(memory.client.watch, {
       input: {
         address: "tasks",
         value: { project: key },
@@ -292,6 +299,7 @@ test("the shared stream routes by place, not address: two values of one address 
       },
       signal: stop.signal,
     });
+    watches.push(watch.catch(stopped)); // a stopped watch ends in AbortError
   }
   await until(() => got.p1!.length > 0 && got.p2!.length > 0);
 
@@ -318,8 +326,8 @@ describe("the protocol holds the watch's length", () => {
     await until(() => faultOf(s) !== undefined);
 
     expect(faultOf(s)).toMatchObject({ fault: "encode", payload: { side: "client" } });
-    // The read is a POST, under the body's own cap: it went. The watch (a GET) did not.
-    expect(app.fills.length).toBe(1);
+    // A keyed session only watches: nothing reached the server.
+    expect(app.fills.length).toBe(0);
   });
 
   test("the server reads no watch text past the line: invalid, on memory and on SSE", async () => {
@@ -347,10 +355,11 @@ describe("the protocol holds the watch's length", () => {
 
     const got: Record<number, unknown[]> = {};
     const stop = new AbortController();
-    closers.unshift(() => stop.abort());
+    const watches: Promise<unknown>[] = [];
+    closers.push(() => (stop.abort(), Promise.all(watches)));
     for (let i = 0; i < 6; i++) {
       got[i] = [];
-      void tab.run(memory.client.watch, {
+      const watch = tab.run(memory.client.watch, {
         input: {
           address: "tasks",
           value: { project: `${long(600)}${i}` },
@@ -359,9 +368,166 @@ describe("the protocol holds the watch's length", () => {
         },
         signal: stop.signal,
       });
+      watches.push(watch.catch(stopped));
     }
     await until(() => Object.values(got).every((list) => list.length > 0));
 
     for (let i = 0; i < 6; i++) expect(got[i]![0]).toMatchObject({ ok: true, value: [`v${i}`] });
   });
 });
+
+describe("the shared stream stays readable by the other side's version", () => {
+  test("each frame entry names its address first: a client from before routes by address", async () => {
+    const app = boot("memory");
+    await app.ready;
+    const pushed: string[] = [];
+    const list = [
+      ["tasks", JSON.stringify({ project: "p1" })],
+      ["tasks", JSON.stringify({ project: "p2" })],
+    ];
+    const stop = new AbortController();
+    const watch = app.server.run(memory.server.serveStream, {
+      input: { address: "*", text: JSON.stringify(list), meta: {}, push: (t) => pushed.push(t) },
+      signal: stop.signal,
+    });
+    closers.push(() => (stop.abort(), watch.catch(stopped)));
+    await until(() => pushed.length > 0);
+
+    const entries = pushed.flatMap((t) => JSON.parse(t) as [string, string, number][]);
+    // The old client reads `[to, text]` of each entry: the address, then that member's reply.
+    expect(entries.map(([to]) => to)).toEqual(["tasks", "tasks"]);
+    const byPlace = Object.fromEntries(entries.map(([, t, at]) => [at, JSON.parse(t).value]));
+    expect(byPlace).toEqual({ 0: ["p1 first"], 1: ["p2 first"] });
+  });
+
+  test("a server from before sends `[address, text]`: the client routes it by address", async () => {
+    const notes = data({ initial: [] as string[], parse: z.array(z.string()) });
+    const plain = remoteData({ notes });
+    const read = JSON.stringify({ ok: true, value: ["from a read"] });
+    const reply = JSON.stringify({ ok: true, value: ["from an old server"] });
+    const enc = new TextEncoder();
+    const old = Bun.serve({
+      port: 0,
+      idleTimeout: 0,
+      fetch: (r) => {
+        const path = new URL(r.url).pathname;
+        if (r.method === "POST") return new Response(read);
+        if (!path.endsWith("/*")) return new Response(null, { status: 404 });
+
+        // The old frame: `[address, text]`, no place.
+        const frame = JSON.stringify([["notes", reply]]);
+        const body = new ReadableStream({
+          start: (out) => out.enqueue(enc.encode(`: open\n\ndata: ${JSON.stringify(frame)}\n\n`)),
+        });
+        return new Response(body, { headers: { "content-type": "text/event-stream" } });
+      },
+    });
+    closers.push(() => old.stop(true));
+
+    const tab = createScope({
+      capsules: [
+        sseClient.client({ base: `http://localhost:${old.port}/api`, streams: "one" }),
+        plain({ read: sseClient.client }),
+      ],
+    });
+    closers.push(() => tab.close());
+    await tab.ready;
+
+    // The push came over the shared stream, in the old frame, and reached its member.
+    await until(() => tab.resolve(plain.notes).get()[0] === "from an old server");
+  });
+});
+
+test("a keyed write with no project bound fails before it runs: MissingTag", async () => {
+  const app = boot("memory");
+  await app.ready;
+  const tab = app.client();
+  await tab.ready;
+  const s = tab.createSession({ tags: [board.project("p1")] });
+  await until(() => read(s).length > 0);
+
+  let ran = 0;
+  const write = operation({
+    label: "tasks.untagged",
+    depends: { list: tasks.controller },
+    run: ({ list }) => (ran++, list.set(["lost"])),
+  });
+  // No project: the write would go to no one, so it fails, as Core fails a missing tag.
+  const failed = await Promise.resolve(app.server.run(write)).then(
+    () => null,
+    (e: unknown) => e,
+  );
+  expect(failed).toMatchObject({ kind: "MissingTag", payload: { label: "project" } });
+  expect(ran).toBe(0);
+
+  // Tagged, the same write runs and reaches p1.
+  await app.server.run(write, { tags: [board.project("p1")] });
+  await until(() => read(s)[0] === "lost");
+  expect(ran).toBe(1);
+});
+
+test("a child session on the parent's project shares its watch: no new request", async () => {
+  const app = boot("memory");
+  await app.ready;
+  const tab = app.client();
+  await tab.ready;
+
+  const s = tab.createSession({ tags: [board.project("p1")] });
+  await until(() => read(s).length > 0);
+  const fills = app.fills.length;
+
+  // A short call session inside s joins p1 too: it shares the entry, so no new watch, no new fill.
+  const seen = operation({
+    label: "seen",
+    depends: { list: board.tasks },
+    run: ({ list }) => list.get(),
+  });
+  const ac = new AbortController();
+  expect(await s.run(seen, { signal: ac.signal })).toEqual(["p1 first"]);
+  await tick();
+  expect(app.fills.length).toBe(fills);
+
+  // And the parent still gets pushes after the child closed.
+  await app.write("p1", "after the child");
+  await until(() => read(s).length === 2);
+});
+
+for (const kind of ["memory", "sse"] as const) {
+  test(`${kind}: a shared stream outlives its first member: the others read on, and it closes after the last`, async () => {
+    const app = boot(kind);
+    await app.ready;
+    const tab = app.client({ streams: "one" });
+    await tab.ready;
+
+    const got: Record<string, unknown[]> = { p1: [], p2: [] };
+    const stop = { p1: new AbortController(), p2: new AbortController() };
+    const watches: Promise<unknown>[] = [];
+    for (const key of ["p1", "p2"] as const) {
+      const watch = tab.run((kind === "memory" ? memory.client : sseClient.client).watch, {
+        input: {
+          address: "tasks",
+          value: { project: key },
+          meta: {},
+          push: (r) => got[key]!.push(r),
+        },
+        signal: stop[key].signal,
+      });
+      watches.push(watch.catch(stopped));
+    }
+    closers.push(() => (stop.p1.abort(), stop.p2.abort(), Promise.all(watches)));
+    await until(() => got.p1!.length > 0 && got.p2!.length > 0);
+
+    stop.p1.abort(); // the first member leaves first
+    await tick();
+    await app.write("p2", "after p1 left");
+    await until(() => got.p2!.length === 2);
+    expect(got.p2![1]).toMatchObject({ ok: true, value: ["p2 first", "after p1 left"] });
+
+    stop.p2.abort(); // the last member leaves: the stream closes, and the server forgets p2
+    await tick();
+    await app.write("p2", "while no one watched");
+    const again = tab.createSession({ tags: [board.project("p2")] });
+    await until(() => read(again).length === 3);
+    expect(app.fills.filter((p) => p === "p2").length).toBe(2);
+  });
+}
