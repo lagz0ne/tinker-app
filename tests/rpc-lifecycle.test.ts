@@ -828,3 +828,55 @@ test("F4: retry counts down: one run, then at most the count it names", async ()
   expect(calls).toBe(3);
   expect(failure(error)).toEqual(["link", {}]);
 });
+
+test("F5: an onError that throws hands the new error to the next onError", async () => {
+  let seen: unknown = null;
+  const breaks = operation({
+    label: "error.breaks",
+    input: hook.error,
+    run: (): never => {
+      throw new Error("onError broke");
+    },
+  });
+  const sees = operation({
+    label: "error.next",
+    input: hook.error,
+    run: (_deps, { input }) => void (seen = String(Object(input.error).message)),
+  });
+  const impl = operation({
+    label: "fail.do",
+    input: z.null(),
+    run: (): string => {
+      throw new Error("first");
+    },
+  });
+  const { client } = await pair(
+    { implement: { ...here, fail: impl }, onError: [breaks, sees] },
+    { remote: memory.client },
+  );
+
+  const error = await client.run(api.fail, { input: null }).then(
+    () => null,
+    (e: unknown) => e,
+  );
+
+  expect(seen).toBe("onError broke");
+  expect(failure(error)).toEqual(["failed", {}]);
+});
+
+test("F5: a stream skips onSuccess", async () => {
+  let successes = 0;
+  const sees = operation({
+    label: "stream.success",
+    input: hook.success,
+    run: () => void (successes += 1),
+  });
+  const { client } = await pair({ implement: here, onSuccess: [sees] }, { remote: memory.client });
+
+  const stream = await client.run(api.tick, { input: null });
+  for await (const one of stream) {
+    expect(one).toBe(1);
+  }
+
+  expect(successes).toBe(0);
+});
