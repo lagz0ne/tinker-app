@@ -4,12 +4,9 @@ import { createScope, data, operation } from "@tinker/core";
 import { z } from "zod";
 
 import { memory } from "~/components/memory";
-import type { Streams } from "~/components/protocol";
 import { remoteData } from "~/components/remote-data";
 
-import { sseClient, sseServer } from "./support/sse";
-
-const sse = { client: sseClient.client, server: sseServer.server };
+import { listen, wsClient, wsServer } from "./support/ws";
 
 // F35: one write changes two keys. Does a client ever see one key changed without the other?
 
@@ -19,7 +16,7 @@ afterEach(async () => {
   for (const c of closers.splice(0).reverse()) await c();
 });
 
-async function torn(streams: Streams, kind: "memory" | "sse") {
+async function torn(kind: "memory" | "ws") {
   const todos = data({ initial: [] as string[] });
   const activity = data({ initial: [] as string[] });
   const board = remoteData({ todos, activity });
@@ -32,25 +29,19 @@ async function torn(streams: Streams, kind: "memory" | "sse") {
       log.set([...log.get(), `added ${input}`])
     ),
   });
-  const transport = sse.server({ base: "/api", services: [board] });
+  const transport = wsServer.server({ path: "/api", services: [board] });
   const server = createScope({
     capsules: [board({ serve: true }), transport, memory.server({ services: [board] })],
   });
   await server.ready;
   closers.push(() => server.close());
-  const handle = server.resolve(transport);
-  const bun = Bun.serve({
-    port: 0,
-    idleTimeout: 0,
-    fetch: async (r) => (await handle(r, server)) ?? new Response(null, { status: 404 }),
-  });
+
+  const { bun, url } = listen(server, [transport]);
   closers.push(() => bun.stop(true));
   const client = createScope({
     capsules: [
-      kind === "memory"
-        ? memory.client({ peer: server, streams })
-        : sse.client({ base: `http://localhost:${bun.port}/api`, streams }),
-      board({ read: kind === "memory" ? memory.client : sse.client }),
+      kind === "memory" ? memory.client({ peer: server }) : wsClient.client({ url: `${url}/api` }),
+      board({ read: kind === "memory" ? memory.client : wsClient.client }),
     ],
   });
   await client.ready;
@@ -82,18 +73,10 @@ async function torn(streams: Streams, kind: "memory" | "sse") {
   return { seen, apart };
 }
 
-test("SSE, each stream: the two keys arrive apart", async () => {
-  const out = await torn("each", "sse");
-  console.log("sse each:", JSON.stringify(out));
-  expect(out.apart).toBeGreaterThan(0);
+test("one socket: one write's keys arrive in one frame and are set together", async () => {
+  expect((await torn("ws")).apart).toBe(0);
 });
 
-test("SSE, one stream: one write's keys arrive in one frame and are set together", async () => {
-  const out = await torn("one", "sse");
-  console.log("sse one:", JSON.stringify(out));
-  expect(out.apart).toBe(0);
-});
-
-test("memory, one stream: together too", async () => {
-  expect((await torn("one", "memory")).apart).toBe(0);
+test("memory: together too", async () => {
+  expect((await torn("memory")).apart).toBe(0);
 });

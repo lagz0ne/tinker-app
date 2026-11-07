@@ -8,12 +8,10 @@ import type {
   Codec,
   MetaOp,
   Protocol,
-  Pushes,
   RenewOp,
   Reply,
   ServerSide,
   Service,
-  Streams,
   TextServe,
   TextStream,
   Watch,
@@ -22,15 +20,13 @@ import { requestStop } from "~/components/requests";
 import { routes, traceparent } from "~/components/requests/index.server";
 
 // The memory transport (tests): the same protocol, in one process. The client runs the server
-// scope's text ops in one session per request, as sse.server does: in the client's trace, with
+// scope's text ops in one session per request, as ws.server does: in the client's trace, with
 // a request bound (`routes.request`, the fixed headers). A peer holds one memory server.
 
 type ClientConfig = {
   peer: Scope.Handle;
   headers?: Readonly<Record<string, string>>;
   codec?: Codec;
-  pushes?: Pushes;
-  streams?: Streams;
   meta?: MetaOp;
   renew?: RenewOp;
 };
@@ -58,8 +54,6 @@ export function createMemory() {
   const headers = tag<Readonly<Record<string, string>>>({ label: "memory.headers", default: {} });
   const keys = {
     codec: tag<Codec>({ label: "memory.codec" }).optional,
-    pushes: tag<Pushes>({ label: "memory.pushes" }).optional,
-    streams: tag<Streams>({ label: "memory.streams" }).optional,
     meta: tag<MetaOp>({ label: "memory.meta" }).optional,
     renew: tag<RenewOp>({ label: "memory.renew" }).optional,
   };
@@ -127,18 +121,15 @@ export function createMemory() {
     config: { peer: peer.required, headers, ...keys },
     exports: { call, watch },
     hooks: {
-      async start({ config, load, next, run }) {
+      async start({ config, load, next }) {
         const p = await load(protocol, kept);
-        const { codec, pushes, streams, meta, renew } = config;
+        const { codec, meta, renew } = config;
         load(clientHeld, kept).set({
           protocol: p,
           side: {
             send,
             open,
-            root: run,
             codec: p.given(codec) ?? p.json,
-            pushes: p.given(pushes),
-            streams: p.given(streams),
             meta: p.given(meta),
             renew: p.given(renew),
           },

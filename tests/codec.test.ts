@@ -6,9 +6,7 @@ import { z } from "zod";
 import { memory } from "~/components/memory";
 import { rpc } from "~/components/rpc";
 
-import { sseClient, sseServer } from "./support/sse";
-
-const sse = { client: sseClient.client, server: sseServer.server };
+import { wsClient } from "./support/ws";
 
 // A value or a text the codec cannot handle is its own fault: encode or decode, with the side.
 
@@ -112,15 +110,29 @@ test("decode on the server: a text it cannot read answers decode, side server", 
 });
 
 test("decode on the client: a reply it cannot read is decode, side client (not link)", async () => {
-  // A proxy that answers 200 with its own page.
-  const proxy = Bun.serve({ port: 0, fetch: () => new Response("<html>502 Bad Gateway</html>") });
+  // A server that answers each call with a page, not a reply text.
+  const proxy = Bun.serve({
+    port: 0,
+    fetch: (r, b) => (b.upgrade(r) ? undefined : new Response(null, { status: 400 })),
+    websocket: {
+      message: (ws, frame) =>
+        void ws.send(
+          JSON.stringify(
+            (JSON.parse(String(frame)) as { i: number }[]).map(({ i }) => ({
+              i,
+              t: "<html>502 Bad Gateway</html>",
+            })),
+          ),
+        ),
+    },
+  });
   closers.push(() => proxy.stop(true));
   const lines: string[] = [];
   const client = createScope({
     observe: { log: (l) => void lines.push(`${l.message} ${JSON.stringify(l.attributes)}`) },
     capsules: [
-      sse.client({ base: `http://localhost:${proxy.port}/api` }),
-      api({ remote: sse.client }),
+      wsClient.client({ url: `ws://localhost:${proxy.port}/api` }),
+      api({ remote: wsClient.client }),
     ],
   });
   await client.ready;

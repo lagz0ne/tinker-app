@@ -1,7 +1,7 @@
 import { operation, resource, tag } from "@tinker/core";
 import { z } from "zod";
 
-import { hook, step } from "~/components/protocol";
+import { hook } from "~/components/protocol";
 import { routes } from "~/components/requests/index.server";
 import { channel } from "~/components/rpc";
 
@@ -27,18 +27,6 @@ export const signedIn = operation({
   depends: { who: principal },
   // No user: refuse, a value. The call answers the `refused` fault; nothing is thrown here.
   run: async ({ who }, { input }) => (who ? { tags: [user(who)] } : input.refuse({ signIn: true })),
-});
-
-/**
- * The same guard for remoteData, which still runs on middleware (`use`): it calls `next` where
- * the hook answers `{ tags }`. It goes when remoteData takes the lifecycle's hooks.
- */
-export const signedInUse = operation({
-  label: "signedIn.use",
-  input: step,
-  depends: { who: principal },
-  run: async ({ who }, { input }) =>
-    who ? input.next({ tags: [user(who)] }) : input.refuse({ signIn: true }),
 });
 
 const note = (

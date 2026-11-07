@@ -4,12 +4,10 @@ import { createScope, data, operation } from "@tinker/core";
 
 import { memory } from "~/components/memory";
 import { callInput, watchInput } from "~/components/protocol";
-import type { Answer, Reply, Stream, Streams } from "~/components/protocol";
+import type { Answer, Reply, Stream } from "~/components/protocol";
 import { remoteData } from "~/components/remote-data";
 
-import { sseClient, sseServer } from "./support/sse";
-
-const sse = { client: sseClient.client, server: sseServer.server };
+import { wsClient } from "./support/ws";
 
 // "If the server fails, we need to know": no failure ends as silence on the client.
 
@@ -58,8 +56,8 @@ async function server(lines: string[] = []) {
   return { s, board };
 }
 
-async function client(peer: Awaited<ReturnType<typeof server>>["s"], streams: Streams = "each") {
-  const c = createScope({ capsules: [memory.client({ peer, streams })] });
+async function client(peer: Awaited<ReturnType<typeof server>>["s"]) {
+  const c = createScope({ capsules: [memory.client({ peer })] });
   await c.ready;
   closers.push(() => c.close());
   return c;
@@ -90,47 +88,32 @@ test("a service that throws on a call: the client gets failed, the cause is in t
   expect(lines).toContain("protocol service failed");
 });
 
-for (const streams of ["each", "one"] as const) {
-  test(`${streams} stream: a service that throws on a stream pushes failed, not a quiet end`, async () => {
-    const { s } = await server();
-    expect(await pushes(await client(s, streams), "boom")).toEqual([
-      { ok: false, kind: "failed", payload: {} },
-    ]);
-  });
+test("a service that throws on a stream pushes failed, not a quiet end", async () => {
+  const { s } = await server();
+  expect(await pushes(await client(s), "boom")).toEqual([
+    { ok: false, kind: "failed", payload: {} },
+  ]);
+});
 
-  test(`${streams} stream: an address no one has pushes link, as a 404 on a call`, async () => {
-    const { s } = await server();
-    expect(await pushes(await client(s, streams), "nope")).toEqual([
-      { ok: false, kind: "link", payload: {} },
-    ]);
-  });
+test("an address no one has pushes link, as a 404 on a call", async () => {
+  const { s } = await server();
+  expect(await pushes(await client(s), "nope")).toEqual([{ ok: false, kind: "link", payload: {} }]);
+});
 
-  test(`${streams} stream: a stream that cannot open makes the key throw link; the value still comes by call`, async () => {
-    const board = remoteData({ todos: data({ initial: [] as string[] }) });
-    const transport = sse.server({ base: "/api", services: [board] });
-    const s = createScope({ capsules: [board({ serve: true }), transport] });
-    await s.ready;
-    closers.push(() => s.close());
-    const handle = s.resolve(transport);
-    // The stream route is down (503 on every GET); calls still work.
-    const bun = Bun.serve({
-      port: 0,
-      fetch: async (r) =>
-        r.method === "GET"
-          ? new Response(null, { status: 503 })
-          : ((await handle(r, s)) ?? new Response(null, { status: 404 })),
-    });
-    closers.push(() => bun.stop(true));
-    const c = createScope({
-      capsules: [
-        sse.client({ base: `http://localhost:${bun.port}/api`, streams }),
-        board({ read: sse.client }),
-      ],
-    });
-    closers.push(() => c.close());
-    await c.ready;
-    await tick(30);
-
-    expect(c.resolve(board.faults).get().todos?.message).toContain("todos: link");
+test("a socket that cannot open makes the key's fault link, as data", async () => {
+  const board = remoteData({ todos: data({ initial: [] as string[] }) });
+  // The socket route is down: every upgrade answers 503.
+  const bun = Bun.serve({ port: 0, fetch: () => new Response(null, { status: 503 }) });
+  closers.push(() => bun.stop(true));
+  const c = createScope({
+    capsules: [
+      wsClient.client({ url: `ws://localhost:${bun.port}/api` }),
+      board({ read: wsClient.client }),
+    ],
   });
-}
+  closers.push(() => c.close());
+  await c.ready;
+  await tick(30);
+
+  expect(c.resolve(board.faults).get().todos?.message).toContain("todos: link");
+});

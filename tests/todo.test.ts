@@ -9,17 +9,8 @@ import { rpc } from "~/components/rpc";
 
 import { keepDates } from "./fixtures/todo/codec";
 import { api, board } from "./fixtures/todo/contracts";
-import {
-  addTodo,
-  joinPresence,
-  removeTodo,
-  signedIn,
-  signedInUse,
-  toggleTodo,
-} from "./fixtures/todo/data";
-import { sseClient, sseServer } from "./support/sse";
-
-const sse = { client: sseClient.client, server: sseServer.server };
+import { addTodo, joinPresence, removeTodo, signedIn, toggleTodo } from "./fixtures/todo/data";
+import { listen, wsClient, wsServer } from "./support/ws";
 
 // Tests wire their own scopes, as server.ts and main.tsx do; browser.test.ts runs those two whole.
 
@@ -32,11 +23,11 @@ afterEach(async () => {
 
 type Scope = ReturnType<typeof createScope>;
 
-async function boot(kind: "memory" | "sse") {
-  const transport = sse.server({ base: "/api", codec: keepDates, services: [board, api] });
+async function boot(kind: "memory" | "ws") {
+  const transport = wsServer.server({ path: "/api", codec: keepDates, services: [board, api] });
   const server = createScope({
     capsules: [
-      board({ serve: true, use: [signedInUse] }),
+      board({ serve: true, onStart: [signedIn] }),
       api({
         onStart: [signedIn],
         implement: {
@@ -52,32 +43,19 @@ async function boot(kind: "memory" | "sse") {
   });
   await server.ready;
   closers.push(() => server.close());
-  let base = "";
-  if (kind === "sse") {
-    const handle = server.resolve(transport);
-    const bun = Bun.serve({
-      port: 0,
-      idleTimeout: 0,
-      fetch: async (r) => (await handle(r, server)) ?? new Response(null, { status: 404 }),
-    });
-    closers.push(() => bun.stop(true));
-    base = `http://localhost:${bun.port}/api`;
-  }
-  /** A client scope, as main.tsx builds it; not waited, so a refused start can be read.
-   *  Clients take turns: whole or delta pushes, each stream or one shared stream. */
-  let count = 0;
+  const { bun, url } = listen(server, [transport]);
+  closers.push(() => bun.stop(true));
+  const base = `${url}/api`;
+  /** A client scope, as main.tsx builds it; not waited, so a refused start can be read. */
   const open = (who?: string) => {
     const headers: Record<string, string> = who ? { cookie: `sid=${who}` } : {};
-    const turn = count++;
-    const pushes = turn % 2 ? "delta" : "whole";
-    const streams = turn % 4 >= 2 ? "one" : "each";
-    const options = { codec: keepDates, headers, pushes, streams } as const;
-    const transport = kind === "memory" ? memory.client : sse.client;
+    const options = { codec: keepDates, headers } as const;
+    const transport = kind === "memory" ? memory.client : wsClient.client;
     const client = createScope({
       capsules: [
         kind === "memory"
           ? memory.client({ peer: server, ...options })
-          : sse.client({ base, ...options }),
+          : wsClient.client({ url: base, ...options }),
         board({ read: transport }),
         api({ remote: transport }),
       ],
@@ -119,7 +97,7 @@ const until = async (ok: () => boolean, ms = 3000) => {
   }
 };
 
-for (const kind of ["memory", "sse"] as const) {
+for (const kind of ["memory", "ws"] as const) {
   describe(kind, () => {
     test("a signed-in client is ready with every basket filled", async () => {
       const { join } = await boot(kind);
@@ -265,24 +243,38 @@ for (const kind of ["memory", "sse"] as const) {
   });
 }
 
-test("on the wire: one transport, rpc and the board on the same routes and codec", async () => {
-  const { base } = await boot("sse");
-  const headers = { cookie: "sid=duke" };
-  const added = await fetch(`${base}/todo.add`, {
-    method: "POST",
-    body: '{"title":"Raw"}',
-    headers,
-  });
+test("on the wire: one socket, rpc and the board on the same frames and codec", async () => {
+  const { base } = await boot("ws");
+  /** One frame out; the first message back for each id. */
+  const exchange = async (headers: Record<string, string>, frame: unknown[]) => {
+    const socket = new WebSocket(base, { headers } as never);
+    const got = new Map<number, { t?: string; e?: number }>();
+    await new Promise<void>((done) => {
+      socket.onopen = () => socket.send(JSON.stringify(frame));
+      socket.onmessage = (e) => {
+        for (const m of JSON.parse(String(e.data))) if (!got.has(m.i)) got.set(m.i, m);
+        if (got.size === frame.length) done();
+      };
+    });
 
-  expect(await added.text()).toMatch(/^\{"ok":true,"value":\{"id":"[0-9a-f-]+"\}\}$/);
-  const read = await (
-    await fetch(`${base}/todos`, { method: "POST", body: "null", headers })
-  ).text();
-  expect(read).toMatch(
+    socket.close();
+    return got;
+  };
+  const duke = { cookie: "sid=duke" };
+  const added = await exchange(duke, [{ i: 1, a: "todo.add", t: '{"title":"Raw"}' }]);
+  expect(added.get(1)?.t).toMatch(/^\{"ok":true,"value":\{"id":"[0-9a-f-]+"\}\}$/);
+
+  // A board key is an rpc stream key: its watch gives the value now as the first push.
+  const read = await exchange(duke, [
+    { i: 1, a: "todos", t: "null", w: 1 },
+    { i: 2, a: "todos", t: "null" }, // a call finds no reply key there
+  ]);
+  expect(read.get(1)?.t).toMatch(
     /^\{"ok":true,"value":\[\{"id":"[^"]+","title":"Raw","done":false,"by":"duke","at":\{"\$date":"[^"]+"\}\}\]\}$/,
   );
-  const guest = await (await fetch(`${base}/todos`, { method: "POST", body: "null" })).text();
-  expect(guest).toBe('{"ok":false,"kind":"refused","payload":{"signIn":true}}');
+  expect(read.get(2)?.e).toBe(404);
+  const guest = await exchange({}, [{ i: 1, a: "todos", t: "null", w: 1 }]);
+  expect(guest.get(1)?.t).toBe('{"ok":false,"kind":"refused","payload":{"signIn":true}}');
 });
 
 describe("one rpc capsule: the same handle on both sides", () => {
@@ -310,6 +302,19 @@ describe("one rpc capsule: the same handle on both sides", () => {
       Object(await guest.settle(api["todo.add"], { input: { title: "" } })).error,
     ).toMatchObject({ kind: "DataValidationFailed" });
     await guest.close();
+  });
+
+  test("a remote stream ends on the server when the reader breaks, not at session close", async () => {
+    const { join } = await boot("memory");
+    const ann = await join("ann");
+    const bot = await join("bot");
+    for await (const count of await bot.run(api["presence.join"], { input: null })) {
+      expect(count).toBeGreaterThan(0);
+      await until(() => ann.resolve(board.people).get().includes("bot"));
+      break;
+    }
+    // The client scope stays open: only the break can end the server's watch.
+    await until(() => !ann.resolve(board.people).get().includes("bot"));
   });
 
   test("a stream runs here too: online while read, gone after break", async () => {

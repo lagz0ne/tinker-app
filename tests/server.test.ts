@@ -42,13 +42,39 @@ const proxied = (path: string, body: unknown) =>
       headers: { "content-type": "application/json", origin: "https://app.example" },
       body: JSON.stringify(body),
     }),
+    undefined as never,
   );
 
-test("PUBLIC_ORIGIN reaches rpc: a call from the public origin passes behind a TLS proxy", async () => {
-  const reply = await proxied("/rpc/greet", { name: "Duke" });
+/** The command behind a real Bun server: one greet over a socket that sends `origin`. */
+async function greetOver(main: typeof started, origin: string) {
+  const bun = Bun.serve({
+    port: 0,
+    websocket: main.websocket!,
+    fetch: async (r, s) => {
+      const reply = await main.fetch(r, s as never);
+      return reply === null ? undefined : (reply ?? new Response(null, { status: 404 }));
+    },
+  });
+  // Bun's WebSocket takes headers: a browser sets Origin itself.
+  const socket = new WebSocket(`ws://localhost:${bun.port}/rpc`, { headers: { origin } } as never);
+  const reply = await new Promise<string>((done) => {
+    socket.onopen = () => socket.send(JSON.stringify([{ i: 1, a: "greet", t: '{"name":"Duke"}' }]));
+    socket.onmessage = (e) => done(JSON.parse(String(e.data))[0].t);
+    socket.onclose = (e) => done(`closed ${e.code}`);
+    socket.onerror = () => done("refused");
+  });
 
-  expect(reply?.status).toBe(200);
-  expect(await reply?.json()).toEqual({ ok: true, value: { text: "Hello, Duke." } });
+  socket.close();
+  await bun.stop(true);
+  return reply;
+}
+
+test("PUBLIC_ORIGIN reaches rpc: a socket from the public origin passes behind a TLS proxy", async () => {
+  expect(JSON.parse(await greetOver(started, "https://app.example"))).toEqual({
+    ok: true,
+    value: { text: "Hello, Duke." },
+  });
+  expect(await greetOver(started, "https://evil.example")).not.toContain("Hello");
 });
 
 test("PUBLIC_ORIGIN reaches telemetry: a tab batch from the public origin is taken", async () => {
@@ -80,9 +106,12 @@ test("an empty PUBLIC_ORIGIN counts as unset: rpc and telemetry take the request
         headers: { "content-type": "application/json", origin: "http://app.example" },
         body: JSON.stringify(body),
       }),
+      undefined as never,
     );
 
-  expect((await post("/rpc/greet", { name: "Duke" }))?.status).toBe(200);
+  // The socket's request URL is http://localhost:<port>, so that is the origin it takes.
+  const local = await greetOver(plain, "http://localhost");
+  expect(local).toBe("refused"); // port differs: not the request URL's origin
   expect((await post("/api/telemetry", { logs: [], traces: [] }))?.status).toBe(202);
   quiet.abort();
   await plain.closed;

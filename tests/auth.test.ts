@@ -4,7 +4,7 @@ import { createScope, data, operation, tag } from "@tinker/core";
 import { z } from "zod";
 
 import { createMemory, memory } from "~/components/memory";
-import { hook, step } from "~/components/protocol";
+import { hook } from "~/components/protocol";
 import { remoteData } from "~/components/remote-data";
 import { routes } from "~/components/requests/index.server";
 import { rpc } from "~/components/rpc";
@@ -61,15 +61,6 @@ function boot() {
       return who ? { tags: [user(who)] } : input.refuse({ signIn: true });
     },
   });
-  /** The same guard for remoteData, which still runs on middleware (`use`). */
-  const bearerUse = operation({
-    label: "bearer.use",
-    input: step,
-    run: async (_, { input }) => {
-      const who = whoOf(input.meta);
-      return who ? input.next({ tags: [user(who)] }) : input.refuse({ signIn: true });
-    },
-  });
   const add = operation({
     label: "note.add.do",
     input: z.string(),
@@ -82,7 +73,7 @@ function boot() {
   const server = createScope({
     capsules: [
       auth({ implement: { "auth.status": statusOf } }), // public: no hooks
-      board({ serve: true, use: [bearerUse] }),
+      board({ serve: true, onStart: [bearer] }),
       api({ onStart: [bearer], implement: { "note.add": add } }),
       memory.server({ services: [auth, board, api] }),
     ],

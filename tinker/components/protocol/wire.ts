@@ -2,10 +2,10 @@ import type { Operation } from "@tinker/core";
 import { z } from "zod";
 
 // The shapes each layer gives the next (ADR 0048 words):
-//   transport  moves text: sse, memory
+//   transport  moves text: ws, memory
 //   protocol   gives text meaning: the codec and the reply envelope, shared by rpc and remoteData
 //   rpc, remoteData deal in values only
-// `meta`: string pairs beside the body (headers on SSE). Lowercase: HTTP header names have no case.
+// `meta`: string pairs beside the body (`m` in a socket message). Lowercase, as HTTP headers.
 
 const meta = z.record(z.string().regex(/^[a-z0-9-]+$/), z.string());
 /**
@@ -79,25 +79,6 @@ export type Service = {
 export type Answer = Operation.Handle<Promise<Reply | null>, z.infer<typeof callInput>>;
 /** Server, given by rpc and remoteData: pushes replies; false when the address is not theirs. */
 export type Stream = Operation.Handle<Promise<boolean>, z.infer<typeof watchInput>>;
-
-/**
- * How a stream's pushes travel: the protocol's choice, never the caller's. As HTTP delta
- * encoding (RFC 3229), the client asks with a header (`a-im: text-delta`) and the server
- * answers in kind. The delta is on the value's TEXT, so it works with any codec:
- *   whole  each push carries the whole value (the default)
- *   delta  each push carries only the changed text span, against the last push of that stream
- */
-export type Pushes = "whole" | "delta";
-/**
- * How many transport streams the watches use: also the protocol's choice.
- *   each  one stream per watched address (the default)
- *   one   the watches started in the same tick share one stream, as HTTP/2 or graphql-ws
- *         carry many streams on one connection. The server sends the pushes made in the
- *         same tick as ONE frame, so the keys one write changed arrive together.
- */
-export type Streams = "each" | "one";
-/** The changed span of a text: drop `cut` chars at `at`, put `add` there. From "" it is the whole text. */
-export type Delta = { at: number; cut: number; add: string };
 
 /** Turns values to text and back. Both sides of a transport must use the same one; JSON unset. */
 export type Codec = { serialize(value: unknown): string; deserialize(text: string): unknown };

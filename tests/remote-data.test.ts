@@ -5,8 +5,8 @@ import type { Observe } from "@tinker/core";
 import { z } from "zod";
 
 import { memory } from "~/components/memory";
-import { step } from "~/components/protocol";
-import type { Middleware } from "~/components/protocol";
+import { hook } from "~/components/protocol";
+import type { OnStart } from "~/components/protocol";
 import { remoteData } from "~/components/remote-data";
 
 // remoteData over the app's own cells: plain data, no label; the key is the address.
@@ -22,11 +22,14 @@ const tick = (ms = 40) => new Promise((r) => setTimeout(r, ms));
 /** A server serving `def`, and a client reading it, over memory. */
 async function pair(
   def: ReturnType<typeof remoteData<{}>>,
-  extra: { use?: Middleware[]; observe?: Observe.Config } = {},
+  extra: { onStart?: OnStart[]; observe?: Observe.Config } = {},
 ) {
   const server = createScope({
     observe: extra.observe,
-    capsules: [def({ serve: true, use: extra.use }), memory.server({ services: [def] })],
+    capsules: [
+      def({ serve: true, ...(extra.onStart ? { onStart: extra.onStart } : {}) }),
+      memory.server({ services: [def] }),
+    ],
   });
   await server.ready;
   closers.push(() => server.close());
@@ -198,20 +201,20 @@ test("faults, not errors: a refusal is a value; a throw is `failed`, its text in
   const board = remoteData({ todos });
   const refuse = operation({
     label: "refuse",
-    input: step,
+    input: hook.start,
     run: async (_, { input }) => input.refuse({ signIn: true }),
   });
   const crash = operation({
     label: "crash",
-    input: step,
+    input: hook.start,
     run: (): never => {
       throw new Error("db password is hunter2");
     },
   });
   const lines: string[] = [];
-  const failure = async (use: Middleware[]) => {
+  const failure = async (onStart: OnStart[]) => {
     const { client } = await pair(board, {
-      use,
+      onStart,
       observe: { log: (l) => void lines.push(`${l.message} ${JSON.stringify(l.attributes)}`) },
     });
     await client.ready; // a fault never fails start
@@ -223,7 +226,9 @@ test("faults, not errors: a refusal is a value; a throw is `failed`, its text in
   const crashed = await failure([crash]);
   expect(crashed).toEqual({ fault: "failed", payload: {} });
   expect(JSON.stringify(crashed)).not.toContain("hunter2");
-  expect(lines.some((l) => l.includes("remoteData failed") && l.includes("hunter2"))).toBe(true);
+  expect(lines.some((l) => l.includes("remoteData call failed") && l.includes("hunter2"))).toBe(
+    true,
+  );
 });
 
 test("a fault is data beside the value, and clears when a good value arrives", async () => {
@@ -232,10 +237,10 @@ test("a fault is data beside the value, and clears when a good value arrives", a
   let open = false;
   const gate = operation({
     label: "gate",
-    input: step,
-    run: async (_, { input }) => (open ? input.next() : input.refuse({ signIn: true })),
+    input: hook.start,
+    run: async (_, { input }) => (open ? undefined : input.refuse({ signIn: true })),
   });
-  const { client } = await pair(board, { use: [gate] });
+  const { client } = await pair(board, { onStart: [gate] });
   await client.ready;
 
   expect(client.resolve(board.faults).get().todos?.fault).toBe("refused");
@@ -252,10 +257,10 @@ test("F45 B: a session read and an op's depends see the fault, with no resolve h
   const board = remoteData({ todos });
   const refuse = operation({
     label: "refuse",
-    input: step,
+    input: hook.start,
     run: async (_, { input }) => input.refuse({ signIn: true }),
   });
-  const { client } = await pair(board, { use: [refuse] });
+  const { client } = await pair(board, { onStart: [refuse] });
   await client.ready;
   const read = operation({
     label: "read",
@@ -279,11 +284,11 @@ test("a remoteData fault carries the trace id of the read or push that brought i
   const board = remoteData({ todos });
   const refuse = operation({
     label: "refuse",
-    input: step,
+    input: hook.start,
     run: async (_, { input }) => input.refuse({ signIn: true }),
   });
   const server = createScope({
-    capsules: [board({ serve: true, use: [refuse] }), memory.server({ services: [board] })],
+    capsules: [board({ serve: true, onStart: [refuse] }), memory.server({ services: [board] })],
   });
   await server.ready;
   closers.push(() => server.close());
@@ -300,5 +305,6 @@ test("a remoteData fault carries the trace id of the read or push that brought i
   expect(error.traceId).toBeString();
   // The last fault wins: the first read's, or a later push's (the watch keeps trying).
   const from = spans.filter((x) => x.traceId === error.traceId).map((x) => x.name);
-  expect(from.some((n) => n === "remoteData.get" || n === "remoteData.receive")).toBe(true);
+  // The read is the key's stream run (rpc), named by its key.
+  expect(from.some((n) => n === "todos" || n === "remoteData.receive")).toBe(true);
 });

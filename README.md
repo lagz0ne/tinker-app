@@ -55,7 +55,7 @@ and oxlint, with rules in `vite.config.ts`.
 functions. Every function is an operation or
 a capsule hook. `cn` and `defineMain` are
 exempt. So are the definition makers (`rpc`,
-`remoteData`, `createSse`, `createMemory`):
+`remoteData`, `createWs`, `createMemory`):
 they run at module load, before any scope. A module resource (a `resource` whose
 factory returns `import("<package>")` on every
 return) counts as a library: the options you
@@ -93,9 +93,9 @@ The client and the server run the same handle.
   A key has an `input` and an `output` shape.
 - `src/backend/`: the implementations.
 - `cmds/server.ts`: `api({ implement })`, and
-  `sse.server({ base: "/rpc", services })`.
-- `cmds/browser.tsx`: `sse.client({ base })`,
-  and `api({ remote: sse.client })`.
+  `ws.server({ path: "/rpc", services })`.
+- `cmds/browser.tsx`: `ws.client({ url })`,
+  and `api({ remote: ws.client })`.
 - A key with no implementation fails start
   with `MissingConfig`.
 - A failure is a fault from a fixed set:
@@ -123,7 +123,7 @@ The client and the server run the same handle.
 
 ### The layers
 
-- transport: bytes (`sse`, `memory`).
+- transport: text (`ws`, `memory`).
 - protocol: codec, envelope, faults, the
   lifecycle's hooks. Shared code, not a
   capsule.
@@ -147,7 +147,7 @@ The server installs it with `implement`:
 ```ts
 capsules: [
   api({ implement: { greet: greetHere } }),
-  sse.server({ base: "/rpc", services: [api] }),
+  ws.server({ path: "/rpc", services: [api] }),
 ],
 ```
 
@@ -155,8 +155,8 @@ The tab installs it with `remote`:
 
 ```ts
 capsules: [
-  sse.client({ base: "/rpc" }),
-  api({ remote: sse.client }),
+  ws.client({ url: "wss://app.example/rpc" }),
+  api({ remote: ws.client }),
 ],
 ```
 
@@ -176,7 +176,7 @@ export const board = remoteData({ todos });
 - Server: `board({ serve: true })`. An op
   writes `todos.controller`; the capsule
   copies the write and pushes it.
-- Tab: `board({ read: sse.client })`, then
+- Tab: `board({ read: ws.client })`, then
   `useData(board.todos)`. Read only.
 - `board.faults`: each key's last fault, as
   data. A read never throws.
@@ -288,7 +288,7 @@ write is never sent twice.
 
 ```ts
 api({
-  remote: sse.client,
+  remote: ws.client,
   retry: { link: 2 },
   onStart: [signedIn],
   onError: [refusedAsFault],
@@ -334,9 +334,9 @@ depends: { t: token.atScope.controller },
 - `cell.atScope.controller`: the root, no
   namespace.
 
-The client sends a W3C `traceparent` header,
-so the server's span is the child of the
-client's `sse.send` span.
+The client sends a W3C `traceparent` in each
+message's meta, so the server's span is the
+child of the client's `ws.send` span.
 
 ## Database: Drizzle
 
@@ -436,8 +436,10 @@ words, with a session as the boundary:
   import. Same exit codes as `serveMain`.
 - `tinker/components/protocol`: the envelope,
   the faults, the codec use, the route table.
-- `tinker/components/sse`: `sse.client`
-  (`index.ts`), `sse.server` (`index.server.ts`).
+- `tinker/components/ws`: `ws.client`
+  (`index.ts`), `ws.server` (`index.server.ts`).
+  One socket per client. The messages of one
+  tick go as one frame, both ways.
 - `tinker/components/memory`: the in-process
   transport, for tests.
 - `tinker/components/rpc`: `rpc(contracts)`.

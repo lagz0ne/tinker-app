@@ -5,8 +5,8 @@ import { createRoot } from "react-dom/client";
 
 import { TinkerError, TinkerNotFound } from "~/base/fallbacks";
 import { abortReasons } from "~/components/errors";
-import { sse } from "~/components/sse";
 import { telemetry } from "~/components/telemetry";
+import { ws } from "~/components/ws";
 
 import { api } from "@/api";
 import { routeTree } from "@/routes";
@@ -18,8 +18,8 @@ const app = createScope({
   signal: stop.signal,
   capsules: [
     telemetry.browser({ service: "tinker-browser", console }),
-    sse.client({ base: "/rpc" }),
-    api({ remote: sse.client }),
+    ws.client({ url: `${location.origin.replace(/^http/, "ws")}/rpc` }),
+    api({ remote: ws.client }),
   ],
 });
 

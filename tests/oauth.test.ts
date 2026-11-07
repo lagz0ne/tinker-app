@@ -4,12 +4,12 @@ import { createScope, data, operation, resource, tag } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 import { z } from "zod";
 
-import { hook, step } from "~/components/protocol";
+import { hook } from "~/components/protocol";
 import { remoteData } from "~/components/remote-data";
 import { routes } from "~/components/requests/index.server";
 import { rpc } from "~/components/rpc";
 
-import { createSse } from "./support/sse";
+import { createWs, listen } from "./support/ws";
 
 // Duke's stress case, whole: a public and a signed transport, EACH ON ITS OWN BASE (two
 // SSE bases), on both sides. The signed side sends a short access token; when it expires, the
@@ -95,17 +95,6 @@ async function boot(ttl: number) {
       return { tags: [user(held.who)] };
     },
   });
-  /** The same guard for remoteData, which still runs on middleware (`use`). */
-  const bearerUse = operation({
-    label: "bearer.use",
-    input: step,
-    run: async (_, { input }) => {
-      const held = whoOf(input.meta);
-      if (!held) return input.refuse({ signIn: true });
-      if (held.until < Date.now()) return input.refuse({ expired: true });
-      return input.next({ tags: [user(held.who)] });
-    },
-  });
   const add = operation({
     label: "note.add.do",
     input: z.string(),
@@ -115,36 +104,25 @@ async function boot(ttl: number) {
       list.get().length
     ),
   });
-  const publicSse = createSse();
-  const signedSse = createSse();
+  const publicWs = createWs();
+  const signedWs = createWs();
   const spans: Observe.Span[] = [];
   const server = createScope({
     observe: { export: (x) => void spans.push(x) },
     capsules: [
       auth({ implement: { "auth.status": status, "auth.refresh": refresh } }),
-      board({ serve: true, use: [bearerUse] }),
+      board({ serve: true, onStart: [bearer] }),
       api({ onStart: [bearer], implement: { "note.add": add } }),
-      publicSse.server({ base: "/public", services: [auth] }),
-      signedSse.server({ base: "/api", services: [board, api] }),
+      publicWs.server({ path: "/public", services: [auth] }),
+      signedWs.server({ path: "/api", services: [board, api] }),
     ],
   });
   await server.ready;
   closers.push(() => server.close());
-  const handles = [server.resolve(publicSse.server), server.resolve(signedSse.server)];
-  const bun = Bun.serve({
-    port: 0,
-    idleTimeout: 0,
-    fetch: async (r) => {
-      for (const handle of handles) {
-        const out = await handle(r, server);
-        if (out) return out;
-      }
-      return new Response(null, { status: 404 });
-    },
-  });
+  const { bun, url } = listen(server, [publicWs.server, signedWs.server]);
   closers.push(() => bun.stop(true));
 
-  return { url: `http://localhost:${bun.port}`, sessions, refreshes, spans };
+  return { url, sessions, refreshes, spans };
 }
 
 // ---- the client: two transports. Tokens live in a client cell.
@@ -199,17 +177,17 @@ const renew = operation({
 
 async function client(url: string, sid: string) {
   const headers = { cookie: `sid=${sid}` };
-  const publicSse = createSse();
-  const signedSse = createSse();
+  const publicWs = createWs();
+  const signedWs = createWs();
   const spans: Observe.Span[] = [];
   const scope = createScope({
     observe: { export: (x) => void spans.push(x) },
     capsules: [
-      publicSse.client({ base: `${url}/public`, headers }),
-      auth({ remote: publicSse.client }),
-      signedSse.client({ base: `${url}/api`, headers, meta: credentials, renew }),
-      board({ read: signedSse.client }),
-      api({ remote: signedSse.client }),
+      publicWs.client({ url: `${url}/public`, headers }),
+      auth({ remote: publicWs.client }),
+      signedWs.client({ url: `${url}/api`, headers, meta: credentials, renew }),
+      board({ read: signedWs.client }),
+      api({ remote: signedWs.client }),
     ],
   });
   await scope.ready;
@@ -218,7 +196,7 @@ async function client(url: string, sid: string) {
   return { scope, spans };
 }
 
-test("each transport on its own base: /public answers the auth check, /api the rest", async () => {
+test("each transport on its own path: /public answers the auth check, /api the rest", async () => {
   const { url, sessions } = await boot(60_000);
   sessions.set("s1", "duke");
   const { scope } = await client(url, "s1");
@@ -226,11 +204,19 @@ test("each transport on its own base: /public answers the auth check, /api the r
   expect(await scope.run(api["note.add"], { input: "hi" })).toBe(1);
   await tick();
   expect(scope.resolve(board.notes).get()).toEqual(["duke: hi"]);
-  // The signed base has no auth.status; the public base has no note.add.
-  expect((await fetch(`${url}/api/auth.status`, { method: "POST", body: "null" })).status).toBe(
-    404,
-  );
-  expect((await fetch(`${url}/public/note.add`, { method: "POST", body: '"x"' })).status).toBe(404);
+  // The signed path has no auth.status; the public path has no note.add.
+  const first = async (path: string, a: string, t: string) => {
+    const socket = new WebSocket(`${url}${path}`);
+    const got = await new Promise<{ e?: number }>((done) => {
+      socket.onopen = () => socket.send(JSON.stringify([{ i: 1, a, t }]));
+      socket.onmessage = (e) => done(JSON.parse(String(e.data))[0]);
+    });
+
+    socket.close();
+    return got.e;
+  };
+  expect(await first("/api", "auth.status", "null")).toBe(404);
+  expect(await first("/public", "note.add", '"x"')).toBe(404);
 });
 
 test("the access token expires: one refresh, the call tries once more and works", async () => {
@@ -301,11 +287,11 @@ test("one trace: the call, its refused try, the refresh on /public, the retry on
     count(client_, "credentials"),
     count(client_, "renew"),
     count(client_, "auth.refresh"),
-    count(client_, "sse.send"),
+    count(client_, "ws.send"),
   ]).toEqual([2, 1, 1, 3]);
   // Server: three requests in the same trace; the first is refused, the retry runs the op.
   expect([
-    count(server_, "sse.serve"),
+    count(server_, "ws.serve"),
     count(server_, "bearer"),
     count(server_, "auth.refresh.do"),
     count(server_, "note.add.do"),
@@ -316,10 +302,10 @@ test("one trace: the call, its refused try, the refresh on /public, the retry on
     x ? [x.name, ...up(byId.get(x.parentSpanId ?? ""))] : [];
   expect(up(spans.find((x) => x.name === "auth.refresh"))).toContain("renew");
   expect(up(spans.find((x) => x.name === "renew"))).toContain("note.add");
-  // Every server span of this call sits under a client sse.send span.
-  const sends = new Set(spans.filter((x) => x.name === "sse.send").map((x) => x.spanId));
+  // Every server span of this call sits under a client ws.send span.
+  const sends = new Set(spans.filter((x) => x.name === "ws.send").map((x) => x.spanId));
   const roots = server.spans
-    .filter((x) => x.traceId === trace && x.name === "sse.serve")
+    .filter((x) => x.traceId === trace && x.name === "ws.serve")
     .map((x) => x.parentSpanId);
   expect(roots.every((p) => sends.has(p ?? ""))).toBe(true);
 });

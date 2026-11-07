@@ -58,7 +58,10 @@ type Implement<C extends Contracts> = {
  * runs after the op run ended, when its depends are gone (Disposed). Not the run's own signal
  * either: an aborted run disposes its depends at once, so no cleanup could write (F32).
  */
-export const channel = tag<{ send(output: unknown): void; closed: AbortSignal }>({
+export const channel = tag<{
+  send(output: unknown, meta?: Record<string, string>): void;
+  closed: AbortSignal;
+}>({
   label: "rpc.channel",
 });
 
@@ -77,7 +80,6 @@ type Job<C extends Contracts> =
 type Config<C extends Contracts> = Job<C> & Hooks;
 
 const reserved = ["answer", "stream", "fault"];
-const name = "rpc"; // labels only: the wire address is the key
 
 /**
  * The call's own fault, thrown on the calling side and told apart by its definition's brand:
@@ -98,11 +100,18 @@ type Failed = Extract<Reply, { ok: false }>;
 
 /** One definition, as the steps read it: its contracts, its brand, its serving ops. */
 type Def = {
+  /** Labels only: the wire address is the key. */
+  readonly name: string;
   readonly contracts: Contracts;
   readonly keys: readonly string[];
-  readonly brand: object;
+  readonly fault: {
+    is(error: unknown): boolean;
+    make(address: string, fault: Fault, payload: unknown, traceId: string | undefined): RpcFault;
+  };
   readonly answer: unknown;
   readonly stream: unknown;
+  /** One push taken on the calling side: an OTel process span, linked to the sender's span. */
+  readonly receive: unknown;
 };
 
 /** The config every definition's capsule has, as its hooks read it. */
@@ -140,7 +149,7 @@ const steps = resource({
     const kindOf =
       (def: Def) =>
       (error: unknown): Fault | undefined =>
-        Object(error)[brandKey] === def.brand ? (error as RpcFault).fault : undefined;
+        def.fault.is(error) ? (error as RpcFault).fault : undefined;
 
     const faultOf = (
       def: Def,
@@ -148,40 +157,51 @@ const steps = resource({
       fault: Fault,
       payload: unknown,
       traceId: string | undefined,
-    ): RpcFault =>
-      Object.assign(new Error(`${address}: ${fault}${traceId ? ` (trace ${traceId})` : ""}`), {
-        [brandKey]: def.brand,
-        address,
-        fault,
-        payload,
-        traceId,
-      });
+    ): RpcFault => def.fault.make(address, fault, payload, traceId);
 
     /**
      * Pull side of a stream: `start` gets `push` first (a source may push at once), then the
-     * outputs are read with for await. `end` runs when the reader leaves.
+     * outputs are read with for await. `end` runs when the reader leaves. `meta` is the meta of
+     * the output just read (a push's `traceparent`), as a Response carries its headers.
      */
     const pull = <T>(
       start: (push: (r: Reply) => void) => Promise<unknown>,
       parse: (v: unknown) => T,
       onFault: (r: Failed) => unknown,
-      end?: () => void,
+      end?: (reason?: unknown) => void,
     ) => {
       const queue: Reply[] = [];
       let wake = () => {};
       let done = false;
+      let meta: Record<string, string> | undefined;
+      let stopped = false;
       const ended = start((r) => (queue.push(r), wake())).finally(() => ((done = true), wake()));
+
       return {
+        get meta() {
+          return meta;
+        },
+        /** Leaves the stream from outside the loop, as a break does from inside. */
+        stop(reason?: unknown) {
+          stopped = true;
+          void ended.catch(() => undefined); // a left stream's own end is no one's error
+          end?.(reason);
+          wake();
+        },
         async *[Symbol.asyncIterator]() {
           try {
             for (;;) {
+              if (stopped) return;
               const reply = queue.shift();
-              if (reply?.ok) yield parse(reply.value);
-              else if (reply) throw onFault(reply);
+              if (reply?.ok) {
+                meta = reply.meta;
+                yield parse(reply.value);
+              } else if (reply) throw onFault(reply);
               else if (done) return void (await ended);
               else await new Promise<void>((r) => (wake = r));
             }
           } finally {
+            void ended.catch(() => undefined); // the reader may leave first: its end is no error
             end?.();
           }
         },
@@ -191,13 +211,13 @@ const steps = resource({
     /** Start: one job, `implement` or `remote`; with `implement`, a run for every key. */
     const check = (def: Def, config: Read, raise: (kind: string, payload: unknown) => never) => {
       if (config.remote.present === config.implement.present) {
-        raise("MissingConfig", { label: name, key: "implement | remote" });
+        raise("MissingConfig", { label: def.name, key: "implement | remote" });
       }
       const implement = config.implement.present ? config.implement.value : {};
       const missing = config.implement.present
         ? def.keys.find((key) => !implement[key] || !flow.runOf(implement[key]))
         : undefined;
-      if (missing) raise("MissingConfig", { label: name, key: `implement.${missing}` });
+      if (missing) raise("MissingConfig", { label: def.name, key: `implement.${missing}` });
     };
 
     /** The edge: bad input is this side's bug; it throws here, before anything runs or is sent. */
@@ -215,16 +235,18 @@ const steps = resource({
       const { call: invocation, run, config, raise, log, obs } = event;
       const traceId = obs.span?.traceId;
       const contract = def.contracts[key]!;
-      if (!config.remote.present) return raise("MissingConfig", { label: name, key: "remote" });
+      if (!config.remote.present) {
+        return raise("MissingConfig", { label: def.name, key: "remote" });
+      }
       const remote = config.remote.value;
       const input = inputOf(def, event, key);
       const reply = (contract.mode ?? "reply") === "reply";
       if (!reply && !remote.watch) {
-        return raise("MissingConfig", { label: name, key: "remote.watch" });
+        return raise("MissingConfig", { label: def.name, key: "remote.watch" });
       }
       const watch = remote.watch;
       const faulted = (r: Failed) => {
-        if (r.kind !== "refused") log.warn("rpc fault", { address: key, fault: r.kind });
+        if (r.kind !== "refused") log.warn(`${def.name} fault`, { address: key, fault: r.kind });
         return faultOf(def, key, r.kind, r.payload, traceId);
       };
 
@@ -245,17 +267,21 @@ const steps = resource({
               return answer.value;
             }
 
+            // The reader leaves (a break, or `stop()`): the watch ends, as the server's channel does.
+            const leave = new AbortController();
+            const until = signal ? AbortSignal.any([signal, leave.signal]) : leave.signal;
             return pull(
               (push) =>
                 Promise.resolve(
                   run(
                     watch!,
-                    { input: { address: key, value: input, meta, push }, signal, ...bind },
+                    { input: { address: key, value: input, meta, push }, signal: until, ...bind },
                     sent,
                   ),
                 ),
               (v) => contract.output.parse(v),
               faulted,
+              (reason) => leave.abort(reason),
             );
           },
           {
@@ -279,7 +305,7 @@ const steps = resource({
       const contract = def.contracts[key]!;
       const input = inputOf(def, event, key);
       if (!config.implement.present) {
-        return raise("MissingConfig", { label: name, key: "implement" });
+        return raise("MissingConfig", { label: def.name, key: "implement" });
       }
       const entry = config.implement.value[key];
       const implementation = flow.runOf(entry) as Operation.Handle<unknown, unknown>;
@@ -304,8 +330,12 @@ const steps = resource({
             invocation?.signal?.addEventListener("abort", () => leave.abort(), { once: true });
             return pull(
               (push) => {
-                const send = (value: unknown) =>
-                  push({ ok: true, value: contract.output.parse(value) });
+                const send = (value: unknown, meta?: Record<string, string>) =>
+                  push({
+                    ok: true,
+                    value: contract.output.parse(value),
+                    ...(meta ? { meta } : {}),
+                  });
                 const out = channel({ send, closed: leave.signal });
                 return Promise.resolve(run(implementation, { input, tags: [...tags, out] }, work));
               },
@@ -329,10 +359,10 @@ const steps = resource({
 
     /** A throw is `failed`, whatever it carries: its kind is never read. The cause stays here, whole. */
     const failedAt =
-      ({ log, obs }: Event, address: string) =>
+      (def: Def, { log, obs }: Event, address: string) =>
       (error: unknown): Reply => {
-        obs.event("rpc.failed", { address });
-        log.error("rpc call failed", {
+        obs.event(`${def.name}.failed`, { address });
+        log.error(`${def.name} call failed`, {
           address,
           cause: String(error),
           stack: String(Object(error).stack ?? ""),
@@ -407,7 +437,7 @@ const steps = resource({
           },
         )
         .then(answeredAs)
-        .catch(failedAt(event, address));
+        .catch(failedAt(def, event, address));
     };
 
     /** stream: each output pushed, until the op returns or the caller leaves (`left`). */
@@ -425,8 +455,9 @@ const steps = resource({
 
       const entry = config.implement.present ? config.implement.value[address] : undefined;
       const implementation = flow.runOf(entry) as Operation.Handle<unknown, unknown>;
-      const send = (value: unknown) => push({ ok: true, value: contract.output.parse(value) });
-      const out = channel({ send, closed: left ?? new AbortController().signal });
+      const send = (value: unknown, meta?: Record<string, string>) =>
+        push({ ok: true, value: contract.output.parse(value), ...(meta ? { meta } : {}) });
+      const out = channel({ send, closed: left ?? event.signal ?? new AbortController().signal });
 
       return flow
         .runHooks(
@@ -440,7 +471,7 @@ const steps = resource({
         )
         .then(
           (end) => (flow.isRefused(end) && push(answeredAs(end)), true),
-          (error) => (push(failedAt(event, address)(error)), true),
+          (error) => (push(failedAt(def, event, address)(error)), true),
         );
     };
 
@@ -472,7 +503,11 @@ type Steps = typeof steps extends Resource.Handle<infer T> ? Awaited<T> : never;
  * - `remote`: a run goes through the capsule's hooks, then the protocol's `call` or `watch`.
  * Values only: the protocol owns the codec.
  */
-export function rpc<const C extends Contracts>(contracts: C) {
+export function rpc<const C extends Contracts>(
+  contracts: C,
+  /** `label` names its spans and logs (remoteData passes its own); the wire address is the key. */
+  { label: name = "rpc" }: { readonly label?: string } = {},
+) {
   const keys = Object.keys(contracts) as (keyof C & string)[];
   const taken = keys.find((key) => reserved.includes(key));
   if (taken) throw new Error(`${name}: "${taken}" is a reserved key`);
@@ -480,6 +515,15 @@ export function rpc<const C extends Contracts>(contracts: C) {
   const fault = {
     /** True for a fault from a call of this definition, on this side. */
     is: (error: unknown): error is RpcFault<keyof C & string> => Object(error)[brandKey] === brand,
+    /** A fault of this definition, made on this side (the transport failed, a value did not fit). */
+    make: (address: string, kind: Fault, payload: unknown, traceId: string | undefined): RpcFault =>
+      Object.assign(new Error(`${address}: ${kind}${traceId ? ` (trace ${traceId})` : ""}`), {
+        [brandKey]: brand,
+        address,
+        fault: kind,
+        payload,
+        traceId,
+      }),
   };
 
   const ops = Object.fromEntries(
@@ -517,7 +561,26 @@ export function rpc<const C extends Contracts>(contracts: C) {
       throw new Error(`${name} does not serve here`);
     },
   });
-  const def: Def = { contracts, keys, brand, answer, stream };
+  /**
+   * One push taken by a stream reader: an OTel process span. A push that carries the sender's
+   * span (`meta.traceparent`) records it as a link, since Core spans have no links of their own.
+   */
+  const receive = operation({
+    label: `${name}.receive`,
+    input: z.object({ key: z.string(), meta: z.record(z.string(), z.string()).optional() }),
+    run: (_, { input, obs }) => {
+      if (obs.span) {
+        Object.assign(obs.span.attributes, {
+          "messaging.operation.type": "process",
+          "messaging.destination.name": input.key,
+        });
+      }
+      const link = input.meta?.traceparent;
+      if (link) obs.event("link", { traceparent: link });
+      return obs.span?.traceId;
+    },
+  });
+  const def: Def = { name, contracts, keys, fault, answer, stream, receive };
   const own = data<Steps | null>({ label: `${name}.steps`, initial: null });
 
   const configShape = {
@@ -558,10 +621,15 @@ export function rpc<const C extends Contracts>(contracts: C) {
   });
 
   /** One capsule; its call takes a union (Core config is flat: this cast is the gap, F28). */
-  return Object.assign(base, { fault, addresses: keys }) as unknown as Omit<typeof base, never> &
+  return Object.assign(base, { fault, receive, addresses: keys }) as unknown as Omit<
+    typeof base,
+    never
+  > &
     Ops<C> & {
       readonly answer: Answer;
       readonly stream: Stream;
+      /** A stream reader's process span for one push: `run(api.receive, { input: { key, meta } })`. */
+      readonly receive: typeof receive;
       readonly fault: typeof fault;
       readonly addresses: readonly string[];
       readonly contracts: C;

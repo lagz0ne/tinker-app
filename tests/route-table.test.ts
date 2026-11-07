@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 
 import { createScope, data, operation } from "@tinker/core";
-import type { Observe } from "@tinker/core";
+import type { Observe, Scope } from "@tinker/core";
 import { z } from "zod";
 
 import { memory } from "~/components/memory";
@@ -26,6 +26,20 @@ const startError = async (capsules: NonNullable<Parameters<typeof createScope>[0
   return { kind: Object(error).kind, payload: Object(error).payload };
 };
 
+/** A watch's first push, then the watch ends: a remoteData key is an rpc stream key. */
+const first = async (scope: Scope.Handle, address: string) => {
+  const stop = new AbortController();
+  const got = Promise.withResolvers<string>();
+  const watch = scope.run(memory.server.serveStream, {
+    input: { address, text: "null", meta: {}, push: (t) => got.resolve(t), left: stop.signal },
+  });
+
+  const text = await got.promise;
+  stop.abort();
+  await watch;
+  return JSON.parse(text);
+};
+
 test("two services with one address: the first wins and start warns, as Hono does", async () => {
   const board = remoteData({ "todo.add": data({ initial: 0 }) });
   const api = rpc({ "todo.add": { input: z.null(), output: z.null() } });
@@ -45,10 +59,12 @@ test("two services with one address: the first wins and start warns, as Hono doe
   const warned = lines.find((l) => l.startsWith("protocol duplicate address"));
   expect(warned).toContain('"winner":"remoteData"');
   expect(warned).toContain('"shadowed":"rpc"');
+  // The board's key is a stream key: a call finds no reply key there (404), a watch gets the value.
   const reply = await scope.run(memory.server.serve, {
     input: { address: "todo.add", text: "null", meta: {} },
   });
-  expect(JSON.parse(String(reply))).toEqual({ ok: true, value: 0 }); // the board answered
+  expect(reply).toBeNull();
+  expect(await first(scope, "todo.add")).toEqual({ ok: true, value: 0 }); // the board answered
 });
 
 test("strict: two services with one address fail start, naming the address and both", async () => {
@@ -64,14 +80,6 @@ test("strict: two services with one address fail start, naming the address and b
   ).toEqual({
     kind: "DuplicateAddress",
     payload: { address: "todo.add", services: ["remoteData", "rpc"] },
-  });
-});
-
-test("the shared stream's address is reserved", async () => {
-  const board = remoteData({ "*": data({ initial: 0 }) });
-  expect(await startError([board({ serve: true }), memory.server({ services: [board] })])).toEqual({
-    kind: "ReservedAddress",
-    payload: { address: "*", service: "remoteData" },
   });
 });
 
@@ -130,14 +138,17 @@ test("30 definitions × 3 keys and one rpc with 30 keys: each call reaches its o
     );
   for (let b = 0; b < 30; b++) {
     for (let k = 0; k < 3; k++) {
-      expect(await ask(`b${b}.k${k}`)).toEqual({ ok: true, value: `board ${b} key ${k}` });
+      expect(await first(server, `b${b}.k${k}`)).toEqual({
+        ok: true,
+        value: `board ${b} key ${k}`,
+      });
     }
   }
   for (const k of keys) expect(await ask(k)).toEqual({ ok: true, value: `answered ${k}` });
   const count = (name: string) => spans.filter((x) => x.name === name).length;
-  // Each call ran exactly one service: 90 board answers, 30 rpc answers. Asking in turn would
-  // have run up to 31 answers per call.
-  expect([count("remoteData.answer"), count("rpc.answer")]).toEqual([90, 30]);
+  // Each ask ran exactly one service: 90 board watches, 30 rpc answers. Asking in turn would
+  // have run up to 31 services per ask.
+  expect([count("remoteData.stream"), count("rpc.answer")]).toEqual([90, 30]);
 });
 
 test("one shared stream carries keys of two definitions; each is routed to its own", async () => {
@@ -162,7 +173,7 @@ test("one shared stream carries keys of two definitions; each is routed to its o
   closers.push(() => server.close());
   const client = createScope({
     capsules: [
-      memory.client({ peer: server, streams: "one" }),
+      memory.client({ peer: server }),
       board({ read: memory.client }),
       prefs({ read: memory.client }),
     ],

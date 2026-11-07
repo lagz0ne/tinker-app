@@ -1,11 +1,12 @@
 import { createScope } from "@tinker/core";
+import type { Server } from "bun";
 
 import { defineMain } from "~/base/main";
 import { observeServerPanics } from "~/base/panics.server";
 import { health } from "~/components/health";
 import { routes } from "~/components/requests/index.server";
-import { sse } from "~/components/sse/index.server";
 import { telemetry } from "~/components/telemetry/index.server";
+import { ws } from "~/components/ws/index.server";
 
 import { api } from "@/api";
 import { greetHere } from "@/backend/greet";
@@ -15,7 +16,7 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
   if (args.length) {
     stderr.write("Usage: bun cmds/host.ts\n");
     exit(64);
-    return { fetch: async () => undefined, closed: Promise.resolve() };
+    return { fetch: async () => undefined, websocket: undefined, closed: Promise.resolve() };
   }
 
   // Behind a TLS proxy the request URL is http: calls and tab batches must come from the public
@@ -41,7 +42,7 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
     capsules: [
       sink,
       api({ implement: { greet: greetHere } }),
-      sse.server({ base: "/rpc", services: [api], origin }),
+      ws.server({ path: "/rpc", services: [api], origin }),
       routes({
         stop: signal,
         table: {
@@ -55,9 +56,14 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
   await app.ready;
   signal.throwIfAborted(); // Aborted during start: app is closing, so no handler.
   app.onClose(observeServerPanics(exit.bind(null, 1), app.closed, stderr));
-  const [calls, table] = [app.resolve(sse.server), app.resolve(routes)];
+  const [{ upgrade, websocket }, table] = [app.resolve(ws.server), app.resolve(routes)];
   return {
-    fetch: async (request: Request) => (await calls(request, app)) ?? table(request, app),
+    websocket: websocket as never,
+    // undefined: not the socket's path, so the route table; null: upgraded; else its answer.
+    fetch: async (request: Request, server: Server<never>) => {
+      const upgraded = upgrade(request, app, server as never);
+      return upgraded === undefined ? table(request, app) : upgraded;
+    },
     closed: app.closed,
   };
 });

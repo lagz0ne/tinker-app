@@ -1,9 +1,14 @@
-import type { HTMLBundle } from "bun";
+import type { HTMLBundle, Server, WebSocketHandler } from "bun";
 
 import type { MainClosed, MainContext } from "./main";
 
+/**
+ * `fetch` answers undefined when the path is not the command's (404 here), and null when it
+ * upgraded the request to a WebSocket (Bun owns it now). `websocket` is the socket handler.
+ */
 type Main = (ctx: MainContext) => Promise<{
-  fetch: (request: Request) => Promise<Response | undefined>;
+  fetch: (request: Request, server: Server<never>) => Promise<Response | null | undefined>;
+  websocket?: WebSocketHandler<never>;
   closed: MainClosed;
 }>;
 
@@ -17,7 +22,7 @@ const signalCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 } as const;
  * The listener replaces the ignore that `nohup` sets, so `nohup bun run start &` stops when its
  * shell exits: run it under `setsid` or a process manager instead.
  * A command that calls `exit` during start gets that code and no port: the host never listens,
- * but still waits for `closed`. `/api/*`, `/rpc/*` and each of `options.paths` (Bun route
+ * but still waits for `closed`. `/api/*`, `/rpc`, `/rpc/*` and each of `options.paths` (Bun route
  * patterns, such as `/mcp` or `/.well-known/*`) go to the command; every other path gets the
  * page (the router owns it). `paths` adds to the two defaults; it never drops them.
  * `pages` are the client's routes: dev passes Bun's HTML import, a build its own files.
@@ -63,15 +68,22 @@ export async function serveMain(
     : [
         Bun.serve({
           port: Number(process.env.PORT ?? 4318),
-          // Bun's 10 s default resets a quiet stream (SSE); 60 s (max 255) outlasts usual heartbeats.
+          // Bun's 10 s default cuts a slow request; 60 s (max 255) matches the socket idle time.
           idleTimeout: 60,
+          // Bun's types want `fetch` beside `websocket`; unset, Bun reads `websocket` as absent.
+          websocket: started.websocket as never,
+          fetch: () => new Response(null, { status: 404 }),
           development: process.env.NODE_ENV !== "production" && { hmr: false, console: true },
           routes: {
             ...Object.fromEntries(
-              ["/api/*", "/rpc/*", ...(options.paths ?? [])].map((path) => [
+              ["/api/*", "/rpc", "/rpc/*", ...(options.paths ?? [])].map((path) => [
                 path,
-                async (request: Request) =>
-                  (await started.fetch(request)) ?? new Response(null, { status: 404 }),
+                async (request: Request, server: Server<never>) => {
+                  const reply = await started.fetch(request, server);
+                  return reply === null
+                    ? undefined
+                    : (reply ?? new Response(null, { status: 404 }));
+                },
               ]),
             ),
             ...pages,

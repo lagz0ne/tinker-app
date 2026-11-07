@@ -5,17 +5,8 @@ import type { Observe } from "@tinker/core";
 
 import { keepDates } from "./fixtures/todo/codec";
 import { api, board } from "./fixtures/todo/contracts";
-import {
-  addTodo,
-  joinPresence,
-  removeTodo,
-  signedIn,
-  signedInUse,
-  toggleTodo,
-} from "./fixtures/todo/data";
-import { sseClient, sseServer } from "./support/sse";
-
-const sse = { client: sseClient.client, server: sseServer.server };
+import { addTodo, joinPresence, removeTodo, signedIn, toggleTodo } from "./fixtures/todo/data";
+import { listen, wsClient, wsServer } from "./support/ws";
 
 // What the traces and logs show today, over SSE. Each test states a fact; a finding is marked.
 
@@ -42,11 +33,11 @@ const tick = (ms = 150) => new Promise((r) => setTimeout(r, ms));
 
 async function boot() {
   const srv = recorder();
-  const transport = sse.server({ base: "/api", codec: keepDates, services: [board, api] });
+  const transport = wsServer.server({ path: "/api", codec: keepDates, services: [board, api] });
   const server = createScope({
     observe: srv.observe,
     capsules: [
-      board({ serve: true, use: [signedInUse] }),
+      board({ serve: true, onStart: [signedIn] }),
       api({
         onStart: [signedIn],
         implement: {
@@ -61,25 +52,20 @@ async function boot() {
   });
   await server.ready;
   closers.push(() => server.close());
-  const handle = server.resolve(transport);
-  const bun = Bun.serve({
-    port: 0,
-    idleTimeout: 0,
-    fetch: async (r) => (await handle(r, server)) ?? new Response(null, { status: 404 }),
-  });
+  const { bun, url } = listen(server, [transport]);
   closers.push(() => bun.stop(true));
   const join = async (who: string) => {
     const seen = recorder();
     const client = createScope({
       observe: seen.observe,
       capsules: [
-        sse.client({
-          base: `http://localhost:${bun.port}/api`,
+        wsClient.client({
+          url: `${url}/api`,
           codec: keepDates,
           headers: { cookie: `sid=${who}` },
         }),
-        board({ read: sse.client }),
-        api({ remote: sse.client }),
+        board({ read: wsClient.client }),
+        api({ remote: wsClient.client }),
       ],
     });
     await client.ready;
@@ -102,19 +88,19 @@ test("a call is one trace across both sides", async () => {
   const mine = since(seen.spans, c0).filter((s) => s.name !== "remoteData.receive"); // pushes: the next test
   const theirs = since(srv.spans, s0).filter((s) => s.kind === "operation");
 
-  expect(names(mine).sort()).toEqual(["sse.call", "sse.send", "todo.add"]);
-  const [root] = theirs.filter((s) => s.name === "sse.serve");
+  expect(names(mine).sort()).toEqual(["todo.add", "ws.call", "ws.send"]);
+  const [root] = theirs.filter((s) => s.name === "ws.serve");
   expect(theirs.every((s) => s.traceId === mine[0]!.traceId)).toBe(true);
   // O1 fixed: the transport sends its own span, so the server's parent is the request (OTel HTTP).
-  expect(root!.parentSpanId).toBe(mine.find((s) => s.name === "sse.send")!.spanId);
+  expect(root!.parentSpanId).toBe(mine.find((s) => s.name === "ws.send")!.spanId);
   // O5: the route table sends todo.add straight to rpc; remoteData.answer no longer runs.
   expect(names(theirs).sort()).toEqual([
     "remoteData.send",
     "remoteData.send",
     "rpc.answer",
     "signedIn",
-    "sse.serve",
     "todo.add.do",
+    "ws.serve",
   ]);
 });
 
@@ -159,9 +145,9 @@ test("finding O3: a basket watch is one trace per client life; a normal close ma
   const { join } = await boot();
   const { client, seen } = await join("duke");
 
-  expect(names(seen.spans)).not.toContain("sse.watch"); // still open: not exported yet
+  expect(names(seen.spans)).not.toContain("ws.watch"); // still open: not exported yet
   await client.close();
-  const watches = seen.spans.filter((s) => s.name === "sse.watch");
+  const watches = seen.spans.filter((s) => s.name === "ws.watch");
   expect(watches.length).toBe(3); // one per basket, each its own trace
   expect(new Set(watches.map((s) => s.traceId)).size).toBe(3);
   expect(watches.every((s) => s.status === "failed")).toBe(true);

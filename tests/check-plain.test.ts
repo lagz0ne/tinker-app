@@ -195,8 +195,8 @@ test("createMainHost and runMain are exempt only in tinker/base/main-host.ts", a
 test("a definition maker is exempt only in its own file; a helper beside it still fails", async () => {
   const result = await checkFiles({
     "tinker/components/rpc/index.ts": `export function rpc() {}\n\nexport const shout = (s: string) => s;\n`,
-    "tinker/components/sse/index.ts": `export function createSse() {}\n`,
-    "tinker/components/memory/index.ts": `export function createSse() {}\n`,
+    "tinker/components/ws/index.ts": `export function createWs() {}\n`,
+    "tinker/components/memory/index.ts": `export function createWs() {}\n`,
   });
 
   expect(result.code).toBe(1);

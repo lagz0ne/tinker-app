@@ -129,10 +129,10 @@ feature
 rpc, remoteData: values only
     |
     v
-transport capsule (sse, memory)
+transport capsule (ws, memory)
   speaks the protocol:
   codec, envelope, faults,
-  route table, pushes, streams
+  route table
     |
     v
 the wire: text
@@ -141,20 +141,19 @@ the wire: text
 ## Decision
 
 1. **Transport.** One capsule per side speaks
-   the protocol. `sse.client` exports `call`
-   and `watch`. `sse.server` gives the request
-   handler as its start value. `memory` is the
+   the protocol. `ws.client` exports `call`
+   and `watch`. `ws.server` gives `upgrade` and
+   the socket handler as its start value. `memory` is the
    same, in one process, for tests.
 2. **Protocol.** Shared code, not a capsule.
    It holds the reply envelope, the fault set,
-   the codec use, the push forms and the route
-   table.
-3. **Second transport.** `createSse()` and
+   the codec use and the route table.
+3. **Second transport.** `createWs()` and
    `createMemory()` make one more set, for a
    scope with a public and a signed base.
 4. **Codec.** Transport config, JSON by
    default. Both sides must use the same one.
-5. **Route table.** `sse.server({ services })`
+5. **Route table.** `ws.server({ services })`
    takes the definitions. A duplicate address:
    the first in the list wins, and start logs a
    warning. `strict: true` fails start with
@@ -162,16 +161,14 @@ the wire: text
 6. **rpc.** `rpc(contracts)` gives one capsule.
    A contract has `input`, `output` and
    `mode` ("reply" or "stream").
-   - `api({ use, implement })` runs the keys in
+   - `api({ onStart, implement })` runs the keys in
      this process (as `createCaller`).
-   - `api({ use, remote: sse.client })` sends
+   - `api({ onStart, remote: ws.client })` sends
      them.
    - `api["todo.add"]` is the same handle on
      both sides.
-   - A key answers only in its own mode. A GET
-     never runs a reply key, so a link on another
-     site cannot change data. Other methods
-     answer 405.
+   - A key answers only in its own mode. A
+     watch never runs a reply key (404).
    - A stream key's op depends on the `channel`
      tag. It sends each output and ends when
      `closed` aborts.
@@ -179,10 +176,10 @@ the wire: text
    takes plain `data` cells as shapes. It makes
    its own cell per key and exports it as a read
    view (ADR 0123). The key is the address.
-   - `board({ serve: true, use })`: the app's
+   - `board({ serve: true, onStart })`: the app's
      writer ops set the passed cell. Each write
      is pushed.
-   - `board({ read: sse.client })`: `call` and
+   - `board({ read: ws.client })`: `call` and
      `watch` fill the cells.
    - The server is the only writer. A client
      changes data through an rpc key.
@@ -243,15 +240,36 @@ the wire: text
       closes the scope.
 13. **Client options** (the protocol's, so on
     the transport):
-    - `pushes`: "whole" or "delta" (RFC 3229).
-    - `streams`: "each" or "one" (one stream,
-      one frame per tick).
-    - `meta`: an op whose pairs go as headers.
+    - `meta`: an op whose pairs go beside the
+      body, in each message's `m`.
     - `renew`: runs on `refused`; true means
       try once more. One at a time.
 14. **Trace.** The transport sends its own span
     as `traceparent`. A push carries the
     writer's span; the client links to it.
+
+15. **One link** (Duke 2026-11-07 12:15).
+    One WebSocket per client carries every
+    call and watch. Precedent: tRPC wsLink
+    messages, batched as httpBatchLink does.
+    - Out: `{i, a, t, m}`; a watch adds
+      `w: 1`; a stop is `{i, x: 1}`.
+    - In: `{i, t}`, `{i, e: status}`, or
+      `{i, end: 1}`.
+    - The messages of one tick go as one
+      frame, both ways (at most 32). One
+      write's keys arrive together (F35).
+    - Guards: Origin at upgrade, 1 MiB frame,
+      a slow reader closed, 256 watches.
+    - Measured in Bun: a batch of 32 costs
+      1.3 µs a call on the server; a POST per
+      call 10.4 µs. A push to 200 clients
+      costs 2.05 µs on SSE, 0.29 µs on WS.
+    - Gone: SSE, the shared stream, delta
+      pushes, the 2 KiB watch text, `use`.
+    - Bytes stay a raw-body POST beside the
+      socket (Q7): Bun hands a WS message
+      whole, so frames would copy it.
 
 ## The lifecycle
 
@@ -326,15 +344,15 @@ export const api = rpc({
 The server command:
 
 ```ts
-const transport = sse.server({
-  base: "/api",
+const transport = ws.server({
+  path: "/api",
   services: [board, api],
 });
 const scope = createScope({
   capsules: [
-    board({ serve: true, use: [signedIn] }),
+    board({ serve: true, onStart: [signedIn] }),
     api({
-      use: [signedIn],
+      onStart: [signedIn],
       implement: { "todo.add": addTodo },
     }),
     transport,
@@ -347,9 +365,9 @@ The client command:
 ```ts
 const scope = createScope({
   capsules: [
-    sse.client({ base: "/api" }),
-    board({ read: sse.client }),
-    api({ remote: sse.client }),
+    ws.client({ url: "wss://app.example/api" }),
+    board({ read: ws.client }),
+    api({ remote: ws.client }),
   ],
 });
 ```
@@ -394,10 +412,10 @@ Log of each step:
 - A key with no input: the JSON codec sends
   `undefined` as `null`, so `z.void()` answers
   `invalid` (Hedl uses a `noInput` shim).
-- Serving on tinker-app: `sse.server` should be
+- Serving on tinker-app: `ws.server` should be
   a route of the `bun.server` capsule.
-- A watch's text is held to 2 KiB on every
-  transport (54563b6).
+- Per socket, at most 8 calls in flight (not
+  built yet).
 - Core rows: F18 (flat spans), F21 (a refusal
   logs as a crash), F28 (union config by cast),
   F32 (abort disposes depends), F39 (write hook

@@ -3,13 +3,12 @@ import { afterAll, beforeEach, expect, test } from "bun:test";
 import { createScope, operation } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 
-import { httpBackend } from "~/components/http";
 import { routes } from "~/components/requests/index.server";
-import { sse as tab } from "~/components/sse";
-import { sse as server } from "~/components/sse/index.server";
 
 import { api } from "@/api";
 import { greetHere } from "@/backend/greet";
+
+import { listen, wsClient as tab, wsServer as server } from "./support/ws";
 
 const shape = /^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/;
 const remote = { traceId: "4bf92f3577b34da6a3ce929d0e0e4736", spanId: "00f067aa0ba902b7" };
@@ -32,7 +31,16 @@ const echo = operation({ label: "trace.echo", run: () => ({ ok: true }) });
 
 const serverSpans: Observe.Span[] = [];
 const tabSpans: Observe.Span[] = [];
-const sent: Headers[] = [];
+/** The meta of each message the clients send, read off the socket. */
+const sent: Map<string, string>[] = [];
+const Real = globalThis.WebSocket;
+
+globalThis.WebSocket = class extends Real {
+  override send(frame: string) {
+    for (const m of JSON.parse(frame)) sent.push(new Map(Object.entries(m.m ?? {})));
+    super.send(frame);
+  }
+} as typeof WebSocket;
 
 const stop = new AbortController();
 
@@ -40,24 +48,31 @@ const backend = createScope({
   observe: { export: (span) => void serverSpans.push(span) },
   capsules: [
     api({ implement: { greet: greetHere } }),
-    server.server({ base: "/rpc", services: [api] }),
+    server.server({ path: "/rpc", services: [api] }),
     routes({ stop: stop.signal, table: { "GET /echo": echo } }),
   ],
 });
 
 await backend.ready;
-const [calls, table] = [backend.resolve(server.server), backend.resolve(routes)];
+const table = backend.resolve(routes);
+const { bun, url } = listen(backend, [server.server]);
 
-/** The client's HTTP goes straight to the server root's fetch: no network. */
-const send = async (url: string | URL | Request, init?: RequestInit) => {
-  sent.push(new Headers(init?.headers));
-  return (await calls(new Request(url, init), backend)) ?? new Response(null, { status: 404 });
+/** One raw frame with this meta; the first answer back. */
+const raw = async (meta: Record<string, string>, base = `${url}/rpc`) => {
+  const socket = new Real(base);
+  const answer = await new Promise<{ t?: string; e?: number }>((done) => {
+    socket.onopen = () =>
+      socket.send(JSON.stringify([{ i: 1, a: "greet", t: '{"name":"fresh"}', m: meta }]));
+    socket.onmessage = (e) => done(JSON.parse(String(e.data))[0]);
+  });
+
+  socket.close();
+  return answer;
 };
 
 const browser = createScope({
   observe: { export: (span) => void tabSpans.push(span) },
-  tags: [httpBackend(send)],
-  capsules: [tab.client({ base: "http://tinker/rpc" }), api({ remote: tab.client })],
+  capsules: [tab.client({ url: `${url}/rpc` }), api({ remote: tab.client })],
 });
 
 await browser.ready;
@@ -70,7 +85,9 @@ beforeEach(() => {
 
 afterAll(async () => {
   await browser.close();
+  await bun.stop(true);
   await backend.close();
+  globalThis.WebSocket = Real;
 });
 
 const named = (spans: Observe.Span[], name: string) => {
@@ -85,8 +102,8 @@ test("a client call's server spans join the client's trace, under the transport'
   });
 
   const call = named(tabSpans, "greet");
-  const request = named(tabSpans, "sse.send");
-  const root = named(serverSpans, "sse.serve");
+  const request = named(tabSpans, "ws.send");
+  const root = named(serverSpans, "ws.serve");
   const work = named(serverSpans, "greet.here");
   expect([root.traceId, work.traceId, request.traceId]).toEqual([
     call.traceId,
@@ -101,7 +118,7 @@ test("a client call's server spans join the client's trace, under the transport'
 
 test("the client sends a W3C traceparent with its own span ids and sampled flag", async () => {
   await browser.run(api.greet, { input: { name: "Duke" } });
-  const request = named(tabSpans, "sse.send");
+  const request = named(tabSpans, "ws.send");
   const header = sent[0]?.get("traceparent");
 
   expect(header).toMatch(shape);
@@ -114,9 +131,9 @@ test("the client sends a W3C traceparent with its own span ids and sampled flag"
   await unsampled.run(api.greet, { input: { name: "quiet" } });
   await unsampled.close();
 
-  const quiet = named(tabSpans, "sse.send");
+  const quiet = named(tabSpans, "ws.send");
   expect(sent[0]?.get("traceparent")).toBe(`00-${remote.traceId}-${quiet.spanId}-00`);
-  const root = named(serverSpans, "sse.serve");
+  const root = named(serverSpans, "ws.serve");
   expect(root.traceId).toBe(remote.traceId);
   expect(root.parentSpanId).toBe(quiet.spanId);
   expect(named(serverSpans, "greet.here").sampled).toBe(false);
@@ -124,15 +141,14 @@ test("the client sends a W3C traceparent with its own span ids and sampled flag"
 
 test("a client with observation off sends no traceparent", async () => {
   const dark = createScope({
-    tags: [httpBackend(send)],
-    capsules: [tab.client({ base: "http://tinker/rpc" }), api({ remote: tab.client })],
+    capsules: [tab.client({ url: `${url}/rpc` }), api({ remote: tab.client })],
   });
   await dark.ready;
   await dark.run(api.greet, { input: { name: "dark" } });
   await dark.close();
 
   expect(sent[0]?.has("traceparent")).toBe(false);
-  expect(named(serverSpans, "sse.serve").parentSpanId).toBeUndefined();
+  expect(named(serverSpans, "ws.serve").parentSpanId).toBeUndefined();
 });
 
 test("routes: a request with a valid traceparent gives a route span that is its child", async () => {
@@ -160,43 +176,28 @@ test("a missing or malformed traceparent starts a fresh trace; the request still
     expect(routeSpan.parentSpanId).toBeUndefined();
 
     serverSpans.length = 0;
-    const call = await calls(
-      new Request("http://tinker/rpc/greet", {
-        method: "POST",
-        body: JSON.stringify({ name: "fresh" }),
-        headers,
-      }),
-      backend,
-    );
-    expect(call?.status).toBe(200);
-    const callSpan = named(serverSpans, "sse.serve");
+    const call = await raw(headers);
+    expect(call.t).toBe('{"ok":true,"value":{"text":"Hello, fresh."}}');
+    const callSpan = named(serverSpans, "ws.serve");
     expect(callSpan.traceId).not.toBe(remote.traceId);
     expect(callSpan.parentSpanId).toBeUndefined();
   }
 });
 
-test("sse: a request after the root closed answers 503, it does not reject", async () => {
+test("ws: a message after the root closed answers 503, it does not reject", async () => {
   const closing = createScope({
     capsules: [
       api({ implement: { greet: greetHere } }),
-      server.server({ base: "/rpc", services: [api] }),
+      server.server({ path: "/rpc", services: [api] }),
     ],
   });
 
   await closing.ready;
-  const answer = closing.resolve(server.server);
+  const late = listen(closing, [server.server]);
   await closing.close();
 
-  const post = await answer(
-    new Request("http://tinker/rpc/greet", {
-      method: "POST",
-      body: JSON.stringify({ name: "late" }),
-      headers: { traceparent: valid },
-    }),
-    closing,
-  );
-  const watch = await answer(new Request("http://tinker/rpc/greet?text=null"), closing);
-  expect([post?.status, watch?.status]).toEqual([503, 503]);
+  expect((await raw({ traceparent: valid }, `${late.url}/rpc`)).e).toBe(503);
+  await late.bun.stop(true);
 });
 
 test("routes: a request after the root closed answers 500, it does not reject", async () => {
