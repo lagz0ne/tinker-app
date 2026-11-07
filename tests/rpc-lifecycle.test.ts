@@ -818,6 +818,8 @@ test("F4: retry counts down: one run, then at most the count it names", async ()
     input: callInput,
     run: async (): Promise<Reply> => {
       calls += 1;
+      // A count that never goes down would send forever: answer after 10 so the test fails, not hangs.
+      if (calls > 10) return { ok: true, value: { n: 1 } };
       return { ok: false, kind: "link", payload: {} };
     },
   });
