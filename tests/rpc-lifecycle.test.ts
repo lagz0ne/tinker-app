@@ -692,3 +692,90 @@ test("F1: every hook gets the key, the input and the meta, on both sides", async
     expect(was(side, "finish")).toEqual([echo, fail]);
   }
 });
+
+test("F2: a server onSuccess reads the output the shape checked: no field it strips", async () => {
+  let keys: string[] = [];
+  const sees = operation({
+    label: "success.keys",
+    input: hook.success,
+    run: (_deps, { input }) => void (keys = Object.keys(Object(input.output))),
+  });
+  const impl = operation({
+    label: "echo.hash",
+    input: z.object({ n: z.number() }),
+    run: (_deps, { input }): { n: number; hash: string } => ({ ...input, hash: "a1b2" }),
+  });
+  const { client } = await pair(
+    { implement: { ...here, echo: impl }, onSuccess: [sees] },
+    { remote: memory.client },
+  );
+
+  expect(await client.run(api.echo, { input: { n: 1 } })).toEqual({ n: 1 });
+  expect(keys).toEqual(["n"]);
+});
+
+test("F2: a client onSuccess never sees a bad wire value: the error goes to onError", async () => {
+  let successes = 0;
+  let seen: unknown = null;
+  const sees = operation({
+    label: "client.success",
+    input: hook.success,
+    run: () => void (successes += 1),
+  });
+  const catches = operation({
+    label: "client.error",
+    input: hook.error,
+    run: (_deps, { input }) => void (seen = input.error),
+  });
+  // The wire says `{ n: "four" }`: not what the contract's output shape accepts.
+  const call = operation({
+    label: "call.bad",
+    input: callInput,
+    run: async (): Promise<Reply> => ({ ok: true, value: { n: "four" } }),
+  });
+  const { client } = await pair(
+    { implement: here },
+    { remote: { call }, onSuccess: [sees], onError: [catches] },
+  );
+
+  const error = await client.run(api.echo, { input: { n: 1 } }).then(
+    () => null,
+    (e: unknown) => e,
+  );
+
+  expect(successes).toBe(0);
+  expect(Object(seen).issues.at(0).path).toEqual(["n"]);
+  expect(Object(error).issues.at(0).path).toEqual(["n"]);
+});
+
+test("F2: a work output that fails the shape reaches onError, and is not retried", async () => {
+  let runs = 0;
+  let seen: unknown = null;
+  const catches = operation({
+    label: "error.issues",
+    input: hook.error,
+    run: (_deps, { input }) => void (seen = input.error),
+  });
+  const impl = operation({
+    label: "echo.nan",
+    input: z.object({ n: z.number() }),
+    // A number the shape rejects: zod reads NaN as its own type.
+    run: (): { n: number } => {
+      runs += 1;
+      return { n: Number.NaN };
+    },
+  });
+  const { client } = await pair(
+    { implement: { ...here, echo: impl }, onError: [catches], retry: { failed: 3 } },
+    { remote: memory.client },
+  );
+
+  const error = await client.run(api.echo, { input: { n: 1 } }).then(
+    () => null,
+    (e: unknown) => e,
+  );
+
+  expect(failure(error)).toEqual(["failed", {}]);
+  expect(runs).toBe(1);
+  expect(Object(seen).issues.at(0).path).toEqual(["n"]);
+});

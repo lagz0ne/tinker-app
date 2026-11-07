@@ -247,15 +247,22 @@ export const lifecycle = resource({
       const left: Partial<Record<Fault, number>> = { ...hooks.retry };
 
       for (;;) {
+        let output: unknown;
         try {
-          state.output = await frame.last(state.meta, state.tags);
-
-          return;
+          output = await frame.last(state.meta, state.tags);
         } catch (fault) {
           const { kind, runs } = againOf(frame, fault, left);
           if (!kind || runs < 1 || frame.signal?.aborted) throw fault;
           left[kind] = runs - 1;
+          continue;
         }
+
+        // The output shape checks the work's value here, before `onSuccess` reads it (a stream's
+        // pushes carry their own shape). Outside the retry catch: a value that does not fit is
+        // never sent again, but it is a throw of this step, so `onError` sees it.
+        state.output = frame.reply && frame.shape ? frame.shape.parse(output) : output;
+
+        return;
       }
     };
 
@@ -312,7 +319,7 @@ export const lifecycle = resource({
       }
     };
 
-    /** The output shape checks a value a hook gave, as it checks the work's own. */
+    /** The output shape checks a value a hook gave, as it checked the work's own. */
     const shapeOf = (frame: Frame, settled: Settled): Settled => {
       if (settled.kind !== "output" || !frame.reply || !frame.shape) return settled;
 
