@@ -807,3 +807,24 @@ test("F3: an already aborted signal stops the work before it runs again", async 
   expect(runs).toBe(1);
   expect(error).toBe(link);
 });
+
+test("F4: retry counts down: one run, then at most the count it names", async () => {
+  let calls = 0;
+  const call = operation({
+    label: "call.link",
+    input: callInput,
+    run: async (): Promise<Reply> => {
+      calls += 1;
+      return { ok: false, kind: "link", payload: {} };
+    },
+  });
+  const { client } = await pair({ implement: here }, { remote: { call }, retry: { link: 2 } });
+
+  const error = await client.run(api.echo, { input: { n: 1 } }).then(
+    () => null,
+    (e: unknown) => e,
+  );
+
+  expect(calls).toBe(3);
+  expect(failure(error)).toEqual(["link", {}]);
+});
