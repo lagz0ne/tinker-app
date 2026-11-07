@@ -254,7 +254,8 @@ const steps = resource({
           {},
           async (_, tags) => {
             if ((contract.mode ?? "reply") === "reply") {
-              const ask = { input, ...(tags.length ? { tags } : {}) };
+              // Its own layer, as on the server: a transaction ends with this run's result.
+              const ask = { input, signal: event.signal, ...(tags.length ? { tags } : {}) };
               return contract.output.parse(await run(implementation, ask, work));
             }
 
@@ -339,7 +340,13 @@ const steps = resource({
       // A bad output throws inside `answeredAs`: catch it too, so it is `failed` and not a crash.
       return chain
         .runChain(run as never, use, address, input, meta, (_, tags) =>
-          run(implementation, { input, ...(tags.length ? { tags } : {}) }, work),
+          // Its own layer (a call with a signal, ADR 0090): a session-target resource, such as
+          // a transaction, ends with the implementation's result, not the request session's close.
+          run(
+            implementation,
+            { input, signal: event.signal, ...(tags.length ? { tags } : {}) },
+            work,
+          ),
         )
         .then(answeredAs(def.contracts[address]!))
         .catch(failedAt(event, address));
