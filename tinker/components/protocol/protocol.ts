@@ -49,6 +49,16 @@ export const kept = { role: "state", explain: "The transport's own side" } as co
 /** The shared stream's address. Its text is the list of [address, text] it carries. */
 export const shared = "*";
 
+/**
+ * The most text one watch may carry, in UTF-8 bytes. A watch is a GET on SSE, so its text rides
+ * in the URL, where a proxy refuses a long one (HTTP 414; nginx keeps 8 KiB for a request line).
+ * URL encoding can triple the text, so 2 KiB stays under that. The protocol holds the line on
+ * every transport, so memory behaves as SSE does: the client sends nothing longer (encode), the
+ * server reads nothing longer (invalid: a stream that says why), and a shared stream splits before
+ * it grows past it.
+ */
+export const watchTextMax = 2048;
+
 /** Watches waiting for the tick's shared stream, per client side. */
 const waiting = new WeakMap<object, Member[]>();
 
@@ -61,6 +71,8 @@ type Member = {
   got: (text: string) => void;
   done: () => void;
   gone: boolean;
+  /** The shared stream this member rides, once the tick opened it. */
+  part?: { members: Member[]; stop: AbortController };
 };
 
 /** RFC 3229 words: the client's ask, as a header beside the body. */
@@ -270,6 +282,14 @@ export const protocol = resource({
       const body = encode(address, input.value);
       if (!body.ok) return up(body); // nothing is sent
 
+      // Too long to carry: a fault the caller sees at once, never a URL a proxy cuts.
+      if (
+        new TextEncoder().encode(codec.serialize([[address, body.value]])).byteLength > watchTextMax
+      ) {
+        hook.log.error("protocol watch too long", { address, max: watchTextMax });
+        return up({ ok: false, kind: "encode", payload: { side: "client", max: watchTextMax } });
+      }
+
       const wantsDelta = own.pushes === "delta";
       // Delta: keep the last value text of this stream; each push changes it.
       let last = "";
@@ -292,19 +312,19 @@ export const protocol = resource({
         });
       }
 
-      // One stream: join this tick's group. The first watch opens it on the next tick and holds it
-      // until every member has left; the others end when they leave.
+      // One stream: join this tick's group. The first watch opens it on the next tick. Each part
+      // of the group (split so no part's text passes the cap) is one stream, held until every
+      // member of that part has left; a member's watch ends when it leaves.
       const group = waiting.get(own) ?? [];
       const lead = group.length === 0;
       return new Promise<void>((done) => {
         const member: Member = { address, text: body.value, got, done, gone: false };
         group.push(member);
 
-        const stop = new AbortController();
         const leave = () => {
           member.gone = true;
-          if (!lead) done();
-          if (group.every((m) => m.gone)) stop.abort();
+          done();
+          if (member.part?.members.every((m) => m.gone)) member.part.stop.abort();
         };
         if (signal?.aborted) leave();
         else signal?.addEventListener("abort", leave, { once: true });
@@ -313,24 +333,43 @@ export const protocol = resource({
         waiting.set(own, group);
         setTimeout(() => {
           waiting.delete(own);
-          // A frame names each member by its place in the list, as an HTTP/2 frame names its
-          // stream: two members can share an address and differ by value (a keyed key, F12).
-          const frame = (text: string) => {
-            const all = decode(shared, text);
-            if (!all.ok) return group.forEach((m) => m.got(codec.serialize(all)));
-            for (const [at, t] of all.value as [number, string][]) group[at]?.got(t);
-          };
-          const list = codec.serialize(group.map((m) => [m.address, m.text]));
-          // The shared stream cannot open (or breaks): every member's key gets link.
-          return run<void>(hook, own.open, {
-            input: { address: shared, text: list, meta: ask, push: frame },
-            signal: stop.signal,
-          })
-            .catch(() => {
-              if (stop.signal.aborted) return;
-              group.forEach((m) => m.gone || m.got(codec.serialize(link)));
-            })
-            .finally(() => group.forEach((m) => m.done()));
+          const parts: Member[][] = [];
+          for (const m of group.filter((each) => !each.gone)) {
+            const last = parts.at(-1);
+            const fits =
+              last &&
+              new TextEncoder().encode(
+                codec.serialize([...last, m].map((each) => [each.address, each.text])),
+              ).byteLength <= watchTextMax;
+            if (fits) last.push(m);
+            else parts.push([m]);
+          }
+
+          return Promise.all(
+            parts.map((members) => {
+              const stop = new AbortController();
+              for (const m of members) m.part = { members, stop };
+
+              // A frame names each member by its place in the list, as an HTTP/2 frame names
+              // its stream: two members can share an address and differ by value (F12).
+              const frame = (text: string) => {
+                const all = decode(shared, text);
+                if (!all.ok) return members.forEach((m) => m.got(codec.serialize(all)));
+                for (const [at, t] of all.value as [number, string][]) members[at]?.got(t);
+              };
+              const list = codec.serialize(members.map((m) => [m.address, m.text]));
+              // The shared stream cannot open (or breaks): every member's key gets link.
+              return run<void>(hook, own.open, {
+                input: { address: shared, text: list, meta: ask, push: frame },
+                signal: stop.signal,
+              })
+                .catch(() => {
+                  if (stop.signal.aborted) return;
+                  members.forEach((m) => m.gone || m.got(codec.serialize(link)));
+                })
+                .finally(() => members.forEach((m) => m.done()));
+            }),
+          );
         }, 0);
       });
     };
@@ -422,6 +461,12 @@ export const protocol = resource({
       const { codec } = own;
       const { decode } = coding(codec, "server", hook.log);
       const { meta, push, left } = input;
+      if (new TextEncoder().encode(input.text).byteLength > watchTextMax) {
+        hook.log.error("protocol watch too long", { address: input.address, max: watchTextMax });
+        push(codec.serialize({ ok: false, kind: "invalid", payload: { side: "server" } }));
+        return true;
+      }
+
       const read = decode(input.address, input.text);
       if (!read.ok) return (push(codec.serialize(read)), true);
       if (input.address !== shared) {

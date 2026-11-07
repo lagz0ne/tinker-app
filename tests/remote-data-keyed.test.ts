@@ -5,7 +5,7 @@ import type { Scope, Tag } from "@tinker/core";
 import { z } from "zod";
 
 import { memory } from "~/components/memory";
-import { step } from "~/components/protocol";
+import { step, watchTextMax } from "~/components/protocol";
 import { remoteData } from "~/components/remote-data";
 
 import { sseClient, sseServer } from "./support/sse";
@@ -112,7 +112,17 @@ function boot(kind: "memory" | "sse", options: { refuse?: string } = {}) {
     closers.push(() => scope.close());
     return scope;
   };
-  return { ready, server, write, client, db, fills };
+  return {
+    ready,
+    server,
+    write,
+    client,
+    db,
+    fills,
+    get base() {
+      return base;
+    },
+  };
 }
 
 const read = (s: Scope.Handle) => s.resolve(board.tasks).get();
@@ -293,4 +303,65 @@ test("the definition refuses a config key that is a cell or reserved", () => {
   const t = tag<string>({ label: "t" });
   expect(() => remoteData({ tasks }, { config: { tasks: t } })).toThrow(/config tasks/);
   expect(() => remoteData({ tasks }, { config: { faults: t } })).toThrow(/config faults/);
+});
+
+describe("the protocol holds the watch's length", () => {
+  const long = (n: number) => "x".repeat(n);
+
+  test("a parameter too long for a watch is the client's encode fault: the watch is not sent", async () => {
+    const app = boot("memory");
+    await app.ready;
+    const tab = app.client();
+    await tab.ready;
+
+    const s = tab.createSession({ tags: [board.project(long(watchTextMax))] });
+    await until(() => faultOf(s) !== undefined);
+
+    expect(faultOf(s)).toMatchObject({ fault: "encode", payload: { side: "client" } });
+    // The read is a POST, under the body's own cap: it went. The watch (a GET) did not.
+    expect(app.fills.length).toBe(1);
+  });
+
+  test("the server reads no watch text past the line: invalid, on memory and on SSE", async () => {
+    const app = boot("sse");
+    await app.ready;
+    const text = JSON.stringify({ project: long(watchTextMax) });
+    const pushed: string[] = [];
+
+    await app.server.run(memory.server.serveStream, {
+      input: { address: "tasks", text, meta: {}, push: (t) => pushed.push(t) },
+    });
+    expect(JSON.parse(pushed[0]!)).toMatchObject({ ok: false, kind: "invalid" });
+
+    const asked = await fetch(`${app.base}/tasks?text=${encodeURIComponent(text)}`);
+    const said = await asked.text();
+    expect(said).toContain('\\"kind\\":\\"invalid\\"');
+  });
+
+  test("a shared stream splits so no part passes the line, and every member gets its value", async () => {
+    const app = boot("memory");
+    await app.ready;
+    for (let i = 0; i < 6; i++) app.db.set(`${long(600)}${i}`, [`v${i}`]);
+    const tab = app.client({ streams: "one" });
+    await tab.ready;
+
+    const got: Record<number, unknown[]> = {};
+    const stop = new AbortController();
+    closers.unshift(() => stop.abort());
+    for (let i = 0; i < 6; i++) {
+      got[i] = [];
+      void tab.run(memory.client.watch, {
+        input: {
+          address: "tasks",
+          value: { project: `${long(600)}${i}` },
+          meta: {},
+          push: (r) => got[i]!.push(r),
+        },
+        signal: stop.signal,
+      });
+    }
+    await until(() => Object.values(got).every((list) => list.length > 0));
+
+    for (let i = 0; i < 6; i++) expect(got[i]![0]).toMatchObject({ ok: true, value: [`v${i}`] });
+  });
 });
