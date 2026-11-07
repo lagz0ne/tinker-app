@@ -9,7 +9,14 @@ import { rpc } from "~/components/rpc";
 
 import { keepDates } from "./fixtures/todo/codec";
 import { api, board } from "./fixtures/todo/contracts";
-import { addTodo, joinPresence, removeTodo, signedIn, toggleTodo } from "./fixtures/todo/data";
+import {
+  addTodo,
+  joinPresence,
+  removeTodo,
+  signedIn,
+  signedInUse,
+  toggleTodo,
+} from "./fixtures/todo/data";
 import { sseClient, sseServer } from "./support/sse";
 
 const sse = { client: sseClient.client, server: sseServer.server };
@@ -29,9 +36,9 @@ async function boot(kind: "memory" | "sse") {
   const transport = sse.server({ base: "/api", codec: keepDates, services: [board, api] });
   const server = createScope({
     capsules: [
-      board({ serve: true, use: [signedIn] }),
+      board({ serve: true, use: [signedInUse] }),
       api({
-        use: [signedIn],
+        onStart: [signedIn],
         implement: {
           "todo.add": addTodo,
           "todo.toggle": toggleTodo,
@@ -279,7 +286,7 @@ test("on the wire: one transport, rpc and the board on the same routes and codec
 });
 
 describe("one rpc capsule: the same handle on both sides", () => {
-  test("the server runs api['todo.add'] here, through use; clients see it", async () => {
+  test("the server runs api['todo.add'] here, through its hooks; clients see it", async () => {
     const { server, join } = await boot("memory");
     const ann = await join("ann");
     const as = (who?: string) =>

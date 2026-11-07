@@ -4,7 +4,7 @@ import { createScope, data, operation, resource, tag } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 import { z } from "zod";
 
-import { step } from "~/components/protocol";
+import { hook, step } from "~/components/protocol";
 import { remoteData } from "~/components/remote-data";
 import { routes } from "~/components/requests/index.server";
 import { rpc } from "~/components/rpc";
@@ -82,12 +82,25 @@ async function boot(ttl: number) {
       return who ? { kind: "in" as const, access: grant(who) } : { kind: "out" as const };
     },
   });
+  const whoOf = (meta: Record<string, string>) =>
+    access.get(/^Bearer (.+)$/.exec(meta.authorization ?? "")?.[1] ?? "");
   /** RFC 6750: an unknown token asks for sign-in; an old one says it expired. */
   const bearer = operation({
     label: "bearer",
+    input: hook.start,
+    run: async (_, { input }) => {
+      const held = whoOf(input.meta);
+      if (!held) return input.refuse({ signIn: true });
+      if (held.until < Date.now()) return input.refuse({ expired: true });
+      return { tags: [user(held.who)] };
+    },
+  });
+  /** The same guard for remoteData, which still runs on middleware (`use`). */
+  const bearerUse = operation({
+    label: "bearer.use",
     input: step,
     run: async (_, { input }) => {
-      const held = access.get(/^Bearer (.+)$/.exec(input.meta.authorization ?? "")?.[1] ?? "");
+      const held = whoOf(input.meta);
       if (!held) return input.refuse({ signIn: true });
       if (held.until < Date.now()) return input.refuse({ expired: true });
       return input.next({ tags: [user(held.who)] });
@@ -109,8 +122,8 @@ async function boot(ttl: number) {
     observe: { export: (x) => void spans.push(x) },
     capsules: [
       auth({ implement: { "auth.status": status, "auth.refresh": refresh } }),
-      board({ serve: true, use: [bearer] }),
-      api({ use: [bearer], implement: { "note.add": add } }),
+      board({ serve: true, use: [bearerUse] }),
+      api({ onStart: [bearer], implement: { "note.add": add } }),
       publicSse.server({ base: "/public", services: [auth] }),
       signedSse.server({ base: "/api", services: [board, api] }),
     ],

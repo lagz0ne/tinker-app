@@ -5,7 +5,14 @@ import type { Observe } from "@tinker/core";
 
 import { keepDates } from "./fixtures/todo/codec";
 import { api, board } from "./fixtures/todo/contracts";
-import { addTodo, joinPresence, removeTodo, signedIn, toggleTodo } from "./fixtures/todo/data";
+import {
+  addTodo,
+  joinPresence,
+  removeTodo,
+  signedIn,
+  signedInUse,
+  toggleTodo,
+} from "./fixtures/todo/data";
 import { sseClient, sseServer } from "./support/sse";
 
 const sse = { client: sseClient.client, server: sseServer.server };
@@ -39,9 +46,9 @@ async function boot() {
   const server = createScope({
     observe: srv.observe,
     capsules: [
-      board({ serve: true, use: [signedIn] }),
+      board({ serve: true, use: [signedInUse] }),
       api({
-        use: [signedIn],
+        onStart: [signedIn],
         implement: {
           "todo.add": addTodo,
           "todo.toggle": toggleTodo,

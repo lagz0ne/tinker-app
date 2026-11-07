@@ -1,10 +1,11 @@
 export * from "./middleware";
-// remoteData still runs on middleware (`use`); rpc runs on the lifecycle's hooks. The names both
-// files carry (`Meta`, `Tags`, `Entry`) are the middleware's here; rpc takes its own below.
+// remoteData still runs on middleware (`use`); rpc runs on the lifecycle's hooks. `Entry` is the
+// lifecycle's here: a key's `implement` entry takes hooks, not a `use` list.
 export { hook, lifecycle } from "./lifecycle";
 
 export type {
   Context,
+  Entry,
   Hooks,
   OnError,
   OnFinish,

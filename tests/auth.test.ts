@@ -4,7 +4,7 @@ import { createScope, data, operation, tag } from "@tinker/core";
 import { z } from "zod";
 
 import { createMemory, memory } from "~/components/memory";
-import { step } from "~/components/protocol";
+import { hook, step } from "~/components/protocol";
 import { remoteData } from "~/components/remote-data";
 import { routes } from "~/components/requests/index.server";
 import { rpc } from "~/components/rpc";
@@ -51,11 +51,22 @@ function boot() {
       return { kind: "in" as const, who, token };
     },
   });
+  const whoOf = (meta: Record<string, string>) =>
+    tokens.get(/^Bearer (.+)$/.exec(meta.authorization ?? "")?.[1] ?? "");
   const bearer = operation({
     label: "bearer",
+    input: hook.start,
+    run: async (_, { input }) => {
+      const who = whoOf(input.meta);
+      return who ? { tags: [user(who)] } : input.refuse({ signIn: true });
+    },
+  });
+  /** The same guard for remoteData, which still runs on middleware (`use`). */
+  const bearerUse = operation({
+    label: "bearer.use",
     input: step,
     run: async (_, { input }) => {
-      const who = tokens.get(/^Bearer (.+)$/.exec(input.meta.authorization ?? "")?.[1] ?? "");
+      const who = whoOf(input.meta);
       return who ? input.next({ tags: [user(who)] }) : input.refuse({ signIn: true });
     },
   });
@@ -70,9 +81,9 @@ function boot() {
   });
   const server = createScope({
     capsules: [
-      auth({ implement: { "auth.status": statusOf } }), // public: no `use`
-      board({ serve: true, use: [bearer] }),
-      api({ use: [bearer], implement: { "note.add": add } }),
+      auth({ implement: { "auth.status": statusOf } }), // public: no hooks
+      board({ serve: true, use: [bearerUse] }),
+      api({ onStart: [bearer], implement: { "note.add": add } }),
       memory.server({ services: [auth, board, api] }),
     ],
   });

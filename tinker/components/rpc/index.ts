@@ -2,13 +2,17 @@ import { capsule, data, operation, resource, tag } from "@tinker/core";
 import type { Capsule, Operation, Resource, Tag } from "@tinker/core";
 import { z } from "zod";
 
-import { callInput, middleware, watchInput } from "~/components/protocol";
+import { callInput, lifecycle, watchInput } from "~/components/protocol";
 import type {
   Answer,
   Call,
   Entry,
   Fault,
-  Middleware,
+  Hooks,
+  OnError,
+  OnFinish,
+  OnStart,
+  OnSuccess,
   Reply,
   Stream,
   Watch,
@@ -70,7 +74,7 @@ type Job<C extends Contracts> =
       readonly implement?: never;
     };
 
-type Config<C extends Contracts> = Job<C> & { readonly use?: readonly Middleware[] };
+type Config<C extends Contracts> = Job<C> & Hooks;
 
 const reserved = ["answer", "stream", "fault"];
 const name = "rpc"; // labels only: the wire address is the key
@@ -105,7 +109,11 @@ type Def = {
 type Read = {
   readonly remote: Tag.Presence<Remote>;
   readonly implement: Tag.Presence<Readonly<Record<string, unknown>>>;
-  readonly use: readonly Middleware[];
+  readonly retry: Partial<Record<Fault, number>>;
+  readonly onStart: readonly OnStart[];
+  readonly onSuccess: readonly OnSuccess[];
+  readonly onError: readonly OnError[];
+  readonly onFinish: readonly OnFinish[];
 };
 
 type Event = Omit<Capsule.Events["run"], "config"> & { readonly config: Read };
@@ -117,8 +125,23 @@ type Event = Omit<Capsule.Events["run"], "config"> & { readonly config: Read };
 const steps = resource({
   label: "rpc.steps",
   target: "scope",
-  depends: { chain: middleware },
-  factory: ({ chain }) => {
+  depends: { flow: lifecycle },
+  factory: ({ flow }) => {
+    /** The capsule's own hooks, as one key's hooks read them. */
+    const hooksIn = (config: Read): Hooks => ({
+      retry: config.retry,
+      onStart: config.onStart,
+      onSuccess: config.onSuccess,
+      onError: config.onError,
+      onFinish: config.onFinish,
+    });
+
+    /** The fault kind of this definition's own fault; undefined for anything else (a shape). */
+    const kindOf =
+      (def: Def) =>
+      (error: unknown): Fault | undefined =>
+        Object(error)[brandKey] === def.brand ? (error as RpcFault).fault : undefined;
+
     const faultOf = (
       def: Def,
       address: string,
@@ -172,7 +195,7 @@ const steps = resource({
       }
       const implement = config.implement.present ? config.implement.value : {};
       const missing = config.implement.present
-        ? def.keys.find((key) => !implement[key] || !chain.runOf(implement[key]))
+        ? def.keys.find((key) => !implement[key] || !flow.runOf(implement[key]))
         : undefined;
       if (missing) raise("MissingConfig", { label: name, key: `implement.${missing}` });
     };
@@ -187,7 +210,7 @@ const steps = resource({
       return input.data;
     };
 
-    /** remote: the key goes through `use`, then the protocol. A fault throws, branded. */
+    /** remote: the key goes through the lifecycle's hooks, then the protocol. A fault throws, branded. */
     const sendKey = (def: Def, event: Event, key: string) => {
       const { call: invocation, run, config, raise, log, obs } = event;
       const traceId = obs.span?.traceId;
@@ -195,45 +218,61 @@ const steps = resource({
       if (!config.remote.present) return raise("MissingConfig", { label: name, key: "remote" });
       const remote = config.remote.value;
       const input = inputOf(def, event, key);
+      const reply = (contract.mode ?? "reply") === "reply";
+      if (!reply && !remote.watch) {
+        return raise("MissingConfig", { label: name, key: "remote.watch" });
+      }
+      const watch = remote.watch;
       const faulted = (r: Failed) => {
         if (r.kind !== "refused") log.warn("rpc fault", { address: key, fault: r.kind });
         return faultOf(def, key, r.kind, r.payload, traceId);
       };
 
-      return chain
-        .runChain(run as never, config.use, key, input, {}, async (meta, tags) => {
-          const bind = tags.length ? { tags } : {};
-          const signal = invocation?.signal;
-          if ((contract.mode ?? "reply") === "reply") {
-            const ask = { input: { address: key, value: input, meta }, signal, ...bind };
-            const reply = await run(remote.call, ask, sent);
-            if (!reply.ok) throw faulted(reply);
-            return contract.output.parse(reply.value);
-          }
+      return flow
+        .runHooks(
+          run as never,
+          flow.hooksOf(hooksIn(config), undefined),
+          key,
+          input,
+          {},
+          async (meta, tags) => {
+            const bind = tags.length ? { tags } : {};
+            const signal = invocation?.signal;
+            if (reply) {
+              const ask = { input: { address: key, value: input, meta }, signal, ...bind };
+              const answer = await run(remote.call, ask, sent);
+              if (!answer.ok) throw faulted(answer);
+              return answer.value;
+            }
 
-          if (!remote.watch) return raise("MissingConfig", { label: name, key: "remote.watch" });
-          const watch = remote.watch;
-          return pull(
-            (push) =>
-              Promise.resolve(
-                run(
-                  watch,
-                  { input: { address: key, value: input, meta, push }, signal, ...bind },
-                  sent,
+            return pull(
+              (push) =>
+                Promise.resolve(
+                  run(
+                    watch!,
+                    { input: { address: key, value: input, meta, push }, signal, ...bind },
+                    sent,
+                  ),
                 ),
-              ),
-            (v) => contract.output.parse(v),
-            faulted,
-          );
-        })
+              (v) => contract.output.parse(v),
+              faulted,
+            );
+          },
+          {
+            reply,
+            signal: invocation?.signal,
+            shape: contract.output,
+            kind: kindOf(def),
+          },
+        )
         .then((out) => {
-          // A client-side middleware said no.
-          if (chain.isRefused(out)) throw faultOf(def, key, "refused", out.payload, traceId);
+          // A client-side hook said no.
+          if (flow.isRefused(out)) throw faultOf(def, key, "refused", out.payload, traceId);
           return out;
         });
     };
 
-    /** implement: the key runs here, through `use` and its entry, then the app's op. */
+    /** implement: the key runs here, through the capsule's hooks and its entry, then the app's op. */
     const runHere = (def: Def, event: Event, key: string) => {
       const { call: invocation, run, config, raise, obs } = event;
       const traceId = obs.span?.traceId;
@@ -243,20 +282,21 @@ const steps = resource({
         return raise("MissingConfig", { label: name, key: "implement" });
       }
       const entry = config.implement.value[key];
-      const implementation = chain.runOf(entry) as Operation.Handle<unknown, unknown>;
+      const implementation = flow.runOf(entry) as Operation.Handle<unknown, unknown>;
+      const reply = (contract.mode ?? "reply") === "reply";
 
-      return chain
-        .runChain(
+      return flow
+        .runHooks(
           run as never,
-          chain.chainOf(config.use, entry),
+          flow.hooksOf(hooksIn(config), entry),
           key,
           input,
           {},
           async (_, tags) => {
-            if ((contract.mode ?? "reply") === "reply") {
+            if (reply) {
               // Its own layer, as on the server: a transaction ends with this run's result.
               const ask = { input, signal: event.signal, ...(tags.length ? { tags } : {}) };
-              return contract.output.parse(await run(implementation, ask, work));
+              return run(implementation, ask, work);
             }
 
             // A stream: the op sends into a queue; leaving the for-await closes the channel.
@@ -274,9 +314,15 @@ const steps = resource({
               () => leave.abort(),
             );
           },
+          {
+            reply,
+            signal: event.signal,
+            shape: contract.output,
+            kind: "failed",
+          },
         )
         .then((out) => {
-          if (chain.isRefused(out)) throw faultOf(def, key, "refused", out.payload, traceId);
+          if (flow.isRefused(out)) throw faultOf(def, key, "refused", out.payload, traceId);
           return out;
         });
     };
@@ -294,13 +340,11 @@ const steps = resource({
         return { ok: false, kind: "failed", payload: {} };
       };
 
-    /** A refusal is `refused`, with its payload; a value is checked against the output shape. */
-    const answeredAs =
-      (contract: Contract) =>
-      (out: unknown): Reply =>
-        chain.isRefused(out)
-          ? { ok: false, kind: "refused", payload: out.payload }
-          : { ok: true, value: contract.output.parse(out) };
+    /** A refusal is `refused`, with its payload; a value goes out as it is (runHooks parsed it). */
+    const answeredAs = (out: unknown): Reply =>
+      flow.isRefused(out)
+        ? { ok: false, kind: "refused", payload: out.payload }
+        : { ok: true, value: out };
 
     /** Input that does not fit: `invalid`, as the answer or as the stream's one push. */
     const invalid = (answering: boolean, push: (r: Reply) => void) => {
@@ -335,20 +379,34 @@ const steps = resource({
 
       const { run, config } = event;
       const entry = config.implement.present ? config.implement.value[address] : undefined;
-      const implementation = chain.runOf(entry) as Operation.Handle<unknown, unknown>;
-      const use = chain.chainOf(config.use, entry);
-      // A bad output throws inside `answeredAs`: catch it too, so it is `failed` and not a crash.
-      return chain
-        .runChain(run as never, use, address, input, meta, (_, tags) =>
-          // Its own layer (a call with a signal, ADR 0090): a session-target resource, such as
-          // a transaction, ends with the implementation's result, not the request session's close.
-          run(
-            implementation,
-            { input, signal: event.signal, ...(tags.length ? { tags } : {}) },
-            work,
-          ),
+      const implementation = flow.runOf(entry) as Operation.Handle<unknown, unknown>;
+      const contract = def.contracts[address]!;
+      // A bad output throws out of `runHooks`: catch it too, so it is `failed` and not a crash.
+      return flow
+        .runHooks(
+          run as never,
+          flow.hooksOf(hooksIn(config), entry),
+          address,
+          input,
+          meta,
+          (_, tags) =>
+            // Its own layer (a call with a signal, ADR 0090): a session-target resource, such as
+            // a transaction, ends with the implementation's result, not the request session's close.
+            Promise.resolve(
+              run(
+                implementation,
+                { input, signal: event.signal, ...(tags.length ? { tags } : {}) },
+                work,
+              ),
+            ),
+          {
+            reply: true,
+            signal: event.signal,
+            shape: contract.output,
+            kind: "failed",
+          },
         )
-        .then(answeredAs(def.contracts[address]!))
+        .then(answeredAs)
         .catch(failedAt(event, address));
     };
 
@@ -366,23 +424,30 @@ const steps = resource({
       if (contract.mode !== "stream") return Promise.resolve(false);
 
       const entry = config.implement.present ? config.implement.value[address] : undefined;
-      const implementation = chain.runOf(entry) as Operation.Handle<unknown, unknown>;
-      const use = chain.chainOf(config.use, entry);
+      const implementation = flow.runOf(entry) as Operation.Handle<unknown, unknown>;
       const send = (value: unknown) => push({ ok: true, value: contract.output.parse(value) });
       const out = channel({ send, closed: left ?? new AbortController().signal });
 
-      return chain
-        .runChain(run as never, use, address, input, meta, (_, tags) =>
-          run(implementation, { input, tags: [...tags, out] }, work),
+      return flow
+        .runHooks(
+          run as never,
+          flow.hooksOf(hooksIn(config), entry),
+          address,
+          input,
+          meta,
+          (_, tags) => Promise.resolve(run(implementation, { input, tags: [...tags, out] }, work)),
+          { reply: false, kind: "failed" },
         )
         .then(
-          (end) => (chain.isRefused(end) && push(answeredAs(contract)(end)), true),
+          (end) => (flow.isRefused(end) && push(answeredAs(end)), true),
           (error) => (push(failedAt(event, address)(error)), true),
         );
     };
 
     return {
       faultOf,
+      kindOf,
+      hooksIn,
       pull,
       check,
       inputOf,
@@ -402,9 +467,9 @@ type Steps = typeof steps extends Resource.Handle<infer T> ? Awaited<T> : never;
 
 /**
  * One definition gives one capsule, as remoteData. `api["todo.add"]` is the same handle on both sides:
- * - `implement`: a run goes through `use` and the key's entry, then the app's op, in this
- *   process (as tRPC createCaller). `api.answer` and `api.stream` serve the protocol.
- * - `remote`: a run goes through `use`, then the protocol's `call` or `watch`.
+ * - `implement`: a run goes through the capsule's hooks and the key's entry, then the app's op,
+ *   in this process (as tRPC createCaller). `api.answer` and `api.stream` serve the protocol.
+ * - `remote`: a run goes through the capsule's hooks, then the protocol's `call` or `watch`.
  * Values only: the protocol owns the codec.
  */
 export function rpc<const C extends Contracts>(contracts: C) {
@@ -431,7 +496,11 @@ export function rpc<const C extends Contracts>(contracts: C) {
   ) as unknown as Ops<C>;
   const keyOf = new Map<unknown, string>(keys.map((key) => [ops[key], key]));
 
-  const useKey = tag<readonly Middleware[]>({ label: `${name}.use`, default: [] });
+  const retryKey = tag<Partial<Record<Fault, number>>>({ label: `${name}.retry`, default: {} });
+  const onStartKey = tag<readonly OnStart[]>({ label: `${name}.onStart`, default: [] });
+  const onSuccessKey = tag<readonly OnSuccess[]>({ label: `${name}.onSuccess`, default: [] });
+  const onErrorKey = tag<readonly OnError[]>({ label: `${name}.onError`, default: [] });
+  const onFinishKey = tag<readonly OnFinish[]>({ label: `${name}.onFinish`, default: [] });
   const remoteKey = tag<Remote>({ label: `${name}.remote` });
   const implementKey = tag<Implement<C>>({ label: `${name}.implement` });
   const answer = operation({
@@ -451,7 +520,15 @@ export function rpc<const C extends Contracts>(contracts: C) {
   const def: Def = { contracts, keys, brand, answer, stream };
   const own = data<Steps | null>({ label: `${name}.steps`, initial: null });
 
-  const configShape = { remote: remoteKey.optional, implement: implementKey.optional, use: useKey };
+  const configShape = {
+    remote: remoteKey.optional,
+    implement: implementKey.optional,
+    retry: retryKey,
+    onStart: onStartKey,
+    onSuccess: onSuccessKey,
+    onError: onErrorKey,
+    onFinish: onFinishKey,
+  };
   const base = capsule({
     label: name,
     config: configShape,

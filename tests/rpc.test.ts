@@ -4,7 +4,7 @@ import { createScope, isError, operation } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 import { z } from "zod";
 
-import { step } from "~/components/protocol";
+import { hook } from "~/components/protocol";
 import { rpc } from "~/components/rpc";
 import { sse as tab } from "~/components/sse";
 import { sse as server } from "~/components/sse/index.server";
@@ -19,10 +19,10 @@ const more = rpc({
   crash: { input: z.null(), output: z.null() },
 });
 
-/** A middleware that says no: the call answers `refused`, with this payload. */
+/** An `onStart` that says no: the call answers `refused`, with this payload. */
 const no = operation({
   label: "no",
-  input: step,
+  input: hook.start,
   run: async (_deps, { input }) => input.refuse({ message: "no" }),
 });
 
@@ -52,7 +52,7 @@ const backend = createScope({
   observe,
   capsules: [
     api({ implement: { greet: greetHere } }),
-    more({ implement: { refuse: { run: refuseHere, use: [no] }, crash: crashHere } }),
+    more({ implement: { refuse: { run: refuseHere, onStart: [no] }, crash: crashHere } }),
     server.server({ base: "/rpc", services: [api, more] }),
   ],
 });

@@ -1,7 +1,7 @@
 import { operation, resource, tag } from "@tinker/core";
 import { z } from "zod";
 
-import { step } from "~/components/protocol";
+import { hook, step } from "~/components/protocol";
 import { routes } from "~/components/requests/index.server";
 import { channel } from "~/components/rpc";
 
@@ -10,7 +10,7 @@ import type { Event } from "./contracts";
 
 // The server's operations. The board serves the shared cells; only these ops write them.
 
-/** The caller. Only the signedIn middleware binds it. */
+/** The caller. `signedIn` binds it: the onStart hook on rpc, the middleware on remoteData. */
 export const user = tag<string>({ label: "user" });
 
 /** One per request session: the cookie `sid=<name>` to a user, or null. */
@@ -23,9 +23,20 @@ const principal = resource({
 
 export const signedIn = operation({
   label: "signedIn",
-  input: step,
+  input: hook.start,
   depends: { who: principal },
   // No user: refuse, a value. The call answers the `refused` fault; nothing is thrown here.
+  run: async ({ who }, { input }) => (who ? { tags: [user(who)] } : input.refuse({ signIn: true })),
+});
+
+/**
+ * The same guard for remoteData, which still runs on middleware (`use`): it calls `next` where
+ * the hook answers `{ tags }`. It goes when remoteData takes the lifecycle's hooks.
+ */
+export const signedInUse = operation({
+  label: "signedIn.use",
+  input: step,
+  depends: { who: principal },
   run: async ({ who }, { input }) =>
     who ? input.next({ tags: [user(who)] }) : input.refuse({ signIn: true }),
 });
