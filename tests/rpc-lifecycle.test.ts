@@ -83,6 +83,57 @@ async function pair(server: Config, client: Config, observe?: Observe.Config) {
 
 const failure = (error: unknown) => (api.fault.is(error) ? [error.fault, error.payload] : null);
 
+/** F1: what one hook got, as its schema says it: the key, the input and the meta, on either side. */
+type Got = { side: string; kind: string; key: unknown; input: unknown; meta: unknown };
+const got: Got[] = [];
+const saw =
+  (side: string, kind: string) =>
+  (input: { key: unknown; input: unknown; meta: unknown }): void =>
+    void got.push({ side, kind, key: input.key, input: input.input, meta: input.meta });
+
+/** The four hooks of one side, each only saying what it got. */
+const watcher = (side: string) => ({
+  onStart: [
+    operation({
+      label: `${side}.seen.start`,
+      input: hook.start,
+      run: (_deps, { input }) => saw(side, "start")(input),
+    }),
+  ],
+  onSuccess: [
+    operation({
+      label: `${side}.seen.success`,
+      input: hook.success,
+      run: (_deps, { input }) => saw(side, "success")(input),
+    }),
+  ],
+  onError: [
+    operation({
+      label: `${side}.seen.error`,
+      input: hook.error,
+      run: (_deps, { input }) => saw(side, "error")(input),
+    }),
+  ],
+  onFinish: [
+    operation({
+      label: `${side}.seen.finish`,
+      input: hook.finish,
+      run: (_deps, { input }) => saw(side, "finish")(input),
+    }),
+  ],
+});
+
+const clientSaw = watcher("client");
+const serverSaw = watcher("server");
+
+/** The key, input and meta each hook of one side got, in call order. */
+const was = (side: string, kind: string) =>
+  got.filter((one) => one.side === side && one.kind === kind).map(({ key, input, meta }) => ({
+    key,
+    input,
+    meta,
+  }));
+
 test("L1: an onStart that refuses stops the call: no implementation, refused, no onError", async () => {
   let ran = 0;
   let errors = 0;
@@ -619,4 +670,25 @@ test("L20: onError cannot recover a stream: the stream is failed, and the log sa
 
   expect(failure(error)).toEqual(["failed", {}]);
   expect(lines.some((line) => line.includes("onError cannot recover a stream"))).toBe(true);
+});
+
+test("F1: every hook gets the key, the input and the meta, on both sides", async () => {
+  got.length = 0;
+  const { client } = await pair(
+    { implement: here, ...serverSaw },
+    { remote: memory.client, ...clientSaw },
+  );
+
+  await client.run(api.echo, { input: { n: 1 } });
+  await client.run(api.fail, { input: null }).catch(() => undefined);
+
+  const echo = { key: "echo", input: { n: 1 }, meta: {} };
+  const fail = { key: "fail", input: null, meta: {} };
+
+  for (const side of ["client", "server"]) {
+    expect(was(side, "start")).toEqual([echo, fail]);
+    expect(was(side, "success")).toEqual([echo]);
+    expect(was(side, "error")).toEqual([fail]);
+    expect(was(side, "finish")).toEqual([echo, fail]);
+  }
 });

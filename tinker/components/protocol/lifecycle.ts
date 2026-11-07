@@ -181,15 +181,32 @@ export const lifecycle = resource({
       return { ...listsOf(capsule, entry), retry: entry.retry ?? capsule.retry };
     };
 
-    /** One hook's run: its call, and the tags bound so far. */
+    /**
+     * One hook's run: the whole call as its schema says it (`key`, `input`, `meta`, `context`),
+     * what this kind adds (`refuse`, `output`, `error`, `outcome`), and the tags bound so far.
+     * The schema's fields are the operation's input, so they go inside `input`.
+     */
     const hookOf = (
       frame: Frame,
       one: OnStart | OnSuccess | OnError | OnFinish,
       state: State,
-      input: object,
+      extra: object,
     ) =>
       Promise.resolve(
-        frame.run(one, { input, ...(state.tags.length ? { tags: state.tags } : {}) }, why),
+        frame.run(
+          one,
+          {
+            input: {
+              key: frame.key,
+              input: frame.input,
+              meta: state.meta,
+              context: state.context,
+              ...extra,
+            },
+            ...(state.tags.length ? { tags: state.tags } : {}),
+          },
+          why,
+        ),
       );
 
     /** The meta, tags and context an `onStart` answer adds, for the hooks and work after it. */
@@ -207,11 +224,7 @@ export const lifecycle = resource({
       state: State,
     ): Promise<Refused | undefined> => {
       for (const one of hooks.onStart ?? []) {
-        const said = await hookOf(frame, one, state, {
-          meta: state.meta,
-          context: state.context,
-          refuse,
-        });
+        const said = await hookOf(frame, one, state, { refuse });
 
         if (said === undefined) continue;
         if (isRefused(said)) return said;
@@ -249,10 +262,7 @@ export const lifecycle = resource({
     /** `onSuccess`, a reply only: its answer is the new output; undefined keeps it. */
     const successOf = async (frame: Frame, hooks: Hooks, state: State) => {
       for (const one of hooks.onSuccess ?? []) {
-        const said = await hookOf(frame, one, state, {
-          output: state.output,
-          context: state.context,
-        });
+        const said = await hookOf(frame, one, state, { output: state.output });
 
         if (said !== undefined) state.output = said;
       }
@@ -270,7 +280,7 @@ export const lifecycle = resource({
       for (const one of hooks.onError ?? []) {
         let said: unknown;
         try {
-          said = await hookOf(frame, one, state, { error, context: state.context, refuse });
+          said = await hookOf(frame, one, state, { error, refuse });
         } catch (thrown) {
           error = thrown;
           continue;
@@ -368,7 +378,7 @@ export const lifecycle = resource({
       const outcome = outcomeOf(settled);
       // Always, with the outcome: its answer is ignored and its throw is thrown, as `finally`.
       for (const one of hooks.onFinish ?? []) {
-        await hookOf(frame, one, state, { outcome, context: state.context });
+        await hookOf(frame, one, state, { outcome });
       }
 
       return endOf(settled);
