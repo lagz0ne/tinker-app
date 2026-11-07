@@ -180,6 +180,37 @@ export const board = remoteData({ todos });
 - `board.faults`: each key's last fault, as
   data. A read never throws.
 
+### remoteData per project: `config`
+
+A definition takes a `config` of your own
+tags, as a capsule does. Each becomes a tag
+on the instance:
+
+```ts
+const board = remoteData(
+  { tasks },
+  { config: { project: projectTag } },
+);
+```
+
+- Tab: bind it where it fits, on the root,
+  a session, or a namespace:
+  `createSession({ tags:
+[board.project("p1")] })`.
+- That session reads p1's list. Two
+  sessions on p1 share one watch.
+- Server: `board({ serve: true, fill })`.
+  `fill.tasks` is an op that reads
+  `board.project` and gives the first value.
+- A write runs in a call tagged with the
+  project. It pushes to that project only.
+- A keyed write with no project bound fails
+  with `MissingTag` before it runs.
+- The tag's own `parse` checks the value on
+  the server. Middleware sees it as `param`.
+- A watch's text is at most 2 KiB
+  (`watchTextMax`), on every transport.
+
 ### Middleware and `refused`
 
 A middleware is a plain operation on `step`.
