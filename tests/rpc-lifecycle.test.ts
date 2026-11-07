@@ -5,7 +5,7 @@ import type { Observe } from "@tinker/core";
 import { z } from "zod";
 
 import { memory } from "~/components/memory";
-import { callInput, hook } from "~/components/protocol";
+import { callInput, hook, lifecycle } from "~/components/protocol";
 import type { Reply } from "~/components/protocol";
 import { channel, rpc } from "~/components/rpc";
 
@@ -778,4 +778,32 @@ test("F2: a work output that fails the shape reaches onError, and is not retried
   expect(failure(error)).toEqual(["failed", {}]);
   expect(runs).toBe(1);
   expect(Object(seen).issues.at(0).path).toEqual(["n"]);
+});
+
+test("F3: an already aborted signal stops the work before it runs again", async () => {
+  const root = createScope({});
+  await root.ready;
+  closers.push(() => root.close());
+  const { runHooks } = root.resolve(lifecycle);
+  let runs = 0;
+  const link = new Error("link down");
+
+  const error = await runHooks(
+    async () => undefined,
+    { retry: { link: 5 } },
+    "echo",
+    { n: 1 },
+    {},
+    async () => {
+      runs += 1;
+      throw link;
+    },
+    { reply: true, kind: "link", signal: AbortSignal.abort() },
+  ).then(
+    () => null,
+    (e: unknown) => e,
+  );
+
+  expect(runs).toBe(1);
+  expect(error).toBe(link);
 });
