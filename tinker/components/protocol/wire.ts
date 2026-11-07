@@ -36,7 +36,7 @@ export type TextStream = Operation.Handle<Promise<boolean>, z.infer<typeof openI
 /**
  * The envelope. A domain outcome (a todo that is gone) is a value: it rides in `value`, as the
  * contract's output shape says. A fault is the call's own, from a fixed set, as HTTP statuses:
- *   refused  a middleware said no (it returned refuse(payload)), like 401/403
+ *   refused  a hook said no (it returned refuse(payload)), like 401/403
  *   failed   the server threw; the cause stays in the server log, like 500
  *   invalid  the input did not fit, like 400
  *   encode   the codec could not turn a value into text (a BigInt in JSON), like gRPC "marshal"
