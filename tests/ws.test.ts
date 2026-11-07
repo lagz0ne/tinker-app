@@ -165,3 +165,41 @@ test("a reader that stops ends the server's watch", async () => {
   expect(seen).toEqual([0, 1, 2]);
   expect(ended).toBe(1);
 });
+
+test("reset drops the socket: the next call opens a new one, and the old close fails nothing new", async () => {
+  const transport = wsServer.server({ path: "/rpc", services: [api as never] });
+  const scope = createScope({ capsules: [api({ implement: { greet: greetHere } }), transport] });
+  await scope.ready;
+  closers.push(() => scope.close());
+
+  const door = scope.resolve(transport);
+  let upgrades = 0;
+  const bun = Bun.serve({
+    port: 0,
+    idleTimeout: 0,
+    websocket: door.websocket as never,
+    fetch: (r, b) => {
+      const reply = door.upgrade(r, scope, b as never);
+      if (reply === null) upgrades += 1;
+      return reply === null ? undefined : (reply ?? new Response(null, { status: 404 }));
+    },
+  });
+  closers.push(() => bun.stop(true));
+
+  const client = createScope({
+    capsules: [ws.client({ url: `ws://localhost:${bun.port}/rpc` }), api({ remote: ws.client })],
+  });
+  await client.ready;
+  closers.push(() => client.close());
+
+  expect(await client.run(api.greet, { input: { name: "a" } })).toEqual({ text: "Hello, a." });
+  expect(upgrades).toBe(1);
+
+  // A sign-in changed the cookie: the app resets, and the next call goes on a new socket at once,
+  // before the old socket's close event comes.
+  await client.run(ws.client.reset);
+  expect(await client.run(api.greet, { input: { name: "b" } })).toEqual({ text: "Hello, b." });
+  await tick();
+  expect(await client.run(api.greet, { input: { name: "c" } })).toEqual({ text: "Hello, c." });
+  expect(upgrades).toBe(2);
+});

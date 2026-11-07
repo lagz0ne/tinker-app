@@ -59,6 +59,10 @@ export function createWs() {
     waits: Map<number, Waiter>;
     next: number;
     post: (message: Out) => void;
+    /** Fails every waiter of this socket, and forgets it; another socket's close is no-op. */
+    drop: (socket: WebSocket | null) => void;
+    /** Drops the socket: every waiter fails as a link fault, and the next message opens a new one. */
+    reset: () => void;
   };
   const link = data<Link | null>({ label: "ws.link", initial: null });
 
@@ -130,6 +134,18 @@ export function createWs() {
     },
   });
 
+  /**
+   * Drops the socket, so the next call opens a new one. The server reads the cookie once, at the
+   * upgrade: an app runs this when the account changes (a sign-in, a sign-out), as Phoenix and
+   * Socket.IO reconnect on a new session. Calls and watches on the old socket fail as `link`;
+   * remoteData's back-off opens their watches again, on the new socket.
+   */
+  const reset = operation({
+    label: "ws.reset",
+    depends: { link: link.controller },
+    run: ({ link }) => link.get()?.reset(),
+  });
+
   /** What rpc and remoteData run: a value out, the reply (or the pushes) back. */
   const call = operation({
     label: "ws.call",
@@ -156,7 +172,7 @@ export function createWs() {
   const client = capsule({
     label: "ws",
     config: { url: url.required, headers, ...keys },
-    exports: { call, watch },
+    exports: { call, watch, reset },
     hooks: {
       async start({ config, load, next }) {
         const p = await load(protocol, kept);
@@ -165,6 +181,19 @@ export function createWs() {
         const waits = new Map<number, Waiter>();
         const sockets = new Set<WebSocket>();
         let opening: Promise<WebSocket> | null = null;
+        /** The socket now in use: a close of an older one fails nothing of the new one's. */
+        let current: WebSocket | null = null;
+
+        /** Fails every waiter, and forgets the socket: the next message opens a new one. */
+        const drop = (socket: WebSocket | null) => {
+          if (socket !== current) return;
+
+          current = null;
+          opening = null;
+          if (socket) sockets.delete(socket);
+          for (const waiter of waits.values()) waiter(null);
+          waits.clear();
+        };
 
         // The first message of a tick schedules the frame; the frame opens the socket if needed.
         const post = (message: Out) => {
@@ -175,15 +204,13 @@ export function createWs() {
               const socket = Object.keys(config.headers).length
                 ? new WebSocket(config.url, { headers: config.headers } as never)
                 : new WebSocket(config.url);
+              current = socket;
               socket.addEventListener("open", () => done((sockets.add(socket), socket)));
               socket.addEventListener("message", (event) => {
                 for (const m of JSON.parse(String(event.data)) as In[]) waits.get(m.i)?.(m);
               });
               socket.addEventListener("close", () => {
-                sockets.delete(socket);
-                opening = null;
-                for (const waiter of waits.values()) waiter(null);
-                waits.clear();
+                drop(socket);
                 broke(new Error("TransportFailed"));
               });
             });
@@ -198,7 +225,15 @@ export function createWs() {
           }, 0);
         };
 
-        load(link, kept).set({ sockets, waits, next: 1, post });
+        /** Drops the socket now in use, and closes it. */
+        const reset = () => {
+          const old = current;
+
+          drop(old);
+          old?.close(1000, "reset");
+        };
+
+        load(link, kept).set({ sockets, waits, next: 1, post, drop, reset });
         load(held, kept).set({
           protocol: p,
           side: {
@@ -230,6 +265,7 @@ export function createWs() {
     client: client as unknown as Omit<typeof client, never> & {
       readonly call: Call;
       readonly watch: Watch;
+      readonly reset: typeof reset;
       (values: ClientConfig): ReturnType<typeof client>;
     },
   };
