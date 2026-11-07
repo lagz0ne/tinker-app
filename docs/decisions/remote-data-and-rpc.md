@@ -202,7 +202,9 @@ the wire: text
    `onFinish`) and TanStack Query (`retry`; a
    context from the start hook reaches the
    later ones). See "The lifecycle" below.
-   Building it is open.
+   Built for rpc in c9f876e: both sides, and
+   `implement` entries. remoteData's half is
+   open.
 9. **Outcomes are output.** A todo that is gone
    is `{ kind: "gone" }` in the output shape.
    No error lists. No kind is read off a thrown
@@ -389,8 +391,6 @@ Log of each step:
 
 ## Open
 
-- Build the lifecycle (decision 8) in
-  tinker-app, then move Hedl's `use` to it.
 - A key with no input: the JSON codec sends
   `undefined` as `null`, so `z.void()` answers
   `invalid` (Hedl uses a `noInput` shim).

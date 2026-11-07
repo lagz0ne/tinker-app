@@ -124,8 +124,9 @@ The client and the server run the same handle.
 ### The layers
 
 - transport: bytes (`sse`, `memory`).
-- protocol: codec, envelope, faults,
-  middleware. Shared code, not a capsule.
+- protocol: codec, envelope, faults, the
+  lifecycle's hooks. Shared code, not a
+  capsule.
 - rpc and remoteData: values.
 
 ### rpc, in code
@@ -207,34 +208,90 @@ const board = remoteData(
 - A keyed write with no project bound fails
   with `MissingTag` before it runs.
 - The tag's own `parse` checks the value on
-  the server. Middleware sees it as `param`.
+  the server; a `use` step there sees the
+  parameter in its input.
 - A watch's text is at most 2 KiB
   (`watchTextMax`), on every transport.
 
-### Middleware and `refused`
+### The lifecycle: hooks and `refused`
 
-A middleware is a plain operation on `step`.
-It calls `next`, or says no with `refuse`:
+A hook is a plain operation on one of the
+hook shapes: `hook.start`, `hook.success`,
+`hook.error`, `hook.finish`. A capsule lists
+them, and a list runs in order. `onStart`
+binds the caller, or says no with `refuse`:
 
 ```ts
-const bearer = operation({
-  input: step,
-  run: async (_, { input: s }) => {
-    const who = whoOf(s.meta.authorization);
-    return who
-      ? s.next({ tags: [user(who)] })
-      : s.refuse({ signIn: true });
-  },
+const signedIn = operation({
+  input: hook.start,
+  depends: { who: principal },
+  run: async ({ who }, { input }) =>
+    who
+      ? { tags: [user(who)] }
+      : input.refuse({ signIn: true }),
 });
 ```
 
-- `use: [bearer]` on `api(...)` or
-  `board(...)` wraps every key.
-- `implement: { key: { run, use } }` adds
-  to it for one key. `inherit: false` drops
-  the capsule's `use`.
+- `onStart: [signedIn]` on `api(...)` runs
+  for every key, on either side.
+- `implement: { key: { run, onStart } }`
+  adds to it for one key. `inherit: false`
+  drops the capsule's lists.
 - A refusal is the `refused` fault, with its
-  payload (as HTTP 401/403).
+  payload (as HTTP 401/403), and `onError`
+  does not run.
+
+`onError` may let the error stand, refuse, or
+answer a value: recovery.
+
+```ts
+const refusedAsFault = operation({
+  input: hook.error,
+  run: async (_, { input }) =>
+    input.refuse({ kind: Object(input.error).kind }),
+});
+```
+
+`onStart` may leave a context for the later
+hooks, and `onFinish` reads the outcome:
+
+```ts
+const timing = operation({
+  input: hook.start,
+  run: async (_, { clock }) => ({
+    context: { t0: clock.currentTimeMillis() },
+  }),
+});
+const timed = operation({
+  input: hook.finish,
+  run: (_, { input, clock, log }) =>
+    log.info("call", {
+      key: input.key,
+      ms: clock.currentTimeMillis() -
+        Number(input.context.t0),
+      outcome: input.outcome.kind,
+    }),
+});
+```
+
+`retry` names fault kinds and counts:
+`{ link: 2 }` runs the work again at most
+twice after `link` faults. Only the work runs
+again; the hooks run once. No default: a
+write is never sent twice.
+
+```ts
+api({
+  remote: sse.client,
+  retry: { link: 2 },
+  onStart: [signedIn],
+  onError: [refusedAsFault],
+  onFinish: [timed],
+});
+```
+
+remoteData still takes a `use` list for now:
+its half of the lifecycle is an open point.
 
 ### Tests: the memory transport
 
