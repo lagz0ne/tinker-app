@@ -271,8 +271,9 @@ the wire: text
       socket (Q7): Bun hands a WS message
       whole, so frames would copy it.
 16. **Bytes** (Duke 2026-11-07, Q4 A + Q7 A).
-    - A key's input has one `bytes({ max,
-types })` field at most; a reply key only.
+    - A key's input has one `bytes()` field
+      at most, with `max` and `types`; a reply
+      key only.
     - The client sends the rest as `x-input`,
       the meta as `x-meta`, the Blob as body.
     - `POST <path>/<address>`, on `ws.server`.
