@@ -182,6 +182,15 @@ the wire: text
    - The server is the only writer. A client
      changes data through an rpc key.
    - A cell's `parse` checks both sides.
+   - One value per parameter (F12, Duke
+     2026-11-07 06:26 "session is meant for
+     that"): `remoteData(cells, { config:
+{ project } })` takes the app's own tags.
+     Bind `board.project("p1")` on a root, a
+     session or a namespace. The server's fill
+     op reads `board.project`. A write in a call
+     tagged p1 pushes to p1 only. Built in
+     9d3a939, 54563b6, 34109e5.
 8. **Middleware.** A plain operation on `step`.
    `use` wraps every key. An `implement` entry
    adds its own, or with `inherit: false` runs
@@ -305,6 +314,9 @@ The todo stress app in a scratch copy, Core
 - Two users in real Chromium over SSE.
 - Each silent path from the audit has a test
   that fails before the fix.
+- Home: built in tinker-app (b961bf6 ADR,
+  f56a0d5 code); `rpc` and `live-read` went.
+  Hedl runs it since 46543d7.
 - Faults as data: a session read and an op's
   `depends` see `refused`. A guest in Chromium
   sees "Sign in to see the list.".
@@ -318,13 +330,17 @@ Log of each step:
 
 ## Open
 
-- F12: one key per project (Hedl). Parked.
-- Home: a tinker-app component that replaces
-  `rpc` and `live-read`. Parked.
+- Middleware or lifecycle hooks (Duke
+  2026-11-07 07:05): asked whether `use` goes
+  for `onStart`, `onError`, `onFinish` and
+  `retry`.
+- A key with no input: the JSON codec sends
+  `undefined` as `null`, so `z.void()` answers
+  `invalid` (Hedl uses a `noInput` shim).
 - Serving on tinker-app: `sse.server` should be
   a route of the `bun.server` capsule.
-- A watch's `?text=` has no `maxBody` cap; only
-  the host's URL limit holds it.
+- A watch's text is held to 2 KiB on every
+  transport (54563b6).
 - Core rows: F18 (flat spans), F21 (a refusal
   logs as a crash), F28 (union config by cast),
   F32 (abort disposes depends), F39 (write hook
