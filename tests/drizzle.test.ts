@@ -113,7 +113,6 @@ for (const driver of drivers) {
     });
 
     test("a later capsule's start sees the migrated schema", async () => {
-      // Migrate runs before next(): Flyway and Rails migrate before the app serves.
       let seen: unknown;
       const later = capsule({
         label: "later",
@@ -124,9 +123,10 @@ for (const driver of drivers) {
           },
         },
       });
-      const scope = createScope({ capsules: [...driver.capsules(), later] as never });
+
+      await using scope = createScope({ capsules: [...driver.capsules(), later] as never });
       await scope.ready;
-      await scope.close();
+
       expect(Array.isArray(seen)).toBe(true);
     });
 

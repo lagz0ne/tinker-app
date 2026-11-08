@@ -46,7 +46,7 @@ telemetry must then come from that origin.
 ## Checks
 
 `bun run check` runs tsc, `bun test`, both
-builds, then `check:client`.
+builds, then `check:client` and `check:tests`.
 
 `bun run check:style` is `vp check`: oxfmt
 and oxlint, with rules in `vite.config.ts`.
@@ -83,6 +83,40 @@ on each push to `main`, and weekly.
   that imports no builtin, such as a module
   resource that loads a server package, must
   end in `.server.ts` (`modules.server.ts`).
+- `check:tests`: reads both metafiles. It
+  fails if a prod build holds test code:
+  `@tinker/core/testing` or a `*.testing.ts`
+  file. See "Test tooling" below.
+
+## Test tooling: a test capsule
+
+A capsule's author ships its test tooling as a
+test capsule (Core ADR 0127). Put it in a
+`*.testing.ts` file. Only tests import it.
+
+```ts
+// auth.testing.ts
+import { testCapsule } from "@tinker/core/testing";
+
+export const authTesting = testCapsule(auth, {
+  exports: { signInAs },
+});
+```
+
+```ts
+// auth.test.ts
+await using app = createScope({
+  capsules: [auth({ api: fakeApi() }), authTesting],
+});
+await app.run(authTesting.signInAs, { input: ANN });
+```
+
+- A call made during start waits for start, so
+  a test needs no `await app.ready`.
+- `await using` closes the scope at the end of
+  the test.
+- `check:tests` fails the build if a prod file
+  imports a `*.testing.ts` file.
 
 ## rpc and remote data: one transport
 
