@@ -111,8 +111,14 @@ await using app = createScope({
 await app.run(authTesting.signInAs, { input: ANN });
 ```
 
-- A call made during start waits for start, so
-  a test needs no `await app.ready`.
+- A root with capsules answers each call with a
+  promise (Core ADR 0128). A call made during
+  start waits for start.
+- Code that wants a `Scope.Handle` takes the
+  started one: `const live = await app.ready`.
+  Its sync calls stay sync.
+- Lint makes `no-floating-promises` an error,
+  so a call you forgot to await fails `check`.
 - `await using` closes the scope at the end of
   the test.
 - `check:tests` fails the build if a prod file

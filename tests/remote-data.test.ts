@@ -24,18 +24,17 @@ async function pair(
   def: ReturnType<typeof remoteData<{}>>,
   extra: { onStart?: OnStart[]; observe?: Observe.Config } = {},
 ) {
-  const server = createScope({
+  const server = await createScope({
     observe: extra.observe,
     capsules: [
       def({ serve: true, ...(extra.onStart ? { onStart: extra.onStart } : {}) }),
       memory.server({ services: [def] }),
     ],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
-  const client = createScope({
+  const client = await createScope({
     capsules: [memory.client({ peer: server }), def({ read: memory.client })],
-  });
+  }).ready;
   closers.push(() => client.close());
 
   return { server, client };
@@ -52,7 +51,6 @@ test("the same plain cell on both sides: no label, a Date crosses through the co
     run: async ({ list }, { input }) => list.set([...list.get(), input]),
   });
   const { server, client } = await pair(board);
-  await client.ready;
 
   expect(client.resolve(board.todos).get()).toEqual(["a"]);
   expect(String(client.resolve(board.seen).get())).toBe("1970-01-01T00:00:00.000Z"); // JSON gives a string: the type says Date. keepDates keeps it.
@@ -69,23 +67,21 @@ test("two definitions in one app: each key is its own address", async () => {
   const theme = data({ initial: "light" });
   const board = remoteData({ todos });
   const prefs = remoteData({ theme });
-  const server = createScope({
+  const server = await createScope({
     capsules: [
       board({ serve: true }),
       prefs({ serve: true }),
       memory.server({ services: [board, prefs] }),
     ],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
-  const client = createScope({
+  const client = await createScope({
     capsules: [
       memory.client({ peer: server }),
       board({ read: memory.client }),
       prefs({ read: memory.client }),
     ],
-  });
-  await client.ready;
+  }).ready;
   closers.push(() => client.close());
 
   expect([client.resolve(board.todos).get(), client.resolve(prefs.theme).get()]).toEqual([
@@ -104,7 +100,6 @@ test("a feature reads the export: a reader with no controller, so it cannot writ
     run: async ({ list }, { input }) => list.set([...list.get(), input]),
   });
   const { client } = await pair(board);
-  await client.ready;
   const out = await client.settle(add, { input: "local" });
 
   expect(Object(out).error).toMatchObject({ kind: "InvalidDependency" });
@@ -121,7 +116,6 @@ test("parse checks both sides: the server cannot write a bad value; a client rea
     run: async ({ c }, { input }) => c.set(input as number),
   });
   const { server, client } = await pair(remoteData({ count }));
-  await client.ready;
   expect(Object(await server.settle(set, { input: "two" })).error).toMatchObject({
     kind: "DataValidationFailed",
   });
@@ -138,17 +132,15 @@ test("parse checks both sides: the server cannot write a bad value; a client rea
   });
   const lines: string[] = [];
   const older = remoteData({ count: loose });
-  const s2 = createScope({
+  const s2 = await createScope({
     capsules: [older({ serve: true }), memory.server({ services: [older] })],
-  });
-  await s2.ready;
+  }).ready;
   closers.push(() => s2.close());
   const strict = remoteData({ count }); // the same shape again: a new definition, its own cell
-  const c2 = createScope({
+  const c2 = await createScope({
     observe: { log: (l) => void lines.push(l.message) },
     capsules: [memory.client({ peer: s2 }), strict({ read: memory.client })],
-  });
-  await c2.ready;
+  }).ready;
   closers.push(() => c2.close());
   await s2.run(put, { input: 2 });
   await tick();
@@ -175,17 +167,15 @@ test("a bad value on the first read: start still ends; faults shows invalid, wit
     run: async ({ c }, { input }) => c.set(input),
   });
   const older = remoteData({ count: loose });
-  const s2 = createScope({
+  const s2 = await createScope({
     capsules: [older({ serve: true }), memory.server({ services: [older] })],
-  });
-  await s2.ready;
+  }).ready;
   closers.push(() => s2.close());
   const strict = remoteData({ count: data({ initial: 0, parse: z.number() }) });
-  const c2 = createScope({
+  const c2 = await createScope({
     observe: { export: () => undefined },
     capsules: [memory.client({ peer: s2 }), strict({ read: memory.client })],
-  });
-  await c2.ready;
+  }).ready;
   closers.push(() => c2.close());
 
   expect(c2.resolve(strict.faults).get().count?.message).toMatch(
@@ -241,7 +231,6 @@ test("a fault is data beside the value, and clears when a good value arrives", a
     run: async (_, { input }) => (open ? undefined : input.refuse({ signIn: true })),
   });
   const { client } = await pair(board, { onStart: [gate] });
-  await client.ready;
 
   expect(client.resolve(board.faults).get().todos?.fault).toBe("refused");
   expect(client.resolve(board.todos).get()).toEqual(["a"]); // the read itself never throws
@@ -261,7 +250,6 @@ test("F45 B: a session read and an op's depends see the fault, with no resolve h
     run: async (_, { input }) => input.refuse({ signIn: true }),
   });
   const { client } = await pair(board, { onStart: [refuse] });
-  await client.ready;
   const read = operation({
     label: "read",
     depends: { list: board.todos, faults: board.faults },
@@ -287,17 +275,15 @@ test("a remoteData fault carries the trace id of the read or push that brought i
     input: hook.start,
     run: async (_, { input }) => input.refuse({ signIn: true }),
   });
-  const server = createScope({
+  const server = await createScope({
     capsules: [board({ serve: true, onStart: [refuse] }), memory.server({ services: [board] })],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
   const spans: Observe.Span[] = [];
-  const client = createScope({
+  const client = await createScope({
     observe: { export: (x) => void spans.push(x) },
     capsules: [memory.client({ peer: server }), board({ read: memory.client })],
-  });
-  await client.ready;
+  }).ready;
   closers.push(() => client.close());
   const error = client.resolve(board.faults).get().todos;
   if (!board.fault.is(error)) throw new Error("expected a board fault");

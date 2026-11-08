@@ -34,7 +34,7 @@ const tick = (ms = 150) => new Promise((r) => setTimeout(r, ms));
 async function boot() {
   const srv = recorder();
   const transport = wsServer.server({ path: "/api", codec: keepDates, services: [board, api] });
-  const server = createScope({
+  const server = await createScope({
     observe: srv.observe,
     capsules: [
       board({ serve: true, onStart: [signedIn] }),
@@ -49,14 +49,13 @@ async function boot() {
       }),
       transport,
     ],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
   const { bun, url } = listen(server, [transport]);
   closers.push(() => bun.stop(true));
   const join = async (who: string) => {
     const seen = recorder();
-    const client = createScope({
+    const client = await createScope({
       observe: seen.observe,
       capsules: [
         wsClient.client({
@@ -67,8 +66,7 @@ async function boot() {
         board({ read: wsClient.client }),
         api({ remote: wsClient.client }),
       ],
-    });
-    await client.ready;
+    }).ready;
     closers.push(() => client.close());
     return { client, seen };
   };

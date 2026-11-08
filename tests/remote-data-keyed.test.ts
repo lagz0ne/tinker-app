@@ -39,7 +39,7 @@ const board = remoteData(
 );
 
 /** The server's store, by project (a database in the real app). */
-function boot(kind: "memory" | "ws", options: { refuse?: string } = {}) {
+async function boot(kind: "memory" | "ws", options: { refuse?: string } = {}) {
   const db = new Map<string, string[]>([
     ["p1", ["p1 first"]],
     ["p2", ["p2 first"]],
@@ -73,40 +73,37 @@ function boot(kind: "memory" | "ws", options: { refuse?: string } = {}) {
   });
 
   const transport = wsServer.server({ path: "/api", services: [board] });
-  const server = createScope({
+  const server = await createScope({
     capsules: [
       board({ serve: true, fill: { tasks: tasksNow }, onStart: [guard] }),
       transport,
       memory.server({ services: [board] }),
     ],
-  });
-  let base = "";
-  const ready = server.ready.then(() => {
-    if (kind === "ws") {
-      const { bun, url } = listen(server, [transport]);
-      closers.push(() => bun.stop(true));
-      base = `${url}/api`;
-    }
-  });
+  }).ready;
   closers.push(() => server.close());
+  let base = "";
+  if (kind === "ws") {
+    const { bun, url } = listen(server, [transport]);
+    closers.push(() => bun.stop(true));
+    base = `${url}/api`;
+  }
 
   const write = (key: string, title: string) =>
     server.run(add, { input: { project: key, title }, tags: [board.project(key)] });
 
-  const client = (extra: { tags?: Tag.Bindings } = {}) => {
+  const client = async (extra: { tags?: Tag.Bindings } = {}) => {
     const t = kind === "memory" ? memory.client : wsClient.client;
-    const scope = createScope({
+    const scope = await createScope({
       tags: extra.tags,
       capsules: [
         kind === "memory" ? memory.client({ peer: server }) : wsClient.client({ url: base }),
         board({ read: t }),
       ],
-    });
+    }).ready;
     closers.push(() => scope.close());
     return scope;
   };
   return {
-    ready,
     server,
     write,
     client,
@@ -124,11 +121,9 @@ const faultOf = (s: Scope.Handle) => s.resolve(board.faults).get().tasks;
 for (const kind of ["memory", "ws"] as const) {
   describe(kind, () => {
     test("two sessions, two projects: each reads its own list; the root names none", async () => {
-      const app = boot(kind);
-      await app.ready;
+      const app = await boot(kind);
 
-      const tab = app.client();
-      await tab.ready;
+      const tab = await app.client();
 
       const p1 = tab.createSession({ tags: [board.project("p1")] });
       const p2 = tab.createSession({ tags: [board.project("p2")] });
@@ -140,12 +135,9 @@ for (const kind of ["memory", "ws"] as const) {
     });
 
     test("a write for p1 reaches only p1's sessions, across two clients", async () => {
-      const app = boot(kind);
-      await app.ready;
+      const app = await boot(kind);
 
-      const a = app.client();
-      const b = app.client();
-      await Promise.all([a.ready, b.ready]);
+      const [a, b] = await Promise.all([app.client(), app.client()]);
 
       const a1 = a.createSession({ tags: [board.project("p1")] });
       const b1 = b.createSession({ tags: [board.project("p1")] });
@@ -166,11 +158,9 @@ for (const kind of ["memory", "ws"] as const) {
     });
 
     test("one client carries two projects of one key, and each gets its own", async () => {
-      const app = boot(kind);
-      await app.ready;
+      const app = await boot(kind);
 
-      const tab = app.client();
-      await tab.ready;
+      const tab = await app.client();
 
       const p1 = tab.createSession({ tags: [board.project("p1")] });
       const p2 = tab.createSession({ tags: [board.project("p2")] });
@@ -186,11 +176,9 @@ for (const kind of ["memory", "ws"] as const) {
     });
 
     test("bound at the root: the root reads that project, as an unkeyed board does", async () => {
-      const app = boot(kind);
-      await app.ready;
+      const app = await boot(kind);
 
-      const tab = app.client({ tags: [board.project("p2")] });
-      await tab.ready;
+      const tab = await app.client({ tags: [board.project("p2")] });
 
       await until(() => tab.resolve(board.tasks).get().length > 0);
 
@@ -198,11 +186,9 @@ for (const kind of ["memory", "ws"] as const) {
     });
 
     test("a refused project shows in that session's faults; the other reads on", async () => {
-      const app = boot(kind, { refuse: "p2" });
-      await app.ready;
+      const app = await boot(kind, { refuse: "p2" });
 
-      const tab = app.client();
-      await tab.ready;
+      const tab = await app.client();
 
       const p1 = tab.createSession({ tags: [board.project("p1")] });
       const p2 = tab.createSession({ tags: [board.project("p2")] });
@@ -216,11 +202,9 @@ for (const kind of ["memory", "ws"] as const) {
 }
 
 test("the server fills a project once while it is watched, and forgets it when no one watches", async () => {
-  const app = boot("memory");
-  await app.ready;
+  const app = await boot("memory");
 
-  const tab = app.client();
-  await tab.ready;
+  const tab = await app.client();
 
   const s1 = tab.createSession({ tags: [board.project("p1")] });
   const s2 = tab.createSession({ tags: [board.project("p1")] }); // the same project: shares the watch
@@ -244,8 +228,7 @@ test("the server fills a project once while it is watched, and forgets it when n
 });
 
 test("a parameter that does not fit the config is invalid on the server", async () => {
-  const app = boot("memory");
-  await app.ready;
+  const app = await boot("memory");
 
   const reply = await app.server.run(board.answer, {
     input: { address: "tasks", value: { project: 7 }, meta: {} },
@@ -254,11 +237,9 @@ test("a parameter that does not fit the config is invalid on the server", async 
 });
 
 test("a session made with a namespace whose tags bind the project reads that project", async () => {
-  const app = boot("memory");
-  await app.ready;
+  const app = await boot("memory");
 
-  const tab = app.client();
-  await tab.ready;
+  const tab = await app.client();
 
   const space = namespace({ tags: [board.project("p2")] });
   const s = tab.createSession({ ns: space });
@@ -274,10 +255,8 @@ test("the definition refuses a config key that is a cell or reserved", () => {
 });
 
 test("a keyed write with no project bound fails before it runs: MissingTag", async () => {
-  const app = boot("memory");
-  await app.ready;
-  const tab = app.client();
-  await tab.ready;
+  const app = await boot("memory");
+  const tab = await app.client();
   const s = tab.createSession({ tags: [board.project("p1")] });
   await until(() => read(s).length > 0);
 
@@ -302,10 +281,8 @@ test("a keyed write with no project bound fails before it runs: MissingTag", asy
 });
 
 test("a child session on the parent's project shares its watch: no new request", async () => {
-  const app = boot("memory");
-  await app.ready;
-  const tab = app.client();
-  await tab.ready;
+  const app = await boot("memory");
+  const tab = await app.client();
 
   const s = tab.createSession({ tags: [board.project("p1")] });
   await until(() => read(s).length > 0);

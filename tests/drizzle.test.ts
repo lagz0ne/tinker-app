@@ -61,7 +61,7 @@ for (const driver of drivers) {
     let app: Scope.Handle;
 
     beforeAll(async () => {
-      app = createScope({ capsules: driver.capsules() as never });
+      app = await createScope({ capsules: driver.capsules() as never }).ready;
       await app.ready;
     }, 30_000);
     afterAll(async () => void (await app.close()));
@@ -124,8 +124,8 @@ for (const driver of drivers) {
         },
       });
 
-      await using scope = createScope({ capsules: [...driver.capsules(), later] as never });
-      await scope.ready;
+      await using scope = await createScope({ capsules: [...driver.capsules(), later] as never })
+        .ready;
 
       expect(Array.isArray(seen)).toBe(true);
     });
@@ -144,10 +144,9 @@ test("no driver is a type error and fails at createScope", () => {
 });
 
 test("a forced session close rolls back; a graceful close commits", async () => {
-  const app = createScope({
+  const app = await createScope({
     capsules: [pglite(), drizzlePg({ driver: pglite.connection, migrations: pgMigrations })],
-  });
-  await app.ready;
+  }).ready;
 
   const forced = app.createSession();
   await forced.run(pgOps.addNote, { input: { title: "dropped" } });

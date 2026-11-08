@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { createScope } from "@tinker/core";
+import { createScope, type Scope as CoreScope } from "@tinker/core";
 import { z } from "zod";
 
 import { memory } from "~/components/memory";
@@ -21,11 +21,11 @@ afterEach(async () => {
   for (const c of closers.splice(0).reverse()) await c();
 });
 
-type Scope = ReturnType<typeof createScope>;
+type Scope = CoreScope.Handle;
 
 async function boot(kind: "memory" | "ws") {
   const transport = wsServer.server({ path: "/api", codec: keepDates, services: [board, api] });
-  const server = createScope({
+  const server = await createScope({
     capsules: [
       board({ serve: true, onStart: [signedIn] }),
       api({
@@ -40,8 +40,7 @@ async function boot(kind: "memory" | "ws") {
       transport,
       memory.server({ codec: keepDates, services: [board, api] }),
     ],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
   const { bun, url } = listen(server, [transport]);
   closers.push(() => bun.stop(true));
@@ -68,8 +67,7 @@ async function boot(kind: "memory" | "ws") {
   };
   const join = async (who: string) => {
     const client = open(who);
-    await client.ready;
-    return client;
+    return Object.assign(await client.ready, { end: client.end });
   };
   /** Online until the client closes, as main.tsx does. */
   const online = (client: Scope) =>

@@ -107,7 +107,7 @@ async function boot(ttl: number) {
   const publicWs = createWs();
   const signedWs = createWs();
   const spans: Observe.Span[] = [];
-  const server = createScope({
+  const server = await createScope({
     observe: { export: (x) => void spans.push(x) },
     capsules: [
       auth({ implement: { "auth.status": status, "auth.refresh": refresh } }),
@@ -116,8 +116,7 @@ async function boot(ttl: number) {
       publicWs.server({ path: "/public", services: [auth] }),
       signedWs.server({ path: "/api", services: [board, api] }),
     ],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
   const { bun, url } = listen(server, [publicWs.server, signedWs.server]);
   closers.push(() => bun.stop(true));
@@ -180,7 +179,7 @@ async function client(url: string, sid: string) {
   const publicWs = createWs();
   const signedWs = createWs();
   const spans: Observe.Span[] = [];
-  const scope = createScope({
+  const scope = await createScope({
     observe: { export: (x) => void spans.push(x) },
     capsules: [
       publicWs.client({ url: `${url}/public`, headers }),
@@ -189,8 +188,7 @@ async function client(url: string, sid: string) {
       board({ read: signedWs.client }),
       api({ remote: signedWs.client }),
     ],
-  });
-  await scope.ready;
+  }).ready;
   closers.push(() => scope.close());
 
   return { scope, spans };

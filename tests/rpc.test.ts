@@ -48,24 +48,21 @@ const observe: Observe.Config = {
   log: (line) => void lines.push(`${line.message} ${JSON.stringify(line.attributes)}`),
 };
 
-const backend = createScope({
+const backend = await createScope({
   observe,
   capsules: [
     api({ implement: { greet: greetHere } }),
     more({ implement: { refuse: { run: refuseHere, onStart: [no] }, crash: crashHere } }),
     server.server({ path: "/rpc", services: [api, more] }),
   ],
-});
+}).ready;
 
-await backend.ready;
 const http = listen(backend, [server.server]);
 const base = `${http.url}/rpc`;
 
-const browser = createScope({
+const browser = await createScope({
   capsules: [tab.client({ url: base }), api({ remote: tab.client }), more({ remote: tab.client })],
-});
-
-await browser.ready;
+}).ready;
 
 afterAll(async () => {
   await browser.close();
@@ -170,8 +167,7 @@ test("an unknown address is 404; a foreign origin is 403", async () => {
 test("a bound public origin is the one a socket must come from, over an http request URL", async () => {
   /** 101 when the upgrade would go ahead; else the answer's status. */
   const open = async (origin: string | undefined, headers: Record<string, string>) => {
-    const proxied = serverWith({ origin });
-    await proxied.ready;
+    const proxied = await serverWith({ origin }).ready;
     const reply = proxied
       .resolve(server.server)
       .upgrade(new Request("http://app.example/rpc", { headers }), proxied, {
@@ -244,8 +240,7 @@ test("a frame over maxPayload (1 MiB unset) closes the socket (1009) and runs no
 });
 
 test("a bound smaller maxPayload is the cap", async () => {
-  const small = serverWith({ maxPayload: 64 });
-  await small.ready;
+  const small = await serverWith({ maxPayload: 64 }).ready;
   const door = listen(small, [server.server]);
   const at = `${door.url}/rpc`;
 

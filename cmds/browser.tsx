@@ -33,15 +33,15 @@ window.addEventListener("pagehide", (event) => {
 });
 
 import.meta.hot?.dispose(close);
-await app.ready;
+const live = await app.ready;
 
 const router = createRouter({
   routeTree,
-  context: { scope: app },
+  context: { scope: live },
   scrollRestoration: true,
   defaultErrorComponent: TinkerError,
   defaultNotFoundComponent: TinkerNotFound,
-  Wrap: ({ children }) => <ScopeProvider scope={app}>{children}</ScopeProvider>,
+  Wrap: ({ children }) => <ScopeProvider scope={live}>{children}</ScopeProvider>,
 });
 
 declare module "@tanstack/react-router" {

@@ -33,7 +33,7 @@ async function pair() {
   const lines: string[] = [];
   const traces: Record<string, string | undefined> = {};
   const spans: Array<{ name: string; traceId: string }> = [];
-  const server = createScope({
+  const server = await createScope({
     observe: {
       export: () => undefined,
       log: (l) =>
@@ -41,10 +41,9 @@ async function pair() {
         (traces[`server ${l.message}`] = l.span?.traceId)),
     },
     capsules: [api({ implement: { big, echo } }), memory.server({ services: [api] })],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
-  const client = createScope({
+  const client = await createScope({
     observe: {
       export: (x) => void spans.push(x),
       log: (l) =>
@@ -52,8 +51,7 @@ async function pair() {
         (traces[`client ${l.message}`] = l.span?.traceId)),
     },
     capsules: [memory.client({ peer: server }), api({ remote: memory.client })],
-  });
-  await client.ready;
+  }).ready;
   closers.push(() => client.close());
 
   return { server, client, lines, traces, spans };
@@ -128,14 +126,13 @@ test("decode on the client: a reply it cannot read is decode, side client (not l
   });
   closers.push(() => proxy.stop(true));
   const lines: string[] = [];
-  const client = createScope({
+  const client = await createScope({
     observe: { log: (l) => void lines.push(`${l.message} ${JSON.stringify(l.attributes)}`) },
     capsules: [
       wsClient.client({ url: `ws://localhost:${proxy.port}/api` }),
       api({ remote: wsClient.client }),
     ],
-  });
-  await client.ready;
+  }).ready;
   closers.push(() => client.close());
 
   expect(await faultOf(client.run(api.echo, { input: { n: 1 } }))).toEqual({
@@ -167,10 +164,9 @@ test("F40: a Core kind (DataValidationFailed, from a bad output) does not cross:
     input: z.null(),
     run: async () => ({ n: "not a number" }) as never,
   });
-  const server = createScope({
+  const server = await createScope({
     capsules: [wrong({ implement: { bad } }), memory.server({ services: [wrong] })],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
   const text = await server.run(memory.server.serve, {
     input: { address: "bad", text: "null", meta: {} },

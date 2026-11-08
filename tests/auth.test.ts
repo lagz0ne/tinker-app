@@ -33,7 +33,7 @@ const api = rpc({ "note.add": { input: z.string(), output: z.number() } });
 
 // ---- the server: ONE transport; the route table sends each address to its service.
 // The public service reads the cookie; the signed services check the bearer token.
-function boot() {
+async function boot() {
   const sessions = new Map<string, string>(); // cookie sid -> who (a sign-in adds a row)
   const tokens = new Map<string, string>(); // bearer token -> who
   const user = tag<string>({ label: "user" });
@@ -70,14 +70,14 @@ function boot() {
       list.get().length
     ),
   });
-  const server = createScope({
+  const server = await createScope({
     capsules: [
       auth({ implement: { "auth.status": statusOf } }), // public: no hooks
       board({ serve: true, onStart: [bearer] }),
       api({ onStart: [bearer], implement: { "note.add": add } }),
       memory.server({ services: [auth, board, api] }),
     ],
-  });
+  }).ready;
   closers.push(() => server.close());
 
   return { server, sessions, tokens };
@@ -98,8 +98,8 @@ const credentials = operation({
   },
 });
 
-async function client(server: ReturnType<typeof boot>["server"], sid: string) {
-  const scope = createScope({
+async function client(server: Awaited<ReturnType<typeof boot>>["server"], sid: string) {
+  const scope = await createScope({
     capsules: [
       memory.client({ peer: server, headers: { cookie: `sid=${sid}` } }),
       auth({ remote: memory.client }),
@@ -107,15 +107,13 @@ async function client(server: ReturnType<typeof boot>["server"], sid: string) {
       board({ read: signed.client }),
       api({ remote: signed.client }),
     ],
-  });
-  await scope.ready;
+  }).ready;
   closers.push(() => scope.close());
   return scope;
 }
 
 test("signed in: the auth check goes over the public transport; the rest carries the bearer", async () => {
-  const { server, sessions } = boot();
-  await server.ready;
+  const { server, sessions } = await boot();
   sessions.set("s1", "duke");
   const duke = await client(server, "s1");
 
@@ -130,8 +128,7 @@ test("signed in: the auth check goes over the public transport; the rest carries
 });
 
 test("a guest: the public transport answers out; the signed calls are refused, the scope stays open", async () => {
-  const { server } = boot();
-  await server.ready;
+  const { server } = await boot();
   const guest = await client(server, "nobody");
 
   expect(await guest.run(auth["auth.status"], { input: null })).toEqual({ kind: "out" });
@@ -144,8 +141,7 @@ test("a guest: the public transport answers out; the signed calls are refused, t
 });
 
 test("the guest signs in later: the next request asks again, and the board fills without a new scope", async () => {
-  const { server, sessions } = boot();
-  await server.ready;
+  const { server, sessions } = await boot();
   const ann = await client(server, "s2");
 
   expect(ann.resolve(board.faults).get().notes?.fault).toBe("refused");
@@ -161,8 +157,7 @@ test("the guest signs in later: the next request asks again, and the board fills
 });
 
 test("the cost: one auth check per signed request (as tRPC headers()); caching it is the app's choice", async () => {
-  const { server, sessions } = boot();
-  await server.ready;
+  const { server, sessions } = await boot();
   sessions.set("s3", "bo");
   const bo = await client(server, "s3");
   const before = statusCalls;

@@ -30,7 +30,7 @@ const slow = operation({
 
 test("each route reply maps to its HTTP status", async () => {
   const stop = new AbortController();
-  const app = createScope({
+  const app = await createScope({
     capsules: [
       routes({
         stop: stop.signal,
@@ -43,8 +43,7 @@ test("each route reply maps to its HTTP status", async () => {
         },
       }),
     ],
-  });
-  await app.ready;
+  }).ready;
   const fetch = app.resolve(routes);
   const call = (path: string, init?: RequestInit) =>
     fetch(new Request(`http://t${path}`, init), app);
@@ -92,11 +91,10 @@ test("an early reply streams while its op runs; the op's span ends after the bod
       writer.close();
     },
   });
-  const app = createScope({
+  const app = await createScope({
     observe: { export: (span) => void spans.push(span) },
     capsules: [routes({ stop: new AbortController().signal, table: { "GET /stream": stream } })],
-  });
-  await app.ready;
+  }).ready;
   const answer = app.resolve(routes);
   const http = Bun.serve({
     port: 0,
@@ -144,11 +142,10 @@ test("an op that replies early and then fails keeps its reply", async () => {
       throw new Error("after the reply");
     },
   });
-  const app = createScope({
+  const app = await createScope({
     observe: { export: (span) => void spans.push(span) },
     capsules: [routes({ stop: new AbortController().signal, table: { "GET /late": late } })],
-  });
-  await app.ready;
+  }).ready;
 
   const response = await within(app.resolve(routes)(new Request("http://t/late"), app));
   expect(response).toBeInstanceOf(Response);
@@ -172,10 +169,9 @@ test("after an early reply, a Response the op returns is dropped and its body ca
       return new Response(new ReadableStream({ cancel: (reason) => cancelled.resolve(reason) }));
     },
   });
-  const app = createScope({
+  const app = await createScope({
     capsules: [routes({ stop: new AbortController().signal, table: { "GET /twice": twice } })],
-  });
-  await app.ready;
+  }).ready;
 
   const response = await within(app.resolve(routes)(new Request("http://t/twice"), app));
   expect(response).toBeInstanceOf(Response);

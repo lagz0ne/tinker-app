@@ -42,17 +42,13 @@ const api = rpc({
   boom: { input: z.null(), output: z.null() },
 });
 
-const server = createScope({
+const server = await createScope({
   capsules: [api({ implement: { ok, boom } }), memory.server({ services: [api] })],
-});
+}).ready;
 
-await server.ready;
-
-const client = createScope({
+const client = await createScope({
   capsules: [memory.client({ peer: server }), api({ remote: memory.client })],
-});
-
-await client.ready;
+}).ready;
 
 afterAll(async () => {
   await client.close();

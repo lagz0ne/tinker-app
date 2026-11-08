@@ -26,6 +26,8 @@ export default defineConfig({
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",
       complexity: ["error", { max: 8 }],
+      // A capsule root answers each call with a promise (Core ADR 0128): await it.
+      "typescript/no-floating-promises": "error",
       "tinker/blank-lines": "error",
       "tinker/body-steps": "error",
       curly: ["error", "multi-line"],

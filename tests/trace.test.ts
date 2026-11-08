@@ -44,16 +44,15 @@ globalThis.WebSocket = class extends Real {
 
 const stop = new AbortController();
 
-const backend = createScope({
+const backend = await createScope({
   observe: { export: (span) => void serverSpans.push(span) },
   capsules: [
     api({ implement: { greet: greetHere } }),
     server.server({ path: "/rpc", services: [api] }),
     routes({ stop: stop.signal, table: { "GET /echo": echo } }),
   ],
-});
+}).ready;
 
-await backend.ready;
 const table = backend.resolve(routes);
 const { bun, url } = listen(backend, [server.server]);
 
@@ -70,12 +69,10 @@ const raw = async (meta: Record<string, string>, base = `${url}/rpc`) => {
   return answer;
 };
 
-const browser = createScope({
+const browser = await createScope({
   observe: { export: (span) => void tabSpans.push(span) },
   capsules: [tab.client({ url: `${url}/rpc` }), api({ remote: tab.client })],
-});
-
-await browser.ready;
+}).ready;
 
 beforeEach(() => {
   serverSpans.length = 0;
@@ -140,10 +137,9 @@ test("the client sends a W3C traceparent with its own span ids and sampled flag"
 });
 
 test("a client with observation off sends no traceparent", async () => {
-  const dark = createScope({
+  const dark = await createScope({
     capsules: [tab.client({ url: `${url}/rpc` }), api({ remote: tab.client })],
-  });
-  await dark.ready;
+  }).ready;
   await dark.run(api.greet, { input: { name: "dark" } });
   await dark.close();
 
@@ -185,14 +181,13 @@ test("a missing or malformed traceparent starts a fresh trace; the request still
 });
 
 test("ws: a message after the root closed answers 503, it does not reject", async () => {
-  const closing = createScope({
+  const closing = await createScope({
     capsules: [
       api({ implement: { greet: greetHere } }),
       server.server({ path: "/rpc", services: [api] }),
     ],
-  });
+  }).ready;
 
-  await closing.ready;
   const late = listen(closing, [server.server]);
   await closing.close();
 
@@ -201,11 +196,10 @@ test("ws: a message after the root closed answers 503, it does not reject", asyn
 });
 
 test("routes: a request after the root closed answers 500, it does not reject", async () => {
-  const closing = createScope({
+  const closing = await createScope({
     capsules: [routes({ stop: new AbortController().signal, table: { "GET /echo": echo } })],
-  });
+  }).ready;
 
-  await closing.ready;
   const answer = closing.resolve(routes);
   await closing.close();
 

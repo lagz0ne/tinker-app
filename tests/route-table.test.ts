@@ -45,16 +45,15 @@ test("two services with one address: the first wins and start warns, as Hono doe
   const api = rpc({ "todo.add": { input: z.null(), output: z.null() } });
   const add = operation({ label: "add", input: z.null(), run: async () => null });
   const lines: string[] = [];
-  const scope = createScope({
+  const scope = await createScope({
     observe: { log: (l) => void lines.push(`${l.message} ${JSON.stringify(l.attributes)}`) },
     capsules: [
       board({ serve: true }),
       api({ implement: { "todo.add": add } }),
       memory.server({ services: [board, api] }),
     ],
-  });
+  }).ready;
   closers.push(() => scope.close());
-  await scope.ready;
 
   const warned = lines.find((l) => l.startsWith("protocol duplicate address"));
   expect(warned).toContain('"winner":"remoteData"');
@@ -85,17 +84,15 @@ test("strict: two services with one address fail start, naming the address and b
 
 test("no service has the address: the server answers null (404); the client gets link", async () => {
   const board = remoteData({ todos: data({ initial: [] as string[] }) });
-  const server = createScope({
+  const server = await createScope({
     capsules: [board({ serve: true }), memory.server({ services: [board] })],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
 
   expect(
     await server.run(memory.server.serve, { input: { address: "nope", text: "null", meta: {} } }),
   ).toBeNull();
-  const client = createScope({ capsules: [memory.client({ peer: server })] });
-  await client.ready;
+  const client = await createScope({ capsules: [memory.client({ peer: server })] }).ready;
   closers.push(() => client.close());
   expect(
     await client.run(memory.client.call, { input: { address: "nope", value: null, meta: {} } }),
@@ -122,15 +119,14 @@ test("30 definitions × 3 keys and one rpc with 30 keys: each call reaches its o
     ]),
   );
   const spans: Observe.Span[] = [];
-  const server = createScope({
+  const server = await createScope({
     observe: { export: (x) => void spans.push(x) },
     capsules: [
       ...boards.map((b) => b({ serve: true })),
       api({ implement: implement as never }),
       memory.server({ services: [...boards, api] }),
     ],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
   const ask = async (address: string) =>
     JSON.parse(
@@ -162,23 +158,21 @@ test("one shared stream carries keys of two definitions; each is routed to its o
     depends: { t: todos.controller, p: theme.controller },
     run: async ({ t, p }) => (t.set(["a"]), p.set("dark")),
   });
-  const server = createScope({
+  const server = await createScope({
     capsules: [
       board({ serve: true }),
       prefs({ serve: true }),
       memory.server({ services: [board, prefs] }),
     ],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
-  const client = createScope({
+  const client = await createScope({
     capsules: [
       memory.client({ peer: server }),
       board({ read: memory.client }),
       prefs({ read: memory.client }),
     ],
-  });
-  await client.ready;
+  }).ready;
   closers.push(() => client.close());
   await new Promise((r) => setTimeout(r, 30));
   await server.run(set, { input: null });

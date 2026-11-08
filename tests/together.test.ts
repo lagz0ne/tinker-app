@@ -30,21 +30,19 @@ async function torn(kind: "memory" | "ws") {
     ),
   });
   const transport = wsServer.server({ path: "/api", services: [board] });
-  const server = createScope({
+  const server = await createScope({
     capsules: [board({ serve: true }), transport, memory.server({ services: [board] })],
-  });
-  await server.ready;
+  }).ready;
   closers.push(() => server.close());
 
   const { bun, url } = listen(server, [transport]);
   closers.push(() => bun.stop(true));
-  const client = createScope({
+  const client = await createScope({
     capsules: [
       kind === "memory" ? memory.client({ peer: server }) : wsClient.client({ url: `${url}/api` }),
       board({ read: kind === "memory" ? memory.client : wsClient.client }),
     ],
-  });
-  await client.ready;
+  }).ready;
   closers.push(() => client.close());
   await new Promise((r) => setTimeout(r, 30)); // the watches are open
   // Each time either key changes, the two must agree: n todos, n activity lines.

@@ -48,10 +48,9 @@ for (const [name, make] of Object.entries(sinks)) {
   test(`${name}: a tab batch posted to /api/telemetry makes no server span or log line`, async () => {
     const sink = make();
     const stop = new AbortController();
-    const app = createScope({
+    const app = await createScope({
       capsules: [sink, routes({ stop: stop.signal, table: { "POST /api/telemetry": sink.route } })],
-    });
-    await app.ready;
+    }).ready;
     const post = () =>
       app.resolve(routes)(
         new Request("http://app.example/api/telemetry", {

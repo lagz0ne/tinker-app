@@ -23,8 +23,7 @@ const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 
 async function serverOf(services: never[], capsules: unknown[], options = {}) {
   const transport = wsServer.server({ path: "/rpc", services, ...options });
-  const scope = createScope({ capsules: [...(capsules as never[]), transport] });
-  await scope.ready;
+  const scope = await createScope({ capsules: [...(capsules as never[]), transport] }).ready;
   closers.push(() => scope.close());
 
   const { upgrade, websocket } = scope.resolve(transport) as never as {
@@ -47,8 +46,8 @@ async function serverOf(services: never[], capsules: unknown[], options = {}) {
 
 test("a call crosses the socket and back", async () => {
   const { url } = await serverOf([api as never], [api({ implement: { greet: greetHere } })]);
-  const client = createScope({ capsules: [ws.client({ url }), api({ remote: ws.client })] });
-  await client.ready;
+  const client = await createScope({ capsules: [ws.client({ url }), api({ remote: ws.client })] })
+    .ready;
   closers.push(() => client.close());
 
   const all = await Promise.all(
@@ -68,8 +67,8 @@ test("the calls of one tick go as one frame", async () => {
     }
   } as typeof WebSocket;
   closers.push(() => (globalThis.WebSocket = Real));
-  const client = createScope({ capsules: [ws.client({ url }), api({ remote: ws.client })] });
-  await client.ready;
+  const client = await createScope({ capsules: [ws.client({ url }), api({ remote: ws.client })] })
+    .ready;
   closers.push(() => client.close());
 
   await Promise.all(
@@ -93,8 +92,8 @@ test("a watch gets pushes; one write's two keys arrive together (F35)", async ()
     ),
   });
   const { scope: server, url } = await serverOf([board as never], [board({ serve: true })]);
-  const client = createScope({ capsules: [ws.client({ url }), board({ read: ws.client })] });
-  await client.ready;
+  const client = await createScope({ capsules: [ws.client({ url }), board({ read: ws.client })] })
+    .ready;
   closers.push(() => client.close());
   await tick();
 
@@ -152,8 +151,8 @@ test("a reader that stops ends the server's watch", async () => {
     },
   });
   const { url } = await serverOf([ticks as never], [ticks({ implement: { count: countHere } })]);
-  const client = createScope({ capsules: [ws.client({ url }), ticks({ remote: ws.client })] });
-  await client.ready;
+  const client = await createScope({ capsules: [ws.client({ url }), ticks({ remote: ws.client })] })
+    .ready;
   closers.push(() => client.close());
 
   const seen: number[] = [];
@@ -168,8 +167,9 @@ test("a reader that stops ends the server's watch", async () => {
 
 test("reset drops the socket: the next call opens a new one, and the old close fails nothing new", async () => {
   const transport = wsServer.server({ path: "/rpc", services: [api as never] });
-  const scope = createScope({ capsules: [api({ implement: { greet: greetHere } }), transport] });
-  await scope.ready;
+  const scope = await createScope({
+    capsules: [api({ implement: { greet: greetHere } }), transport],
+  }).ready;
   closers.push(() => scope.close());
 
   const door = scope.resolve(transport);
@@ -186,10 +186,9 @@ test("reset drops the socket: the next call opens a new one, and the old close f
   });
   closers.push(() => bun.stop(true));
 
-  const client = createScope({
+  const client = await createScope({
     capsules: [ws.client({ url: `ws://localhost:${bun.port}/rpc` }), api({ remote: ws.client })],
-  });
-  await client.ready;
+  }).ready;
   closers.push(() => client.close());
 
   expect(await client.run(api.greet, { input: { name: "a" } })).toEqual({ text: "Hello, a." });

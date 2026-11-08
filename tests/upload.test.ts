@@ -54,11 +54,10 @@ const transport = wsServer.server({
   uploadDeadline: 300,
 });
 
-const backend = createScope({
+const backend = await createScope({
   capsules: [api({ implement: { "file.put": put, plain }, onStart: [gate] }), transport],
-});
+}).ready;
 
-await backend.ready;
 const door = backend.resolve(transport);
 
 const bun = Bun.serve({
@@ -74,11 +73,9 @@ const bun = Bun.serve({
 
 const base = `localhost:${bun.port}/rpc`;
 
-const browser = createScope({
+const browser = await createScope({
   capsules: [ws.client({ url: `ws://${base}` }), api({ remote: ws.client })],
-});
-
-await browser.ready;
+}).ready;
 
 afterAll(async () => {
   await browser.close();
@@ -113,13 +110,12 @@ test("a key with bytes runs from the client: the value as text, the bytes as the
 });
 
 test("the memory transport carries the bytes as they are", async () => {
-  const server = createScope({
+  const server = await createScope({
     capsules: [api({ implement: { "file.put": put, plain } }), memory.server({ services: [api] })],
-  });
-  const tab = createScope({
+  }).ready;
+  const tab = await createScope({
     capsules: [memory.client({ peer: server }), api({ remote: memory.client })],
-  });
-  await Promise.all([server.ready, tab.ready]);
+  }).ready;
 
   const file = new Blob(["in memory"], { type: "text/plain" });
   expect(await tab.run(api["file.put"], { input: { name: "m", file } })).toMatchObject({

@@ -64,15 +64,13 @@ const here = {
 
 /** A server scope that implements the keys here, and a client scope that calls them. */
 async function pair(server: Config, client: Config, observe?: Observe.Config) {
-  const impl = createScope({
+  const impl = await createScope({
     ...(observe ? { observe } : {}),
     capsules: [api(server), memory.server({ services: [api] })],
-  });
-  await impl.ready;
-  const callers = createScope({
+  }).ready;
+  const callers = await createScope({
     capsules: [memory.client({ peer: impl }), api(client)],
-  });
-  await callers.ready;
+  }).ready;
   closers.push(
     () => callers.close(),
     () => impl.close(),

@@ -46,19 +46,17 @@ const boom = {
 async function server(lines: string[] = []) {
   const todos = data({ initial: ["a"] });
   const board = remoteData({ todos });
-  const s = createScope({
+  const s = await createScope({
     observe: { log: (l) => void lines.push(l.message) },
     capsules: [board({ serve: true }), memory.server({ services: [board, boom] })],
-  });
-  await s.ready;
+  }).ready;
   closers.push(() => s.close());
 
   return { s, board };
 }
 
 async function client(peer: Awaited<ReturnType<typeof server>>["s"]) {
-  const c = createScope({ capsules: [memory.client({ peer })] });
-  await c.ready;
+  const c = await createScope({ capsules: [memory.client({ peer })] }).ready;
   closers.push(() => c.close());
   return c;
 }
@@ -105,14 +103,13 @@ test("a socket that cannot open makes the key's fault link, as data", async () =
   // The socket route is down: every upgrade answers 503.
   const bun = Bun.serve({ port: 0, fetch: () => new Response(null, { status: 503 }) });
   closers.push(() => bun.stop(true));
-  const c = createScope({
+  const c = await createScope({
     capsules: [
       wsClient.client({ url: `ws://localhost:${bun.port}/api` }),
       board({ read: wsClient.client }),
     ],
-  });
+  }).ready;
   closers.push(() => c.close());
-  await c.ready;
   await tick(30);
 
   expect(c.resolve(board.faults).get().todos?.message).toContain("todos: link");
