@@ -115,7 +115,8 @@ export const drizzleSqlite = capsule({
   exports: { db, tx, migrate },
   hooks: {
     async start({ next, run, load, config, closing }) {
-      await next();
+      // Migrate first, then the later capsules start: Flyway and Rails migrate before the app
+      // serves, so a later start reads the schema and no write waits on migrate's lock.
       load(rootClosing, { role: "state", explain: "Marks the root, for the boundary rule" }).set(
         closing,
       );
@@ -124,6 +125,7 @@ export const drizzleSqlite = capsule({
         await load(config.driver, meta),
       );
       await run(migrate, {}, { role: "setup", explain: "Brings the schema up to date" });
+      await next();
     },
   },
 });

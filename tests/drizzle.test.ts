@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createScope } from "@tinker/core";
+import { capsule, createScope } from "@tinker/core";
 import type { Scope } from "@tinker/core";
 
 import { bunSql } from "~/components/bun-sql/index.server";
@@ -110,6 +110,24 @@ for (const driver of drivers) {
       expect(result.status === "failed" && Object(result.error).kind).toBe(
         "TransactionNeedsSession",
       );
+    });
+
+    test("a later capsule's start sees the migrated schema", async () => {
+      // Migrate runs before next(): Flyway and Rails migrate before the app serves.
+      let seen: unknown;
+      const later = capsule({
+        label: "later",
+        hooks: {
+          async start({ next, run }) {
+            seen = await run(ops.listNotes, {}, { role: "setup", explain: "Reads at start" });
+            await next();
+          },
+        },
+      });
+      const scope = createScope({ capsules: [...driver.capsules(), later] as never });
+      await scope.ready;
+      await scope.close();
+      expect(Array.isArray(seen)).toBe(true);
     });
 
     test("the capsule record shows the driver and migrate as setup", () => {
