@@ -40,6 +40,8 @@ jobs:
         with:
           bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
+      # Chromium for the browser test project (tests/browser).
+      - run: bunx playwright install --with-deps chromium
       # Typecheck, tests, and the build with its client check.
       - run: bun run check
       # Format and lint (vp check).
