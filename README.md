@@ -66,18 +66,20 @@ pass to it are native. `ReadableStream` and
 `.github/workflows/gates.yml` runs all three
 on each push to `main`, and weekly.
 
-## Two builds
+## One build: a binary
 
-- `build:client`: `cmds/index.html`, browser
-  target, to `dist/client`, with a metafile.
-  `--public-path=/` makes `index.html` load
-  its files from `/`, so a deep link such as
-  `/a/b` works.
-- `build:server`: `cmds/host.ts` and the
-  telemetry worker, Bun target, to `dist/server`.
-- `check:client`: reads the client metafile.
-  It fails if a server module is in the client
-  build: a `*.server.ts` file, `src/backend`,
+- `build:server`: `bun build --compile` of
+  `cmds/host.ts` and the telemetry worker, to
+  one file, `dist/server`.
+- The page comes from the HTML import in
+  `cmds/host.ts`. Its files sit inside the
+  binary. Nothing is read from disk.
+- `--bytecode`: the server ships as bytecode.
+  It starts in about half the time.
+- `start`: runs `dist/server`, from any folder.
+- `check:client`: reads the metafile. Only the
+  page's modules count. It fails if a server
+  module is among them: a `*.server.ts` file, `src/backend`,
   a server cmd, or a `node:` or `bun:` import.
   The name is the only rule: a server module
   that imports no builtin, such as a module
@@ -510,25 +512,23 @@ words, with a session as the boundary:
 
 - `cmds/server.ts`: the root, rpc, the table.
 - `cmds/browser.tsx`: the tab root and the router.
-- `cmds/dev.ts`, `cmds/host.ts`: `Bun.serve` for
-  dev and for the build.
+- `cmds/host.ts`: `serve` from `@tinker/bun`,
+  for dev and for the binary.
   `/api/*` and `/rpc/*` go to the server
   command. To add more, pass a third argument:
-  `serveMain(main, pages, { paths: ["/mcp"] })`.
+  `serve(main, pages, { paths: ["/mcp"] })`.
 - `tinker/base/main-host.ts`: `runMain`, the
   host for a command with no port, such as an
-  import. Same exit codes as `serveMain`.
-- `tinker/components/protocol`: the envelope,
-  the faults, the codec use, the route table.
-- `tinker/components/ws`: `ws.client`
-  (`index.ts`), `ws.server` (`index.server.ts`).
-  One socket per client. The messages of one
-  tick go as one frame, both ways.
-- `tinker/components/memory`: the in-process
-  transport, for tests.
-- `tinker/components/rpc`: `rpc(contracts)`.
-- `tinker/components/remote-data`:
-  `remoteData(cells)`.
+  import. Same exit codes as `serve`.
+- `rpc(contracts)`, `remoteData(cells)` and
+  `transport` (the envelope, the faults, the
+  codec) come from `@tinker/core`.
+- `@tinker/bun/client`: `ws.client`;
+  `@tinker/bun`: `ws.server`. One socket per client. The
+  messages of one tick go as one frame, both
+  ways.
+- `memory` from `@tinker/core/testing`: the
+  in-process transport, for tests.
 - `tinker/components/requests`: the `routes`
   capsule. A route is any operation. A stream
   route calls `routes.reply` with its Response,

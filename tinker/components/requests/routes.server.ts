@@ -1,14 +1,16 @@
-import { capsule, tag } from "@tinker/core";
+import { capsule, tag, transport } from "@tinker/core";
 import type { Ns, Operation, RunResult, Scope } from "@tinker/core";
 
 import { backendStop, requestStop } from "./lifetime";
-import { traceparent } from "./trace.server";
 
 /** One row of the route table: "METHOD /path/{param}" names the operation that answers it. */
 export type Routes = Readonly<Record<`${string} /${string}`, Operation.Handle<any, any>>>;
 
-/** The request a route operation answers; bound per request, read only by HTTP-aware ops. */
-const request = tag<Request>({ label: "routes.request" });
+/**
+ * The request a route operation answers; bound per request, read only by HTTP-aware ops. It is
+ * Core's own tag, so an op reads it the same under a route and under any rpc transport.
+ */
+const request = transport.request;
 
 /**
  * Sends the reply before the route operation ends. A stream's operation replies with its body,
@@ -66,7 +68,7 @@ export const routes = capsule({
 
         const params = row.pattern.exec(url)!.pathname.groups;
         const signal = AbortSignal.any([incoming.signal, config.stop]);
-        const trace = traceparent.safeParse(incoming.headers.get("traceparent")).data ?? null;
+        const trace = transport.traceparentOf(incoming.headers.get("traceparent"));
         const early = Promise.withResolvers<Response>();
         // A closing root throws `Disposed` from createSession: answer it as a failed run.
         let session: Scope.Handle | undefined;

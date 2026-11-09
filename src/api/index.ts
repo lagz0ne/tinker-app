@@ -1,6 +1,5 @@
+import { rpc } from "@tinker/core";
 import { z } from "zod";
-
-import { rpc } from "~/components/rpc";
 
 /**
  * Every call the client can make, by address. Server and client install `api` from this one

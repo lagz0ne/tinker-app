@@ -1,10 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 
-import { createScope, data, operation } from "@tinker/core";
+import { createScope, data, operation, remoteData } from "@tinker/core";
+import { memory } from "@tinker/core/testing";
 import { z } from "zod";
-
-import { memory } from "~/components/memory";
-import { remoteData } from "~/components/remote-data";
 
 import { listen, wsClient, wsServer } from "./support/ws";
 

@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { createScope, type Scope as CoreScope } from "@tinker/core";
+import { createScope, rpc } from "@tinker/core";
+import type { Scope as CoreScope } from "@tinker/core";
+import { memory } from "@tinker/core/testing";
 import { z } from "zod";
 
-import { memory } from "~/components/memory";
 import { routes } from "~/components/requests/index.server";
-import { rpc } from "~/components/rpc";
 
 import { keepDates } from "./fixtures/todo/codec";
 import { api, board } from "./fixtures/todo/contracts";

@@ -1,12 +1,12 @@
-import { operation, resource, tag } from "@tinker/core";
+import { channel, operation, resource, tag, transport } from "@tinker/core";
 import { z } from "zod";
 
-import { hook } from "~/components/protocol";
 import { routes } from "~/components/requests/index.server";
-import { channel } from "~/components/rpc";
 
 import { activity, people, todos } from "./contracts";
 import type { Event } from "./contracts";
+
+const { hook } = transport;
 
 // The server's operations. The board serves the shared cells; only these ops write them.
 

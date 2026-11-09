@@ -1,14 +1,13 @@
+import { createWs as createServer } from "@tinker/bun";
+import { createWs as createClient } from "@tinker/bun/client";
 import type { Scope } from "@tinker/core";
-
-import { createWs as createClient } from "~/components/ws";
-import { createWs as createServer } from "~/components/ws/index.server";
 
 /** Both sides of one WebSocket transport, as a test wires them: the client and the server. */
 export const createWs = () => ({ ...createClient(), ...createServer() });
 
 /** The default client and server, as `cmds/browser.tsx` and `cmds/server.ts` import them. */
-export { ws as wsClient } from "~/components/ws";
-export { ws as wsServer } from "~/components/ws/index.server";
+export { ws as wsClient } from "@tinker/bun/client";
+export { ws as wsServer } from "@tinker/bun";
 
 type Door = {
   upgrade: (r: Request, s: Scope.Handle, b: never) => Response | null | undefined;

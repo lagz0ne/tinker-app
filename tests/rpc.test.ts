@@ -1,16 +1,15 @@
 import { afterAll, expect, test } from "bun:test";
 
-import { createScope, isError, operation } from "@tinker/core";
+import { createScope, isError, operation, rpc, transport } from "@tinker/core";
 import type { Observe } from "@tinker/core";
 import { z } from "zod";
-
-import { hook } from "~/components/protocol";
-import { rpc } from "~/components/rpc";
 
 import { api } from "@/api";
 import { greetHere } from "@/backend/greet";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
+
+const { hook } = transport;
 
 // The template app's api over the socket, and the rules of ws.server: origin, frame size.
 

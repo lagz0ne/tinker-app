@@ -1,13 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
 
-import { createScope, data, operation, tag } from "@tinker/core";
+import { createScope, data, operation, remoteData, rpc, tag, transport } from "@tinker/core";
+import { createMemory, memory } from "@tinker/core/testing";
 import { z } from "zod";
 
-import { createMemory, memory } from "~/components/memory";
-import { hook } from "~/components/protocol";
-import { remoteData } from "~/components/remote-data";
 import { routes } from "~/components/requests/index.server";
-import { rpc } from "~/components/rpc";
+
+const { hook } = transport;
 
 // Duke's case: an authed and an unauthed transport. The signed one depends on the principal;
 // to get the principal, the client first asks the auth status over the public one.

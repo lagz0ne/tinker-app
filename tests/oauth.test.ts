@@ -1,15 +1,23 @@
 import { afterEach, expect, test } from "bun:test";
 
-import { createScope, data, operation, resource, tag } from "@tinker/core";
+import {
+  createScope,
+  data,
+  operation,
+  remoteData,
+  resource,
+  rpc,
+  tag,
+  transport,
+} from "@tinker/core";
 import type { Observe } from "@tinker/core";
 import { z } from "zod";
 
-import { hook } from "~/components/protocol";
-import { remoteData } from "~/components/remote-data";
 import { routes } from "~/components/requests/index.server";
-import { rpc } from "~/components/rpc";
 
 import { createWs, listen } from "./support/ws";
+
+const { hook } = transport;
 
 // Duke's stress case, whole: a public and a signed transport, EACH ON ITS OWN BASE (two
 // SSE bases), on both sides. The signed side sends a short access token; when it expires, the

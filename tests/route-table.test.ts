@@ -1,12 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 
-import { createScope, data, operation } from "@tinker/core";
+import { createScope, data, operation, remoteData, rpc } from "@tinker/core";
 import type { Observe, Scope } from "@tinker/core";
+import { memory } from "@tinker/core/testing";
 import { z } from "zod";
-
-import { memory } from "~/components/memory";
-import { remoteData } from "~/components/remote-data";
-import { rpc } from "~/components/rpc";
 
 // O5: the server transport routes by a table built at start (gRPC addService, an HTTP router).
 

@@ -1,8 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 
-import { createScope, data } from "@tinker/core";
-
-import { remoteData } from "~/components/remote-data";
+import { createScope, data, remoteData } from "@tinker/core";
 
 const closers: (() => Promise<void>)[] = [];
 afterEach(async () => void (await Promise.all(closers.splice(0).map((c) => c()))));

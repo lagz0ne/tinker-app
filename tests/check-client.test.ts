@@ -40,3 +40,32 @@ test("a client build of client modules passes", async () => {
     err: "",
   });
 });
+
+test("a compiled server's metafile: only the page's modules count", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "check-client-"));
+  folders.push(folder);
+  const metafile = join(folder, "meta.json");
+  const page = { "cmds/browser.tsx": {} };
+  const write = (pageInputs: Record<string, unknown>) =>
+    Bun.write(
+      metafile,
+      JSON.stringify({
+        inputs: { "cmds/browser.tsx": {}, "cmds/server.ts": {}, "src/backend/greet.ts": {} },
+        outputs: {
+          "./server": { entryPoint: "cmds/host.ts", inputs: { "cmds/server.ts": {} } },
+          "./chunk-a.js": { entryPoint: "cmds/index.html", inputs: pageInputs },
+        },
+      }),
+    );
+  const run = () => Bun.spawnSync([process.execPath, script, metafile]);
+
+  await write(page);
+  expect(run().stdout.toString()).toBe(
+    "client build clean: 1 modules, none from the server side\n",
+  );
+
+  await write({ ...page, "src/backend/greet.ts": {} });
+  const leaked = run();
+  expect(leaked.exitCode).toBe(1);
+  expect(leaked.stderr.toString().trim()).toBe("server code in client: src/backend/greet.ts");
+});

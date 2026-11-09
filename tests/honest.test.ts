@@ -1,13 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
 
-import { createScope, data, operation } from "@tinker/core";
-
-import { memory } from "~/components/memory";
-import { callInput, watchInput } from "~/components/protocol";
-import type { Answer, Reply, Stream } from "~/components/protocol";
-import { remoteData } from "~/components/remote-data";
+import { createScope, data, operation, remoteData, transport } from "@tinker/core";
+import { memory } from "@tinker/core/testing";
 
 import { wsClient } from "./support/ws";
+
+const { callInput, watchInput } = transport;
+type Answer = transport.Answer;
+type Reply = transport.Reply;
+type Stream = transport.Stream;
 
 // "If the server fails, we need to know": no failure ends as silence on the client.
 

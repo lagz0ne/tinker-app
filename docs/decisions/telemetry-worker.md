@@ -99,8 +99,8 @@ worker thread (its own telemetry root)
   in `workerData`. The worker command binds them
   inline. No component reads env.
 - `cmds/telemetry-worker.ts` is the worker
-  command. Start's plugin builds it to
-  `dist/server/telemetry-worker.js`.
+  command. `build:server` compiles it into
+  the binary, beside the server.
 - Native glue (ring reads, the port, fd writes)
   lives in `tinker/base/telemetry-worker.ts`.
   Commands may not import `node:` modules.
@@ -395,8 +395,9 @@ Tests:
 - The wire test feeds one app root to the
   in-process observer and to the real ring.
   Storage bodies and console text match.
-- The built-worker tests run
-  `dist/server/telemetry-worker.js`:
+- The worker tests run
+  `cmds/telemetry-worker.ts`; the binary test
+  runs it inside the compiled server:
   every span and line arrives;
   lines that wrap the ring arrive whole;
   a turn larger than the ring drops and counts;

@@ -1,3 +1,4 @@
+import { ws } from "@tinker/bun";
 import { createScope } from "@tinker/core";
 import type { Server } from "bun";
 
@@ -6,7 +7,6 @@ import { observeServerPanics } from "~/base/panics.server";
 import { health } from "~/components/health";
 import { routes } from "~/components/requests/index.server";
 import { telemetry } from "~/components/telemetry/index.server";
-import { ws } from "~/components/ws/index.server";
 
 import { api } from "@/api";
 import { greetHere } from "@/backend/greet";

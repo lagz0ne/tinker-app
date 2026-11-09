@@ -1,13 +1,13 @@
 import { afterAll, expect, test } from "bun:test";
 
-import { createScope, operation } from "@tinker/core";
+import { ws as wsServer } from "@tinker/bun";
+import { ws } from "@tinker/bun/client";
+import { bytes, createScope, operation, rpc, transport } from "@tinker/core";
+import type { RpcBody } from "@tinker/core";
+import { memory } from "@tinker/core/testing";
 import { z } from "zod";
 
-import { memory } from "~/components/memory";
-import { hook } from "~/components/protocol";
-import { bytes, rpc } from "~/components/rpc";
-import { ws } from "~/components/ws";
-import { ws as wsServer } from "~/components/ws/index.server";
+const { hook } = transport;
 
 // Bytes beside the socket (Q7 A): a key with a `bytes(...)` field goes on its own POST,
 // `/rpc/<address>`, and the server checks it before it reads one byte. Each guard has a case.
@@ -16,7 +16,10 @@ const api = rpc({
   "file.put": {
     input: z.object({
       name: z.string(),
-      file: bytes({ max: 1024, types: ["application/octet-stream", "text/plain"] }),
+      file: bytes(z.custom<RpcBody>(), {
+        max: 1024,
+        types: ["application/octet-stream", "text/plain"],
+      }),
     }),
     output: z.object({ name: z.string(), type: z.string(), text: z.string() }),
   },
@@ -47,7 +50,7 @@ const gate = operation({
     Object(input.input).name === "no" ? input.refuse({ why: "no" }) : undefined,
 });
 
-const transport = wsServer.server({
+const link = wsServer.server({
   path: "/rpc",
   services: [api],
   maxUploads: 2,
@@ -55,10 +58,10 @@ const transport = wsServer.server({
 });
 
 const backend = await createScope({
-  capsules: [api({ implement: { "file.put": put, plain }, onStart: [gate] }), transport],
+  capsules: [api({ implement: { "file.put": put, plain }, onStart: [gate] }), link],
 }).ready;
 
-const door = backend.resolve(transport);
+const door = backend.resolve(link);
 
 const bun = Bun.serve({
   port: 0,
@@ -218,12 +221,15 @@ test("the host's body cap is the largest bytes key", () => {
 });
 
 test("a bytes field is one per key, on a reply key, with a max and a type", () => {
-  expect(() => bytes({ max: 0 })).toThrow();
-  expect(() => bytes({ max: 10, types: [] })).toThrow();
+  expect(() => bytes(z.custom<RpcBody>(), { max: 0 })).toThrow();
+  expect(() => bytes(z.custom<RpcBody>(), { max: 10, types: [] })).toThrow();
   expect(() =>
     rpc({
       two: {
-        input: z.object({ a: bytes({ max: 1 }), b: bytes({ max: 1 }) }),
+        input: z.object({
+          a: bytes(z.custom<RpcBody>(), { max: 1 }),
+          b: bytes(z.custom<RpcBody>(), { max: 1 }),
+        }),
         output: z.null(),
       },
     }),

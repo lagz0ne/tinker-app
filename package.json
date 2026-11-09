@@ -1,17 +1,16 @@
 {
   "name": "tinker-app",
-  "version": "0.21.1",
+  "version": "0.22.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run db:generate && bun --hot cmds/dev.ts",
+    "dev": "bun run db:generate && bun --hot cmds/host.ts",
     "db:generate": "bun scripts/db-generate.ts",
-    "build": "rm -rf dist && bun run build:client && bun run build:server && bun run check:client && bun run check:tests",
-    "build:client": "bun build cmds/index.html --target=browser --production --splitting --public-path=/ --outdir dist/client --metafile=dist/client-meta.json",
-    "build:server": "bun build cmds/host.ts cmds/telemetry-worker.ts --target=bun --production --root cmds --outdir dist/server --metafile=dist/server-meta.json",
-    "check:client": "bun scripts/check-client.ts dist/client-meta.json",
-    "check:tests": "bun scripts/check-no-tests.ts dist/client-meta.json dist/server-meta.json",
-    "start": "NODE_ENV=production bun dist/server/host.js",
+    "build": "rm -rf dist && bun run build:server && bun run check:client && bun run check:tests",
+    "build:server": "bun build cmds/host.ts cmds/telemetry-worker.ts --compile --bytecode --format=esm --minify --sourcemap=linked --define process.env.NODE_ENV='\"production\"' --metafile=dist/meta.json --outfile dist/server",
+    "check:client": "bun scripts/check-client.ts dist/meta.json",
+    "check:tests": "bun scripts/check-no-tests.ts dist/meta.json",
+    "start": "dist/server",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "check": "bun run typecheck && bun run test && bun run build",
@@ -20,8 +19,9 @@
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.41",
-    "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.14.1/tinker-core-0.14.1.tgz",
-    "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/v0.14.1/tinker-react-0.14.1.tgz",
+    "@tinker/bun": "file:/tmp/claude-0/-home-user/764afaca-623d-561d-9080-83226c7952b7/scratchpad/revamp/tgz/tinker-bun-0.15.0.tgz",
+    "@tinker/core": "file:/tmp/claude-0/-home-user/764afaca-623d-561d-9080-83226c7952b7/scratchpad/revamp/tgz/tinker-core-0.15.0.tgz",
+    "@tinker/react": "file:/tmp/claude-0/-home-user/764afaca-623d-561d-9080-83226c7952b7/scratchpad/revamp/tgz/tinker-react-0.15.0.tgz",
     "drizzle-orm": "1.0.0-rc.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -37,5 +37,8 @@
     "typescript-api": "npm:typescript@5.9.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
     "vite-plus": "1.0.0"
+  },
+  "overrides": {
+    "@tinker/core": "file:/tmp/claude-0/-home-user/764afaca-623d-561d-9080-83226c7952b7/scratchpad/revamp/tgz/tinker-core-0.15.0.tgz"
   }
 }

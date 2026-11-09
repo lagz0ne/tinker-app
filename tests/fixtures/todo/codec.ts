@@ -1,4 +1,6 @@
-import type { Codec } from "~/components/protocol";
+import type { transport } from "@tinker/core";
+
+type Codec = transport.Codec;
 
 /** JSON that keeps a Date a Date. Both sides give it to the protocol. */
 export const keepDates: Codec = {

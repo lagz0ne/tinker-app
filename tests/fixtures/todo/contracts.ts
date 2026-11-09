@@ -1,8 +1,5 @@
-import { data } from "@tinker/core";
+import { data, remoteData, rpc } from "@tinker/core";
 import { z } from "zod";
-
-import { remoteData } from "~/components/remote-data";
-import { rpc } from "~/components/rpc";
 
 // Shared by server and client: what can be read (board) and what can be asked (api).
 
