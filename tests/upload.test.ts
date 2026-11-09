@@ -1,10 +1,9 @@
-import { afterAll, expect, test } from "bun:test";
-
 import { ws as wsServer } from "@tinker/bun";
 import { ws } from "@tinker/bun/client";
 import { bytes, createScope, operation, rpc, transport } from "@tinker/core";
 import type { RpcBody } from "@tinker/core";
 import { memory } from "@tinker/core/testing";
+import { afterAll, expect, test } from "vite-plus/test";
 import { z } from "zod";
 
 const { hook } = transport;

@@ -1,7 +1,6 @@
-import { expect, test } from "bun:test";
-
 import { createScope, operation } from "@tinker/core";
 import type { Observe } from "@tinker/core";
+import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 
 import { routes } from "~/components/requests/index.server";

@@ -1,7 +1,6 @@
-import { afterAll, expect, test } from "bun:test";
-
 import { createScope, isError, operation, rpc, transport } from "@tinker/core";
 import type { Observe } from "@tinker/core";
+import { afterAll, expect, test } from "vite-plus/test";
 import { z } from "zod";
 
 import { api } from "@/api";

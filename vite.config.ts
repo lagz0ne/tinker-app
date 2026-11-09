@@ -1,6 +1,58 @@
+import { fileURLToPath } from "node:url";
+
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
+import { playwright } from "vite-plus/test/browser-playwright";
+
+import { clientMeta } from "./scripts/client-meta";
+
+const at = (path: string) => fileURLToPath(new URL(path, import.meta.url));
+const alias = { "~": at("tinker"), "@": at("src") };
+/** The Bun server in dev (`bun --hot cmds/api.ts`): Vite answers the page, Bun the rest. */
+const api = `http://127.0.0.1:${process.env.API_PORT ?? 3001}`;
 
 export default defineConfig({
+  // The browser half: the page and its modules, with React Fast Refresh. Bun runs the server.
+  root: at("cmds"),
+  plugins: [react(), clientMeta(at("."))],
+  resolve: { alias },
+  build: { outDir: at("dist/client"), emptyOutDir: true },
+  server: {
+    port: Number(process.env.DEV_PORT ?? 5173),
+    strictPort: true,
+    proxy: { "/rpc": { target: api, ws: true }, "/api": api },
+  },
+  test: {
+    root: at("."),
+    projects: [
+      {
+        // The server half and the scripts, on the Bun runtime (`bun --bun vp test`).
+        resolve: { alias },
+        test: {
+          name: "server",
+          root: at("."),
+          include: ["tests/**/*.test.ts"],
+          exclude: ["tests/browser/**", "**/node_modules/**", "tests/.gen-*/**"],
+        },
+      },
+      {
+        // The page's modules, in a real Chromium.
+        plugins: [react()],
+        resolve: { alias },
+        test: {
+          name: "browser",
+          root: at("."),
+          include: ["tests/browser/**/*.test.tsx"],
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright(),
+            instances: [{ browser: "chromium" }],
+          },
+        },
+      },
+    ],
+  },
   // Markdown fences keep the line breaks we wrote.
   fmt: {
     embeddedLanguageFormatting: "off",

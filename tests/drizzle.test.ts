@@ -1,10 +1,10 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { capsule, createScope } from "@tinker/core";
 import type { Scope } from "@tinker/core";
+import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 
 import { bunSql } from "~/components/bun-sql/index.server";
 import { bunSqlite } from "~/components/bun-sqlite/index.server";

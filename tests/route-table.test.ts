@@ -1,8 +1,7 @@
-import { afterEach, expect, test } from "bun:test";
-
 import { createScope, data, operation, remoteData, rpc } from "@tinker/core";
 import type { Observe, Scope } from "@tinker/core";
 import { memory } from "@tinker/core/testing";
+import { afterEach, expect, test } from "vite-plus/test";
 import { z } from "zod";
 
 // O5: the server transport routes by a table built at start (gRPC addService, an HTTP router).

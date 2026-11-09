@@ -1,11 +1,11 @@
-import { afterEach, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import type { MainClosed, MainContext } from "~/base/main";
 import { createMainHost, runMain } from "~/base/main-host";
 
 // The command host in process, with fake streams: each case drives one rule of
 // tinker/base/main-host.ts and reads the code, the printed lines, and the host's own signal.
-// Ported from the Hedl app's tests/main-host.test.ts, on bun:test.
+// Ported from the Hedl app's tests/main-host.test.ts.
 
 type Closed = { closed: MainClosed };
 type WriteDone = (error?: Error | null) => void;
@@ -59,7 +59,7 @@ const host = (
   options: Partial<Parameters<typeof createMainHost>[1]> = {},
 ) => {
   const stderr = plain();
-  const hardStop = mock();
+  const hardStop = vi.fn();
   const run = createMainHost(main, {
     env: {},
     stdout: plain(),
@@ -73,7 +73,7 @@ const host = (
 };
 
 afterEach(() => {
-  mock.restore();
+  vi.restoreAllMocks();
 });
 
 test("a command that ends clean exits 0 and prints nothing", async () => {
@@ -210,7 +210,7 @@ test("a host stop's signal reason never prints; a command's Error reason does", 
 });
 
 test("onStart runs once the command returned, and not when it already stopped", async () => {
-  const onStart = mock();
+  const onStart = vi.fn();
   const running = host(async () => done, { onStart });
 
   expect(await running.closed).toBe(0);
@@ -219,7 +219,7 @@ test("onStart runs once the command returned, and not when it already stopped", 
   expect(call?.[0]).toBe(done);
   expect(call?.[1]).toBe(running.signal);
 
-  const stopped = mock();
+  const stopped = vi.fn();
   const exited = host(
     async ({ exit }) => {
       exit(3);
@@ -432,7 +432,7 @@ test("a command that does not close within grace gets the hard stop", async () =
 });
 
 test("the default hard stop kills the process with SIGKILL", async () => {
-  const kill = spyOn(process, "kill").mockImplementation(() => true);
+  const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
   let release = () => {};
   const run = createMainHost(
     async ({ exit }) => {
@@ -510,10 +510,10 @@ test("runMain ignores a gone reader on its streams and rethrows any other stream
   const watched = (name: string, isTTY?: boolean) => ({
     isTTY,
     write() {},
-    on: mock((event: "error", listener: (error: unknown) => void) =>
+    on: vi.fn((event: "error", listener: (error: unknown) => void) =>
       handlers.set(`${name} ${event}`, listener),
     ),
-    off: mock(),
+    off: vi.fn(),
   });
   const stdout = watched("stdout");
   const stderr = watched("stderr");

@@ -1,6 +1,5 @@
-import { expect, test } from "bun:test";
-
 import { createScope } from "@tinker/core";
+import { expect, test } from "vite-plus/test";
 
 import { placeGo, placeHistory, placeNow, placeOpen, placeStack } from "~/components/place";
 

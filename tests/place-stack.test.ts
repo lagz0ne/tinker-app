@@ -1,7 +1,6 @@
-import { expect, test } from "bun:test";
-
 import { createScope } from "@tinker/core";
 import { makeTestClock } from "@tinker/core/testing";
+import { expect, test } from "vite-plus/test";
 
 import {
   placeAddress,

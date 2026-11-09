@@ -1,11 +1,25 @@
 import { serve } from "@tinker/bun";
 
-import page from "./index.html";
+import files from "./client-files.gen";
 import main from "./server";
 
+/** Hashed assets never change; the page itself is read fresh. */
+const immutable = { "cache-control": "public, max-age=31536000, immutable" };
+
+/** Each client file the build put inside the binary, as a static route. */
+const pages: Record<string, Response> = {};
+
+for (const [path, file] of Object.entries(files)) {
+  pages[path] = new Response(
+    Bun.file(file),
+    path.startsWith("/assets/") ? { headers: immutable } : {},
+  );
+}
+
+const index = files["/index.html"];
+
 /**
- * The server, in dev and built. Dev: `bun --hot` bundles the page on request. Built:
- * `bun build --compile` bundles the page from this HTML import and puts its files inside the
- * one binary, with the server as bytecode; nothing is read from disk at run time.
+ * Built: `vp build` made the client, `bun build --compile` put it inside the one binary beside
+ * the server, as bytecode. Every path the command does not take gets the page (a deep link).
  */
-await serve(main, { "/*": page });
+await serve(main, index ? { ...pages, "/*": new Response(Bun.file(index)) } : pages);

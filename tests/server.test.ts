@@ -1,6 +1,5 @@
-import { afterAll, expect, test } from "bun:test";
-
 import { createScope } from "@tinker/core";
+import { afterAll, expect, test } from "vite-plus/test";
 
 import { telemetry } from "~/components/telemetry/index.server";
 

@@ -1,12 +1,13 @@
-import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
+import { afterAll, expect, test } from "vite-plus/test";
+
 // Inside the repo, so the schema file finds drizzle-orm in node_modules.
-const folder = mkdtempSync(join(import.meta.dir, ".gen-"));
+const folder = mkdtempSync(join(import.meta.dirname, ".gen-"));
 afterAll(() => rmSync(folder, { recursive: true, force: true }));
 
-const script = join(import.meta.dir, "../scripts/db-generate.ts");
+const script = join(import.meta.dirname, "../scripts/db-generate.ts");
 
 const schema = (
   extra: string,
@@ -45,7 +46,7 @@ test("dev start writes a migration only when the schema changed", async () => {
 }, 60_000);
 
 test("no drizzle config: nothing runs", () => {
-  const empty = mkdtempSync(join(import.meta.dir, ".gen-"));
+  const empty = mkdtempSync(join(import.meta.dirname, ".gen-"));
   const run = Bun.spawnSync([process.execPath, script, empty], { stdout: "pipe" });
   rmSync(empty, { recursive: true, force: true });
 

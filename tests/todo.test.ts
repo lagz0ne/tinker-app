@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-
 import { createScope, rpc } from "@tinker/core";
 import type { Scope as CoreScope } from "@tinker/core";
 import { memory } from "@tinker/core/testing";
+import { afterEach, describe, expect, test } from "vite-plus/test";
 import { z } from "zod";
 
 import { routes } from "~/components/requests/index.server";
@@ -333,7 +332,7 @@ describe("one rpc capsule: the same handle on both sides", () => {
 
   test("api: one job, implement or remote; both or neither fails start", async () => {
     // @ts-expect-error: neither
-    expect(createScope({ capsules: [api({})] }).ready).rejects.toMatchObject({
+    await expect(createScope({ capsules: [api({})] }).ready).rejects.toMatchObject({
       kind: "MissingConfig",
       payload: { key: "implement | remote" },
     });
@@ -351,7 +350,7 @@ describe("one rpc capsule: the same handle on both sides", () => {
         }),
       ],
     });
-    expect(both.ready).rejects.toMatchObject({ kind: "MissingConfig" });
+    await expect(both.ready).rejects.toMatchObject({ kind: "MissingConfig" });
     expect(() => rpc({ answer: { input: z.null(), output: z.null() } })).toThrow(
       '"answer" is a reserved key',
     );

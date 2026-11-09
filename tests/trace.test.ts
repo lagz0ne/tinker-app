@@ -1,7 +1,6 @@
-import { afterAll, beforeEach, expect, test } from "bun:test";
-
 import { createScope, operation } from "@tinker/core";
 import type { Observe } from "@tinker/core";
+import { afterAll, beforeEach, expect, test } from "vite-plus/test";
 
 import { routes } from "~/components/requests/index.server";
 

@@ -1,4 +1,3 @@
-import { afterAll, afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,10 +5,11 @@ import { join } from "node:path";
 import { ws } from "@tinker/bun/client";
 import { createScope } from "@tinker/core";
 import type { Subprocess } from "bun";
+import { afterAll, afterEach, expect, test } from "vite-plus/test";
 
 import { api } from "@/api";
 
-// The built server is one binary: the page, its files and the telemetry worker are inside it.
+// The built server is one binary: Vite's client, its files and the telemetry worker are inside it.
 // It runs from any folder, with nothing beside it.
 
 const out = mkdtempSync(join(tmpdir(), "binary-"));
@@ -21,8 +21,15 @@ afterEach(() => {
 
 afterAll(() => rmSync(out, { recursive: true, force: true }));
 
-/** The real `build:server` script, with its outputs moved to a temp folder. */
+/** The real `build:client`, then the real `build:server` with its outputs in a temp folder. */
 async function build() {
+  const client = Bun.spawn(["bun", "run", "build:client"], {
+    cwd: new URL("..", import.meta.url).pathname,
+    stdout: "ignore",
+    stderr: "inherit",
+  });
+  expect(await client.exited).toBe(0);
+
   const pkg = await Bun.file(new URL("../package.json", import.meta.url)).json();
   const script = String(pkg.scripts["build:server"])
     .replace(/--outfile \S+/, `--outfile ${join(out, "server")}`)

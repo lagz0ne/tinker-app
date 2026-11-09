@@ -1,7 +1,8 @@
 # tinker-app
 
 A Tinker app on TanStack Router and `Bun.serve`.
-Two builds, one per side.
+Vite runs the browser half. Bun runs the
+server half.
 
 ## Start an app
 
@@ -19,11 +20,28 @@ npx degit lagz0ne/tinker-app#v0.19.3 my-app
 ## Run
 
 ```bash
-bun run dev      # dev server, Bun bundles on request
-bun run check    # tsc, tests, both builds, check:client
-bun run build    # both builds, then the client check
-bun run start    # the built server
+bun run dev    # vp dev + bun --hot
+bun run check  # tsc, tests, build, checks
+bun run build  # vp build, then one binary
+bun run start  # the built server
 ```
+
+`dev` runs two halves (`cmds/dev.ts`):
+
+```text
+browser
+   |
+vp dev :5173   page, Fast Refresh
+   |  /rpc (socket), /api
+bun --hot :3001   cmds/api.ts
+```
+
+- The socket in dev is Bun's own, as when
+  built.
+- `PUBLIC_ORIGIN` is Vite's origin in dev.
+- Fast Refresh keeps state when a component
+  lives in its own module. A file that also
+  exports the route tree reloads the page.
 
 `dev` and `start` need three telemetry keys:
 
@@ -45,8 +63,17 @@ telemetry must then come from that origin.
 
 ## Checks
 
-`bun run check` runs tsc, `bun test`, both
-builds, then `check:client` and `check:tests`.
+`bun run check` runs tsc, the tests, the
+build, then `check:client` and `check:tests`.
+
+`bun run test` is `bun --bun vp test`. It has
+two projects in `vite.config.ts`:
+
+- `server`: `tests/*.test.ts`, on the Bun
+  runtime, so `bun:*` imports work.
+- `browser`: `tests/browser/*.test.tsx`, in a
+  real Chromium (Vitest browser mode,
+  Playwright).
 
 `bun run check:style` is `vp check`: oxfmt
 and oxlint, with rules in `vite.config.ts`.
@@ -68,17 +95,23 @@ on each push to `main`, and weekly.
 
 ## One build: a binary
 
+- `build:client`: `vp build` to
+  `dist/client`. Then
+  `scripts/embed-client.ts` writes
+  `cmds/client-files.gen.ts`: one
+  `with { type: "file" }` import per file.
 - `build:server`: `bun build --compile` of
   `cmds/host.ts` and the telemetry worker, to
   one file, `dist/server`.
-- The page comes from the HTML import in
-  `cmds/host.ts`. Its files sit inside the
-  binary. Nothing is read from disk.
+- The client's files sit inside the binary.
+  Nothing is read from disk.
 - `--bytecode`: the server ships as bytecode.
   It starts in about half the time.
 - `start`: runs `dist/server`, from any folder.
-- `check:client`: reads the metafile. Only the
-  page's modules count. It fails if a server
+- `check:client`: reads
+  `dist/client-meta.json`, the module list a
+  small Vite plugin writes
+  (`scripts/client-meta.ts`). It fails if a server
   module is among them: a `*.server.ts` file, `src/backend`,
   a server cmd, or a `node:` or `bun:` import.
   The name is the only rule: a server module
@@ -553,7 +586,7 @@ words, with a session as the boundary:
 - `tinker/components/bun-sql`, `bun-sqlite`,
   `pglite`: the drivers.
 - `scripts/`: `check-client`, `check-plain`.
-- `tests/`: `bun test` files for rpc, remote
+- `tests/`: test files for rpc, remote
   data, the transports, routes, trace, health,
   drizzle, telemetry ingest and `check-plain`,
   plus `tests/serve-main.test.ts` (the Bun

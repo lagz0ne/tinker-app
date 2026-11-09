@@ -1,7 +1,6 @@
-import { afterEach, expect, test } from "bun:test";
-
 import { createScope, data, operation, remoteData, rpc, tag, transport } from "@tinker/core";
 import { createMemory, memory } from "@tinker/core/testing";
+import { afterEach, expect, test } from "vite-plus/test";
 import { z } from "zod";
 
 import { routes } from "~/components/requests/index.server";

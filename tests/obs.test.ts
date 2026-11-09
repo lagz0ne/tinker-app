@@ -1,7 +1,6 @@
-import { afterEach, expect, test } from "bun:test";
-
 import { createScope, LEVELS } from "@tinker/core";
 import type { Observe } from "@tinker/core";
+import { afterEach, expect, test } from "vite-plus/test";
 
 import { keepDates } from "./fixtures/todo/codec";
 import { api, board } from "./fixtures/todo/contracts";

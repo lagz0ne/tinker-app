@@ -1,9 +1,10 @@
-import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const script = join(import.meta.dir, "../scripts/check-client.ts");
+import { afterAll, expect, test } from "vite-plus/test";
+
+const script = join(import.meta.dirname, "../scripts/check-client.ts");
 const folders: string[] = [];
 
 afterAll(() => {
