@@ -1,6 +1,6 @@
 {
   "name": "tinker-app",
-  "version": "0.21.0",
+  "version": "0.21.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,8 +20,8 @@
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.41",
-    "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.14.0/tinker-core-0.14.0.tgz",
-    "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/v0.14.0/tinker-react-0.14.0.tgz",
+    "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.14.1/tinker-core-0.14.1.tgz",
+    "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/v0.14.1/tinker-react-0.14.1.tgz",
     "drizzle-orm": "1.0.0-rc.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
