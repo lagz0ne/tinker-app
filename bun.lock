@@ -256,7 +256,7 @@
 
     "@testing-library/user-event": ["@testing-library/user-event@14.6.8", "", { "peerDependencies": { "@testing-library/dom": ">=7.21.4" } }, "sha512-vgSSqnANMnkcYR/vUNDbwS7aM3OErRLNUG8vCVVlj4oc6cKffUrccX7UAS5AmJQQNZTSibi9z5GvvRZ0aYgUCQ=="],
 
-    "@tinker/bun": ["@tinker/bun@/tmp/claude-0/-home-user/764afaca-623d-561d-9080-83226c7952b7/scratchpad/revamp/tgz/tinker-bun-0.15.0.tgz", { "dependencies": { "@tinker/core": "0.15.0" } }, "sha512-Z+mkX5o06Grnq7roHuMln2sjIzFzKkRP+PNlVYh386qBto0ZPFPR9dr9NmkbkIEPmpPu0CFsK52cdSpV1eGk4g=="],
+    "@tinker/bun": ["@tinker/bun@/tmp/claude-0/-home-user/764afaca-623d-561d-9080-83226c7952b7/scratchpad/revamp/tgz/tinker-bun-0.15.0.tgz", { "dependencies": { "@tinker/core": "0.15.0" }, "peerDependencies": { "drizzle-orm": "^1.0.0-rc.4" }, "optionalPeers": ["drizzle-orm"] }, "sha512-QrFvJN0YR1mF4Hhj7vVWJN8B73xYX/isfgqaCkOHvjZDi6eRLZNzBMjLenqudzaJRAd1Q6WVoGrFlvBlwiMYVg=="],
 
     "@tinker/core": ["@tinker/core@/tmp/claude-0/-home-user/764afaca-623d-561d-9080-83226c7952b7/scratchpad/revamp/tgz/tinker-core-0.15.0.tgz", {}, "sha512-rNCQ17oCHH1EfZAxbQEalwhxyF+crnv2T7Vy0j/Uhi0hAqFuO6hU4ozYfVsuGh1aNThJjwP5n058p8qzqMqQXw=="],
 

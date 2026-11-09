@@ -464,9 +464,10 @@ a driver owns the client, a facade gives
 Drizzle to your operations. Bun first.
 
 - `drizzlePg`: Postgres dialect. Drivers:
-  `bunSql` (Bun.sql), `pglite` (tests).
+  `bunSql` from `@tinker/bun/sql` (Bun.SQL),
+  `pglite` (tests).
 - `drizzleSqlite`: SQLite dialect. Driver:
-  `bunSqlite` (bun:sqlite).
+  `bunSqlite` from `@tinker/bun/sqlite`.
 - The facade exports `db`, `tx`, `migrate`.
 - Start runs `migrate` from the drizzle-kit
   folder (default `drizzle/pg`).
@@ -583,8 +584,9 @@ words, with a session as the boundary:
   or log line, a refused one included.
 - `tinker/components/drizzle-pg`,
   `drizzle-sqlite`: the Drizzle facades.
-- `tinker/components/bun-sql`, `bun-sqlite`,
-  `pglite`: the drivers.
+- `tinker/components/pglite`: the test
+  driver. The Bun drivers are in
+  `@tinker/bun/sql` and `@tinker/bun/sqlite`.
 - `scripts/`: `check-client`, `check-plain`.
 - `tests/`: test files for rpc, remote
   data, the transports, routes, trace, health,
