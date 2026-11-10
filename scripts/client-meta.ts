@@ -1,12 +1,10 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-
 import type { Plugin } from "vite-plus";
 
 /**
  * A Vite plugin: after the client build, writes `dist/client-meta.json` in the shape of a Bun
  * metafile (`inputs`, each with its `imports`), so `check:client` and `check:tests` read the
- * bundler's own module list. Paths are from the repo root, as Bun writes them.
+ * bundler's own module list. Paths are from the repo root, as Bun writes them. Vite runs on Bun
+ * (`bun --bun vp build`), so `Bun.write` makes the folder too.
  */
 export function clientMeta(root: string): Plugin {
   const base = root.replace(/\/$/, "");
@@ -15,7 +13,7 @@ export function clientMeta(root: string): Plugin {
   return {
     name: "tinker:client-meta",
     apply: "build",
-    generateBundle(_, bundle) {
+    async generateBundle(_, bundle) {
       const ids = Object.values(bundle).flatMap((out) =>
         out.type === "chunk" ? out.moduleIds : [],
       );
@@ -27,8 +25,7 @@ export function clientMeta(root: string): Plugin {
         }),
       );
       // Beside dist/client, not in it: the binary embeds dist/client, and this list is no page file.
-      mkdirSync(join(base, "dist"), { recursive: true });
-      writeFileSync(join(base, "dist/client-meta.json"), JSON.stringify({ inputs }, null, 2));
+      await Bun.write(`${base}/dist/client-meta.json`, JSON.stringify({ inputs }, null, 2));
     },
   };
 }

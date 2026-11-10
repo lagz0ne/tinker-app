@@ -7,15 +7,15 @@
     "dev": "bun run db:generate && bun cmds/dev.ts",
     "db:generate": "bun scripts/db-generate.ts",
     "build": "rm -rf dist && bun run build:client && bun run build:server && bun run check:client && bun run check:tests",
-    "build:client": "vp build && bun scripts/embed-client.ts",
+    "build:client": "bun --bun vp build && bun scripts/embed-client.ts",
     "build:server": "bun build cmds/host.ts cmds/telemetry-worker.ts --compile --bytecode --format=esm --minify --sourcemap=linked --define process.env.NODE_ENV='\"production\"' --metafile=dist/meta.json --outfile dist/server",
     "check:client": "bun scripts/check-client.ts dist/client-meta.json",
     "check:tests": "bun scripts/check-no-tests.ts dist/client-meta.json dist/meta.json",
     "start": "dist/server",
-    "typecheck": "bun scripts/embed-client.ts && tsc --noEmit",
+    "typecheck": "bun scripts/embed-client.ts && bun --bun tsc --noEmit",
     "test": "bun --bun vp test",
     "check": "bun run typecheck && bun run test && bun run build",
-    "check:style": "vp check",
+    "check:style": "bun --bun vp check",
     "check:plain": "bun scripts/check-plain.ts"
   },
   "dependencies": {

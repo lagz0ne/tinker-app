@@ -1,28 +1,32 @@
 # tinker-app
 
 A Tinker app on TanStack Router and `Bun.serve`.
-Vite runs the browser half. Bun runs the
+Vite bundles the browser half. Bun runs the
 server half.
+
+Bun is the one runtime. Vite runs on it too
+(`bun --bun vp`). No Node is needed: CI runs
+every gate with `node` on the path set to fail.
 
 ## Start an app
 
 ```bash
-npx degit lagz0ne/tinker-app my-app
+bunx degit lagz0ne/tinker-app my-app
 cd my-app && bun install
 ```
 
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-npx degit lagz0ne/tinker-app#v0.19.3 my-app
+bunx degit lagz0ne/tinker-app#v0.22.0 my-app
 ```
 
 ## Run
 
 ```bash
-bun run dev    # vp dev + bun --hot
+bun run dev    # Vite + bun --hot
 bun run check  # tsc, tests, build, checks
-bun run build  # vp build, then one binary
+bun run build  # page bundle, then one binary
 bun run start  # the built server
 ```
 
@@ -75,7 +79,7 @@ two projects in `vite.config.ts`:
   real Chromium (Vitest browser mode,
   Playwright).
 
-`bun run check:style` is `vp check`: oxfmt
+`bun run check:style` is `bun --bun vp check`: oxfmt
 and oxlint, with rules in `vite.config.ts`.
 
 `bun run check:plain` bans plain helper
@@ -95,7 +99,7 @@ on each push to `main`, and weekly.
 
 ## One build: a binary
 
-- `build:client`: `vp build` to
+- `build:client`: `bun --bun vp build` to
   `dist/client`. Then
   `scripts/embed-client.ts` writes
   `cmds/client-files.gen.ts`: one
@@ -633,5 +637,5 @@ Old versions live in tags: `small-v*`,
 
 ```bash
 git checkout start-archive
-npx degit lagz0ne/tinker-app#start-archive old-start
+bunx degit lagz0ne/tinker-app#start-archive old-start
 ```

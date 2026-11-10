@@ -42,6 +42,15 @@ jobs:
       - run: bun install --frozen-lockfile
       # Chromium for the browser test project (tests/browser).
       - run: bunx playwright install --with-deps chromium
+      # Bun-first: from here on, a call to `node` fails the run.
+      - name: Block node
+        run: |
+          mkdir -p "$RUNNER_TEMP/no-node"
+          printf '#!/bin/sh\necho "node called: this app runs on Bun only" >&2\nexit 1\n' > "$RUNNER_TEMP/no-node/node"
+          chmod +x "$RUNNER_TEMP/no-node/node"
+          echo "$RUNNER_TEMP/no-node" >> "$GITHUB_PATH"
+      - name: node is blocked
+        run: "! node --version"
       # Typecheck, tests, and the build with its client check.
       - run: bun run check
       # Format and lint (vp check).
