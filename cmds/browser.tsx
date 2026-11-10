@@ -10,6 +10,7 @@ import { telemetry } from "~/components/telemetry";
 
 import { api } from "@/api";
 import { routeTree } from "@/routes";
+import { todoApi, todoBoard } from "@/todo/contract";
 
 /** The tab's one root. A real page hide, or a hot swap of this module, closes it. */
 const stop = new AbortController();
@@ -20,6 +21,9 @@ const app = createScope({
     telemetry.browser({ service: "tinker-browser", console }),
     ws.client({ url: `${location.origin.replace(/^http/, "ws")}/rpc` }),
     api({ remote: ws.client }),
+    // The todo feature: the live list over the socket, and its calls.
+    todoBoard({ read: ws.client }),
+    todoApi({ remote: ws.client }),
   ],
 });
 

@@ -9,6 +9,8 @@ import { telemetry } from "~/components/telemetry/index.server";
 
 import { api } from "@/api";
 import { greetHere } from "@/backend/greet";
+import { todoApi, todoBoard } from "@/todo/contract";
+import { todoOps } from "@/todo/ops.server";
 
 import { pages } from "./pages";
 
@@ -41,7 +43,7 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       ? telemetry.thread({ ...sends, worker: new URL("./telemetry-worker.js", import.meta.url) })
       : telemetry.server(sends);
 
-  const socket = ws.server({ path: "/rpc", services: [api], origin });
+  const socket = ws.server({ path: "/rpc", services: [api, todoBoard, todoApi], origin });
   const table = routes({
     stop: signal,
     table: {
@@ -62,6 +64,9 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       }),
       sink,
       api({ implement: { greet: greetHere } }),
+      // The todo feature: the server serves the list and is its only writer.
+      todoBoard({ serve: true }),
+      todoApi({ implement: todoOps }),
       socket,
       table,
     ],

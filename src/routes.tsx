@@ -5,6 +5,7 @@ import { baseVersion } from "~/components/health";
 
 import { api } from "@/api";
 import { Greeting } from "@/greeting";
+import { TodoList } from "@/todo/todo-list";
 
 const root = createRootRouteWithContext<{ scope: Scope.Handle }>()({ component: Outlet });
 
@@ -18,6 +19,9 @@ const index = createRoute({
   component: () => <Greeting text={index.useLoaderData().text} />,
 });
 
+// The todo feature: its view reads the live list, so the route loads nothing.
+const todo = createRoute({ getParentRoute: () => root, path: "/todo", component: TodoList });
+
 const tinker = createRoute({
   getParentRoute: () => root,
   path: "/tinker",
@@ -29,4 +33,4 @@ const tinker = createRoute({
   ),
 });
 
-export const routeTree = root.addChildren([index, tinker]);
+export const routeTree = root.addChildren([index, todo, tinker]);

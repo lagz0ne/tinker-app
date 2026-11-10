@@ -39,6 +39,8 @@ export default defineConfig({
         // The page's modules, in a real Chromium.
         plugins: [react()],
         resolve: { alias },
+        // Found up front, so a first run does not reload the page mid-test.
+        optimizeDeps: { include: ["@tinker/core/testing", "@tinker/react", "react-dom/client"] },
         test: {
           name: "browser",
           root: at("."),
