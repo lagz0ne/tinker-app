@@ -110,8 +110,8 @@ test("another feature reads the list through the door, on either side, and canno
   await a.run(todo.api["todo.add"], { input: { title: "Read me" } });
   await until(() => a.resolve(todo.board.todos).get().length === 1);
 
-  expect(await a.run(openCount, { input: null })).toBe(1);
-  expect(await server.run(openCount, { input: null })).toBe(1);
+  expect(a.run(openCount, { input: null })).toBe(1);
+  expect(server.run(openCount, { input: null })).toBe(1);
   // @ts-expect-error the door shows a read view: no controller, so no write from outside
   expect(todo.board.todos.controller).toBeUndefined();
 });
