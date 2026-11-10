@@ -51,7 +51,7 @@ for (const [name, make] of Object.entries(sinks)) {
       capsules: [sink, routes({ stop: stop.signal, table: { "POST /api/telemetry": sink.route } })],
     }).ready;
     const post = () =>
-      app.resolve(routes)(
+      app.resolve(routes).fetch(
         new Request("http://app.example/api/telemetry", {
           method: "POST",
           headers: { "content-type": "application/json", origin: "http://app.example" },

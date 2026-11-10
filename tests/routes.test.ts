@@ -43,7 +43,7 @@ test("each route reply maps to its HTTP status", async () => {
       }),
     ],
   }).ready;
-  const fetch = app.resolve(routes);
+  const fetch = app.resolve(routes).fetch;
   const call = (path: string, init?: RequestInit) =>
     fetch(new Request(`http://t${path}`, init), app);
 
@@ -94,7 +94,7 @@ test("an early reply streams while its op runs; the op's span ends after the bod
     observe: { export: (span) => void spans.push(span) },
     capsules: [routes({ stop: new AbortController().signal, table: { "GET /stream": stream } })],
   }).ready;
-  const answer = app.resolve(routes);
+  const answer = app.resolve(routes).fetch;
   const http = Bun.serve({
     port: 0,
     fetch: async (r) => (await answer(r, app)) ?? new Response(null, { status: 404 }),
@@ -146,7 +146,7 @@ test("an op that replies early and then fails keeps its reply", async () => {
     capsules: [routes({ stop: new AbortController().signal, table: { "GET /late": late } })],
   }).ready;
 
-  const response = await within(app.resolve(routes)(new Request("http://t/late"), app));
+  const response = await within(app.resolve(routes).fetch(new Request("http://t/late"), app));
   expect(response).toBeInstanceOf(Response);
   if (!(response instanceof Response)) return;
   expect(response.status).toBe(202);
@@ -172,7 +172,7 @@ test("after an early reply, a Response the op returns is dropped and its body ca
     capsules: [routes({ stop: new AbortController().signal, table: { "GET /twice": twice } })],
   }).ready;
 
-  const response = await within(app.resolve(routes)(new Request("http://t/twice"), app));
+  const response = await within(app.resolve(routes).fetch(new Request("http://t/twice"), app));
   expect(response).toBeInstanceOf(Response);
   if (!(response instanceof Response)) return;
   expect(response.status).toBe(202);

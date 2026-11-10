@@ -52,7 +52,7 @@ const backend = await createScope({
   ],
 }).ready;
 
-const table = backend.resolve(routes);
+const table = backend.resolve(routes).fetch;
 const { bun, url } = listen(backend, [server.server]);
 
 /** One raw frame with this meta; the first answer back. */
@@ -199,7 +199,7 @@ test("routes: a request after the root closed answers 500, it does not reject", 
     capsules: [routes({ stop: new AbortController().signal, table: { "GET /echo": echo } })],
   }).ready;
 
-  const answer = closing.resolve(routes);
+  const answer = closing.resolve(routes).fetch;
   await closing.close();
 
   const response = await answer(new Request("http://tinker/echo"), closing);

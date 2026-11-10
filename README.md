@@ -18,7 +18,7 @@ cd my-app && bun install
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-bunx degit lagz0ne/tinker-app#v0.22.0 my-app
+bunx degit lagz0ne/tinker-app#v0.23.0 my-app
 ```
 
 ## Run
@@ -548,16 +548,20 @@ words, with a session as the boundary:
 
 ## Where things are
 
-- `cmds/server.ts`: the root, rpc, the table.
+- `cmds/server.ts`: the root. The `serve`
+  capsule goes first: it listens once the
+  socket and the table have started.
+  `/api/*` and `/rpc/*` go to the handlers.
+  To add more, pass `paths: ["/mcp"]`.
+- `cmds/pages.ts`: the client files in the
+  binary, as `serve`'s pages.
 - `cmds/browser.tsx`: the tab root and the router.
-- `cmds/host.ts`: `serve` from `@tinker/bun`,
-  for dev and for the binary.
-  `/api/*` and `/rpc/*` go to the server
-  command. To add more, pass a third argument:
-  `serve(main, pages, { paths: ["/mcp"] })`.
+- `cmds/host.ts`, `cmds/api.ts`: `run(main)`
+  from `@tinker/bun`, the host. It owns the
+  signals and the exit code.
 - `tinker/base/main-host.ts`: `runMain`, the
   host for a command with no port, such as an
-  import. Same exit codes as `serve`.
+  import. Same exit codes as `run`.
 - `rpc(contracts)`, `remoteData(cells)` and
   `transport` (the envelope, the faults, the
   codec) come from `@tinker/core`.
@@ -595,7 +599,7 @@ words, with a session as the boundary:
 - `tests/`: test files for rpc, remote
   data, the transports, routes, trace, health,
   drizzle, telemetry ingest and `check-plain`,
-  plus `tests/serve-main.test.ts` (the Bun
+  plus `tests/main-host.test.ts` (the
   host), `tests/server.test.ts` (the server
   command) and `tests/build-client.test.ts`
   (the client build). The Bun.sql tests run

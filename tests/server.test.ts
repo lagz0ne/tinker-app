@@ -1,4 +1,6 @@
+import { serve } from "@tinker/bun";
 import { createScope } from "@tinker/core";
+import type { Scope } from "@tinker/core";
 import { afterAll, expect, test } from "vite-plus/test";
 
 import { telemetry } from "~/components/telemetry/index.server";
@@ -12,8 +14,12 @@ const server: Server = await import(new URL("../cmds/server.ts", import.meta.url
 const collector = Bun.serve({ port: 0, fetch: () => new Response(null, { status: 204 }) });
 const stop = new AbortController();
 
-const started = await server.default({
+/** The command's root: a test reads where its `serve` listens. */
+type Root = Scope.Starting & { readonly closed: Promise<unknown> };
+
+const started = (await server.default({
   env: {
+    PORT: "0",
     OTEL_SERVICE_NAME: "server-test",
     VICTORIA_TRACES_URL: `${collector.url}traces`,
     VICTORIA_LOGS_URL: `${collector.url}logs`,
@@ -25,7 +31,10 @@ const started = await server.default({
   stdout: { write: () => true },
   stderr: { write: () => true },
   exit: (code, reason) => stop.abort(reason ?? code),
-});
+})) as Root;
+
+/** Where a root's `serve` listens. */
+const urlOf = (root: Root) => root.resolve(serve.url).get()!;
 
 afterAll(async () => {
   stop.abort();
@@ -35,27 +44,16 @@ afterAll(async () => {
 
 /** A tab's call as it reaches the host behind a TLS proxy: an http request URL, an https Origin. */
 const proxied = (path: string, body: unknown) =>
-  started.fetch(
-    new Request(`http://app.example${path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json", origin: "https://app.example" },
-      body: JSON.stringify(body),
-    }),
-    undefined as never,
-  );
-
-/** The command behind a real Bun server: one greet over a socket that sends `origin`. */
-async function greetOver(main: typeof started, origin: string) {
-  const bun = Bun.serve({
-    port: 0,
-    websocket: main.websocket!,
-    fetch: async (r, s) => {
-      const reply = await main.fetch(r, s as never);
-      return reply === null ? undefined : (reply ?? new Response(null, { status: 404 }));
-    },
+  fetch(new URL(path, urlOf(started)), {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "https://app.example" },
+    body: JSON.stringify(body),
   });
+
+/** One greet over the command's own port, on a socket that sends `origin`. */
+async function greetOver(root: Root, origin: string) {
   // Bun's WebSocket takes headers: a browser sets Origin itself.
-  const socket = new WebSocket(`ws://localhost:${bun.port}/rpc`, { headers: { origin } } as never);
+  const socket = new WebSocket(`ws://${urlOf(root).host}/rpc`, { headers: { origin } } as never);
   const reply = await new Promise<string>((done) => {
     socket.onopen = () => socket.send(JSON.stringify([{ i: 1, a: "greet", t: '{"name":"Duke"}' }]));
     socket.onmessage = (e) => done(JSON.parse(String(e.data))[0].t);
@@ -64,7 +62,6 @@ async function greetOver(main: typeof started, origin: string) {
   });
 
   socket.close();
-  await bun.stop(true);
   return reply;
 }
 
@@ -84,8 +81,9 @@ test("PUBLIC_ORIGIN reaches telemetry: a tab batch from the public origin is tak
 
 test("an empty PUBLIC_ORIGIN counts as unset: rpc and telemetry take the request URL's origin", async () => {
   const quiet = new AbortController();
-  const plain = await server.default({
+  const plain = (await server.default({
     env: {
+      PORT: "0",
       OTEL_SERVICE_NAME: "server-test",
       VICTORIA_TRACES_URL: `${collector.url}traces`,
       VICTORIA_LOGS_URL: `${collector.url}logs`,
@@ -97,16 +95,14 @@ test("an empty PUBLIC_ORIGIN counts as unset: rpc and telemetry take the request
     stdout: { write: () => true },
     stderr: { write: () => true },
     exit: (code, reason) => quiet.abort(reason ?? code),
-  });
+  })) as Root;
+  const at = urlOf(plain);
   const post = (path: string, body: unknown) =>
-    plain.fetch(
-      new Request(`http://app.example${path}`, {
-        method: "POST",
-        headers: { "content-type": "application/json", origin: "http://app.example" },
-        body: JSON.stringify(body),
-      }),
-      undefined as never,
-    );
+    fetch(new URL(path, at), {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: at.origin },
+      body: JSON.stringify(body),
+    });
 
   // The socket's request URL is http://localhost:<port>, so that is the origin it takes.
   const local = await greetOver(plain, "http://localhost");

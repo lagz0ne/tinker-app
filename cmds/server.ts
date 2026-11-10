@@ -1,6 +1,5 @@
-import { ws } from "@tinker/bun";
+import { serve, ws } from "@tinker/bun";
 import { createScope } from "@tinker/core";
-import type { Server } from "bun";
 
 import { defineMain } from "~/base/main";
 import { observeServerPanics } from "~/base/panics.server";
@@ -11,12 +10,17 @@ import { telemetry } from "~/components/telemetry/index.server";
 import { api } from "@/api";
 import { greetHere } from "@/backend/greet";
 
+import { pages } from "./pages";
+
+/** The env's defaults: the dev port when `PORT` is unset. */
+const defaults = { PORT: "4318" };
+
 /** The host starts the server; importing this command opens nothing. */
 export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) => {
   if (args.length) {
     stderr.write("Usage: bun cmds/host.ts\n");
     exit(64);
-    return { fetch: async () => undefined, websocket: undefined, closed: Promise.resolve() };
+    return { closed: Promise.resolve() };
   }
 
   // Behind a TLS proxy the request URL is http: calls and tab batches must come from the public
@@ -37,36 +41,33 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       ? telemetry.thread({ ...sends, worker: new URL("./telemetry-worker.js", import.meta.url) })
       : telemetry.server(sends);
 
+  const socket = ws.server({ path: "/rpc", services: [api], origin });
+  const table = routes({
+    stop: signal,
+    table: {
+      "GET /api/health": health,
+      "POST /api/telemetry": sink.route,
+    },
+  });
   const app = createScope({
     signal,
     capsules: [
+      serve({
+        port: Number({ ...defaults, ...env }.PORT),
+        pages,
+        websocket: socket,
+        handlers: [table],
+        development: env.NODE_ENV !== "production",
+        stdout,
+      }),
       sink,
       api({ implement: { greet: greetHere } }),
-      ws.server({ path: "/rpc", services: [api], origin }),
-      routes({
-        stop: signal,
-        table: {
-          "GET /api/health": health,
-          "POST /api/telemetry": sink.route,
-        },
-      }),
+      socket,
+      table,
     ],
   });
 
   const live = await app.ready;
-  signal.throwIfAborted(); // Aborted during start: app is closing, so no handler.
   live.onClose(observeServerPanics(exit.bind(null, 1), app.closed, stderr));
-  const [link, table] = [live.resolve(ws.server), live.resolve(routes)];
-  return {
-    websocket: link.websocket as never,
-    // A key's bytes are the largest body; 1 MiB covers the routes' own JSON bodies.
-    maxRequestBodySize: Math.max(link.maxBody, 1_048_576),
-    // The socket's path, then a bytes POST, then the route table. null: upgraded; else the answer.
-    fetch: async (request: Request, server: Server<never>) => {
-      const upgraded = link.upgrade(request, live, server as never);
-      if (upgraded !== undefined) return upgraded;
-      return (await link.post(request, live)) ?? table(request, live);
-    },
-    closed: app.closed,
-  };
+  return app;
 });

@@ -58,10 +58,11 @@ export const routes = capsule({
         return { method, pattern, op, ns: config.ns.find((row) => row.op === op)?.ns };
       });
 
-      return async function fetch(
+      /** A `serve` handler (ADR 0132 in tinkered): the table's answer, or undefined. */
+      const fetch = async (
         incoming: Request,
         scope: Scope.Handle,
-      ): Promise<Response | undefined> {
+      ): Promise<Response | undefined> => {
         const url = new URL(incoming.url);
         const row = rows.find((row) => row.method === incoming.method && row.pattern.test(url));
         if (!row) return undefined;
@@ -102,6 +103,7 @@ export const routes = capsule({
         }
         return winner;
       };
+      return { fetch };
     },
   },
 });
