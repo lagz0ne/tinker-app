@@ -8,9 +8,9 @@ import { TinkerError, TinkerNotFound } from "~/base/fallbacks";
 import { abortReasons } from "~/components/errors";
 import { telemetry } from "~/components/telemetry";
 
-import { api } from "@/api";
+import { greet } from "@/greet";
 import { routeTree } from "@/routes";
-import { todoApi, todoBoard } from "@/todo/contract";
+import { todo } from "@/todo";
 
 /** The tab's one root. A real page hide, or a hot swap of this module, closes it. */
 const stop = new AbortController();
@@ -20,10 +20,10 @@ const app = createScope({
   capsules: [
     telemetry.browser({ service: "tinker-browser", console }),
     ws.client({ url: `${location.origin.replace(/^http/, "ws")}/rpc` }),
-    api({ remote: ws.client }),
+    greet.api({ remote: ws.client }),
     // The todo feature: the live list over the socket, and its calls.
-    todoBoard({ read: ws.client }),
-    todoApi({ remote: ws.client }),
+    todo.board({ read: ws.client }),
+    todo.api({ remote: ws.client }),
   ],
 });
 

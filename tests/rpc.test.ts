@@ -3,8 +3,8 @@ import type { Observe } from "@tinker/core";
 import { afterAll, expect, test } from "vite-plus/test";
 import { z } from "zod";
 
-import { api } from "@/api";
-import { greetHere } from "@/backend/greet";
+import { greet } from "@/greet";
+import { greetOps } from "@/greet/index.server";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
 
@@ -49,9 +49,9 @@ const observe: Observe.Config = {
 const backend = await createScope({
   observe,
   capsules: [
-    api({ implement: { greet: greetHere } }),
+    greet.api({ implement: greetOps }),
     more({ implement: { refuse: { run: refuseHere, onStart: [no] }, crash: crashHere } }),
-    server.server({ path: "/rpc", services: [api, more] }),
+    server.server({ path: "/rpc", services: [greet.api, more] }),
   ],
 }).ready;
 
@@ -59,7 +59,11 @@ const http = listen(backend, [server.server]);
 const base = `${http.url}/rpc`;
 
 const browser = await createScope({
-  capsules: [tab.client({ url: base }), api({ remote: tab.client }), more({ remote: tab.client })],
+  capsules: [
+    tab.client({ url: base }),
+    greet.api({ remote: tab.client }),
+    more({ remote: tab.client }),
+  ],
 }).ready;
 
 afterAll(async () => {
@@ -72,8 +76,8 @@ afterAll(async () => {
 const serverWith = (options: { origin?: string; maxPayload?: number }) =>
   createScope({
     capsules: [
-      api({ implement: { greet: greetHere } }),
-      server.server({ path: "/rpc", services: [api], ...options }),
+      greet.api({ implement: greetOps }),
+      server.server({ path: "/rpc", services: [greet.api], ...options }),
     ],
   });
 
@@ -93,23 +97,23 @@ const raw = async (frame: string, url = base) => {
 const greetFrame = (name: string, extra = {}) =>
   JSON.stringify([{ i: 1, a: "greet", t: JSON.stringify({ name }), ...extra }]);
 
-test("the client runs api.greet; the server's implementation does the work", async () => {
+test("the client runs greet.api.greet; the server's implementation does the work", async () => {
   spans.length = 0;
-  const reply = await browser.run(api.greet, { input: { name: "Duke" } });
+  const reply = await browser.run(greet.api.greet, { input: { name: "Duke" } });
 
   expect(reply).toEqual({ text: "Hello, Duke." });
   expect(spans).toContain("greet.here");
 });
 
 test("the server runs the same handle here, on its implementation", async () => {
-  expect(await backend.run(api.greet, { input: { name: "here" } })).toEqual({
+  expect(await backend.run(greet.api.greet, { input: { name: "here" } })).toEqual({
     text: "Hello, here.",
   });
 });
 
 test("bad input fails with DataValidationFailed on the client; nothing is sent", async () => {
   spans.length = 0;
-  const result = await browser.settle(api.greet, { rawInput: { name: "" } });
+  const result = await browser.settle(greet.api.greet, { rawInput: { name: "" } });
 
   expect(result.status).toBe("failed");
   expect(isError(Object(result).error, "DataValidationFailed")).toBe(true);
@@ -143,7 +147,7 @@ test("a throw on the server is the failed fault; its cause stays in the server l
 
 test("with no rpc capsule, a run of a key fails loud: CapsuleMissing", async () => {
   const bare = createScope();
-  const result = await bare.settle(api.greet, { input: { name: "x" } });
+  const result = await bare.settle(greet.api.greet, { input: { name: "x" } });
 
   expect(Object(result).error.kind).toBe("CapsuleMissing");
   await bare.close();

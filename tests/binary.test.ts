@@ -7,7 +7,7 @@ import { createScope } from "@tinker/core";
 import type { Subprocess } from "bun";
 import { afterAll, afterEach, expect, test } from "vite-plus/test";
 
-import { api } from "@/api";
+import { greet } from "@/greet";
 
 // The built server is one binary: Vite's client, its files and the telemetry worker are inside it.
 // It runs from any folder, with nothing beside it.
@@ -86,9 +86,9 @@ test("the binary serves the page, its files and rpc, and sends traces from its w
 
   // rpc over the socket, as a tab calls it.
   const tab = await createScope({
-    capsules: [ws.client({ url: `ws://${url.host}/rpc` }), api({ remote: ws.client })],
+    capsules: [ws.client({ url: `ws://${url.host}/rpc` }), greet.api({ remote: ws.client })],
   }).ready;
-  expect(await tab.run(api.greet, { input: { name: "bin" } })).toMatchObject({
+  expect(await tab.run(greet.api.greet, { input: { name: "bin" } })).toMatchObject({
     text: expect.stringContaining("bin"),
   });
   await tab.close();

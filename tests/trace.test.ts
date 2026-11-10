@@ -4,8 +4,8 @@ import { afterAll, beforeEach, expect, test } from "vite-plus/test";
 
 import { routes } from "~/components/requests/index.server";
 
-import { api } from "@/api";
-import { greetHere } from "@/backend/greet";
+import { greet } from "@/greet";
+import { greetOps } from "@/greet/index.server";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
 
@@ -46,8 +46,8 @@ const stop = new AbortController();
 const backend = await createScope({
   observe: { export: (span) => void serverSpans.push(span) },
   capsules: [
-    api({ implement: { greet: greetHere } }),
-    server.server({ path: "/rpc", services: [api] }),
+    greet.api({ implement: greetOps }),
+    server.server({ path: "/rpc", services: [greet.api] }),
     routes({ stop: stop.signal, table: { "GET /echo": echo } }),
   ],
 }).ready;
@@ -70,7 +70,7 @@ const raw = async (meta: Record<string, string>, base = `${url}/rpc`) => {
 
 const browser = await createScope({
   observe: { export: (span) => void tabSpans.push(span) },
-  capsules: [tab.client({ url: `${url}/rpc` }), api({ remote: tab.client })],
+  capsules: [tab.client({ url: `${url}/rpc` }), greet.api({ remote: tab.client })],
 }).ready;
 
 beforeEach(() => {
@@ -93,7 +93,7 @@ const named = (spans: Observe.Span[], name: string) => {
 };
 
 test("a client call's server spans join the client's trace, under the transport's own span", async () => {
-  expect(await browser.run(api.greet, { input: { name: "Duke" } })).toEqual({
+  expect(await browser.run(greet.api.greet, { input: { name: "Duke" } })).toEqual({
     text: "Hello, Duke.",
   });
 
@@ -113,7 +113,7 @@ test("a client call's server spans join the client's trace, under the transport'
 });
 
 test("the client sends a W3C traceparent with its own span ids and sampled flag", async () => {
-  await browser.run(api.greet, { input: { name: "Duke" } });
+  await browser.run(greet.api.greet, { input: { name: "Duke" } });
   const request = named(tabSpans, "ws.send");
   const header = sent[0]?.get("traceparent");
 
@@ -124,7 +124,7 @@ test("the client sends a W3C traceparent with its own span ids and sampled flag"
   const unsampled = browser.createSession({
     trace: { traceId: remote.traceId, parentSpanId: remote.spanId, sampled: false },
   });
-  await unsampled.run(api.greet, { input: { name: "quiet" } });
+  await unsampled.run(greet.api.greet, { input: { name: "quiet" } });
   await unsampled.close();
 
   const quiet = named(tabSpans, "ws.send");
@@ -137,9 +137,9 @@ test("the client sends a W3C traceparent with its own span ids and sampled flag"
 
 test("a client with observation off sends no traceparent", async () => {
   const dark = await createScope({
-    capsules: [tab.client({ url: `${url}/rpc` }), api({ remote: tab.client })],
+    capsules: [tab.client({ url: `${url}/rpc` }), greet.api({ remote: tab.client })],
   }).ready;
-  await dark.run(api.greet, { input: { name: "dark" } });
+  await dark.run(greet.api.greet, { input: { name: "dark" } });
   await dark.close();
 
   expect(sent[0]?.has("traceparent")).toBe(false);
@@ -182,8 +182,8 @@ test("a missing or malformed traceparent starts a fresh trace; the request still
 test("ws: a message after the root closed answers 503, it does not reject", async () => {
   const closing = await createScope({
     capsules: [
-      api({ implement: { greet: greetHere } }),
-      server.server({ path: "/rpc", services: [api] }),
+      greet.api({ implement: greetOps }),
+      server.server({ path: "/rpc", services: [greet.api] }),
     ],
   }).ready;
 

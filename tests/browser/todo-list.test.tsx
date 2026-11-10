@@ -5,9 +5,9 @@ import { createRoot } from "react-dom/client";
 import { expect, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser/context";
 
-import { todoApi, todoBoard } from "@/todo/contract";
-import { todoOps } from "@/todo/ops.server";
-import { TodoList } from "@/todo/todo-list";
+import { todo } from "@/todo";
+import { TodoList } from "@/todo";
+import { todoOps } from "@/todo/index.server";
 
 // In a real Chromium: the page asks the server through `todoApi`, and draws the list the server
 // pushes through `todoBoard`. The server here is a scope in the same page, over `memory`.
@@ -15,16 +15,16 @@ import { TodoList } from "@/todo/todo-list";
 test("add, toggle and remove a todo from the page; the server holds each change", async () => {
   const server = await createScope({
     capsules: [
-      todoBoard({ serve: true }),
-      todoApi({ implement: todoOps }),
-      memory.server({ services: [todoBoard, todoApi] }),
+      todo.board({ serve: true }),
+      todo.api({ implement: todoOps }),
+      memory.server({ services: [todo.board, todo.api] }),
     ],
   }).ready;
   const tab = await createScope({
     capsules: [
       memory.client({ peer: server }),
-      todoBoard({ read: memory.client }),
-      todoApi({ remote: memory.client }),
+      todo.board({ read: memory.client }),
+      todo.api({ remote: memory.client }),
     ],
   }).ready;
   const box = document.body.appendChild(document.createElement("div"));
@@ -40,11 +40,11 @@ test("add, toggle and remove a todo from the page; the server holds each change"
   await expect.element(page.getByText("Try the template")).toBeVisible();
 
   await page.getByRole("checkbox").click();
-  await expect.poll(() => server.resolve(todoBoard.todos).get()[0]?.done).toBe(true);
+  await expect.poll(() => server.resolve(todo.board.todos).get()[0]?.done).toBe(true);
 
   await page.getByRole("button", { name: "Remove" }).click();
   await expect.element(page.getByText("Try the template")).not.toBeInTheDocument();
-  expect(server.resolve(todoBoard.todos).get()).toEqual([]);
+  expect(server.resolve(todo.board.todos).get()).toEqual([]);
 
   root.unmount();
   await tab.close();

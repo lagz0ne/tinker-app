@@ -163,23 +163,63 @@ await app.run(authTesting.signInAs, { input: ANN });
 - `check:tests` fails the build if a prod file
   imports a `*.testing.ts` file.
 
+## A feature: one folder, one door
+
+An app is a set of features. Each feature is
+one folder in `src/`, with one door:
+
+```text
+src/todo/
+  contract.ts     todoBoard + todoApi
+  ops.server.ts   the server's ops
+  todo-list.tsx   the page
+  index.ts        door: todo
+  index.server.ts door: todoOps
+```
+
+```ts
+export const todo = capsule({
+  label: "todo",
+  exports: { board: todoBoard, api: todoApi },
+});
+```
+
+- `board` is remote data: the live read.
+  `todo.board.todos` is a read view, so
+  only the feature's own ops write it.
+- `api` is rpc: every change is a call.
+- Others import `@/todo` only. The server
+  also imports `@/todo/index.server`.
+- Lint refuses a deeper import
+  (`no-restricted-imports`). Inside its
+  folder, a feature imports by `./`.
+- The cmds install the board and api:
+  `todo.board({ serve: true })` and
+  `todo.api({ implement: todoOps })` on
+  the server; `todo.board({ read })` and
+  `todo.api({ remote })` in the tab.
+- Precedent: a DDD bounded context, a
+  module with one public door.
+
 ## rpc and remote data: one transport
 
 The decision: `docs/decisions/remote-data-and-rpc.md`.
 The client and the server run the same handle.
 
-- `src/api/`: `api = rpc({ greet: {...} })`.
+- `src/greet/contract.ts`:
+  `greetApi = rpc({ greet: {...} })`.
   A key has an `input` and an `output` shape.
-- `src/backend/`: the implementations.
-- `cmds/server.ts`: `api({ implement })`, and
-  `ws.server({ path: "/rpc", services })`.
+- `src/greet/greet.server.ts`: the work.
+- `cmds/server.ts`: `greet.api({ implement })`,
+  and `ws.server({ path: "/rpc", services })`.
 - `cmds/browser.tsx`: `ws.client({ url })`,
-  and `api({ remote: ws.client })`.
+  and `greet.api({ remote: ws.client })`.
 - A key with no implementation fails start
   with `MissingConfig`.
 - A failure is a fault from a fixed set:
   `refused`, `failed`, `invalid`, `encode`,
-  `decode`, `link`. `api.fault.is(e)` tells.
+  `decode`, `link`. `greet.api.fault.is(e)`
+  tells.
 - A server throw is `failed`. Its cause stays
   in the server log.
 - `remoteData({ cells })` reads server cells

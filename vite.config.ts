@@ -86,6 +86,19 @@ export default defineConfig({
       "tinker/body-steps": "error",
       curly: ["error", "multi-line"],
       "import/no-relative-parent-imports": "error",
+      // A feature has one door: `@/<feature>` (and `@/<feature>/index.server` on the server).
+      // Inside its own folder a feature imports its files by `./`.
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/*/*", "!@/*/index.server"],
+              message: "Import a feature by its door: `@/<feature>` or `@/<feature>/index.server`.",
+            },
+          ],
+        },
+      ],
       // Misreads Vite's `?raw` text imports as missing default exports.
       "import/default": "off",
     },
