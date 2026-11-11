@@ -231,6 +231,10 @@ It shows keyed data with a guard.
   says offline, the rest shows a ref.
   The ref is the trace id; the cause is in
   that trace on the server.
+- An op that writes two cells checks first
+  and writes last, with no `await` between
+  the writes. Cells have no transaction; a
+  store has one.
 - The data is in memory: a restart loses it.
   A real app keeps it in a store, behind a
   `load`.
