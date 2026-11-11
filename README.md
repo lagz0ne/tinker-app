@@ -235,8 +235,13 @@ It shows keyed data with a guard.
   primary key: each read is some fields of
   the key, and the guard's field is in it.
 - A fault is said by its kind (`Fault` in
-  `board.tsx`): `refused` says why, `link`
-  says offline, the rest shows a ref.
+  `board.tsx`): `refused` says why, the
+  rest shows a ref.
+- `link` is the one kind with no answer
+  from the server. A read is asked again
+  by itself. A call is not: it may have
+  run, so the page says "It may be saved"
+  and the person looks first.
   The ref is the trace id; the cause is in
   that trace on the server.
 - An op that writes two cells checks first

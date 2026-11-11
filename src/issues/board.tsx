@@ -53,11 +53,19 @@ export function IssuesHome() {
 }
 
 /** A fault, said by its kind, as a page says 403, offline and 500. A bug shows the server's
- * trace id as a ref: the cause is in that trace on the server, never in the tab. */
-function Fault({ fault }: { fault: unknown }) {
+ * trace id as a ref: the cause is in that trace on the server, never in the tab.
+ * `link` is the one kind with no answer from the server. A read is asked again by itself. A call
+ * is not: the server may have done it, so the person looks first. */
+function Fault({ fault, read }: { fault: unknown; read?: boolean }) {
   const { fault: kind, payload, traceId } = Object(fault) as Partial<RemoteFault>;
   if (!kind) return null;
-  if (kind === "link") return <p role="status">Offline. Trying again.</p>;
+  if (kind === "link") {
+    return (
+      <p role="status">
+        {read ? "Offline. Trying again." : "No answer. It may be saved. Look, then try again."}
+      </p>
+    );
+  }
 
   const team = Object(payload).notMember as string | undefined;
   if (kind === "refused") {
@@ -75,7 +83,7 @@ function Waiting({ state, again }: { state: PartState | undefined; again: () => 
 
   return (
     <main>
-      <Fault fault={state.fault} />
+      <Fault fault={state.fault} read />
       {state.fault.fault !== "link" && (
         <button type="button" onClick={again}>
           Try again

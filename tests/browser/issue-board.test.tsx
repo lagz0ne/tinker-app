@@ -1,7 +1,7 @@
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { createScope, operation } from "@tinker/core";
 import type { Observe } from "@tinker/core";
-import { memory } from "@tinker/core/testing";
+import { createMemory, memory } from "@tinker/core/testing";
 import { ScopeProvider } from "@tinker/react";
 import { createRoot } from "react-dom/client";
 import { expect, test } from "vite-plus/test";
@@ -160,5 +160,63 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
 
   root.unmount();
   await ana.close();
+  await server.close();
+});
+
+// `link` is the one fault with no answer from the server: the call may have run. A call is not
+// sent again by itself, so the page says so and the person looks first.
+test("a call with no answer says that it may be saved; it is not sent again", async () => {
+  const down = createMemory();
+  const server = await createScope({
+    capsules: [
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const dead = await createScope({
+    capsules: [
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      down.server({ services: [issues.api] }),
+    ],
+  }).ready;
+  const setup = await createScope({
+    capsules: [
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  setup.run(signIn, { input: { name: "ana" } });
+  await setup.run(issues.api["team.create"], { input: { teamId: "ENG" } });
+  // Ana reads the board from the live server; her calls go to a server that is gone.
+  const ana = await createScope({
+    capsules: [
+      memory.client({ peer: server, meta: whoMeta }),
+      down.client({ peer: dead, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: down.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  await dead.close();
+  const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
+  const router = createRouter({ routeTree, history, context: { scope: ana } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  root.render(
+    <ScopeProvider scope={ana}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  await page.getByLabelText("New issue").fill("Login fails");
+  await page.getByRole("button", { name: "Add issue" }).click();
+
+  await expect
+    .poll(() => document.querySelector("main [role=status]")?.textContent)
+    .toBe("No answer. It may be saved. Look, then try again.");
+
+  root.unmount();
+  await ana.close();
+  await setup.close();
   await server.close();
 });
