@@ -29,13 +29,8 @@ const notes = data({ initial: [] as string[] });
 const board = remoteData({ notes });
 const api = rpc({ "note.add": { input: z.string(), output: z.number() } });
 
-// ---- two transports: the public one (`memory`) and the signed one. Each is a pair: its client
-// reaches its own server (Core 0.17.6).
-const signed = createMemory();
-
-// ---- the server: one scope with the server end of each transport; each route table sends an
-// address to its service. The public service reads the cookie; the signed services check the
-// bearer token.
+// ---- the server: ONE transport; the route table sends each address to its service.
+// The public service reads the cookie; the signed services check the bearer token.
 async function boot() {
   const sessions = new Map<string, string>(); // cookie sid -> who (a sign-in adds a row)
   const tokens = new Map<string, string>(); // bearer token -> who
@@ -78,8 +73,7 @@ async function boot() {
       auth({ implement: { "auth.status": statusOf } }), // public: no hooks
       board({ serve: true, onStart: [bearer] }),
       api({ onStart: [bearer], implement: { "note.add": add } }),
-      memory.server({ services: [auth] }),
-      signed.server({ services: [board, api] }),
+      memory.server({ services: [auth, board, api] }),
     ],
   }).ready;
   closers.push(() => server.close());
@@ -87,7 +81,9 @@ async function boot() {
   return { server, sessions, tokens };
 }
 
-// ---- the client command: the client end of each transport, to the one server scope.
+// ---- the client command: two client sets to one server, as two sockets to one URL
+// (Core 0.17.7).
+const signed = createMemory();
 let statusCalls = 0;
 
 /** The signed transport's credentials: ask the public one who we are, then send the bearer. */

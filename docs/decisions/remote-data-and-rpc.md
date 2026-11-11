@@ -153,9 +153,9 @@ the wire: text
    the codec use and the route table.
 3. **Second transport.** `createWs()` and
    `createMemory()` make one more set, for a
-   scope with a public and a signed base. A
-   memory client reaches only the server of
-   its own set (Core 0.17.6).
+   scope with a public and a signed base.
+   Two client sets can reach one server, as
+   two sockets reach one URL (Core 0.17.7).
 4. **Codec.** Transport config, JSON by
    default. Both sides must use the same one.
 5. **Route table.** `ws.server({ services })`
