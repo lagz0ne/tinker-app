@@ -93,9 +93,11 @@ test("a service that throws on a stream pushes failed, not a quiet end", async (
   ]);
 });
 
-test("an address no one has pushes link, as a 404 on a call", async () => {
+test("an address no one has pushes missing, as a 404 on a call", async () => {
   const { s } = await server();
-  expect(await pushes(await client(s), "nope")).toEqual([{ ok: false, kind: "link", payload: {} }]);
+  expect(await pushes(await client(s), "nope")).toEqual([
+    { ok: false, kind: "missing", payload: {} },
+  ]);
 });
 
 test("a socket that cannot open makes the key's fault link, as data", async () => {

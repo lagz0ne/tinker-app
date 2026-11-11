@@ -18,7 +18,7 @@ cd my-app && bun install
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-bunx degit lagz0ne/tinker-app#v0.24.3 my-app
+bunx degit lagz0ne/tinker-app#v0.24.4 my-app
 ```
 
 ## Run
@@ -234,14 +234,18 @@ It shows keyed data with a guard.
 - Choose the key from the reads, as a table's
   primary key: each read is some fields of
   the key, and the guard's field is in it.
-- A fault is said by its kind (`Fault` in
-  `board.tsx`): `refused` says why, the
-  rest shows a ref.
-- `link` is the one kind with no answer
-  from the server. A read is asked again
-  by itself. A call is not: it may have
-  run, so the page says "It may be saved"
-  and the person looks first.
+- A fault says who spoke (`Fault` in
+  `board.tsx`): `from` is `"server"` or
+  `"local"`.
+- The server's answer: `refused` says why,
+  `missing` says the page is old, the rest
+  shows a ref. The same ask gives the same
+  answer, so nothing asks again.
+- `link` is local: no answer. A read is
+  asked again by itself. A call is not.
+  `sent: false` means nothing left. Else
+  the call may have run, so the page says
+  "It may be saved" and the person looks.
   The ref is the trace id; the cause is in
   that trace on the server.
 - An op that writes two cells checks first

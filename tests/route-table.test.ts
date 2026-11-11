@@ -78,7 +78,7 @@ test("strict: two services with one address fail start, naming the address and b
   });
 });
 
-test("no service has the address: the server answers null (404); the client gets link", async () => {
+test("no service has the address: the server answers null (404); the client gets missing", async () => {
   const board = remoteData({ todos: data({ initial: [] as string[] }) });
   const server = await createScope({
     capsules: [board({ serve: true }), memory.server({ services: [board] })],
@@ -92,7 +92,7 @@ test("no service has the address: the server answers null (404); the client gets
   closers.push(() => client.close());
   expect(
     await client.run(memory.client.call, { input: { address: "nope", value: null, meta: {} } }),
-  ).toEqual({ ok: false, kind: "link", payload: {} });
+  ).toEqual({ ok: false, kind: "missing", payload: {} });
 });
 
 test("30 definitions × 3 keys and one rpc with 30 keys: each call reaches its own service, and only it", async () => {
