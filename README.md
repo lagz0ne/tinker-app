@@ -18,7 +18,7 @@ cd my-app && bun install
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-bunx degit lagz0ne/tinker-app#v0.24.2 my-app
+bunx degit lagz0ne/tinker-app#v0.24.3 my-app
 ```
 
 ## Run
@@ -212,9 +212,17 @@ It shows keyed data with a guard.
   `issues.board.issues.where({ teamId })`.
 - Every key starts with `teamId`, so one
   `onStart` hook guards every part.
-- A non-member's read is refused. The tab
-  asks again with back-off, so a person
-  added later sees the team.
+- A part has its own state:
+  `useData(issues.board.status(read))` is
+  `pending`, `ready` or `fault`.
+- A non-member's read is refused. That is
+  the server's answer, so the client does
+  not ask again by itself. "Try again"
+  runs `issues.board.invalidate` with the
+  part, so a person added later sees the
+  team. Only a broken link heals by itself.
+- The guard reads its part, typed:
+  `issueBoard.part(input)?.teamId`.
 - A move names the version it saw. A newer
   version answers `stale`, as output.
 - Sign-in is a stand-in: a name in each

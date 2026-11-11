@@ -73,7 +73,7 @@ test("an issue made and moved on one tab moves on the drawn tab; a thread takes 
   await server.close();
 });
 
-test("a tab that is not in the team sees why, not an empty board", async () => {
+test('a tab that is not in the team sees why; "Try again" shows the team once it is in', async () => {
   const server = await createScope({
     capsules: [
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
@@ -99,6 +99,11 @@ test("a tab that is not in the team sees why, not an empty board", async () => {
   );
 
   await expect.element(page.getByRole("alert")).toHaveTextContent("You are not in team OPS.");
+
+  await cy.run(issues.api["team.create"], { input: { teamId: "OPS" } });
+  await page.getByRole("button", { name: "Try again" }).click();
+
+  await expect.element(page.getByRole("heading", { name: "OPS" })).toBeVisible();
 
   root.unmount();
   await cy.close();

@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
-import type { RemoteFault } from "@tinker/core";
+import type { PartState, RemoteFault } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
 import { memo } from "react";
 
@@ -67,13 +67,35 @@ function Fault({ fault }: { fault: unknown }) {
   return <p role="alert">{`Something broke.${traceId ? ` Ref ${traceId.slice(0, 8)}` : ""}`}</p>;
 }
 
+/** A part that is not ready: not read yet, or a fault that stands. A broken link heals by
+ * itself. Any other fault is the server's answer, so it waits for the person: "Try again" asks
+ * for the part once more. */
+function Waiting({ state, again }: { state: PartState | undefined; again: () => void }) {
+  if (state?.status !== "fault") return <p role="status">Loading.</p>;
+
+  return (
+    <main>
+      <Fault fault={state.fault} />
+      {state.fault.fault !== "link" && (
+        <button type="button" onClick={again}>
+          Try again
+        </button>
+      )}
+    </main>
+  );
+}
+
 /** `/issues/$team`: the team's issues in four lanes, live; the open thread beside them. */
 export function Board({ teamId }: { teamId: string }) {
-  const list = useData(issueBoard.issues.where({ teamId }));
-  const faults = useData(issueBoard.faults);
+  const part = issueBoard.issues.where({ teamId });
+  const list = useData(part);
+  const state = useData(issueBoard.status(part));
+  const again = useRun(issueBoard.invalidate);
   const create = useRun(issueApi["issue.create"]);
   const add = useRun(issueApi["team.add"]);
-  if (faults.issues) return <Fault fault={faults.issues} />;
+  if (state?.status !== "ready") {
+    return <Waiting state={state} again={() => again.run({ input: { issues: { teamId } } })} />;
+  }
 
   return (
     <main>

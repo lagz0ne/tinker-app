@@ -1,7 +1,7 @@
 import { operation, tag, transport } from "@tinker/core";
 import { z } from "zod";
 
-import { comments, issues, members, states } from "./contract";
+import { comments, issueBoard, issues, members, states } from "./contract";
 
 // The server's work for `issueApi`. Each op writes members of the keyed cells; `issueBoard` tells
 // every member's tab that reads the part, and the tab asks for that part alone.
@@ -25,7 +25,7 @@ export const membersOnly = operation({
   input: transport.hook.start,
   depends: { team: members.controller },
   run: ({ team }, { input }) => {
-    const teamId = String(Object(Object(input.input).part).teamId);
+    const teamId = issueBoard.part(input)?.teamId ?? "";
     const known = team.of({ teamId, userId: input.meta.who ?? "" }).get();
     return known ? undefined : input.refuse({ notMember: teamId });
   },

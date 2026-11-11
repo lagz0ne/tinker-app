@@ -59,6 +59,10 @@ const read = (scope: Scope.Handle, teamId: string) => {
   return reader;
 };
 
+/** The state of a tab's part of one team's issues. */
+const state = (scope: Scope.Handle, teamId: string) =>
+  scope.resolve(issues.board.status(issues.board.issues.where({ teamId }))).get()?.status;
+
 const until = async (ok: () => boolean) => {
   const end = Date.now() + 8000;
   while (!ok()) {
@@ -137,20 +141,23 @@ test("a tab with no `who` is refused; so is a member of no team, on calls and on
     .run(issues.api["team.create"], { input: { teamId: "NOPE" } })
     .catch((e: unknown) => e);
   expect(issues.api.fault.is(refused) && refused.fault).toBe("refused");
-  await until(() => cy.resolve(issues.board.faults).get().issues !== undefined);
+  await until(() => state(cy, teamId) === "fault");
   expect(peek.get()).toEqual([]);
 });
 
-// The tab asks a refused part again with back-off (50 ms, doubling, at most 5 s), as
-// EventSource retries: the grant shows with no signal from the server.
-test("a person added while their tab is open starts to see the team, by the retry", async () => {
+// A refused part is the server's answer: the tab does not ask again by itself (Core 0.17.4,
+// ADR 0139). The page's "Try again" is an `invalidate` of the part, as a query's `refetch`.
+test("a person added while their tab is open sees the team when they try again", async () => {
   const teamId = await team();
   const peek = read(cy, teamId);
   await ana.run(issues.api["issue.create"], { input: { teamId, title: "Welcome" } });
-  await until(() => cy.resolve(issues.board.faults).get().issues !== undefined);
+  await until(() => state(cy, teamId) === "fault");
 
   await ana.run(issues.api["team.add"], { input: { teamId, userId: "cy" } });
+  await cy.run(issues.board.invalidate, { input: { issues: { teamId } } });
   await until(() => peek.get().length === 1);
+
+  expect(state(cy, teamId)).toBe("ready");
 });
 
 /** The one span of this name; its trace id. */
