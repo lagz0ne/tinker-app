@@ -6,9 +6,9 @@
       "name": "tinker-app",
       "dependencies": {
         "@tanstack/react-router": "1.170.41",
-        "@tinker/bun": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.1/tinker-bun-0.17.1.tgz",
-        "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.1/tinker-core-0.17.1.tgz",
-        "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.1/tinker-react-0.17.1.tgz",
+        "@tinker/bun": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.2/tinker-bun-0.17.2.tgz",
+        "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.2/tinker-core-0.17.2.tgz",
+        "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.2/tinker-react-0.17.2.tgz",
         "drizzle-orm": "1.0.0-rc.4",
         "react": "^19.3.0",
         "react-dom": "^19.3.0",
@@ -253,11 +253,11 @@
 
     "@testing-library/user-event": ["@testing-library/user-event@14.6.8", "", { "peerDependencies": { "@testing-library/dom": ">=7.21.4" } }, "sha512-vgSSqnANMnkcYR/vUNDbwS7aM3OErRLNUG8vCVVlj4oc6cKffUrccX7UAS5AmJQQNZTSibi9z5GvvRZ0aYgUCQ=="],
 
-    "@tinker/bun": ["@tinker/bun@https://github.com/lagz0ne/tinkered/releases/download/v0.17.1/tinker-bun-0.17.1.tgz", { "dependencies": { "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.1/tinker-core-0.17.1.tgz" }, "peerDependencies": { "drizzle-orm": "^1.0.0-rc.4" }, "optionalPeers": ["drizzle-orm"] }, "sha512-BeyXdy4NzUrGImzPVPOCx14IjAr7MrfiU4r0S9tNMO087n9hfh+D+eyJfL8I2fqzpSdX8iKfaLhBnSzKwl58pw=="],
+    "@tinker/bun": ["@tinker/bun@https://github.com/lagz0ne/tinkered/releases/download/v0.17.2/tinker-bun-0.17.2.tgz", { "dependencies": { "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.2/tinker-core-0.17.2.tgz" }, "peerDependencies": { "drizzle-orm": "^1.0.0-rc.4" }, "optionalPeers": ["drizzle-orm"] }, "sha512-cuxvNRQEVY+Rb37l57QWY0O07WKYKe1tFkucop3Yn0cNX5Wq3TAG7KszhDBP2Eu8wyEPYNmfKXNvfNuBIm7BGQ=="],
 
-    "@tinker/core": ["@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/v0.17.1/tinker-core-0.17.1.tgz", {}, "sha512-p4I9gwJ5/DqoRbC1Ra+jIzWox++yIbxyT9yN85FeuzZh1fEAnR6737wGih8ylMXUqLkKfQLwdoZRVXXQimcFEQ=="],
+    "@tinker/core": ["@tinker/core@https://github.com/lagz0ne/tinkered/releases/download/v0.17.2/tinker-core-0.17.2.tgz", {}, "sha512-YQ87p8YbJ782opkSvgFWSrd62jpxrAOwktFzkgE5CPyJn/LBNvP7xhz9xV2P3FJl7cCLCnZQglzjKDAfoAQO2w=="],
 
-    "@tinker/react": ["@tinker/react@https://github.com/lagz0ne/tinkered/releases/download/v0.17.1/tinker-react-0.17.1.tgz", { "dependencies": { "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.1/tinker-core-0.17.1.tgz" }, "peerDependencies": { "react": ">=19" } }, "sha512-+rA4x1rVr0oiM/nT9I6j82yNI9vFzvPoyybRiwDGp0XtmkE7J+8zhRzouktqSsh8LN+kdkLsojMTnsRWu9TP4w=="],
+    "@tinker/react": ["@tinker/react@https://github.com/lagz0ne/tinkered/releases/download/v0.17.2/tinker-react-0.17.2.tgz", { "dependencies": { "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.2/tinker-core-0.17.2.tgz" }, "peerDependencies": { "react": ">=19" } }, "sha512-w1Cz2k7rkvCCeFcysCVUpCoYxbftc8FVeEO1jVRgOV77zu1CamdgJ6UxSEkLP7FQw11RsPVVc9CyEgTkorHFRA=="],
 
     "@types/aria-query": ["@types/aria-query@5.0.4", "", {}, "sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw=="],
 
