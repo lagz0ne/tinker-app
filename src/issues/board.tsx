@@ -1,4 +1,5 @@
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
+import type { RemoteFault } from "@tinker/core";
 import { useData, useRun } from "@tinker/react";
 import { memo } from "react";
 
@@ -51,13 +52,28 @@ export function IssuesHome() {
   );
 }
 
+/** A fault, said by its kind, as a page says 403, offline and 500. A bug shows the server's
+ * trace id as a ref: the cause is in that trace on the server, never in the tab. */
+function Fault({ fault }: { fault: unknown }) {
+  const { fault: kind, payload, traceId } = Object(fault) as Partial<RemoteFault>;
+  if (!kind) return null;
+  if (kind === "link") return <p role="status">Offline. Trying again.</p>;
+
+  const team = Object(payload).notMember as string | undefined;
+  if (kind === "refused") {
+    return <p role="alert">{team ? `You are not in team ${team}.` : "Sign in first."}</p>;
+  }
+
+  return <p role="alert">{`Something broke.${traceId ? ` Ref ${traceId.slice(0, 8)}` : ""}`}</p>;
+}
+
 /** `/issues/$team`: the team's issues in four lanes, live; the open thread beside them. */
 export function Board({ teamId }: { teamId: string }) {
   const list = useData(issueBoard.issues.where({ teamId }));
   const faults = useData(issueBoard.faults);
   const create = useRun(issueApi["issue.create"]);
   const add = useRun(issueApi["team.add"]);
-  if (faults.issues) return <p role="alert">You are not in team {teamId}.</p>;
+  if (faults.issues) return <Fault fault={faults.issues} />;
 
   return (
     <main>
@@ -92,6 +108,7 @@ export function Board({ teamId }: { teamId: string }) {
         <input name="user" aria-label="Add member" placeholder="name" />
         <button type="submit">Add member</button>
       </form>
+      <Fault fault={create.error ?? add.error} />
       <div className="lanes">
         {states.map((state) => (
           <section key={state} aria-label={state}>
@@ -137,6 +154,7 @@ const Card = memo(function Card({ teamId, id }: { teamId: string; id: string }) 
         ))}
       </select>
       {move.data?.kind === "stale" && <small role="status">Changed by someone else.</small>}
+      <Fault fault={move.error} />
     </article>
   );
 });
@@ -167,6 +185,7 @@ export function Thread({ teamId, issueId }: { teamId: string; issueId: string })
         <input name="text" aria-label="Comment" />
         <button type="submit">Comment</button>
       </form>
+      <Fault fault={say.error} />
     </aside>
   );
 }

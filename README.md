@@ -222,6 +222,18 @@ It shows keyed data with a guard.
 - Every cell is served. A cell that is not
   served is a copy per session, so a
   call's write to it ends with the call.
+  `cell.atScope.controller` writes the root.
+- Choose the key from the reads, as a table's
+  primary key: each read is some fields of
+  the key, and the guard's field is in it.
+- A fault is said by its kind (`Fault` in
+  `board.tsx`): `refused` says why, `link`
+  says offline, the rest shows a ref.
+  The ref is the trace id; the cause is in
+  that trace on the server.
+- The data is in memory: a restart loses it.
+  A real app keeps it in a store, behind a
+  `load`.
 
 ```ts
 issues.board({

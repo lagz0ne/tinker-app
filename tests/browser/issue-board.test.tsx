@@ -1,10 +1,12 @@
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { createScope } from "@tinker/core";
+import { createScope, operation } from "@tinker/core";
+import type { Observe } from "@tinker/core";
 import { memory } from "@tinker/core/testing";
 import { ScopeProvider } from "@tinker/react";
 import { createRoot } from "react-dom/client";
 import { expect, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser/context";
+import { z } from "zod";
 
 import { issues, signIn, whoMeta } from "@/issues";
 import { issueOps, membersOnly, signedIn } from "@/issues/index.server";
@@ -100,5 +102,58 @@ test("a tab that is not in the team sees why, not an empty board", async () => {
 
   root.unmount();
   await cy.close();
+  await server.close();
+});
+
+test("a call that breaks on the server shows a ref, and the server's trace has the cause", async () => {
+  const spans: Observe.Span[] = [];
+  const boom = operation({
+    label: "issue.create.boom",
+    input: z.object({ teamId: z.string(), title: z.string() }),
+    run: (): { kind: "gone" } => {
+      throw new Error("the disk is full");
+    },
+  });
+  const server = await createScope({
+    observe: { export: (span) => void spans.push(span) },
+    capsules: [
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: { ...issueOps, "issue.create": boom }, onStart: [signedIn] }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  // The tab observes, as the real page does (`telemetry.browser`): the fault's ref is its trace.
+  const ana = await createScope({
+    observe: { export: () => undefined },
+    capsules: [
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
+  const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
+  const router = createRouter({ routeTree, history, context: { scope: ana } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  root.render(
+    <ScopeProvider scope={ana}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  await page.getByLabelText("New issue").fill("Login fails");
+  await page.getByRole("button", { name: "Add issue" }).click();
+  await expect
+    .poll(() => document.querySelector("[role=alert]")?.textContent)
+    .toMatch(/^Something broke\. Ref [0-9a-f]{8}$/);
+
+  const ref = page.getByRole("alert").element().textContent!.slice(-8);
+  const failed = spans.find((span) => span.name === "issue.create.boom");
+  expect(failed?.traceId.slice(0, 8)).toBe(ref);
+  expect(String(failed?.error)).toContain("the disk is full");
+
+  root.unmount();
+  await ana.close();
   await server.close();
 });
