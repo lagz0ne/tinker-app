@@ -30,7 +30,9 @@ const table = tag<Routes>({ label: "routes.table" });
 const failures: Readonly<Record<string, number>> = { DataValidationFailed: 400, Cancelled: 503 };
 
 /**
- * The cmd's one route table, compiled once at start: method + URLPattern per row. A route's
+ * The cmd's one route table, compiled once at start. A row with no param is one Map read by
+ * "METHOD /path", as a static route in Hono's router; a row with a param keeps its URLPattern,
+ * matched once. The first row that fits wins, by table order, in both. A route's
  * raw input is its query plus its path params. Its reply: a Response as is, nothing as 204, a
  * value as JSON. Bad input is 400, a cancel 503, anything else 500. No row: undefined. A route
  * that sent its reply early has answered: how its operation ends later changes no reply.
@@ -52,11 +54,31 @@ export const routes = capsule({
     async start({ config, next }) {
       await next();
 
-      const rows = Object.entries(config.table).map(([key, op]) => {
+      type Row = {
+        method: string;
+        pattern: URLPattern;
+        op: Routes[keyof Routes];
+        ns?: Ns;
+        /** The path up to the segment of its first param: a path that does not start so cannot fit. */
+        head: string;
+      };
+      /** Rows whose path has no param, by their key. */
+      const fixed = new Map<string, Row>();
+      /** Rows with a param, and a fixed row that an earlier one of these also matches. */
+      const patterned: Row[] = [];
+      for (const [key, op] of Object.entries(config.table)) {
         const [method, pathname] = key.split(" ") as [string, string];
         const pattern = new URLPattern({ pathname: pathname.replaceAll(/\{(\w+)\}/g, ":$1") });
-        return { method, pattern, op, ns: config.ns.find((row) => row.op === op)?.ns };
-      });
+
+        const plain = /^[\w\-.~/]*/.exec(pathname)![0];
+        const head = plain === pathname ? plain : plain.slice(0, plain.lastIndexOf("/") + 1);
+        const ns = config.ns.find((row) => row.op === op)?.ns;
+        const row = { method, pattern, op, ns, head };
+
+        const shadowed = patterned.some((r) => r.method === method && r.pattern.test({ pathname }));
+        if (plain === pathname && !shadowed) fixed.set(key, row);
+        else patterned.push(row);
+      }
 
       /** A `serve` handler (ADR 0132 in tinkered): the table's answer, or undefined. */
       const fetch = async (
@@ -64,10 +86,17 @@ export const routes = capsule({
         scope: Scope.Handle,
       ): Promise<Response | undefined> => {
         const url = new URL(incoming.url);
-        const row = rows.find((row) => row.method === incoming.method && row.pattern.test(url));
+        const method = incoming.method;
+        let row = fixed.get(`${method} ${url.pathname}`);
+        let params: Record<string, string | undefined> = {};
+        for (let at = 0; !row && at < patterned.length; at++) {
+          const next = patterned[at]!;
+          if (next.method !== method || !url.pathname.startsWith(next.head)) continue;
+          const match = next.pattern.exec(url);
+          if (match) [row, params] = [next, match.pathname.groups];
+        }
         if (!row) return undefined;
 
-        const params = row.pattern.exec(url)!.pathname.groups;
         const signal = AbortSignal.any([incoming.signal, config.stop]);
         const trace = transport.traceparentOf(incoming.headers.get("traceparent"));
         const early = Promise.withResolvers<Response>();

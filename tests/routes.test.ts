@@ -64,6 +64,33 @@ test("each route reply maps to its HTTP status", async () => {
   await app.close();
 });
 
+test("a fixed path after a param row that also fits it: the param row still wins", async () => {
+  const which = (label: string) => operation({ label, run: () => new Response(label) });
+  const app = await createScope({
+    capsules: [
+      routes({
+        stop: new AbortController().signal,
+        table: {
+          "GET /a/first": which("fixed-first"),
+          "GET /a/{id}": which("param"),
+          "GET /a/late": which("fixed-late"),
+          "POST /a/late": which("other-method"),
+        },
+      }),
+    ],
+  }).ready;
+  const fetch = app.resolve(routes).fetch;
+  const text = async (path: string, method = "GET") =>
+    (await fetch(new Request(`http://t${path}`, { method }), app))?.text();
+
+  expect(await text("/a/first")).toBe("fixed-first");
+  expect(await text("/a/late")).toBe("param");
+  expect(await text("/a/late", "POST")).toBe("other-method");
+  expect(await text("/a/late/")).toBeUndefined();
+
+  await app.close();
+});
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
