@@ -160,11 +160,11 @@ const one = (spans: Observe.Span[], name: string) => {
   return found[0]!;
 };
 
-// One move, followed across both tabs and the server. The call is one trace: tab A's call, its
-// socket send, the server's serve, the guard, the op. The signal to tab B and B's ask again are
-// a second trace: the keyed signal carries no traceparent yet (Core gap, sent to Core). When it
-// does, the second trace links to the first, and this test checks the link.
-test("one move: the call is one trace across tab and server; the other tab's ask is one more", async () => {
+// One move, followed across both tabs and the server, as OTel messaging: tab A's call, the
+// server's op and its `remoteData.send` (the producer) are one trace. The signal carries that
+// send; tab B's ask runs under `remoteData.receive` (the consumer), a trace of its own with a
+// link to the send. So a move and every read it caused join up (Core 0.17.3).
+test("one move: one trace from tab A to the server's send; tab B's ask links to it", async () => {
   const teamId = await team();
   const seen = read(bo, teamId);
   await ana.run(issues.api["issue.create"], { input: { teamId, title: "Trace me" } });
@@ -182,17 +182,30 @@ test("one move: the call is one trace across tab and server; the other tab's ask
       .map((s) => s.name)
       .toSorted();
   const call = one(tabSpans, "issue.move").traceId;
-  const ask = one(tabSpans, "issues.ask").traceId;
+  const send = one(serverSpans, "remoteData.send");
+  const receive = one(tabSpans, "remoteData.receive");
+  const ask = receive.traceId;
 
   expect(names(tabSpans, call)).toEqual(["issue.move", "issues.whoMeta", "ws.call", "ws.send"]);
   expect(names(serverSpans, call)).toEqual([
     "issue.move.do",
     "issues.inTeam",
     "issues.signedIn",
+    "remoteData.send",
     "rpc.answer",
     "ws.serve",
   ]);
-  expect(names(tabSpans, ask)).toEqual(["issues.ask", "issues.whoMeta", "ws.call", "ws.send"]);
+  expect(send.traceId).toBe(call);
+  // Tab B's ask is its own trace, as an OTel consumer: it links to the server's send.
+  const link = receive.events.find((e) => e.name === "link")?.attributes?.traceparent;
+  expect(link).toBe(`00-${call}-${send.spanId}-01`);
+  expect(names(tabSpans, ask)).toEqual([
+    "issues.ask",
+    "issues.whoMeta",
+    "remoteData.receive",
+    "ws.call",
+    "ws.send",
+  ]);
   expect(names(serverSpans, ask)).toEqual([
     "issues.membersOnly",
     "issues.signedIn",
@@ -200,5 +213,4 @@ test("one move: the call is one trace across tab and server; the other tab's ask
     "remoteData.ask",
     "ws.serve",
   ]);
-  expect(ask).not.toBe(call);
 });
