@@ -11,10 +11,21 @@ export type Todo = z.infer<typeof todo>;
 /** A todo that is no longer there: a domain outcome, so it is part of the output shape. */
 const gone = z.object({ kind: z.literal("gone"), id: z.string() });
 
-/** The list, as the server holds it. Only the ops in `./ops.server` write it. */
-export const todos = data({ label: "todo.list", initial: [] as Todo[], parse: z.array(todo) });
+/**
+ * The list, as the server holds it: a keyed cell, one member per todo (ADR 0135). Only the ops in
+ * `./ops.server` write it. A write changes one member, so a tab asks for that member alone.
+ */
+export const todos = data({
+  label: "todo.list",
+  mode: "keyed",
+  parse: todo,
+  key: (t) => ({ id: t.id }),
+});
 
-/** Read: the server serves the list, and pushes each change; a tab reads `todoBoard.todos`. */
+/**
+ * Read: the server serves the list by part. A tab reads `todoBoard.todos.where({})` for every
+ * todo, or `todoBoard.todos.of({ id })` for one; a set on the server tells each reader of it.
+ */
 export const todoBoard = remoteData({ todos });
 
 /** Ask: every change is a call, and the server is the only writer. Outcomes are output. */

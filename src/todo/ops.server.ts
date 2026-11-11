@@ -3,8 +3,8 @@ import { z } from "zod";
 
 import { todos } from "./contract";
 
-// The server's work for `todoApi`. Each op writes the one list cell; `todoBoard` pushes the new
-// list to every tab that reads it, so no op sends anything by hand.
+// The server's work for `todoApi`. Each op writes one member of the list; `todoBoard` tells every
+// tab that reads it, and the tab asks for that member alone. No op sends anything by hand.
 
 export const addTodo = operation({
   label: "todo.add.do",
@@ -12,7 +12,7 @@ export const addTodo = operation({
   depends: { list: todos.controller },
   run: ({ list }, { input, random }) => {
     const id = random.uuid();
-    list.set([...list.get(), { id, title: input.title, done: false }]);
+    list.set({ id, title: input.title, done: false });
     return { id };
   },
 });
@@ -22,9 +22,9 @@ export const toggleTodo = operation({
   input: z.object({ id: z.string() }),
   depends: { list: todos.controller },
   run: ({ list }, { input }) => {
-    const item = list.get().find((t) => t.id === input.id);
+    const item = list.of({ id: input.id }).get();
     if (!item) return { kind: "gone" as const, id: input.id };
-    list.set(list.get().map((t) => (t.id === input.id ? { ...t, done: !t.done } : t)));
+    list.update({ id: input.id }, (t) => ({ ...t, done: !t.done }));
     return { kind: "toggled" as const, done: !item.done };
   },
 });
@@ -34,8 +34,8 @@ export const removeTodo = operation({
   input: z.object({ id: z.string() }),
   depends: { list: todos.controller },
   run: ({ list }, { input }) => {
-    if (!list.get().some((t) => t.id === input.id)) return { kind: "gone" as const, id: input.id };
-    list.set(list.get().filter((t) => t.id !== input.id));
+    if (!list.of({ id: input.id }).get()) return { kind: "gone" as const, id: input.id };
+    list.delete({ id: input.id });
     return { kind: "removed" as const };
   },
 });

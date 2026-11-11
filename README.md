@@ -18,7 +18,7 @@ cd my-app && bun install
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-bunx degit lagz0ne/tinker-app#v0.23.2 my-app
+bunx degit lagz0ne/tinker-app#v0.24.0 my-app
 ```
 
 ## Run
@@ -343,6 +343,37 @@ export const board = remoteData({ todos });
   `useData(board.todos)`. Read only.
 - `board.faults`: each key's last fault, as
   data. A read never throws.
+
+### A keyed cell: one member per change
+
+The todo list is keyed. A write sends the
+member it changed, not the list:
+
+```ts
+const todos = data({
+  label: "todo.list",
+  mode: "keyed",
+  parse: todo,
+  key: (t) => ({ id: t.id }),
+});
+```
+
+- Read all: `todo.board.todos.where({})`.
+- Read one: `todo.board.todos.of({ id })`.
+- The list maps ids to `<TodoRow id />`.
+  Each row reads `of({ id })`, so a toggle
+  draws one row.
+- A part inside a part in use opens no new
+  stream: it rides that one.
+- Write on the server: `set`, `update`,
+  `delete` on `todos.controller`.
+- Data in a database: give the board a
+  `load` op. A projector reads the store's
+  notices and calls `invalidate`.
+- A store with no notices tells a second
+  client only through the op: it calls
+  `invalidate` after its commit.
+- Guide: tinkered `docs/keyed-projector.md`.
 
 ### remoteData per project: `config`
 
