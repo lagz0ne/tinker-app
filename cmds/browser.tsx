@@ -9,6 +9,7 @@ import { abortReasons } from "~/components/errors";
 import { telemetry } from "~/components/telemetry";
 
 import { greet } from "@/greet";
+import { issues, whoMeta } from "@/issues";
 import { routeTree } from "@/routes";
 import { todo } from "@/todo";
 
@@ -19,11 +20,15 @@ const app = createScope({
   signal: stop.signal,
   capsules: [
     telemetry.browser({ service: "tinker-browser", console }),
-    ws.client({ url: `${location.origin.replace(/^http/, "ws")}/rpc` }),
+    // `whoMeta`: the issue board's sign-in stand-in rides each message's meta.
+    ws.client({ url: `${location.origin.replace(/^http/, "ws")}/rpc`, meta: whoMeta }),
     greet.api({ remote: ws.client }),
     // The todo feature: the live list over the socket, and its calls.
     todo.board({ read: ws.client }),
     todo.api({ remote: ws.client }),
+    // The issue board: the team's parts over the socket, and its calls.
+    issues.board({ read: ws.client }),
+    issues.api({ remote: ws.client }),
   ],
 });
 

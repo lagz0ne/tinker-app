@@ -201,6 +201,35 @@ export const todo = capsule({
 - Precedent: a DDD bounded context, a
   module with one public door.
 
+## A second feature: the issue board
+
+`src/issues/` is a team board at `/issues`.
+It shows keyed data with a guard.
+
+- Issues are keyed `{ teamId, id }`.
+- Comments are keyed `{ teamId, issueId, id }`.
+- A tab reads one team:
+  `issues.board.issues.where({ teamId })`.
+- Every key starts with `teamId`, so one
+  `onStart` hook guards every part.
+- A non-member's read is refused. The tab
+  asks again with back-off, so a person
+  added later sees the team.
+- A move names the version it saw. A newer
+  version answers `stale`, as output.
+- Sign-in is a stand-in: a name in each
+  message's meta (`whoMeta`). No password.
+- Every cell is served. A cell that is not
+  served is a copy per session, so a
+  call's write to it ends with the call.
+
+```ts
+issues.board({
+  serve: true,
+  onStart: [signedIn, membersOnly],
+});
+```
+
 ## rpc and remote data: one transport
 
 The decision: `docs/decisions/remote-data-and-rpc.md`.

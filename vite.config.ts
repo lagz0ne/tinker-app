@@ -40,7 +40,14 @@ export default defineConfig({
         plugins: [react()],
         resolve: { alias },
         // Found up front, so a first run does not reload the page mid-test.
-        optimizeDeps: { include: ["@tinker/core/testing", "@tinker/react", "react-dom/client"] },
+        optimizeDeps: {
+          include: [
+            "@tinker/core/testing",
+            "@tinker/react",
+            "react-dom/client",
+            "@tanstack/react-router",
+          ],
+        },
         test: {
           name: "browser",
           root: at("."),

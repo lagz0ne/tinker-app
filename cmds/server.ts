@@ -9,6 +9,8 @@ import { telemetry } from "~/components/telemetry/index.server";
 
 import { greet } from "@/greet";
 import { greetOps } from "@/greet/index.server";
+import { issues } from "@/issues";
+import { issueOps, membersOnly, signedIn } from "@/issues/index.server";
 import { todo } from "@/todo";
 import { todoOps } from "@/todo/index.server";
 
@@ -43,7 +45,11 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       ? telemetry.thread({ ...sends, worker: new URL("./telemetry-worker.js", import.meta.url) })
       : telemetry.server(sends);
 
-  const socket = ws.server({ path: "/rpc", services: [greet.api, todo.board, todo.api], origin });
+  const socket = ws.server({
+    path: "/rpc",
+    services: [greet.api, todo.board, todo.api, issues.board, issues.api],
+    origin,
+  });
   const table = routes({
     stop: signal,
     table: {
@@ -67,6 +73,9 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       // The todo feature: the server serves the list and is its only writer.
       todo.board({ serve: true }),
       todo.api({ implement: todoOps }),
+      // The issue board: each part goes to its team's members; every call needs a viewer.
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
       socket,
       table,
     ],

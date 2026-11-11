@@ -1,0 +1,172 @@
+import { Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { useData, useRun } from "@tinker/react";
+import { memo } from "react";
+
+import { issueApi, issueBoard, states } from "./contract";
+import { me as signedAs, signIn } from "./sign-in";
+
+// The issue board's pages. No state of their own: each reads a keyed part with `useData` and asks
+// the server with `useRun`; the server's write comes back as a signal for that part alone.
+
+/** `/issues`: who you are, and which team to open (it is made if nobody has it yet). */
+export function IssuesHome() {
+  const name = useRun(signIn);
+  const navigate = useNavigate();
+  const open = useRun(issueApi["team.create"], {
+    onSuccess: (_, call) =>
+      void navigate({ to: "/issues/$team", params: { team: call.input!.teamId } }),
+  });
+  const me = useData(signedAs);
+
+  return (
+    <main>
+      <h1>Issues</h1>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          name.run({
+            input: {
+              name: (event.currentTarget.elements.namedItem("name") as HTMLInputElement).value,
+            },
+          });
+        }}
+      >
+        <input name="name" aria-label="Your name" defaultValue={me} />
+        <button type="submit">Sign in</button>
+      </form>
+      {me && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const teamId = (event.currentTarget.elements.namedItem("team") as HTMLInputElement)
+              .value;
+            open.run({ input: { teamId: teamId.trim().toUpperCase() } });
+          }}
+        >
+          <input name="team" aria-label="Team key" placeholder="ENG" />
+          <button type="submit">Open team</button>
+        </form>
+      )}
+    </main>
+  );
+}
+
+/** `/issues/$team`: the team's issues in four lanes, live; the open thread beside them. */
+export function Board({ teamId }: { teamId: string }) {
+  const list = useData(issueBoard.issues.where({ teamId }));
+  const faults = useData(issueBoard.faults);
+  const create = useRun(issueApi["issue.create"]);
+  const add = useRun(issueApi["team.add"]);
+  if (faults.issues) return <p role="alert">You are not in team {teamId}.</p>;
+
+  return (
+    <main>
+      <h1>{teamId}</h1>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          create.run({
+            input: {
+              teamId,
+              title: (event.currentTarget.elements.namedItem("title") as HTMLInputElement).value,
+            },
+          });
+          event.currentTarget.reset();
+        }}
+      >
+        <input name="title" aria-label="New issue" placeholder="What is wrong?" />
+        <button type="submit">Add issue</button>
+      </form>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          add.run({
+            input: {
+              teamId,
+              userId: (event.currentTarget.elements.namedItem("user") as HTMLInputElement).value,
+            },
+          });
+          event.currentTarget.reset();
+        }}
+      >
+        <input name="user" aria-label="Add member" placeholder="name" />
+        <button type="submit">Add member</button>
+      </form>
+      <div className="lanes">
+        {states.map((state) => (
+          <section key={state} aria-label={state}>
+            <h2>{state}</h2>
+            {list
+              .filter((i) => i.state === state)
+              .toSorted((a, b) => a.number - b.number)
+              .map((i) => (
+                <Card key={i.id} teamId={teamId} id={i.id} />
+              ))}
+          </section>
+        ))}
+      </div>
+      <Outlet />
+    </main>
+  );
+}
+
+/** One card: it reads its own member, so a move draws this card alone (and its new lane). */
+const Card = memo(function Card({ teamId, id }: { teamId: string; id: string }) {
+  const issue = useData(issueBoard.issues.of({ teamId, id }));
+  const move = useRun(issueApi["issue.move"]);
+  if (!issue) return null;
+
+  const name = `${teamId}-${issue.number}`;
+  return (
+    <article>
+      <Link to="/issues/$team/$id" params={{ team: teamId, id }}>
+        {name}
+      </Link>{" "}
+      {issue.title}
+      <select
+        aria-label={`State of ${name}`}
+        value={issue.state}
+        onChange={(event) =>
+          move.run({
+            input: { teamId, id, version: issue.version, state: event.target.value as never },
+          })
+        }
+      >
+        {states.map((s) => (
+          <option key={s}>{s}</option>
+        ))}
+      </select>
+      {move.data?.kind === "stale" && <small role="status">Changed by someone else.</small>}
+    </article>
+  );
+});
+
+/** `/issues/$team/$id`: one issue's comments, live. */
+export function Thread({ teamId, issueId }: { teamId: string; issueId: string }) {
+  const thread = useData(issueBoard.comments.where({ teamId, issueId }));
+  const say = useRun(issueApi["comment.add"]);
+
+  return (
+    <aside aria-label="Comments">
+      {thread.map((c) => (
+        <p key={c.id}>{`${c.author}: ${c.text}`}</p>
+      ))}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          say.run({
+            input: {
+              teamId,
+              issueId,
+              text: (event.currentTarget.elements.namedItem("text") as HTMLInputElement).value,
+            },
+          });
+          event.currentTarget.reset();
+        }}
+      >
+        <input name="text" aria-label="Comment" />
+        <button type="submit">Comment</button>
+      </form>
+    </aside>
+  );
+}
