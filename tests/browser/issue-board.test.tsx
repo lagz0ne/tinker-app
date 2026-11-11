@@ -1,7 +1,7 @@
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { createScope, operation } from "@tinker/core";
-import type { Observe } from "@tinker/core";
-import { memory } from "@tinker/core/testing";
+import type { Observe, Scope } from "@tinker/core";
+import { createMemory, memory } from "@tinker/core/testing";
 import { ScopeProvider } from "@tinker/react";
 import { createRoot } from "react-dom/client";
 import { expect, test } from "vite-plus/test";
@@ -163,9 +163,10 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
   await server.close();
 });
 
-// `link` is the one fault with no answer from the server: the call may have run. A call is not
-// sent again by itself, so the page says so and the person looks first.
-test("a call with no answer says that it may be saved; it is not sent again", async () => {
+// `link` on a read: the server goes away with the page open. Its close ends the open watch
+// (Core 0.17.6), so the part is a fault, and the page says so in place of the form. Core asks
+// again by itself.
+test("the server goes away with the page open: the page says that it is offline", async () => {
   const server = await createScope({
     capsules: [
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
@@ -190,12 +191,102 @@ test("a call with no answer says that it may be saved; it is not sent again", as
       <RouterProvider router={router} />
     </ScopeProvider>,
   );
+  await expect.element(page.getByLabelText("New issue")).toBeVisible();
+
+  await server.close();
+
+  await expect
+    .poll(() => document.querySelector("main [role=status]")?.textContent)
+    .toBe("Offline. Trying again.");
+  expect(document.querySelector("form")).toBeNull();
+
+  root.unmount();
+  await ana.close();
+});
+
+// `link` on a call: the reads and the calls go over two links here (as sse and http), so the
+// board stays ready when only the calls get no answer. A call is never sent again by itself.
+const calls = createMemory();
+
+/** The page of `ana` on team ENG: the board from `reads`, the calls to `api` over `calls`. */
+const pageOf = operation({
+  label: "test.issues.page",
+  input: z.custom<{ reads: Scope.Handle; api: Scope.Handle }>(),
+  run: async (_, { input }) => {
+    const ana = await createScope({
+      capsules: [
+        memory.client({ peer: input.reads }),
+        issues.board({ read: memory.client }),
+        calls.client({ peer: input.api }),
+        issues.api({ remote: calls.client }),
+      ],
+    }).ready;
+    const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
+    const router = createRouter({ routeTree, history, context: { scope: ana } });
+    const root = createRoot(document.body.appendChild(document.createElement("div")));
+    root.render(
+      <ScopeProvider scope={ana}>
+        <RouterProvider router={router} />
+      </ScopeProvider>,
+    );
+
+    return { ana, root };
+  },
+});
+
+test("a call that did not leave says that nothing was sent", async () => {
+  const reads = await createScope({
+    capsules: [issues.board({ serve: true }), memory.server({ services: [issues.board] })],
+  }).ready;
+  const api = await createScope({
+    capsules: [issues.api({ implement: issueOps }), calls.server({ services: [issues.api] })],
+  }).ready;
+  const { ana, root } = await reads.run(pageOf, { input: { reads, api } });
   await page.getByLabelText("New issue").fill("Login fails");
 
-  // The server goes away with the page open: the next call gets no answer. Its close settles
-  // only after the client leaves (it holds an open watch), so the test does not wait for it here.
-  const gone = server.close();
+  await api.close(); // the server of the calls is away: a call cannot leave
   await page.getByRole("button", { name: "Add issue" }).click();
+
+  await expect
+    .poll(() => document.querySelector("main [role=status]")?.textContent)
+    .toBe("Offline. Nothing was sent. Try again.");
+
+  root.unmount();
+  await ana.close();
+  await reads.close();
+});
+
+test("a call that left and got no answer says that it may be saved", async () => {
+  // The server does the work, then goes away before its answer leaves.
+  const work = Promise.withResolvers<void>();
+  const done = Promise.withResolvers<void>();
+  const create = operation({
+    label: "test.issue.create.slow",
+    input: z.object({ teamId: z.string(), title: z.string() }),
+    run: async () => {
+      work.resolve();
+      await done.promise;
+
+      return { kind: "created" as const, number: 1 };
+    },
+  });
+  const reads = await createScope({
+    capsules: [issues.board({ serve: true }), memory.server({ services: [issues.board] })],
+  }).ready;
+  const api = await createScope({
+    capsules: [
+      issues.api({ implement: { ...issueOps, "issue.create": create } }),
+      calls.server({ services: [issues.api] }),
+    ],
+  }).ready;
+  const { ana, root } = await reads.run(pageOf, { input: { reads, api } });
+  await page.getByLabelText("New issue").fill("Login fails");
+  await page.getByRole("button", { name: "Add issue" }).click();
+  await work.promise;
+
+  const gone = api.close();
+  done.resolve();
+  await gone;
 
   await expect
     .poll(() => document.querySelector("main [role=status]")?.textContent)
@@ -203,7 +294,7 @@ test("a call with no answer says that it may be saved; it is not sent again", as
 
   root.unmount();
   await ana.close();
-  await gone;
+  await reads.close();
 });
 
 // `missing` is the server's answer: it does not have the address. On a page that means an old

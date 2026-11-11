@@ -138,7 +138,7 @@ test("O2 fixed: a push is a send span in the writer's trace, linked from each re
   expect(since(duke.seen.logs, 0).some((l) => l.message === "remoteData.receive")).toBe(true); // Core's debug line
 });
 
-test("finding O3: a basket watch is one trace per client life; a normal close marks it failed", async () => {
+test("O3 gone: a basket watch is one trace per client life; a normal close ends it ok", async () => {
   const { join } = await boot();
   const { client, seen } = await join("duke");
 
@@ -147,8 +147,7 @@ test("finding O3: a basket watch is one trace per client life; a normal close ma
   const watches = seen.spans.filter((s) => s.name === "ws.watch");
   expect(watches.length).toBe(3); // one per basket, each its own trace
   expect(new Set(watches.map((s) => s.traceId)).size).toBe(3);
-  expect(watches.every((s) => s.status === "failed")).toBe(true);
-  expect(String(watches[0]!.error)).toContain("scope closed");
+  expect(watches.every((s) => s.status === "ok" && s.error === undefined)).toBe(true);
 });
 
 test("O4 gone: a domain outcome is output, so nothing logs at error on either side", async () => {

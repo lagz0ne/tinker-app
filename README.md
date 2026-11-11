@@ -18,7 +18,7 @@ cd my-app && bun install
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-bunx degit lagz0ne/tinker-app#v0.24.4 my-app
+bunx degit lagz0ne/tinker-app#v0.24.5 my-app
 ```
 
 ## Run
@@ -248,6 +248,12 @@ It shows keyed data with a guard.
   "It may be saved" and the person looks.
   The ref is the trace id; the cause is in
   that trace on the server.
+- A server that goes away ends the open
+  reads as `link`: the board says "Offline.
+  Trying again." in place of the form.
+- A throw in a transport is a bug, not
+  `link`: it shows as `failed`, from local,
+  with the cause in the log.
 - An op that writes two cells checks first
   and writes last, with no `await` between
   the writes. Cells have no transaction; a

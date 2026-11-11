@@ -153,7 +153,9 @@ the wire: text
    the codec use and the route table.
 3. **Second transport.** `createWs()` and
    `createMemory()` make one more set, for a
-   scope with a public and a signed base.
+   scope with a public and a signed base. A
+   memory client reaches only the server of
+   its own set (Core 0.17.6).
 4. **Codec.** Transport config, JSON by
    default. Both sides must use the same one.
 5. **Route table.** `ws.server({ services })`
@@ -438,5 +440,5 @@ Log of each step:
 - Core rows: F18 (flat spans), F21 (a refusal
   logs as a crash), F28 (union config by cast),
   F32 (abort disposes depends), F39 (write hook
-  has no span), O3 (a watch's close marks it
-  failed).
+  has no span). O3 (a watch's close marked
+  it failed) is fixed in Core 0.17.6.
