@@ -20,9 +20,9 @@
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.41",
-    "@tinkered/bun": "https://github.com/lagz0ne/tinkered/releases/download/v0.18.0/tinker-bun-0.18.0.tgz",
-    "@tinkered/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.18.0/tinker-core-0.18.0.tgz",
-    "@tinkered/react": "https://github.com/lagz0ne/tinkered/releases/download/v0.18.0/tinker-react-0.18.0.tgz",
+    "@tinkered/bun": "^0.18.0",
+    "@tinkered/core": "^0.18.0",
+    "@tinkered/react": "^0.18.0",
     "drizzle-orm": "1.0.0-rc.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -31,7 +31,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.5.14",
     "@tanstack/intent": "0.5.6",
-    "@tinkered/analyze": "https://github.com/lagz0ne/tinkered/releases/download/v0.18.0/tinker-analyze-0.18.0.tgz",
+    "@tinkered/analyze": "^0.18.0",
     "@types/bun": "^1.3.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
