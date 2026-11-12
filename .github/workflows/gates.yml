@@ -22,26 +22,32 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Playwright's own image: Chromium for the browser test project (tests/browser) and its
+    # system libraries are in it, so no run installs a browser. Its tag is the `playwright`
+    # version in package.json: move both in one commit.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
     # A real Postgres for the Bun.sql driver tests.
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_PASSWORD: postgres
-        ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready --health-interval 2s
           --health-timeout 5s --health-retries 20
     env:
-      PG_URL: postgres://postgres:postgres@localhost:5432/postgres
+      # A job in a container reaches a service by its name, with no port map.
+      PG_URL: postgres://postgres:postgres@postgres:5432/postgres
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.4.4"
+      # Bun from npm: setup-bun needs `unzip`, and the image has none. npm is in the image.
+      - name: Bun 1.4.4
+        run: npm install --global --allow-scripts=bun bun@1.4.4
       - run: bun install --frozen-lockfile
-      # Chromium for the browser test project (tests/browser).
-      - run: bunx playwright install --with-deps chromium
+      # Fails here, with one clear line, when the image tag and package.json name two versions.
+      - name: The image has the browser this Playwright wants
+        run: test -x "$(bun -e 'import { chromium } from "playwright"; console.log(chromium.executablePath())')"
       # Bun-first: from here on, a call to `node` fails the run.
       - name: Block node
         run: |
