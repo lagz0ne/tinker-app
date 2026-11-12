@@ -1,6 +1,6 @@
 {
   "name": "tinker-app",
-  "version": "0.24.7",
+  "version": "0.24.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,13 +16,13 @@
     "test": "bun --bun vp test",
     "check": "bun run typecheck && bun run test && bun run build",
     "check:style": "bun --bun vp check",
-    "check:plain": "bun scripts/check-plain.ts"
+    "check:plain": "tinker-analyze check"
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.41",
-    "@tinker/bun": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.8/tinker-bun-0.17.8.tgz",
-    "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.8/tinker-core-0.17.8.tgz",
-    "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.8/tinker-react-0.17.8.tgz",
+    "@tinker/bun": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.10/tinker-bun-0.17.10.tgz",
+    "@tinker/core": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.10/tinker-core-0.17.10.tgz",
+    "@tinker/react": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.10/tinker-react-0.17.10.tgz",
     "drizzle-orm": "1.0.0-rc.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -30,6 +30,8 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.14",
+    "@tanstack/intent": "0.5.6",
+    "@tinker/analyze": "https://github.com/lagz0ne/tinkered/releases/download/v0.17.10/tinker-analyze-0.17.10.tgz",
     "@types/bun": "^1.3.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -38,8 +40,12 @@
     "drizzle-kit": "1.0.0-rc.4",
     "playwright": "1.63.0",
     "typescript": "^7.0.2",
-    "typescript-api": "npm:typescript@5.9.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
     "vite-plus": "1.0.0"
+  },
+  "intent": {
+    "skills": [
+      "@tinker/*"
+    ]
   }
 }

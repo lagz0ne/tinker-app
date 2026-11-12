@@ -82,7 +82,7 @@ export default defineConfig({
     plugins: ["eslint", "typescript", "unicorn", "oxc", "import"],
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
-      { name: "tinker", specifier: "./tools/lint/blank-lines.mjs" },
+      { name: "tinker", specifier: "@tinker/analyze/lint" },
     ],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",
@@ -91,6 +91,8 @@ export default defineConfig({
       "typescript/no-floating-promises": "error",
       "tinker/blank-lines": "error",
       "tinker/body-steps": "error",
+      // Another capsule's cell is read through its export, or changed by its op (ADR 0123).
+      "tinker/cell-write": "warn",
       curly: ["error", "multi-line"],
       "import/no-relative-parent-imports": "error",
       // A feature has one door: `@/<feature>` (and `@/<feature>/index.server` on the server).

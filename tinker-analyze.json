@@ -1,0 +1,22 @@
+{
+  "plain": {
+    "entries": {
+      "tinker/base/main.ts": {
+        "defineMain": "Type only: it gives a command's main its input type and runs nothing."
+      },
+      "tinker/base/main-host.ts": {
+        "createMainHost": "The host for commands with no port: it runs before any scope exists.",
+        "runMain": "The process form of that host: it owns OS signals and the exit code."
+      },
+      "tinker/base/panics.server.ts": {
+        "observeServerPanics": "The process panic hook: it must report even when the root's own close fails."
+      },
+      "tinker/base/telemetry-worker.ts": {
+        "telemetryWorkerInput": "The worker thread's inputs: read from workerData before its root exists.",
+        "serveTelemetryWorker": "The worker's native loop beside its root. A span here would feed the telemetry it drains.",
+        "ringLines": "A step of serveTelemetryWorker.",
+        "takeLines": "A step of serveTelemetryWorker."
+      }
+    }
+  }
+}

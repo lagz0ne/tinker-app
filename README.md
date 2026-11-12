@@ -18,7 +18,7 @@ cd my-app && bun install
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-bunx degit lagz0ne/tinker-app#v0.24.7 my-app
+bunx degit lagz0ne/tinker-app#v0.24.8 my-app
 ```
 
 ## Run
@@ -82,17 +82,43 @@ two projects in `vite.config.ts`:
 `bun run check:style` is `bun --bun vp check`: oxfmt
 and oxlint, with rules in `vite.config.ts`.
 
-`bun run check:plain` bans plain helper
-functions. Every function is an operation or
-a capsule hook. `cn` and `defineMain` are
-exempt. So are the definition makers (`rpc`,
-`remoteData`, `createWs`, `createMemory`):
-they run at module load, before any scope. A module resource (a `resource` whose
-factory returns `import("<package>")` on every
-return) counts as a library: the options you
-pass to it are native. `ReadableStream` and
-`Proxy` count only as a direct
-`new X({...})`, not through a const.
+`bun run check:plain` runs `tinker-analyze check`
+(`@tinker/analyze`). It reads the files and
+prints each broken rule with its rule id, then
+the skill to read:
+
+```text
+src/a.tsx:3 tinker/react-state `useState`: …
+
+tinker/react-state: hold the state in a Core
+  cell and read it with @tinker/react
+  read: @tinker/react#react
+```
+
+- `tinker/plain`: no plain helper functions.
+  Every function is an operation or a capsule
+  hook. `cn` is exempt.
+- `tinker/one-wire`: a page file calls no
+  `fetch` or `WebSocket`; the rpc client does.
+- `tinker/react-state`: a page file calls no
+  `useState`, `useReducer` or `useEffect`.
+
+The app's own exceptions are in
+`tinker-analyze.json`, each with its reason:
+the entry functions in `tinker/base`, which
+run before any scope.
+
+## For agents
+
+`AGENTS.md` tells an agent how to work here.
+The Tinker rules ship in the packages as
+skills (`@tanstack/intent` lists and loads
+them), at the installed version:
+
+```bash
+bunx intent list
+bunx intent load @tinker/core#core/operation
+```
 
 `.github/workflows/gates.yml` runs all three
 on each push to `main`, and weekly.
@@ -734,10 +760,10 @@ words, with a session as the boundary:
 - `tinker/components/pglite`: the test
   driver. The Bun drivers are in
   `@tinker/bun/sql` and `@tinker/bun/sqlite`.
-- `scripts/`: `check-client`, `check-plain`.
+- `scripts/`: `check-client`.
 - `tests/`: test files for rpc, remote
   data, the transports, routes, trace, health,
-  drizzle, telemetry ingest and `check-plain`,
+  drizzle and telemetry ingest,
   plus `tests/main-host.test.ts` (the
   host), `tests/server.test.ts` (the server
   command) and `tests/build-client.test.ts`
