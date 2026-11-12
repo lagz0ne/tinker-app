@@ -1,8 +1,8 @@
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { createScope, operation } from "@tinker/core";
-import type { Observe, Scope } from "@tinker/core";
-import { createMemory, memory } from "@tinker/core/testing";
-import { ScopeProvider } from "@tinker/react";
+import { createScope, operation } from "@tinkered/core";
+import type { Observe, Scope } from "@tinkered/core";
+import { createMemory, memory } from "@tinkered/core/testing";
+import { ScopeProvider } from "@tinkered/react";
 import { createRoot } from "react-dom/client";
 import { expect, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser/context";

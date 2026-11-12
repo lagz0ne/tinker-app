@@ -1,5 +1,5 @@
-import { createScope } from "@tinker/core";
-import type { Observe, Scope } from "@tinker/core";
+import { createScope } from "@tinkered/core";
+import type { Observe, Scope } from "@tinkered/core";
 import { afterAll, beforeEach, expect, test } from "vite-plus/test";
 
 import { issues, signIn, whoMeta } from "@/issues";

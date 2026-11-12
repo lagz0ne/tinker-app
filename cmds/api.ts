@@ -1,4 +1,4 @@
-import { run } from "@tinker/bun";
+import { run } from "@tinkered/bun";
 
 import main from "./server";
 

@@ -1,5 +1,5 @@
 import { createRootRouteWithContext, createRoute, Outlet } from "@tanstack/react-router";
-import type { Scope } from "@tinker/core";
+import type { Scope } from "@tinkered/core";
 
 import { baseVersion } from "~/components/health";
 

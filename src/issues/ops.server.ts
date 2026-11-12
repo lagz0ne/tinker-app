@@ -1,4 +1,4 @@
-import { operation, tag, transport } from "@tinker/core";
+import { operation, tag, transport } from "@tinkered/core";
 import { z } from "zod";
 
 import { comments, issueBoard, issues, members, states } from "./contract";

@@ -1,4 +1,4 @@
-import { LEVELS, resource } from "@tinker/core";
+import { LEVELS, resource } from "@tinkered/core";
 
 import { exportHealth } from "./health";
 import { queue } from "./queue";

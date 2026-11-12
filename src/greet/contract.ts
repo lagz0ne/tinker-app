@@ -1,4 +1,4 @@
-import { rpc } from "@tinker/core";
+import { rpc } from "@tinkered/core";
 import { z } from "zod";
 
 /**

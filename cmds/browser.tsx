@@ -1,7 +1,7 @@
 import { createRouter, RouterProvider } from "@tanstack/react-router";
-import { ws } from "@tinker/bun/client";
-import { createScope } from "@tinker/core";
-import { ScopeProvider } from "@tinker/react";
+import { ws } from "@tinkered/bun/client";
+import { createScope } from "@tinkered/core";
+import { ScopeProvider } from "@tinkered/react";
 import { createRoot } from "react-dom/client";
 
 import { TinkerError, TinkerNotFound } from "~/base/fallbacks";

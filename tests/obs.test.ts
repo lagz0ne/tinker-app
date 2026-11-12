@@ -1,5 +1,5 @@
-import { createScope, LEVELS } from "@tinker/core";
-import type { Observe } from "@tinker/core";
+import { createScope, LEVELS } from "@tinkered/core";
+import type { Observe } from "@tinkered/core";
 import { afterEach, expect, test } from "vite-plus/test";
 
 import { keepDates } from "./fixtures/todo/codec";

@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { bunSql } from "@tinker/bun/sql";
-import { bunSqlite } from "@tinker/bun/sqlite";
-import { capsule, createScope } from "@tinker/core";
-import type { Scope } from "@tinker/core";
+import { bunSql } from "@tinkered/bun/sql";
+import { bunSqlite } from "@tinkered/bun/sqlite";
+import { capsule, createScope } from "@tinkered/core";
+import type { Scope } from "@tinkered/core";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 
 import { drizzlePg } from "~/components/drizzle-pg/index.server";

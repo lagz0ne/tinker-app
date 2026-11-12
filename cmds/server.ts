@@ -1,5 +1,5 @@
-import { serve, ws } from "@tinker/bun";
-import { createScope } from "@tinker/core";
+import { serve, ws } from "@tinkered/bun";
+import { createScope } from "@tinkered/core";
 
 import { defineMain } from "~/base/main";
 import { observeServerPanics } from "~/base/panics.server";

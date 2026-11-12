@@ -1,4 +1,4 @@
-import { operation, resource } from "@tinker/core";
+import { operation, resource } from "@tinkered/core";
 import { z } from "zod";
 
 import { abortReasons } from "~/components/errors";

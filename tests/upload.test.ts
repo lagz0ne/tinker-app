@@ -1,8 +1,8 @@
-import { ws as wsServer } from "@tinker/bun";
-import { ws } from "@tinker/bun/client";
-import { bytes, createScope, operation, rpc, transport } from "@tinker/core";
-import type { RpcBody } from "@tinker/core";
-import { memory } from "@tinker/core/testing";
+import { ws as wsServer } from "@tinkered/bun";
+import { ws } from "@tinkered/bun/client";
+import { bytes, createScope, operation, rpc, transport } from "@tinkered/core";
+import type { RpcBody } from "@tinkered/core";
+import { memory } from "@tinkered/core/testing";
 import { afterAll, expect, test } from "vite-plus/test";
 import { z } from "zod";
 

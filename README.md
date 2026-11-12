@@ -18,7 +18,7 @@ cd my-app && bun install
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-bunx degit lagz0ne/tinker-app#v0.24.8 my-app
+bunx degit lagz0ne/tinker-app#v0.25.0 my-app
 ```
 
 ## Run
@@ -84,7 +84,7 @@ and oxlint, with rules in `vite.config.ts`.
 
 `bun run check:plain` runs `tinker-analyze check`,
 on Bun (`bun --bun`),
-(`@tinker/analyze`). It reads the files and
+(`@tinkered/analyze`). It reads the files and
 prints each broken rule with its rule id, then
 the skill to read:
 
@@ -92,8 +92,8 @@ the skill to read:
 src/a.tsx:3 tinker/react-state `useState`: …
 
 tinker/react-state: hold the state in a Core
-  cell and read it with @tinker/react
-  read: @tinker/react#react
+  cell and read it with @tinkered/react
+  read: @tinkered/react#react
 ```
 
 - `tinker/plain`: no plain helper functions.
@@ -118,7 +118,7 @@ them), at the installed version:
 
 ```bash
 bunx intent list
-bunx intent load @tinker/core#core/operation
+bunx intent load @tinkered/core#core/operation
 ```
 
 `.github/workflows/gates.yml` runs all three
@@ -151,7 +151,7 @@ on each push to `main`, and weekly.
   end in `.server.ts` (`modules.server.ts`).
 - `check:tests`: reads both metafiles. It
   fails if a prod build holds test code:
-  `@tinker/core/testing` or a `*.testing.ts`
+  `@tinkered/core/testing` or a `*.testing.ts`
   file. See "Test tooling" below.
 
 ## Test tooling: a test capsule
@@ -162,7 +162,7 @@ test capsule (Core ADR 0127). Put it in a
 
 ```ts
 // auth.testing.ts
-import { testCapsule } from "@tinker/core/testing";
+import { testCapsule } from "@tinkered/core/testing";
 
 export const authTesting = testCapsule(auth, {
   exports: { signInAs },
@@ -634,10 +634,10 @@ a driver owns the client, a facade gives
 Drizzle to your operations. Bun first.
 
 - `drizzlePg`: Postgres dialect. Drivers:
-  `bunSql` from `@tinker/bun/sql` (Bun.SQL),
+  `bunSql` from `@tinkered/bun/sql` (Bun.SQL),
   `pglite` (tests).
 - `drizzleSqlite`: SQLite dialect. Driver:
-  `bunSqlite` from `@tinker/bun/sqlite`.
+  `bunSqlite` from `@tinkered/bun/sqlite`.
 - The facade exports `db`, `tx`, `migrate`.
 - Start runs `migrate` from the drizzle-kit
   folder (default `drizzle/pg`).
@@ -723,19 +723,19 @@ words, with a session as the boundary:
   binary, as `serve`'s pages.
 - `cmds/browser.tsx`: the tab root and the router.
 - `cmds/host.ts`, `cmds/api.ts`: `run(main)`
-  from `@tinker/bun`, the host. It owns the
+  from `@tinkered/bun`, the host. It owns the
   signals and the exit code.
 - `tinker/base/main-host.ts`: `runMain`, the
   host for a command with no port, such as an
   import. Same exit codes as `run`.
 - `rpc(contracts)`, `remoteData(cells)` and
   `transport` (the envelope, the faults, the
-  codec) come from `@tinker/core`.
-- `@tinker/bun/client`: `ws.client`;
-  `@tinker/bun`: `ws.server`. One socket per client. The
+  codec) come from `@tinkered/core`.
+- `@tinkered/bun/client`: `ws.client`;
+  `@tinkered/bun`: `ws.server`. One socket per client. The
   messages of one tick go as one frame, both
   ways.
-- `memory` from `@tinker/core/testing`: the
+- `memory` from `@tinkered/core/testing`: the
   in-process transport, for tests.
 - `tinker/components/requests`: the `routes`
   capsule. A route is any operation. A stream
@@ -760,7 +760,7 @@ words, with a session as the boundary:
   `drizzle-sqlite`: the Drizzle facades.
 - `tinker/components/pglite`: the test
   driver. The Bun drivers are in
-  `@tinker/bun/sql` and `@tinker/bun/sqlite`.
+  `@tinkered/bun/sql` and `@tinkered/bun/sqlite`.
 - `scripts/`: `check-client`.
 - `tests/`: test files for rpc, remote
   data, the transports, routes, trace, health,

@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { ws } from "@tinker/bun/client";
-import { createScope } from "@tinker/core";
+import { ws } from "@tinkered/bun/client";
+import { createScope } from "@tinkered/core";
 import type { Subprocess } from "bun";
 import { afterAll, afterEach, expect, test } from "vite-plus/test";
 

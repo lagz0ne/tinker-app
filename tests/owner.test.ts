@@ -1,4 +1,4 @@
-import { createScope, data, remoteData } from "@tinker/core";
+import { createScope, data, remoteData } from "@tinkered/core";
 import { afterEach, expect, test } from "vite-plus/test";
 
 const closers: (() => Promise<void>)[] = [];

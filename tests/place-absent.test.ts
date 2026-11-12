@@ -1,4 +1,4 @@
-import { createScope } from "@tinker/core";
+import { createScope } from "@tinkered/core";
 import { expect, test } from "vite-plus/test";
 
 import { placeNow, placeOpen, placeSearch } from "~/components/place";

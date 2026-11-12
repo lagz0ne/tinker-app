@@ -1,6 +1,6 @@
-import { serve } from "@tinker/bun";
-import { createScope } from "@tinker/core";
-import type { Scope } from "@tinker/core";
+import { serve } from "@tinkered/bun";
+import { createScope } from "@tinkered/core";
+import type { Scope } from "@tinkered/core";
 import { afterAll, expect, test } from "vite-plus/test";
 
 import { telemetry } from "~/components/telemetry/index.server";

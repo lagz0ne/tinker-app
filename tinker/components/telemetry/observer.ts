@@ -1,5 +1,5 @@
-import { LEVELS, operation, resource } from "@tinker/core";
-import type { Capsule, Observe } from "@tinker/core";
+import { LEVELS, operation, resource } from "@tinkered/core";
+import type { Capsule, Observe } from "@tinkered/core";
 
 import { logConsole } from "./console";
 import { queue } from "./queue";

@@ -1,4 +1,4 @@
-import { createScope } from "@tinker/core";
+import { createScope } from "@tinkered/core";
 import { afterAll, beforeEach, expect, test } from "vite-plus/test";
 
 import { routes } from "~/components/requests/index.server";

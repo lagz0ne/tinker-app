@@ -1,4 +1,4 @@
-import { channel, operation, resource, tag, transport } from "@tinker/core";
+import { channel, operation, resource, tag, transport } from "@tinkered/core";
 import { z } from "zod";
 
 import { routes } from "~/components/requests/index.server";

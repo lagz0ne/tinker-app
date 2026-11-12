@@ -1,5 +1,5 @@
-import { operation, resource, tag } from "@tinker/core";
-import type { Capsule, Observe } from "@tinker/core";
+import { operation, resource, tag } from "@tinkered/core";
+import type { Capsule, Observe } from "@tinkered/core";
 import { z } from "zod";
 
 import { abortReasons } from "~/components/errors";

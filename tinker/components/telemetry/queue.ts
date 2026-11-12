@@ -1,4 +1,4 @@
-import { resource } from "@tinker/core";
+import { resource } from "@tinkered/core";
 
 import { abortReasons } from "~/components/errors";
 

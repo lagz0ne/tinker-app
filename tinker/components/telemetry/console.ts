@@ -1,4 +1,4 @@
-import { tag } from "@tinker/core";
+import { tag } from "@tinkered/core";
 
 export declare namespace ConsoleOutput {
   /** `fd` lets a telemetry worker write the same lines straight to the descriptor. */

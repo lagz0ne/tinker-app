@@ -1,4 +1,4 @@
-import type { transport } from "@tinker/core";
+import type { transport } from "@tinkered/core";
 
 type Codec = transport.Codec;
 

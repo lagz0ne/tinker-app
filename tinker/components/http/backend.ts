@@ -1,4 +1,4 @@
-import { tag } from "@tinker/core";
+import { tag } from "@tinkered/core";
 
 /**
  * The one way out for HTTP components send themselves; tests bind a fake (ADR 0102). Its default is

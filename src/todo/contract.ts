@@ -1,4 +1,4 @@
-import { data, remoteData, rpc } from "@tinker/core";
+import { data, remoteData, rpc } from "@tinkered/core";
 import { z } from "zod";
 
 // The todo feature's contract: both sides import it. What can be read (`todoBoard`, remote data)

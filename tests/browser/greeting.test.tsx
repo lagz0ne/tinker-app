@@ -1,4 +1,4 @@
-import { createScope } from "@tinker/core";
+import { createScope } from "@tinkered/core";
 import { createRoot } from "react-dom/client";
 import { expect, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser/context";

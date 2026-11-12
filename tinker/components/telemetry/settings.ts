@@ -1,5 +1,5 @@
-import { LEVELS, tag } from "@tinker/core";
-import type { Observe } from "@tinker/core";
+import { LEVELS, tag } from "@tinkered/core";
+import type { Observe } from "@tinkered/core";
 import { z } from "zod";
 
 export const telemetrySide = tag({

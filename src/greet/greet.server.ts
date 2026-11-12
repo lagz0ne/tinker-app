@@ -1,4 +1,4 @@
-import { operation } from "@tinker/core";
+import { operation } from "@tinkered/core";
 
 import { greetApi } from "./contract";
 

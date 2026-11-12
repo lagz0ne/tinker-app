@@ -1,4 +1,4 @@
-import { data, remoteData, rpc } from "@tinker/core";
+import { data, remoteData, rpc } from "@tinkered/core";
 import { z } from "zod";
 
 // The issue board's contract: both sides import it. A team's issues move through four states,

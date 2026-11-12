@@ -1,4 +1,4 @@
-import { data } from "@tinker/core";
+import { data } from "@tinkered/core";
 
 import type { Telemetry } from "./records";
 

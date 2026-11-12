@@ -1,4 +1,4 @@
-import { data, operation } from "@tinker/core";
+import { data, operation } from "@tinkered/core";
 import { z } from "zod";
 
 // The tab's sign-in stand-in: a name, sent as `who` in each message's meta. No password: the

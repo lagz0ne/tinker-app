@@ -1,5 +1,5 @@
-import { capsule, tag, transport } from "@tinker/core";
-import type { Ns, Operation, RunResult, Scope } from "@tinker/core";
+import { capsule, tag, transport } from "@tinkered/core";
+import type { Ns, Operation, RunResult, Scope } from "@tinkered/core";
 
 import { backendStop, requestStop } from "./lifetime";
 

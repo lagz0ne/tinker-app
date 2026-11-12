@@ -1,5 +1,5 @@
-import { createScope, data, operation, remoteData, transport } from "@tinker/core";
-import { memory } from "@tinker/core/testing";
+import { createScope, data, operation, remoteData, transport } from "@tinkered/core";
+import { memory } from "@tinkered/core/testing";
 import { afterEach, expect, test } from "vite-plus/test";
 
 import { wsClient } from "./support/ws";

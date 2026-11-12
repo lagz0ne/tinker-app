@@ -1,5 +1,5 @@
-import { namespace, operation } from "@tinker/core";
-import type { Observe } from "@tinker/core";
+import { namespace, operation } from "@tinkered/core";
+import type { Observe } from "@tinkered/core";
 import type { z } from "zod";
 
 import type { span, logRecord, telemetryBatch } from "./records.server";

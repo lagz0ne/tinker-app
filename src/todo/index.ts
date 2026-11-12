@@ -1,4 +1,4 @@
-import { capsule } from "@tinker/core";
+import { capsule } from "@tinkered/core";
 
 import { todoApi, todoBoard } from "./contract";
 

@@ -1,6 +1,6 @@
-import { createScope } from "@tinker/core";
-import { memory } from "@tinker/core/testing";
-import { ScopeProvider, useData } from "@tinker/react";
+import { createScope } from "@tinkered/core";
+import { memory } from "@tinkered/core/testing";
+import { ScopeProvider, useData } from "@tinkered/react";
 import { memo, Profiler } from "react";
 import type { ProfilerOnRenderCallback } from "react";
 import { createRoot } from "react-dom/client";

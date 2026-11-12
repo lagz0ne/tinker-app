@@ -1,5 +1,5 @@
 import type { AnyRouter, RouterHistory } from "@tanstack/react-router";
-import { data, tag } from "@tinker/core";
+import { data, tag } from "@tinkered/core";
 import { z } from "zod";
 
 /**

@@ -1,4 +1,4 @@
-import { capsule } from "@tinker/core";
+import { capsule } from "@tinkered/core";
 
 import { logConsole } from "./console";
 import { queueSink } from "./observer";

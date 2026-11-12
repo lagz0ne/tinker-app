@@ -1,4 +1,4 @@
-import { operation } from "@tinker/core";
+import { operation } from "@tinkered/core";
 import { asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 

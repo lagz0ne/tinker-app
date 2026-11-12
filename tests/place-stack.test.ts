@@ -1,5 +1,5 @@
-import { createScope } from "@tinker/core";
-import { makeTestClock } from "@tinker/core/testing";
+import { createScope } from "@tinkered/core";
+import { makeTestClock } from "@tinkered/core/testing";
 import { expect, test } from "vite-plus/test";
 
 import {

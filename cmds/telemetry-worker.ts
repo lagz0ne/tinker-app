@@ -1,4 +1,4 @@
-import { createScope } from "@tinker/core";
+import { createScope } from "@tinkered/core";
 
 import { serveTelemetryWorker, telemetryWorkerInput } from "~/base/telemetry-worker";
 import { telemetry, threadDrain } from "~/components/telemetry/index.server";

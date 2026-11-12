@@ -1,5 +1,5 @@
-import { createScope, operation } from "@tinker/core";
-import type { Observe } from "@tinker/core";
+import { createScope, operation } from "@tinkered/core";
+import type { Observe } from "@tinkered/core";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
 

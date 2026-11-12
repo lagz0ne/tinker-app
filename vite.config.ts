@@ -42,8 +42,8 @@ export default defineConfig({
         // Found up front, so a first run does not reload the page mid-test.
         optimizeDeps: {
           include: [
-            "@tinker/core/testing",
-            "@tinker/react",
+            "@tinkered/core/testing",
+            "@tinkered/react",
             "react-dom/client",
             "@tanstack/react-router",
           ],
@@ -82,7 +82,7 @@ export default defineConfig({
     plugins: ["eslint", "typescript", "unicorn", "oxc", "import"],
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
-      { name: "tinker", specifier: "@tinker/analyze/lint" },
+      { name: "tinker", specifier: "@tinkered/analyze/lint" },
     ],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",

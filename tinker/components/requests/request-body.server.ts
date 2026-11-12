@@ -1,4 +1,4 @@
-import { resource } from "@tinker/core";
+import { resource } from "@tinkered/core";
 
 import { backendStop, requestStop } from "./lifetime";
 

@@ -1,7 +1,7 @@
 # Working on this app
 
-This app runs on Tinker: `@tinker/core`,
-`@tinker/react`, `@tinker/bun`.
+This app runs on Tinker: `@tinkered/core`,
+`@tinkered/react`, `@tinkered/bun`.
 The rules for Tinker code ship inside those
 packages as skills. A skill has the version of
 the code you have installed.
@@ -27,7 +27,7 @@ Before editing files for a substantial task:
    A finding is one line:
    `<file>:<line> <rule id> <what is there>`.
    After the findings, each broken rule names
-   its skill: `read: @tinker/core#core/operation`.
+   its skill: `read: @tinkered/core#core/operation`.
    Load that skill, fix the code, run it again.
 2. `bun run check:style`: format and lint.
 3. `bun run check`: types, tests, build.

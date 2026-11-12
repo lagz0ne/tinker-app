@@ -1,5 +1,5 @@
-import { capsule, data, operation, resource, tag } from "@tinker/core";
-import type { Resource } from "@tinker/core";
+import { capsule, data, operation, resource, tag } from "@tinkered/core";
+import type { Resource } from "@tinkered/core";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { z } from "zod";
 

@@ -1,5 +1,5 @@
-import { capsule, data, operation, resource, tag } from "@tinker/core";
-import type { Resource } from "@tinker/core";
+import { capsule, data, operation, resource, tag } from "@tinkered/core";
+import type { Resource } from "@tinkered/core";
 import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 

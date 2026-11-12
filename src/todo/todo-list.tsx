@@ -1,4 +1,4 @@
-import { useData, useRun } from "@tinker/react";
+import { useData, useRun } from "@tinkered/react";
 import { memo } from "react";
 
 import { todoApi, todoBoard } from "./contract";

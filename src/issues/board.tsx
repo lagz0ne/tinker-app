@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
-import type { PartState, RemoteFault } from "@tinker/core";
-import { useData, useRun } from "@tinker/react";
+import type { PartState, RemoteFault } from "@tinkered/core";
+import { useData, useRun } from "@tinkered/react";
 import { memo } from "react";
 
 import { issueApi, issueBoard, states } from "./contract";

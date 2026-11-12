@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import { capsule, resource, tag } from "@tinker/core";
+import { capsule, resource, tag } from "@tinkered/core";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 

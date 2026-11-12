@@ -3,7 +3,7 @@
 Date: 2026-11-06. Status: accepted shape;
 built. Since 2026-11-09 (tinkered ADR 0130)
 rpc and remoteData are Core primitives, and
-ws is in the `@tinker/bun` package: the part
+ws is in the `@tinkered/bun` package: the part
 "userland, not Core" is replaced.
 Accepted: Duke, step by step, 2026-11-05 23:41
 to 2026-11-06 15:37 UTC (quotes below).
