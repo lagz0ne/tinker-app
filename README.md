@@ -82,7 +82,8 @@ two projects in `vite.config.ts`:
 `bun run check:style` is `bun --bun vp check`: oxfmt
 and oxlint, with rules in `vite.config.ts`.
 
-`bun run check:plain` runs `tinker-analyze check`
+`bun run check:plain` runs `tinker-analyze check`,
+on Bun (`bun --bun`),
 (`@tinker/analyze`). It reads the files and
 prints each broken rule with its rule id, then
 the skill to read:

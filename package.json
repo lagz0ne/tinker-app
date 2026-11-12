@@ -16,7 +16,7 @@
     "test": "bun --bun vp test",
     "check": "bun run typecheck && bun run test && bun run build",
     "check:style": "bun --bun vp check",
-    "check:plain": "tinker-analyze check"
+    "check:plain": "bun --bun tinker-analyze check"
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.41",
