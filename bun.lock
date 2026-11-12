@@ -6,9 +6,9 @@
       "name": "tinker-app",
       "dependencies": {
         "@tanstack/react-router": "1.170.41",
-        "@tinkered/bun": "^0.18.1",
-        "@tinkered/core": "^0.18.1",
-        "@tinkered/react": "^0.18.1",
+        "@tinkered/bun": "^0.20.0",
+        "@tinkered/core": "^0.20.0",
+        "@tinkered/react": "^0.20.0",
         "drizzle-orm": "1.0.0-rc.4",
         "react": "^19.3.0",
         "react-dom": "^19.3.0",
@@ -17,7 +17,7 @@
       "devDependencies": {
         "@electric-sql/pglite": "0.5.14",
         "@tanstack/intent": "0.5.6",
-        "@tinkered/analyze": "^0.18.1",
+        "@tinkered/analyze": "^0.20.0",
         "@types/bun": "^1.3.0",
         "@types/react": "^19",
         "@types/react-dom": "^19",
@@ -256,13 +256,13 @@
 
     "@testing-library/user-event": ["@testing-library/user-event@14.6.8", "", { "peerDependencies": { "@testing-library/dom": ">=7.21.4" } }, "sha512-vgSSqnANMnkcYR/vUNDbwS7aM3OErRLNUG8vCVVlj4oc6cKffUrccX7UAS5AmJQQNZTSibi9z5GvvRZ0aYgUCQ=="],
 
-    "@tinkered/analyze": ["@tinkered/analyze@0.18.1", "", { "dependencies": { "typescript-api": "npm:typescript@5.9.3" }, "bin": { "tinker-analyze": "dist/cli.mjs" } }, "sha512-dAxXR3arDEuFQgnD0axRTfuufEWERQ10t0w08X/+XPNs6ptZCcduTi07EEqi/Kc/vhKPevVCzd4SfepKl3+pYQ=="],
+    "@tinkered/analyze": ["@tinkered/analyze@0.20.0", "", { "dependencies": { "typescript-api": "npm:typescript@5.9.3" }, "bin": { "tinker-analyze": "dist/cli.mjs" } }, "sha512-F+yrALuVMMxodbqWo7xnLD8iMwvHkiCR50fYoNIWykzfAwdubfAvsN5woPfaEjDPqeIyPOK+qaZ9g0QRhGzjfA=="],
 
-    "@tinkered/bun": ["@tinkered/bun@0.18.1", "", { "dependencies": { "@tinkered/core": "^0.18.1" }, "peerDependencies": { "drizzle-orm": "^1.0.0-rc.4" }, "optionalPeers": ["drizzle-orm"] }, "sha512-bZ+XRLoUwIloAsTAtcRMPmnRBZwvox8XODljR+v5PZbZ+0uLiciRRCIitJS/W1N5wXuYTvYvB9CTMmDZLwsFYg=="],
+    "@tinkered/bun": ["@tinkered/bun@0.20.0", "", { "dependencies": { "@tinkered/core": "^0.20.0" }, "peerDependencies": { "drizzle-orm": "^1.0.0-rc.4" }, "optionalPeers": ["drizzle-orm"] }, "sha512-1Yirk2yU/Pb6Txb4DwmQCxcFhrTcVZPefgBJqZsxqq4KnC6gOMURdC7nYiBE1rT2X1iiusuXDCqHv5EUXpM//w=="],
 
-    "@tinkered/core": ["@tinkered/core@0.18.1", "", {}, "sha512-SRYyTbZRJnGMMdZ0YxTarcneP5sGp92ZZ2ervHHPrLjULGx0JQgpu0cFCAOao18m4KQOEgIqEL2WF3aEmp2SIg=="],
+    "@tinkered/core": ["@tinkered/core@0.20.0", "", {}, "sha512-4Boqprbkpl4Y1F4MShwx+M+Z4tC7GZcgc86blzspjXpxN7pFLXHKlSZXJgCvqcJJvZuDzwurvU6lFFUThklSwg=="],
 
-    "@tinkered/react": ["@tinkered/react@0.18.1", "", { "dependencies": { "@tinkered/core": "^0.18.1" }, "peerDependencies": { "react": ">=19" } }, "sha512-gZFdppfxAcFDLef08rMZ1q/+Vxk/qNtAnUJjkfa5JOm8veSpQ1GYdYv4/M4c6eYIRa+9VcJ6CUJO82GJiIgCtQ=="],
+    "@tinkered/react": ["@tinkered/react@0.20.0", "", { "dependencies": { "@tinkered/core": "^0.20.0" }, "peerDependencies": { "react": ">=19" } }, "sha512-JnjHdBewXKVfFkL6hLMuxycgJFVmp1ymqcliIDbvXc6MJV8/aalLkwI0N8zA3qA8p5v9J+S4t4DQfGtLxNpWsg=="],
 
     "@types/aria-query": ["@types/aria-query@5.0.4", "", {}, "sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw=="],
 

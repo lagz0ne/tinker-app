@@ -32,16 +32,15 @@ const app = createScope({
   ],
 });
 
-const close = async () => {
-  stop.abort(abortReasons.closed);
-  await app.closed;
-};
-
 window.addEventListener("pagehide", (event) => {
-  if (!event.persisted) void close();
+  if (!event.persisted) stop.abort(abortReasons.closed);
 });
 
-import.meta.hot?.dispose(close);
+import.meta.hot?.dispose(async () => {
+  stop.abort(abortReasons.closed);
+  await app.closed;
+});
+
 const live = await app.ready;
 
 const router = createRouter({

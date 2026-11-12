@@ -25,14 +25,13 @@ export const flushTelemetry = operation({
 });
 
 const held = { role: "state", explain: "Holds spans and logs until a flush" } as const;
+const sends = { role: "worker", explain: "Sends queued records" } as const;
 
 /** Sends what reaches the queue: a timer sends it, close sends what is left. */
 export const queueSend: Capsule.Hooks = {
   async start({ load, run, next }) {
     const owned = await load(queue, held, { ns: quiet });
-    owned.start(() =>
-      run(flushTelemetry, { ns: quiet }, { role: "worker", explain: "Sends queued records" }),
-    );
+    owned.start(() => run(flushTelemetry, { ns: quiet }, sends));
     await next();
   },
   async close({ load, next }) {
@@ -51,7 +50,9 @@ export const queueSink: Capsule.Hooks = {
     event.tap(
       await event.load(observer, { role: "state", explain: "Queues each record" }, { ns: quiet }),
     );
-    await queueSend.start!(event);
+    const owned = await event.load(queue, held, { ns: quiet });
+    owned.start(() => event.run(flushTelemetry, { ns: quiet }, sends));
+    await event.next();
   },
 };
 

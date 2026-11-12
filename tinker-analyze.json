@@ -16,6 +16,9 @@
         "serveTelemetryWorker": "The worker's native loop beside its root. A span here would feed the telemetry it drains.",
         "ringLines": "A step of serveTelemetryWorker.",
         "takeLines": "A step of serveTelemetryWorker."
+      },
+      "tinker/components/telemetry/thread.server.ts": {
+        "plain": "A check inside the native observer callbacks: a span here would feed the telemetry it sends."
       }
     }
   }
