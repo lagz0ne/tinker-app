@@ -39,6 +39,9 @@ limits), 0090 (a call runs in a child session),
   concern.
 - 04:21: a duplicate address is allowed, as in
   Hono. The first wins.
+  Changed on 2026-11-13 14:50: a duplicate fails
+  the start (Tinker ADR 0153), because two
+  boards with one cell name mixed their data.
 - 04:31: no `mode` on remote data. The
   protocol controls it.
 - 05:39: a protocol layer, if rpc and remote
@@ -105,6 +108,10 @@ one op. The wire is set up once, at the seam.
 - **Koa, TanStack Start.** Middleware is a chain
   with `next`.
 - **Hono.** A duplicate route: the first wins.
+  This is `strict: false` now.
+- **tRPC `mergeRouters`, Fastify.** A duplicate
+  fails when the table is built. The default
+  since Core 0.21.3.
 - **OkHttp `Authenticator`.** On a 401, renew
   once, then try again.
 - **RFC 3229 delta encoding.** The client asks
@@ -159,10 +166,11 @@ the wire: text
 4. **Codec.** Transport config, JSON by
    default. Both sides must use the same one.
 5. **Route table.** `ws.server({ services })`
-   takes the definitions. A duplicate address:
-   the first in the list wins, and start logs a
-   warning. `strict: true` fails start with
-   `DuplicateAddress` instead.
+   takes the definitions. A duplicate address
+   fails start with `DuplicateAddress`, which
+   names both units (Core 0.21.3). With
+   `strict: false` the first in the list wins,
+   and start logs a warning.
 6. **rpc.** `rpc(contracts)` gives one capsule.
    A contract has `input`, `output` and
    `mode` ("reply" or "stream").

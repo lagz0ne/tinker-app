@@ -36,7 +36,7 @@ const first = async (scope: Scope.Handle, address: string) => {
   return JSON.parse(text);
 };
 
-test("two services with one address: the first wins and start warns, as Hono does", async () => {
+test("strict: false: two services with one address, the first wins and start warns, as Hono does", async () => {
   const board = remoteData({ "todo.add": data({ initial: 0 }) });
   const api = rpc({ "todo.add": { input: z.null(), output: z.null() } });
   const add = operation({ label: "add", input: z.null(), run: async () => null });
@@ -46,7 +46,7 @@ test("two services with one address: the first wins and start warns, as Hono doe
     capsules: [
       board({ serve: true }),
       api({ implement: { "todo.add": add } }),
-      memory.server({ services: [board, api] }),
+      memory.server({ services: [board, api], strict: false }),
     ],
   }).ready;
   closers.push(() => scope.close());
@@ -62,7 +62,7 @@ test("two services with one address: the first wins and start warns, as Hono doe
   expect(await first(scope, "todo.add")).toEqual({ ok: true, value: 0 }); // the board answered
 });
 
-test("strict: two services with one address fail start, naming the address and both", async () => {
+test("two services with one address fail start, naming the address and both", async () => {
   const board = remoteData({ "todo.add": data({ initial: 0 }) });
   const api = rpc({ "todo.add": { input: z.null(), output: z.null() } });
   const add = operation({ label: "add", input: z.null(), run: async () => null });
@@ -70,7 +70,7 @@ test("strict: two services with one address fail start, naming the address and b
     await startError([
       board({ serve: true }),
       api({ implement: { "todo.add": add } }),
-      memory.server({ services: [board, api], strict: true }),
+      memory.server({ services: [board, api] }),
     ]),
   ).toEqual({
     kind: "DuplicateAddress",
