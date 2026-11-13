@@ -157,14 +157,16 @@ on each push to `main`, and weekly.
 ## Test tooling: a test capsule
 
 A capsule's author ships its test tooling as a
-test capsule (Core ADR 0127). Put it in a
+plain capsule (Core ADR 0131). Put it in a
 `*.testing.ts` file. Only tests import it.
+Its label is `<capsule>.testing`.
 
 ```ts
 // auth.testing.ts
-import { testCapsule } from "@tinkered/core/testing";
+import { capsule } from "@tinkered/core";
 
-export const authTesting = testCapsule(auth, {
+export const authTesting = capsule({
+  label: "auth.testing",
   exports: { signInAs },
 });
 ```
@@ -383,7 +385,9 @@ A file is one field of a key's input:
 "file.put": {
   input: z.object({
     name: z.string(),
-    file: bytes({ max: 10 << 20 }),
+    file: bytes(z.custom<RpcBody>(), {
+      max: 10 << 20,
+    }),
   }),
   output: z.object({ id: z.string() }),
 },
@@ -506,12 +510,14 @@ const board = remoteData(
 
 A hook is a plain operation on one of the
 hook shapes: `hook.start`, `hook.success`,
-`hook.error`, `hook.finish`. A capsule lists
+`hook.error`, `hook.finish`. Core has them:
+`const { hook } = transport`. A capsule lists
 them, and a list runs in order. `onStart`
 binds the caller, or says no with `refuse`:
 
 ```ts
 const signedIn = operation({
+  label: "signedIn",
   input: hook.start,
   depends: { who: principal },
   run: async ({ who }, { input }) =>
@@ -535,6 +541,7 @@ answer a value: recovery.
 
 ```ts
 const refusedAsFault = operation({
+  label: "refusedAsFault",
   input: hook.error,
   run: async (_, { input }) =>
     input.refuse({ kind: Object(input.error).kind }),
@@ -552,12 +559,14 @@ hooks, and `onFinish` reads the outcome:
 
 ```ts
 const timing = operation({
+  label: "timing",
   input: hook.start,
   run: async (_, { clock }) => ({
     context: { t0: clock.currentTimeMillis() },
   }),
 });
 const timed = operation({
+  label: "timed",
   input: hook.finish,
   run: (_, { input, clock, log }) =>
     log.info("call", {
@@ -590,21 +599,23 @@ its half of the lifecycle is an open point.
 
 ### Tests: the memory transport
 
-The same protocol in one process:
+The same protocol in one process. `memory`
+comes from `@tinkered/core/testing`. A peer is
+a started scope, so wait for `ready`:
 
 ```ts
-const server = createScope({
+const server = await createScope({
   capsules: [
     board({ serve: true }),
     memory.server({ services: [board] }),
   ],
-});
-const tab = createScope({
+}).ready;
+const tab = await createScope({
   capsules: [
     memory.client({ peer: server }),
     board({ read: memory.client }),
   ],
-});
+}).ready;
 ```
 
 ### A write that must outlive its call
