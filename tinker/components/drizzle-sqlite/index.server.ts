@@ -22,7 +22,10 @@ export type SqliteConnection = {
   }>;
 };
 
-/** The driver's connection resource: `bunSqlite.connection`. */
+/**
+ * The driver's connection resource: `bunSqlite.connection`.
+ * A slot: a unit that depends on it gets the built connection (ADR 0151).
+ */
 const driver = tag<Resource.Handle<Promise<SqliteConnection>>>({ label: "drizzleSqlite.driver" });
 
 /** The drizzle-kit `out` folder, relative to the working directory; `false` skips migrate. */
@@ -32,27 +35,14 @@ const migrations = tag<string | false>({
   parse: z.union([z.string().min(1), z.literal(false)]),
 });
 
-/** The bound driver's connection, written once at start (see `drizzlePg`: same Core gap). */
-const opened = data<SqliteConnection | undefined>({ initial: undefined });
-
 /** The root's own closing signal, written at start. A session resource built with this very
  * signal was built on the root itself: no call owns it, so it would never end. */
 const rootClosing = data<AbortSignal | undefined>({ initial: undefined });
 
-const connection = resource({
-  label: "drizzleSqlite.connection",
-  depends: { opened },
-  factory: ({ opened }, { raise: coreRaise }): SqliteConnection => {
-    const raise: Errors.Raise = coreRaise;
-
-    return opened ?? raise("DatabaseNotStarted", { label: "drizzleSqlite" });
-  },
-});
-
 /** The shared db: reads and single statements outside a transaction. */
 const db = resource({
   label: "drizzleSqlite.db",
-  depends: { connection },
+  depends: { connection: driver },
   factory: async ({ connection }) => connection.db,
 });
 
@@ -79,7 +69,7 @@ const writeTurn = resource({
 const tx = resource({
   label: "drizzleSqlite.tx",
   target: "session",
-  depends: { connection, writeTurn, root: rootClosing },
+  depends: { connection: driver, writeTurn, root: rootClosing },
   factory: async ({ connection, writeTurn, root }, { closing, defer, raise: coreRaise }) => {
     const raise: Errors.Raise = coreRaise;
 
@@ -102,7 +92,7 @@ const tx = resource({
 /** Brings the schema up to date with the driver's own Drizzle migrator. */
 const migrate = operation({
   label: "drizzleSqlite.migrate",
-  depends: { connection, folder: migrations },
+  depends: { connection: driver, folder: migrations },
   run: async ({ connection, folder }) => {
     if (folder !== false) await connection.migrate(folder);
   },
@@ -114,15 +104,11 @@ export const drizzleSqlite = capsule({
   config: { driver: driver.required, migrations },
   exports: { db, tx, migrate },
   hooks: {
-    async start({ next, run, load, config, closing }) {
+    async start({ next, run, load, closing }) {
       // Migrate first, then the later capsules start: Flyway and Rails migrate before the app
       // serves, so a later start reads the schema and no write waits on migrate's lock.
       load(rootClosing, { role: "state", explain: "Marks the root, for the boundary rule" }).set(
         closing,
-      );
-      const meta = { role: "state", explain: "The driver's Drizzle connection" } as const;
-      load(opened, { role: "state", explain: "Hands the connection to db, tx and migrate" }).set(
-        await load(config.driver, meta),
       );
       await run(migrate, {}, { role: "setup", explain: "Brings the schema up to date" });
       await next();

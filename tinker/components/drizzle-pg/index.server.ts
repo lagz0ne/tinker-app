@@ -15,7 +15,10 @@ export type PgConnection = {
   readonly migrate: (folder: string) => Promise<void>;
 };
 
-/** The driver's connection resource: `bunSql.connection`, `pglite.connection`. */
+/**
+ * The driver's connection resource: `bunSql.connection`, `pglite.connection`.
+ * A slot: a unit that depends on it gets the built connection (ADR 0151).
+ */
 const driver = tag<Resource.Handle<Promise<PgConnection>>>({ label: "drizzlePg.driver" });
 
 /** The drizzle-kit `out` folder, relative to the working directory; `false` skips migrate. */
@@ -25,30 +28,14 @@ const migrations = tag<string | false>({
   parse: z.union([z.string().min(1), z.literal(false)]),
 });
 
-/**
- * The bound driver's connection. Start loads the driver and writes it here once, before any
- * unit reads it. A tag cannot name a resource yet (Core gap), so a cell carries the value.
- */
-const opened = data<PgConnection | undefined>({ initial: undefined });
-
 /** The root's own closing signal, written at start. A session resource built with this very
  * signal was built on the root itself: no call owns it, so it would never end. */
 const rootClosing = data<AbortSignal | undefined>({ initial: undefined });
 
-const connection = resource({
-  label: "drizzlePg.connection",
-  depends: { opened },
-  factory: ({ opened }, { raise: coreRaise }): PgConnection => {
-    const raise: Errors.Raise = coreRaise;
-
-    return opened ?? raise("DatabaseNotStarted", { label: "drizzlePg" });
-  },
-});
-
 /** The shared db: reads and single statements outside a transaction. */
 const db = resource({
   label: "drizzlePg.db",
-  depends: { connection },
+  depends: { connection: driver },
   factory: async ({ connection }) => connection.db,
 });
 
@@ -59,7 +46,7 @@ const db = resource({
 const tx = resource({
   label: "drizzlePg.tx",
   target: "session",
-  depends: { connection, root: rootClosing },
+  depends: { connection: driver, root: rootClosing },
   factory: async ({ connection, root }, { closing, defer, raise: coreRaise }): Promise<PgTx> => {
     const raise: Errors.Raise = coreRaise;
 
@@ -91,7 +78,7 @@ const tx = resource({
 /** Brings the schema up to date with the driver's own Drizzle migrator. */
 const migrate = operation({
   label: "drizzlePg.migrate",
-  depends: { connection, folder: migrations },
+  depends: { connection: driver, folder: migrations },
   run: async ({ connection, folder }) => {
     if (folder !== false) await connection.migrate(folder);
   },
@@ -106,15 +93,11 @@ export const drizzlePg = capsule({
   config: { driver: driver.required, migrations },
   exports: { db, tx, migrate },
   hooks: {
-    async start({ next, run, load, config, closing }) {
+    async start({ next, run, load, closing }) {
       // Migrate first, then the later capsules start: Flyway and Rails migrate before the app
       // serves, so a later start reads the schema and no write waits on migrate's lock.
       load(rootClosing, { role: "state", explain: "Marks the root, for the boundary rule" }).set(
         closing,
-      );
-      const meta = { role: "state", explain: "The driver's Drizzle connection" } as const;
-      load(opened, { role: "state", explain: "Hands the connection to db, tx and migrate" }).set(
-        await load(config.driver, meta),
       );
       await run(migrate, {}, { role: "setup", explain: "Brings the schema up to date" });
       await next();

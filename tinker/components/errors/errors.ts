@@ -30,7 +30,6 @@ export declare namespace Errors {
     SlotEmpty: Record<string, never>;
     Refused: { message: string };
 
-    DatabaseNotStarted: { label: string };
     TransactionNotOpened: { label: string };
     TransactionNeedsSession: { label: string };
   };
