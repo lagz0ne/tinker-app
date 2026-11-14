@@ -18,7 +18,7 @@ cd my-app && bun install
 Pin a release with `#vX.Y.Z`:
 
 ```bash
-bunx degit lagz0ne/tinker-app#v0.26.1 my-app
+bunx degit lagz0ne/tinker-app#v0.28.0 my-app
 ```
 
 ## Run
@@ -103,6 +103,10 @@ tinker/react-state: hold the state in a Core
   `fetch` or `WebSocket`; the rpc client does.
 - `tinker/react-state`: a page file calls no
   `useState`, `useReducer` or `useEffect`.
+- A value computed from cells is a Core
+  `derived`, read with `useData(total({...}))`.
+  It needs no `useMemo`: each reader of one
+  config shares one value.
 
 The app's own exceptions are in
 `tinker-analyze.json`, each with its reason:
@@ -329,6 +333,11 @@ The client and the server run the same handle.
   socket: see "Bytes, in code".
 - `memory` is the same protocol in one
   process, for tests.
+- Two services with one address fail the
+  start with `DuplicateAddress`. The fault
+  names both. Rename one cell. `strict: false`
+  on `ws.server` or `memory.server` lets the
+  first in the list win, with a warning.
 
 - Each implementation runs in its own layer
   (a call with a `signal`). A `tx` it joins
@@ -459,6 +468,23 @@ const todos = data({
 
 - Read all: `todo.board.todos.where({})`.
 - Read one: `todo.board.todos.of({ id })`.
+- Read a window: a second argument names an
+  order and a limit. The store sorts and
+  cuts, not Core:
+
+```ts
+useData(board.tasks.where(
+  { project },
+  { order: "-created", limit: 50 },
+));
+```
+
+- A window needs a `load` op. Its input is
+  the part and the window as one value. A
+  board with no `load` fails a window.
+- A new window starts `pending`, with no
+  rows. A signal in the part asks the whole
+  window again.
 - The list maps ids to `<TodoRow id />`.
   Each row reads `of({ id })`, so a toggle
   draws one row.

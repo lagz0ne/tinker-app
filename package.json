@@ -1,6 +1,6 @@
 {
   "name": "tinker-app",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,9 +20,9 @@
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.41",
-    "@tinkered/bun": "^0.22.0",
-    "@tinkered/core": "^0.22.0",
-    "@tinkered/react": "^0.22.0",
+    "@tinkered/bun": "^0.23.1",
+    "@tinkered/core": "^0.23.1",
+    "@tinkered/react": "^0.23.1",
     "drizzle-orm": "1.0.0-rc.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -31,7 +31,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.5.14",
     "@tanstack/intent": "0.5.6",
-    "@tinkered/analyze": "^0.22.0",
+    "@tinkered/analyze": "^0.23.1",
     "@types/bun": "^1.3.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
