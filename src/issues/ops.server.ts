@@ -54,7 +54,7 @@ const createTeam = operation({
 const addMember = operation({
   label: "team.add.do",
   input: issueApi["team.add"].input,
-  depends: { team: members.controller, ok: inTeam.controller },
+  depends: { team: members.controller, ok: inTeam },
   run: ({ team, ok }, { input }) => {
     if (!ok.run({ input })) return { kind: "gone" as const };
 
@@ -67,7 +67,7 @@ const addMember = operation({
 const createIssue = operation({
   label: "issue.create.do",
   input: issueApi["issue.create"].input,
-  depends: { list: issues.controller, ok: inTeam.controller },
+  depends: { list: issues.controller, ok: inTeam },
   run: ({ list, ok }, { input, random }) => {
     if (!ok.run({ input })) return { kind: "gone" as const };
 
@@ -81,7 +81,7 @@ const createIssue = operation({
 const moveIssue = operation({
   label: "issue.move.do",
   input: issueApi["issue.move"].input,
-  depends: { list: issues.controller, ok: inTeam.controller },
+  depends: { list: issues.controller, ok: inTeam },
   run: ({ list, ok }, { input }) => {
     const key = { teamId: input.teamId, id: input.id };
     const now = list.of(key).get();
@@ -100,7 +100,7 @@ const addComment = operation({
   depends: {
     list: issues.controller,
     thread: comments.controller,
-    ok: inTeam.controller,
+    ok: inTeam,
     me: viewer.required,
   },
   run: ({ list, thread, ok, me }, { input, random }) => {
