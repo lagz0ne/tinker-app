@@ -23,10 +23,10 @@ export const signedIn = operation({
 export const membersOnly = operation({
   label: "issues.membersOnly",
   input: transport.hook.start,
-  depends: { team: members.controller },
-  run: ({ team }, { input }) => {
+  depends: { team: members.controller, me: viewer.required },
+  run: ({ team, me }, { input }) => {
     const teamId = issueBoard.part(input)?.teamId ?? "";
-    const known = team.of({ teamId, userId: input.meta.who ?? "" }).get();
+    const known = team.of({ teamId, userId: me }).get();
     return known ? undefined : input.refuse({ notMember: teamId });
   },
 });
