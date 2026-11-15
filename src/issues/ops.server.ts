@@ -1,7 +1,7 @@
 import { operation, tag, transport } from "@tinkered/core";
 import { z } from "zod";
 
-import { comments, issueBoard, issues, members, states } from "./contract";
+import { comments, issueApi, issueBoard, issues, members } from "./contract";
 
 // The server's work for `issueApi`. Each op writes members of the keyed cells; `issueBoard` tells
 // every member's tab that reads the part, and the tab asks for that part alone.
@@ -41,7 +41,7 @@ const inTeam = operation({
 
 const createTeam = operation({
   label: "team.create.do",
-  input: z.object({ teamId: z.string() }),
+  input: issueApi["team.create"].input,
   depends: { team: members.controller, me: viewer.required },
   run: ({ team, me }, { input }) => {
     if (team.where(input).get().length) return { kind: "exists" as const };
@@ -53,7 +53,7 @@ const createTeam = operation({
 
 const addMember = operation({
   label: "team.add.do",
-  input: z.object({ teamId: z.string(), userId: z.string() }),
+  input: issueApi["team.add"].input,
   depends: { team: members.controller, ok: inTeam.controller },
   run: ({ team, ok }, { input }) => {
     if (!ok.run({ input })) return { kind: "gone" as const };
@@ -66,7 +66,7 @@ const addMember = operation({
 /** A number one past the team's last: ENG-1, ENG-2. One writer, so no gap and no twin. */
 const createIssue = operation({
   label: "issue.create.do",
-  input: z.object({ teamId: z.string(), title: z.string() }),
+  input: issueApi["issue.create"].input,
   depends: { list: issues.controller, ok: inTeam.controller },
   run: ({ list, ok }, { input, random }) => {
     if (!ok.run({ input })) return { kind: "gone" as const };
@@ -80,12 +80,7 @@ const createIssue = operation({
 
 const moveIssue = operation({
   label: "issue.move.do",
-  input: z.object({
-    teamId: z.string(),
-    id: z.string(),
-    version: z.number(),
-    state: z.enum(states),
-  }),
+  input: issueApi["issue.move"].input,
   depends: { list: issues.controller, ok: inTeam.controller },
   run: ({ list, ok }, { input }) => {
     const key = { teamId: input.teamId, id: input.id };
@@ -101,7 +96,7 @@ const moveIssue = operation({
 
 const addComment = operation({
   label: "comment.add.do",
-  input: z.object({ teamId: z.string(), issueId: z.string(), text: z.string() }),
+  input: issueApi["comment.add"].input,
   depends: {
     list: issues.controller,
     thread: comments.controller,
