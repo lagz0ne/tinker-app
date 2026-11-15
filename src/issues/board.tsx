@@ -92,14 +92,14 @@ function Waiting({ state, again }: { state: PartState | undefined; again: () => 
   if (state?.status !== "fault") return <p role="status">Loading.</p>;
 
   return (
-    <main>
+    <>
       <Fault fault={state.fault} read />
       {state.fault.fault !== "link" && (
         <button type="button" onClick={again}>
           Try again
         </button>
       )}
-    </main>
+    </>
   );
 }
 
@@ -112,7 +112,11 @@ export function Board({ teamId }: { teamId: string }) {
   const create = useRun(issueApi["issue.create"]);
   const add = useRun(issueApi["team.add"]);
   if (state?.status !== "ready") {
-    return <Waiting state={state} again={() => again.run({ input: { issues: { teamId } } })} />;
+    return (
+      <main>
+        <Waiting state={state} again={() => again.run({ input: { issues: { teamId } } })} />
+      </main>
+    );
   }
 
   return (
@@ -199,10 +203,24 @@ const Card = memo(function Card({ teamId, id }: { teamId: string; id: string }) 
   );
 });
 
-/** `/issues/$team/$id`: one issue's comments, live. */
+/** `/issues/$team/$id`: one issue's comments, live. Its part is read on its own, so it has its
+ * own wait: an empty list before the answer would say "no comments" when that is not known. */
 export function Thread({ teamId, issueId }: { teamId: string; issueId: string }) {
-  const thread = useData(issueBoard.comments.where({ teamId, issueId }));
+  const part = issueBoard.comments.where({ teamId, issueId });
+  const thread = useData(part);
+  const state = useData(issueBoard.status(part));
+  const again = useRun(issueBoard.invalidate);
   const say = useRun(issueApi["comment.add"]);
+  if (state?.status !== "ready") {
+    return (
+      <aside aria-label="Comments">
+        <Waiting
+          state={state}
+          again={() => again.run({ input: { comments: { teamId, issueId } } })}
+        />
+      </aside>
+    );
+  }
 
   return (
     <aside aria-label="Comments">

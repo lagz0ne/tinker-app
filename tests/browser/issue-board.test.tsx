@@ -1,5 +1,5 @@
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { createScope, operation } from "@tinkered/core";
+import { createScope, operation, transport } from "@tinkered/core";
 import type { Observe, Scope } from "@tinkered/core";
 import { createMemory, memory } from "@tinkered/core/testing";
 import { ScopeProvider } from "@tinkered/react";
@@ -107,6 +107,59 @@ test('a tab that is not in the team sees why; "Try again" shows the team once it
 
   root.unmount();
   await cy.close();
+  await server.close();
+});
+
+// The thread's part is read on its own, so it waits on its own: a refused thread says so in the
+// thread, with "Try again", in place of an empty list that reads as "no comments".
+test('a refused thread says why; "Try again" shows its comments once it is allowed', async () => {
+  let shut = true;
+  const threads = operation({
+    label: "test.issues.threads",
+    input: transport.hook.start,
+    run: (_, { input }) => {
+      const part = issues.board.part(input);
+      return shut && part && "issueId" in part ? input.refuse({ notMember: "ENG" }) : undefined;
+    },
+  });
+  const server = await createScope({
+    capsules: [
+      issues.board({ serve: true, onStart: [signedIn, membersOnly, threads] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const ana = await createScope({
+    capsules: [
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
+  await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: "Login fails" } });
+  const id = server.resolve(issues.board.issues).get()[0]!.id;
+  await ana.run(issues.api["comment.add"], { input: { teamId: "ENG", issueId: id, text: "Seen" } });
+  const history = createMemoryHistory({ initialEntries: [`/issues/ENG/${id}`] });
+  const router = createRouter({ routeTree, history, context: { scope: ana } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  root.render(
+    <ScopeProvider scope={ana}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+  const thread = page.getByRole("complementary", { name: "Comments" });
+
+  await expect.element(thread.getByRole("alert")).toHaveTextContent("You are not in team ENG.");
+
+  shut = false;
+  await thread.getByRole("button", { name: "Try again" }).click();
+
+  await expect.element(thread.getByText("ana: Seen")).toBeVisible();
+
+  root.unmount();
+  await ana.close();
   await server.close();
 });
 
