@@ -1,7 +1,7 @@
 import { useData, useRun } from "@tinkered/react";
 import { memo } from "react";
 
-import { todoApi, todoBoard } from "./contract";
+import { type Todo, todoApi, todoBoard } from "./contract";
 
 /** The todo page: reads the live list, and asks the server for every change. No state of its own. */
 export function TodoList() {
@@ -25,22 +25,19 @@ export function TodoList() {
       </form>
       <ul>
         {list.map((item) => (
-          <TodoRow key={item.id} id={item.id} />
+          <TodoRow key={item.id} item={item} />
         ))}
       </ul>
     </main>
   );
 }
 
-/**
- * One todo: it reads its own member, so a toggle draws this row alone. It rides the list's
- * stream: a part inside a part in use opens no stream of its own.
- */
-export const TodoRow = memo(function TodoRow({ id }: { id: string }) {
-  const item = useData(todoBoard.todos.of({ id }));
+/** One todo. Core keeps a member's reference until it changes, so a toggle draws this row
+ * alone. */
+export const TodoRow = memo(function TodoRow({ item }: { item: Todo }) {
   const toggle = useRun(todoApi["todo.toggle"]);
   const remove = useRun(todoApi["todo.remove"]);
-  if (!item) return null;
+  const { id } = item;
 
   return (
     <li>

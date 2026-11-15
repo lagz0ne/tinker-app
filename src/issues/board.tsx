@@ -3,7 +3,7 @@ import type { PartState, RemoteFault } from "@tinkered/core";
 import { useData, useRun } from "@tinkered/react";
 import { memo } from "react";
 
-import { issueApi, issueBoard, states } from "./contract";
+import { type Issue, issueApi, issueBoard, states } from "./contract";
 import { me as signedAs, signIn } from "./sign-in";
 
 // The issue board's pages. No state of their own: each reads a keyed part with `useData` and asks
@@ -161,7 +161,7 @@ export function Board({ teamId }: { teamId: string }) {
               .filter((i) => i.state === state)
               .toSorted((a, b) => a.number - b.number)
               .map((i) => (
-                <Card key={i.id} teamId={teamId} id={i.id} />
+                <Card key={i.id} issue={i} />
               ))}
           </section>
         ))}
@@ -171,11 +171,11 @@ export function Board({ teamId }: { teamId: string }) {
   );
 }
 
-/** One card: it reads its own member, so a move draws this card alone (and its new lane). */
-const Card = memo(function Card({ teamId, id }: { teamId: string; id: string }) {
-  const issue = useData(issueBoard.issues.of({ teamId, id }));
+/** One card. Core keeps a member's reference until it changes, so a move draws this card alone
+ * (and its new lane). */
+const Card = memo(function Card({ issue }: { issue: Issue }) {
   const move = useRun(issueApi["issue.move"]);
-  if (!issue) return null;
+  const { teamId, id } = issue;
 
   const name = `${teamId}-${issue.number}`;
   return (

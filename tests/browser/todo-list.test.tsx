@@ -8,7 +8,7 @@ import { expect, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser/context";
 
 import { todo } from "@/todo";
-import { TodoList, TodoRow } from "@/todo";
+import { type Todo, TodoList, TodoRow } from "@/todo";
 import { todoOps } from "@/todo/index.server";
 
 // In a real Chromium: the page asks the server through `todoApi`, and draws the list the server
@@ -75,10 +75,10 @@ test("a toggle draws the toggled row alone", async () => {
   const count: ProfilerOnRenderCallback = (id) => void draws.set(id, (draws.get(id) ?? 0) + 1);
   // A Profiler draws again with its parent, so each one sits in a memo, as TodoRow does: it then
   // reports only a row that draws for its own member.
-  const Counted = memo(function Counted({ id, title }: { id: string; title: string }) {
+  const Counted = memo(function Counted({ item }: { item: Todo }) {
     return (
-      <Profiler id={title} onRender={count}>
-        <TodoRow id={id} />
+      <Profiler id={item.title} onRender={count}>
+        <TodoRow item={item} />
       </Profiler>
     );
   });
@@ -88,7 +88,7 @@ test("a toggle draws the toggled row alone", async () => {
     return (
       <ul>
         {list.map((item) => (
-          <Counted key={item.id} id={item.id} title={item.title} />
+          <Counted key={item.id} item={item} />
         ))}
       </ul>
     );
