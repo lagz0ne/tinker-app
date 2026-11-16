@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import { gates } from "@tinkered/cli/config";
+import { pageGuard } from "@tinkered/cli/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 import { playwright } from "vite-plus/test/browser-playwright";
@@ -15,7 +16,9 @@ const api = `http://127.0.0.1:${process.env.API_PORT ?? 3001}`;
 export default defineConfig({
   // The browser half: the page and its modules, with React Fast Refresh. Bun runs the server.
   root: at("cmds"),
-  plugins: [react(), clientMeta(at("."))],
+  // The page build refuses server code in its graph (`.server.` files, bun:, node:). The browser
+  // tests below run the server in the page on purpose, so a test run leaves the guard out.
+  plugins: [process.env.VITEST ? [] : pageGuard(), react(), clientMeta(at("."))],
   resolve: { alias },
   build: { outDir: at("dist/client"), emptyOutDir: true },
   server: {
