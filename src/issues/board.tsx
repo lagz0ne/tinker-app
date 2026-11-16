@@ -189,7 +189,6 @@ export function Board({ teamId }: { teamId: string }) {
             <h2>{state}</h2>
             {list
               .filter((i) => i.state === state)
-              .toSorted((a, b) => a.number - b.number)
               .map((i) => (
                 <Card key={i.id} issue={i} />
               ))}
