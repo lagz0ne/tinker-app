@@ -145,6 +145,48 @@ test("a tab with no `who` is refused; so is a member of no team, on calls and on
   expect(peek.get()).toEqual([]);
 });
 
+// S5, each call that names a team: the `gone` answer is reached once from outside the team and,
+// where the call names an issue, once for an issue that is not there. Nothing is written.
+test("every call that names a team answers gone to a person outside it, and writes nothing", async () => {
+  const teamId = await team();
+  const seen = read(ana, teamId);
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Ours" } });
+  await until(() => seen.get().length === 1);
+  const { id, version } = seen.get()[0]!;
+  const gone = { kind: "gone" };
+
+  expect(await cy.run(issues.api["team.add"], { input: { teamId, userId: "cy" } })).toEqual(gone);
+  expect(
+    await cy.run(issues.api["issue.move"], { input: { teamId, id, version, state: "done" } }),
+  ).toEqual(gone);
+  expect(
+    await cy.run(issues.api["comment.add"], { input: { teamId, issueId: id, text: "hi" } }),
+  ).toEqual(gone);
+  expect(
+    await ana.run(issues.api["issue.move"], {
+      input: { teamId, id: "none", version: 1, state: "done" },
+    }),
+  ).toEqual(gone);
+  expect(
+    await ana.run(issues.api["comment.add"], { input: { teamId, issueId: "none", text: "hi" } }),
+  ).toEqual(gone);
+
+  const members = backend.resolve(issues.board.members).get();
+  expect(members.some((m) => m.teamId === teamId && m.userId === "cy")).toBe(false);
+  expect(
+    backend
+      .resolve(issues.board.issues)
+      .get()
+      .find((i) => i.id === id)?.state,
+  ).toBe("backlog");
+  expect(
+    backend
+      .resolve(issues.board.comments)
+      .get()
+      .filter((c) => c.teamId === teamId),
+  ).toEqual([]);
+});
+
 // A refused part is the server's answer: the tab does not ask again by itself (Core 0.17.4,
 // ADR 0139). The page's "Try again" is an `invalidate` of the part, as a query's `refetch`.
 test("a person added while their tab is open sees the team when they try again", async () => {
