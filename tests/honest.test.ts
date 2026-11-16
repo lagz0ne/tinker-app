@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, data, operation, remoteData, transport } from "@tinkered/core";
 import { memory } from "@tinkered/core/testing";
 import { afterEach, expect, test } from "vite-plus/test";
@@ -48,7 +49,11 @@ async function server(lines: string[] = []) {
   const board = remoteData({ todos });
   const s = await createScope({
     observe: { log: (l) => void lines.push(l.message) },
-    capsules: [board({ serve: true }), memory.server({ services: [board, boom] })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      board({ serve: true }),
+      memory.server({ services: [board, boom] }),
+    ],
   }).ready;
   closers.push(() => s.close());
 
@@ -56,7 +61,9 @@ async function server(lines: string[] = []) {
 }
 
 async function client(peer: Awaited<ReturnType<typeof server>>["s"]) {
-  const c = await createScope({ capsules: [memory.client({ peer })] }).ready;
+  const c = await createScope({
+    capsules: [exits({ file: process.env.TINKER_EXITS }), memory.client({ peer })],
+  }).ready;
   closers.push(() => c.close());
   return c;
 }
@@ -107,6 +114,7 @@ test("a socket that cannot open makes the key's fault link, as data", async () =
   closers.push(() => bun.stop(true));
   const c = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       wsClient.client({ url: `ws://localhost:${bun.port}/api` }),
       board({ read: wsClient.client }),
     ],

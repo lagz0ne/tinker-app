@@ -1,5 +1,6 @@
 import { ws as wsServer } from "@tinkered/bun";
 import { ws } from "@tinkered/bun/client";
+import { exits } from "@tinkered/cli/test";
 import { bytes, createScope, operation, rpc, transport } from "@tinkered/core";
 import type { RpcBody } from "@tinkered/core";
 import { memory } from "@tinkered/core/testing";
@@ -57,7 +58,11 @@ const link = wsServer.server({
 });
 
 const backend = await createScope({
-  capsules: [api({ implement: { "file.put": put, plain }, onStart: [gate] }), link],
+  capsules: [
+    exits({ file: process.env.TINKER_EXITS }),
+    api({ implement: { "file.put": put, plain }, onStart: [gate] }),
+    link,
+  ],
 }).ready;
 
 const door = backend.resolve(link);
@@ -76,7 +81,11 @@ const bun = Bun.serve({
 const base = `localhost:${bun.port}/rpc`;
 
 const browser = await createScope({
-  capsules: [ws.client({ url: `ws://${base}` }), api({ remote: ws.client })],
+  capsules: [
+    exits({ file: process.env.TINKER_EXITS }),
+    ws.client({ url: `ws://${base}` }),
+    api({ remote: ws.client }),
+  ],
 }).ready;
 
 afterAll(async () => {
@@ -113,10 +122,18 @@ test("a key with bytes runs from the client: the value as text, the bytes as the
 
 test("the memory transport carries the bytes as they are", async () => {
   const server = await createScope({
-    capsules: [api({ implement: { "file.put": put, plain } }), memory.server({ services: [api] })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      api({ implement: { "file.put": put, plain } }),
+      memory.server({ services: [api] }),
+    ],
   }).ready;
   const tab = await createScope({
-    capsules: [memory.client({ peer: server }), api({ remote: memory.client })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      memory.client({ peer: server }),
+      api({ remote: memory.client }),
+    ],
   }).ready;
 
   const file = new Blob(["in memory"], { type: "text/plain" });

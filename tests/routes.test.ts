@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, operation } from "@tinkered/core";
 import type { Observe } from "@tinkered/core";
 import { expect, test } from "vite-plus/test";
@@ -31,6 +32,7 @@ test("each route reply maps to its HTTP status", async () => {
   const stop = new AbortController();
   const app = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       routes({
         stop: stop.signal,
         table: {
@@ -68,6 +70,7 @@ test("a fixed path after a param row that also fits it: the param row still wins
   const which = (label: string) => operation({ label, run: () => new Response(label) });
   const app = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       routes({
         stop: new AbortController().signal,
         table: {
@@ -119,7 +122,10 @@ test("an early reply streams while its op runs; the op's span ends after the bod
   });
   const app = await createScope({
     observe: { export: (span) => void spans.push(span) },
-    capsules: [routes({ stop: new AbortController().signal, table: { "GET /stream": stream } })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      routes({ stop: new AbortController().signal, table: { "GET /stream": stream } }),
+    ],
   }).ready;
   const answer = app.resolve(routes).fetch;
   const http = Bun.serve({
@@ -170,7 +176,10 @@ test("an op that replies early and then fails keeps its reply", async () => {
   });
   const app = await createScope({
     observe: { export: (span) => void spans.push(span) },
-    capsules: [routes({ stop: new AbortController().signal, table: { "GET /late": late } })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      routes({ stop: new AbortController().signal, table: { "GET /late": late } }),
+    ],
   }).ready;
 
   const response = await within(app.resolve(routes).fetch(new Request("http://t/late"), app));
@@ -196,7 +205,10 @@ test("after an early reply, a Response the op returns is dropped and its body ca
     },
   });
   const app = await createScope({
-    capsules: [routes({ stop: new AbortController().signal, table: { "GET /twice": twice } })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      routes({ stop: new AbortController().signal, table: { "GET /twice": twice } }),
+    ],
   }).ready;
 
   const response = await within(app.resolve(routes).fetch(new Request("http://t/twice"), app));

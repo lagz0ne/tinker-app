@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope } from "@tinkered/core";
 import { afterAll, beforeEach, expect, test } from "vite-plus/test";
 
@@ -48,7 +49,11 @@ for (const [name, make] of Object.entries(sinks)) {
     const sink = make();
     const stop = new AbortController();
     const app = await createScope({
-      capsules: [sink, routes({ stop: stop.signal, table: { "POST /api/telemetry": sink.route } })],
+      capsules: [
+        exits({ file: process.env.TINKER_EXITS }),
+        sink,
+        routes({ stop: stop.signal, table: { "POST /api/telemetry": sink.route } }),
+      ],
     }).ready;
     const post = () =>
       app.resolve(routes).fetch(

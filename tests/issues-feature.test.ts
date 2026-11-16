@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope } from "@tinkered/core";
 import type { Observe, Scope } from "@tinkered/core";
 import { afterAll, beforeEach, expect, test } from "vite-plus/test";
@@ -17,6 +18,7 @@ const tabSpans: Observe.Span[] = [];
 const backend = await createScope({
   observe: { export: (span) => void serverSpans.push(span) },
   capsules: [
+    exits({ file: process.env.TINKER_EXITS }),
     issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
     issues.api({ implement: issueOps, onStart: [signedIn] }),
     server.server({ path: "/rpc", services: [issues.board, issues.api] }),
@@ -31,6 +33,7 @@ const open = async (who: string) => {
   const scope = await createScope({
     observe: { export: (span) => void tabSpans.push(span) },
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       tab.client({ url: `${url}/rpc`, meta: whoMeta }),
       issues.board({ read: tab.client }),
       issues.api({ remote: tab.client }),

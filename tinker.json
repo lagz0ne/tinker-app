@@ -21,5 +21,6 @@
         "plain": "A check inside the native observer callbacks: a span here would feed the telemetry it sends."
       }
     }
-  }
+  },
+  "tests": "bun --bun vp test --project server"
 }

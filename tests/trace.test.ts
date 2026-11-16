@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, operation } from "@tinkered/core";
 import type { Observe } from "@tinkered/core";
 import { afterAll, beforeEach, expect, test } from "vite-plus/test";
@@ -46,6 +47,7 @@ const stop = new AbortController();
 const backend = await createScope({
   observe: { export: (span) => void serverSpans.push(span) },
   capsules: [
+    exits({ file: process.env.TINKER_EXITS }),
     greet.api({ implement: greetOps }),
     server.server({ path: "/rpc", services: [greet.api] }),
     routes({ stop: stop.signal, table: { "GET /echo": echo } }),
@@ -70,7 +72,11 @@ const raw = async (meta: Record<string, string>, base = `${url}/rpc`) => {
 
 const browser = await createScope({
   observe: { export: (span) => void tabSpans.push(span) },
-  capsules: [tab.client({ url: `${url}/rpc` }), greet.api({ remote: tab.client })],
+  capsules: [
+    exits({ file: process.env.TINKER_EXITS }),
+    tab.client({ url: `${url}/rpc` }),
+    greet.api({ remote: tab.client }),
+  ],
 }).ready;
 
 beforeEach(() => {
@@ -137,7 +143,11 @@ test("the client sends a W3C traceparent with its own span ids and sampled flag"
 
 test("a client with observation off sends no traceparent", async () => {
   const dark = await createScope({
-    capsules: [tab.client({ url: `${url}/rpc` }), greet.api({ remote: tab.client })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      tab.client({ url: `${url}/rpc` }),
+      greet.api({ remote: tab.client }),
+    ],
   }).ready;
   await dark.run(greet.api.greet, { input: { name: "dark" } });
   await dark.close();
@@ -182,6 +192,7 @@ test("a missing or malformed traceparent starts a fresh trace; the request still
 test("ws: a message after the root closed answers 503, it does not reject", async () => {
   const closing = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       greet.api({ implement: greetOps }),
       server.server({ path: "/rpc", services: [greet.api] }),
     ],
@@ -196,7 +207,10 @@ test("ws: a message after the root closed answers 503, it does not reject", asyn
 
 test("routes: a request after the root closed answers 500, it does not reject", async () => {
   const closing = await createScope({
-    capsules: [routes({ stop: new AbortController().signal, table: { "GET /echo": echo } })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      routes({ stop: new AbortController().signal, table: { "GET /echo": echo } }),
+    ],
   }).ready;
 
   const answer = closing.resolve(routes).fetch;

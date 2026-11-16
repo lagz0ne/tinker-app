@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import {
   createScope,
   data,
@@ -117,6 +118,7 @@ async function boot(ttl: number) {
   const server = await createScope({
     observe: { export: (x) => void spans.push(x) },
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       auth({ implement: { "auth.status": status, "auth.refresh": refresh } }),
       board({ serve: true, onStart: [bearer] }),
       api({ onStart: [bearer], implement: { "note.add": add } }),
@@ -189,6 +191,7 @@ async function client(url: string, sid: string) {
   const scope = await createScope({
     observe: { export: (x) => void spans.push(x) },
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       publicWs.client({ url: `${url}/public`, headers }),
       auth({ remote: publicWs.client }),
       signedWs.client({ url: `${url}/api`, headers, meta: credentials, renew }),

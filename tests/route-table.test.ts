@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, data, operation, remoteData, rpc } from "@tinkered/core";
 import type { Observe, Scope } from "@tinkered/core";
 import { memory } from "@tinkered/core/testing";
@@ -44,6 +45,7 @@ test("strict: false: two services with one address, the first wins and start war
   const scope = await createScope({
     observe: { log: (l) => void lines.push(`${l.message} ${JSON.stringify(l.attributes)}`) },
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       board({ serve: true }),
       api({ implement: { "todo.add": add } }),
       memory.server({ services: [board, api], strict: false }),
@@ -81,14 +83,20 @@ test("two services with one address fail start, naming the address and both", as
 test("no service has the address: the server answers null (404); the client gets missing", async () => {
   const board = remoteData({ todos: data({ initial: [] as string[] }) });
   const server = await createScope({
-    capsules: [board({ serve: true }), memory.server({ services: [board] })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      board({ serve: true }),
+      memory.server({ services: [board] }),
+    ],
   }).ready;
   closers.push(() => server.close());
 
   expect(
     await server.run(memory.server.serve, { input: { address: "nope", text: "null", meta: {} } }),
   ).toBeNull();
-  const client = await createScope({ capsules: [memory.client({ peer: server })] }).ready;
+  const client = await createScope({
+    capsules: [exits({ file: process.env.TINKER_EXITS }), memory.client({ peer: server })],
+  }).ready;
   closers.push(() => client.close());
   expect(
     await client.run(memory.client.call, { input: { address: "nope", value: null, meta: {} } }),
@@ -118,6 +126,7 @@ test("30 definitions × 3 keys and one rpc with 30 keys: each call reaches its o
   const server = await createScope({
     observe: { export: (x) => void spans.push(x) },
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       ...boards.map((b) => b({ serve: true })),
       api({ implement: implement as never }),
       memory.server({ services: [...boards, api] }),
@@ -156,6 +165,7 @@ test("one shared stream carries keys of two definitions; each is routed to its o
   });
   const server = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       board({ serve: true }),
       prefs({ serve: true }),
       memory.server({ services: [board, prefs] }),
@@ -164,6 +174,7 @@ test("one shared stream carries keys of two definitions; each is routed to its o
   closers.push(() => server.close());
   const client = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       memory.client({ peer: server }),
       board({ read: memory.client }),
       prefs({ read: memory.client }),

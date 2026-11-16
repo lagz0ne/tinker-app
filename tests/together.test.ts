@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, data, operation, remoteData } from "@tinkered/core";
 import { memory } from "@tinkered/core/testing";
 import { afterEach, expect, test } from "vite-plus/test";
@@ -28,7 +29,12 @@ async function torn(kind: "memory" | "ws") {
   });
   const transport = wsServer.server({ path: "/api", services: [board] });
   const server = await createScope({
-    capsules: [board({ serve: true }), transport, memory.server({ services: [board] })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      board({ serve: true }),
+      transport,
+      memory.server({ services: [board] }),
+    ],
   }).ready;
   closers.push(() => server.close());
 
@@ -36,6 +42,7 @@ async function torn(kind: "memory" | "ws") {
   closers.push(() => bun.stop(true));
   const client = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       kind === "memory" ? memory.client({ peer: server }) : wsClient.client({ url: `${url}/api` }),
       board({ read: kind === "memory" ? memory.client : wsClient.client }),
     ],

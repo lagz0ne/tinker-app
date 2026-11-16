@@ -1,4 +1,5 @@
 import { serve } from "@tinkered/bun";
+import { exits } from "@tinkered/cli/test";
 import { createScope } from "@tinkered/core";
 import type { Scope } from "@tinkered/core";
 import { afterAll, expect, test } from "vite-plus/test";
@@ -121,7 +122,7 @@ test("a telemetry origin that is not an http(s) URL fails its root's start, nami
       origin,
     });
     try {
-      await createScope({ capsules: [sink] }).close();
+      await createScope({ capsules: [exits({ file: process.env.TINKER_EXITS }), sink] }).close();
       return { origin, kind: undefined, label: undefined };
     } catch (error) {
       const { kind, payload } = Object(error);

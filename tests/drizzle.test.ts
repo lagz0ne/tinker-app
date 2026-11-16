@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { bunSql } from "@tinkered/bun/sql";
 import { bunSqlite } from "@tinkered/bun/sqlite";
+import { exits } from "@tinkered/cli/test";
 import { capsule, createScope } from "@tinkered/core";
 import type { Scope } from "@tinkered/core";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
@@ -124,8 +125,9 @@ for (const driver of drivers) {
         },
       });
 
-      await using scope = await createScope({ capsules: [...driver.capsules(), later] as never })
-        .ready;
+      await using scope = await createScope({
+        capsules: [exits({ file: process.env.TINKER_EXITS }), ...driver.capsules(), later] as never,
+      }).ready;
 
       expect(Array.isArray(seen)).toBe(true);
     });
@@ -140,12 +142,18 @@ for (const driver of drivers) {
 
 test("no driver is a type error and fails at createScope", () => {
   // @ts-expect-error driver is required
-  expect(() => createScope({ capsules: [drizzlePg()] })).toThrow("MissingConfig");
+  expect(() =>
+    createScope({ capsules: [exits({ file: process.env.TINKER_EXITS }), drizzlePg()] }),
+  ).toThrow("MissingConfig");
 });
 
 test("a forced session close rolls back; a graceful close commits", async () => {
   const app = await createScope({
-    capsules: [pglite(), drizzlePg({ driver: pglite.connection, migrations: pgMigrations })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      pglite(),
+      drizzlePg({ driver: pglite.connection, migrations: pgMigrations }),
+    ],
   }).ready;
 
   const forced = app.createSession();

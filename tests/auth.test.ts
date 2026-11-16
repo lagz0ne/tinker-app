@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, data, operation, remoteData, rpc, tag, transport } from "@tinkered/core";
 import { createMemory, memory } from "@tinkered/core/testing";
 import { afterEach, expect, test } from "vite-plus/test";
@@ -70,6 +71,7 @@ async function boot() {
   });
   const server = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       auth({ implement: { "auth.status": statusOf } }), // public: no hooks
       board({ serve: true, onStart: [bearer] }),
       api({ onStart: [bearer], implement: { "note.add": add } }),
@@ -100,6 +102,7 @@ const credentials = operation({
 async function client(server: Awaited<ReturnType<typeof boot>>["server"], sid: string) {
   const scope = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       memory.client({ peer: server, headers: { cookie: `sid=${sid}` } }),
       auth({ remote: memory.client }),
       signed.client({ peer: server, headers: { cookie: `sid=${sid}` }, meta: credentials }),

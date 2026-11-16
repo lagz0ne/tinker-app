@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, isError, operation, rpc, transport } from "@tinkered/core";
 import type { Observe } from "@tinkered/core";
 import { afterAll, expect, test } from "vite-plus/test";
@@ -49,6 +50,7 @@ const observe: Observe.Config = {
 const backend = await createScope({
   observe,
   capsules: [
+    exits({ file: process.env.TINKER_EXITS }),
     greet.api({ implement: greetOps }),
     more({ implement: { refuse: { run: refuseHere, onStart: [no] }, crash: crashHere } }),
     server.server({ path: "/rpc", services: [greet.api, more] }),
@@ -60,6 +62,7 @@ const base = `${http.url}/rpc`;
 
 const browser = await createScope({
   capsules: [
+    exits({ file: process.env.TINKER_EXITS }),
     tab.client({ url: base }),
     greet.api({ remote: tab.client }),
     more({ remote: tab.client }),
@@ -76,6 +79,7 @@ afterAll(async () => {
 const serverWith = (options: { origin?: string; maxPayload?: number }) =>
   createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       greet.api({ implement: greetOps }),
       server.server({ path: "/rpc", services: [greet.api], ...options }),
     ],
@@ -220,6 +224,7 @@ test("a bound origin that is not an http(s) URL fails start, naming origin", asy
 test("a key with no implementation fails start, naming it; no request is ever served", async () => {
   const missing = createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       more({ implement: { refuse: refuseHere } as never }),
       server.server({ path: "/rpc", services: [more] }),
     ],

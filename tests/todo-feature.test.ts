@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, operation } from "@tinkered/core";
 import type { Scope } from "@tinkered/core";
 import { memory } from "@tinkered/core/testing";
@@ -22,6 +23,7 @@ async function boot() {
   const services = [greet.api, todo.board, todo.api];
   const server = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       greet.api({ implement: greetOps }),
       todo.board({ serve: true }),
       todo.api({ implement: todoOps }),
@@ -33,6 +35,7 @@ async function boot() {
   const tab = async () => {
     const scope = await createScope({
       capsules: [
+        exits({ file: process.env.TINKER_EXITS }),
         memory.client({ peer: server }),
         greet.api({ remote: memory.client }),
         todo.board({ read: memory.client }),
@@ -85,6 +88,7 @@ test("toggle and remove land on every tab; a stale id answers gone, as output", 
   expect(await b.run(todo.api["todo.remove"], { input: { id } })).toEqual({ kind: "removed" });
   await until(() => seen.get().length === 0);
   expect(await a.run(todo.api["todo.toggle"], { input: { id } })).toEqual({ kind: "gone", id });
+  expect(await a.run(todo.api["todo.remove"], { input: { id } })).toEqual({ kind: "gone", id });
 });
 
 test("an empty title is refused by the contract on the tab: the server never sees it", async () => {
@@ -138,6 +142,7 @@ test("with 1,000 todos, one toggle sends one member over the wire, not the list"
   const services = [todo.board, todo.api];
   const server = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       todo.board({ serve: true }),
       todo.api({ implement: todoOps }),
       memory.server({ services, codec: counted }),
@@ -149,6 +154,7 @@ test("with 1,000 todos, one toggle sends one member over the wire, not the list"
   }
   const tab = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       memory.client({ peer: server, codec: counted }),
       todo.board({ read: memory.client }),
       todo.api({ remote: memory.client }),

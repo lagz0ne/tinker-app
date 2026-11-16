@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, LEVELS } from "@tinkered/core";
 import type { Observe } from "@tinkered/core";
 import { afterEach, expect, test } from "vite-plus/test";
@@ -36,6 +37,7 @@ async function boot() {
   const server = await createScope({
     observe: srv.observe,
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       board({ serve: true, onStart: [signedIn] }),
       api({
         onStart: [signedIn],
@@ -57,6 +59,7 @@ async function boot() {
     const client = await createScope({
       observe: seen.observe,
       capsules: [
+        exits({ file: process.env.TINKER_EXITS }),
         wsClient.client({
           url: `${url}/api`,
           codec: keepDates,

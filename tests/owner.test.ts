@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, data, remoteData } from "@tinkered/core";
 import { afterEach, expect, test } from "vite-plus/test";
 
@@ -26,7 +27,13 @@ test("the passed cell is only a shape: each definition makes its own cell", asyn
   const two = remoteData({ todos });
 
   expect(one.todos).not.toBe(two.todos);
-  const scope = createScope({ capsules: [one({ serve: true }), two({ serve: true })] });
+  const scope = createScope({
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      one({ serve: true }),
+      two({ serve: true }),
+    ],
+  });
   await scope.ready;
   closers.push(async () => void (await scope.close()));
   expect([scope.resolve(one.todos).get(), scope.resolve(two.todos).get()]).toEqual([["a"], ["a"]]);

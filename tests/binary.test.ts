@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { ws } from "@tinkered/bun/client";
+import { exits } from "@tinkered/cli/test";
 import { createScope } from "@tinkered/core";
 import type { Subprocess } from "bun";
 import { afterAll, afterEach, expect, test } from "vite-plus/test";
@@ -86,7 +87,11 @@ test("the binary serves the page, its files and rpc, and sends traces from its w
 
   // rpc over the socket, as a tab calls it.
   const tab = await createScope({
-    capsules: [ws.client({ url: `ws://${url.host}/rpc` }), greet.api({ remote: ws.client })],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      ws.client({ url: `ws://${url.host}/rpc` }),
+      greet.api({ remote: ws.client }),
+    ],
   }).ready;
   expect(await tab.run(greet.api.greet, { input: { name: "bin" } })).toMatchObject({
     text: expect.stringContaining("bin"),

@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope, rpc } from "@tinkered/core";
 import type { Scope as CoreScope } from "@tinkered/core";
 import { memory } from "@tinkered/core/testing";
@@ -26,6 +27,7 @@ async function boot(kind: "memory" | "ws") {
   const transport = wsServer.server({ path: "/api", codec: keepDates, services: [board, api] });
   const server = await createScope({
     capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
       board({ serve: true, onStart: [signedIn] }),
       api({
         onStart: [signedIn],
@@ -51,6 +53,7 @@ async function boot(kind: "memory" | "ws") {
     const transport = kind === "memory" ? memory.client : wsClient.client;
     const client = createScope({
       capsules: [
+        exits({ file: process.env.TINKER_EXITS }),
         kind === "memory"
           ? memory.client({ peer: server, ...options })
           : wsClient.client({ url: base, ...options }),
@@ -332,12 +335,15 @@ describe("one rpc capsule: the same handle on both sides", () => {
 
   test("api: one job, implement or remote; both or neither fails start", async () => {
     // @ts-expect-error: neither
-    await expect(createScope({ capsules: [api({})] }).ready).rejects.toMatchObject({
+    await expect(
+      createScope({ capsules: [exits({ file: process.env.TINKER_EXITS }), api({})] }).ready,
+    ).rejects.toMatchObject({
       kind: "MissingConfig",
       payload: { key: "implement | remote" },
     });
     const both = createScope({
       capsules: [
+        exits({ file: process.env.TINKER_EXITS }),
         // @ts-expect-error: both
         api({
           remote: memory.client,
