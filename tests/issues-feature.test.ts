@@ -90,10 +90,35 @@ test("a team is made once; issue numbers count up with no gap", async () => {
   const add = (title: string) => ana.run(issues.api["issue.create"], { input: { teamId, title } });
 
   expect(again).toEqual({ kind: "exists" });
-  expect([await add("one"), await add("two")]).toEqual([
+  expect([await add("one"), await add("two"), await add("three")]).toEqual([
     { kind: "created", number: 1 },
     { kind: "created", number: 2 },
+    { kind: "created", number: 3 },
   ]);
+  // S2: the count is the team's own. A second team starts at 1 again.
+  const other = await team();
+  expect(
+    await ana.run(issues.api["issue.create"], { input: { teamId: other, title: "one" } }),
+  ).toEqual({ kind: "created", number: 1 });
+});
+
+// S1: `exists` is an answer, not a way in. A person outside the team who names its key is told
+// that it exists, and stays outside.
+test("a team that exists takes no new member from team.create", async () => {
+  const teamId = await team();
+
+  expect(await cy.run(issues.api["team.create"], { input: { teamId } })).toEqual({
+    kind: "exists",
+  });
+  const inTeam = backend
+    .resolve(issues.board.members)
+    .get()
+    .filter((m) => m.teamId === teamId)
+    .map((m) => m.userId);
+  expect(inTeam.toSorted()).toEqual(["ana", "bo"]);
+  expect(await cy.run(issues.api["issue.create"], { input: { teamId, title: "x" } })).toEqual({
+    kind: "gone",
+  });
 });
 
 test("a move on one tab lands on the other; a move from an old version answers stale", async () => {
@@ -114,6 +139,20 @@ test("a move on one tab lands on the other; a move from an old version answers s
     kind: "stale",
     version: 2,
   });
+  // A version the server never had is not the one it has: stale too.
+  expect(
+    await bo.run(issues.api["issue.move"], { input: { ...move, version: 9, state: "done" } }),
+  ).toEqual({
+    kind: "stale",
+    version: 2,
+  });
+  // S3: a stale move changes nothing.
+  expect(
+    backend
+      .resolve(issues.board.issues)
+      .get()
+      .find((i) => i.id === id),
+  ).toMatchObject({ state: "doing", version: 2 });
 });
 
 test("comments: a part of their own, read by team and issue", async () => {
@@ -148,6 +187,39 @@ test("a tab with no `who` is refused; so is a member of no team, on calls and on
   expect(peek.get()).toEqual([]);
 });
 
+/** Reads each part of one team on a tab; answers a function that gives each part's fault. */
+const faultsOf = (scope: Scope.Handle, teamId: string, issueId: string) => {
+  const members = issues.board.members.where({ teamId });
+  const list = issues.board.issues.where({ teamId });
+  const thread = issues.board.comments.where({ teamId, issueId });
+  scope.resolve(members).watch(() => undefined);
+  scope.resolve(list).watch(() => undefined);
+  scope.resolve(thread).watch(() => undefined);
+
+  return () =>
+    [
+      scope.resolve(issues.board.status(members)).get(),
+      scope.resolve(issues.board.status(list)).get(),
+      scope.resolve(issues.board.status(thread)).get(),
+    ].map((now) => (now?.status === "fault" ? now.fault : undefined));
+};
+
+// S5, each part of a team: members, issues and comments. A read from outside the team is refused
+// with the team in the payload; a read with no `who` is refused too.
+test("every part of a team is refused to a person outside it, and to a tab with no `who`", async () => {
+  const teamId = await team();
+  const seen = read(ana, teamId);
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Ours" } });
+  await until(() => seen.get().length === 1);
+  const outside = faultsOf(cy, teamId, seen.get()[0]!.id);
+  const nobody = faultsOf(await open(""), teamId, seen.get()[0]!.id);
+  await until(() => [...outside(), ...nobody()].every(Boolean));
+
+  const refused = { fault: "refused", payload: { notMember: teamId } };
+  expect(outside()).toMatchObject([refused, refused, refused]);
+  expect(nobody().map((fault) => fault?.fault)).toEqual(["refused", "refused", "refused"]);
+});
+
 // S5, each call that names a team: the `gone` answer is reached once from outside the team and,
 // where the call names an issue, once for an issue that is not there. Nothing is written.
 test("every call that names a team answers gone to a person outside it, and writes nothing", async () => {
@@ -173,6 +245,11 @@ test("every call that names a team answers gone to a person outside it, and writ
   expect(
     await ana.run(issues.api["comment.add"], { input: { teamId, issueId: "none", text: "hi" } }),
   ).toEqual(gone);
+  // An issue of another team is not an issue of this one.
+  const other = await team();
+  expect(
+    await ana.run(issues.api["comment.add"], { input: { teamId: other, issueId: id, text: "hi" } }),
+  ).toEqual(gone);
 
   const members = backend.resolve(issues.board.members).get();
   expect(members.some((m) => m.teamId === teamId && m.userId === "cy")).toBe(false);
@@ -186,7 +263,7 @@ test("every call that names a team answers gone to a person outside it, and writ
     backend
       .resolve(issues.board.comments)
       .get()
-      .filter((c) => c.teamId === teamId),
+      .filter((c) => c.teamId === teamId || c.teamId === other),
   ).toEqual([]);
 });
 
