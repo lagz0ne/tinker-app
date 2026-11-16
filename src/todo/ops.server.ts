@@ -24,7 +24,7 @@ export const toggleTodo = operation({
   run: ({ list }, { input }) => {
     const item = list.of({ id: input.id }).get();
     if (!item) return { kind: "gone" as const, id: input.id };
-    list.update({ id: input.id }, (t) => ({ ...t, done: !t.done }));
+    list.set({ ...item, done: !item.done });
     return { kind: "toggled" as const, done: !item.done };
   },
 });

@@ -89,7 +89,7 @@ const moveIssue = operation({
     if (now.version !== input.version) return { kind: "stale" as const, version: now.version };
 
     const version = now.version + 1;
-    list.update(key, (i) => ({ ...i, state: input.state, version }));
+    list.set({ ...now, state: input.state, version });
     return { kind: "moved" as const, version };
   },
 });
