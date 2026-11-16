@@ -19,24 +19,23 @@ export const signedIn = operation({
   },
 });
 
-/** Every read of a part: the viewer must be a member of the part's team (ADR 0138 rule 14). */
-export const membersOnly = operation({
-  label: "issues.membersOnly",
-  input: transport.hook.start,
-  depends: { team: members.controller, me: viewer.required },
-  run: ({ team, me }, { input }) => {
-    const teamId = issueBoard.part(input)?.teamId ?? "";
-    const known = team.of({ teamId, userId: me }).get();
-    return known ? undefined : input.refuse({ notMember: teamId });
-  },
-});
-
-/** A call's check: the viewer is a member of the team the input names. */
+/** The member check: the viewer is a member of the team the input names. Calls and reads run it. */
 const inTeam = operation({
   label: "issues.inTeam",
   input: z.object({ teamId: z.string() }),
   depends: { team: members.controller, me: viewer.required },
   run: ({ team, me }, { input }) => !!team.of({ teamId: input.teamId, userId: me }).get(),
+});
+
+/** Every read of a part: the viewer must be a member of the part's team (ADR 0138 rule 14). */
+export const membersOnly = operation({
+  label: "issues.membersOnly",
+  input: transport.hook.start,
+  depends: { ok: inTeam },
+  run: ({ ok }, { input }) => {
+    const teamId = issueBoard.part(input)?.teamId ?? "";
+    return ok.run({ input: { teamId } }) ? undefined : input.refuse({ notMember: teamId });
+  },
 });
 
 const createTeam = operation({

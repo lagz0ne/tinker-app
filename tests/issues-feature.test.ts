@@ -339,6 +339,7 @@ test("one move: one trace from tab A to the server's send; tab B's ask links to 
     "ws.send",
   ]);
   expect(names(serverSpans, ask)).toEqual([
+    "issues.inTeam",
     "issues.membersOnly",
     "issues.signedIn",
     "remoteData.answer",
