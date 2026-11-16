@@ -1,4 +1,5 @@
 {
+  "extends": "@tinkered/cli/tsconfig.json",
   "compilerOptions": {
     "target": "ESNext",
     "module": "Preserve",

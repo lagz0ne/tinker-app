@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 
+import { gates } from "@tinkered/cli/config";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 import { playwright } from "vite-plus/test/browser-playwright";
@@ -82,7 +83,7 @@ export default defineConfig({
     plugins: ["eslint", "typescript", "unicorn", "oxc", "import"],
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
-      { name: "tinker", specifier: "@tinkered/analyze/lint" },
+      { name: "tinker", specifier: "@tinkered/cli/lint" },
     ],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",
@@ -119,6 +120,8 @@ export default defineConfig({
         files: ["**/*.mjs", "**/*.js", "**/*.cjs"],
         rules: { "import/no-relative-parent-imports": "off" },
       },
+      // The kind gate and the cast gate (`tinker check`, types stage): the app's own code.
+      { files: ["src/**"], rules: gates },
     ],
   },
 });

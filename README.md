@@ -82,20 +82,25 @@ two projects in `vite.config.ts`:
 `bun run check:style` is `bun --bun vp check`: oxfmt
 and oxlint, with rules in `vite.config.ts`.
 
-`bun run check:plain` runs `tinker-analyze check`,
-on Bun (`bun --bun`),
-(`@tinkered/analyze`). It reads the files and
-prints each broken rule with its rule id, then
-the skill to read:
+`bun run check:plain` runs `tinker check`
+(`@tinkered/cli`), on Bun (`bun --bun`). It
+runs the types stage, then the rules stage.
+Each finding prints its rule id and its fix:
 
 ```text
 src/a.tsx:3 tinker/react-state `useState`: …
+  Right: a `data` cell, read with `useData`.
+  more: tinker skill load @tinkered/react#react
 
-tinker/react-state: hold the state in a Core
-  cell and read it with @tinkered/react
-  read: @tinkered/react#react
+tinker check: rules failed.
 ```
 
+Only `tinker check: OK` says the code is done.
+
+- `tinker/cast`: no `as` but `as const`, no `!`,
+  no `any`, in `src/`.
+- `tinker/kind`: a `switch` on a call's `kind`
+  has a case for each kind, and no `default`.
 - `tinker/plain`: no plain helper functions.
   Every function is an operation or a capsule
   hook. `cn` is exempt.
@@ -104,12 +109,13 @@ tinker/react-state: hold the state in a Core
 - `tinker/react-state`: a page file calls no
   `useState`, `useReducer` or `useEffect`.
 - A value computed from cells is a Core
-  `derived`, read with `useData(total({...}))`.
+  `resource` with a `config`, read with
+  `useData(total({...}))`.
   It needs no `useMemo`: each reader of one
   config shares one value.
 
 The app's own exceptions are in
-`tinker-analyze.json`, each with its reason:
+`tinker.json`, each with its reason:
 the entry functions in `tinker/base`, which
 run before any scope.
 

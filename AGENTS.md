@@ -21,17 +21,22 @@ Before editing files for a substantial task:
 
 <!-- intent-skills:end -->
 
-## After you edit: run the checks
+## After you edit: run the check
 
-1. `bun run check:plain` runs `tinker-analyze`.
-   A finding is one line:
+1. `bun run check:plain` runs `tinker check`.
+   It runs two stages: types, then rules.
+   A finding is one line, then its fix:
    `<file>:<line> <rule id> <what is there>`.
-   After the findings, each broken rule names
-   its skill: `read: @tinkered/core#core/operation`.
-   Load that skill, fix the code, run it again.
+   The last line says what to do next.
+   Fix each finding, then run it again.
+   Only `tinker check: OK` says the code is done.
 2. `bun run check:style`: format and lint.
 3. `bun run check`: types, tests, build.
 
-An exception to a rule goes in
-`tinker-analyze.json`, with its reason.
+No cast: no `as` but `as const`, no `!`, no `any`.
+A `switch` on a call's `kind` has a case for
+each kind, and no `default`.
+
+An exception to a rule goes in `tinker.json`,
+with its reason.
 Do not add one to make a check pass.

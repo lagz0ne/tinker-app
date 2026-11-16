@@ -2,6 +2,7 @@ import { Link, Outlet, useNavigate } from "@tanstack/react-router";
 import type { PartState, RemoteFault } from "@tinkered/core";
 import { useData, useRun } from "@tinkered/react";
 import { memo } from "react";
+import { z } from "zod";
 
 import { type Issue, issueApi, issueBoard, states } from "./contract";
 import { me as signedAs, signIn } from "./sign-in";
@@ -11,11 +12,11 @@ import { me as signedAs, signIn } from "./sign-in";
 
 /** `/issues`: who you are, and which team to open (it is made if nobody has it yet). */
 export function IssuesHome() {
-  const name = useRun(signIn);
+  const signedIn = useRun(signIn);
   const navigate = useNavigate();
   const open = useRun(issueApi["team.create"], {
     onSuccess: (_, call) =>
-      void navigate({ to: "/issues/$team", params: { team: call.input!.teamId } }),
+      call.input && void navigate({ to: "/issues/$team", params: { team: call.input.teamId } }),
   });
   const me = useData(signedAs);
 
@@ -25,11 +26,8 @@ export function IssuesHome() {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          name.run({
-            input: {
-              name: (event.currentTarget.elements.namedItem("name") as HTMLInputElement).value,
-            },
-          });
+          const name = new FormData(event.currentTarget).get("name");
+          if (typeof name === "string") signedIn.run({ input: { name } });
         }}
       >
         <input name="name" aria-label="Your name" defaultValue={me} />
@@ -39,9 +37,10 @@ export function IssuesHome() {
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            const teamId = (event.currentTarget.elements.namedItem("team") as HTMLInputElement)
-              .value;
-            open.run({ input: { teamId: teamId.trim().toUpperCase() } });
+            const teamId = new FormData(event.currentTarget).get("team");
+            if (typeof teamId === "string") {
+              open.run({ input: { teamId: teamId.trim().toUpperCase() } });
+            }
           }}
         >
           <input name="team" aria-label="Team key" placeholder="ENG" />
@@ -50,6 +49,39 @@ export function IssuesHome() {
       )}
     </main>
   );
+}
+
+/** A refusal's payload, when the reader is not in the team. */
+const notMember = z.object({ notMember: z.string() });
+
+/** A call's answer, as the page gets it. */
+type Out<K extends "team.add" | "issue.create" | "issue.move" | "comment.add"> = Awaited<
+  ReturnType<(typeof issueApi)[K]["run"]>
+>;
+
+/** What a move's answer says. Every kind has its case: a new kind fails here. */
+function Moved({ out }: { out: Out<"issue.move"> | undefined }) {
+  switch (out?.kind) {
+    case undefined:
+    case "moved":
+      return null;
+    case "stale":
+      return <small role="status">Changed by someone else.</small>;
+    case "gone":
+      return <small role="status">This issue is gone.</small>;
+  }
+}
+
+/** What an add's answer says: an issue, a member or a comment. */
+function Added({ out }: { out: Out<"team.add" | "issue.create" | "comment.add"> | undefined }) {
+  switch (out?.kind) {
+    case undefined:
+    case "created":
+    case "added":
+      return null;
+    case "gone":
+      return <small role="status">That is gone, or you are not in this team.</small>;
+  }
 }
 
 /** `link`: no answer came. A read is asked again by itself. A call is not: when it left, the
@@ -71,18 +103,22 @@ function NoAnswer({ read, sent }: { read?: boolean; sent?: boolean }) {
  * - `link`: no answer. A read is asked again by itself. A call is not: `sent` says if it left.
  *   When it did, the server may have done it, so the person looks first.
  * - the rest is a bug: it shows the trace id as a ref. The cause is in that trace, never here. */
-function Fault({ fault, read }: { fault: unknown; read?: boolean }) {
-  const { fault: kind, payload, sent, traceId } = Object(fault) as Partial<RemoteFault>;
-  if (!kind) return null;
+function Fault({ fault, read }: { fault: RemoteFault; read?: boolean }) {
+  const { fault: kind, payload, sent, traceId } = fault;
   if (kind === "link") return <NoAnswer read={read} sent={sent} />;
   if (kind === "missing") return <p role="alert">This page is old. Load it again.</p>;
 
-  const team = Object(payload).notMember as string | undefined;
+  const team = notMember.safeParse(payload).data?.notMember;
   if (kind === "refused") {
     return <p role="alert">{team ? `You are not in team ${team}.` : "Sign in first."}</p>;
   }
 
   return <p role="alert">{`Something broke.${traceId ? ` Ref ${traceId.slice(0, 8)}` : ""}`}</p>;
+}
+
+/** A call's error: shown when it is a fault of the board's api. */
+function CallFault({ error }: { error: unknown }) {
+  return issueApi.fault.is(error) ? <Fault fault={error} /> : null;
 }
 
 /** A part that is not ready: not read yet, or a fault that stands. A broken link heals by
@@ -125,12 +161,8 @@ export function Board({ teamId }: { teamId: string }) {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          create.run({
-            input: {
-              teamId,
-              title: (event.currentTarget.elements.namedItem("title") as HTMLInputElement).value,
-            },
-          });
+          const title = new FormData(event.currentTarget).get("title");
+          if (typeof title === "string") create.run({ input: { teamId, title } });
           event.currentTarget.reset();
         }}
       >
@@ -140,19 +172,17 @@ export function Board({ teamId }: { teamId: string }) {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          add.run({
-            input: {
-              teamId,
-              userId: (event.currentTarget.elements.namedItem("user") as HTMLInputElement).value,
-            },
-          });
+          const userId = new FormData(event.currentTarget).get("user");
+          if (typeof userId === "string") add.run({ input: { teamId, userId } });
           event.currentTarget.reset();
         }}
       >
         <input name="user" aria-label="Add member" placeholder="name" />
         <button type="submit">Add member</button>
       </form>
-      <Fault fault={create.error ?? add.error} />
+      <Added out={create.data} />
+      <Added out={add.data} />
+      <CallFault error={create.error ?? add.error} />
       <div className="lanes">
         {states.map((state) => (
           <section key={state} aria-label={state}>
@@ -187,18 +217,17 @@ const Card = memo(function Card({ issue }: { issue: Issue }) {
       <select
         aria-label={`State of ${name}`}
         value={issue.state}
-        onChange={(event) =>
-          move.run({
-            input: { teamId, id, version: issue.version, state: event.target.value as never },
-          })
-        }
+        onChange={(event) => {
+          const state = states.find((s) => s === event.target.value);
+          if (state) move.run({ input: { teamId, id, version: issue.version, state } });
+        }}
       >
         {states.map((s) => (
           <option key={s}>{s}</option>
         ))}
       </select>
-      {move.data?.kind === "stale" && <small role="status">Changed by someone else.</small>}
-      <Fault fault={move.error} />
+      <Moved out={move.data} />
+      <CallFault error={move.error} />
     </article>
   );
 });
@@ -230,20 +259,16 @@ export function Thread({ teamId, issueId }: { teamId: string; issueId: string })
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          say.run({
-            input: {
-              teamId,
-              issueId,
-              text: (event.currentTarget.elements.namedItem("text") as HTMLInputElement).value,
-            },
-          });
+          const text = new FormData(event.currentTarget).get("text");
+          if (typeof text === "string") say.run({ input: { teamId, issueId, text } });
           event.currentTarget.reset();
         }}
       >
         <input name="text" aria-label="Comment" />
         <button type="submit">Comment</button>
       </form>
-      <Fault fault={say.error} />
+      <Added out={say.data} />
+      <CallFault error={say.error} />
     </aside>
   );
 }

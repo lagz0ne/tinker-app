@@ -15,8 +15,8 @@ export function TodoList() {
         onSubmit={(event) => {
           event.preventDefault();
           const form = event.currentTarget;
-          const title = form.elements.namedItem("title") as HTMLInputElement;
-          add.run({ input: { title: title.value } });
+          const title = new FormData(form).get("title");
+          if (typeof title === "string") add.run({ input: { title } });
           form.reset();
         }}
       >
