@@ -32,7 +32,14 @@ const issues = createRoute({ getParentRoute: () => root, path: "/issues", compon
 const team = createRoute({
   getParentRoute: () => root,
   path: "/issues/$team",
-  component: () => <Board teamId={team.useParams().team} />,
+  // The team's page, then the open thread beside it. The child route draws in this `Outlet`, so
+  // a page of the feature knows nothing about the route tree.
+  component: () => (
+    <>
+      <Board teamId={team.useParams().team} />
+      <Outlet />
+    </>
+  ),
 });
 
 const thread = createRoute({

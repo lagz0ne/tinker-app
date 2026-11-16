@@ -4,7 +4,7 @@ import type { Observe, Scope } from "@tinkered/core";
 import { createMemory, memory } from "@tinkered/core/testing";
 import { ScopeProvider } from "@tinkered/react";
 import { createRoot } from "react-dom/client";
-import { expect, test } from "vite-plus/test";
+import { expect, onTestFinished, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser/context";
 import { z } from "zod";
 
@@ -41,6 +41,8 @@ test("an issue made and moved on one tab moves on the drawn tab; a thread takes 
   const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
   const router = createRouter({ routeTree, history, context: { scope: bo } });
   const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
   root.render(
     <ScopeProvider scope={bo}>
       <RouterProvider router={router} />
@@ -67,9 +69,49 @@ test("an issue made and moved on one tab moves on the drawn tab; a thread takes 
   await page.getByRole("button", { name: "Comment" }).click();
   await expect.element(page.getByText("bo: Seen on Safari")).toBeVisible();
 
-  root.unmount();
   await ana.close();
   await bo.close();
+  await server.close();
+});
+
+// P1: the home page signs the person in and opens a team. Nobody made the team before, so the
+// page makes it: the board that follows is read as a member.
+test('"Open team" on a new key makes the team and shows its board', async () => {
+  const server = await createScope({
+    capsules: [
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const dee = await createScope({
+    capsules: [
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  const history = createMemoryHistory({ initialEntries: ["/issues"] });
+  const router = createRouter({ routeTree, history, context: { scope: dee } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
+  root.render(
+    <ScopeProvider scope={dee}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  await page.getByLabelText("Your name").fill("dee");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabelText("Team key").fill("NEW");
+  await page.getByRole("button", { name: "Open team" }).click();
+
+  await expect.element(page.getByRole("heading", { name: "NEW" })).toBeVisible();
+  await expect.element(page.getByLabelText("New issue")).toBeVisible();
+  expect(history.location.pathname).toBe("/issues/NEW");
+
+  await dee.close();
   await server.close();
 });
 
@@ -92,6 +134,8 @@ test('a tab that is not in the team sees why; "Try again" shows the team once it
   const history = createMemoryHistory({ initialEntries: ["/issues/OPS"] });
   const router = createRouter({ routeTree, history, context: { scope: cy } });
   const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
   root.render(
     <ScopeProvider scope={cy}>
       <RouterProvider router={router} />
@@ -105,7 +149,6 @@ test('a tab that is not in the team sees why; "Try again" shows the team once it
 
   await expect.element(page.getByRole("heading", { name: "OPS" })).toBeVisible();
 
-  root.unmount();
   await cy.close();
   await server.close();
 });
@@ -144,6 +187,8 @@ test('a refused thread says why; "Try again" shows its comments once it is allow
   const history = createMemoryHistory({ initialEntries: [`/issues/ENG/${id}`] });
   const router = createRouter({ routeTree, history, context: { scope: ana } });
   const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
   root.render(
     <ScopeProvider scope={ana}>
       <RouterProvider router={router} />
@@ -158,7 +203,6 @@ test('a refused thread says why; "Try again" shows its comments once it is allow
 
   await expect.element(thread.getByText("ana: Seen")).toBeVisible();
 
-  root.unmount();
   await ana.close();
   await server.close();
 });
@@ -194,6 +238,8 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
   const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
   const router = createRouter({ routeTree, history, context: { scope: ana } });
   const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
   root.render(
     <ScopeProvider scope={ana}>
       <RouterProvider router={router} />
@@ -211,7 +257,6 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
   expect(failed?.traceId.slice(0, 8)).toBe(ref);
   expect(String(failed?.error)).toContain("the disk is full");
 
-  root.unmount();
   await ana.close();
   await server.close();
 });
@@ -239,6 +284,8 @@ test("the server goes away with the page open: the page says that it is offline"
   const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
   const router = createRouter({ routeTree, history, context: { scope: ana } });
   const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
   root.render(
     <ScopeProvider scope={ana}>
       <RouterProvider router={router} />
@@ -253,7 +300,6 @@ test("the server goes away with the page open: the page says that it is offline"
     .toBe("Offline. Trying again.");
   expect(document.querySelector("form")).toBeNull();
 
-  root.unmount();
   await ana.close();
 });
 
@@ -277,13 +323,15 @@ const pageOf = operation({
     const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
     const router = createRouter({ routeTree, history, context: { scope: ana } });
     const root = createRoot(document.body.appendChild(document.createElement("div")));
+    // A test that fails leaves no page behind for the next one.
+    onTestFinished(() => root.unmount());
     root.render(
       <ScopeProvider scope={ana}>
         <RouterProvider router={router} />
       </ScopeProvider>,
     );
 
-    return { ana, root };
+    return { ana };
   },
 });
 
@@ -294,7 +342,7 @@ test("a call that did not leave says that nothing was sent", async () => {
   const api = await createScope({
     capsules: [issues.api({ implement: issueOps }), calls.server({ services: [issues.api] })],
   }).ready;
-  const { ana, root } = await reads.run(pageOf, { input: { reads, api } });
+  const { ana } = await reads.run(pageOf, { input: { reads, api } });
   await page.getByLabelText("New issue").fill("Login fails");
 
   await api.close(); // the server of the calls is away: a call cannot leave
@@ -304,7 +352,6 @@ test("a call that did not leave says that nothing was sent", async () => {
     .poll(() => document.querySelector("main [role=status]")?.textContent)
     .toBe("Offline. Nothing was sent. Try again.");
 
-  root.unmount();
   await ana.close();
   await reads.close();
 });
@@ -332,7 +379,7 @@ test("a call that left and got no answer says that it may be saved", async () =>
       calls.server({ services: [issues.api] }),
     ],
   }).ready;
-  const { ana, root } = await reads.run(pageOf, { input: { reads, api } });
+  const { ana } = await reads.run(pageOf, { input: { reads, api } });
   await page.getByLabelText("New issue").fill("Login fails");
   await page.getByRole("button", { name: "Add issue" }).click();
   await work.promise;
@@ -345,7 +392,6 @@ test("a call that left and got no answer says that it may be saved", async () =>
     .poll(() => document.querySelector("main [role=status]")?.textContent)
     .toBe("No answer. It may be saved. Look, then try again.");
 
-  root.unmount();
   await ana.close();
   await reads.close();
 });
@@ -368,6 +414,8 @@ test("a call to an address the server does not have says that the page is old", 
   const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
   const router = createRouter({ routeTree, history, context: { scope: ana } });
   const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
   root.render(
     <ScopeProvider scope={ana}>
       <RouterProvider router={router} />
@@ -381,7 +429,6 @@ test("a call to an address the server does not have says that the page is old", 
     .poll(() => document.querySelector("main [role=alert]")?.textContent)
     .toBe("This page is old. Load it again.");
 
-  root.unmount();
   await ana.close();
   await server.close();
 });

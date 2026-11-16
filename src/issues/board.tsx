@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { PartState, RemoteFault } from "@tinkered/core";
 import { useData, useRun } from "@tinkered/react";
 import { memo } from "react";
@@ -196,7 +196,6 @@ export function Board({ teamId }: { teamId: string }) {
           </section>
         ))}
       </div>
-      <Outlet />
     </main>
   );
 }
