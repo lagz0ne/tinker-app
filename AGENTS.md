@@ -24,7 +24,11 @@ Before editing files for a substantial task:
 ## After you edit: run the check
 
 1. `bun run check:plain` runs `tinker check`.
-   It runs two stages: types, then rules.
+   It runs four stages: types, rules, tests,
+   then exits. An exit is one way out of an
+   operation: each `kind` of its answer, a
+   refusal, or a plain return. A test must reach
+   each one.
    A finding is one line, then its fix:
    `<file>:<line> <rule id> <what is there>`.
    The last line says what to do next.
@@ -36,6 +40,12 @@ Before editing files for a substantial task:
 No cast: no `as` but `as const`, no `!`, no `any`.
 A `switch` on a call's `kind` has a case for
 each kind, and no `default`.
+
+A test scope lists `exits` first, so the check
+sees what the test reached:
+`exits({ file: process.env.TINKER_EXITS })` in a
+server test, `exits({ store: localStorage })` in
+a browser test.
 
 An exception to a rule goes in `tinker.json`,
 with its reason.
