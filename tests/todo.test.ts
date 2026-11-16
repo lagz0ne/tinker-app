@@ -335,9 +335,7 @@ describe("one rpc capsule: the same handle on both sides", () => {
 
   test("api: one job, implement or remote; both or neither fails start", async () => {
     // @ts-expect-error: neither
-    await expect(
-      createScope({ capsules: [exits({ file: process.env.TINKER_EXITS }), api({})] }).ready,
-    ).rejects.toMatchObject({
+    await expect(createScope({ capsules: [api({})] }).ready).rejects.toMatchObject({
       kind: "MissingConfig",
       payload: { key: "implement | remote" },
     });

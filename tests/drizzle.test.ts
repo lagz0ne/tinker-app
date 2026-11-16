@@ -142,9 +142,7 @@ for (const driver of drivers) {
 
 test("no driver is a type error and fails at createScope", () => {
   // @ts-expect-error driver is required
-  expect(() =>
-    createScope({ capsules: [exits({ file: process.env.TINKER_EXITS }), drizzlePg()] }),
-  ).toThrow("MissingConfig");
+  expect(() => createScope({ capsules: [drizzlePg()] })).toThrow("MissingConfig");
 });
 
 test("a forced session close rolls back; a graceful close commits", async () => {

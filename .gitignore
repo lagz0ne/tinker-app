@@ -8,3 +8,4 @@ dist/
 tests/.gen-*/
 cmds/client-files.gen.ts
 .vitest/
+.tinker/

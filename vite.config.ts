@@ -53,6 +53,7 @@ export default defineConfig({
           name: "browser",
           root: at("."),
           include: ["tests/browser/**/*.test.tsx"],
+          setupFiles: ["tests/browser/exits.setup.ts"],
           browser: {
             enabled: true,
             headless: true,

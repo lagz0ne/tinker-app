@@ -22,5 +22,5 @@
       }
     }
   },
-  "tests": "bun --bun vp test --project server"
+  "tests": "bun run test"
 }

@@ -1,4 +1,5 @@
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import { exits } from "@tinkered/cli/test";
 import { createScope, operation, transport } from "@tinkered/core";
 import type { Observe, Scope } from "@tinkered/core";
 import { createMemory, memory } from "@tinkered/core/testing";
@@ -18,6 +19,7 @@ import { routeTree } from "@/routes";
 test("an issue made and moved on one tab moves on the drawn tab; a thread takes a comment", async () => {
   const server = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
       memory.server({ services: [issues.board, issues.api] }),
@@ -26,6 +28,7 @@ test("an issue made and moved on one tab moves on the drawn tab; a thread takes 
   const tab = async (name: string) => {
     const scope = await createScope({
       capsules: [
+        exits({ store: localStorage }),
         memory.client({ peer: server, meta: whoMeta }),
         issues.board({ read: memory.client }),
         issues.api({ remote: memory.client }),
@@ -79,6 +82,7 @@ test("an issue made and moved on one tab moves on the drawn tab; a thread takes 
 test('"Open team" on a new key makes the team and shows its board', async () => {
   const server = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
       memory.server({ services: [issues.board, issues.api] }),
@@ -86,6 +90,7 @@ test('"Open team" on a new key makes the team and shows its board', async () => 
   }).ready;
   const dee = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       memory.client({ peer: server, meta: whoMeta }),
       issues.board({ read: memory.client }),
       issues.api({ remote: memory.client }),
@@ -118,6 +123,7 @@ test('"Open team" on a new key makes the team and shows its board', async () => 
 test('a tab that is not in the team sees why; "Try again" shows the team once it is in', async () => {
   const server = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
       memory.server({ services: [issues.board, issues.api] }),
@@ -125,6 +131,7 @@ test('a tab that is not in the team sees why; "Try again" shows the team once it
   }).ready;
   const cy = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       memory.client({ peer: server, meta: whoMeta }),
       issues.board({ read: memory.client }),
       issues.api({ remote: memory.client }),
@@ -167,6 +174,7 @@ test('a refused thread says why; "Try again" shows its comments once it is allow
   });
   const server = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly, threads] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
       memory.server({ services: [issues.board, issues.api] }),
@@ -174,6 +182,7 @@ test('a refused thread says why; "Try again" shows its comments once it is allow
   }).ready;
   const ana = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       memory.client({ peer: server, meta: whoMeta }),
       issues.board({ read: memory.client }),
       issues.api({ remote: memory.client }),
@@ -219,6 +228,7 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
   const server = await createScope({
     observe: { export: (span) => void spans.push(span) },
     capsules: [
+      exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: { ...issueOps, "issue.create": boom }, onStart: [signedIn] }),
       memory.server({ services: [issues.board, issues.api] }),
@@ -228,6 +238,7 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
   const ana = await createScope({
     observe: { export: () => undefined },
     capsules: [
+      exits({ store: localStorage }),
       memory.client({ peer: server, meta: whoMeta }),
       issues.board({ read: memory.client }),
       issues.api({ remote: memory.client }),
@@ -267,6 +278,7 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
 test("the server goes away with the page open: the page says that it is offline", async () => {
   const server = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
       memory.server({ services: [issues.board, issues.api] }),
@@ -274,6 +286,7 @@ test("the server goes away with the page open: the page says that it is offline"
   }).ready;
   const ana = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       memory.client({ peer: server, meta: whoMeta }),
       issues.board({ read: memory.client }),
       issues.api({ remote: memory.client }),
@@ -314,6 +327,7 @@ const pageOf = operation({
   run: async (_, { input }) => {
     const ana = await createScope({
       capsules: [
+        exits({ store: localStorage }),
         memory.client({ peer: input.reads }),
         issues.board({ read: memory.client }),
         calls.client({ peer: input.api }),
@@ -337,10 +351,18 @@ const pageOf = operation({
 
 test("a call that did not leave says that nothing was sent", async () => {
   const reads = await createScope({
-    capsules: [issues.board({ serve: true }), memory.server({ services: [issues.board] })],
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true }),
+      memory.server({ services: [issues.board] }),
+    ],
   }).ready;
   const api = await createScope({
-    capsules: [issues.api({ implement: issueOps }), calls.server({ services: [issues.api] })],
+    capsules: [
+      exits({ store: localStorage }),
+      issues.api({ implement: issueOps }),
+      calls.server({ services: [issues.api] }),
+    ],
   }).ready;
   const { ana } = await reads.run(pageOf, { input: { reads, api } });
   await page.getByLabelText("New issue").fill("Login fails");
@@ -371,10 +393,15 @@ test("a call that left and got no answer says that it may be saved", async () =>
     },
   });
   const reads = await createScope({
-    capsules: [issues.board({ serve: true }), memory.server({ services: [issues.board] })],
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true }),
+      memory.server({ services: [issues.board] }),
+    ],
   }).ready;
   const api = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       issues.api({ implement: { ...issueOps, "issue.create": create } }),
       calls.server({ services: [issues.api] }),
     ],
@@ -401,10 +428,15 @@ test("a call that left and got no answer says that it may be saved", async () =>
 test("a call to an address the server does not have says that the page is old", async () => {
   // A server that serves the board, and no `issues.api`: every call to it is `missing`.
   const server = await createScope({
-    capsules: [issues.board({ serve: true }), memory.server({ services: [issues.board] })],
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true }),
+      memory.server({ services: [issues.board] }),
+    ],
   }).ready;
   const ana = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       memory.client({ peer: server, meta: whoMeta }),
       issues.board({ read: memory.client }),
       issues.api({ remote: memory.client }),

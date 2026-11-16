@@ -1,3 +1,4 @@
+import { exits } from "@tinkered/cli/test";
 import { createScope } from "@tinkered/core";
 import { memory } from "@tinkered/core/testing";
 import { ScopeProvider, useData } from "@tinkered/react";
@@ -17,6 +18,7 @@ import { todoOps } from "@/todo/index.server";
 test("add, toggle and remove a todo from the page; the server holds each change", async () => {
   const server = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       todo.board({ serve: true }),
       todo.api({ implement: todoOps }),
       memory.server({ services: [todo.board, todo.api] }),
@@ -24,6 +26,7 @@ test("add, toggle and remove a todo from the page; the server holds each change"
   }).ready;
   const tab = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       memory.client({ peer: server }),
       todo.board({ read: memory.client }),
       todo.api({ remote: memory.client }),
@@ -56,6 +59,7 @@ test("add, toggle and remove a todo from the page; the server holds each change"
 test("a toggle draws the toggled row alone", async () => {
   const server = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       todo.board({ serve: true }),
       todo.api({ implement: todoOps }),
       memory.server({ services: [todo.board, todo.api] }),
@@ -66,6 +70,7 @@ test("a toggle draws the toggled row alone", async () => {
   }
   const tab = await createScope({
     capsules: [
+      exits({ store: localStorage }),
       memory.client({ peer: server }),
       todo.board({ read: memory.client }),
       todo.api({ remote: memory.client }),
