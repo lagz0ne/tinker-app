@@ -83,9 +83,10 @@ const moveIssue = operation({
   input: issueApi["issue.move"].input,
   depends: { list: issues.controller, ok: inTeam },
   run: ({ list, ok }, { input }) => {
+    // The member check comes first, as in every call: nobody outside the team reaches a read.
     const key = { teamId: input.teamId, id: input.id };
-    const now = list.of(key).get();
-    if (!now || !ok.run({ input })) return { kind: "gone" as const };
+    const now = ok.run({ input }) ? list.of(key).get() : undefined;
+    if (!now) return { kind: "gone" as const };
     if (now.version !== input.version) return { kind: "stale" as const, version: now.version };
 
     const version = now.version + 1;
@@ -104,8 +105,9 @@ const addComment = operation({
     me: viewer.required,
   },
   run: ({ list, thread, ok, me }, { input, random }) => {
-    const there = list.of({ teamId: input.teamId, id: input.issueId }).get();
-    if (!there || !ok.run({ input })) return { kind: "gone" as const };
+    const key = { teamId: input.teamId, id: input.issueId };
+    const there = ok.run({ input }) ? list.of(key).get() : undefined;
+    if (!there) return { kind: "gone" as const };
 
     thread.set({ ...input, id: random.uuid(), author: me });
     return { kind: "added" as const };

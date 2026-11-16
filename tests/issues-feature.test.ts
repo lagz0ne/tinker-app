@@ -237,6 +237,7 @@ test("every call that names a team answers gone to a person outside it, and writ
   expect(
     await cy.run(issues.api["comment.add"], { input: { teamId, issueId: id, text: "hi" } }),
   ).toEqual(gone);
+  serverSpans.length = 0;
   expect(
     await ana.run(issues.api["issue.move"], {
       input: { teamId, id: "none", version: 1, state: "done" },
@@ -245,6 +246,8 @@ test("every call that names a team answers gone to a person outside it, and writ
   expect(
     await ana.run(issues.api["comment.add"], { input: { teamId, issueId: "none", text: "hi" } }),
   ).toEqual(gone);
+  // S7: each call runs the member check, also when its issue is not there.
+  await until(() => serverSpans.filter((span) => span.name === "issues.inTeam").length === 2);
   // An issue of another team is not an issue of this one.
   const other = await team();
   expect(
