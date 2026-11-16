@@ -9,7 +9,8 @@ import { abortReasons } from "~/components/errors";
 import { telemetry } from "~/components/telemetry";
 
 import { greet } from "@/greet";
-import { issues, whoMeta } from "@/issues";
+import { issues } from "@/issues";
+import { whoMeta } from "@/issues/sign-in";
 import { routeTree } from "@/routes";
 import { todo } from "@/todo";
 

@@ -202,18 +202,17 @@ await app.run(authTesting.signInAs, { input: ANN });
 - `check:tests` fails the build if a prod file
   imports a `*.testing.ts` file.
 
-## A feature: one folder, one door
+## A feature: one folder, no barrel
 
 An app is a set of features. Each feature is
-one folder in `src/`, with one door:
+one folder in `src/`:
 
 ```text
 src/todo/
   contract.ts     todoBoard + todoApi
   ops.server.ts   the server's ops
   todo-list.tsx   the page
-  index.ts        door: todo
-  index.server.ts door: todoOps
+  index.ts        the capsule: todo
 ```
 
 ```ts
@@ -227,18 +226,20 @@ export const todo = capsule({
   `todo.board.todos` is a read view, so
   only the feature's own ops write it.
 - `api` is rpc: every change is a call.
-- Others import `@/todo` only. The server
-  also imports `@/todo/index.server`.
-- Lint refuses a deeper import
-  (`no-restricted-imports`). Inside its
-  folder, a feature imports by `./`.
+- A file is imported by its own path:
+  `@/todo` for the capsule,
+  `@/todo/todo-list` for the page,
+  `@/todo/ops.server` for the server's ops.
+- No file re-exports another (no barrel,
+  ADR 0160). `tinker check` finds one as
+  `tinker/barrel`.
+- A page build refuses a `.server.` file
+  (`pageGuard()`, ADR 0160).
 - The cmds install the board and api:
   `todo.board({ serve: true })` and
   `todo.api({ implement: todoOps })` on
   the server; `todo.board({ read })` and
   `todo.api({ remote })` in the tab.
-- Precedent: a DDD bounded context, a
-  module with one public door.
 
 ## A second feature: the issue board
 

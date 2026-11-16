@@ -8,11 +8,11 @@ import { routes } from "~/components/requests/index.server";
 import { telemetry } from "~/components/telemetry/index.server";
 
 import { greet } from "@/greet";
-import { greetOps } from "@/greet/index.server";
+import { greetOps } from "@/greet/greet.server";
 import { issues } from "@/issues";
-import { issueOps, membersOnly, signedIn } from "@/issues/index.server";
+import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
 import { todo } from "@/todo";
-import { todoOps } from "@/todo/index.server";
+import { todoOps } from "@/todo/ops.server";
 
 import { pages } from "./pages";
 

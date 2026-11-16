@@ -3,8 +3,9 @@ import { createScope } from "@tinkered/core";
 import type { Observe, Scope } from "@tinkered/core";
 import { afterAll, beforeEach, expect, test } from "vite-plus/test";
 
-import { issues, signIn, whoMeta } from "@/issues";
-import { issueOps, membersOnly, signedIn } from "@/issues/index.server";
+import { issues } from "@/issues";
+import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
+import { signIn, whoMeta } from "@/issues/sign-in";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
 

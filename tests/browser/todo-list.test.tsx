@@ -9,8 +9,9 @@ import { expect, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser/context";
 
 import { todo } from "@/todo";
-import { type Todo, TodoList, TodoRow } from "@/todo";
-import { todoOps } from "@/todo/index.server";
+import { type Todo } from "@/todo/contract";
+import { todoOps } from "@/todo/ops.server";
+import { TodoList, TodoRow } from "@/todo/todo-list";
 
 // In a real Chromium: the page asks the server through `todoApi`, and draws the list the server
 // pushes through `todoBoard`. The server here is a scope in the same page, over `memory`.

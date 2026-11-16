@@ -6,7 +6,7 @@ import { afterAll, beforeEach, expect, test } from "vite-plus/test";
 import { routes } from "~/components/requests/index.server";
 
 import { greet } from "@/greet";
-import { greetOps } from "@/greet/index.server";
+import { greetOps } from "@/greet/greet.server";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
 

@@ -5,8 +5,8 @@ import { expect, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser/context";
 
 import { greet } from "@/greet";
-import { Greeting } from "@/greet";
-import { greetOps } from "@/greet/index.server";
+import { greetOps } from "@/greet/greet.server";
+import { Greeting } from "@/greet/greeting";
 
 // In a real Chromium: a Tinker scope runs the rpc key here, React draws its answer.
 

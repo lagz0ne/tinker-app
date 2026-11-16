@@ -5,7 +5,7 @@ import { afterAll, expect, test } from "vite-plus/test";
 import { z } from "zod";
 
 import { greet } from "@/greet";
-import { greetOps } from "@/greet/index.server";
+import { greetOps } from "@/greet/greet.server";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
 

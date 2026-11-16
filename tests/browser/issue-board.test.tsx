@@ -9,8 +9,9 @@ import { expect, onTestFinished, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser/context";
 import { z } from "zod";
 
-import { issues, signIn, whoMeta } from "@/issues";
-import { issueOps, membersOnly, signedIn } from "@/issues/index.server";
+import { issues } from "@/issues";
+import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
+import { signIn, whoMeta } from "@/issues/sign-in";
 import { routeTree } from "@/routes";
 
 // In a real Chromium: the board's pages over `memory`, with the app's own routes. Two tabs are

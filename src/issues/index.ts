@@ -2,11 +2,8 @@ import { capsule } from "@tinkered/core";
 
 import { issueApi, issueBoard } from "./contract";
 
-export { Board, IssuesHome, Thread } from "./board";
-export { signIn, whoMeta } from "./sign-in";
-
 /**
- * The issue board's one door: other features and the cmds import `@/issues` only.
+ * The issue board's capsule. Others import a file of the feature by its own path (ADR 0160).
  * - `board`: members, issues and comments (remote data, keyed by team). Members read their team.
  * - `api`: every change, as a call (rpc).
  */

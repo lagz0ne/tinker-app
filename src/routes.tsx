@@ -4,9 +4,9 @@ import type { Scope } from "@tinkered/core";
 import { baseVersion } from "~/components/health";
 
 import { greet } from "@/greet";
-import { Greeting } from "@/greet";
-import { Board, IssuesHome, Thread } from "@/issues";
-import { TodoList } from "@/todo";
+import { Greeting } from "@/greet/greeting";
+import { Board, IssuesHome, Thread } from "@/issues/board";
+import { TodoList } from "@/todo/todo-list";
 
 const root = createRootRouteWithContext<{ scope: Scope.Handle }>()({ component: Outlet });
 

@@ -6,9 +6,9 @@ import { afterEach, expect, test } from "vite-plus/test";
 import { z } from "zod";
 
 import { greet } from "@/greet";
-import { greetOps } from "@/greet/index.server";
+import { greetOps } from "@/greet/greet.server";
 import { todo } from "@/todo";
-import { todoOps } from "@/todo/index.server";
+import { todoOps } from "@/todo/ops.server";
 
 // The todo feature as the two cmds install it: the server serves the board and implements the
 // api; each tab reads the board and calls the api. Over `memory`, the same protocol as the socket.

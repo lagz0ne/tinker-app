@@ -1,6 +1,8 @@
 # A feature is one folder with one door
 
-Date: 2026-11-10. Status: accepted; built.
+Date: 2026-11-10. Status: replaced by Tinker
+ADR 0160 (2026-11-16): no barrel; a file is
+imported by its own path.
 Accepted: Duke, 2026-11-10 03:11 UTC.
 
 ## What Duke said
