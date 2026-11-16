@@ -55,6 +55,20 @@ test("an issue made and moved on one tab moves on the drawn tab; a thread takes 
   await page.getByLabelText("New issue").fill("Login fails");
   await page.getByRole("button", { name: "Add issue" }).click();
   await expect.element(page.getByRole("link", { name: "ENG-1" })).toBeVisible();
+  // P2: four lanes. A new card is in backlog, with its title.
+  for (const lane of ["backlog", "todo", "doing", "done"]) {
+    // In the page, not "visible": a lane with no card and no heading has no size.
+    await expect.element(page.getByRole("region", { name: lane, exact: true })).toBeInTheDocument();
+  }
+  const backlog = page.getByRole("region", { name: "backlog", exact: true });
+  await expect.element(backlog.getByRole("link", { name: "ENG-1" })).toBeVisible();
+  expect(backlog.element().textContent).toContain("Login fails");
+  // P2: a lane lists its cards by number.
+  await page.getByLabelText("New issue").fill("Logout fails");
+  await page.getByRole("button", { name: "Add issue" }).click();
+  await expect
+    .poll(() => [...backlog.element().querySelectorAll("a")].map((a) => a.textContent))
+    .toEqual(["ENG-1", "ENG-2"]);
 
   const [made] = ana.resolve(issues.board.issues.where({ teamId: "ENG" })).get();
   const id = made?.id ?? server.resolve(issues.board.issues).get()[0]!.id;
@@ -63,6 +77,19 @@ test("an issue made and moved on one tab moves on the drawn tab; a thread takes 
   });
   const done = page.getByRole("region", { name: "done" });
   await expect.element(done.getByRole("link", { name: "ENG-1" })).toBeVisible();
+  await expect.element(backlog.getByRole("link", { name: "ENG-1" })).not.toBeInTheDocument();
+
+  // P2: the member form adds a person to the team.
+  await page.getByRole("textbox", { name: "Add member" }).fill("cy");
+  await page.getByRole("button", { name: "Add member" }).click();
+  await expect
+    .poll(() =>
+      server
+        .resolve(issues.board.members)
+        .get()
+        .map((m) => m.userId),
+    )
+    .toContain("cy");
 
   await page.getByLabelText("State of ENG-1").selectOptions("todo");
   await expect.poll(() => server.resolve(issues.board.issues).get()[0]?.state).toBe("todo");
@@ -109,7 +136,8 @@ test('"Open team" on a new key makes the team and shows its board', async () => 
 
   await page.getByLabelText("Your name").fill("dee");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByLabelText("Team key").fill("NEW");
+  // The contract upper-cases a key, so the page opens the team under that key.
+  await page.getByLabelText("Team key").fill("new");
   await page.getByRole("button", { name: "Open team" }).click();
 
   await expect.element(page.getByRole("heading", { name: "NEW" })).toBeVisible();
@@ -216,6 +244,206 @@ test('a refused thread says why; "Try again" shows its comments once it is allow
   await server.close();
 });
 
+// P4: a read with no `who` is refused by `signedIn`: the page says to sign in.
+test("a tab that is not signed in is told to sign in", async () => {
+  const server = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const nobody = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
+  const router = createRouter({ routeTree, history, context: { scope: nobody } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
+  root.render(
+    <ScopeProvider scope={nobody}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  await expect
+    .poll(() => document.querySelector("main [role=alert]")?.textContent)
+    .toBe("Sign in first.");
+  expect(document.querySelector("form")).toBeNull();
+
+  await nobody.close();
+  await server.close();
+});
+
+// P4: until the server answers the read, the page says that it loads, and shows no board. The
+// server's start hook holds the read here, so the wait is as long as the test needs.
+test("a board that is not read yet says that it loads", async () => {
+  const answer = Promise.withResolvers<void>();
+  const hold = operation({
+    label: "test.issues.hold",
+    input: transport.hook.start,
+    run: async () => {
+      await answer.promise;
+
+      return undefined;
+    },
+  });
+  const server = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly, hold] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const ana = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
+  const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
+  const router = createRouter({ routeTree, history, context: { scope: ana } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
+  root.render(
+    <ScopeProvider scope={ana}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  await expect
+    .poll(() => document.querySelector("main [role=status]")?.textContent)
+    .toBe("Loading.");
+  expect(document.querySelector("form")).toBeNull();
+
+  answer.resolve();
+  await expect.element(page.getByRole("heading", { name: "ENG" })).toBeVisible();
+
+  await ana.close();
+  await server.close();
+});
+
+// P2: the server answers `stale` when the card's version is not its own. The answer is replaced
+// here, so the page's move is stale with no race between two tabs.
+test("a stale move says that someone else changed the issue", async () => {
+  const stale = operation({
+    label: "test.issue.move.stale",
+    input: issues.api["issue.move"].input,
+    run: () => ({ kind: "stale" as const, version: 7 }),
+  });
+  const server = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: { ...issueOps, "issue.move": stale }, onStart: [signedIn] }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const ana = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
+  await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: "Login fails" } });
+  const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
+  const router = createRouter({ routeTree, history, context: { scope: ana } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
+  root.render(
+    <ScopeProvider scope={ana}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  await page.getByLabelText("State of ENG-1").selectOptions("doing");
+
+  await expect
+    .poll(() => document.querySelector("main [role=status]")?.textContent)
+    .toBe("Changed by someone else.");
+  const backlog = page.getByRole("region", { name: "backlog", exact: true });
+  await expect.element(backlog.getByRole("link", { name: "ENG-1" })).toBeVisible();
+
+  await ana.close();
+  await server.close();
+});
+
+// P4: `gone` is an answer, so the page says it as a status. The answers are replaced here: a
+// member's own page gets `gone` only in a race (the issue or the membership went away).
+test("a call that answers gone says so", async () => {
+  const moveGone = operation({
+    label: "test.issue.move.gone",
+    input: issues.api["issue.move"].input,
+    run: () => ({ kind: "gone" as const }),
+  });
+  const addGone = operation({
+    label: "test.team.add.gone",
+    input: issues.api["team.add"].input,
+    run: () => ({ kind: "gone" as const }),
+  });
+  const server = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({
+        implement: { ...issueOps, "issue.move": moveGone, "team.add": addGone },
+        onStart: [signedIn],
+      }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const ana = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
+  await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: "Login fails" } });
+  const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
+  const router = createRouter({ routeTree, history, context: { scope: ana } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // A test that fails leaves no page behind for the next one.
+  onTestFinished(() => root.unmount());
+  root.render(
+    <ScopeProvider scope={ana}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+  const said = () => [...document.querySelectorAll("main [role=status]")].map((e) => e.textContent);
+
+  await page.getByLabelText("State of ENG-1").selectOptions("doing");
+  await expect.poll(said).toEqual(["This issue is gone."]);
+
+  await page.getByRole("textbox", { name: "Add member" }).fill("cy");
+  await page.getByRole("button", { name: "Add member" }).click();
+  await expect.poll(said).toContain("That is gone, or you are not in this team.");
+
+  await ana.close();
+  await server.close();
+});
+
 test("a call that breaks on the server shows a ref, and the server's trace has the cause", async () => {
   const spans: Observe.Span[] = [];
   const boom = operation({
@@ -312,6 +540,10 @@ test("the server goes away with the page open: the page says that it is offline"
     .poll(() => document.querySelector("main [role=status]")?.textContent)
     .toBe("Offline. Trying again.");
   expect(document.querySelector("form")).toBeNull();
+  // A broken link heals by itself: there is nothing for the person to press.
+  expect([...document.querySelectorAll("button")].map((b) => b.textContent)).not.toContain(
+    "Try again",
+  );
 
   await ana.close();
 });
