@@ -1,0 +1,36 @@
+client    op check: deps{cell:issues.me.controller} reads{} writes{issues.me.set} calls{} returns{}
+client    op check: deps{cell:issues.me.value} reads{} writes{} calls{} returns{}
+contract  capsule exports{api,board}
+contract  cell issues.comments keyed key{teamId,issueId,id}
+contract  cell issues.list keyed key{teamId,id}
+contract  cell issues.me plain
+contract  cell issues.members keyed key{teamId,userId}
+contract  rpc comment.add -> added|gone
+contract  rpc issue.create -> created|gone
+contract  rpc issue.move -> gone|moved|stale
+contract  rpc team.add -> added|gone
+contract  rpc team.create -> created|exists
+contract  served comments = issues.comments
+contract  served issues = issues.list
+contract  served members = issues.members
+contract  tag own
+page      data comments.where
+page      data issues.me
+page      data issues.where
+page      data status(comments.where)
+page      data status(issues.where)
+page      run comment.add
+page      run invalidate
+page      run issue.create
+page      run issue.move
+page      run issues.signIn
+page      run team.add
+page      run team.create
+server    op check: deps{cell:issues.members.controller,tag:own.required} reads{issues.members.of} writes{} calls{} returns{}
+server    op hook: deps{op:check} reads{} writes{} calls{op:check} returns{} refuses
+server    op hook: deps{} reads{} writes{} calls{} returns{} refuses
+server    op serves comment.add: deps{cell:issues.comments.controller,cell:issues.list.controller,op:check,tag:own.required} reads{issues.list.of} writes{issues.comments.set} calls{op:check} returns{added|gone}
+server    op serves issue.create: deps{cell:issues.list.controller,op:check} reads{issues.list.where} writes{issues.list.set} calls{op:check} returns{created|gone}
+server    op serves issue.move: deps{cell:issues.list.controller,op:check} reads{issues.list.of} writes{issues.list.set} calls{op:check} returns{gone|moved|stale}
+server    op serves team.add: deps{cell:issues.members.controller,op:check} reads{} writes{issues.members.set} calls{op:check} returns{added|gone}
+server    op serves team.create: deps{cell:issues.members.controller,tag:own.required} reads{issues.members.where} writes{issues.members.set} calls{} returns{created|exists}
