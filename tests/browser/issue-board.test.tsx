@@ -137,7 +137,7 @@ test('"Open team" on a new key makes the team and shows its board', async () => 
 
   await page.getByLabelText("Your name").fill("dee");
   await page.getByRole("button", { name: "Sign in" }).click();
-  // The contract upper-cases a key, so the page opens the team under that key.
+  // The server answers with the key it keeps (upper case), and the page opens the team there.
   await page.getByLabelText("Team key").fill("new");
   await page.getByRole("button", { name: "Open team" }).click();
 

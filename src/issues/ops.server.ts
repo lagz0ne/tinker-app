@@ -43,10 +43,10 @@ const createTeam = operation({
   input: issueApi["team.create"].input,
   depends: { team: members.controller, me: viewer.required },
   run: ({ team, me }, { input }) => {
-    if (team.where(input).get().length) return { kind: "exists" as const };
+    if (team.where(input).get().length) return { kind: "exists" as const, teamId: input.teamId };
 
     team.set({ ...input, userId: me });
-    return { kind: "created" as const };
+    return { kind: "created" as const, teamId: input.teamId };
   },
 });
 

@@ -70,7 +70,8 @@ export const issueApi = rpc({
         .toUpperCase()
         .regex(/^[A-Z][A-Z0-9]{1,9}$/),
     }),
-    output: z.object({ kind: z.enum(["created", "exists"]) }),
+    /** The key as the server keeps it: the page opens the team there, never at its own copy. */
+    output: z.object({ kind: z.enum(["created", "exists"]), teamId: z.string() }),
   },
   "team.add": {
     input: team.extend({ userId: z.string().trim().min(1) }),

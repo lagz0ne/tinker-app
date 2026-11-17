@@ -90,7 +90,7 @@ test("a team is made once; issue numbers count up with no gap", async () => {
   const again = await bo.run(issues.api["team.create"], { input: { teamId } });
   const add = (title: string) => ana.run(issues.api["issue.create"], { input: { teamId, title } });
 
-  expect(again).toEqual({ kind: "exists" });
+  expect(again).toEqual({ kind: "exists", teamId });
   expect([await add("one"), await add("two"), await add("three")]).toEqual([
     { kind: "created", number: 1 },
     { kind: "created", number: 2 },
@@ -110,6 +110,7 @@ test("a team that exists takes no new member from team.create", async () => {
 
   expect(await cy.run(issues.api["team.create"], { input: { teamId } })).toEqual({
     kind: "exists",
+    teamId,
   });
   const inTeam = backend
     .resolve(issues.board.members)

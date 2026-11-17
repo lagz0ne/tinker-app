@@ -15,8 +15,7 @@ export function IssuesHome() {
   const signedIn = useRun(signIn);
   const navigate = useNavigate();
   const open = useRun(issueApi["team.create"], {
-    onSuccess: (_, call) =>
-      call.input && void navigate({ to: "/issues/$team", params: { team: call.input.teamId } }),
+    onSuccess: (out) => void navigate({ to: "/issues/$team", params: { team: out.teamId } }),
   });
   const me = useData(signedAs);
 
@@ -38,9 +37,7 @@ export function IssuesHome() {
           onSubmit={(event) => {
             event.preventDefault();
             const teamId = new FormData(event.currentTarget).get("team");
-            if (typeof teamId === "string") {
-              open.run({ input: { teamId: teamId.trim().toUpperCase() } });
-            }
+            if (typeof teamId === "string") open.run({ input: { teamId } });
           }}
         >
           <input name="team" aria-label="Team key" placeholder="ENG" />
