@@ -60,6 +60,7 @@ function analyze(file) {
   const src = program.getSourceFile(file);
   const ops = [];
   const labelOfVar = new Map();
+  const tagOfVar = new Map();
   const imported = new Map();
   for (const st of src.statements) {
     if (ts.isImportDeclaration(st) && st.importClause?.namedBindings && ts.isNamedImports(st.importClause.namedBindings)) {
@@ -73,6 +74,11 @@ function analyze(file) {
       const decl = n.parent && ts.isVariableDeclaration(n.parent) ? n.parent.name.getText() : undefined;
       if (label && decl) labelOfVar.set(decl, label);
       ops.push({ label, obj });
+    }
+    if (ts.isCallExpression(n) && n.expression.getText() === "tag" && n.arguments[0] && ts.isObjectLiteralExpression(n.arguments[0])) {
+      const label = propOf(n.arguments[0], "label")?.initializer?.text;
+      const decl = n.parent && ts.isVariableDeclaration(n.parent) ? n.parent.name.getText() : undefined;
+      if (label && decl) tagOfVar.set(decl, label);
     }
     ts.forEachChild(n, visit);
   };
@@ -89,7 +95,11 @@ function analyze(file) {
         const cell = local ? (imported.get(local) ?? local) : undefined;
         if (cell && CELL.test(cell)) deps.set(key, { cell });
         else if (local && labelOfVar.has(local)) deps.set(key, { op: labelOfVar.get(local) });
-        else if (!/\.required$|\.optional$/.test(val)) deps.set(key, { cell: "?", op: "?" });
+        else if (local && tagOfVar.has(local)) deps.set(key, { tag: tagOfVar.get(local) });
+        else if (/^(\w+)\.(required|optional)$/.test(val)) {
+          const name = val.split(".")[0];
+          deps.set(key, { tag: tagOfVar.get(name) ?? imported.get(name) ?? name });
+        } else deps.set(key, { cell: "?", op: "?" });
       }
     }
     const runP = propOf(obj, "run");
@@ -103,7 +113,7 @@ function analyze(file) {
       }
     }
     const paths = walkFn(fn, alias);
-    return { label, paths };
+    return { label, paths, data: dataFacts(fn, alias) };
   });
 }
 
@@ -213,6 +223,126 @@ function walkFn(fn, alias) {
   return done;
 }
 
+
+/** Data facts: the key of each read and the source of each written field, one level of
+ *  local consts deep. A source is `input.x`, `tag:<label>`, `read:<cell>{keys}`, `random`,
+ *  `literal`, or `?` (the code hands it through something this script does not follow). */
+function dataFacts(fn, alias) {
+  if (!fn) return { reads: [], writes: [] };
+  const local = new Map();
+  const p1 = fn.parameters?.[1];
+  const ctxNames = new Set();
+  if (p1 && ts.isObjectBindingPattern(p1.name)) for (const el of p1.name.elements) ctxNames.add(el.name.getText());
+  const scanDecl = (n) => {
+    if (ts.isVariableDeclaration(n) && n.initializer) {
+      if (ts.isIdentifier(n.name)) local.set(n.name.getText(), n.initializer);
+      else if (ts.isObjectBindingPattern(n.name)) {
+        for (const el of n.name.elements) local.set(el.name.getText(), { from: n.initializer, field: (el.propertyName ?? el.name).getText() });
+      }
+    }
+    if (ts.isForOfStatement(n) && ts.isVariableDeclarationList(n.initializer)) {
+      for (const d of n.initializer.declarations) if (ts.isIdentifier(d.name)) local.set(d.name.getText(), n.expression);
+    }
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left)) {
+      (more.get(n.left.getText()) ?? more.set(n.left.getText(), []).get(n.left.getText())).push(n.right);
+    }
+    ts.forEachChild(n, scanDecl);
+  };
+  const more = new Map();
+  scanDecl(fn.body);
+  const reads = [];
+  const writes = [];
+  const bound = new Set();
+  const GLOBALS = new Set(["Math", "Number", "String", "Date", "JSON", "Object", "Array", "Boolean", "undefined"]);
+  const readKey = (call) => {
+    const pa = call.expression;
+    const d = alias.get(unwrap(pa.expression).getText());
+    let arg = call.arguments[0] ? unwrap(call.arguments[0]) : undefined;
+    if (arg && ts.isIdentifier(arg) && local.get(arg.getText()) && !local.get(arg.getText()).from) {
+      const init = unwrap(local.get(arg.getText()));
+      if (ts.isObjectLiteralExpression(init)) arg = init;
+    }
+    const keys = arg && ts.isObjectLiteralExpression(arg) ? fields(arg) : arg ? { "*": src(arg, 0) } : {};
+    return { cell: d.cell, how: pa.name.getText(), keys };
+  };
+  const isCellCall = (e, names) => ts.isCallExpression(e) && ts.isPropertyAccessExpression(e.expression) && names.includes(e.expression.name.getText()) && ts.isIdentifier(unwrap(e.expression.expression)) && alias.get(unwrap(e.expression.expression).getText())?.cell;
+  const fmtKeys = (k) => `{${Object.entries(k).map(([f, v]) => `${f}<-${[...v].join("|")}`).join(",")}}`;
+  const src = (e, depth) => {
+    e = unwrap(e);
+    const out = new Set();
+    if (!e || depth > 6) return new Set(["?"]);
+    if (ts.isStringLiteral(e) || ts.isNumericLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e) || e.kind === ts.SyntaxKind.TrueKeyword || e.kind === ts.SyntaxKind.FalseKeyword) return new Set(["literal"]);
+    if (ts.isIdentifier(e)) {
+      const n = e.getText();
+      const d = alias.get(n);
+      if (d?.tag) return new Set([`tag:${d.tag}`]);
+      if (d?.op && d.op !== "?") return new Set();
+      if (ctxNames.has(n)) return new Set([n === "input" ? "input.*" : n]);
+      const l = local.get(n);
+      if (l && l.from) {
+        const base = unwrap(l.from);
+        if (ts.isIdentifier(base) && ctxNames.has(base.getText()) && base.getText() === "input") return new Set([`input.${l.field}`]);
+        return src(l.from, depth + 1);
+      }
+      if (l) {
+        const all = new Set(src(l, depth + 1));
+        for (const r of more.get(n) ?? []) if (depth < 4) for (const x of src(r, depth + 1)) all.add(x);
+        return all;
+      }
+      if (GLOBALS.has(n) || bound.has(n)) return new Set();
+      return new Set(["?"]);
+    }
+    if (ts.isPropertyAccessExpression(e)) {
+      const base = unwrap(e.expression);
+      if (ts.isIdentifier(base) && base.getText() === "input" && ctxNames.has("input")) return new Set([`input.${e.name.getText()}`]);
+      if (ts.isIdentifier(base) && base.getText() === "random") return new Set(["random"]);
+      return src(e.expression, depth);
+    }
+    if (ts.isArrowFunction(e) || ts.isFunctionExpression(e)) {
+      for (const prm of e.parameters) bound.add(prm.name.getText());
+      return src(e.body, depth);
+    }
+    if (ts.isCallExpression(e)) {
+      const inner = ts.isPropertyAccessExpression(e.expression) ? unwrap(e.expression.expression) : undefined;
+      if (inner && isCellCall(inner, ["of", "where"])) {
+        const r = readKey(inner);
+        return new Set([`read:${r.cell}.${r.how}${fmtKeys(r.keys)}`]);
+      }
+      if (isCellCall(e, ["of", "where"])) {
+        const r = readKey(e);
+        return new Set([`read:${r.cell}.${r.how}${fmtKeys(r.keys)}`]);
+      }
+    }
+    ts.forEachChild(e, (c) => {
+      if (ts.isExpression(c) || ts.isIdentifier(c)) for (const x of src(c, depth)) out.add(x);
+    });
+    return out.size ? out : new Set(["literal"]);
+  };
+  const fields = (obj) => {
+    const f = {};
+    for (const p of obj.properties) {
+      if (ts.isSpreadAssignment(p)) {
+        const s = src(p.expression, 0);
+        f["..."] = new Set([...(f["..."] ?? []), ...s]);
+        for (const k of Object.keys(f)) if (k !== "...") f[k] = new Set([...f[k], ...[...s].map((x) => `${x} (if it has ${k})`)]);
+      } else if (ts.isShorthandPropertyAssignment(p)) f[p.name.getText()] = src(p.name, 0);
+      else if (ts.isPropertyAssignment(p)) f[p.name.getText()] = src(p.initializer, 0);
+    }
+    return f;
+  };
+  const visit = (n) => {
+    if (isCellCall(n, ["of", "where"])) reads.push({ line: n.getSourceFile().getLineAndCharacterOfPosition(n.getStart()).line + 1, ...readKey(n) });
+    if (isCellCall(n, ["set"])) {
+      const d = alias.get(unwrap(n.expression.expression).getText());
+      const arg = n.arguments[0] ? unwrap(n.arguments[0]) : undefined;
+      writes.push({ line: n.getSourceFile().getLineAndCharacterOfPosition(n.getStart()).line + 1, cell: d.cell, fields: arg && ts.isObjectLiteralExpression(arg) ? fields(arg) : { "*": arg ? src(arg, 0) : new Set(["?"]) } });
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(fn.body);
+  return { reads, writes, fmtKeys };
+}
+
 const CHECK = "issues.inTeam";
 for (const file of process.argv.slice(2)) {
   const app = basename(file, ".ts");
@@ -221,7 +351,11 @@ for (const file of process.argv.slice(2)) {
   const j1u = [];
   const j6 = [];
   const j6u = [];
-  for (const { label, paths } of analyze(file)) {
+  const j3 = [];
+  const j5 = [];
+  const j7 = [];
+  const ju = { J3: [], J5: [], J7: [] };
+  for (const { label, paths, data } of analyze(file)) {
     const byExit = new Map();
     for (const p of paths) {
       const exit = p.at(-1).kind;
@@ -249,9 +383,41 @@ for (const file of process.argv.slice(2)) {
     if (readsIssues) facts.push(`O ${label} issues read-before ${CHECK}: ${early.size ? `yes @${[...early].join(",")}` : "no"}`);
     if (early.size && label !== CHECK) j6.push(`${label} reads issues before the check @${[...early].join(",")}`);
     if (unsure.size && label !== CHECK) j6u.push(`${label} unknown dependency before the read @${[...unsure].join(",")}`);
+    for (const r of data.reads) facts.push(`K ${label} ${r.cell}.${r.how}${data.fmtKeys(r.keys)} @${r.line}`);
+    for (const w of data.writes) facts.push(`S ${label} ${w.cell}.set${data.fmtKeys(w.fields)} @${w.line}`);
+    const teamKeyed = (r) => r.keys.teamId && [...r.keys.teamId].every((x) => x === "input.teamId");
+    const unseen = (r) => Object.values(r.keys).some((v) => v.has("?")) || r.keys["*"];
+    if (["issue.move.do", "comment.add.do"].includes(label)) {
+      for (const r of data.reads.filter((r) => r.cell === "issues")) {
+        if (unseen(r) && !teamKeyed(r)) ju.J5.push(`${label} issues.${r.how} key unseen @${r.line}`);
+        else if (!teamKeyed(r) || (r.how === "of" && !r.keys.id)) j5.push(`${label} issues.${r.how}${data.fmtKeys(r.keys)} @${r.line}`);
+      }
+    }
+    if (label === "issue.create.do") {
+      const w = data.writes.find((w) => w.cell === "issues");
+      const num = w?.fields.number;
+      if (!num) ju.J3.push(`${label} number source unseen`);
+      else {
+        const reads = [...num].filter((x) => x.startsWith("read:issues"));
+        const bad = reads.filter((x) => !/teamId<-input\.teamId/.test(x));
+        if (!reads.length) ju.J3.push(`${label} number<-${[...num].join("|")}`);
+        else if (bad.length) j3.push(`${label} number<-${bad.join("|")} @${w.line}`);
+      }
+    }
+    if (label === "comment.add.do") {
+      const w = data.writes.find((w) => w.cell === "comments");
+      const a = w?.fields.author;
+      if (!a) ju.J7.push(`${label} author unseen`);
+      else if ([...a].some((x) => x.startsWith("input") && !x.includes("(if it has"))) j7.push(`${label} author<-${[...a].join("|")} @${w.line}`);
+      else if (![...a].every((x) => x.startsWith("tag:"))) ju.J7.push(`${label} author<-${[...a].join("|")}`);
+    }
   }
   console.log(`== ${app}`);
   for (const f of facts) console.log(`  ${f}`);
   console.log(`  J1 ${j1.length ? `VIOLATION ${j1.join("; ")}` : j1u.length ? `UNSURE ${j1u.join("; ")}` : "OK"}`);
   console.log(`  J6 ${j6.length ? `VIOLATION ${j6.join("; ")}` : j6u.length ? `UNSURE ${j6u.join("; ")}` : "OK"}`);
+  const say = (id, bad, un) => console.log(`  ${id} ${bad.length ? `VIOLATION ${bad.join("; ")}` : un.length ? `UNSURE ${un.join("; ")}` : "OK"}`);
+  say("J3", j3, ju.J3);
+  say("J5", j5, ju.J5);
+  say("J7", j7, ju.J7);
 }
