@@ -88,8 +88,8 @@ function analyze(file) {
         const local = val.match(/^(\w+)(\.controller)?$/)?.[1];
         const cell = local ? (imported.get(local) ?? local) : undefined;
         if (cell && CELL.test(cell)) deps.set(key, { cell });
-        else if (labelOfVar.has(val)) deps.set(key, { op: labelOfVar.get(val) });
-        else if (!/\.required$|\.optional$/.test(val)) deps.set(key, { cell: "?" });
+        else if (local && labelOfVar.has(local)) deps.set(key, { op: labelOfVar.get(local) });
+        else if (!/\.required$|\.optional$/.test(val)) deps.set(key, { cell: "?", op: "?" });
       }
     }
     const runP = propOf(obj, "run");
@@ -220,6 +220,7 @@ for (const file of process.argv.slice(2)) {
   const j1 = [];
   const j1u = [];
   const j6 = [];
+  const j6u = [];
   for (const { label, paths } of analyze(file)) {
     const byExit = new Map();
     for (const p of paths) {
@@ -234,18 +235,23 @@ for (const file of process.argv.slice(2)) {
       if (exit === "value" && w.size && !/^issues\.(signedIn|membersOnly|inTeam)$/.test(label)) j1u.push(`${label} exit of unknown kind writes ${[...w].join(",")}`);
     }
     const early = new Set();
+    const unsure = new Set();
     for (const p of paths) {
       const iRead = p.findIndex((ev) => (ev.t === "read" || ev.t === "may") && (ev.cell === "issues" || ev.cell === "?"));
       if (iRead < 0) continue;
       const iCheck = p.findIndex((ev) => ev.t === "call" && ev.op === CHECK);
-      if (iCheck < 0 || iCheck > iRead) early.add(p[iRead].line);
+      const iUnknown = p.findIndex((ev) => ev.t === "call" && ev.op === "?");
+      if (iCheck >= 0 && iCheck < iRead) continue;
+      if (p[iRead].cell === "?" || (iUnknown >= 0 && iUnknown < iRead)) unsure.add(p[iRead].line);
+      else early.add(p[iRead].line);
     }
     const readsIssues = paths.some((p) => p.some((ev) => ev.t === "read" && (ev.cell === "issues" || ev.cell === "?")));
     if (readsIssues) facts.push(`O ${label} issues read-before ${CHECK}: ${early.size ? `yes @${[...early].join(",")}` : "no"}`);
     if (early.size && label !== CHECK) j6.push(`${label} reads issues before the check @${[...early].join(",")}`);
+    if (unsure.size && label !== CHECK) j6u.push(`${label} unknown dependency before the read @${[...unsure].join(",")}`);
   }
   console.log(`== ${app}`);
   for (const f of facts) console.log(`  ${f}`);
   console.log(`  J1 ${j1.length ? `VIOLATION ${j1.join("; ")}` : j1u.length ? `UNSURE ${j1u.join("; ")}` : "OK"}`);
-  console.log(`  J6 ${j6.length ? `VIOLATION ${j6.join("; ")}` : "OK"}`);
+  console.log(`  J6 ${j6.length ? `VIOLATION ${j6.join("; ")}` : j6u.length ? `UNSURE ${j6u.join("; ")}` : "OK"}`);
 }
