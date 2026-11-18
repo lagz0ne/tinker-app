@@ -24,8 +24,14 @@ Before editing files for a substantial task:
 ## After you edit: run the check
 
 1. `bun run check:plain` runs `tinker check`.
-   It runs four stages: types, rules, tests,
-   then exits. An exit is one way out of an
+   It runs five stages: types, rules, graph,
+   tests, then exits. The graph is
+   `tinker.graph`: one line per operation, with
+   what it reads, writes and calls. After you
+   change an operation, run
+   `bunx tinker graph --write`, read the diff,
+   and commit it.
+   An exit is one way out of an
    operation: each `kind` of its answer, a
    refusal, or a plain return. A test must reach
    each one.
