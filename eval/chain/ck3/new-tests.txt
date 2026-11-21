@@ -1,0 +1,2 @@
+an archived team is read as before and takes no change
+an archived team says so on the next change

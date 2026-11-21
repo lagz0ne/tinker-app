@@ -1,0 +1,3 @@
+a rename lands on the other tab; a rename from an old version answers stale
+a card is renamed in place
+a stale rename says that someone else changed the issue
