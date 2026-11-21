@@ -1,7 +1,9 @@
 comment.add.do exits{added,gone} reads{issues.list.of} writes{issues.comments.set} calls{issues.inTeam}
 greet.here exits{value} reads{} writes{} calls{}
 issue.create.do exits{created,gone} reads{issues.list.where} writes{issues.list.set} calls{issues.inTeam}
-issue.move.do exits{gone,moved,stale} reads{issues.list.of} writes{issues.list.set} calls{issues.inTeam}
+issue.move.do exits{gone,moved,stale} reads{} writes{issues.list.set} calls{issues.atVersion}
+issue.rename.do exits{gone,renamed,stale} reads{} writes{issues.list.set} calls{issues.atVersion}
+issues.atVersion exits{gone,now,stale} reads{issues.list.of} writes{} calls{issues.inTeam}
 issues.inTeam exits{value} reads{issues.members.of} writes{} calls{}
 issues.membersOnly exits{refused,value} reads{} writes{} calls{issues.inTeam}
 issues.signIn exits{value} reads{} writes{issues.me.set} calls{}

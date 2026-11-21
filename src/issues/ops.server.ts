@@ -77,20 +77,48 @@ const createIssue = operation({
   },
 });
 
-const moveIssue = operation({
-  label: "issue.move.do",
-  input: issueApi["issue.move"].input,
+/** The issue a change names, at the version it saw. The member check comes first, as in every
+ * call: nobody outside the team reaches a read. A move and a rename both start here. */
+const atVersion = operation({
+  label: "issues.atVersion",
+  input: z.object({ teamId: z.string(), id: z.string(), version: z.number() }),
   depends: { list: issues.controller, ok: inTeam },
   run: ({ list, ok }, { input }) => {
-    // The member check comes first, as in every call: nobody outside the team reaches a read.
-    const key = { teamId: input.teamId, id: input.id };
-    const now = ok.run({ input }) ? list.of(key).get() : undefined;
+    const now = ok.run({ input })
+      ? list.of({ teamId: input.teamId, id: input.id }).get()
+      : undefined;
     if (!now) return { kind: "gone" as const };
     if (now.version !== input.version) return { kind: "stale" as const, version: now.version };
 
-    const version = now.version + 1;
-    list.set({ ...now, state: input.state, version });
+    return { kind: "now" as const, issue: now };
+  },
+});
+
+const moveIssue = operation({
+  label: "issue.move.do",
+  input: issueApi["issue.move"].input,
+  depends: { list: issues.controller, at: atVersion },
+  run: ({ list, at }, { input }) => {
+    const now = at.run({ input });
+    if (now.kind !== "now") return now;
+
+    const version = now.issue.version + 1;
+    list.set({ ...now.issue, state: input.state, version });
     return { kind: "moved" as const, version };
+  },
+});
+
+const renameIssue = operation({
+  label: "issue.rename.do",
+  input: issueApi["issue.rename"].input,
+  depends: { list: issues.controller, at: atVersion },
+  run: ({ list, at }, { input }) => {
+    const now = at.run({ input });
+    if (now.kind !== "now") return now;
+
+    const version = now.issue.version + 1;
+    list.set({ ...now.issue, title: input.title, version });
+    return { kind: "renamed" as const, version };
   },
 });
 
@@ -119,5 +147,6 @@ export const issueOps = {
   "team.add": addMember,
   "issue.create": createIssue,
   "issue.move": moveIssue,
+  "issue.rename": renameIssue,
   "comment.add": addComment,
 } as const;

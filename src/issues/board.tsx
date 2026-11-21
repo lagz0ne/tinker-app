@@ -52,15 +52,15 @@ export function IssuesHome() {
 const notMember = z.object({ notMember: z.string() });
 
 /** A call's answer, as the page gets it. */
-type Out<K extends "team.add" | "issue.create" | "issue.move" | "comment.add"> = Awaited<
-  ReturnType<(typeof issueApi)[K]["run"]>
->;
+type Out<K extends "team.add" | "issue.create" | "issue.move" | "issue.rename" | "comment.add"> =
+  Awaited<ReturnType<(typeof issueApi)[K]["run"]>>;
 
-/** What a move's answer says. Every kind has its case: a new kind fails here. */
-function Moved({ out }: { out: Out<"issue.move"> | undefined }) {
+/** What a move's or a rename's answer says. Every kind has its case: a new kind fails here. */
+function Changed({ out }: { out: Out<"issue.move" | "issue.rename"> | undefined }) {
   switch (out?.kind) {
     case undefined:
     case "moved":
+    case "renamed":
       return null;
     case "stale":
       return <small role="status">Changed by someone else.</small>;
@@ -200,7 +200,8 @@ export function Board({ teamId }: { teamId: string }) {
  * (and its new lane). */
 const Card = memo(function Card({ issue }: { issue: Issue }) {
   const move = useRun(issueApi["issue.move"]);
-  const { teamId, id } = issue;
+  const rename = useRun(issueApi["issue.rename"]);
+  const { teamId, id, version } = issue;
 
   const name = `${teamId}-${issue.number}`;
   return (
@@ -214,15 +215,31 @@ const Card = memo(function Card({ issue }: { issue: Issue }) {
         value={issue.state}
         onChange={(event) => {
           const state = states.find((s) => s === event.target.value);
-          if (state) move.run({ input: { teamId, id, version: issue.version, state } });
+          if (state) move.run({ input: { teamId, id, version, state } });
         }}
       >
         {states.map((s) => (
           <option key={s}>{s}</option>
         ))}
       </select>
-      <Moved out={move.data} />
-      <CallFault error={move.error} />
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const title = new FormData(event.currentTarget).get("title");
+          if (typeof title === "string") rename.run({ input: { teamId, id, version, title } });
+        }}
+      >
+        <input
+          name="title"
+          aria-label={`Title of ${name}`}
+          defaultValue={issue.title}
+          key={version}
+        />
+        <button type="submit">Rename</button>
+      </form>
+      <Changed out={move.data} />
+      <Changed out={rename.data} />
+      <CallFault error={move.error ?? rename.error} />
     </article>
   );
 });

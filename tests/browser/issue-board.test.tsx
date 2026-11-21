@@ -381,6 +381,73 @@ test("a stale move says that someone else changed the issue", async () => {
   await server.close();
 });
 
+/** A server with the board's ops (some replaced), a signed-in tab, and ENG with one issue. The
+ * tab draws `/issues/ENG`. */
+const drawn = async (replace: Partial<typeof issueOps> = {}) => {
+  const server = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: { ...issueOps, ...replace }, onStart: [signedIn] }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+
+  const ana = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+
+  ana.run(signIn, { input: { name: "ana" } });
+  await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
+  await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: "Login fials" } });
+
+  const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
+  const router = createRouter({ routeTree, history, context: { scope: ana } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  onTestFinished(async () => {
+    root.unmount();
+    await ana.close();
+    await server.close();
+  });
+  root.render(
+    <ScopeProvider scope={ana}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  return server;
+};
+
+// P5: a card's title is renamed in place; the server keeps the new title.
+test("a card is renamed in place", async () => {
+  const server = await drawn();
+
+  await page.getByLabelText("Title of ENG-1").fill("Login fails");
+  await page.getByRole("button", { name: "Rename" }).click();
+
+  await expect.poll(() => server.resolve(issues.board.issues).get()[0]?.title).toBe("Login fails");
+  await expect.element(page.getByLabelText("Title of ENG-1")).toHaveValue("Login fails");
+});
+
+test("a stale rename says that someone else changed the issue", async () => {
+  const stale = operation({
+    label: "test.issue.rename.stale",
+    input: issues.api["issue.rename"].input,
+    run: () => ({ kind: "stale" as const, version: 7 }),
+  });
+  await drawn({ "issue.rename": stale });
+
+  await page.getByLabelText("Title of ENG-1").fill("Login fails");
+  await page.getByRole("button", { name: "Rename" }).click();
+
+  await expect.element(page.getByRole("status")).toBeVisible();
+});
+
 // P4: `gone` is an answer, so the page says it as a status. The answers are replaced here: a
 // member's own page gets `gone` only in a race (the issue or the membership went away).
 test("a call that answers gone says so", async () => {

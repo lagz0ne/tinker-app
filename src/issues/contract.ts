@@ -93,6 +93,19 @@ export const issueApi = rpc({
       gone,
     ]),
   },
+  /** A rename names the version it saw, as a move does: a newer one answers `stale`. */
+  "issue.rename": {
+    input: team.extend({
+      id: z.string(),
+      version: z.number(),
+      title: z.string().trim().min(1).max(200),
+    }),
+    output: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("renamed"), version: z.number() }),
+      z.object({ kind: z.literal("stale"), version: z.number() }),
+      gone,
+    ]),
+  },
   "comment.add": {
     input: team.extend({ issueId: z.string(), text: z.string().trim().min(1).max(5000) }),
     output: z.discriminatedUnion("kind", [z.object({ kind: z.literal("added") }), gone]),

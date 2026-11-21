@@ -157,6 +157,31 @@ test("a move on one tab lands on the other; a move from an old version answers s
   ).toMatchObject({ state: "doing", version: 2 });
 });
 
+// S8: a rename names the version it saw, as a move does. A move and a rename count one version,
+// so a rename after a move from the same old version is stale, and changes nothing.
+test("a rename lands on the other tab; a rename from an old version answers stale", async () => {
+  const teamId = await team();
+  const seen = read(bo, teamId);
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Typo hre" } });
+  await until(() => seen.get().length === 1);
+  const { id } = seen.get()[0]!;
+  const rename = (title: string, version: number) =>
+    ana.run(issues.api["issue.rename"], { input: { teamId, id, version, title } });
+
+  expect(await rename("Typo here", 1)).toEqual({ kind: "renamed", version: 2 });
+  await until(() => seen.get()[0]?.title === "Typo here");
+  expect(
+    await bo.run(issues.api["issue.move"], { input: { teamId, id, version: 2, state: "todo" } }),
+  ).toEqual({ kind: "moved", version: 3 });
+  expect(await rename("Lost edit", 2)).toEqual({ kind: "stale", version: 3 });
+  expect(
+    backend
+      .resolve(issues.board.issues)
+      .get()
+      .find((i) => i.id === id),
+  ).toMatchObject({ title: "Typo here", state: "todo", version: 3 });
+});
+
 test("comments: a part of their own, read by team and issue", async () => {
   const teamId = await team();
   const seen = read(ana, teamId);
@@ -237,6 +262,9 @@ test("every call that names a team answers gone to a person outside it, and writ
     await cy.run(issues.api["issue.move"], { input: { teamId, id, version, state: "done" } }),
   ).toEqual(gone);
   expect(
+    await cy.run(issues.api["issue.rename"], { input: { teamId, id, version, title: "x" } }),
+  ).toEqual(gone);
+  expect(
     await cy.run(issues.api["comment.add"], { input: { teamId, issueId: id, text: "hi" } }),
   ).toEqual(gone);
   serverSpans.length = 0;
@@ -246,10 +274,15 @@ test("every call that names a team answers gone to a person outside it, and writ
     }),
   ).toEqual(gone);
   expect(
+    await ana.run(issues.api["issue.rename"], {
+      input: { teamId, id: "none", version: 1, title: "x" },
+    }),
+  ).toEqual(gone);
+  expect(
     await ana.run(issues.api["comment.add"], { input: { teamId, issueId: "none", text: "hi" } }),
   ).toEqual(gone);
   // S7: each call runs the member check, also when its issue is not there.
-  await until(() => serverSpans.filter((span) => span.name === "issues.inTeam").length === 2);
+  await until(() => serverSpans.filter((span) => span.name === "issues.inTeam").length === 3);
   // An issue of another team is not an issue of this one.
   const other = await team();
   expect(
@@ -262,8 +295,8 @@ test("every call that names a team answers gone to a person outside it, and writ
     backend
       .resolve(issues.board.issues)
       .get()
-      .find((i) => i.id === id)?.state,
-  ).toBe("backlog");
+      .find((i) => i.id === id),
+  ).toMatchObject({ state: "backlog", title: "Ours" });
   expect(
     backend
       .resolve(issues.board.comments)
@@ -323,6 +356,7 @@ test("one move: one trace from tab A to the server's send; tab B's ask links to 
   expect(names(tabSpans, call)).toEqual(["issue.move", "issues.whoMeta", "ws.call", "ws.send"]);
   expect(names(serverSpans, call)).toEqual([
     "issue.move.do",
+    "issues.atVersion",
     "issues.inTeam",
     "issues.signedIn",
     "remoteData.send",
