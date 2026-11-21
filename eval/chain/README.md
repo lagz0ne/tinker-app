@@ -70,3 +70,20 @@ ck4 the role check is in `issues.canWrite` alone.
 
 A model is golden on the chain when 5 of 5 runs are
 strict at ck1, ck2, ck3 and ck4.
+
+## Skill trial (run 13)
+
+`skill/operation-SKILL.md` is the installed
+operation skill plus one section: read
+`tinker.graph` before you write a check, and call
+the operation that makes it.
+
+- Base: the old skill. Run ck4 on each tree that
+  ended run 12 strict at ck3.
+- New: copy the file over
+  `node_modules/@tinkered/core/skills/core/operation/SKILL.md`
+  before ck1, then run the chain to ck4.
+
+Facts per step: strict, and the cell readers from
+`tinker.graph` (each cell, and the ops that read
+it directly).
