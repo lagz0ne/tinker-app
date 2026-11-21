@@ -1,0 +1,3 @@
+a viewer reads the team and every change they ask answers forbidden
+a viewer sees the board, and a change says they can only view
+the member form adds a person as a viewer

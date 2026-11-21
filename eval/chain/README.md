@@ -1,6 +1,6 @@
 # CUJ chain (SlopCodeBench model)
 
-Duke picked A, 2026-11-21: golden is a chain of 3
+Duke picked A, 2026-11-21: golden is a chain of
 steps on the writer's own tree, strict.
 
 Precedent: SlopCodeBench (arXiv 2603.24755).
@@ -14,6 +14,10 @@ tests run again.
   tinker-app main 436a33d).
 - ck2: `issue.rename`. Golden ebe4c87.
 - ck3: `team.archive`; comments go. Golden 3377e87.
+- ck4: a viewer role; every change by a viewer
+  answers `forbidden`. Golden 1264f11: one edit in
+  `issues.canWrite`. A writer that copied the
+  check into each op must find every copy.
 
 Each `ckN/` has:
 
@@ -59,9 +63,10 @@ Iso without strict means new work broke old work.
 
 Golden facts: erosion 0.00 at each step;
 ck2 move and rename both call `issues.atVersion`;
-ck3 every change calls `issues.canWrite`.
+ck3 every change calls `issues.canWrite`;
+ck4 the role check is in `issues.canWrite` alone.
 
 ## Chain golden
 
 A model is golden on the chain when 5 of 5 runs are
-strict at ck1, ck2 and ck3.
+strict at ck1, ck2, ck3 and ck4.
