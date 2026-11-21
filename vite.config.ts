@@ -84,6 +84,8 @@ export default defineConfig({
     },
   },
   lint: {
+    // Eval kit (branch only): scripts for the scorer, not app code.
+    ignorePatterns: ["eval/**"],
     plugins: ["eslint", "typescript", "unicorn", "oxc", "import"],
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
