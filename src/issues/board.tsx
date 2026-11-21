@@ -4,7 +4,7 @@ import { useData, useRun } from "@tinkered/react";
 import { memo } from "react";
 import { z } from "zod";
 
-import { type Issue, issueApi, issueBoard, states } from "./contract";
+import { type Issue, issueApi, issueBoard, roles, states } from "./contract";
 import { me as signedAs, signIn } from "./sign-in";
 
 // The issue board's pages. No state of their own: each reads a keyed part with `useData` and asks
@@ -56,9 +56,8 @@ type Out<K extends "team.add" | "team.archive" | "issue.create" | "issue.move" |
   Awaited<ReturnType<(typeof issueApi)[K]["run"]>>;
 
 /** What a move's or a rename's answer says. Every kind has its case: a new kind fails here. */
-function Changed({ out }: { out: Out<"issue.move" | "issue.rename"> | undefined }) {
-  switch (out?.kind) {
-    case undefined:
+function Changed({ out }: { out: Out<"issue.move" | "issue.rename"> }) {
+  switch (out.kind) {
     case "moved":
     case "renamed":
       return null;
@@ -68,6 +67,8 @@ function Changed({ out }: { out: Out<"issue.move" | "issue.rename"> | undefined 
       return <small role="status">This issue is gone.</small>;
     case "archived":
       return <Archived />;
+    case "forbidden":
+      return <ViewOnly />;
   }
 }
 
@@ -76,10 +77,14 @@ function Archived() {
   return <small role="status">This team is archived.</small>;
 }
 
+/** The answer of every change by a viewer. */
+function ViewOnly() {
+  return <small role="status">You can only view this team.</small>;
+}
+
 /** What an add's or the archive's answer says. */
-function Added({ out }: { out: Out<"team.add" | "issue.create" | "team.archive"> | undefined }) {
-  switch (out?.kind) {
-    case undefined:
+function Added({ out }: { out: Out<"team.add" | "issue.create" | "team.archive"> }) {
+  switch (out.kind) {
     case "created":
     case "added":
       return null;
@@ -87,6 +92,8 @@ function Added({ out }: { out: Out<"team.add" | "issue.create" | "team.archive">
       return <small role="status">That is gone, or you are not in this team.</small>;
     case "archived":
       return <Archived />;
+    case "forbidden":
+      return <ViewOnly />;
   }
 }
 
@@ -179,20 +186,28 @@ export function Board({ teamId }: { teamId: string }) {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          const userId = new FormData(event.currentTarget).get("user");
-          if (typeof userId === "string") add.run({ input: { teamId, userId } });
+          const form = new FormData(event.currentTarget);
+          const userId = form.get("user");
+          const role = roles.find((r) => r === form.get("role"));
+
+          if (typeof userId === "string" && role) add.run({ input: { teamId, userId, role } });
           event.currentTarget.reset();
         }}
       >
         <input name="user" aria-label="Add member" placeholder="name" />
+        <select name="role" aria-label="Role">
+          {roles.map((r) => (
+            <option key={r}>{r}</option>
+          ))}
+        </select>
         <button type="submit">Add member</button>
       </form>
       <button type="button" onClick={() => archive.run({ input: { teamId } })}>
         Archive team
       </button>
-      <Added out={create.data} />
-      <Added out={add.data} />
-      <Added out={archive.data} />
+      {create.data && <Added out={create.data} />}
+      {add.data && <Added out={add.data} />}
+      {archive.data && <Added out={archive.data} />}
       <CallFault error={create.error ?? add.error ?? archive.error} />
       <div className="lanes">
         {states.map((state) => (
@@ -248,8 +263,8 @@ const Card = memo(function Card({ issue }: { issue: Issue }) {
         />
         <button type="submit">Rename</button>
       </form>
-      <Changed out={move.data} />
-      <Changed out={rename.data} />
+      {move.data && <Changed out={move.data} />}
+      {rename.data && <Changed out={rename.data} />}
       <CallFault error={move.error ?? rename.error} />
     </article>
   );

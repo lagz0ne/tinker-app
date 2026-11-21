@@ -40,7 +40,7 @@ test("an issue made and moved on one tab moves on the drawn tab", async () => {
   };
   const [ana, bo] = [await tab("ana"), await tab("bo")];
   await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
-  await ana.run(issues.api["team.add"], { input: { teamId: "ENG", userId: "bo" } });
+  await ana.run(issues.api["team.add"], { input: { teamId: "ENG", userId: "bo", role: "member" } });
 
   const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
   const router = createRouter({ routeTree, history, context: { scope: bo } });
@@ -321,12 +321,12 @@ test("a stale move says that someone else changed the issue", async () => {
   await server.close();
 });
 
-/** A server with the board's ops (some replaced), a signed-in tab, and ENG with one issue. The
- * tab draws `/issues/ENG`. */
+/** A server with the board's ops (some replaced), and ENG with one issue that ana made. The page
+ * draws `/issues/ENG` for ana, or for a viewer of ENG when `viewer` names one. */
 /** What `issues.api` implements, typed by the contract (not by the ops of this app). */
 type Implement = NonNullable<Parameters<typeof issues.api>[0]["implement"]>;
 
-const drawn = async (replace: Partial<Implement> = {}) => {
+const drawn = async (replace: Partial<Implement> = {}, viewer?: string) => {
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
@@ -336,29 +336,39 @@ const drawn = async (replace: Partial<Implement> = {}) => {
     ],
   }).ready;
 
-  const ana = await createScope({
-    capsules: [
-      exits({ store: localStorage }),
-      memory.client({ peer: server, meta: whoMeta }),
-      issues.board({ read: memory.client }),
-      issues.api({ remote: memory.client }),
-    ],
-  }).ready;
+  const tab = async (name: string) => {
+    const scope = await createScope({
+      capsules: [
+        exits({ store: localStorage }),
+        memory.client({ peer: server, meta: whoMeta }),
+        issues.board({ read: memory.client }),
+        issues.api({ remote: memory.client }),
+      ],
+    }).ready;
+    scope.run(signIn, { input: { name } });
+    return scope;
+  };
 
-  ana.run(signIn, { input: { name: "ana" } });
+  const ana = await tab("ana");
   await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
   await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: "Login fials" } });
+  if (viewer) {
+    const input = { teamId: "ENG", userId: viewer, role: "viewer" } as const;
+    await ana.run(issues.api["team.add"], { input });
+  }
 
+  const shown = viewer ? await tab(viewer) : ana;
   const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
-  const router = createRouter({ routeTree, history, context: { scope: ana } });
+  const router = createRouter({ routeTree, history, context: { scope: shown } });
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   onTestFinished(async () => {
     root.unmount();
+    await shown.close();
     await ana.close();
     await server.close();
   });
   root.render(
-    <ScopeProvider scope={ana}>
+    <ScopeProvider scope={shown}>
       <RouterProvider router={router} />
     </ScopeProvider>,
   );
@@ -406,6 +416,39 @@ test("an archived team says so on the next change", async () => {
   await expect.poll(() => page.getByRole("status").elements().length).toBe(before + 1);
   await expect.element(page.getByRole("article", { name: "ENG-1" })).toBeVisible();
   expect(server.resolve(issues.board.issues).get()).toHaveLength(1);
+});
+
+// P7: a viewer sees the board; each change they ask shows a status, and nothing changes.
+test("a viewer sees the board, and a change says they can only view", async () => {
+  const server = await drawn({}, "vi");
+
+  await expect.element(page.getByRole("article", { name: "ENG-1" })).toBeVisible();
+  await page.getByLabelText("New issue").fill("Not mine");
+  await page.getByRole("button", { name: "Add issue" }).click();
+  await expect.poll(() => page.getByRole("status").elements().length).toBe(1);
+  await page.getByLabelText("State of ENG-1").selectOptions("done");
+  await expect.poll(() => page.getByRole("status").elements().length).toBe(2);
+
+  await expect.element(page.getByRole("article", { name: "ENG-1" })).toBeVisible();
+  expect(server.resolve(issues.board.issues).get()).toMatchObject([{ state: "backlog" }]);
+});
+
+// P2: the member form names a role: a person added as a viewer is kept as one.
+test("the member form adds a person as a viewer", async () => {
+  const server = await drawn();
+
+  await page.getByRole("textbox", { name: "Add member" }).fill("vi");
+  await page.getByLabelText("Role").selectOptions("viewer");
+  await page.getByRole("button", { name: "Add member" }).click();
+
+  await expect
+    .poll(() =>
+      server
+        .resolve(issues.board.members)
+        .get()
+        .map((m) => `${m.userId} ${m.role}`),
+    )
+    .toContain("vi viewer");
 });
 
 // P4: `gone` is an answer, so the page says it as a status. The answers are replaced here: a

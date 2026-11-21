@@ -2,14 +2,18 @@ import { data, remoteData, rpc } from "@tinkered/core";
 import { z } from "zod";
 
 // The issue board's contract: both sides import it. A team's issues move through four states,
-// live on every member's tab. A team can be archived: it keeps its issues and takes no change. Rebuilt from the Start-era board
+// live on every member's tab. A team can be archived: it keeps its issues and takes no change.
+// A viewer reads the team and changes nothing. Rebuilt from the Start-era board
 // (tinker-app tag `start-archive`) on keyed data. Every key starts with `teamId`, so one guard
 // checks every part. Every cell is served: a cell that is not served is a copy per session, so a
 // call's write to it would end with the call.
 
 export const states = ["backlog", "todo", "doing", "done"] as const;
 
-const member = z.object({ teamId: z.string(), userId: z.string() });
+/** A member changes the team; a viewer only reads it. */
+export const roles = ["member", "viewer"] as const;
+
+const member = z.object({ teamId: z.string(), userId: z.string(), role: z.enum(roles) });
 
 const issue = z.object({
   teamId: z.string(),
@@ -22,7 +26,8 @@ const issue = z.object({
 
 export type Issue = z.infer<typeof issue>;
 
-/** Who is in which team. A team is its first member: `ENG` exists once someone made it. */
+/** Who is in which team, and in which role. A team is its first member: `ENG` exists once
+ * someone made it. */
 export const members = data({
   label: "issues.members",
   mode: "keyed",
@@ -53,6 +58,8 @@ const team = z.object({ teamId: z.string() });
 const gone = z.object({ kind: z.literal("gone") });
 /** The answer of every change to an archived team: nothing changed. */
 const shut = z.object({ kind: z.literal("archived") });
+/** The answer of every change by a viewer: nothing changed. */
+const viewOnly = z.object({ kind: z.literal("forbidden") });
 
 /** Ask: every change is a call; the server is the only writer. Outcomes are output. */
 export const issueApi = rpc({
@@ -68,8 +75,13 @@ export const issueApi = rpc({
     output: z.object({ kind: z.enum(["created", "exists"]), teamId: z.string() }),
   },
   "team.add": {
-    input: team.extend({ userId: z.string().trim().min(1) }),
-    output: z.discriminatedUnion("kind", [z.object({ kind: z.literal("added") }), gone, shut]),
+    input: team.extend({ userId: z.string().trim().min(1), role: z.enum(roles) }),
+    output: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("added") }),
+      gone,
+      shut,
+      viewOnly,
+    ]),
   },
   "issue.create": {
     input: team.extend({ title: z.string().trim().min(1).max(200) }),
@@ -77,6 +89,7 @@ export const issueApi = rpc({
       z.object({ kind: z.literal("created"), number: z.number() }),
       gone,
       shut,
+      viewOnly,
     ]),
   },
   /** A move names the version it saw: a newer one answers `stale`, so no edit is lost. */
@@ -87,6 +100,7 @@ export const issueApi = rpc({
       z.object({ kind: z.literal("stale"), version: z.number() }),
       gone,
       shut,
+      viewOnly,
     ]),
   },
   /** A rename names the version it saw, as a move does: a newer one answers `stale`. */
@@ -101,11 +115,12 @@ export const issueApi = rpc({
       z.object({ kind: z.literal("stale"), version: z.number() }),
       gone,
       shut,
+      viewOnly,
     ]),
   },
   /** Archive a team: its members still read it, and every change answers `archived`. */
   "team.archive": {
     input: team,
-    output: z.discriminatedUnion("kind", [shut, gone]),
+    output: z.discriminatedUnion("kind", [shut, gone, viewOnly]),
   },
 });

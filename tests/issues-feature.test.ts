@@ -52,7 +52,7 @@ let n = 0;
 const team = async () => {
   const teamId = `T${++n}`;
   await ana.run(issues.api["team.create"], { input: { teamId } });
-  await ana.run(issues.api["team.add"], { input: { teamId, userId: "bo" } });
+  await ana.run(issues.api["team.add"], { input: { teamId, userId: "bo", role: "member" } });
   return teamId;
 };
 
@@ -196,7 +196,9 @@ test("an archived team is read as before and takes no change", async () => {
   expect(await cy.run(issues.api["team.archive"], { input: { teamId } })).toEqual({ kind: "gone" });
   expect(await ana.run(issues.api["team.archive"], { input: { teamId } })).toEqual(shut);
   expect(await bo.run(issues.api["team.archive"], { input: { teamId } })).toEqual(shut);
-  expect(await bo.run(issues.api["team.add"], { input: { teamId, userId: "cy" } })).toEqual(shut);
+  expect(
+    await bo.run(issues.api["team.add"], { input: { teamId, userId: "cy", role: "member" } }),
+  ).toEqual(shut);
   expect(
     await bo.run(issues.api["issue.create"], { input: { teamId, title: "Too late" } }),
   ).toEqual(shut);
@@ -228,6 +230,51 @@ test("an archived team is read as before and takes no change", async () => {
   expect(
     await ana.run(issues.api["issue.create"], { input: { teamId: other, title: "Open" } }),
   ).toEqual({ kind: "created", number: 1 });
+});
+
+// S10: a viewer reads the team as a member does, and every change they ask answers `forbidden`
+// and writes nothing. The role check comes after the member check and before the archive check.
+test("a viewer reads the team and every change they ask answers forbidden", async () => {
+  const teamId = await team();
+  const dee = await open("dee");
+  const added = await ana.run(issues.api["team.add"], {
+    input: { teamId, userId: "dee", role: "viewer" },
+  });
+  expect(added).toEqual({ kind: "added" });
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Look only" } });
+  const seen = read(dee, teamId);
+  await until(() => seen.get().length === 1);
+  const { id, version } = seen.get()[0]!;
+  const no = { kind: "forbidden" };
+
+  expect(
+    await dee.run(issues.api["team.add"], { input: { teamId, userId: "cy", role: "member" } }),
+  ).toEqual(no);
+  expect(await dee.run(issues.api["issue.create"], { input: { teamId, title: "x" } })).toEqual(no);
+  expect(
+    await dee.run(issues.api["issue.move"], { input: { teamId, id, version, state: "done" } }),
+  ).toEqual(no);
+  expect(
+    await dee.run(issues.api["issue.rename"], { input: { teamId, id, version, title: "x" } }),
+  ).toEqual(no);
+  expect(await dee.run(issues.api["team.archive"], { input: { teamId } })).toEqual(no);
+  // A viewer of an archived team is told `forbidden`, not `archived`.
+  await ana.run(issues.api["team.archive"], { input: { teamId } });
+  expect(await dee.run(issues.api["issue.create"], { input: { teamId, title: "x" } })).toEqual(no);
+
+  expect(
+    backend
+      .resolve(issues.board.issues)
+      .get()
+      .filter((i) => i.teamId === teamId),
+  ).toMatchObject([{ title: "Look only", state: "backlog", version: 1 }]);
+  const inTeam = backend
+    .resolve(issues.board.members)
+    .get()
+    .filter((m) => m.teamId === teamId)
+    .map((m) => `${m.userId} ${m.role}`);
+  expect(inTeam.toSorted()).toEqual(["ana member", "bo member", "dee viewer"]);
+  expect(state(dee, teamId)).toBe("ready");
 });
 
 test("a tab with no `who` is refused; so is a member of no team, on calls and on reads", async () => {
@@ -289,7 +336,9 @@ test("every call that names a team answers gone to a person outside it, and writ
   const { id, version } = seen.get()[0]!;
   const gone = { kind: "gone" };
 
-  expect(await cy.run(issues.api["team.add"], { input: { teamId, userId: "cy" } })).toEqual(gone);
+  expect(
+    await cy.run(issues.api["team.add"], { input: { teamId, userId: "cy", role: "member" } }),
+  ).toEqual(gone);
   expect(
     await cy.run(issues.api["issue.move"], { input: { teamId, id, version, state: "done" } }),
   ).toEqual(gone);
@@ -335,7 +384,7 @@ test("a person added while their tab is open sees the team when they try again",
   await ana.run(issues.api["issue.create"], { input: { teamId, title: "Welcome" } });
   await until(() => state(cy, teamId) === "fault");
 
-  await ana.run(issues.api["team.add"], { input: { teamId, userId: "cy" } });
+  await ana.run(issues.api["team.add"], { input: { teamId, userId: "cy", role: "member" } });
   await cy.run(issues.board.invalidate, { input: { issues: { teamId } } });
   await until(() => peek.get().length === 1);
 

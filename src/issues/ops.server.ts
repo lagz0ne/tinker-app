@@ -7,27 +7,28 @@ import { archived, issueApi, issueBoard, issues, members } from "./contract";
 // every member's tab that reads the part, and the tab asks for that part alone.
 
 /** Who calls: `signedIn` binds it for each call. */
-const viewer = tag<string>({ label: "issues.viewer" });
+const caller = tag<string>({ label: "issues.caller" });
 
-/** Every call and ask: no `who` in its meta, no service; else it runs as the viewer. */
+/** Every call and ask: no `who` in its meta, no service; else it runs as the caller. */
 export const signedIn = operation({
   label: "issues.signedIn",
   input: transport.hook.start,
   run: (_, { input }) => {
     const me = input.meta.who;
-    return me ? { tags: [viewer(me)] } : input.refuse({ signIn: true });
+    return me ? { tags: [caller(me)] } : input.refuse({ signIn: true });
   },
 });
 
-/** The member check: the viewer is a member of the team the input names. Calls and reads run it. */
+/** The member check: the caller's place in the team the input names, if they have one. Calls
+ * and reads run it. */
 const inTeam = operation({
   label: "issues.inTeam",
   input: z.object({ teamId: z.string() }),
-  depends: { team: members.controller, me: viewer.required },
-  run: ({ team, me }, { input }) => !!team.of({ teamId: input.teamId, userId: me }).get(),
+  depends: { team: members.controller, me: caller.required },
+  run: ({ team, me }, { input }) => team.of({ teamId: input.teamId, userId: me }).get(),
 });
 
-/** Every read of a part: the viewer must be a member of the part's team (ADR 0138 rule 14). */
+/** Every read of a part: the caller must be a member of the part's team (ADR 0138 rule 14). */
 export const membersOnly = operation({
   label: "issues.membersOnly",
   input: transport.hook.start,
@@ -38,14 +39,17 @@ export const membersOnly = operation({
   },
 });
 
-/** Every change to a team starts here: `gone` outside the team, then `archived` for an archived
- * team. The member check comes first, so nobody outside the team learns that it is archived. */
+/** Every change to a team starts here: `gone` outside the team, `forbidden` for a viewer, then
+ * `archived` for an archived team (as HTTP: 404, 403, then 423). The member check comes first,
+ * so nobody outside the team learns that it is archived. */
 const canWrite = operation({
   label: "issues.canWrite",
   input: z.object({ teamId: z.string() }),
   depends: { ok: inTeam, shut: archived.controller },
   run: ({ ok, shut }, { input }) => {
-    if (!ok.run({ input })) return { kind: "gone" as const };
+    const place = ok.run({ input });
+    if (!place) return { kind: "gone" as const };
+    if (place.role === "viewer") return { kind: "forbidden" as const };
     if (shut.of({ teamId: input.teamId }).get()) return { kind: "archived" as const };
 
     return { kind: "ok" as const };
@@ -55,11 +59,11 @@ const canWrite = operation({
 const createTeam = operation({
   label: "team.create.do",
   input: issueApi["team.create"].input,
-  depends: { team: members.controller, me: viewer.required },
+  depends: { team: members.controller, me: caller.required },
   run: ({ team, me }, { input }) => {
     if (team.where(input).get().length) return { kind: "exists" as const, teamId: input.teamId };
 
-    team.set({ ...input, userId: me });
+    team.set({ ...input, userId: me, role: "member" });
     return { kind: "created" as const, teamId: input.teamId };
   },
 });
@@ -146,9 +150,9 @@ const archiveTeam = operation({
   depends: { shut: archived.controller, can: canWrite },
   run: ({ shut, can }, { input }) => {
     const now = can.run({ input });
-    if (now.kind === "gone") return now;
-    if (now.kind === "ok") shut.set({ teamId: input.teamId });
+    if (now.kind !== "ok") return now;
 
+    shut.set({ teamId: input.teamId });
     return { kind: "archived" as const };
   },
 });
