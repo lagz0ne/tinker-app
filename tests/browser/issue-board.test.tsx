@@ -394,11 +394,13 @@ test("an archived team says so on the next change", async () => {
   const server = await drawn();
 
   await page.getByRole("button", { name: "Archive team" }).click();
-  await expect.element(page.getByRole("status")).toBeVisible();
+  await expect.poll(() => server.resolve(issues.board.archived).get()).toHaveLength(1);
+  // The archive's own answer may show a status or not: P6 asks only for the next change's.
+  const before = page.getByRole("status").elements().length;
   await page.getByLabelText("New issue").fill("Too late");
   await page.getByRole("button", { name: "Add issue" }).click();
 
-  await expect.poll(() => page.getByRole("status").elements().length).toBe(2);
+  await expect.poll(() => page.getByRole("status").elements().length).toBe(before + 1);
   await expect.element(page.getByRole("article", { name: "ENG-1" })).toBeVisible();
   expect(server.resolve(issues.board.issues).get()).toHaveLength(1);
 });
