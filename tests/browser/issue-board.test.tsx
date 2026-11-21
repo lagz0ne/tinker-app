@@ -323,7 +323,10 @@ test("a stale move says that someone else changed the issue", async () => {
 
 /** A server with the board's ops (some replaced), a signed-in tab, and ENG with one issue. The
  * tab draws `/issues/ENG`. */
-const drawn = async (replace: Partial<typeof issueOps> = {}) => {
+/** What `issues.api` implements, typed by the contract (not by the ops of this app). */
+type Implement = NonNullable<Parameters<typeof issues.api>[0]["implement"]>;
+
+const drawn = async (replace: Partial<Implement> = {}) => {
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
