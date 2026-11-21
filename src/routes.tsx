@@ -5,7 +5,7 @@ import { baseVersion } from "~/components/health";
 
 import { greet } from "@/greet";
 import { Greeting } from "@/greet/greeting";
-import { Board, IssuesHome, Thread } from "@/issues/board";
+import { Board, IssuesHome } from "@/issues/board";
 import { TodoList } from "@/todo/todo-list";
 
 const root = createRootRouteWithContext<{ scope: Scope.Handle }>()({ component: Outlet });
@@ -32,20 +32,7 @@ const issues = createRoute({ getParentRoute: () => root, path: "/issues", compon
 const team = createRoute({
   getParentRoute: () => root,
   path: "/issues/$team",
-  // The team's page, then the open thread beside it. The child route draws in this `Outlet`, so
-  // a page of the feature knows nothing about the route tree.
-  component: () => (
-    <>
-      <Board teamId={team.useParams().team} />
-      <Outlet />
-    </>
-  ),
-});
-
-const thread = createRoute({
-  getParentRoute: () => team,
-  path: "$id",
-  component: () => <Thread teamId={team.useParams().team} issueId={thread.useParams().id} />,
+  component: () => <Board teamId={team.useParams().team} />,
 });
 
 const tinker = createRoute({
@@ -59,10 +46,4 @@ const tinker = createRoute({
   ),
 });
 
-export const routeTree = root.addChildren([
-  index,
-  todo,
-  issues,
-  team.addChildren([thread]),
-  tinker,
-]);
+export const routeTree = root.addChildren([index, todo, issues, team, tinker]);

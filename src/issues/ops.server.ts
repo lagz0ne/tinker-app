@@ -1,7 +1,7 @@
 import { operation, tag, transport } from "@tinkered/core";
 import { z } from "zod";
 
-import { comments, issueApi, issueBoard, issues, members } from "./contract";
+import { archived, issueApi, issueBoard, issues, members } from "./contract";
 
 // The server's work for `issueApi`. Each op writes members of the keyed cells; `issueBoard` tells
 // every member's tab that reads the part, and the tab asks for that part alone.
@@ -38,6 +38,20 @@ export const membersOnly = operation({
   },
 });
 
+/** Every change to a team starts here: `gone` outside the team, then `archived` for an archived
+ * team. The member check comes first, so nobody outside the team learns that it is archived. */
+const canWrite = operation({
+  label: "issues.canWrite",
+  input: z.object({ teamId: z.string() }),
+  depends: { ok: inTeam, shut: archived.controller },
+  run: ({ ok, shut }, { input }) => {
+    if (!ok.run({ input })) return { kind: "gone" as const };
+    if (shut.of({ teamId: input.teamId }).get()) return { kind: "archived" as const };
+
+    return { kind: "ok" as const };
+  },
+});
+
 const createTeam = operation({
   label: "team.create.do",
   input: issueApi["team.create"].input,
@@ -53,9 +67,10 @@ const createTeam = operation({
 const addMember = operation({
   label: "team.add.do",
   input: issueApi["team.add"].input,
-  depends: { team: members.controller, ok: inTeam },
-  run: ({ team, ok }, { input }) => {
-    if (!ok.run({ input })) return { kind: "gone" as const };
+  depends: { team: members.controller, can: canWrite },
+  run: ({ team, can }, { input }) => {
+    const now = can.run({ input });
+    if (now.kind !== "ok") return now;
 
     team.set(input);
     return { kind: "added" as const };
@@ -66,9 +81,10 @@ const addMember = operation({
 const createIssue = operation({
   label: "issue.create.do",
   input: issueApi["issue.create"].input,
-  depends: { list: issues.controller, ok: inTeam },
-  run: ({ list, ok }, { input, random }) => {
-    if (!ok.run({ input })) return { kind: "gone" as const };
+  depends: { list: issues.controller, can: canWrite },
+  run: ({ list, can }, { input, random }) => {
+    const now = can.run({ input });
+    if (now.kind !== "ok") return now;
 
     const team = list.where({ teamId: input.teamId }).get();
     const number = Math.max(0, ...team.map((i) => i.number)) + 1;
@@ -77,16 +93,17 @@ const createIssue = operation({
   },
 });
 
-/** The issue a change names, at the version it saw. The member check comes first, as in every
+/** The issue a change names, at the version it saw. The write check comes first, as in every
  * call: nobody outside the team reaches a read. A move and a rename both start here. */
 const atVersion = operation({
   label: "issues.atVersion",
   input: z.object({ teamId: z.string(), id: z.string(), version: z.number() }),
-  depends: { list: issues.controller, ok: inTeam },
-  run: ({ list, ok }, { input }) => {
-    const now = ok.run({ input })
-      ? list.of({ teamId: input.teamId, id: input.id }).get()
-      : undefined;
+  depends: { list: issues.controller, can: canWrite },
+  run: ({ list, can }, { input }) => {
+    const may = can.run({ input });
+    if (may.kind !== "ok") return may;
+
+    const now = list.of({ teamId: input.teamId, id: input.id }).get();
     if (!now) return { kind: "gone" as const };
     if (now.version !== input.version) return { kind: "stale" as const, version: now.version };
 
@@ -122,22 +139,17 @@ const renameIssue = operation({
   },
 });
 
-const addComment = operation({
-  label: "comment.add.do",
-  input: issueApi["comment.add"].input,
-  depends: {
-    list: issues.controller,
-    thread: comments.controller,
-    ok: inTeam,
-    me: viewer.required,
-  },
-  run: ({ list, thread, ok, me }, { input, random }) => {
-    const key = { teamId: input.teamId, id: input.issueId };
-    const there = ok.run({ input }) ? list.of(key).get() : undefined;
-    if (!there) return { kind: "gone" as const };
+/** Archive a team. A second archive answers the same and writes nothing. */
+const archiveTeam = operation({
+  label: "team.archive.do",
+  input: issueApi["team.archive"].input,
+  depends: { shut: archived.controller, can: canWrite },
+  run: ({ shut, can }, { input }) => {
+    const now = can.run({ input });
+    if (now.kind === "gone") return now;
+    if (now.kind === "ok") shut.set({ teamId: input.teamId });
 
-    thread.set({ ...input, id: random.uuid(), author: me });
-    return { kind: "added" as const };
+    return { kind: "archived" as const };
   },
 });
 
@@ -148,5 +160,5 @@ export const issueOps = {
   "issue.create": createIssue,
   "issue.move": moveIssue,
   "issue.rename": renameIssue,
-  "comment.add": addComment,
+  "team.archive": archiveTeam,
 } as const;

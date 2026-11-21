@@ -182,19 +182,52 @@ test("a rename lands on the other tab; a rename from an old version answers stal
   ).toMatchObject({ title: "Typo here", state: "todo", version: 3 });
 });
 
-test("comments: a part of their own, read by team and issue", async () => {
+// S9: an archived team keeps its issues for its members, and every change answers `archived`
+// and writes nothing. A person outside the team gets `gone`, as before: the archive is not news
+// to them. A second archive answers the same.
+test("an archived team is read as before and takes no change", async () => {
   const teamId = await team();
-  const seen = read(ana, teamId);
-  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Talk" } });
+  const seen = read(bo, teamId);
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Keep me" } });
   await until(() => seen.get().length === 1);
-  const issueId = seen.get()[0]!.id;
-  const thread = bo.resolve(issues.board.comments.where({ teamId, issueId }));
-  thread.watch(() => undefined);
+  const { id } = seen.get()[0]!;
+  const shut = { kind: "archived" };
 
-  await ana.run(issues.api["comment.add"], { input: { teamId, issueId, text: "Looks good" } });
-  await until(() => thread.get().length === 1);
+  expect(await cy.run(issues.api["team.archive"], { input: { teamId } })).toEqual({ kind: "gone" });
+  expect(await ana.run(issues.api["team.archive"], { input: { teamId } })).toEqual(shut);
+  expect(await bo.run(issues.api["team.archive"], { input: { teamId } })).toEqual(shut);
+  expect(await bo.run(issues.api["team.add"], { input: { teamId, userId: "cy" } })).toEqual(shut);
+  expect(
+    await bo.run(issues.api["issue.create"], { input: { teamId, title: "Too late" } }),
+  ).toEqual(shut);
+  expect(
+    await bo.run(issues.api["issue.move"], { input: { teamId, id, version: 1, state: "done" } }),
+  ).toEqual(shut);
+  expect(
+    await bo.run(issues.api["issue.rename"], { input: { teamId, id, version: 1, title: "x" } }),
+  ).toEqual(shut);
+  expect(await cy.run(issues.api["issue.create"], { input: { teamId, title: "x" } })).toEqual({
+    kind: "gone",
+  });
 
-  expect(thread.get()[0]).toMatchObject({ author: "ana", text: "Looks good" });
+  expect(
+    backend
+      .resolve(issues.board.issues)
+      .get()
+      .filter((i) => i.teamId === teamId),
+  ).toMatchObject([{ title: "Keep me", state: "backlog", version: 1 }]);
+  const inTeam = backend
+    .resolve(issues.board.members)
+    .get()
+    .filter((m) => m.teamId === teamId)
+    .map((m) => m.userId);
+  expect(inTeam.toSorted()).toEqual(["ana", "bo"]);
+  expect(state(bo, teamId)).toBe("ready");
+  // Another team is not archived by this one.
+  const other = await team();
+  expect(
+    await ana.run(issues.api["issue.create"], { input: { teamId: other, title: "Open" } }),
+  ).toEqual({ kind: "created", number: 1 });
 });
 
 test("a tab with no `who` is refused; so is a member of no team, on calls and on reads", async () => {
@@ -215,31 +248,30 @@ test("a tab with no `who` is refused; so is a member of no team, on calls and on
 });
 
 /** Reads each part of one team on a tab; answers a function that gives each part's fault. */
-const faultsOf = (scope: Scope.Handle, teamId: string, issueId: string) => {
-  const members = issues.board.members.where({ teamId });
-  const list = issues.board.issues.where({ teamId });
-  const thread = issues.board.comments.where({ teamId, issueId });
-  scope.resolve(members).watch(() => undefined);
-  scope.resolve(list).watch(() => undefined);
-  scope.resolve(thread).watch(() => undefined);
+const faultsOf = (scope: Scope.Handle, teamId: string) => {
+  const parts = [
+    issues.board.members.where({ teamId }),
+    issues.board.issues.where({ teamId }),
+    issues.board.archived.where({ teamId }),
+  ] as const;
+  for (const part of parts) scope.resolve(part).watch(() => undefined);
 
   return () =>
-    [
-      scope.resolve(issues.board.status(members)).get(),
-      scope.resolve(issues.board.status(list)).get(),
-      scope.resolve(issues.board.status(thread)).get(),
-    ].map((now) => (now?.status === "fault" ? now.fault : undefined));
+    parts.map((part) => {
+      const now = scope.resolve(issues.board.status(part)).get();
+      return now?.status === "fault" ? now.fault : undefined;
+    });
 };
 
-// S5, each part of a team: members, issues and comments. A read from outside the team is refused
+// S5, each part of a team: members, issues and the archive mark. A read from outside the team is refused
 // with the team in the payload; a read with no `who` is refused too.
 test("every part of a team is refused to a person outside it, and to a tab with no `who`", async () => {
   const teamId = await team();
   const seen = read(ana, teamId);
   await ana.run(issues.api["issue.create"], { input: { teamId, title: "Ours" } });
   await until(() => seen.get().length === 1);
-  const outside = faultsOf(cy, teamId, seen.get()[0]!.id);
-  const nobody = faultsOf(await open(""), teamId, seen.get()[0]!.id);
+  const outside = faultsOf(cy, teamId);
+  const nobody = faultsOf(await open(""), teamId);
   await until(() => [...outside(), ...nobody()].every(Boolean));
 
   const refused = { fault: "refused", payload: { notMember: teamId } };
@@ -264,9 +296,6 @@ test("every call that names a team answers gone to a person outside it, and writ
   expect(
     await cy.run(issues.api["issue.rename"], { input: { teamId, id, version, title: "x" } }),
   ).toEqual(gone);
-  expect(
-    await cy.run(issues.api["comment.add"], { input: { teamId, issueId: id, text: "hi" } }),
-  ).toEqual(gone);
   serverSpans.length = 0;
   expect(
     await ana.run(issues.api["issue.move"], {
@@ -278,15 +307,14 @@ test("every call that names a team answers gone to a person outside it, and writ
       input: { teamId, id: "none", version: 1, title: "x" },
     }),
   ).toEqual(gone);
-  expect(
-    await ana.run(issues.api["comment.add"], { input: { teamId, issueId: "none", text: "hi" } }),
-  ).toEqual(gone);
   // S7: each call runs the member check, also when its issue is not there.
-  await until(() => serverSpans.filter((span) => span.name === "issues.inTeam").length === 3);
+  await until(() => serverSpans.filter((span) => span.name === "issues.inTeam").length === 2);
   // An issue of another team is not an issue of this one.
   const other = await team();
   expect(
-    await ana.run(issues.api["comment.add"], { input: { teamId: other, issueId: id, text: "hi" } }),
+    await ana.run(issues.api["issue.rename"], {
+      input: { teamId: other, id, version: 1, title: "x" },
+    }),
   ).toEqual(gone);
 
   const members = backend.resolve(issues.board.members).get();
@@ -297,12 +325,6 @@ test("every call that names a team answers gone to a person outside it, and writ
       .get()
       .find((i) => i.id === id),
   ).toMatchObject({ state: "backlog", title: "Ours" });
-  expect(
-    backend
-      .resolve(issues.board.comments)
-      .get()
-      .filter((c) => c.teamId === teamId || c.teamId === other),
-  ).toEqual([]);
 });
 
 // A refused part is the server's answer: the tab does not ask again by itself (Core 0.17.4,
@@ -357,6 +379,7 @@ test("one move: one trace from tab A to the server's send; tab B's ask links to 
   expect(names(serverSpans, call)).toEqual([
     "issue.move.do",
     "issues.atVersion",
+    "issues.canWrite",
     "issues.inTeam",
     "issues.signedIn",
     "remoteData.send",

@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import type { PartState, RemoteFault } from "@tinkered/core";
 import { useData, useRun } from "@tinkered/react";
 import { memo } from "react";
@@ -52,7 +52,7 @@ export function IssuesHome() {
 const notMember = z.object({ notMember: z.string() });
 
 /** A call's answer, as the page gets it. */
-type Out<K extends "team.add" | "issue.create" | "issue.move" | "issue.rename" | "comment.add"> =
+type Out<K extends "team.add" | "team.archive" | "issue.create" | "issue.move" | "issue.rename"> =
   Awaited<ReturnType<(typeof issueApi)[K]["run"]>>;
 
 /** What a move's or a rename's answer says. Every kind has its case: a new kind fails here. */
@@ -66,11 +66,18 @@ function Changed({ out }: { out: Out<"issue.move" | "issue.rename"> | undefined 
       return <small role="status">Changed by someone else.</small>;
     case "gone":
       return <small role="status">This issue is gone.</small>;
+    case "archived":
+      return <Archived />;
   }
 }
 
-/** What an add's answer says: an issue, a member or a comment. */
-function Added({ out }: { out: Out<"team.add" | "issue.create" | "comment.add"> | undefined }) {
+/** The answer of every change to an archived team. */
+function Archived() {
+  return <small role="status">This team is archived.</small>;
+}
+
+/** What an add's or the archive's answer says. */
+function Added({ out }: { out: Out<"team.add" | "issue.create" | "team.archive"> | undefined }) {
   switch (out?.kind) {
     case undefined:
     case "created":
@@ -78,6 +85,8 @@ function Added({ out }: { out: Out<"team.add" | "issue.create" | "comment.add"> 
       return null;
     case "gone":
       return <small role="status">That is gone, or you are not in this team.</small>;
+    case "archived":
+      return <Archived />;
   }
 }
 
@@ -136,7 +145,7 @@ function Waiting({ state, again }: { state: PartState | undefined; again: () => 
   );
 }
 
-/** `/issues/$team`: the team's issues in four lanes, live; the open thread beside them. */
+/** `/issues/$team`: the team's issues in four lanes, live. */
 export function Board({ teamId }: { teamId: string }) {
   const part = issueBoard.issues.where({ teamId });
   const list = useData(part);
@@ -144,6 +153,7 @@ export function Board({ teamId }: { teamId: string }) {
   const again = useRun(issueBoard.invalidate);
   const create = useRun(issueApi["issue.create"]);
   const add = useRun(issueApi["team.add"]);
+  const archive = useRun(issueApi["team.archive"]);
   if (state?.status !== "ready") {
     return (
       <main>
@@ -177,9 +187,13 @@ export function Board({ teamId }: { teamId: string }) {
         <input name="user" aria-label="Add member" placeholder="name" />
         <button type="submit">Add member</button>
       </form>
+      <button type="button" onClick={() => archive.run({ input: { teamId } })}>
+        Archive team
+      </button>
       <Added out={create.data} />
       <Added out={add.data} />
-      <CallFault error={create.error ?? add.error} />
+      <Added out={archive.data} />
+      <CallFault error={create.error ?? add.error ?? archive.error} />
       <div className="lanes">
         {states.map((state) => (
           <section key={state} aria-label={state}>
@@ -205,11 +219,8 @@ const Card = memo(function Card({ issue }: { issue: Issue }) {
 
   const name = `${teamId}-${issue.number}`;
   return (
-    <article>
-      <Link to="/issues/$team/$id" params={{ team: teamId, id }}>
-        {name}
-      </Link>{" "}
-      {issue.title}
+    <article aria-label={name}>
+      <strong>{name}</strong> {issue.title}
       <select
         aria-label={`State of ${name}`}
         value={issue.state}
@@ -243,44 +254,3 @@ const Card = memo(function Card({ issue }: { issue: Issue }) {
     </article>
   );
 });
-
-/** `/issues/$team/$id`: one issue's comments, live. Its part is read on its own, so it has its
- * own wait: an empty list before the answer would say "no comments" when that is not known. */
-export function Thread({ teamId, issueId }: { teamId: string; issueId: string }) {
-  const part = issueBoard.comments.where({ teamId, issueId });
-  const thread = useData(part);
-  const state = useData(issueBoard.status(part));
-  const again = useRun(issueBoard.invalidate);
-  const say = useRun(issueApi["comment.add"]);
-  if (state?.status !== "ready") {
-    return (
-      <aside aria-label="Comments">
-        <Waiting
-          state={state}
-          again={() => again.run({ input: { comments: { teamId, issueId } } })}
-        />
-      </aside>
-    );
-  }
-
-  return (
-    <aside aria-label="Comments">
-      {thread.map((c) => (
-        <p key={c.id}>{`${c.author}: ${c.text}`}</p>
-      ))}
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          const text = new FormData(event.currentTarget).get("text");
-          if (typeof text === "string") say.run({ input: { teamId, issueId, text } });
-          event.currentTarget.reset();
-        }}
-      >
-        <input name="text" aria-label="Comment" />
-        <button type="submit">Comment</button>
-      </form>
-      <Added out={say.data} />
-      <CallFault error={say.error} />
-    </aside>
-  );
-}
