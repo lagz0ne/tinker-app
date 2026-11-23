@@ -27,7 +27,10 @@
     "rules": [
       {
         "writes": "issues.list",
-        "calls": "issues.record"
+        "calls": "issues.record",
+        "except": {
+          "team.delete.do": "A delete takes each issue and its events away: it leaves no event."
+        }
       }
     ]
   }

@@ -55,20 +55,33 @@ export const membersOnly = operation({
   },
 });
 
-/** Every change to a team starts here: `gone` outside the team, `forbidden` for a viewer, then
- * `archived` for an archived team (as HTTP: 404, 403, then 423). The member check comes first,
- * so nobody outside the team learns that it is archived. */
-const canWrite = operation({
-  label: "issues.canWrite",
+/** Who may change the team: `gone` outside the team, `forbidden` for a viewer (as HTTP: 404,
+ * then 403). The member check comes first, so nobody outside the team learns more. */
+const canChange = operation({
+  label: "issues.canChange",
   input: z.object({ teamId: z.string() }),
-  depends: { ok: inTeam, shut: archived.controller },
-  run: ({ ok, shut }, { input }) => {
+  depends: { ok: inTeam },
+  run: ({ ok }, { input }) => {
     const place = ok.run({ input });
     if (!place) return { kind: "gone" as const };
     if (place.role === "viewer") return { kind: "forbidden" as const };
-    if (shut.of({ teamId: input.teamId }).get()) return { kind: "archived" as const };
 
     return { kind: "ok" as const };
+  },
+});
+
+/** Every change to a team's work starts here: `canChange`, then `archived` for an archived team
+ * (as HTTP 423). Only a delete skips the archive mark. */
+const canWrite = operation({
+  label: "issues.canWrite",
+  input: z.object({ teamId: z.string() }),
+  depends: { may: canChange, shut: archived.controller },
+  run: ({ may, shut }, { input }) => {
+    const now = may.run({ input });
+    if (now.kind !== "ok") return now;
+    if (shut.of({ teamId: input.teamId }).get()) return { kind: "archived" as const };
+
+    return now;
   },
 });
 
@@ -226,6 +239,32 @@ const archiveTeam = operation({
   },
 });
 
+/** Delete a team: each member of each of its parts goes. Its members go last. */
+const deleteTeam = operation({
+  label: "team.delete.do",
+  input: issueApi["team.delete"].input,
+  depends: {
+    may: canChange,
+    team: members.controller,
+    list: issues.controller,
+    shut: archived.controller,
+    tags: labels.controller,
+    log: events.controller,
+  },
+  run: ({ may, team, list, shut, tags, log }, { input }) => {
+    const now = may.run({ input });
+    if (now.kind !== "ok") return now;
+
+    const part = { teamId: input.teamId };
+    for (const { id, name } of tags.where(part).get()) tags.delete({ ...part, id, name });
+    for (const { id, version } of log.where(part).get()) log.delete({ ...part, id, version });
+    for (const { id } of list.where(part).get()) list.delete({ ...part, id });
+    shut.delete(part);
+    for (const { userId } of team.where(part).get()) team.delete({ ...part, userId });
+    return { kind: "deleted" as const };
+  },
+});
+
 /** The server's side of `issueApi`, by address: `issues.api({ implement: issueOps })`. */
 export const issueOps = {
   "team.create": createTeam,
@@ -236,4 +275,5 @@ export const issueOps = {
   "issue.label": labelIssue,
   "issue.assign": assignIssue,
   "team.archive": archiveTeam,
+  "team.delete": deleteTeam,
 } as const;

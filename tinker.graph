@@ -5,7 +5,8 @@ issue.label.do exits{archived,forbidden,gone,labeled,stale} reads{} writes{issue
 issue.move.do exits{archived,forbidden,gone,moved,stale} reads{} writes{} calls{issues.atVersion,issues.record}
 issue.rename.do exits{archived,forbidden,gone,renamed,stale} reads{} writes{} calls{issues.atVersion,issues.record}
 issues.atVersion exits{archived,forbidden,gone,now,stale} reads{issues.list.of} writes{} calls{issues.canWrite}
-issues.canWrite exits{archived,forbidden,gone,ok} reads{issues.archived.of} writes{} calls{issues.inTeam}
+issues.canChange exits{forbidden,gone,ok} reads{} writes{} calls{issues.inTeam}
+issues.canWrite exits{archived,forbidden,gone,ok} reads{issues.archived.of} writes{} calls{issues.canChange}
 issues.inTeam exits{value} reads{issues.members.of} writes{} calls{}
 issues.membersOnly exits{refused,value} reads{} writes{} calls{issues.inTeam}
 issues.record exits{value} reads{} writes{issues.events.set,issues.list.set} calls{}
@@ -16,6 +17,7 @@ issues.whoMeta exits{value} reads{issues.me.get} writes{} calls{}
 team.add.do exits{added,archived,forbidden,gone} reads{} writes{issues.members.set} calls{issues.canWrite}
 team.archive.do exits{archived,forbidden,gone} reads{} writes{issues.archived.set} calls{issues.canWrite}
 team.create.do exits{created,exists} reads{issues.members.where} writes{issues.members.set} calls{}
+team.delete.do exits{deleted,forbidden,gone} reads{issues.events.where,issues.labels.where,issues.list.where,issues.members.where} writes{issues.archived.delete,issues.events.delete,issues.labels.delete,issues.list.delete,issues.members.delete} calls{issues.canChange}
 todo.add.do exits{value} reads{} writes{todo.list.set} calls{}
 todo.remove.do exits{gone,removed} reads{todo.list.of} writes{todo.list.delete} calls{}
 todo.toggle.do exits{gone,toggled} reads{todo.list.of} writes{todo.list.set} calls{}

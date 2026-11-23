@@ -511,6 +511,79 @@ test("an answer that is not a success leaves no event, nor does a change of the 
   expect(eventsOf(teamId)).toEqual([`${id} 1 created ana`]);
 });
 
+/** What is left of one team on the server, in every part. */
+const leftOf = (teamId: string) => {
+  const mine = <T extends { teamId: string }>(list: readonly T[]) =>
+    list.filter((m) => m.teamId === teamId).length;
+  return [
+    mine(backend.resolve(issues.board.members).get()),
+    mine(backend.resolve(issues.board.issues).get()),
+    mine(backend.resolve(issues.board.archived).get()),
+    mine(backend.resolve(issues.board.labels).get()),
+    mine(backend.resolve(issues.board.events).get()),
+  ];
+};
+
+// S15: a delete takes every part of the team. A team made again with the same key starts empty.
+test("a deleted team leaves nothing; made again, it starts empty", async () => {
+  const teamId = await team();
+  const seen = read(bo, teamId);
+  const places = placesOf(bo, "bo");
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Old" } });
+  await until(() => seen.get().length === 1);
+  const { id } = seen.get()[0]!;
+  await ana.run(issues.api["issue.label"], {
+    input: { teamId, id, version: 1, name: "bug", on: true },
+  });
+  await ana.run(issues.api["issue.assign"], { input: { teamId, id, version: 2, userId: "bo" } });
+  await ana.run(issues.api["team.archive"], { input: { teamId } });
+  await until(() => places.get().some((p) => p.teamId === teamId));
+  expect(leftOf(teamId)).toEqual([2, 1, 1, 1, 3]);
+
+  // An archived team can be deleted.
+  expect(await bo.run(issues.api["team.delete"], { input: { teamId } })).toEqual({
+    kind: "deleted",
+  });
+  expect(leftOf(teamId)).toEqual([0, 0, 0, 0, 0]);
+  // A tab that reads the team is told it is not in it any more (ADR 0139 d4: a refused part shows
+  // its fault). Its own list of teams drops the team.
+  await until(() => state(bo, teamId) === "fault");
+  expect(
+    bo.resolve(issues.board.status(issues.board.issues.where({ teamId }))).get(),
+  ).toMatchObject({ fault: { fault: "refused", payload: { notMember: teamId } } });
+  await until(() => !places.get().some((p) => p.teamId === teamId));
+  // The deleter is not in the team any more.
+  expect(await bo.run(issues.api["team.delete"], { input: { teamId } })).toEqual({ kind: "gone" });
+
+  expect(await cy.run(issues.api["team.create"], { input: { teamId } })).toEqual({
+    kind: "created",
+    teamId,
+  });
+  expect(await cy.run(issues.api["issue.create"], { input: { teamId, title: "New" } })).toEqual({
+    kind: "created",
+    number: 1,
+  });
+  expect(leftOf(teamId)).toEqual([1, 1, 0, 0, 1]);
+});
+
+// S15: a delete answers `gone` outside the team and `forbidden` to a viewer, and writes nothing.
+test("a delete answers gone outside the team and forbidden to a viewer, and writes nothing", async () => {
+  const teamId = await team();
+  const dee = await open("dee");
+  await ana.run(issues.api["team.add"], { input: { teamId, userId: "dee", role: "viewer" } });
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Stay" } });
+
+  expect(await cy.run(issues.api["team.delete"], { input: { teamId } })).toEqual({ kind: "gone" });
+  expect(await dee.run(issues.api["team.delete"], { input: { teamId } })).toEqual({
+    kind: "forbidden",
+  });
+  expect(leftOf(teamId)).toEqual([3, 1, 0, 0, 1]);
+  // Another team is not deleted by this one.
+  const other = await team();
+  await ana.run(issues.api["team.delete"], { input: { teamId } });
+  expect(leftOf(other)).toEqual([2, 0, 0, 0, 0]);
+});
+
 test("a tab with no `who` is refused; so is a member of no team, on calls and on reads", async () => {
   const teamId = await team();
   const peek = read(cy, teamId);

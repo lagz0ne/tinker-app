@@ -687,6 +687,19 @@ test("the history lists each change of the team's issues, live", async () => {
     ]);
 });
 
+// P12: "Delete team" deletes the team and opens `/issues`.
+test("delete team takes the team away and opens the home page", async () => {
+  const server = await drawn();
+  await expect.element(page.getByRole("article", { name: "ENG-1" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Delete team" }).click();
+
+  await expect.element(page.getByLabelText("Your name")).toBeVisible();
+  await expect.poll(() => server.resolve(issues.board.members).get()).toEqual([]);
+  expect(server.resolve(issues.board.issues).get()).toEqual([]);
+  expect(server.resolve(issues.board.events).get()).toEqual([]);
+});
+
 // P4: `gone` is an answer, so the page says it as a status. The answers are replaced here: a
 // member's own page gets `gone` only in a race (the issue or the membership went away).
 test("a call that answers gone says so", async () => {

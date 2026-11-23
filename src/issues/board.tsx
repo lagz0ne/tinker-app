@@ -60,7 +60,8 @@ type Change =
   | "issue.move"
   | "issue.rename"
   | "issue.label"
-  | "issue.assign";
+  | "issue.assign"
+  | "team.delete";
 
 /** A change's answer, as the page gets it. */
 type Out = Awaited<ReturnType<(typeof issueApi)[Change]["run"]>>;
@@ -73,6 +74,7 @@ const says: Record<Out["kind"], string | null> = {
   renamed: null,
   labeled: null,
   assigned: null,
+  deleted: null,
   stale: "Changed by someone else.",
   gone: "That is gone, or you are not in this team.",
   archived: "This team is archived.",
@@ -242,6 +244,7 @@ export function Board({ teamId }: { teamId: string }) {
       <button type="button" onClick={() => archive.run({ input: { teamId } })}>
         Archive team
       </button>
+      <DeleteTeam teamId={teamId} />
       {create.data && <Said out={create.data} />}
       {add.data && <Said out={add.data} />}
       {archive.data && <Said out={archive.data} />}
@@ -249,6 +252,26 @@ export function Board({ teamId }: { teamId: string }) {
       <Lanes list={list} teamId={teamId} />
       <History list={list} teamId={teamId} />
     </main>
+  );
+}
+
+/** Delete the team: every part of it goes, and the page goes back to `/issues`. */
+function DeleteTeam({ teamId }: { teamId: string }) {
+  const navigate = useNavigate();
+  const remove = useRun(issueApi["team.delete"], {
+    onSuccess: (out) => {
+      if (out.kind === "deleted") void navigate({ to: "/issues" });
+    },
+  });
+
+  return (
+    <>
+      <button type="button" onClick={() => remove.run({ input: { teamId } })}>
+        Delete team
+      </button>
+      {remove.data && <Said out={remove.data} />}
+      <CallFault error={remove.error} />
+    </>
   );
 }
 

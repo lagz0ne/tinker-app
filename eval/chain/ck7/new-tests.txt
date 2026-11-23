@@ -1,0 +1,4 @@
+every change of an issue leaves one event at its new version, with who and what
+an answer that is not a success leaves no event, nor does a change of the team
+every part of a team is refused to a person outside it, and to a tab with no `who`
+the history lists each change of the team's issues, live

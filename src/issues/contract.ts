@@ -5,7 +5,8 @@ import { z } from "zod";
 // live on every member's tab. A team can be archived: it keeps its issues and takes no change.
 // A viewer reads the team and changes nothing. An issue carries labels; the board filters by one.
 // An issue has an assignee; a person sees the issues assigned to them in all their teams.
-// Each change of an issue leaves an event: the issue's history.
+// Each change of an issue leaves an event: the issue's history. A member can delete a team: every
+// part of it goes.
 // Rebuilt from the Start-era board (tinker-app tag `start-archive`) on keyed data. Every key
 // starts with `teamId`, so one guard checks every part. Every cell is served: a cell that is not served is a copy per session, so a
 // call's write to it would end with the call.
@@ -189,5 +190,14 @@ export const issueApi = rpc({
   "team.archive": {
     input: team,
     output: z.discriminatedUnion("kind", [shut, gone, viewOnly]),
+  },
+  /** Delete a team: every part of it goes. An archived team can be deleted too. */
+  "team.delete": {
+    input: team,
+    output: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("deleted") }),
+      gone,
+      viewOnly,
+    ]),
   },
 });
