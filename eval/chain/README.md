@@ -104,3 +104,27 @@ when to write one.
   (`combobox`, `Role`, exact). By label text, a
   `<label>` that wraps the select reads as
   "Rolememberviewer" and matches nothing.
+
+## Start tree fix (run 16)
+
+`start/tests/drizzle.test.ts` is main 9f51755's
+test, byte-equal. Its second PGlite scope starts in
+a `beforeAll` (30 s), not in the 5 s test. The old
+test timed out on a busy box, so `tinker check`
+failed with no writer fault. The runner retried it.
+
+The golden commits (436a33d, ebe4c87, 3377e87,
+1264f11) keep the old test. Before a run:
+
+1. Copy the file over `tests/drizzle.test.ts` in
+   each golden tree ck1-ck4.
+2. Make the start tree from golden ck1 as before.
+   It gets the file, and its manifest hashes it.
+3. Make each golden manifest the same way, after
+   the copy.
+
+The file is a given file: a writer must not change
+it. The runner needs no drizzle retry rule.
+
+Checked on 0.34.5: golden ck1-ck4 with the file
+are strict (22/22, 25/25, 25/25, 28/28).
