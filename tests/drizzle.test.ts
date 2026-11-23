@@ -113,8 +113,10 @@ for (const driver of drivers) {
       );
     });
 
-    test("a later capsule's start sees the migrated schema", async () => {
-      let seen: unknown;
+    // A second scope, started here and not in its test: its own driver starts a new PGlite,
+    // about 2 s on an idle box and over 5 s (the test limit) on a busy one.
+    let seen: unknown;
+    beforeAll(async () => {
       const later = capsule({
         label: "later",
         hooks: {
@@ -125,10 +127,13 @@ for (const driver of drivers) {
         },
       });
 
-      await using scope = await createScope({
+      const scope = await createScope({
         capsules: [exits({ file: process.env.TINKER_EXITS }), ...driver.capsules(), later] as never,
       }).ready;
+      await scope.close();
+    }, 30_000);
 
+    test("a later capsule's start sees the migrated schema", () => {
       expect(Array.isArray(seen)).toBe(true);
     });
 
