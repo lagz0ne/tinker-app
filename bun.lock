@@ -6,9 +6,9 @@
       "name": "tinker-app",
       "dependencies": {
         "@tanstack/react-router": "1.170.41",
-        "@tinkered/bun": "^0.31.14",
-        "@tinkered/core": "^0.31.14",
-        "@tinkered/react": "^0.31.14",
+        "@tinkered/bun": "^0.34.6",
+        "@tinkered/core": "^0.34.6",
+        "@tinkered/react": "^0.34.6",
         "drizzle-orm": "1.0.0-rc.4",
         "react": "^19.3.0",
         "react-dom": "^19.3.0",
@@ -17,7 +17,7 @@
       "devDependencies": {
         "@electric-sql/pglite": "0.5.14",
         "@tanstack/intent": "0.5.6",
-        "@tinkered/cli": "^0.31.14",
+        "@tinkered/cli": "^0.34.6",
         "@types/bun": "^1.3.0",
         "@types/react": "^19",
         "@types/react-dom": "^19",
@@ -256,13 +256,13 @@
 
     "@testing-library/user-event": ["@testing-library/user-event@14.6.8", "", { "peerDependencies": { "@testing-library/dom": ">=7.21.4" } }, "sha512-vgSSqnANMnkcYR/vUNDbwS7aM3OErRLNUG8vCVVlj4oc6cKffUrccX7UAS5AmJQQNZTSibi9z5GvvRZ0aYgUCQ=="],
 
-    "@tinkered/bun": ["@tinkered/bun@0.31.14", "", { "dependencies": { "@tinkered/core": "^0.31.14" }, "peerDependencies": { "drizzle-orm": "^1.0.0-rc.4" }, "optionalPeers": ["drizzle-orm"] }, "sha512-SQQeD83OIl475mmH0ke4FQrXwt2uG+EYe4bvqsjAJj6RztaZQhRsRgF8j8v93ZSBRnsFGWyXQXJ51HNJ/y5tAA=="],
+    "@tinkered/bun": ["@tinkered/bun@0.34.6", "", { "dependencies": { "@tinkered/core": "^0.34.6" }, "peerDependencies": { "drizzle-orm": "^1.0.0-rc.4" }, "optionalPeers": ["drizzle-orm"] }, "sha512-pF8RCRMhuoaKdUrOEjS/82+G9vwrBHhwcrC5eIBiQnZza7vtmCwiUzyYXhxYy1FzUFM6QyjuLuaLMOA6MtSFWg=="],
 
-    "@tinkered/cli": ["@tinkered/cli@0.31.14", "", { "dependencies": { "@tanstack/intent": "0.5.6", "typescript-api": "npm:typescript@5.9.3" }, "peerDependencies": { "@tinkered/core": "^0.31.14", "vite-plus": "^1.0.0" }, "optionalPeers": ["@tinkered/core", "vite-plus"], "bin": { "tinker": "dist/cli.mjs" } }, "sha512-yCidJ/A5JY1l+2W+TLqwQvKo8MeBUZQWa633ZbynT2nNDnUPSBtVBbL9LDqhpSuYt7i4AlPyQ/H4q0fQkW8tiQ=="],
+    "@tinkered/cli": ["@tinkered/cli@0.34.6", "", { "dependencies": { "@tanstack/intent": "0.5.6", "typescript-api": "npm:typescript@5.9.3" }, "peerDependencies": { "@tinkered/core": "^0.34.6", "vite-plus": "^1.0.0" }, "optionalPeers": ["@tinkered/core", "vite-plus"], "bin": { "tinker": "dist/cli.mjs" } }, "sha512-vsSKfIWB53IbulPwXnK2bF9x29vH5ryTbPo7V7hnYZ5zKWCrY6G/PyR6uvr/bLvpF5MxO1qk/wzFjSG3LAePWQ=="],
 
-    "@tinkered/core": ["@tinkered/core@0.31.14", "", {}, "sha512-Jz7u+Xd0t3Dd47guMqz60+Nx7uVAjKA/JFG4VcbwKo3EYv8vUzoJbzxvZc4w7p6LJiyGZlJZluDIg4MsL4fdWg=="],
+    "@tinkered/core": ["@tinkered/core@0.34.6", "", {}, "sha512-9Y3p1DdRqXklB/T6IFJcuYzY2ElYOTNuv+sHAOWLaLnc99vNGhrFvqPTkURNQ1pa4/I5D+uh6vHGJy1AT56Ylw=="],
 
-    "@tinkered/react": ["@tinkered/react@0.31.14", "", { "dependencies": { "@tinkered/core": "^0.31.14" }, "peerDependencies": { "react": ">=19" } }, "sha512-oxkGHTWFNi3M4bAHJRbd0uLSSje8f41rGC/DtTEkWvimyh8CkDVXOdqEzqyYIu8boxx401nXn2OkGIlXAg9dOg=="],
+    "@tinkered/react": ["@tinkered/react@0.34.6", "", { "dependencies": { "@tinkered/core": "^0.34.6" }, "peerDependencies": { "react": ">=19" } }, "sha512-4qwI33WCShCEqUVWDpQs8AFguYs5bGbQP6oGJpqAfEPX53q7p26X4c7IyccSRFE+skxDoAaYw+9qcFWfxbSF4g=="],
 
     "@types/aria-query": ["@types/aria-query@5.0.4", "", {}, "sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw=="],
 
