@@ -5,7 +5,7 @@ import { baseVersion } from "~/components/health";
 
 import { greet } from "@/greet";
 import { Greeting } from "@/greet/greeting";
-import { Board, IssuesHome } from "@/issues/board";
+import { Board, IssuesHome, MyIssues } from "@/issues/board";
 import { TodoList } from "@/todo/todo-list";
 
 const root = createRootRouteWithContext<{ scope: Scope.Handle }>()({ component: Outlet });
@@ -29,6 +29,9 @@ const todo = createRoute({ getParentRoute: () => root, path: "/todo", component:
 // The issue board: each view reads its keyed part, so no route loads anything.
 const issues = createRoute({ getParentRoute: () => root, path: "/issues", component: IssuesHome });
 
+// The issues assigned to the signed-in person, in every team they are in.
+const mine = createRoute({ getParentRoute: () => root, path: "/issues/mine", component: MyIssues });
+
 const team = createRoute({
   getParentRoute: () => root,
   path: "/issues/$team",
@@ -46,4 +49,4 @@ const tinker = createRoute({
   ),
 });
 
-export const routeTree = root.addChildren([index, todo, issues, team, tinker]);
+export const routeTree = root.addChildren([index, todo, issues, mine, team, tinker]);

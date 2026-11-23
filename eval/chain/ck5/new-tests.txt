@@ -1,0 +1,5 @@
+a label put on one tab shows on the other; taking it off removes it; each counts a version
+a label change answers gone, forbidden and archived as every change does, and writes nothing
+every part of a team is refused to a person outside it, and to a tab with no `who`
+a label is put on a card and taken off; the filter shows only its issues
+a label put on by another tab shows on the card and in the filter

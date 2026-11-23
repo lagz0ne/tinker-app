@@ -52,58 +52,38 @@ export function IssuesHome() {
 /** A refusal's payload, when the reader is not in the team. */
 const notMember = z.object({ notMember: z.string() });
 
-/** A call's answer, as the page gets it. */
-type Out<
-  K extends
-    | "team.add"
-    | "team.archive"
-    | "issue.create"
-    | "issue.move"
-    | "issue.rename"
-    | "issue.label",
-> = Awaited<ReturnType<(typeof issueApi)[K]["run"]>>;
+/** Every change the board asks for. */
+type Change =
+  | "team.add"
+  | "team.archive"
+  | "issue.create"
+  | "issue.move"
+  | "issue.rename"
+  | "issue.label"
+  | "issue.assign";
 
-/** What a change of one issue answers. Every kind has its case: a new kind fails here. */
-function Changed({ out }: { out: Out<"issue.move" | "issue.rename" | "issue.label"> }) {
-  switch (out.kind) {
-    case "moved":
-    case "renamed":
-    case "labeled":
-      return null;
-    case "stale":
-      return <small role="status">Changed by someone else.</small>;
-    case "gone":
-      return <small role="status">This issue is gone.</small>;
-    case "archived":
-      return <Archived />;
-    case "forbidden":
-      return <ViewOnly />;
-  }
-}
+/** A change's answer, as the page gets it. */
+type Out = Awaited<ReturnType<(typeof issueApi)[Change]["run"]>>;
 
-/** The answer of every change to an archived team. */
-function Archived() {
-  return <small role="status">This team is archived.</small>;
-}
+/** What each answer says; a success says nothing. Each kind has its line: a new kind fails here. */
+const says: Record<Out["kind"], string | null> = {
+  created: null,
+  added: null,
+  moved: null,
+  renamed: null,
+  labeled: null,
+  assigned: null,
+  stale: "Changed by someone else.",
+  gone: "That is gone, or you are not in this team.",
+  archived: "This team is archived.",
+  forbidden: "You can only view this team.",
+  notAssignable: "Only a member of the team can take it.",
+};
 
-/** The answer of every change by a viewer. */
-function ViewOnly() {
-  return <small role="status">You can only view this team.</small>;
-}
-
-/** What an add's or the archive's answer says. */
-function Added({ out }: { out: Out<"team.add" | "issue.create" | "team.archive"> }) {
-  switch (out.kind) {
-    case "created":
-    case "added":
-      return null;
-    case "gone":
-      return <small role="status">That is gone, or you are not in this team.</small>;
-    case "archived":
-      return <Archived />;
-    case "forbidden":
-      return <ViewOnly />;
-  }
+/** What a call's answer says, as a status. */
+function Said({ out }: { out: Out }) {
+  const text = says[out.kind];
+  return text && <small role="status">{text}</small>;
 }
 
 /** `link`: no answer came. A read is asked again by itself. A call is not: when it left, the
@@ -161,6 +141,53 @@ function Waiting({ state, again }: { state: PartState | undefined; again: () => 
   );
 }
 
+/** `/issues/mine`: the issues assigned to the signed-in person, in each team they are in. */
+export function MyIssues() {
+  const me = useData(signedAs);
+  const part = issueBoard.members.where({ userId: me });
+  const places = useData(part);
+  const state = useData(issueBoard.status(part));
+  const again = useRun(issueBoard.invalidate);
+  if (state?.status !== "ready") {
+    return (
+      <main>
+        <Waiting state={state} again={() => again.run({ input: { members: { userId: me } } })} />
+      </main>
+    );
+  }
+
+  return (
+    <main>
+      <h1>My issues</h1>
+      {places
+        .map((p) => p.teamId)
+        .toSorted()
+        .map((teamId) => (
+          <Mine key={teamId} teamId={teamId} me={me} />
+        ))}
+    </main>
+  );
+}
+
+/** One team's issues that are assigned to `me`, by number. */
+function Mine({ teamId, me }: { teamId: string; me: string }) {
+  const list = useData(issueBoard.issues.where({ teamId }));
+
+  return (
+    <section aria-label={teamId}>
+      <h2>{teamId}</h2>
+      {list
+        .filter((i) => i.assignee === me)
+        .toSorted((a, b) => a.number - b.number)
+        .map((i) => (
+          <article key={i.id} aria-label={`${teamId}-${i.number}`}>
+            <strong>{`${teamId}-${i.number}`}</strong> {i.title} <small>{i.state}</small>
+          </article>
+        ))}
+    </section>
+  );
+}
+
 /** `/issues/$team`: the team's issues in four lanes, live. With a label shown, only the issues
  * that carry it. */
 export function Board({ teamId }: { teamId: string }) {
@@ -215,9 +242,9 @@ export function Board({ teamId }: { teamId: string }) {
       <button type="button" onClick={() => archive.run({ input: { teamId } })}>
         Archive team
       </button>
-      {create.data && <Added out={create.data} />}
-      {add.data && <Added out={add.data} />}
-      {archive.data && <Added out={archive.data} />}
+      {create.data && <Said out={create.data} />}
+      {add.data && <Said out={add.data} />}
+      {archive.data && <Said out={archive.data} />}
       <CallFault error={create.error ?? add.error ?? archive.error} />
       <Lanes list={list} teamId={teamId} />
     </main>
@@ -229,6 +256,12 @@ export function Board({ teamId }: { teamId: string }) {
  * not draw it again. */
 function Lanes({ list, teamId }: { list: readonly Issue[]; teamId: string }) {
   const tags = useData(issueBoard.labels.where({ teamId }));
+  // Who may take an issue: the team's members, not its viewers.
+  const people = useData(issueBoard.members.where({ teamId }))
+    .filter((m) => m.role === "member")
+    .map((m) => m.userId)
+    .toSorted()
+    .join(" ");
   const known = [...new Set(tags.map((t) => t.name))].toSorted();
   // A label that no issue of this team has shows all.
   const shown = useData(shownLabel);
@@ -260,6 +293,7 @@ function Lanes({ list, teamId }: { list: readonly Issue[]; teamId: string }) {
                 <Card
                   key={i.id}
                   issue={i}
+                  people={people}
                   labels={tags
                     .filter((t) => t.id === i.id)
                     .map((t) => t.name)
@@ -276,10 +310,17 @@ function Lanes({ list, teamId }: { list: readonly Issue[]; teamId: string }) {
 
 /** One card. Core keeps a member's reference until it changes, so a move draws this card alone
  * (and its new lane). */
-const Card = memo(function Card({ issue, labels }: { issue: Issue; labels: string }) {
+const Card = memo(function Card({
+  issue,
+  labels,
+  people,
+}: {
+  issue: Issue;
+  labels: string;
+  people: string;
+}) {
   const move = useRun(issueApi["issue.move"]);
   const rename = useRun(issueApi["issue.rename"]);
-  const label = useRun(issueApi["issue.label"]);
   const { teamId, id, version } = issue;
 
   const name = `${teamId}-${issue.number}`;
@@ -313,6 +354,47 @@ const Card = memo(function Card({ issue, labels }: { issue: Issue; labels: strin
         />
         <button type="submit">Rename</button>
       </form>
+      <Assignee issue={issue} name={name} people={people} />
+      <Labels issue={issue} name={name} labels={labels} />
+      {move.data && <Said out={move.data} />}
+      {rename.data && <Said out={rename.data} />}
+      <CallFault error={move.error ?? rename.error} />
+    </article>
+  );
+});
+
+/** A card's assignee: `nobody`, or one of the team's members. */
+function Assignee({ issue, name, people }: { issue: Issue; name: string; people: string }) {
+  const assign = useRun(issueApi["issue.assign"]);
+  const { teamId, id, version } = issue;
+
+  return (
+    <>
+      <select
+        aria-label={`Assignee of ${name}`}
+        value={issue.assignee ?? "nobody"}
+        onChange={(event) => {
+          const to = event.target.value;
+          assign.run({ input: { teamId, id, version, userId: to === "nobody" ? null : to } });
+        }}
+      >
+        {["nobody", ...people.split(" ")].map((p) => (
+          <option key={p}>{p}</option>
+        ))}
+      </select>
+      {assign.data && <Said out={assign.data} />}
+      <CallFault error={assign.error} />
+    </>
+  );
+}
+
+/** A card's labels: each one a button that takes it off, and a form that puts one on. */
+function Labels({ issue, name, labels }: { issue: Issue; name: string; labels: string }) {
+  const label = useRun(issueApi["issue.label"]);
+  const { teamId, id, version } = issue;
+
+  return (
+    <>
       {labels &&
         labels.split(" ").map((n) => (
           <button
@@ -337,10 +419,8 @@ const Card = memo(function Card({ issue, labels }: { issue: Issue; labels: strin
         <input name="label" aria-label={`Label for ${name}`} />
         <button type="submit">Add label</button>
       </form>
-      {move.data && <Changed out={move.data} />}
-      {rename.data && <Changed out={rename.data} />}
-      {label.data && <Changed out={label.data} />}
-      <CallFault error={move.error ?? rename.error ?? label.error} />
-    </article>
+      {label.data && <Said out={label.data} />}
+      <CallFault error={label.error} />
+    </>
   );
-});
+}

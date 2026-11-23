@@ -28,13 +28,19 @@ const inTeam = operation({
   run: ({ team, me }, { input }) => team.of({ teamId: input.teamId, userId: me }).get(),
 });
 
-/** Every read of a part: the caller must be a member of the part's team (ADR 0138 rule 14). */
+/** Every read of a part: the caller must be a member of the part's team (ADR 0138 rule 14). A
+ * part of `members` by `userId` alone is the caller's own teams: it goes to that user only. */
 export const membersOnly = operation({
   label: "issues.membersOnly",
   input: transport.hook.start,
-  depends: { ok: inTeam },
-  run: ({ ok }, { input }) => {
-    const teamId = issueBoard.part(input)?.teamId ?? "";
+  depends: { ok: inTeam, me: caller.required },
+  run: ({ ok, me }, { input }) => {
+    const part = issueBoard.part(input);
+    if (part && !("teamId" in part) && "userId" in part) {
+      return part.userId === me ? undefined : input.refuse({ notYou: part.userId });
+    }
+
+    const teamId = part?.teamId ?? "";
     return ok.run({ input: { teamId } }) ? undefined : input.refuse({ notMember: teamId });
   },
 });
@@ -161,6 +167,26 @@ const labelIssue = operation({
   },
 });
 
+/** Assign an issue, or take its assignee off. The assignee must be a `member` of the team. */
+const assignIssue = operation({
+  label: "issue.assign.do",
+  input: issueApi["issue.assign"].input,
+  depends: { list: issues.controller, team: members.controller, at: atVersion },
+  run: ({ list, team, at }, { input }) => {
+    const now = at.run({ input });
+    if (now.kind !== "now") return now;
+
+    const { teamId, userId } = input;
+    if (userId !== null && team.of({ teamId, userId }).get()?.role !== "member") {
+      return { kind: "notAssignable" as const };
+    }
+
+    const version = now.issue.version + 1;
+    list.set({ ...now.issue, assignee: userId ?? undefined, version });
+    return { kind: "assigned" as const, version };
+  },
+});
+
 /** Archive a team. A second archive answers the same and writes nothing. */
 const archiveTeam = operation({
   label: "team.archive.do",
@@ -183,5 +209,6 @@ export const issueOps = {
   "issue.move": moveIssue,
   "issue.rename": renameIssue,
   "issue.label": labelIssue,
+  "issue.assign": assignIssue,
   "team.archive": archiveTeam,
 } as const;

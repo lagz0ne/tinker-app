@@ -359,6 +359,96 @@ test("a label change answers gone, forbidden and archived as every change does, 
   ).toMatchObject({ version: 1 });
 });
 
+/** A tab's reader of its own places in every team, kept in use. */
+const placesOf = (scope: Scope.Handle, userId: string) => {
+  const reader = scope.resolve(issues.board.members.where({ userId }));
+  reader.watch(() => undefined);
+  return reader;
+};
+
+// S12: an assignment is a change of the issue. It names the version it saw, counts one version,
+// and the assignee must be a `member` of the team. `userId: null` takes the assignee off.
+test("an issue is assigned to a member and taken off; anyone else is not assignable", async () => {
+  const teamId = await team();
+  const seen = read(bo, teamId);
+  await ana.run(issues.api["team.add"], { input: { teamId, userId: "dee", role: "viewer" } });
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Fix it" } });
+  await until(() => seen.get().length === 1);
+  const { id } = seen.get()[0]!;
+  const assign = (userId: string | null, version: number) =>
+    ana.run(issues.api["issue.assign"], { input: { teamId, id, version, userId } });
+
+  expect(await assign("bo", 1)).toEqual({ kind: "assigned", version: 2 });
+  await until(() => seen.get()[0]?.assignee === "bo");
+  // A viewer, and a person outside the team, cannot take an issue.
+  expect(await assign("dee", 2)).toEqual({ kind: "notAssignable" });
+  expect(await assign("cy", 2)).toEqual({ kind: "notAssignable" });
+  expect(await assign("ana", 1)).toEqual({ kind: "stale", version: 2 });
+  expect(await assign(null, 2)).toEqual({ kind: "assigned", version: 3 });
+  await until(() => seen.get()[0]?.version === 3);
+  expect(seen.get()[0]?.assignee).toBeUndefined();
+  expect(
+    await bo.run(issues.api["issue.rename"], { input: { teamId, id, version: 3, title: "Fixed" } }),
+  ).toEqual({ kind: "renamed", version: 4 });
+});
+
+// S12: an assignment answers as every change does.
+test("an assignment answers gone, forbidden and archived as every change does, and writes nothing", async () => {
+  const teamId = await team();
+  const dee = await open("dee");
+  await ana.run(issues.api["team.add"], { input: { teamId, userId: "dee", role: "viewer" } });
+  const seen = read(ana, teamId);
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Ours" } });
+  await until(() => seen.get().length === 1);
+  const { id } = seen.get()[0]!;
+  const to = { teamId, id, version: 1, userId: "bo" };
+
+  expect(await cy.run(issues.api["issue.assign"], { input: to })).toEqual({ kind: "gone" });
+  expect(await ana.run(issues.api["issue.assign"], { input: { ...to, id: "none" } })).toEqual({
+    kind: "gone",
+  });
+  expect(await dee.run(issues.api["issue.assign"], { input: to })).toEqual({ kind: "forbidden" });
+  await ana.run(issues.api["team.archive"], { input: { teamId } });
+  expect(await bo.run(issues.api["issue.assign"], { input: to })).toEqual({ kind: "archived" });
+
+  expect(
+    backend
+      .resolve(issues.board.issues)
+      .get()
+      .find((i) => i.id === id),
+  ).toEqual(expect.not.objectContaining({ assignee: expect.anything() }));
+});
+
+// S13: a person reads their own places in every team, live: a team that adds them shows at once.
+// Nobody else reads them.
+test("a person reads their own teams, live; another person's teams are refused", async () => {
+  const first = await team();
+  const eve = await open("eve");
+  const mine = placesOf(eve, "eve");
+  await ana.run(issues.api["team.add"], {
+    input: { teamId: first, userId: "eve", role: "member" },
+  });
+  await until(() => mine.get().length === 1);
+  const second = await team();
+  await ana.run(issues.api["team.add"], {
+    input: { teamId: second, userId: "eve", role: "viewer" },
+  });
+  await until(() => mine.get().length === 2);
+  expect(
+    mine
+      .get()
+      .map((m) => `${m.teamId} ${m.role}`)
+      .toSorted(),
+  ).toEqual([`${first} member`, `${second} viewer`]);
+
+  const peek = placesOf(cy, "eve");
+  const status = () =>
+    cy.resolve(issues.board.status(issues.board.members.where({ userId: "eve" }))).get();
+  await until(() => status()?.status === "fault");
+  expect(status()).toMatchObject({ fault: { fault: "refused" } });
+  expect(peek.get()).toEqual([]);
+});
+
 test("a tab with no `who` is refused; so is a member of no team, on calls and on reads", async () => {
   const teamId = await team();
   const peek = read(cy, teamId);

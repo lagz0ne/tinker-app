@@ -528,6 +528,125 @@ test("a label put on by another tab shows on the card and in the filter", async 
     .toEqual(["all", "ui"]);
 });
 
+// P9: a card's select `Assignee of ENG-1` lists `nobody`, then the team's members (not its
+// viewers). A choice assigns the issue.
+test("a card is assigned to a member of the team, and back to nobody", async () => {
+  const server = await drawn({}, undefined);
+  const ana = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  onTestFinished(async () => {
+    await ana.close();
+  });
+  await ana.run(issues.api["team.add"], { input: { teamId: "ENG", userId: "bo", role: "member" } });
+  await ana.run(issues.api["team.add"], { input: { teamId: "ENG", userId: "vi", role: "viewer" } });
+  const who = page.getByRole("combobox", { name: "Assignee of ENG-1", exact: true });
+  await expect
+    .poll(() => [...who.element().querySelectorAll("option")].map((o) => o.text))
+    .toEqual(["nobody", "ana", "bo"]);
+
+  await who.selectOptions("bo");
+  await expect.poll(() => server.resolve(issues.board.issues).get()[0]?.assignee).toBe("bo");
+  await expect.element(who).toHaveValue("bo");
+  await who.selectOptions("nobody");
+  await expect.poll(() => server.resolve(issues.board.issues).get()[0]?.version).toBe(3);
+  expect(server.resolve(issues.board.issues).get()[0]?.assignee).toBeUndefined();
+});
+
+// P10: `/issues/mine` lists, for each team the person is in, the issues assigned to them, live.
+test("my issues lists the issues assigned to me in each of my teams, live", async () => {
+  const server = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const tab = async (name: string) => {
+    const scope = await createScope({
+      capsules: [
+        exits({ store: localStorage }),
+        memory.client({ peer: server, meta: whoMeta }),
+        issues.board({ read: memory.client }),
+        issues.api({ remote: memory.client }),
+      ],
+    }).ready;
+    scope.run(signIn, { input: { name } });
+    return scope;
+  };
+  const [ana, bo] = [await tab("ana"), await tab("bo")];
+  const made = async (teamId: string, title: string) => {
+    await ana.run(issues.api["issue.create"], { input: { teamId, title } });
+    const it = server
+      .resolve(issues.board.issues)
+      .get()
+      .find((i) => i.teamId === teamId && i.title === title)!;
+    return { teamId, id: it.id, version: 1 };
+  };
+  for (const teamId of ["WEB", "API"]) {
+    await ana.run(issues.api["team.create"], { input: { teamId } });
+    await ana.run(issues.api["team.add"], { input: { teamId, userId: "bo", role: "member" } });
+  }
+  await ana.run(issues.api["issue.assign"], {
+    input: { ...(await made("WEB", "Header")), userId: "bo" },
+  });
+  await made("WEB", "Footer");
+  await ana.run(issues.api["issue.assign"], {
+    input: { ...(await made("API", "Auth")), userId: "bo" },
+  });
+
+  const history = createMemoryHistory({ initialEntries: ["/issues/mine"] });
+  const router = createRouter({ routeTree, history, context: { scope: bo } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  onTestFinished(async () => {
+    root.unmount();
+    await ana.close();
+    await bo.close();
+    await server.close();
+  });
+  root.render(
+    <ScopeProvider scope={bo}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  await expect.element(page.getByRole("heading", { name: "My issues" })).toBeVisible();
+  const web = page.getByRole("region", { name: "WEB", exact: true });
+  const api = page.getByRole("region", { name: "API", exact: true });
+  await expect.element(web.getByRole("article", { name: "WEB-1" })).toBeVisible();
+  await expect.element(api.getByRole("article", { name: "API-1" })).toBeVisible();
+  expect(web.getByRole("article", { name: "WEB-2" }).elements()).toEqual([]);
+  // The teams in order of their key.
+  expect(
+    [...document.querySelectorAll("main section")].map((x) => x.getAttribute("aria-label")),
+  ).toEqual(["API", "WEB"]);
+
+  // A team that adds bo, and an issue it assigns to bo, show at once.
+  await ana.run(issues.api["team.create"], { input: { teamId: "OPS" } });
+  await ana.run(issues.api["team.add"], { input: { teamId: "OPS", userId: "bo", role: "member" } });
+  await ana.run(issues.api["issue.assign"], {
+    input: { ...(await made("OPS", "Pager")), userId: "bo" },
+  });
+  const ops = page.getByRole("region", { name: "OPS", exact: true });
+  await expect.element(ops.getByRole("article", { name: "OPS-1" })).toBeVisible();
+  // An issue taken off bo goes.
+  const [header] = server
+    .resolve(issues.board.issues)
+    .get()
+    .filter((i) => i.title === "Header");
+  await ana.run(issues.api["issue.assign"], {
+    input: { teamId: "WEB", id: header!.id, version: 2, userId: null },
+  });
+  await expect.element(web.getByRole("article", { name: "WEB-1" })).not.toBeInTheDocument();
+});
+
 // P4: `gone` is an answer, so the page says it as a status. The answers are replaced here: a
 // member's own page gets `gone` only in a race (the issue or the membership went away).
 test("a call that answers gone says so", async () => {

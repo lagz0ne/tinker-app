@@ -1,4 +1,5 @@
 greet.here exits{value} reads{} writes{} calls{}
+issue.assign.do exits{archived,assigned,forbidden,gone,notAssignable,stale} reads{issues.members.of} writes{issues.list.set} calls{issues.atVersion}
 issue.create.do exits{archived,created,forbidden,gone} reads{issues.list.where} writes{issues.list.set} calls{issues.canWrite}
 issue.label.do exits{archived,forbidden,gone,labeled,stale} reads{} writes{issues.labels.delete,issues.labels.set,issues.list.set} calls{issues.atVersion}
 issue.move.do exits{archived,forbidden,gone,moved,stale} reads{} writes{issues.list.set} calls{issues.atVersion}

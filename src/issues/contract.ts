@@ -3,9 +3,10 @@ import { z } from "zod";
 
 // The issue board's contract: both sides import it. A team's issues move through four states,
 // live on every member's tab. A team can be archived: it keeps its issues and takes no change.
-// A viewer reads the team and changes nothing. An issue carries labels; the board filters by one. Rebuilt from the Start-era board
-// (tinker-app tag `start-archive`) on keyed data. Every key starts with `teamId`, so one guard
-// checks every part. Every cell is served: a cell that is not served is a copy per session, so a
+// A viewer reads the team and changes nothing. An issue carries labels; the board filters by one.
+// An issue has an assignee; a person sees the issues assigned to them in all their teams.
+// Rebuilt from the Start-era board (tinker-app tag `start-archive`) on keyed data. Every key
+// starts with `teamId`, so one guard checks every part. Every cell is served: a cell that is not served is a copy per session, so a
 // call's write to it would end with the call.
 
 export const states = ["backlog", "todo", "doing", "done"] as const;
@@ -22,12 +23,15 @@ const issue = z.object({
   title: z.string(),
   state: z.enum(states),
   version: z.number(),
+  /** The member who works on it; none at first. */
+  assignee: z.string().optional(),
 });
 
 export type Issue = z.infer<typeof issue>;
 
 /** Who is in which team, and in which role. A team is its first member: `ENG` exists once
- * someone made it. */
+ * someone made it. A tab reads one team with `where({ teamId })`, and the caller's own teams
+ * with `where({ userId })`. */
 export const members = data({
   label: "issues.members",
   mode: "keyed",
@@ -59,7 +63,8 @@ export const labels = data({
   key: (l) => ({ teamId: l.teamId, id: l.id, name: l.name }),
 });
 
-/** Read: each part goes only to the members of its team. */
+/** Read: each part of a team goes only to the members of that team. A part of `members` by
+ * `userId` goes only to that user. */
 export const issueBoard = remoteData({ members, issues, archived, labels });
 
 const team = z.object({ teamId: z.string() });
@@ -142,6 +147,20 @@ export const issueApi = rpc({
     output: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("labeled"), version: z.number() }),
       z.object({ kind: z.literal("stale"), version: z.number() }),
+      gone,
+      shut,
+      viewOnly,
+    ]),
+  },
+  /** An assignment is a change of the issue: it names the version it saw, as a move does.
+   * `userId: null` takes the assignee off. The assignee must be a `member` of the team: anyone
+   * else answers `notAssignable`. */
+  "issue.assign": {
+    input: team.extend({ id: z.string(), version: z.number(), userId: z.string().nullable() }),
+    output: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("assigned"), version: z.number() }),
+      z.object({ kind: z.literal("stale"), version: z.number() }),
+      z.object({ kind: z.literal("notAssignable") }),
       gone,
       shut,
       viewOnly,
