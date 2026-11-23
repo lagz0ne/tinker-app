@@ -438,7 +438,7 @@ test("the member form adds a person as a viewer", async () => {
   const server = await drawn();
 
   await page.getByRole("textbox", { name: "Add member" }).fill("vi");
-  await page.getByLabelText("Role").selectOptions("viewer");
+  await page.getByRole("combobox", { name: "Role", exact: true }).selectOptions("viewer");
   await page.getByRole("button", { name: "Add member" }).click();
 
   await expect

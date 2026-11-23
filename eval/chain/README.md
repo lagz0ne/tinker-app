@@ -10,8 +10,8 @@ tests run again.
 
 ## Steps
 
-- ck1: today's task (kit 9.1 TASK.md, golden =
-  tinker-app main 436a33d).
+- ck1: today's task (kit 9.1 TASK.md, now in
+  `ck1/TASK.md`; golden = tinker-app main 436a33d).
 - ck2: `issue.rename`. Golden ebe4c87.
 - ck3: `team.archive`; comments go. Golden 3377e87.
 - ck4: a viewer role; every change by a viewer
@@ -87,3 +87,20 @@ the operation that makes it.
 Facts per step: strict, and the cell readers from
 `tinker.graph` (each cell, and the ops that read
 it directly).
+
+## Graph rules (run 15)
+
+`@tinkered/*` 0.34.5 checks `graph.rules` in
+`tinker.json` (ADR 0167). Its operation skill says
+when to write one.
+
+- `ck1/TASK.md`: the writer may add `graph.rules`
+  to `tinker.json`, and must not change its other
+  keys. The TASK does not say what to write.
+- The scorer counts `tinker.json` as unchanged when
+  its only change is a `graph` key.
+- `ck4/hidden/issue-board.test.tsx`: the member
+  form's select is found by role and name
+  (`combobox`, `Role`, exact). By label text, a
+  `<label>` that wraps the select reads as
+  "Rolememberviewer" and matches nothing.
