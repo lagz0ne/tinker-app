@@ -647,6 +647,46 @@ test("my issues lists the issues assigned to me in each of my teams, live", asyn
   await expect.element(web.getByRole("article", { name: "WEB-1" })).not.toBeInTheDocument();
 });
 
+// P11: the board's region `History` lists each event of the team, by issue number, then version,
+// live.
+test("the history lists each change of the team's issues, live", async () => {
+  const server = await drawn();
+  const ana = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  onTestFinished(async () => {
+    await ana.close();
+  });
+  await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: "Second" } });
+  const { id } = server
+    .resolve(issues.board.issues)
+    .get()
+    .find((i) => i.number === 1)!;
+  await ana.run(issues.api["issue.move"], {
+    input: { teamId: "ENG", id, version: 1, state: "todo" },
+  });
+  const one = page.getByRole("article", { name: "ENG-1" });
+  await expect.element(one.getByLabelText("Title of ENG-1")).toBeVisible();
+  await one.getByLabelText("Title of ENG-1").fill("Login fails");
+  await one.getByRole("button", { name: "Rename" }).click();
+
+  const history = page.getByRole("region", { name: "History", exact: true });
+  await expect
+    .poll(() => [...history.element().querySelectorAll("li")].map((li) => li.textContent))
+    .toEqual([
+      "ENG-1 v1 created by ana",
+      "ENG-1 v2 moved by ana",
+      "ENG-1 v3 renamed by ana",
+      "ENG-2 v1 created by ana",
+    ]);
+});
+
 // P4: `gone` is an answer, so the page says it as a status. The answers are replaced here: a
 // member's own page gets `gone` only in a race (the issue or the membership went away).
 test("a call that answers gone says so", async () => {

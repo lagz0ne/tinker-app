@@ -1,7 +1,17 @@
 import { operation, tag, transport } from "@tinkered/core";
 import { z } from "zod";
 
-import { archived, issueApi, issueBoard, issues, labels, members } from "./contract";
+import {
+  archived,
+  changes,
+  events,
+  issue,
+  issueApi,
+  issueBoard,
+  issues,
+  labels,
+  members,
+} from "./contract";
 
 // The server's work for `issueApi`. Each op writes members of the keyed cells; `issueBoard` tells
 // every member's tab that reads the part, and the tab asks for that part alone.
@@ -62,6 +72,19 @@ const canWrite = operation({
   },
 });
 
+/** Save a change of an issue: the issue at its new version, and the event of that version. Every
+ * change of an issue ends here, so none leaves no event (`tinker.json` graph rule). */
+const record = operation({
+  label: "issues.record",
+  input: z.object({ issue, what: z.enum(changes) }),
+  depends: { list: issues.controller, log: events.controller, me: caller.required },
+  run: ({ list, log, me }, { input }) => {
+    const { issue, what } = input;
+    list.set(issue);
+    log.set({ teamId: issue.teamId, id: issue.id, version: issue.version, by: me, what });
+  },
+});
+
 const createTeam = operation({
   label: "team.create.do",
   input: issueApi["team.create"].input,
@@ -91,14 +114,15 @@ const addMember = operation({
 const createIssue = operation({
   label: "issue.create.do",
   input: issueApi["issue.create"].input,
-  depends: { list: issues.controller, can: canWrite },
-  run: ({ list, can }, { input, random }) => {
+  depends: { list: issues.controller, can: canWrite, save: record },
+  run: ({ list, can, save }, { input, random }) => {
     const now = can.run({ input });
     if (now.kind !== "ok") return now;
 
     const team = list.where({ teamId: input.teamId }).get();
     const number = Math.max(0, ...team.map((i) => i.number)) + 1;
-    list.set({ ...input, id: random.uuid(), number, state: "backlog", version: 1 });
+    const made = { ...input, id: random.uuid(), number, state: "backlog" as const, version: 1 };
+    save.run({ input: { issue: made, what: "created" } });
     return { kind: "created" as const, number };
   },
 });
@@ -124,13 +148,13 @@ const atVersion = operation({
 const moveIssue = operation({
   label: "issue.move.do",
   input: issueApi["issue.move"].input,
-  depends: { list: issues.controller, at: atVersion },
-  run: ({ list, at }, { input }) => {
+  depends: { at: atVersion, save: record },
+  run: ({ at, save }, { input }) => {
     const now = at.run({ input });
     if (now.kind !== "now") return now;
 
     const version = now.issue.version + 1;
-    list.set({ ...now.issue, state: input.state, version });
+    save.run({ input: { issue: { ...now.issue, state: input.state, version }, what: "moved" } });
     return { kind: "moved" as const, version };
   },
 });
@@ -138,13 +162,13 @@ const moveIssue = operation({
 const renameIssue = operation({
   label: "issue.rename.do",
   input: issueApi["issue.rename"].input,
-  depends: { list: issues.controller, at: atVersion },
-  run: ({ list, at }, { input }) => {
+  depends: { at: atVersion, save: record },
+  run: ({ at, save }, { input }) => {
     const now = at.run({ input });
     if (now.kind !== "now") return now;
 
     const version = now.issue.version + 1;
-    list.set({ ...now.issue, title: input.title, version });
+    save.run({ input: { issue: { ...now.issue, title: input.title, version }, what: "renamed" } });
     return { kind: "renamed" as const, version };
   },
 });
@@ -153,8 +177,8 @@ const renameIssue = operation({
 const labelIssue = operation({
   label: "issue.label.do",
   input: issueApi["issue.label"].input,
-  depends: { list: issues.controller, tags: labels.controller, at: atVersion },
-  run: ({ list, tags, at }, { input }) => {
+  depends: { tags: labels.controller, at: atVersion, save: record },
+  run: ({ tags, at, save }, { input }) => {
     const now = at.run({ input });
     if (now.kind !== "now") return now;
 
@@ -162,7 +186,7 @@ const labelIssue = operation({
     if (input.on) tags.set(key);
     else tags.delete(key);
     const version = now.issue.version + 1;
-    list.set({ ...now.issue, version });
+    save.run({ input: { issue: { ...now.issue, version }, what: "labeled" } });
     return { kind: "labeled" as const, version };
   },
 });
@@ -171,8 +195,8 @@ const labelIssue = operation({
 const assignIssue = operation({
   label: "issue.assign.do",
   input: issueApi["issue.assign"].input,
-  depends: { list: issues.controller, team: members.controller, at: atVersion },
-  run: ({ list, team, at }, { input }) => {
+  depends: { team: members.controller, at: atVersion, save: record },
+  run: ({ team, at, save }, { input }) => {
     const now = at.run({ input });
     if (now.kind !== "now") return now;
 
@@ -182,7 +206,8 @@ const assignIssue = operation({
     }
 
     const version = now.issue.version + 1;
-    list.set({ ...now.issue, assignee: userId ?? undefined, version });
+    const next = { ...now.issue, assignee: userId ?? undefined, version };
+    save.run({ input: { issue: next, what: "assigned" } });
     return { kind: "assigned" as const, version };
   },
 });

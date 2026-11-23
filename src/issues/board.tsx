@@ -247,6 +247,7 @@ export function Board({ teamId }: { teamId: string }) {
       {archive.data && <Said out={archive.data} />}
       <CallFault error={create.error ?? add.error ?? archive.error} />
       <Lanes list={list} teamId={teamId} />
+      <History list={list} teamId={teamId} />
     </main>
   );
 }
@@ -305,6 +306,28 @@ function Lanes({ list, teamId }: { list: readonly Issue[]; teamId: string }) {
         ))}
       </div>
     </>
+  );
+}
+
+/** The team's history: each event, as `ENG-1 v2 moved by bo`, by issue number, then version. */
+function History({ list, teamId }: { list: readonly Issue[]; teamId: string }) {
+  const log = useData(issueBoard.events.where({ teamId }));
+  const numbers = new Map(list.map((i) => [i.id, i.number]));
+  const lines = log
+    .map((e) => ({ ...e, number: numbers.get(e.id) ?? 0 }))
+    .toSorted((a, b) => a.number - b.number || a.version - b.version);
+
+  return (
+    <section aria-label="History">
+      <h2>History</h2>
+      <ul>
+        {lines.map((e) => (
+          <li key={`${e.id} ${e.version}`}>
+            {`${teamId}-${e.number} v${e.version} ${e.what} by ${e.by}`}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

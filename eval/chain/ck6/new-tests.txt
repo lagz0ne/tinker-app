@@ -1,0 +1,5 @@
+an issue is assigned to a member and taken off; anyone else is not assignable
+an assignment answers gone, forbidden and archived as every change does, and writes nothing
+a person reads their own teams, live; another person's teams are refused
+a card is assigned to a member of the team, and back to nobody
+my issues lists the issues assigned to me in each of my teams, live

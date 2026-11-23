@@ -22,5 +22,13 @@
       }
     }
   },
-  "tests": "bun run test"
+  "tests": "bun run test",
+  "graph": {
+    "rules": [
+      {
+        "writes": "issues.list",
+        "calls": "issues.record"
+      }
+    ]
+  }
 }

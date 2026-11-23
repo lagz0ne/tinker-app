@@ -449,6 +449,68 @@ test("a person reads their own teams, live; another person's teams are refused",
   expect(peek.get()).toEqual([]);
 });
 
+/** The events of one team on the server, as `version what by` per issue id. */
+const eventsOf = (teamId: string) =>
+  backend
+    .resolve(issues.board.events)
+    .get()
+    .filter((e) => e.teamId === teamId)
+    .toSorted((a, b) => a.version - b.version)
+    .map((e) => `${e.id} ${e.version} ${e.what} ${e.by}`);
+
+// S14: each change of an issue that succeeds leaves one event, at the issue's new version, with
+// the caller and what changed. The other tabs see it.
+test("every change of an issue leaves one event at its new version, with who and what", async () => {
+  const teamId = await team();
+  const seen = read(bo, teamId);
+  const log = bo.resolve(issues.board.events.where({ teamId }));
+  log.watch(() => undefined);
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Slow" } });
+  await until(() => seen.get().length === 1);
+  const { id } = seen.get()[0]!;
+  const at = { teamId, id };
+
+  await bo.run(issues.api["issue.move"], { input: { ...at, version: 1, state: "doing" } });
+  await ana.run(issues.api["issue.rename"], { input: { ...at, version: 2, title: "Too slow" } });
+  await bo.run(issues.api["issue.label"], { input: { ...at, version: 3, name: "perf", on: true } });
+  await bo.run(issues.api["issue.label"], {
+    input: { ...at, version: 4, name: "perf", on: false },
+  });
+  await ana.run(issues.api["issue.assign"], { input: { ...at, version: 5, userId: "bo" } });
+
+  expect(eventsOf(teamId)).toEqual([
+    `${id} 1 created ana`,
+    `${id} 2 moved bo`,
+    `${id} 3 renamed ana`,
+    `${id} 4 labeled bo`,
+    `${id} 5 labeled bo`,
+    `${id} 6 assigned ana`,
+  ]);
+  await until(() => log.get().length === 6);
+});
+
+// S14: an answer that is not a success leaves no event; nor does a change that is not of an
+// issue (a member added, the team archived).
+test("an answer that is not a success leaves no event, nor does a change of the team", async () => {
+  const teamId = await team();
+  const dee = await open("dee");
+  await ana.run(issues.api["team.add"], { input: { teamId, userId: "dee", role: "viewer" } });
+  const seen = read(ana, teamId);
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "One" } });
+  await until(() => seen.get().length === 1);
+  const { id } = seen.get()[0]!;
+  const at = { teamId, id };
+
+  await ana.run(issues.api["issue.move"], { input: { ...at, version: 9, state: "done" } });
+  await ana.run(issues.api["issue.assign"], { input: { ...at, version: 1, userId: "dee" } });
+  await dee.run(issues.api["issue.rename"], { input: { ...at, version: 1, title: "x" } });
+  await cy.run(issues.api["issue.label"], { input: { ...at, version: 1, name: "x", on: true } });
+  await ana.run(issues.api["team.archive"], { input: { teamId } });
+  await bo.run(issues.api["issue.create"], { input: { teamId, title: "Two" } });
+
+  expect(eventsOf(teamId)).toEqual([`${id} 1 created ana`]);
+});
+
 test("a tab with no `who` is refused; so is a member of no team, on calls and on reads", async () => {
   const teamId = await team();
   const peek = read(cy, teamId);
@@ -473,6 +535,7 @@ const faultsOf = (scope: Scope.Handle, teamId: string) => {
     issues.board.issues.where({ teamId }),
     issues.board.archived.where({ teamId }),
     issues.board.labels.where({ teamId }),
+    issues.board.events.where({ teamId }),
   ] as const;
   for (const part of parts) scope.resolve(part).watch(() => undefined);
 
@@ -483,7 +546,7 @@ const faultsOf = (scope: Scope.Handle, teamId: string) => {
     });
 };
 
-// S5, each part of a team: members, issues, the archive mark and the labels. A read from outside the team is refused
+// S5, each part of a team: members, issues, the archive mark, the labels and the events. A read from outside the team is refused
 // with the team in the payload; a read with no `who` is refused too.
 test("every part of a team is refused to a person outside it, and to a tab with no `who`", async () => {
   const teamId = await team();
@@ -495,8 +558,9 @@ test("every part of a team is refused to a person outside it, and to a tab with 
   await until(() => [...outside(), ...nobody()].every(Boolean));
 
   const refused = { fault: "refused", payload: { notMember: teamId } };
-  expect(outside()).toMatchObject([refused, refused, refused, refused]);
+  expect(outside()).toMatchObject([refused, refused, refused, refused, refused]);
   expect(nobody().map((fault) => fault?.fault)).toEqual([
+    "refused",
     "refused",
     "refused",
     "refused",
@@ -598,7 +662,13 @@ test("one move: one trace from tab A to the server's send; tab B's ask links to 
       .map((s) => s.name)
       .toSorted();
   const call = one(tabSpans, "issue.move").traceId;
-  const send = one(serverSpans, "remoteData.send");
+  // A move writes the issue and its event: the send that carries the issue is the one tab B asks
+  // after.
+  const sends = serverSpans.filter(
+    (s) => s.name === "remoteData.send" && s.attributes["messaging.destination.name"] === "issues",
+  );
+  expect(sends).toHaveLength(1);
+  const send = sends[0]!;
   const receive = one(tabSpans, "remoteData.receive");
   const ask = receive.traceId;
 

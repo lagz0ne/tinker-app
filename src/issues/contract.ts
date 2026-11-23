@@ -5,6 +5,7 @@ import { z } from "zod";
 // live on every member's tab. A team can be archived: it keeps its issues and takes no change.
 // A viewer reads the team and changes nothing. An issue carries labels; the board filters by one.
 // An issue has an assignee; a person sees the issues assigned to them in all their teams.
+// Each change of an issue leaves an event: the issue's history.
 // Rebuilt from the Start-era board (tinker-app tag `start-archive`) on keyed data. Every key
 // starts with `teamId`, so one guard checks every part. Every cell is served: a cell that is not served is a copy per session, so a
 // call's write to it would end with the call.
@@ -16,7 +17,8 @@ export const roles = ["member", "viewer"] as const;
 
 const member = z.object({ teamId: z.string(), userId: z.string(), role: z.enum(roles) });
 
-const issue = z.object({
+/** One issue, as the server keeps it. */
+export const issue = z.object({
   teamId: z.string(),
   id: z.string(),
   number: z.number(),
@@ -63,9 +65,26 @@ export const labels = data({
   key: (l) => ({ teamId: l.teamId, id: l.id, name: l.name }),
 });
 
+/** What a change did to an issue. */
+export const changes = ["created", "moved", "renamed", "labeled", "assigned"] as const;
+
+/** The history of each issue: one event for each version, never changed. `by` is the caller. */
+export const events = data({
+  label: "issues.events",
+  mode: "keyed",
+  parse: z.object({
+    teamId: z.string(),
+    id: z.string(),
+    version: z.number(),
+    by: z.string(),
+    what: z.enum(changes),
+  }),
+  key: (e) => ({ teamId: e.teamId, id: e.id, version: e.version }),
+});
+
 /** Read: each part of a team goes only to the members of that team. A part of `members` by
  * `userId` goes only to that user. */
-export const issueBoard = remoteData({ members, issues, archived, labels });
+export const issueBoard = remoteData({ members, issues, archived, labels, events });
 
 const team = z.object({ teamId: z.string() });
 const gone = z.object({ kind: z.literal("gone") });
