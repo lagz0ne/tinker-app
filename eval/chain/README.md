@@ -18,6 +18,18 @@ tests run again.
   answers `forbidden`. Golden 1264f11: one edit in
   `issues.canWrite`. A writer that copied the
   check into each op must find every copy.
+- ck5: labels; a label change is a versioned
+  change of the issue. Golden e071c64.
+- ck6: assign; `/issues/mine` reads
+  `members.where({ userId })`, so the read hook
+  must let that part go to that user alone.
+  Golden 0ffe998.
+- ck7: history; every change of an issue leaves
+  one event. The TASK states the rule, not each
+  call. Golden 61242b0: one op `issues.record`,
+  and a graph rule in `tinker.json`.
+- ck8: delete a team; every part of steps 1 to 7
+  goes. Golden 91eda9f.
 
 Each `ckN/` has:
 
@@ -128,3 +140,32 @@ it. The runner needs no drizzle retry rule.
 
 Checked on 0.34.5: golden ck1-ck4 with the file
 are strict (22/22, 25/25, 25/25, 28/28).
+
+## Harder chain with grow (run 16)
+
+Duke, 2026-11-23: "harder chain with grow". Steps
+5 to 8 extend the writer's own board. Each one
+cuts across code of the steps before:
+
+- ck5 and ck6 add a change that must take the
+  shared checks (gone, forbidden, archived, stale).
+- ck6 changes the read hook.
+- ck7 states a rule over every change of an
+  issue. A missed place fails a hidden test.
+- ck8 must find every part, also those of ck5 to
+  ck7.
+
+Hidden test edits (spec changes only):
+
+- S5 lists each part of a team: labels at ck5,
+  events at ck7.
+- ck7 trace test: a move writes two cells, so it
+  picks the send to `issues`.
+
+A model is golden on the long chain when 5 of 5
+runs are strict at ck1 to ck8.
+
+ck8 needs the Core fix for a refused re-ask of one
+member (card `core/member-ask-fault-hidden`):
+before it, the other tab's part stays `ready`.
+Run the chain on the release that has it.

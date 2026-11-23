@@ -1,0 +1,3 @@
+a deleted team leaves nothing; made again, it starts empty
+a delete answers gone outside the team and forbidden to a viewer, and writes nothing
+delete team takes the team away and opens the home page
