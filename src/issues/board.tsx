@@ -5,6 +5,7 @@ import { memo } from "react";
 import { z } from "zod";
 
 import { type Issue, issueApi, issueBoard, roles, states } from "./contract";
+import { showLabel, shownLabel } from "./filter";
 import { me as signedAs, signIn } from "./sign-in";
 
 // The issue board's pages. No state of their own: each reads a keyed part with `useData` and asks
@@ -52,14 +53,22 @@ export function IssuesHome() {
 const notMember = z.object({ notMember: z.string() });
 
 /** A call's answer, as the page gets it. */
-type Out<K extends "team.add" | "team.archive" | "issue.create" | "issue.move" | "issue.rename"> =
-  Awaited<ReturnType<(typeof issueApi)[K]["run"]>>;
+type Out<
+  K extends
+    | "team.add"
+    | "team.archive"
+    | "issue.create"
+    | "issue.move"
+    | "issue.rename"
+    | "issue.label",
+> = Awaited<ReturnType<(typeof issueApi)[K]["run"]>>;
 
-/** What a move's or a rename's answer says. Every kind has its case: a new kind fails here. */
-function Changed({ out }: { out: Out<"issue.move" | "issue.rename"> }) {
+/** What a change of one issue answers. Every kind has its case: a new kind fails here. */
+function Changed({ out }: { out: Out<"issue.move" | "issue.rename" | "issue.label"> }) {
   switch (out.kind) {
     case "moved":
     case "renamed":
+    case "labeled":
       return null;
     case "stale":
       return <small role="status">Changed by someone else.</small>;
@@ -152,7 +161,8 @@ function Waiting({ state, again }: { state: PartState | undefined; again: () => 
   );
 }
 
-/** `/issues/$team`: the team's issues in four lanes, live. */
+/** `/issues/$team`: the team's issues in four lanes, live. With a label shown, only the issues
+ * that carry it. */
 export function Board({ teamId }: { teamId: string }) {
   const part = issueBoard.issues.where({ teamId });
   const list = useData(part);
@@ -209,27 +219,67 @@ export function Board({ teamId }: { teamId: string }) {
       {add.data && <Added out={add.data} />}
       {archive.data && <Added out={archive.data} />}
       <CallFault error={create.error ?? add.error ?? archive.error} />
+      <Lanes list={list} teamId={teamId} />
+    </main>
+  );
+}
+
+/** The four lanes, under the label filter: with a label shown, only the issues that carry it. A
+ * card takes its labels as one string (`"bug ui"`), so a change of another card's labels does
+ * not draw it again. */
+function Lanes({ list, teamId }: { list: readonly Issue[]; teamId: string }) {
+  const tags = useData(issueBoard.labels.where({ teamId }));
+  const known = [...new Set(tags.map((t) => t.name))].toSorted();
+  // A label that no issue of this team has shows all.
+  const shown = useData(shownLabel);
+  const label = known.includes(shown) ? shown : "";
+  const show = useRun(showLabel);
+
+  return (
+    <>
+      <select
+        aria-label="Show label"
+        value={label || "all"}
+        onChange={(event) => {
+          const name = event.target.value;
+          show.run({ input: { name: name === "all" ? "" : name } });
+        }}
+      >
+        {["all", ...known].map((n) => (
+          <option key={n}>{n}</option>
+        ))}
+      </select>
       <div className="lanes">
         {states.map((state) => (
           <section key={state} aria-label={state}>
             <h2>{state}</h2>
             {list
               .filter((i) => i.state === state)
+              .filter((i) => !label || tags.some((t) => t.id === i.id && t.name === label))
               .map((i) => (
-                <Card key={i.id} issue={i} />
+                <Card
+                  key={i.id}
+                  issue={i}
+                  labels={tags
+                    .filter((t) => t.id === i.id)
+                    .map((t) => t.name)
+                    .toSorted()
+                    .join(" ")}
+                />
               ))}
           </section>
         ))}
       </div>
-    </main>
+    </>
   );
 }
 
 /** One card. Core keeps a member's reference until it changes, so a move draws this card alone
  * (and its new lane). */
-const Card = memo(function Card({ issue }: { issue: Issue }) {
+const Card = memo(function Card({ issue, labels }: { issue: Issue; labels: string }) {
   const move = useRun(issueApi["issue.move"]);
   const rename = useRun(issueApi["issue.rename"]);
+  const label = useRun(issueApi["issue.label"]);
   const { teamId, id, version } = issue;
 
   const name = `${teamId}-${issue.number}`;
@@ -263,9 +313,34 @@ const Card = memo(function Card({ issue }: { issue: Issue }) {
         />
         <button type="submit">Rename</button>
       </form>
+      {labels &&
+        labels.split(" ").map((n) => (
+          <button
+            type="button"
+            key={n}
+            aria-label={`Remove ${n} from ${name}`}
+            onClick={() => label.run({ input: { teamId, id, version, name: n, on: false } })}
+          >
+            {n}
+          </button>
+        ))}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const n = new FormData(event.currentTarget).get("label");
+          if (typeof n === "string") {
+            label.run({ input: { teamId, id, version, name: n, on: true } });
+          }
+          event.currentTarget.reset();
+        }}
+      >
+        <input name="label" aria-label={`Label for ${name}`} />
+        <button type="submit">Add label</button>
+      </form>
       {move.data && <Changed out={move.data} />}
       {rename.data && <Changed out={rename.data} />}
-      <CallFault error={move.error ?? rename.error} />
+      {label.data && <Changed out={label.data} />}
+      <CallFault error={move.error ?? rename.error ?? label.error} />
     </article>
   );
 });

@@ -438,7 +438,7 @@ test("the member form adds a person as a viewer", async () => {
   const server = await drawn();
 
   await page.getByRole("textbox", { name: "Add member" }).fill("vi");
-  await page.getByLabelText("Role").selectOptions("viewer");
+  await page.getByRole("combobox", { name: "Role", exact: true }).selectOptions("viewer");
   await page.getByRole("button", { name: "Add member" }).click();
 
   await expect
@@ -449,6 +449,83 @@ test("the member form adds a person as a viewer", async () => {
         .map((m) => `${m.userId} ${m.role}`),
     )
     .toContain("vi viewer");
+});
+
+// P8: a card's label form puts a label on it; each label is a button that takes it off. The
+// filter above the lanes shows only the issues with one label.
+test("a label is put on a card and taken off; the filter shows only its issues", async () => {
+  const server = await drawn();
+  const ana = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  onTestFinished(async () => {
+    await ana.close();
+  });
+  await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: "Logout fails" } });
+  const one = page.getByRole("article", { name: "ENG-1" });
+  const two = page.getByRole("article", { name: "ENG-2" });
+  await expect.element(two).toBeVisible();
+
+  await one.getByLabelText("Label for ENG-1").fill("bug");
+  await one.getByRole("button", { name: "Add label" }).click();
+  await expect.element(one.getByRole("button", { name: "Remove bug from ENG-1" })).toBeVisible();
+  await expect
+    .poll(() =>
+      server
+        .resolve(issues.board.labels)
+        .get()
+        .map((t) => t.name),
+    )
+    .toEqual(["bug"]);
+
+  const filter = page.getByRole("combobox", { name: "Show label", exact: true });
+  await filter.selectOptions("bug");
+  await expect.element(two).not.toBeInTheDocument();
+  await expect.element(one).toBeVisible();
+  await filter.selectOptions("all");
+  await expect.element(two).toBeVisible();
+
+  await one.getByRole("button", { name: "Remove bug from ENG-1" }).click();
+  await expect.poll(() => server.resolve(issues.board.labels).get()).toEqual([]);
+  await expect
+    .element(one.getByRole("button", { name: "Remove bug from ENG-1" }))
+    .not.toBeInTheDocument();
+});
+
+// P8: a label put on by another tab shows on the drawn card, and in the filter.
+test("a label put on by another tab shows on the card and in the filter", async () => {
+  const server = await drawn();
+  const ana = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  onTestFinished(async () => {
+    await ana.close();
+  });
+  const { id } = server.resolve(issues.board.issues).get()[0]!;
+
+  const input = { teamId: "ENG", id, version: 1, name: "ui", on: true };
+  expect(await ana.run(issues.api["issue.label"], { input })).toEqual({
+    kind: "labeled",
+    version: 2,
+  });
+
+  await expect.element(page.getByRole("button", { name: "Remove ui from ENG-1" })).toBeVisible();
+  const filter = page.getByRole("combobox", { name: "Show label", exact: true });
+  await expect
+    .poll(() => [...filter.element().querySelectorAll("option")].map((o) => o.text))
+    .toEqual(["all", "ui"]);
 });
 
 // P4: `gone` is an answer, so the page says it as a status. The answers are replaced here: a

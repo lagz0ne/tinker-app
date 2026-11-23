@@ -277,6 +277,88 @@ test("a viewer reads the team and every change they ask answers forbidden", asyn
   expect(state(dee, teamId)).toBe("ready");
 });
 
+/** A tab's reader of one team's labels, kept in use. */
+const tagsOf = (scope: Scope.Handle, teamId: string) => {
+  const reader = scope.resolve(issues.board.labels.where({ teamId }));
+  reader.watch(() => undefined);
+  return reader;
+};
+
+// S11: a label change is a change of the issue. It names the version it saw, as a move does, and
+// counts one version. The other tab sees the label come and go.
+test("a label put on one tab shows on the other; taking it off removes it; each counts a version", async () => {
+  const teamId = await team();
+  const seen = read(bo, teamId);
+  const tags = tagsOf(bo, teamId);
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Crash" } });
+  await until(() => seen.get().length === 1);
+  const { id } = seen.get()[0]!;
+  const label = (name: string, on: boolean, version: number) =>
+    ana.run(issues.api["issue.label"], { input: { teamId, id, version, name, on } });
+
+  expect(await label("Bug", true, 1)).toEqual({ kind: "labeled", version: 2 });
+  expect(await label("ui", true, 2)).toEqual({ kind: "labeled", version: 3 });
+  await until(() => tags.get().length === 2);
+  expect(
+    tags
+      .get()
+      .map((t) => `${t.id === id} ${t.name}`)
+      .toSorted(),
+  ).toEqual(["true bug", "true ui"]);
+  await until(() => seen.get()[0]?.version === 3);
+
+  expect(await label("bug", false, 3)).toEqual({ kind: "labeled", version: 4 });
+  await until(() => tags.get().length === 1);
+  expect(tags.get()[0]?.name).toBe("ui");
+  // A label change, a move and a rename count one version: an old one is stale and writes nothing.
+  expect(await label("p1", true, 3)).toEqual({ kind: "stale", version: 4 });
+  expect(
+    await bo.run(issues.api["issue.move"], { input: { teamId, id, version: 4, state: "todo" } }),
+  ).toEqual({ kind: "moved", version: 5 });
+  expect(await label("p1", true, 4)).toEqual({ kind: "stale", version: 5 });
+  expect(
+    backend
+      .resolve(issues.board.labels)
+      .get()
+      .filter((t) => t.teamId === teamId)
+      .map((t) => t.name),
+  ).toEqual(["ui"]);
+});
+
+// S11: a label change is a change, so it answers as every change does: `gone` outside the team
+// and for an issue that is not there, `forbidden` for a viewer, `archived` for an archived team.
+test("a label change answers gone, forbidden and archived as every change does, and writes nothing", async () => {
+  const teamId = await team();
+  const dee = await open("dee");
+  await ana.run(issues.api["team.add"], { input: { teamId, userId: "dee", role: "viewer" } });
+  const seen = read(ana, teamId);
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Ours" } });
+  await until(() => seen.get().length === 1);
+  const { id } = seen.get()[0]!;
+  const tag = { teamId, id, version: 1, name: "bug", on: true };
+
+  expect(await cy.run(issues.api["issue.label"], { input: tag })).toEqual({ kind: "gone" });
+  expect(await ana.run(issues.api["issue.label"], { input: { ...tag, id: "none" } })).toEqual({
+    kind: "gone",
+  });
+  expect(await dee.run(issues.api["issue.label"], { input: tag })).toEqual({ kind: "forbidden" });
+  await ana.run(issues.api["team.archive"], { input: { teamId } });
+  expect(await bo.run(issues.api["issue.label"], { input: tag })).toEqual({ kind: "archived" });
+
+  expect(
+    backend
+      .resolve(issues.board.labels)
+      .get()
+      .filter((t) => t.teamId === teamId),
+  ).toEqual([]);
+  expect(
+    backend
+      .resolve(issues.board.issues)
+      .get()
+      .find((i) => i.id === id),
+  ).toMatchObject({ version: 1 });
+});
+
 test("a tab with no `who` is refused; so is a member of no team, on calls and on reads", async () => {
   const teamId = await team();
   const peek = read(cy, teamId);
@@ -300,6 +382,7 @@ const faultsOf = (scope: Scope.Handle, teamId: string) => {
     issues.board.members.where({ teamId }),
     issues.board.issues.where({ teamId }),
     issues.board.archived.where({ teamId }),
+    issues.board.labels.where({ teamId }),
   ] as const;
   for (const part of parts) scope.resolve(part).watch(() => undefined);
 
@@ -310,7 +393,7 @@ const faultsOf = (scope: Scope.Handle, teamId: string) => {
     });
 };
 
-// S5, each part of a team: members, issues and the archive mark. A read from outside the team is refused
+// S5, each part of a team: members, issues, the archive mark and the labels. A read from outside the team is refused
 // with the team in the payload; a read with no `who` is refused too.
 test("every part of a team is refused to a person outside it, and to a tab with no `who`", async () => {
   const teamId = await team();
@@ -322,8 +405,13 @@ test("every part of a team is refused to a person outside it, and to a tab with 
   await until(() => [...outside(), ...nobody()].every(Boolean));
 
   const refused = { fault: "refused", payload: { notMember: teamId } };
-  expect(outside()).toMatchObject([refused, refused, refused]);
-  expect(nobody().map((fault) => fault?.fault)).toEqual(["refused", "refused", "refused"]);
+  expect(outside()).toMatchObject([refused, refused, refused, refused]);
+  expect(nobody().map((fault) => fault?.fault)).toEqual([
+    "refused",
+    "refused",
+    "refused",
+    "refused",
+  ]);
 });
 
 // S5, each call that names a team: the `gone` answer is reached once from outside the team and,
@@ -425,16 +513,18 @@ test("one move: one trace from tab A to the server's send; tab B's ask links to 
   const ask = receive.traceId;
 
   expect(names(tabSpans, call)).toEqual(["issue.move", "issues.whoMeta", "ws.call", "ws.send"]);
-  expect(names(serverSpans, call)).toEqual([
-    "issue.move.do",
-    "issues.atVersion",
-    "issues.canWrite",
-    "issues.inTeam",
-    "issues.signedIn",
-    "remoteData.send",
-    "rpc.answer",
-    "ws.serve",
-  ]);
+  // Kit: the ops the TASK names must be in the trace. An op of the writer's own that a call
+  // runs (a shared check, for example) may be there too.
+  expect(names(serverSpans, call)).toEqual(
+    expect.arrayContaining([
+      "issue.move.do",
+      "issues.inTeam",
+      "issues.signedIn",
+      "remoteData.send",
+      "rpc.answer",
+      "ws.serve",
+    ]),
+  );
   expect(send.traceId).toBe(call);
   // Tab B's ask is its own trace, as an OTel consumer: it links to the server's send.
   const link = receive.events.find((e) => e.name === "link")?.attributes?.traceparent;

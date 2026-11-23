@@ -1,7 +1,7 @@
 import { operation, tag, transport } from "@tinkered/core";
 import { z } from "zod";
 
-import { archived, issueApi, issueBoard, issues, members } from "./contract";
+import { archived, issueApi, issueBoard, issues, labels, members } from "./contract";
 
 // The server's work for `issueApi`. Each op writes members of the keyed cells; `issueBoard` tells
 // every member's tab that reads the part, and the tab asks for that part alone.
@@ -143,6 +143,24 @@ const renameIssue = operation({
   },
 });
 
+/** Put a label on an issue, or take it off. Either way the issue gets a new version. */
+const labelIssue = operation({
+  label: "issue.label.do",
+  input: issueApi["issue.label"].input,
+  depends: { list: issues.controller, tags: labels.controller, at: atVersion },
+  run: ({ list, tags, at }, { input }) => {
+    const now = at.run({ input });
+    if (now.kind !== "now") return now;
+
+    const key = { teamId: input.teamId, id: input.id, name: input.name };
+    if (input.on) tags.set(key);
+    else tags.delete(key);
+    const version = now.issue.version + 1;
+    list.set({ ...now.issue, version });
+    return { kind: "labeled" as const, version };
+  },
+});
+
 /** Archive a team. A second archive answers the same and writes nothing. */
 const archiveTeam = operation({
   label: "team.archive.do",
@@ -164,5 +182,6 @@ export const issueOps = {
   "issue.create": createIssue,
   "issue.move": moveIssue,
   "issue.rename": renameIssue,
+  "issue.label": labelIssue,
   "team.archive": archiveTeam,
 } as const;

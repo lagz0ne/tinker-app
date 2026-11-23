@@ -1,11 +1,13 @@
 greet.here exits{value} reads{} writes{} calls{}
 issue.create.do exits{archived,created,forbidden,gone} reads{issues.list.where} writes{issues.list.set} calls{issues.canWrite}
+issue.label.do exits{archived,forbidden,gone,labeled,stale} reads{} writes{issues.labels.delete,issues.labels.set,issues.list.set} calls{issues.atVersion}
 issue.move.do exits{archived,forbidden,gone,moved,stale} reads{} writes{issues.list.set} calls{issues.atVersion}
 issue.rename.do exits{archived,forbidden,gone,renamed,stale} reads{} writes{issues.list.set} calls{issues.atVersion}
 issues.atVersion exits{archived,forbidden,gone,now,stale} reads{issues.list.of} writes{} calls{issues.canWrite}
 issues.canWrite exits{archived,forbidden,gone,ok} reads{issues.archived.of} writes{} calls{issues.inTeam}
 issues.inTeam exits{value} reads{issues.members.of} writes{} calls{}
 issues.membersOnly exits{refused,value} reads{} writes{} calls{issues.inTeam}
+issues.showLabel exits{value} reads{} writes{issues.shownLabel.set} calls{}
 issues.signIn exits{value} reads{} writes{issues.me.set} calls{}
 issues.signedIn exits{refused,value} reads{} writes{} calls{}
 issues.whoMeta exits{value} reads{issues.me.get} writes{} calls{}

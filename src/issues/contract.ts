@@ -3,7 +3,7 @@ import { z } from "zod";
 
 // The issue board's contract: both sides import it. A team's issues move through four states,
 // live on every member's tab. A team can be archived: it keeps its issues and takes no change.
-// A viewer reads the team and changes nothing. Rebuilt from the Start-era board
+// A viewer reads the team and changes nothing. An issue carries labels; the board filters by one. Rebuilt from the Start-era board
 // (tinker-app tag `start-archive`) on keyed data. Every key starts with `teamId`, so one guard
 // checks every part. Every cell is served: a cell that is not served is a copy per session, so a
 // call's write to it would end with the call.
@@ -51,8 +51,16 @@ export const archived = data({
   key: (a) => ({ teamId: a.teamId }),
 });
 
+/** The labels on the issues: one member for each label on an issue. */
+export const labels = data({
+  label: "issues.labels",
+  mode: "keyed",
+  parse: z.object({ teamId: z.string(), id: z.string(), name: z.string() }),
+  key: (l) => ({ teamId: l.teamId, id: l.id, name: l.name }),
+});
+
 /** Read: each part goes only to the members of its team. */
-export const issueBoard = remoteData({ members, issues, archived });
+export const issueBoard = remoteData({ members, issues, archived, labels });
 
 const team = z.object({ teamId: z.string() });
 const gone = z.object({ kind: z.literal("gone") });
@@ -112,6 +120,27 @@ export const issueApi = rpc({
     }),
     output: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("renamed"), version: z.number() }),
+      z.object({ kind: z.literal("stale"), version: z.number() }),
+      gone,
+      shut,
+      viewOnly,
+    ]),
+  },
+  /** A label change is a change of the issue: it names the version it saw, as a move does.
+   * `on: true` puts the label on the issue; `on: false` takes it off. */
+  "issue.label": {
+    input: team.extend({
+      id: z.string(),
+      version: z.number(),
+      name: z
+        .string()
+        .trim()
+        .toLowerCase()
+        .regex(/^[a-z][a-z0-9-]{0,19}$/),
+      on: z.boolean(),
+    }),
+    output: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("labeled"), version: z.number() }),
       z.object({ kind: z.literal("stale"), version: z.number() }),
       gone,
       shut,
