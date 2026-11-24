@@ -165,7 +165,17 @@ Hidden test edits (spec changes only):
 A model is golden on the long chain when 5 of 5
 runs are strict at ck1 to ck8.
 
-ck8 needs the Core fix for a refused re-ask of one
-member (card `core/member-ask-fault-hidden`):
-before it, the other tab's part stays `ready`.
-Run the chain on the release that has it.
+ck8 needs `@tinkered/*` 0.34.7: its Core fix
+(card `core/member-ask-fault-hidden`) makes a
+refused re-ask of one member a fault of the part.
+Before it, the other tab's part stayed `ready`.
+
+Golden ck8 on 0.34.7 also lets a user read their
+own `members` rows by their whole key. A lost row
+is asked again by its whole key, `{ teamId,
+userId }`, so a hook that checks the team first
+refuses it, and "my teams" keeps a deleted team.
+
+Run 16: make every golden tree ck1 to ck8 on
+0.34.7 (`bun update --latest @tinkered/*`), with
+the start drizzle test, as run 15 did.

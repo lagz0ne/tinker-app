@@ -39,14 +39,15 @@ const inTeam = operation({
 });
 
 /** Every read of a part: the caller must be a member of the part's team (ADR 0138 rule 14). A
- * part of `members` by `userId` alone is the caller's own teams: it goes to that user only. */
+ * part of `members` that names a `userId` is that user's own rows: it goes to that user only, in
+ * or out of the team (a tab asks again for one row it lost, by its whole key). */
 export const membersOnly = operation({
   label: "issues.membersOnly",
   input: transport.hook.start,
   depends: { ok: inTeam, me: caller.required },
   run: ({ ok, me }, { input }) => {
     const part = issueBoard.part(input);
-    if (part && !("teamId" in part) && "userId" in part) {
+    if (part && "userId" in part) {
       return part.userId === me ? undefined : input.refuse({ notYou: part.userId });
     }
 
