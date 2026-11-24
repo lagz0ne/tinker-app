@@ -212,3 +212,8 @@ Fix during run 17 (applies from run 18):
   shared check) failed it, though the TASK allows
   it. It now uses `arrayContaining`, as the call
   check beside it does. All hidden copies ck1-ck8.
+- The two call-fault page tests ran on a bare
+  reads server with no member rows. A page that
+  checks the caller is in the team hid the board.
+  Real use always has the row (the hook refuses a
+  non-member). The tests now add ana's row first.

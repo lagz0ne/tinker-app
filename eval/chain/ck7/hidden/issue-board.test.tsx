@@ -10,6 +10,7 @@ import { page } from "vite-plus/test/browser/context";
 import { z } from "zod";
 
 import { issues } from "@/issues";
+import { members } from "@/issues/contract";
 import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
 import { signIn, whoMeta } from "@/issues/sign-in";
 import { routeTree } from "@/routes";
@@ -851,10 +852,20 @@ test("the server goes away with the page open: the page says that it is offline"
 const calls = createMemory();
 
 /** The page of `ana` on team ENG: the board from `reads`, the calls to `api` over `calls`. */
+/** Kit: ana's member row on a bare reads server. */
+const anaJoins = operation({
+  label: "test.issues.anaJoins",
+  depends: { members: members.controller },
+  run: ({ members }) => members.set({ teamId: "ENG", userId: "ana", role: "member" }),
+});
+
 const pageOf = operation({
   label: "test.issues.page",
   input: z.custom<{ reads: Scope.Handle; api: Scope.Handle }>(),
   run: async (_, { input }) => {
+    // Kit: the reads server holds ana's member row, as in real use (the read hook lets only a
+    // member read the team), so a page may check that the caller is in the team.
+    input.reads.run(anaJoins);
     const ana = await createScope({
       capsules: [
         exits({ store: localStorage }),
