@@ -576,7 +576,7 @@ const calls = createMemory();
 const anaJoins = operation({
   label: "test.issues.anaJoins",
   depends: { members: members.controller },
-  run: ({ members }) => members.set({ teamId: "ENG", userId: "ana", role: "member" }),
+  run: ({ members }) => members.set({ teamId: "ENG", userId: "ana" }),
 });
 
 const pageOf = operation({
