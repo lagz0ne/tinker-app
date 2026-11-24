@@ -179,3 +179,28 @@ refuses it, and "my teams" keeps a deleted team.
 Run 16: make every golden tree ck1 to ck8 on
 0.34.7 (`bun update --latest @tinkered/*`), with
 the start drizzle test, as run 15 did.
+
+## Run 16 result and kit fixes
+
+Run 16 (2026-11-24, 0.34.7): 0 of 15 chains strict
+to ck8. Report on the box: `/home/paseo/cuj16/REPORT.md`.
+
+Fixes after run 16:
+
+- ck1 now holds `given/` and `hidden/`, from golden
+  436a33d. ck1 has no `new-tests.txt`: at step 1
+  every hidden test is new.
+- ck8 delete test waits for `Team key`, not
+  `Your name`. A signed-in home page may hide the
+  name form (TASK P1).
+- TASK ck5-ck8 name the step 1 given files again.
+- Golden ck8 hook: a user reads their own member
+  rows; another user's whole-key row takes the team
+  check. Before, golden refused it, and its members
+  part went to `fault`; the page hid that.
+- ck6-ck8 hidden P9: a member added alone shows in
+  the Assignee options. Red on the old golden ck8.
+- TASK ck6, ck7 R2 say the same in words.
+
+Run 17: canary first. Golden ck1-ck8 must be
+strict with these hidden tests.

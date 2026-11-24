@@ -38,21 +38,20 @@ const inTeam = operation({
   run: ({ team, me }, { input }) => team.of({ teamId: input.teamId, userId: me }).get(),
 });
 
-/** Every read of a part: the caller must be a member of the part's team (ADR 0138 rule 14). A
- * part of `members` that names a `userId` is that user's own rows: it goes to that user only, in
- * or out of the team (a tab asks again for one row it lost, by its whole key). */
+/** Every read of a part: the caller must be a member of the part's team (ADR 0138 rule 14). The
+ * caller's own member rows go to the caller, in or out of the team. A part of `members` by
+ * `userId` alone goes to that user only. Core asks again for one row by its whole key
+ * `{ teamId, userId }`: another user's row takes the team check, as its team's part does. */
 export const membersOnly = operation({
   label: "issues.membersOnly",
   input: transport.hook.start,
   depends: { ok: inTeam, me: caller.required },
   run: ({ ok, me }, { input }) => {
-    const part = issueBoard.part(input);
-    if (part && "userId" in part) {
-      return part.userId === me ? undefined : input.refuse({ notYou: part.userId });
-    }
-
-    const teamId = part?.teamId ?? "";
-    return ok.run({ input: { teamId } }) ? undefined : input.refuse({ notMember: teamId });
+    const part = { teamId: "", ...issueBoard.part(input) };
+    if ("userId" in part && part.userId === me) return undefined;
+    if ("userId" in part && part.teamId === "") return input.refuse({ notYou: part.userId });
+    const ask = { input: { teamId: part.teamId } };
+    return ok.run(ask) ? undefined : input.refuse({ notMember: part.teamId });
   },
 });
 

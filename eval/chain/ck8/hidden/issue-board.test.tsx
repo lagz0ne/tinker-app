@@ -544,12 +544,13 @@ test("a card is assigned to a member of the team, and back to nobody", async () 
   onTestFinished(async () => {
     await ana.close();
   });
-  await ana.run(issues.api["team.add"], { input: { teamId: "ENG", userId: "bo", role: "member" } });
-  await ana.run(issues.api["team.add"], { input: { teamId: "ENG", userId: "vi", role: "viewer" } });
   const who = page.getByRole("combobox", { name: "Assignee of ENG-1", exact: true });
-  await expect
-    .poll(() => [...who.element().querySelectorAll("option")].map((o) => o.text))
-    .toEqual(["nobody", "ana", "bo"]);
+  const options = () => [...who.element().querySelectorAll("option")].map((o) => o.text);
+  await ana.run(issues.api["team.add"], { input: { teamId: "ENG", userId: "bo", role: "member" } });
+  await expect.poll(options).toEqual(["nobody", "ana", "bo"]);
+  await ana.run(issues.api["team.add"], { input: { teamId: "ENG", userId: "vi", role: "viewer" } });
+  await ana.run(issues.api["team.add"], { input: { teamId: "ENG", userId: "cy", role: "member" } });
+  await expect.poll(options).toEqual(["nobody", "ana", "bo", "cy"]);
 
   await who.selectOptions("bo");
   await expect.poll(() => server.resolve(issues.board.issues).get()[0]?.assignee).toBe("bo");

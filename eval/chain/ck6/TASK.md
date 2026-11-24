@@ -74,8 +74,13 @@ R1 to R8 hold. These change:
 
 - R2. The read hook refuses a non-member for each
   part of a team: members, issues, archived,
-  labels. A part of `members` by `userId` goes
-  only to that user.
+  labels. A part of `members` by `userId`
+  alone goes only to that user. A user may always
+  read their own member rows.
+  Core asks again for one member row by its whole
+  key `{ teamId, userId }`. Another user's row
+  then takes the team check, as the team's part
+  does.
 - R4. An answer that is not a success writes
   nothing.
 
