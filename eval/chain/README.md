@@ -217,3 +217,13 @@ Fix during run 17 (applies from run 18):
   checks the caller is in the team hid the board.
   Real use always has the row (the hook refuses a
   non-member). The tests now add ana's row first.
+
+Fixes after run 17 (9 of 15 strict to ck8):
+
+- Call-fault page tests: the page tab signs in as
+  ana, and the missing-address test's server holds
+  ana's member row (completes 8273a0f).
+- `tests/todo.test.ts` stress test: 60 s limit,
+  15 s waits. It tests for a hang, not for speed:
+  about 3 s idle, over 20 s at load 33. It ended 2
+  chains in run 17 and hit run 16 twice.

@@ -875,6 +875,7 @@ const pageOf = operation({
         issues.api({ remote: calls.client }),
       ],
     }).ready;
+    ana.run(signIn, { input: { name: "ana" } });
     const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
     const router = createRouter({ routeTree, history, context: { scope: ana } });
     const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -971,6 +972,7 @@ test("a call to an address the server does not have says that the page is old", 
       memory.server({ services: [issues.board] }),
     ],
   }).ready;
+  server.run(anaJoins);
   const ana = await createScope({
     capsules: [
       exits({ store: localStorage }),

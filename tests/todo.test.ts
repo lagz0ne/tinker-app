@@ -215,10 +215,11 @@ for (const kind of ["memory", "ws"] as const) {
       const truth = JSON.stringify(server.resolve(board.todos).get());
       await until(
         () => clients.every((c) => JSON.stringify(c.resolve(board.todos).get()) === truth),
-        5000,
+        15_000,
       );
-      await until(() =>
-        clients.every((c) => c.resolve(board.people).get().join() === users.join()),
+      await until(
+        () => clients.every((c) => c.resolve(board.people).get().join() === users.join()),
+        15_000,
       );
       const done = server.resolve(board.todos).get();
 
@@ -232,14 +233,16 @@ for (const kind of ["memory", "ws"] as const) {
               JSON.stringify(c.resolve(board.activity).get()) ===
               JSON.stringify(server.resolve(board.activity).get()),
           ),
-        5000,
+        15_000,
       );
       console.log(
         `${kind}: ${calls} calls from 20 clients in ${took.toFixed(0)} ms; ${done.length} todos; all 20 clients equal`,
       );
       await Promise.all(clients.map(async (c) => c.end()));
       await until(() => server.resolve(board.people).get().length === 0);
-    }, 20_000);
+      // The limits test for a hang, not for speed: about 3 s on an idle box, over 20 s at load 33
+      // on 8 cores with other test runs (runs 16-17).
+    }, 60_000);
   });
 }
 
