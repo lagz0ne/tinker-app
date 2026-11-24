@@ -536,12 +536,15 @@ test("one move: one trace from tab A to the server's send; tab B's ask links to 
     "ws.call",
     "ws.send",
   ]);
-  expect(names(serverSpans, ask)).toEqual([
-    "issues.inTeam",
-    "issues.membersOnly",
-    "issues.signedIn",
-    "remoteData.answer",
-    "remoteData.ask",
-    "ws.serve",
-  ]);
+  // Kit: as for the call, an op of the writer's own that the read hook runs may be there too.
+  expect(names(serverSpans, ask)).toEqual(
+    expect.arrayContaining([
+      "issues.inTeam",
+      "issues.membersOnly",
+      "issues.signedIn",
+      "remoteData.answer",
+      "remoteData.ask",
+      "ws.serve",
+    ]),
+  );
 });

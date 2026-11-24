@@ -204,3 +204,11 @@ Fixes after run 16:
 
 Run 17: canary first. Golden ck1-ck8 must be
 strict with these hidden tests.
+
+Fix during run 17 (applies from run 18):
+
+- The ask-trace check on the server took an exact
+  list. A writer's own op in the read hook (a
+  shared check) failed it, though the TASK allows
+  it. It now uses `arrayContaining`, as the call
+  check beside it does. All hidden copies ck1-ck8.
