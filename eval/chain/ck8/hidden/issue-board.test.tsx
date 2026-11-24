@@ -694,7 +694,7 @@ test("delete team takes the team away and opens the home page", async () => {
 
   await page.getByRole("button", { name: "Delete team" }).click();
 
-  await expect.element(page.getByLabelText("Your name")).toBeVisible();
+  await expect.element(page.getByLabelText("Team key")).toBeVisible();
   await expect.poll(() => server.resolve(issues.board.members).get()).toEqual([]);
   expect(server.resolve(issues.board.issues).get()).toEqual([]);
   expect(server.resolve(issues.board.events).get()).toEqual([]);

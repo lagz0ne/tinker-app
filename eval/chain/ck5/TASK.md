@@ -22,6 +22,11 @@ change it. It has:
 
 Change your own files: the ops, the pages, your tests.
 
+The files given in step 1 stay given. Do not change
+them: `src/issues/sign-in.ts`, `src/issues/index.ts`,
+`src/routes.tsx`, `cmds/**`. Put a new cell or op in
+a file of your own.
+
 ## Server journeys
 
 S11. A member can put a label on an issue, and take
