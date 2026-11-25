@@ -1,0 +1,32 @@
+greet.here exits{value} faults{} reads{} writes{} calls{} uses{}
+issue.assign.do exits{archived,assigned,forbidden,gone,notAssignable,stale} faults{} reads{issues.members.of} writes{} calls{issues.atVersion,issues.record} uses{}
+issue.create.do exits{archived,created,forbidden,gone} faults{} reads{issues.list.where} writes{} calls{issues.canWrite,issues.record} uses{}
+issue.label.do exits{archived,forbidden,gone,labeled,stale} faults{} reads{} writes{issues.labels.delete,issues.labels.set} calls{issues.atVersion,issues.record} uses{}
+issue.move.do exits{archived,forbidden,gone,moved,stale} faults{} reads{} writes{} calls{issues.atVersion,issues.record} uses{}
+issue.rename.do exits{archived,forbidden,gone,renamed,stale} faults{} reads{} writes{} calls{issues.atVersion,issues.record} uses{}
+issues.atVersion exits{archived,forbidden,gone,now,stale} faults{} reads{issues.list.of} writes{} calls{issues.canWrite} uses{}
+issues.canWrite exits{archived,forbidden,gone,ok} faults{} reads{issues.archived.of} writes{} calls{issues.inTeam} uses{}
+issues.inTeam exits{value} faults{} reads{issues.members.of} writes{} calls{} uses{}
+issues.membersOnly exits{refused,value} faults{} reads{} writes{} calls{issues.inTeam} uses{}
+issues.record exits{value} faults{} reads{} writes{issues.events.set,issues.list.set} calls{} uses{}
+issues.showLabel exits{value} faults{} reads{} writes{issues.shownLabel.set} calls{} uses{}
+issues.signIn exits{value} faults{} reads{} writes{issues.me.set} calls{} uses{}
+issues.signedIn exits{refused,value} faults{} reads{} writes{} calls{} uses{}
+issues.whoMeta exits{value} faults{} reads{issues.me.get} writes{} calls{} uses{}
+team.add.do exits{added,archived,forbidden,gone} faults{} reads{} writes{issues.members.set} calls{issues.canWrite} uses{}
+team.archive.do exits{archived,forbidden,gone} faults{} reads{} writes{issues.archived.set} calls{issues.canWrite} uses{}
+team.create.do exits{created,exists} faults{} reads{issues.members.where} writes{issues.members.set} calls{} uses{}
+todo.add.do exits{value} faults{} reads{} writes{todo.list.set} calls{} uses{}
+todo.remove.do exits{gone,removed} faults{} reads{todo.list.of} writes{todo.list.delete} calls{} uses{}
+todo.toggle.do exits{gone,toggled} faults{} reads{todo.list.of} writes{todo.list.set} calls{} uses{}
+view src/issues/board.tsx#Assignee reads{} runs{?}
+view src/issues/board.tsx#Board reads{?} runs{?}
+view src/issues/board.tsx#Card reads{} runs{?}
+view src/issues/board.tsx#History reads{?} runs{}
+view src/issues/board.tsx#IssuesHome reads{issues.me.get} runs{?,issues.signIn}
+view src/issues/board.tsx#Labels reads{} runs{?}
+view src/issues/board.tsx#Lanes reads{?,issues.shownLabel.get} runs{issues.showLabel}
+view src/issues/board.tsx#Mine reads{?} runs{}
+view src/issues/board.tsx#MyIssues reads{?,issues.me.get} runs{?}
+view src/todo/todo-list.tsx#TodoList reads{?} runs{?}
+view src/todo/todo-list.tsx#TodoRow reads{} runs{?}

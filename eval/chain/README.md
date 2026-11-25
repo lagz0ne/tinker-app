@@ -227,3 +227,23 @@ Fixes after run 17 (9 of 15 strict to ck8):
   15 s waits. It tests for a hang, not for speed:
   about 3 s idle, over 20 s at load 33. It ended 2
   chains in run 17 and hit run 16 twice.
+
+## Golden trees on 0.34.10 (run 19)
+
+`@tinkered/*` 0.34.10 changes `tinker.graph`: each
+op line gets `faults{}` and `uses{}` (empty in every
+golden tree), and each page component gets a line
+`view <file>#<Component> reads{} runs{}`. A graph
+written by 0.34.8 fails `tinker check` on 0.34.10,
+so each golden graph is written again.
+
+- `ckN/golden/` (ck1 to ck7): copy these files over
+  golden tree ckN (`package.json`, `bun.lock`,
+  `tinker.graph`, and the start tests). Each file is
+  what `bun add @tinkered/*@^0.34.10` and
+  `bunx tinker graph --write` give on that commit.
+- ck8 is the branch tip: its `package.json`,
+  `bun.lock` and `tinker.graph` are 0.34.10 here.
+
+No op line changed apart from the two new fields.
+Golden ck1 to ck8 are strict on 0.34.10.

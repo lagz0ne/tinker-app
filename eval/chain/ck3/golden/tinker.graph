@@ -1,0 +1,22 @@
+greet.here exits{value} faults{} reads{} writes{} calls{} uses{}
+issue.create.do exits{archived,created,gone} faults{} reads{issues.list.where} writes{issues.list.set} calls{issues.canWrite} uses{}
+issue.move.do exits{archived,gone,moved,stale} faults{} reads{} writes{issues.list.set} calls{issues.atVersion} uses{}
+issue.rename.do exits{archived,gone,renamed,stale} faults{} reads{} writes{issues.list.set} calls{issues.atVersion} uses{}
+issues.atVersion exits{archived,gone,now,stale} faults{} reads{issues.list.of} writes{} calls{issues.canWrite} uses{}
+issues.canWrite exits{archived,gone,ok} faults{} reads{issues.archived.of} writes{} calls{issues.inTeam} uses{}
+issues.inTeam exits{value} faults{} reads{issues.members.of} writes{} calls{} uses{}
+issues.membersOnly exits{refused,value} faults{} reads{} writes{} calls{issues.inTeam} uses{}
+issues.signIn exits{value} faults{} reads{} writes{issues.me.set} calls{} uses{}
+issues.signedIn exits{refused,value} faults{} reads{} writes{} calls{} uses{}
+issues.whoMeta exits{value} faults{} reads{issues.me.get} writes{} calls{} uses{}
+team.add.do exits{added,archived,gone} faults{} reads{} writes{issues.members.set} calls{issues.canWrite} uses{}
+team.archive.do exits{archived,gone} faults{} reads{} writes{issues.archived.set} calls{issues.canWrite} uses{}
+team.create.do exits{created,exists} faults{} reads{issues.members.where} writes{issues.members.set} calls{} uses{}
+todo.add.do exits{value} faults{} reads{} writes{todo.list.set} calls{} uses{}
+todo.remove.do exits{gone,removed} faults{} reads{todo.list.of} writes{todo.list.delete} calls{} uses{}
+todo.toggle.do exits{gone,toggled} faults{} reads{todo.list.of} writes{todo.list.set} calls{} uses{}
+view src/issues/board.tsx#Board reads{?} runs{?}
+view src/issues/board.tsx#Card reads{} runs{?}
+view src/issues/board.tsx#IssuesHome reads{issues.me.get} runs{?,issues.signIn}
+view src/todo/todo-list.tsx#TodoList reads{?} runs{?}
+view src/todo/todo-list.tsx#TodoRow reads{} runs{?}
