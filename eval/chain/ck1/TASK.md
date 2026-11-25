@@ -139,6 +139,9 @@ P3. `/issues/<team>/<id>`: an `aside` labelled `Comments`.
 - Input `Comment`, button `Comment`.
 - The thread reads its own part, so it shows its own
   loading status and read faults (P4) inside the aside.
+- A refused thread read shows its own alert and a
+  button `Try again` that asks for the thread's part
+  again.
 
 P4. Faults, each a message in `role="alert"` or
 `role="status"`, in your words.
