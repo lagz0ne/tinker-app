@@ -303,11 +303,11 @@ at ck9+, F4 lists `team.add.do` as a writer of
 
 ### Adversarial probes (ck9 search)
 
-`ck9/adversarial/adv.test.ts`: 20 server probes
-(error paths, team isolation, validation, state,
-side effects). `run.sh <tree> <out.json>` runs it in
-a tree with `node_modules`. A red probe is a
-finding, not a score. Run on golden ck8 and the 10
+`probes/adv.test.ts`: 20 server probes (error
+paths, team isolation, validation, state, side
+effects). Not a hidden test. `probes/run.sh <tree>
+<out.json>` runs it in a tree with `node_modules`.
+A red probe is a finding, not a score. Run on golden ck8 and the 10
 run-20 trees (ck8 state):
 
 | probe | what                                | golden         | ds 1-5        | muse 1-5        |
@@ -334,7 +334,8 @@ keep `by`, a big delete, a team made again.
   team's labels, with issue ids. Then
   `issues.where({ id })` gives the whole issue. No
   hidden test reads such a part, so all four were
-  strict. A Tinker gap too: the read hook gets any
+  strict. Lead, 2026-11-26: not in ck9; it is a
+  Tinker gap, fixed by design elsewhere. A Tinker gap too: the read hook gets any
   part, and no skill says "refuse what you do not
   know".
 - A06-A08 (spec gap): the TASKs never say if a
