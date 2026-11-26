@@ -1,0 +1,13 @@
+diff --git a/src/rooms/ops.server.ts b/src/rooms/ops.server.ts
+index 9c1de5a..079ff5b 100644
+--- a/src/rooms/ops.server.ts
++++ b/src/rooms/ops.server.ts
+@@ -37,7 +37,7 @@ export const membersOnly = operation({
+   depends: { ok: inOffice, me: caller.required },
+   run: ({ ok, me }, { input }) => {
+     const part = { officeId: "", ...roomBoard.part(input) };
+-    if ("by" in part && part.by === me) return undefined;
++    if ("by" in part) return undefined;
+     const ask = { input: { officeId: part.officeId } };
+     return ok.run(ask) ? undefined : input.refuse({ notMember: part.officeId });
+   },

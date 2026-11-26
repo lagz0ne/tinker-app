@@ -1,0 +1,21 @@
+booking.cancel.do exits{cancelled,gone,notYours} faults{} reads{rooms.bookings.where} writes{rooms.bookings.delete} calls{rooms.inOffice} uses{}
+booking.make.do exits{booked,gone,taken} faults{} reads{rooms.bookings.where,rooms.list.of} writes{rooms.bookings.set} calls{rooms.inOffice} uses{}
+greet.here exits{value} faults{} reads{} writes{} calls{} uses{}
+member.add.do exits{added,gone} faults{} reads{} writes{rooms.members.set} calls{rooms.inOffice} uses{}
+office.create.do exits{created,exists} faults{} reads{rooms.members.where} writes{rooms.members.set} calls{} uses{}
+room.add.do exits{added,gone} faults{} reads{} writes{rooms.list.set} calls{rooms.inOffice} uses{}
+rooms.inOffice exits{value} faults{} reads{rooms.members.of} writes{} calls{} uses{}
+rooms.membersOnly exits{refused,value} faults{} reads{} writes{} calls{rooms.inOffice} uses{}
+rooms.open exits{value} faults{?} reads{} writes{} calls{?} uses{}
+rooms.signIn exits{value} faults{} reads{} writes{rooms.me.set} calls{} uses{}
+rooms.signedIn exits{refused,value} faults{} reads{} writes{} calls{} uses{}
+rooms.whoMeta exits{value} faults{} reads{rooms.me.get} writes{} calls{} uses{}
+todo.add.do exits{value} faults{} reads{} writes{todo.list.set} calls{} uses{}
+todo.remove.do exits{gone,removed} faults{} reads{todo.list.of} writes{todo.list.delete} calls{} uses{}
+todo.toggle.do exits{gone,toggled} faults{} reads{todo.list.of} writes{todo.list.set} calls{} uses{}
+view src/rooms/pages.tsx#DayBoard reads{?} runs{?}
+view src/rooms/pages.tsx#MyBookings reads{?,rooms.me.get} runs{?}
+view src/rooms/pages.tsx#RoomsHome reads{rooms.me.get} runs{rooms.open,rooms.signIn}
+view src/rooms/pages.tsx#Slot reads{rooms.me.get} runs{?}
+view src/todo/todo-list.tsx#TodoList reads{?} runs{?}
+view src/todo/todo-list.tsx#TodoRow reads{} runs{?}
