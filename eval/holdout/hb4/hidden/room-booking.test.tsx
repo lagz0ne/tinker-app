@@ -19,8 +19,11 @@ import { routeTree } from "@/routes";
 const day = "2026-12-01";
 
 /** A server as the cmds install it; a test may swap ops of the api. */
+/** What `rooms.api` implements, typed by the contract (not by the ops of this app), as eval/chain 2f3ff8b. */
+type Implement = NonNullable<Parameters<typeof rooms.api>[0]["implement"]>;
+
 const serverOf = async (
-  swap: Partial<typeof roomOps> = {},
+  swap: Partial<Implement> = {},
   observe?: { export: (span: Observe.Span) => void },
 ) =>
   createScope({
