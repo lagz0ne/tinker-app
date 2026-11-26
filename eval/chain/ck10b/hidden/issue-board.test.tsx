@@ -17,15 +17,21 @@ import { issueOps, membersOnly, serverParts, signedIn } from "@/issues/ops.serve
 import { signIn, whoMeta } from "@/issues/sign-in";
 import { routeTree } from "@/routes";
 
+/** ck10b+: every test server has a mailer and the app's `serverParts`, as the TASK says. This one
+ * sends nothing. */
+const quietMail: Mailer = { send: async () => undefined };
+
 // In a real Chromium: the board's pages over `memory`, with the app's own routes. Two tabs are
 // two scopes; tab B is drawn, tab A only calls.
 
 test("an issue made and moved on one tab moves on the drawn tab", async () => {
   const server = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -109,10 +115,12 @@ test("an issue made and moved on one tab moves on the drawn tab", async () => {
 // page makes it: the board that follows is read as a member.
 test('"Open team" on a new key makes the team and shows its board', async () => {
   const server = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -151,10 +159,12 @@ test('"Open team" on a new key makes the team and shows its board', async () => 
 
 test('a tab that is not in the team sees why; "Try again" shows the team once it is in', async () => {
   const server = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -191,10 +201,12 @@ test('a tab that is not in the team sees why; "Try again" shows the team once it
 
 test("a tab that is not signed in is told to sign in", async () => {
   const server = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -238,10 +250,12 @@ test("a board that is not read yet says that it loads", async () => {
     },
   });
   const server = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly, hold] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -285,10 +299,12 @@ test("a stale move says that someone else changed the issue", async () => {
     run: () => ({ kind: "stale" as const, version: 7 }),
   });
   const server = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: { ...issueOps, "issue.move": stale }, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -331,10 +347,12 @@ type Implement = NonNullable<Parameters<typeof issues.api>[0]["implement"]>;
 
 const drawn = async (replace: Partial<Implement> = {}, viewer?: string) => {
   const server = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: { ...issueOps, ...replace }, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -566,10 +584,12 @@ test("a card is assigned to a member of the team, and back to nobody", async () 
 // P10: `/issues/mine` lists, for each team the person is in, the issues assigned to them, live.
 test("my issues lists the issues assigned to me in each of my teams, live", async () => {
   const server = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -655,10 +675,12 @@ test("my issues lists the issues assigned to me in each of my teams, live", asyn
 // those issues at once; the team stays in it.
 test("a person made a viewer drops those issues from my issues at once", async () => {
   const server = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -912,11 +934,13 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
     },
   });
   const server = await createScope({
+    tags: [mailer(quietMail)],
     observe: { export: (span) => void spans.push(span) },
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: { ...issueOps, "issue.create": boom }, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -960,10 +984,12 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
 // again by itself.
 test("the server goes away with the page open: the page says that it is offline", async () => {
   const server = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -1054,9 +1080,11 @@ test("a call that did not leave says that nothing was sent", async () => {
     ],
   }).ready;
   const api = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.api({ implement: issueOps }),
+      ...serverParts,
       calls.server({ services: [issues.api] }),
     ],
   }).ready;
@@ -1094,9 +1122,11 @@ test("a call that left and got no answer says that it may be saved", async () =>
     ],
   }).ready;
   const api = await createScope({
+    tags: [mailer(quietMail)],
     capsules: [
       exits({ store: localStorage }),
       issues.api({ implement: { ...issueOps, "issue.create": create } }),
+      ...serverParts,
       calls.server({ services: [issues.api] }),
     ],
   }).ready;

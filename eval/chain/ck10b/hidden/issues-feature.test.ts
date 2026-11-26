@@ -13,6 +13,10 @@ import { signIn, whoMeta } from "@/issues/sign-in";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
 
+/** ck10b+: every test server has a mailer and the app's `serverParts`, as the TASK says. This one
+ * sends nothing. */
+const quietMail: Mailer = { send: async () => undefined };
+
 // The issue board as the cmds install it, over a real socket: the server serves each team's parts
 // to its members and implements the api; each tab reads the board and calls the api. The `who`
 // name in each message's meta stands in for sign-in. Both sides export their spans, so a test can follow one trace.
@@ -21,11 +25,13 @@ const serverSpans: Observe.Span[] = [];
 const tabSpans: Observe.Span[] = [];
 
 const backend = await createScope({
+  tags: [mailer(quietMail)],
   observe: { export: (span) => void serverSpans.push(span) },
   capsules: [
     exits({ file: process.env.TINKER_EXITS }),
     issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
     issues.api({ implement: issueOps, onStart: [signedIn] }),
+    ...serverParts,
     server.server({ path: "/rpc", services: [issues.board, issues.api] }),
   ],
 }).ready;

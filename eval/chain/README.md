@@ -558,3 +558,18 @@ checked again when its reader leaves the team; it
 keeps getting the part's writes until something
 asks again. The skill names `invalidate` only for
 a tab.
+
+### ck10b/ck11 harness fix (after the ck10b run)
+
+The first ck10b run (kit 96a2964) found a kit gap.
+The TASK says the tests bind a mailer and install
+`serverParts`. But the old journeys' servers (the
+shared backend, and each page test's server) did
+neither. o-muse-3 resolves its mail queue (which
+needs `mailer`) inside `team.add`, so 29 old
+journeys failed there, and its 6 new tests passed.
+
+Fix: every hidden server in ck10b and ck11 binds a
+quiet mailer (`quietMail`, sends nothing) and
+installs `...serverParts`. Golden: ck10b 53/53,
+ck11 57/57 with the fix.
