@@ -1,0 +1,4 @@
+Cancel shows on own bookings only; a cancel takes the booking off every tab
+a booking is cancelled by its booker alone; notYours and gone write nothing
+a cancel that answers gone says so
+a cancel that answers notYours says so

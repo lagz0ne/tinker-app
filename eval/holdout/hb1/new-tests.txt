@@ -1,0 +1,17 @@
+"Open office" on a new key makes the office and shows its day
+a booking lands on the other tab; an overlap of the same room and day answers taken
+a booking made on one tab shows on the drawn tab; the form books a room
+a booking that answers gone says so
+a call that breaks on the server shows a ref, and the server's trace has the cause
+a day that is not read yet says that it loads
+a person added while their tab is open sees the office when they try again
+a room added on one tab shows in the rooms of the other tab
+a tab that is not in the office sees why; "Try again" shows the office once it is in
+a tab that is not signed in is told to sign in
+a tab with no `who` is refused; so is a member of no office, on calls and on reads
+a taken room says so, and books nothing
+an office is made once, in upper case; exists takes no new member
+every call that names an office answers gone to a person outside it, and writes nothing
+every part of an office is refused to a person outside it, and to a tab with no `who`
+one booking: one trace from tab A to the server's send; tab B's ask links to it
+the server goes away with the page open: the page says that it is offline

@@ -1,0 +1,3 @@
+a room goes with all its bookings in one call; a booking of it then answers gone
+a room removed on another tab leaves My bookings with no reload
+a room removed on another tab leaves the day page with no reload

@@ -1,0 +1,3 @@
+My bookings lists the caller's bookings by day and start; other tabs' changes show live
+My bookings on a tab that is not signed in says to sign in
+a person reads their own bookings by `by`; another person's take the office check

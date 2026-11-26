@@ -1,0 +1,14 @@
+diff --git a/src/rooms/ops.server.ts b/src/rooms/ops.server.ts
+index c72ae3d..f4e5339 100644
+--- a/src/rooms/ops.server.ts
++++ b/src/rooms/ops.server.ts
+@@ -93,9 +93,6 @@ const removeRoom = operation({
+     const room = ok.run({ input }) ? list.of({ officeId, id: roomId }).get() : undefined;
+     if (!room) return { kind: "gone" as const };
+ 
+-    for (const { day, by, id } of book.where({ officeId, roomId }).get()) {
+-      book.delete({ officeId, roomId, day, by, id });
+-    }
+     list.delete({ officeId, id: roomId });
+     return { kind: "removed" as const };
+   },
