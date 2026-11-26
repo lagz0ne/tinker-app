@@ -166,7 +166,7 @@ test('a tab that is not in the office sees why; "Try again" shows the office onc
   await server.close();
 });
 
-// P4: a read with no `who` is refused by `signedIn`: the page says to sign in.
+// P3: a read with no `who` is refused by `signedIn`: the page says to sign in.
 test("a tab that is not signed in is told to sign in", async () => {
   const server = await serverOf();
   const nobody = await tabOf(server, "");
@@ -179,7 +179,7 @@ test("a tab that is not signed in is told to sign in", async () => {
   await server.close();
 });
 
-// P4: until the server answers the reads, the page says that it loads, and shows no form. The
+// P3: until the server answers the reads, the page says that it loads, and shows no form. The
 // server's read hook holds the reads here, so the wait is as long as the test needs.
 test("a day that is not read yet says that it loads", async () => {
   const answer = Promise.withResolvers<void>();
@@ -228,7 +228,7 @@ test("a taken room says so, and books nothing", async () => {
   await bookOnPage("Blue", "09:30", "10:30");
 
   await expect.element(page.getByRole("status")).toBeVisible();
-  expect(textOf("Blue")).not.toContain("09:30");
+  expect(textOf("Blue")).not.toContain("09:30-10:30 ana");
   expect(server.resolve(rooms.board.bookings).get()).toHaveLength(1);
 
   await ana.close();

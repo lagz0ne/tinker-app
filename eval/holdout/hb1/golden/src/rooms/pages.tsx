@@ -100,13 +100,13 @@ function NoAnswer({ read, sent }: { read?: boolean; sent?: boolean }) {
 }
 
 /** A fault, said by who spoke: the server's answer, or this side with no answer.
- * - `refused`, `missing`: the server answered, and the same ask gives the same answer.
+ * - `refused`: the server answered, and the same ask gives the same answer.
  * - `link`: no answer (see `NoAnswer`).
- * - the rest is a bug: it shows the trace id as a ref. The cause is in that trace, never here. */
+ * - the rest is a bug or an old page: it shows the trace id as a ref. The cause is in that trace,
+ *   never here. */
 function Fault({ fault, read }: { fault: RemoteFault; read?: boolean }) {
   const { fault: kind, payload, sent, traceId } = fault;
   if (kind === "link") return <NoAnswer read={read} sent={sent} />;
-  if (kind === "missing") return <p role="alert">This page is old. Load it again.</p>;
 
   const office = notMember.safeParse(payload).data?.notMember;
   if (kind === "refused") {

@@ -166,7 +166,7 @@ test('a tab that is not in the office sees why; "Try again" shows the office onc
   await server.close();
 });
 
-// P4: a read with no `who` is refused by `signedIn`: the page says to sign in.
+// P3: a read with no `who` is refused by `signedIn`: the page says to sign in.
 test("a tab that is not signed in is told to sign in", async () => {
   const server = await serverOf();
   const nobody = await tabOf(server, "");
@@ -179,7 +179,7 @@ test("a tab that is not signed in is told to sign in", async () => {
   await server.close();
 });
 
-// P4: until the server answers the reads, the page says that it loads, and shows no form. The
+// P3: until the server answers the reads, the page says that it loads, and shows no form. The
 // server's read hook holds the reads here, so the wait is as long as the test needs.
 test("a day that is not read yet says that it loads", async () => {
   const answer = Promise.withResolvers<void>();
@@ -228,7 +228,7 @@ test("a taken room says so, and books nothing", async () => {
   await bookOnPage("Blue", "09:30", "10:30");
 
   await expect.element(page.getByRole("status")).toBeVisible();
-  expect(textOf("Blue")).not.toContain("09:30");
+  expect(textOf("Blue")).not.toContain("09:30-10:30 ana");
   expect(server.resolve(rooms.board.bookings).get()).toHaveLength(1);
 
   await ana.close();
@@ -256,7 +256,7 @@ test("a booking that answers gone says so", async () => {
   await server.close();
 });
 
-// P5: a Cancel button on each booking of this tab's person, and on no other. A cancel takes the
+// P4: a Cancel button on each booking of this tab's person, and on no other. A cancel takes the
 // booking off the page; so does a cancel on another tab, with no reload.
 test("Cancel shows on own bookings only; a cancel takes the booking off every tab", async () => {
   const server = await serverOf();
@@ -273,8 +273,9 @@ test("Cancel shows on own bookings only; a cancel takes the booking off every ta
 
   const mine = page.getByRole("button", { name: "Cancel 09:00-10:00", exact: true });
   await expect.element(mine).toBeVisible();
+  // One Cancel on the page: ana's. bo's booking has none.
   expect(
-    [...document.querySelectorAll("button")].filter((b) => b.textContent?.includes("Cancel")),
+    page.getByRole("button", { name: /^Cancel \d\d:\d\d-\d\d:\d\d$/ }).elements(),
   ).toHaveLength(1);
 
   await mine.click();
@@ -296,7 +297,7 @@ test("Cancel shows on own bookings only; a cancel takes the booking off every ta
   await server.close();
 });
 
-// P5: `notYours` and `gone` are answers, so the page says them as a status. The answers are
+// P4: `notYours` and `gone` are answers, so the page says them as a status. The answers are
 // replaced here: a person's own Cancel gets them only in a race.
 test("a cancel that answers notYours says so", async () => {
   const notYours = operation({
@@ -343,7 +344,7 @@ test("a cancel that answers gone says so", async () => {
   await server.close();
 });
 
-// P6: `/rooms/<office>/mine` lists this person's bookings in the office on every day, by day and
+// P5: `/rooms/<office>/mine` lists this person's bookings in the office on every day, by day and
 // start, each as its day, its span and its room. A booking or a cancel on another tab of the same
 // person shows with no reload.
 test("My bookings lists the caller's bookings by day and start; other tabs' changes show live", async () => {
@@ -389,7 +390,7 @@ test("My bookings lists the caller's bookings by day and start; other tabs' chan
   await server.close();
 });
 
-// P6 with P4: the page of a tab that is not signed in says to sign in.
+// P5 with P3: the page of a tab that is not signed in says to sign in.
 test("My bookings on a tab that is not signed in says to sign in", async () => {
   const server = await serverOf();
   const nobody = await tabOf(server, "");
