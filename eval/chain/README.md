@@ -30,6 +30,10 @@ tests run again.
   and a graph rule in `tinker.json`.
 - ck8: delete a team; every part of steps 1 to 7
   goes. Golden 91eda9f.
+- ck9 (v2): a bug report in plain words; the writer
+  writes a red test first. Golden bacb51b.
+- ck10 (v2): a welcome mail through an outbox.
+  Golden 32ac169. See "Chain v2" below.
 
 Each `ckN/` has:
 
@@ -424,3 +428,16 @@ changed.
    in its key (`labels.where({ name })`). No skill
    says to refuse what the hook does not know. 4 of
    5 Muse trees let it through (A04).
+
+### Proof (2026-11-26, 0.34.10)
+
+From clean copies of each commit:
+
+- Golden ck9 (bacb51b): strict, 47/47, iso 4/4,
+  judge 8/8 OK. `red-first.sh` (before = 4f662ba):
+  red 1 of 1, then green.
+- Golden ck10 (32ac169): strict, 52/52, iso 5/5,
+  judge 8/8 OK.
+- Seeds: ck9 caught (45/47), ck10 caught (50/52).
+- ck9 hidden on golden ck8 and on each of the 10
+  run-20 trees: 45/47, the same 2 tests red.
