@@ -13,12 +13,17 @@
 // v2 (ck9, ck10): steps 9 and 10 judge as step 8, with one change. ck9: a person made a viewer is
 //  taken off each issue, so team.add.do writes issues.list and issues.events (through issues.record).
 //  ck10 adds no writer of a listed cell: the outbox is the writer's own cell, not judged here.
+//  ck11 (step 11): a deleted team's parts go later, from a root the server starts (not a call op, not a
+//  start hook). Such a root may only `.delete` members of the team cells.
+const HOOKS = ["issues.signedIn", "issues.membersOnly"];
+const sweeps = (label, w) =>
+  step >= 11 && !label.endsWith(".do") && !HOOKS.includes(label) && w.endsWith(".delete");
 import { readFileSync } from "node:fs";
 
 const [file, stepArg] = process.argv.slice(2);
 const step = Number(stepArg);
-if (!file || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(step)) {
-  console.error("usage: node rules2.mjs <tinker.graph> <step 1-10>");
+if (!file || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(step)) {
+  console.error("usage: node rules2.mjs <tinker.graph> <step 1-11>");
   process.exit(2);
 }
 const set = (line, name) => {
@@ -149,7 +154,7 @@ else {
     for (const o of [label, ...closure(label)])
       for (const w of ops.get(o)?.writes ?? []) {
         const cell = Object.keys(writers).find((c) => w.startsWith(`${c}.`));
-        if (cell && !writers[cell].includes(label))
+        if (cell && !writers[cell].includes(label) && !sweeps(label, w))
           f4.push(`${op.at} ${label}: writes ${w}${o === label ? "" : ` (through ${o})`}`);
       }
   }

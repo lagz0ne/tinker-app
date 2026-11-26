@@ -13,6 +13,7 @@ import {
   members,
 } from "./contract";
 import { mailRelay, post } from "./outbox.server";
+import { deleting, teamSweeper } from "./sweep.server";
 
 // The server's work for `issueApi`. Each op writes members of the keyed cells; `issueBoard` tells
 // every member's tab that reads the part, and the tab asks for that part alone.
@@ -99,12 +100,14 @@ const record = operation({
   },
 });
 
+/** Make a team. A key whose old team's parts are still going is not free yet: `exists`. */
 const createTeam = operation({
   label: "team.create.do",
   input: issueApi["team.create"].input,
-  depends: { team: members.controller, me: caller.required },
-  run: ({ team, me }, { input }) => {
-    if (team.where(input).get().length) return { kind: "exists" as const, teamId: input.teamId };
+  depends: { team: members.controller, marks: deleting.atScope.controller, me: caller.required },
+  run: ({ team, marks, me }, { input }) => {
+    const taken = team.where(input).get().length > 0 || marks.of(input).get() !== undefined;
+    if (taken) return { kind: "exists" as const, teamId: input.teamId };
 
     team.set({ ...input, userId: me, role: "member" });
     return { kind: "created" as const, teamId: input.teamId };
@@ -263,28 +266,27 @@ const archiveTeam = operation({
   },
 });
 
-/** Delete a team: each member of each of its parts goes. Its members go last. */
+/** Delete a team. Its members go at once, so it is hidden at once: every call on it answers
+ * `gone`, every read of it is refused (each open read is asked again). Its key is marked; the sweeper takes the other parts later,
+ * and then frees the key. An archived team can be deleted too. */
 const deleteTeam = operation({
   label: "team.delete.do",
   input: issueApi["team.delete"].input,
   depends: {
     may: canChange,
     team: members.controller,
-    list: issues.controller,
-    shut: archived.controller,
-    tags: labels.controller,
-    log: events.controller,
+    marks: deleting.atScope.controller,
+    dirty: issueBoard.invalidate,
   },
-  run: ({ may, team, list, shut, tags, log }, { input }) => {
+  run: async ({ may, team, marks, dirty }, { input }) => {
     const now = may.run({ input });
     if (now.kind !== "ok") return now;
 
     const part = { teamId: input.teamId };
-    for (const { id, name } of tags.where(part).get()) tags.delete({ ...part, id, name });
-    for (const { id, version } of log.where(part).get()) log.delete({ ...part, id, version });
-    for (const { id } of list.where(part).get()) list.delete({ ...part, id });
-    shut.delete(part);
+    marks.set(part);
     for (const { userId } of team.where(part).get()) team.delete({ ...part, userId });
+    // An open read of a part does not ask again when its reader leaves the team: tell each one.
+    await dirty.run({ input: { issues: part, archived: part, labels: part, events: part } });
     return { kind: "deleted" as const };
   },
 });
@@ -302,5 +304,6 @@ export const issueOps = {
   "team.delete": deleteTeam,
 } as const;
 
-/** The capsules the issue board needs on the server, beyond `issues.board` and `issues.api`. */
-export const serverParts = [mailRelay];
+/** The capsules the issue board needs on the server, beyond `issues.board` and `issues.api`: the
+ * mail relay and the sweeper of deleted teams. */
+export const serverParts = [mailRelay, teamSweeper];

@@ -500,3 +500,61 @@ Seed `ck10b-drain-in-the-call.patch`: `team.add`
 also starts a drain inside the call (gap 1). The
 call then holds its answer while mail hangs.
 Caught: 30 of 53 fail.
+
+## ck11: a big team is deleted (behaviour only, 2026-11-26)
+
+On top of ck10b. The TASK: `team.delete` answers at
+once, also for a big team. The team is hidden at
+once (members out, calls `gone`, reads refused,
+also an open read; own lists drop it). Its other
+parts go later: at most 100 a second, all within 1
+minute. Until the last part is gone the key is not
+free (`team.create` answers `exists`). A delete
+sent twice deletes once; a team made again keeps
+its parts. The server can close while parts go.
+
+No file is given. `cmds/server.ts` and
+`serverParts` stay the writer's; the tests install
+`serverParts` (the one seam, as in ck10b).
+
+Forced failures in the hidden tests (no op named;
+a test clock and the server's cells):
+
+- a read between the halves: the clock stops after
+  1 s; calls answer `gone`, the key answers
+  `exists`, another team is not touched;
+- delivered twice: two deletes at once, a retried
+  delete, then the key made again keeps its parts
+  for 2 minutes;
+- stopped half way: the server closes with the
+  clock stopped mid-sweep; the close must end at
+  once.
+
+Golden: `team.delete` takes the members, marks the
+key (`issues.deleting`, written at the root), and
+runs `issueBoard.invalidate` on the team's parts.
+A capsule `teamSweeper` (in `serverParts`) runs a
+root worker: each second it takes at most 100
+parts, then frees the key. `team.create` answers
+`exists` on a marked key. The graph rule's except
+names `issues.sweepTeam`.
+
+Hidden: ck10b's 53, with the ck8 delete journey
+replaced by 4 server tests, and 1 new page test
+(the P12 page test now checks the members only) = 57.
+
+Judge at step 11: as step 8, plus F4 lets a root
+that is not a call op or a start hook `.delete`
+members of the team cells.
+
+Seed `ck11-open-reads-not-asked-again.patch`: the
+delete does not run `invalidate`. An open read of
+the team stays `ready` until the sweeper reaches
+it.
+
+Tinker gap seen while building it: a read hook runs
+when a part is asked for. An open read is not
+checked again when its reader leaves the team; it
+keeps getting the part's writes until something
+asks again. The skill names `invalidate` only for
+a tab.

@@ -1,0 +1,5 @@
+a delete answers at once; its members go at once, its other parts later, 100 a second at most
+between the halves: the team is hidden, its key is not free, another team is not touched
+delivered twice: two deletes at once, a retried delete, and a key made again keeps its parts
+stopped half way: the server closes while the parts go, and the close ends at once
+open team on a key still being deleted says you are not in it; later it makes a new team

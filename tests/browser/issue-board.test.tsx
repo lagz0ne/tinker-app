@@ -2,7 +2,7 @@ import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/rea
 import { exits } from "@tinkered/cli/test";
 import { createScope, operation, transport } from "@tinkered/core";
 import type { Observe, Scope } from "@tinkered/core";
-import { createMemory, memory } from "@tinkered/core/testing";
+import { createMemory, makeTestClock, memory } from "@tinkered/core/testing";
 import { ScopeProvider } from "@tinkered/react";
 import { createRoot } from "react-dom/client";
 import { expect, onTestFinished, test } from "vite-plus/test";
@@ -11,7 +11,9 @@ import { z } from "zod";
 
 import { issues } from "@/issues";
 import { members } from "@/issues/contract";
-import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
+import { mailer } from "@/issues/mail";
+import type { Mailer } from "@/issues/mail";
+import { issueOps, membersOnly, serverParts, signedIn } from "@/issues/ops.server";
 import { signIn, whoMeta } from "@/issues/sign-in";
 import { routeTree } from "@/routes";
 
@@ -649,6 +651,225 @@ test("my issues lists the issues assigned to me in each of my teams, live", asyn
   await expect.element(web.getByRole("article", { name: "WEB-1" })).not.toBeInTheDocument();
 });
 
+// P10 and S16 (ck9): a person made a viewer is taken off the team's issues. Their own list drops
+// those issues at once; the team stays in it.
+test("a person made a viewer drops those issues from my issues at once", async () => {
+  const server = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const tab = async (name: string) => {
+    const scope = await createScope({
+      capsules: [
+        exits({ store: localStorage }),
+        memory.client({ peer: server, meta: whoMeta }),
+        issues.board({ read: memory.client }),
+        issues.api({ remote: memory.client }),
+      ],
+    }).ready;
+    scope.run(signIn, { input: { name } });
+    return scope;
+  };
+  const [ana, bo] = [await tab("ana"), await tab("bo")];
+  for (const teamId of ["WEB", "API"]) {
+    await ana.run(issues.api["team.create"], { input: { teamId } });
+    await ana.run(issues.api["team.add"], { input: { teamId, userId: "bo", role: "member" } });
+    await ana.run(issues.api["issue.create"], { input: { teamId, title: "Task" } });
+    const it = server
+      .resolve(issues.board.issues)
+      .get()
+      .find((i) => i.teamId === teamId)!;
+    await ana.run(issues.api["issue.assign"], {
+      input: { teamId, id: it.id, version: 1, userId: "bo" },
+    });
+  }
+
+  const history = createMemoryHistory({ initialEntries: ["/issues/mine"] });
+  const router = createRouter({ routeTree, history, context: { scope: bo } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  onTestFinished(async () => {
+    root.unmount();
+    await ana.close();
+    await bo.close();
+    await server.close();
+  });
+  root.render(
+    <ScopeProvider scope={bo}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  const web = page.getByRole("region", { name: "WEB", exact: true });
+  const api = page.getByRole("region", { name: "API", exact: true });
+  await expect.element(web.getByRole("article", { name: "WEB-1" })).toBeVisible();
+  await expect.element(api.getByRole("article", { name: "API-1" })).toBeVisible();
+
+  await ana.run(issues.api["team.add"], { input: { teamId: "WEB", userId: "bo", role: "viewer" } });
+  await expect.element(web.getByRole("article", { name: "WEB-1" })).not.toBeInTheDocument();
+  // bo still reads WEB as a viewer, and API is not changed.
+  await expect.element(web).toBeInTheDocument();
+  await expect.element(api.getByRole("article", { name: "API-1" })).toBeVisible();
+});
+
+// P2 and S17 (ck10b): the member form adds a person while mail hangs. The add lands at once, and
+// each person gets one welcome mail once mail is back. Time is the server's test clock.
+test("the member form adds people while mail hangs; one welcome mail each arrives later", async () => {
+  const sent: string[] = [];
+  const state = { hang: true };
+  const mail: Mailer = {
+    send: async (to, subject) => {
+      if (state.hang) return new Promise<void>(() => undefined);
+      sent.push(`${to}: ${subject}`);
+    },
+  };
+  const clock = makeTestClock({ now: 1_000_000 });
+  const server = await createScope({
+    clock,
+    tags: [mailer(mail)],
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const ana = await createScope({
+    capsules: [
+      exits({ store: localStorage }),
+      memory.client({ peer: server, meta: whoMeta }),
+      issues.board({ read: memory.client }),
+      issues.api({ remote: memory.client }),
+    ],
+  }).ready;
+  ana.run(signIn, { input: { name: "ana" } });
+  await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
+  await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: "Login fails" } });
+  const pass = async (ms: number) => {
+    for (let t = 0; t < ms; t += 100) {
+      clock.advance(100);
+      await new Promise((r) => setTimeout(r, 1));
+    }
+  };
+
+  const history = createMemoryHistory({ initialEntries: ["/issues/ENG"] });
+  const router = createRouter({ routeTree, history, context: { scope: ana } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  onTestFinished(async () => {
+    root.unmount();
+    state.hang = false;
+    await ana.close();
+    await server.close();
+  });
+  root.render(
+    <ScopeProvider scope={ana}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  await expect.element(page.getByRole("article", { name: "ENG-1" })).toBeVisible();
+  const who = page.getByRole("combobox", { name: "Assignee of ENG-1", exact: true });
+  const options = () => [...who.element().querySelectorAll("option")].map((o) => o.text);
+  await page.getByRole("textbox", { name: "Add member" }).fill("cy");
+  await page.getByRole("button", { name: "Add member" }).click();
+  // The new member shows in the Assignee options: the add landed, mail or not.
+  await expect.poll(options).toContain("cy");
+  await pass(2_000);
+  await page.getByRole("textbox", { name: "Add member" }).fill("dee");
+  await page.getByRole("button", { name: "Add member" }).click();
+  await expect.poll(options).toContain("dee");
+  // The page shows no fault: no call is left without an answer.
+  expect(document.querySelectorAll('main [role="alert"], main [role="status"]')).toHaveLength(0);
+
+  state.hang = false;
+  await pass(60_000);
+  expect(sent.toSorted()).toEqual(["cy: Welcome to ENG", "dee: Welcome to ENG"]);
+});
+
+// P1 and S15 (ck11): a key whose old team is still being taken away is not free. "Open team"
+// on it shows that this person is not in the team; once the old parts are gone, it makes a new,
+// empty team. Time is the server's test clock.
+test("open team on a key still being deleted says you are not in it; later it makes a new team", async () => {
+  const clock = makeTestClock({ now: 1_000_000 });
+  const fake: Mailer = { send: async () => undefined };
+  const server = await createScope({
+    clock,
+    tags: [mailer(fake)],
+    capsules: [
+      exits({ store: localStorage }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const tab = async (name: string) => {
+    const scope = await createScope({
+      capsules: [
+        exits({ store: localStorage }),
+        memory.client({ peer: server, meta: whoMeta }),
+        issues.board({ read: memory.client }),
+        issues.api({ remote: memory.client }),
+      ],
+    }).ready;
+    scope.run(signIn, { input: { name } });
+    return scope;
+  };
+  const [ana, cy] = [await tab("ana"), await tab("cy")];
+  await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
+  for (let k = 0; k < 30; k++) {
+    await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: `Old ${k}` } });
+  }
+  await ana.run(issues.api["team.delete"], { input: { teamId: "ENG" } });
+  const pass = async (ms: number) => {
+    for (let t = 0; t < ms; t += 100) {
+      clock.advance(100);
+      await new Promise((r) => setTimeout(r, 1));
+    }
+  };
+
+  const history = createMemoryHistory({ initialEntries: ["/issues"] });
+  const router = createRouter({ routeTree, history, context: { scope: cy } });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  onTestFinished(async () => {
+    root.unmount();
+    await ana.close();
+    await cy.close();
+    await server.close();
+  });
+  root.render(
+    <ScopeProvider scope={cy}>
+      <RouterProvider router={router} />
+    </ScopeProvider>,
+  );
+
+  await page.getByLabelText("Team key").fill("eng");
+  await page.getByRole("button", { name: "Open team" }).click();
+  // The old team is still being taken away: cy is not in a team with that key.
+  await expect.element(page.getByRole("alert")).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  expect(document.querySelectorAll("article")).toHaveLength(0);
+
+  await pass(60_000);
+  await router.navigate({ to: "/issues" });
+  await page.getByLabelText("Team key").fill("eng");
+  await page.getByRole("button", { name: "Open team" }).click();
+  await expect.element(page.getByRole("heading", { name: "ENG" })).toBeVisible();
+  await expect.element(page.getByRole("button", { name: "Add issue" })).toBeVisible();
+  expect(document.querySelectorAll("article")).toHaveLength(0);
+  expect(
+    server
+      .resolve(issues.board.members)
+      .get()
+      .filter((m) => m.teamId === "ENG")
+      .map((m) => m.userId),
+  ).toEqual(["cy"]);
+}, 30_000);
+
 // P11: the board's region `History` lists each event of the team, by issue number, then version,
 // live.
 test("the history lists each change of the team's issues, live", async () => {
@@ -697,9 +918,8 @@ test("delete team takes the team away and opens the home page", async () => {
   await page.getByRole("button", { name: "Delete team" }).click();
 
   await expect.element(page.getByLabelText("Team key")).toBeVisible();
+  // ck11: the members go at once; the other parts go later (server journeys).
   await expect.poll(() => server.resolve(issues.board.members).get()).toEqual([]);
-  expect(server.resolve(issues.board.issues).get()).toEqual([]);
-  expect(server.resolve(issues.board.events).get()).toEqual([]);
 });
 
 // P4: `gone` is an answer, so the page says it as a status. The answers are replaced here: a

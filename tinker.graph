@@ -16,11 +16,14 @@ issues.record exits{value} faults{} reads{} writes{issues.events.set,issues.list
 issues.showLabel exits{value} faults{} reads{} writes{issues.shownLabel.set} calls{} uses{}
 issues.signIn exits{value} faults{} reads{} writes{issues.me.set} calls{} uses{}
 issues.signedIn exits{refused,value} faults{} reads{} writes{} calls{} uses{}
+issues.sweep exits{value} faults{} reads{issues.deleting.get} writes{issues.deleting.delete} calls{issues.sweepTeam} uses{}
+issues.sweepTeam exits{value} faults{} reads{issues.archived.of,issues.events.where,issues.labels.where,issues.list.where} writes{issues.archived.delete,issues.events.delete,issues.labels.delete,issues.list.delete} calls{} uses{}
+issues.sweeper exits{value} faults{} reads{} writes{} calls{issues.sweep} uses{}
 issues.whoMeta exits{value} faults{} reads{issues.me.get} writes{} calls{} uses{}
 team.add.do exits{added,archived,forbidden,gone} faults{} reads{issues.list.where,issues.members.of} writes{issues.members.set} calls{issues.canWrite,issues.post,issues.record} uses{}
 team.archive.do exits{archived,forbidden,gone} faults{} reads{} writes{issues.archived.set} calls{issues.canWrite} uses{}
-team.create.do exits{created,exists} faults{} reads{issues.members.where} writes{issues.members.set} calls{} uses{}
-team.delete.do exits{deleted,forbidden,gone} faults{} reads{issues.events.where,issues.labels.where,issues.list.where,issues.members.where} writes{issues.archived.delete,issues.events.delete,issues.labels.delete,issues.list.delete,issues.members.delete} calls{issues.canChange} uses{}
+team.create.do exits{created,exists} faults{} reads{issues.deleting.of,issues.members.where} writes{issues.members.set} calls{} uses{}
+team.delete.do exits{deleted,forbidden,gone} faults{?} reads{issues.members.where} writes{issues.deleting.set,issues.members.delete} calls{?,issues.canChange} uses{}
 todo.add.do exits{value} faults{} reads{} writes{todo.list.set} calls{} uses{}
 todo.remove.do exits{gone,removed} faults{} reads{todo.list.of} writes{todo.list.delete} calls{} uses{}
 todo.toggle.do exits{gone,toggled} faults{} reads{todo.list.of} writes{todo.list.set} calls{} uses{}

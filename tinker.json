@@ -32,7 +32,7 @@
         "writes": "issues.list",
         "calls": "issues.record",
         "except": {
-          "team.delete.do": "A delete takes each issue and its events away: it leaves no event."
+          "issues.sweepTeam": "The sweeper takes a deleted team's issues and their events away: it leaves no event."
         }
       }
     ]

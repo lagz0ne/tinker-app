@@ -1,10 +1,14 @@
+import { serve } from "@tinkered/bun";
 import { exits } from "@tinkered/cli/test";
 import { createScope } from "@tinkered/core";
 import type { Observe, Scope } from "@tinkered/core";
-import { afterAll, beforeEach, expect, test } from "vite-plus/test";
+import { makeTestClock, memory } from "@tinkered/core/testing";
+import { afterAll, beforeEach, expect, onTestFinished, test } from "vite-plus/test";
 
 import { issues } from "@/issues";
-import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
+import { mailer } from "@/issues/mail";
+import type { Mailer } from "@/issues/mail";
+import { issueOps, membersOnly, serverParts, signedIn } from "@/issues/ops.server";
 import { signIn, whoMeta } from "@/issues/sign-in";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
@@ -524,46 +528,367 @@ const leftOf = (teamId: string) => {
   ];
 };
 
-// S15: a delete takes every part of the team. A team made again with the same key starts empty.
-test("a deleted team leaves nothing; made again, it starts empty", async () => {
-  const teamId = await team();
-  const seen = read(bo, teamId);
-  const places = placesOf(bo, "bo");
-  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Old" } });
-  await until(() => seen.get().length === 1);
-  const { id } = seen.get()[0]!;
-  await ana.run(issues.api["issue.label"], {
-    input: { teamId, id, version: 1, name: "bug", on: true },
-  });
-  await ana.run(issues.api["issue.assign"], { input: { teamId, id, version: 2, userId: "bo" } });
-  await ana.run(issues.api["team.archive"], { input: { teamId } });
-  await until(() => places.get().some((p) => p.teamId === teamId));
-  expect(leftOf(teamId)).toEqual([2, 1, 1, 1, 3]);
+// S15 (ck11): a delete answers at once. The members go at once, so the team is hidden at once;
+// the other parts go later, at most 100 a second. The key is free again only once they are gone.
+// The server here is the board, the api and the app's `serverParts`, on a test clock: the tests
+// name no op. They delete, move the clock, and look at the server's cells.
 
-  // An archived team can be deleted.
-  expect(await bo.run(issues.api["team.delete"], { input: { teamId } })).toEqual({
+/** A server with the app's server parts and a test clock (mail up), over `memory`. `pass(ms)`
+ * moves the clock in 100 ms steps, letting work run. `big(teamId, n)`: ana makes the team, adds
+ * bo, makes `n` issues with a label each, and archives it. */
+const sweepWorld = async () => {
+  const clock = makeTestClock({ now: 5_000_000 });
+  const fake: Mailer = { send: async () => undefined };
+
+  const server = await createScope({
+    clock,
+    tags: [mailer(fake)],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const tabOf = async (name: string) => {
+    const scope = await createScope({
+      capsules: [
+        exits({ file: process.env.TINKER_EXITS }),
+        memory.client({ peer: server, meta: whoMeta }),
+        issues.board({ read: memory.client }),
+        issues.api({ remote: memory.client }),
+      ],
+    }).ready;
+    scope.run(signIn, { input: { name } });
+    return scope;
+  };
+
+  const [ana, bo, cy] = [await tabOf("ana"), await tabOf("bo"), await tabOf("cy")];
+  onTestFinished(async () => {
+    for (const t of [ana, bo, cy]) await t.close();
+    await server.close();
+  });
+
+  const pass = async (ms: number) => {
+    for (let t = 0; t < ms; t += 100) {
+      clock.advance(100);
+      await new Promise((r) => setTimeout(r, 1));
+    }
+  };
+  /** Each part of a team on the server: members, then the other parts (issues, archive mark,
+   * labels, events). */
+  const parts = (teamId: string) => {
+    const mine = <T extends { teamId: string }>(list: readonly T[]) =>
+      list.filter((m) => m.teamId === teamId);
+    return {
+      members: mine(server.resolve(issues.board.members).get()),
+      other: [
+        ...mine(server.resolve(issues.board.issues).get()),
+        ...mine(server.resolve(issues.board.archived).get()),
+        ...mine(server.resolve(issues.board.labels).get()),
+        ...mine(server.resolve(issues.board.events).get()),
+      ],
+    };
+  };
+  const big = async (teamId: string, n: number) => {
+    await ana.run(issues.api["team.create"], { input: { teamId } });
+    await ana.run(issues.api["team.add"], { input: { teamId, userId: "bo", role: "member" } });
+    for (let k = 0; k < n; k++) {
+      await ana.run(issues.api["issue.create"], { input: { teamId, title: `t${k}` } });
+    }
+
+    const made = server
+      .resolve(issues.board.issues)
+      .get()
+      .filter((i) => i.teamId === teamId);
+    for (const { id } of made) {
+      const input = { teamId, id, version: 1, name: "x", on: true };
+      await ana.run(issues.api["issue.label"], { input });
+    }
+
+    await ana.run(issues.api["team.archive"], { input: { teamId } });
+    // n issues, n labels, 2n events, the archive mark.
+    expect(parts(teamId).other).toHaveLength(4 * n + 1);
+  };
+  return { server, ana, bo, cy, pass, parts, big };
+};
+
+test("a delete answers at once; its members go at once, its other parts later, 100 a second at most", async () => {
+  const { bo, cy, pass, parts, big } = await sweepWorld();
+  await big("BIG", 40);
+  const seen = bo.resolve(issues.board.issues.where({ teamId: "BIG" }));
+  seen.watch(() => undefined);
+  const places = bo.resolve(issues.board.members.where({ userId: "bo" }));
+  places.watch(() => undefined);
+  await until(() => seen.get().length === 40 && places.get().some((p) => p.teamId === "BIG"));
+
+  expect(await bo.run(issues.api["team.delete"], { input: { teamId: "BIG" } })).toEqual({
     kind: "deleted",
   });
-  expect(leftOf(teamId)).toEqual([0, 0, 0, 0, 0]);
-  // A tab that reads the team is told it is not in it any more (ADR 0139 d4: a refused part shows
-  // its fault). Its own list of teams drops the team.
-  await until(() => state(bo, teamId) === "fault");
-  expect(
-    bo.resolve(issues.board.status(issues.board.issues.where({ teamId }))).get(),
-  ).toMatchObject({ fault: { fault: "refused", payload: { notMember: teamId } } });
-  await until(() => !places.get().some((p) => p.teamId === teamId));
-  // The deleter is not in the team any more.
-  expect(await bo.run(issues.api["team.delete"], { input: { teamId } })).toEqual({ kind: "gone" });
+  expect(parts("BIG").members).toEqual([]);
+  expect(parts("BIG").other.length).toBeGreaterThanOrEqual(161 - 100);
+  // The tab that reads the team is told it is not in it; its own list drops the team.
+  await until(
+    () =>
+      bo.resolve(issues.board.status(issues.board.issues.where({ teamId: "BIG" }))).get()
+        ?.status === "fault",
+  );
+  await until(() => !places.get().some((p) => p.teamId === "BIG"));
+  await pass(1_000);
+  expect(parts("BIG").other.length).toBeGreaterThanOrEqual(161 - 200);
 
-  expect(await cy.run(issues.api["team.create"], { input: { teamId } })).toEqual({
+  await pass(60_000);
+  expect(parts("BIG")).toEqual({ members: [], other: [] });
+  // The key is free again: a team made with it starts empty.
+  expect(await cy.run(issues.api["team.create"], { input: { teamId: "BIG" } })).toEqual({
     kind: "created",
-    teamId,
+    teamId: "BIG",
   });
-  expect(await cy.run(issues.api["issue.create"], { input: { teamId, title: "New" } })).toEqual({
+  expect(
+    await cy.run(issues.api["issue.create"], { input: { teamId: "BIG", title: "New" } }),
+  ).toEqual({
     kind: "created",
     number: 1,
   });
-  expect(leftOf(teamId)).toEqual([1, 1, 0, 0, 1]);
+  expect(parts("BIG").members.map((m) => m.userId)).toEqual(["cy"]);
+  expect(parts("BIG").other).toHaveLength(2);
+}, 30_000);
+
+test("between the halves: the team is hidden, its key is not free, another team is not touched", async () => {
+  const { server, ana, bo, cy, pass, parts, big } = await sweepWorld();
+  await big("HALF", 40);
+  await big("KEEP", 3);
+  const keep = parts("KEEP");
+  const [old] = server
+    .resolve(issues.board.issues)
+    .get()
+    .filter((i) => i.teamId === "HALF");
+
+  expect(await ana.run(issues.api["team.delete"], { input: { teamId: "HALF" } })).toEqual({
+    kind: "deleted",
+  });
+  const hidden = async () => {
+    const teamId = "HALF";
+
+    expect(await bo.run(issues.api["issue.create"], { input: { teamId, title: "x" } })).toEqual({
+      kind: "gone",
+    });
+    expect(
+      await bo.run(issues.api["team.add"], { input: { teamId, userId: "dee", role: "member" } }),
+    ).toEqual({ kind: "gone" });
+    expect(
+      await ana.run(issues.api["issue.move"], {
+        input: { teamId, id: old?.id ?? "", version: 2, state: "done" },
+      }),
+    ).toEqual({ kind: "gone" });
+    expect(await ana.run(issues.api["team.archive"], { input: { teamId } })).toEqual({
+      kind: "gone",
+    });
+    expect(await ana.run(issues.api["team.delete"], { input: { teamId } })).toEqual({
+      kind: "gone",
+    });
+    // The key is not free yet: `exists`, and nobody joins.
+    expect(await cy.run(issues.api["team.create"], { input: { teamId } })).toEqual({
+      kind: "exists",
+      teamId,
+    });
+    expect(parts(teamId).members).toEqual([]);
+    expect(await cy.run(issues.api["issue.create"], { input: { teamId, title: "x" } })).toEqual({
+      kind: "gone",
+    });
+
+    expect(parts("KEEP")).toEqual(keep);
+  };
+
+  await hidden();
+  await pass(1_000);
+  // Half way: some parts are gone, some are left.
+  expect(parts("HALF").other.length).toBeGreaterThan(0);
+  await hidden();
+  await pass(60_000);
+  expect(parts("HALF")).toEqual({ members: [], other: [] });
+  expect(parts("KEEP")).toEqual(keep);
+}, 30_000);
+
+test("delivered twice: two deletes at once, a retried delete, and a key made again keeps its parts", async () => {
+  const { ana, bo, pass, parts, big } = await sweepWorld();
+  await big("TWICE", 10);
+  await big("KEEP", 2);
+  const keep = parts("KEEP");
+
+  const both = await Promise.all([
+    ana.run(issues.api["team.delete"], { input: { teamId: "TWICE" } }),
+    bo.run(issues.api["team.delete"], { input: { teamId: "TWICE" } }),
+  ]);
+  expect(both.map((a) => a.kind).toSorted()).toEqual(["deleted", "gone"]);
+  expect(await ana.run(issues.api["team.delete"], { input: { teamId: "TWICE" } })).toEqual({
+    kind: "gone",
+  });
+  await pass(60_000);
+  expect(parts("TWICE")).toEqual({ members: [], other: [] });
+
+  // Made again: its new parts stay, however long the server runs.
+  await big("TWICE", 3);
+  const fresh = parts("TWICE");
+  await pass(120_000);
+  expect(parts("TWICE")).toEqual(fresh);
+  // Deleted again: only then do they go.
+  expect(await ana.run(issues.api["team.delete"], { input: { teamId: "TWICE" } })).toEqual({
+    kind: "deleted",
+  });
+  await pass(60_000);
+  expect(parts("TWICE")).toEqual({ members: [], other: [] });
+  expect(parts("KEEP")).toEqual(keep);
+}, 30_000);
+
+test("stopped half way: the server closes while the parts go, and the close ends at once", async () => {
+  const { server, ana, pass, parts, big } = await sweepWorld();
+  await big("STOP", 40);
+
+  await ana.run(issues.api["team.delete"], { input: { teamId: "STOP" } });
+  await pass(1_000);
+  expect(parts("STOP").other.length).toBeGreaterThan(0);
+  // No time passes from here: a close that waits on the clock never ends.
+  const end = await Promise.race([
+    server.close().then(() => "closed"),
+    new Promise((r) => setTimeout(() => r("still open after 3 s"), 3000)),
+  ]);
+  expect(end).toBe("closed");
+}, 30_000);
+
+// S16 (ck9): an assignee is always a `member`. A person made a viewer is taken off each issue of
+// that team. Each is a change of the issue: one new version, one `assigned` event by the caller.
+test("a member made a viewer is taken off the team's issues: one version and one event each", async () => {
+  const teamId = await team();
+  const other = await team();
+  const seen = read(bo, teamId);
+  const made = async (t: string, title: string, userId: string) => {
+    await ana.run(issues.api["issue.create"], { input: { teamId: t, title } });
+    const it = backend
+      .resolve(issues.board.issues)
+      .get()
+      .find((i) => i.teamId === t && i.title === title)!;
+    await ana.run(issues.api["issue.assign"], {
+      input: { teamId: t, id: it.id, version: 1, userId },
+    });
+    return it.id;
+  };
+  const [one, two, hers, elsewhere] = [
+    await made(teamId, "One", "bo"),
+    await made(teamId, "Two", "bo"),
+    await made(teamId, "Hers", "ana"),
+    await made(other, "Elsewhere", "bo"),
+  ];
+  await until(() => seen.get().filter((i) => i.assignee === "bo").length === 2);
+  const issueOf = (id: string) =>
+    backend
+      .resolve(issues.board.issues)
+      .get()
+      .find((i) => i.id === id);
+  const eventsOf = (id: string) =>
+    backend
+      .resolve(issues.board.events)
+      .get()
+      .filter((e) => e.id === id)
+      .map((e) => [e.version, e.by, e.what])
+      .toSorted((x, y) => Number(x[0]) - Number(y[0]));
+
+  expect(
+    await ana.run(issues.api["team.add"], { input: { teamId, userId: "bo", role: "viewer" } }),
+  ).toEqual({ kind: "added" });
+  for (const id of [one, two]) {
+    expect(issueOf(id)).toMatchObject({ version: 3 });
+    expect(issueOf(id)?.assignee).toBeUndefined();
+    expect(eventsOf(id)).toEqual([
+      [1, "ana", "created"],
+      [2, "ana", "assigned"],
+      [3, "ana", "assigned"],
+    ]);
+  }
+  // Another person's issue, and bo's issue in another team, do not change.
+  expect(issueOf(hers)).toMatchObject({ assignee: "ana", version: 2 });
+  expect(issueOf(elsewhere)).toMatchObject({ assignee: "bo", version: 2 });
+  expect(eventsOf(elsewhere)).toHaveLength(2);
+  expect(
+    backend
+      .resolve(issues.board.members)
+      .get()
+      .find((m) => m.teamId === teamId && m.userId === "bo")?.role,
+  ).toBe("viewer");
+  // The other tab sees it, and the issue stays unassignable to the viewer.
+  await until(() => seen.get().every((i) => i.assignee !== "bo"));
+  expect(
+    await ana.run(issues.api["issue.assign"], {
+      input: { teamId, id: one, version: 3, userId: "bo" },
+    }),
+  ).toEqual({ kind: "notAssignable" });
+});
+
+// S16: a role change that leaves the person a member, a viewer added new, or a viewer made a
+// member changes no issue and leaves no event.
+test("a role that stays member, or a viewer added or promoted, changes no issue", async () => {
+  const teamId = await team();
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Kept" } });
+  const [it] = backend
+    .resolve(issues.board.issues)
+    .get()
+    .filter((i) => i.teamId === teamId);
+  await ana.run(issues.api["issue.assign"], {
+    input: { teamId, id: it!.id, version: 1, userId: "bo" },
+  });
+  const snap = () => ({
+    issues: backend
+      .resolve(issues.board.issues)
+      .get()
+      .filter((i) => i.teamId === teamId),
+    events: backend
+      .resolve(issues.board.events)
+      .get()
+      .filter((e) => e.teamId === teamId).length,
+  });
+  const before = snap();
+  const add = (userId: string, role: "member" | "viewer") =>
+    ana.run(issues.api["team.add"], { input: { teamId, userId, role } });
+
+  expect(await add("bo", "member")).toEqual({ kind: "added" });
+  expect(await add("cy", "viewer")).toEqual({ kind: "added" });
+  expect(await add("cy", "viewer")).toEqual({ kind: "added" });
+  expect(await add("cy", "member")).toEqual({ kind: "added" });
+  expect(snap()).toEqual(before);
+});
+
+// S16 and R4: a role change that is refused takes nobody off: gone, forbidden, archived.
+test("a refused role change takes nobody off an issue", async () => {
+  const teamId = await team();
+  const dee = await open("dee");
+  await ana.run(issues.api["team.add"], { input: { teamId, userId: "dee", role: "viewer" } });
+  await ana.run(issues.api["issue.create"], { input: { teamId, title: "Held" } });
+  const [it] = backend
+    .resolve(issues.board.issues)
+    .get()
+    .filter((i) => i.teamId === teamId);
+  await ana.run(issues.api["issue.assign"], {
+    input: { teamId, id: it!.id, version: 1, userId: "bo" },
+  });
+  const snap = () => [
+    backend
+      .resolve(issues.board.issues)
+      .get()
+      .filter((i) => i.teamId === teamId),
+    backend
+      .resolve(issues.board.events)
+      .get()
+      .filter((e) => e.teamId === teamId).length,
+  ];
+  const before = snap();
+  const demote = { input: { teamId, userId: "bo", role: "viewer" as const } };
+
+  expect(await cy.run(issues.api["team.add"], demote)).toEqual({ kind: "gone" });
+  expect(await dee.run(issues.api["team.add"], demote)).toEqual({ kind: "forbidden" });
+  await ana.run(issues.api["team.archive"], { input: { teamId } });
+  expect(await ana.run(issues.api["team.add"], demote)).toEqual({ kind: "archived" });
+  expect(snap()).toEqual(before);
 });
 
 // S15: a delete answers `gone` outside the team and `forbidden` to a viewer, and writes nothing.
@@ -781,3 +1106,200 @@ test("one move: one trace from tab A to the server's send; tab B's ask links to 
     ]),
   );
 });
+
+// S17 (ck10b): a person added to a team gets one welcome mail. The call never waits for mail.
+// The server is the board, the api, and the app's own `serverParts`; its mailer is a fake on the
+// `mailer` tag, and its time is a test clock. The tests name no op: they add people, move the
+// clock, and count what the fake got.
+
+/** A fake mailer. `fail`: the next sends throw. `hang`: each send never answers. `slow`: each send
+ * answers after that many ms on the server's clock. `sent` holds each mail whose send answered. */
+const fakeMail = (clock: ReturnType<typeof makeTestClock>) => {
+  const sent: { to: string; subject: string; body: string }[] = [];
+  const state = { tries: 0, fail: 0, hang: false, slow: 0 };
+  const mail: Mailer = {
+    send: async (to, subject, body) => {
+      state.tries += 1;
+      if (state.hang) return new Promise<void>(() => undefined);
+      if (state.fail > 0) {
+        state.fail -= 1;
+        throw new Error("mail is down");
+      }
+      if (state.slow) await clock.sleep(state.slow);
+      sent.push({ to, subject, body });
+    },
+  };
+  return { mail, sent, state };
+};
+
+/** A server with the app's server parts, the fake mailer and a test clock, over `memory`, and
+ * ana's tab. Ana made `MAIL`. `pass(ms)` moves the clock in 100 ms steps, letting work run. */
+const mailWorld = async () => {
+  const clock = makeTestClock({ now: 1_000_000 });
+  const fake = fakeMail(clock);
+
+  const server = await createScope({
+    clock,
+    tags: [mailer(fake.mail)],
+    capsules: [
+      exits({ file: process.env.TINKER_EXITS }),
+      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
+      memory.server({ services: [issues.board, issues.api] }),
+    ],
+  }).ready;
+  const tabOf = async (name: string) => {
+    const scope = await createScope({
+      capsules: [
+        exits({ file: process.env.TINKER_EXITS }),
+        memory.client({ peer: server, meta: whoMeta }),
+        issues.board({ read: memory.client }),
+        issues.api({ remote: memory.client }),
+      ],
+    }).ready;
+    scope.run(signIn, { input: { name } });
+    return scope;
+  };
+
+  const ana = await tabOf("ana");
+  onTestFinished(async () => {
+    fake.state.hang = false;
+    await ana.close();
+    await server.close();
+  });
+  await ana.run(issues.api["team.create"], { input: { teamId: "MAIL" } });
+
+  const add = (userId: string, role: "member" | "viewer" = "member") =>
+    ana.run(issues.api["team.add"], { input: { teamId: "MAIL", userId, role } });
+  const pass = async (ms: number) => {
+    for (let t = 0; t < ms; t += 100) {
+      clock.advance(100);
+      await new Promise((r) => setTimeout(r, 1));
+    }
+  };
+  return { fake, server, ana, add, tabOf, pass };
+};
+
+test("a person added gets one welcome mail; a role change or a refused add sends none", async () => {
+  const { fake, add, ana, tabOf, pass } = await mailWorld();
+
+  expect(await add("bo")).toEqual({ kind: "added" });
+  await pass(2_000);
+  expect(fake.sent.map((m) => [m.to, m.subject])).toEqual([["bo", "Welcome to MAIL"]]);
+  // A role change of a person in the team is not a welcome.
+  expect(await add("bo", "viewer")).toEqual({ kind: "added" });
+  expect(await add("bo", "member")).toEqual({ kind: "added" });
+  expect(await add("cy", "viewer")).toEqual({ kind: "added" });
+  // Refused adds send nothing: gone, forbidden, archived.
+  const cy = await tabOf("cy");
+  const dee = await tabOf("dee");
+  const tryAdd = { input: { teamId: "MAIL", userId: "eve", role: "member" as const } };
+  expect(await dee.run(issues.api["team.add"], tryAdd)).toEqual({ kind: "gone" });
+  expect(await cy.run(issues.api["team.add"], tryAdd)).toEqual({ kind: "forbidden" });
+  await ana.run(issues.api["team.archive"], { input: { teamId: "MAIL" } });
+  expect(await ana.run(issues.api["team.add"], tryAdd)).toEqual({ kind: "archived" });
+  await pass(5_000);
+  expect(fake.sent.map((m) => [m.to, m.subject])).toEqual([
+    ["bo", "Welcome to MAIL"],
+    ["cy", "Welcome to MAIL"],
+  ]);
+  expect(fake.state.tries).toBe(2);
+  await cy.close();
+  await dee.close();
+});
+
+test("mail is down once: the add answers, and the mail arrives once mail is back", async () => {
+  const { fake, add, pass } = await mailWorld();
+  fake.state.fail = 1;
+
+  expect(await add("bo")).toEqual({ kind: "added" });
+  await pass(60_000);
+  expect(fake.sent.map((m) => m.to)).toEqual(["bo"]);
+  expect(fake.state.tries).toBe(2);
+  await pass(60_000);
+  expect(fake.sent.map((m) => m.to)).toEqual(["bo"]);
+});
+
+test("mail never answers: the add answers at once; the mail is tried again after 10 s, once", async () => {
+  const { fake, add, pass } = await mailWorld();
+  fake.state.hang = true;
+
+  // The call answers with no time passing: it does not wait for the mail.
+  expect(await add("bo")).toEqual({ kind: "added" });
+  await pass(1_000);
+  expect(fake.state.tries).toBe(1);
+  fake.state.hang = false;
+  // The first send may still answer for 10 s: nobody sends the mail again before that.
+  await pass(8_000);
+  expect(fake.state.tries).toBe(1);
+  await pass(60_000);
+  expect(fake.sent.map((m) => m.to)).toEqual(["bo"]);
+  expect(fake.state.tries).toBe(2);
+});
+
+test("slow mail: sends that take 3 s are not sent again; each person gets one mail", async () => {
+  const { fake, add, pass } = await mailWorld();
+  fake.state.slow = 3_000;
+
+  await add("bo");
+  await add("cy");
+  await add("dee");
+  await pass(30_000);
+  expect(fake.sent.map((m) => m.to).toSorted()).toEqual(["bo", "cy", "dee"]);
+  expect(fake.state.tries).toBe(3);
+});
+
+test("the server cmd prints the welcome mail; the add answers first", async () => {
+  type Server = typeof import("../cmds/server");
+  const cmd: Server = await import(new URL("../cmds/server.ts", import.meta.url).href);
+
+  const sink = Bun.serve({ port: 0, fetch: () => new Response(null, { status: 204 }) });
+  const lines: string[] = [];
+  const stop = new AbortController();
+  const root = await cmd.default({
+    env: {
+      PORT: "0",
+      OTEL_SERVICE_NAME: "mail-test",
+      VICTORIA_TRACES_URL: `${sink.url}traces`,
+      VICTORIA_LOGS_URL: `${sink.url}logs`,
+    },
+    args: [],
+    cwd: process.cwd(),
+    signal: stop.signal,
+    stdout: {
+      write: (x: string) => {
+        lines.push(String(x));
+        return true;
+      },
+    },
+    stderr: { write: () => true },
+    exit: (code, reason) => stop.abort(reason ?? code),
+  });
+  onTestFinished(async () => {
+    stop.abort();
+    await sink.stop(true);
+  });
+  if (!("resolve" in root)) throw new Error("the server cmd gave no scope");
+
+  const at = root.resolve(serve.url).get();
+  const ws = await createScope({
+    capsules: [tab.client({ url: `${at}rpc`, meta: whoMeta }), issues.api({ remote: tab.client })],
+  }).ready;
+  ws.run(signIn, { input: { name: "ana" } });
+  await ws.run(issues.api["team.create"], { input: { teamId: "CMD" } });
+  expect(
+    await ws.run(issues.api["team.add"], {
+      input: { teamId: "CMD", userId: "bo", role: "member" },
+    }),
+  ).toEqual({ kind: "added" });
+
+  const end = Date.now() + 8000;
+  while (!lines.some((l) => l.includes("mail to bo: Welcome to CMD")) && Date.now() < end) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  expect(lines.filter((l) => l.includes("Welcome to CMD"))).toEqual([
+    "mail to bo: Welcome to CMD\n",
+  ]);
+  await ws.close();
+}, 20_000);

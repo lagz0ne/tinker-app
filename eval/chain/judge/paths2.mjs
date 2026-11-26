@@ -857,8 +857,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === "--graph") graphFile = argv[++i];
   else files.push(argv[i]);
 }
-// v2: steps 9 and 10 are judged as step 8 (no new answer kind, no new team part).
-if (step === 9 || step === 10) step = 8;
+// v2: steps 9, 10 and 11 are judged as step 8 (no new answer kind, no new team part).
+if (step === 9 || step === 10 || step === 11) step = 8;
 if (![1, 2, 3, 4, 5, 6, 7, 8].includes(step) || !files.length) {
   console.error("usage: node paths2.mjs --step 1-8 [--graph tinker.graph] <file.ts>...");
   process.exit(2);

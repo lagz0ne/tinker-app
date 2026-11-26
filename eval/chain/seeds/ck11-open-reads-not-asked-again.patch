@@ -1,0 +1,11 @@
+--- a/src/issues/ops.server.ts
++++ b/src/issues/ops.server.ts
+@@ -285,8 +285,6 @@
+     const part = { teamId: input.teamId };
+     marks.set(part);
+     for (const { userId } of team.where(part).get()) team.delete({ ...part, userId });
+-    // An open read of a part does not ask again when its reader leaves the team: tell each one.
+-    await dirty.run({ input: { issues: part, archived: part, labels: part, events: part } });
+     return { kind: "deleted" as const };
+   },
+ });
