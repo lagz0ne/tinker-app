@@ -442,3 +442,61 @@ From clean copies of each commit:
 - Seeds: ck9 caught (45/47), ck10 caught (50/52).
 - ck9 hidden on golden ck8 and on each of the 10
   run-20 trees: 45/47, the same 2 tests red.
+
+## ck10b: the welcome mail, behaviour only (2026-11-26)
+
+Lead, after the v2 baseline (28 of 28 pass): from
+now on a v2 TASK states behaviour only. It never
+gives the design: no who-runs-what, no op names, no
+cmd that does the work.
+
+ck10b replaces ck10 in the chain: ck9, then ck10b,
+then ck11. ck10 stays as the design-given variant.
+
+The TASK: `team.add` of a new person gives one
+welcome mail. The call answers at once, also when
+mail is down or never answers. In the end each add
+gives exactly one mail, also after failures and
+with slow sends. Limits it states: the mail
+arrives within 2 s with mail up; a send not
+answered in 10 s has failed; once mail is back,
+the mail arrives within 1 minute. The server cmd
+writes each mail to stdout (`mail to bo: Welcome
+to ENG`).
+
+Given: `src/issues/mail.ts` only (the `mailer` tag,
+no default). `cmds/server.ts` is the writer's now.
+In `tinker.json` the writer may add `graph.rules`,
+and a `plain` entry for a file of its own.
+
+**The one seam.** The hidden tests name no op. They
+need the server's own parts, so the TASK names one
+export: `serverParts` in `src/issues/ops.server.ts`,
+the capsules the board needs on the server besides
+`issues.board` and `issues.api` (may be empty). The
+tests install it and bind a fake mailer and a test
+clock. They add people, move the clock, and count
+what the fake got. The cmd test runs the real
+`cmds/server.ts` and reads its stdout.
+
+Golden: `team.add` posts to the outbox cell and
+answers. A capsule `mailRelay` (in `serverParts`)
+starts a root worker in its start hook, with the
+root's closing signal: each second it drains the
+outbox. The cmd binds a stand-in mailer and installs
+`serverParts`; `tinker.json` gets the `plain` entry
+for that mailer.
+
+Hidden: ck9's 47 + 5 server + 1 page = 53.
+
+Scorer (`score-step.sh` step `10b`): given files
+are looked up in `ck10b`, then 9 to 1 (not ck10).
+The manifest is ck9's without `cmds/server.ts`, with
+`mail.ts`. `tinker.json` may differ from the start
+in `graph` and in `plain` entries for `src/` files
+or `cmds/server.ts`. The judge runs as step 10.
+
+Seed `ck10b-drain-in-the-call.patch`: `team.add`
+also starts a drain inside the call (gap 1). The
+call then holds its answer while mail hangs.
+Caught: 30 of 53 fail.

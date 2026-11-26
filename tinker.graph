@@ -9,6 +9,7 @@ issues.canChange exits{forbidden,gone,ok} faults{} reads{} writes{} calls{issues
 issues.canWrite exits{archived,forbidden,gone,ok} faults{} reads{issues.archived.of} writes{} calls{issues.canChange} uses{}
 issues.drainMail exits{value} faults{} reads{issues.outbox.get,issues.outbox.of} writes{issues.outbox.delete,issues.outbox.set} calls{} uses{}
 issues.inTeam exits{value} faults{} reads{issues.members.of} writes{} calls{} uses{}
+issues.mailRelay exits{value} faults{} reads{} writes{} calls{issues.drainMail} uses{}
 issues.membersOnly exits{refused,value} faults{} reads{} writes{} calls{issues.inTeam} uses{}
 issues.post exits{value} faults{} reads{} writes{issues.outbox.set} calls{} uses{}
 issues.record exits{value} faults{} reads{} writes{issues.events.set,issues.list.set} calls{} uses{}

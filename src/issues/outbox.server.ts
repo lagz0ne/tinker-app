@@ -1,12 +1,13 @@
-import { data, operation } from "@tinkered/core";
+import { capsule, data, operation } from "@tinkered/core";
 import { z } from "zod";
 
 import { mailer } from "./mail";
 
-// The outbox: a call puts its mail here and answers. A drain sends it later: the server's cmd runs
-// `drainMail` each second, at the root. Built from Core parts: a keyed cell, the scope clock, and
-// one drain op. A mail leaves the outbox only when its send answered, so mail that is down or slow
-// loses nothing. A call never runs the drain: Core ends a call only when the runs it started end.
+// The outbox: a call puts its mail here and answers. The relay sends it later, at the root: the
+// capsule `mailRelay` starts it with the server. Built from Core parts: a keyed cell, the scope
+// clock, one drain op, and a capsule start hook. A mail leaves the outbox only when its send
+// answered, so mail that is down or slow loses nothing. A call never runs the drain: Core ends a
+// call only when the runs it started end.
 
 /** One mail to send. `until`: a drain that took the mail holds it until then (0: nobody holds it). */
 const letter = z.object({
@@ -26,7 +27,7 @@ const outbox = data({
 });
 
 /** How long a drain waits for one send, on the scope clock. Then the mail waits for a later drain. */
-const patience = 5_000;
+const patience = 10_000;
 
 /** Put one mail in the outbox. It sends nothing itself. */
 export const post = operation({
@@ -40,7 +41,7 @@ export const post = operation({
  * a second drain at the same time skips it: no mail goes twice. A send that throws, or that does
  * not answer within `patience`, puts the mail back for the next drain. A drain changes a mail only
  * while it still holds it. */
-export const drainMail = operation({
+const drainMail = operation({
   label: "issues.drainMail",
   depends: { box: outbox.atScope.controller, mail: mailer.required },
   run: async ({ box, mail }, { clock, signal }) => {
@@ -73,5 +74,32 @@ export const drainMail = operation({
       } else box.set({ ...held, until: 0 });
     }
     return { sent, waiting: box.get().length };
+  },
+});
+
+/** How often the relay looks at the outbox, on the scope clock. */
+const tick = 1_000;
+
+/** Drain the outbox each `tick` until the server closes. Its signal is the root's closing signal,
+ * so a graceful close ends it too. */
+const relay = operation({
+  label: "issues.mailRelay",
+  depends: { drain: drainMail },
+  run: async ({ drain }, { clock, signal }) => {
+    while (!signal.aborted) {
+      await drain.run();
+      await clock.sleep(tick, signal).catch(() => undefined);
+    }
+  },
+});
+
+/** The server part that sends the mail: its start runs the relay as a root worker and returns. */
+export const mailRelay = capsule({
+  label: "issues.mailRelay",
+  hooks: {
+    start: ({ settle, closing }) => {
+      const meta = { role: "worker" as const, explain: "Sends the waiting mail each second" };
+      void settle(relay, { signal: closing }, meta);
+    },
   },
 });

@@ -11,8 +11,7 @@ import { greet } from "@/greet";
 import { greetOps } from "@/greet/greet.server";
 import { issues } from "@/issues";
 import { mailer } from "@/issues/mail";
-import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
-import { drainMail } from "@/issues/outbox.server";
+import { issueOps, membersOnly, serverParts, signedIn } from "@/issues/ops.server";
 import { todo } from "@/todo";
 import { todoOps } from "@/todo/ops.server";
 
@@ -85,6 +84,7 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       // The issue board: each part goes to its team's members; every call needs a viewer.
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      ...serverParts,
       socket,
       table,
     ],
@@ -92,9 +92,5 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
 
   const live = await app.ready;
   live.onClose(observeServerPanics(exit.bind(null, 1), app.closed, stderr));
-  // The issue board's outbox relay: the root sends the waiting mail each second, so no call waits
-  // for mail. A run started in a call would hold that call's answer until it ends.
-  const relay = setInterval(() => void app.settle(drainMail), 1_000);
-  live.onClose(() => clearInterval(relay));
   return app;
 });

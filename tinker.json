@@ -21,7 +21,7 @@
         "plain": "A check inside the native observer callbacks: a span here would feed the telemetry it sends."
       },
       "cmds/server.ts": {
-        "send": "The stand-in mailer at the seam (ADR 0113): Core hands it to the drain through the `mailer` tag; it is the outside effect, not a step."
+        "send": "The stand-in mailer at the seam (ADR 0113): the relay calls it through the `mailer` tag; it is the outside effect, not a step."
       }
     }
   },

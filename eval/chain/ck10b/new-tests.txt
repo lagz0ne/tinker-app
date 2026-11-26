@@ -1,0 +1,6 @@
+a person added gets one welcome mail; a role change or a refused add sends none
+mail is down once: the add answers, and the mail arrives once mail is back
+mail never answers: the add answers at once; the mail is tried again after 10 s, once
+slow mail: sends that take 3 s are not sent again; each person gets one mail
+the server cmd prints the welcome mail; the add answers first
+the member form adds people while mail hangs; one welcome mail each arrives later

@@ -1,0 +1,41 @@
+--- a/src/issues/outbox.server.ts
++++ b/src/issues/outbox.server.ts
+@@ -41,7 +41,7 @@
+  * a second drain at the same time skips it: no mail goes twice. A send that throws, or that does
+  * not answer within `patience`, puts the mail back for the next drain. A drain changes a mail only
+  * while it still holds it. */
+-const drainMail = operation({
++export const drainMail = operation({
+   label: "issues.drainMail",
+   depends: { box: outbox.atScope.controller, mail: mailer.required },
+   run: async ({ box, mail }, { clock, signal }) => {
+--- a/src/issues/ops.server.ts
++++ b/src/issues/ops.server.ts
+@@ -12,7 +12,7 @@
+   labels,
+   members,
+ } from "./contract";
+-import { mailRelay, post } from "./outbox.server";
++import { drainMail, mailRelay, post } from "./outbox.server";
+ 
+ // The server's work for `issueApi`. Each op writes members of the keyed cells; `issueBoard` tells
+ // every member's tab that reads the part, and the tab asks for that part alone.
+@@ -124,8 +124,9 @@
+     can: canWrite,
+     save: record,
+     mail: post,
++    drain: drainMail,
+   },
+-  run: ({ team, list, can, save, mail }, { input }) => {
++  run: ({ team, list, can, save, mail, drain }, { input }) => {
+     const now = can.run({ input });
+     if (now.kind !== "ok") return now;
+ 
+@@ -135,6 +136,7 @@
+     if (isNew) {
+       const subject = `Welcome to ${teamId}`;
+       mail.run({ input: { to: userId, subject, body: `You are a ${role} of ${teamId}.` } });
++      void drain.run();
+     }
+     if (input.role === "member") return { kind: "added" as const };
+ 
