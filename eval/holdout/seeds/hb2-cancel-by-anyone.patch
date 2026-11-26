@@ -1,0 +1,12 @@
+diff --git a/src/rooms/ops.server.ts b/src/rooms/ops.server.ts
+index 8cf193f..fcf3249 100644
+--- a/src/rooms/ops.server.ts
++++ b/src/rooms/ops.server.ts
+@@ -107,7 +107,6 @@ const cancelBooking = operation({
+   run: ({ book, ok, me }, { input }) => {
+     const [now] = ok.run({ input }) ? book.where(input).get() : [];
+     if (!now) return { kind: "gone" as const };
+-    if (now.by !== me) return { kind: "notYours" as const };
+ 
+     const { officeId, roomId, day, by, id } = now;
+     book.delete({ officeId, roomId, day, by, id });

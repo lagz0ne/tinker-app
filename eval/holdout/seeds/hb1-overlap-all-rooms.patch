@@ -1,0 +1,13 @@
+diff --git a/src/rooms/ops.server.ts b/src/rooms/ops.server.ts
+index cd6189c..b482ff3 100644
+--- a/src/rooms/ops.server.ts
++++ b/src/rooms/ops.server.ts
+@@ -89,7 +89,7 @@ const makeBooking = operation({
+     const { officeId, roomId, day, start, end } = input;
+     const room = ok.run({ input }) ? list.of({ officeId, id: roomId }).get() : undefined;
+     if (!room) return { kind: "gone" as const };
+-    const that = book.where({ officeId, roomId, day }).get();
++    const that = book.where({ officeId, day }).get();
+     if (that.some((b) => b.start < end && start < b.end)) return { kind: "taken" as const };
+ 
+     const id = random.uuid();
