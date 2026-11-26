@@ -1,0 +1,11 @@
+--- a/src/issues/ops.server.ts
++++ b/src/issues/ops.server.ts
+@@ -123,7 +123,7 @@
+     team.set(input);
+     if (input.role === "member") return { kind: "added" as const };
+ 
+-    const theirs = list.where({ teamId: input.teamId }).get();
++    const theirs = list.get();
+     for (const one of theirs.filter((i) => i.assignee === input.userId)) {
+       const next = { ...one, assignee: undefined, version: one.version + 1 };
+       save.run({ input: { issue: next, what: "assigned" } });

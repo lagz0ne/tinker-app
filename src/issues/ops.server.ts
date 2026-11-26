@@ -110,15 +110,24 @@ const createTeam = operation({
   },
 });
 
+/** Add a person, or set the role of one who is in. An assignee is always a `member`: a person
+ * made a viewer is taken off each issue of the team, and each such issue is a change of it. */
 const addMember = operation({
   label: "team.add.do",
   input: issueApi["team.add"].input,
-  depends: { team: members.controller, can: canWrite },
-  run: ({ team, can }, { input }) => {
+  depends: { team: members.controller, list: issues.controller, can: canWrite, save: record },
+  run: ({ team, list, can, save }, { input }) => {
     const now = can.run({ input });
     if (now.kind !== "ok") return now;
 
     team.set(input);
+    if (input.role === "member") return { kind: "added" as const };
+
+    const theirs = list.where({ teamId: input.teamId }).get();
+    for (const one of theirs.filter((i) => i.assignee === input.userId)) {
+      const next = { ...one, assignee: undefined, version: one.version + 1 };
+      save.run({ input: { issue: next, what: "assigned" } });
+    }
     return { kind: "added" as const };
   },
 });

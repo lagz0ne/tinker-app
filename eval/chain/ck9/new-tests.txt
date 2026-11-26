@@ -1,0 +1,4 @@
+a member made a viewer is taken off the team's issues: one version and one event each
+a role that stays member, or a viewer added or promoted, changes no issue
+a refused role change takes nobody off an issue
+a person made a viewer drops those issues from my issues at once
