@@ -247,3 +247,180 @@ so each golden graph is written again.
 
 No op line changed apart from the two new fields.
 Golden ck1 to ck8 are strict on 0.34.10.
+
+## Chain v2: ck9 and ck10 (2026-11-26)
+
+Two steps on top of golden ck8, in the same format.
+Duke's goal: find where Tinker breaks.
+
+- ck9: a bug report on the writer's own code.
+  Golden bacb51b.
+- ck10: a welcome mail through an outbox. Tinker
+  has no queue or outbox part; the step measures if
+  a writer can build one from Core parts.
+
+### ck9: the bug report
+
+The TASK is a user's report in plain words. It
+names no file. The bug: a member made a viewer
+stays the assignee of their issues. That breaks
+S12 (an assignee is always a `member`).
+
+Why this bug: golden ck8 and all 10 run-20 trees
+have it. Each one fails the same 2 of 47 ck9 hidden
+tests, and passes the other 45. So the step is
+fair on any tree. Nothing is planted.
+
+Golden fix: `team.add` sets the role; a new viewer
+is taken off each issue of that team through
+`issues.record` (one version, one `assigned`
+event by the caller).
+
+Hidden: ck8's 43 tests + 4 root-cause tests (3
+server, 1 page) = 47.
+
+**Red-first rule.** The writer writes
+`tests/bug.test.ts` first. `ck9/red-first.sh
+<before-tree> <after-tree> <out>` checks it:
+
+- red: on a copy of the tree as the step started,
+  the file loads and at least one test fails;
+- green: on the tree at the end, every test of the
+  file passes.
+
+A file that does not load on the old tree is not
+red. Strict at ck9 = strict as before, and
+`red-first.sh` OK.
+
+**Judge.** `judge/` holds the run-20 judge with
+steps 9 and 10. Both judge as step 8. One change:
+at ck9+, F4 lists `team.add.do` as a writer of
+`issues.list` and `issues.events`.
+
+### Adversarial probes (ck9 search)
+
+`ck9/adversarial/adv.test.ts`: 20 server probes
+(error paths, team isolation, validation, state,
+side effects). `run.sh <tree> <out.json>` runs it in
+a tree with `node_modules`. A red probe is a
+finding, not a score. Run on golden ck8 and the 10
+run-20 trees (ck8 state):
+
+| probe | what                                | golden         | ds 1-5        | muse 1-5        |
+| ----- | ----------------------------------- | -------------- | ------------- | --------------- |
+| A04   | a part with no `teamId` in its key  | ok             | ok            | **leak in 1-4** |
+| A06   | a label put on twice                | +1 version     | same          | same            |
+| A07   | a label taken off that is not on    | +1 version     | same          | same            |
+| A08   | a move to the state it is in        | +1 version     | same          | same            |
+| A09   | a member made a viewer              | stays assignee | same          | same            |
+| A10   | the last member makes self a viewer | no member left | same, ds-4 ok | same            |
+| A20   | `team.add` changes a member's role  | yes            | ds-4: never   | yes             |
+
+The other 14 probes pass on all 11 trees:
+parallel creates, a race of two changes, another
+team's issue, parts by team and issue, a delete
+next to a key that starts the same, check order,
+stale and `notAssignable` write nothing, events
+keep `by`, a big delete, a team made again.
+
+- A04 (writer fault, kit gap): Muse 1-4's read hook
+  lets a part through when its key has no `teamId`
+  and no `userId`. An outsider reads
+  `labels.where({ name: "bug" })` and gets every
+  team's labels, with issue ids. Then
+  `issues.where({ id })` gives the whole issue. No
+  hidden test reads such a part, so all four were
+  strict. A Tinker gap too: the read hook gets any
+  part, and no skill says "refuse what you do not
+  know".
+- A06-A08 (spec gap): the TASKs never say if a
+  change that changes nothing is a change. All 11
+  trees count it.
+- A09 (shared fault): ck9's bug.
+- A10, A20 (spec gap): no TASK says what `team.add`
+  does to a person already in the team. 9 trees set
+  the role; n-ds-4 keeps the first role.
+
+### ck10: the outbox
+
+The TASK: `team.add` of a new person puts one
+welcome mail out. The call answers at once, also
+when mail is down or hangs. `drainMail` sends it
+later; each add gives one mail in the end.
+
+Given (copy over the tree; keep the tree's
+`graph` key in `tinker.json`):
+
+- `src/issues/mail.ts`: the tag `mailer`, with
+  `send(to, subject, body)` (ADR 0113). No default.
+- `cmds/server.ts`: binds a stand-in mailer (it
+  writes each mail to stdout), and runs `drainMail`
+  each second at the root.
+- `tinker.json`: one `plain` exception, for that
+  stand-in mailer.
+
+Make the ck10 manifest from ck9's: put in the hash
+of the given `cmds/server.ts`. `mail.ts` is new: the
+scorer checks it against the kit. The scorer takes
+`ck10/given/tinker.json` as the base of the
+`graph`-only rule.
+
+Golden (`src/issues/outbox.server.ts`, about 70
+lines): a keyed cell `issues.outbox` written at the
+root (`atScope`), an op `issues.post`, and
+`drainMail`. A drain holds each mail it takes
+(`until` on the clock), so a second drain skips it.
+A send that throws, or that does not answer in 5 s
+on the scope clock, puts the mail back. Core is not
+changed.
+
+Hidden: ck9's 47 + 4 server + 1 page = 52. The
+fakes throw once, never answer (the test clock
+ends the wait), and two drains run at once.
+
+Why the cmd runs the drain: when a call ends, Core
+aborts the `ctx.signal` of each run the call
+started, and waits for them to end before it
+answers. So a drain started inside `team.add`
+either gives up at once (it listens to the
+signal), or holds the answer until the send ends
+(forever when mail hangs). No call can start work
+that outlives it. The root must own the drain.
+
+### Seeds
+
+`seeds/prove.sh <golden-tree> <step> <seed.patch>`
+copies the tree, applies the seed, runs the step's
+hidden tests.
+
+- `ck9-unassign-every-team.patch`: takes the viewer
+  off their issues in every team. Caught: 2 of 47.
+- `ck10-drain-takes-held-mail.patch`: a drain takes
+  mail that another drain holds. Caught: 2 of 52.
+
+### Tinker gaps seen while building v2
+
+Each is a fact for the lead, not a fix. Core is not
+changed.
+
+1. No owner for work that outlives a call (the
+   ck10 probe). Repro on golden ck10: in
+   `team.add.do`, depend on `drainMail` and add
+   `void drain.run();` after the post. Bind a mailer
+   whose `send` never answers, on a test clock. The
+   `team.add` call never answers. With
+   `clock.sleep(ms, signal)` in the drain instead,
+   the call answers, but the drain gives up at once:
+   its signal aborts when the call ends.
+2. A tag that holds an adapter fails
+   `tinker/plain`. ADR 0113 says outside effects
+   come in by tag. But a tag value with a method,
+   as a default (`tag({ default: { send: async ()
+=> undefined } })`) or bound in a cmd
+   (`mailer({ send: async () => ... })`), is "a
+   plain function". ck10 needs a `tinker.json`
+   exception for the cmd's stand-in mailer.
+3. A read hook gets any part, also one with no team
+   in its key (`labels.where({ name })`). No skill
+   says to refuse what the hook does not know. 4 of
+   5 Muse trees let it through (A04).

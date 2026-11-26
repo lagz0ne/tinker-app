@@ -1,0 +1,29 @@
+{
+  "plain": {
+    "entries": {
+      "tinker/base/main.ts": {
+        "defineMain": "Type only: it gives a command's main its input type and runs nothing."
+      },
+      "tinker/base/main-host.ts": {
+        "createMainHost": "The host for commands with no port: it runs before any scope exists.",
+        "runMain": "The process form of that host: it owns OS signals and the exit code."
+      },
+      "tinker/base/panics.server.ts": {
+        "observeServerPanics": "The process panic hook: it must report even when the root's own close fails."
+      },
+      "tinker/base/telemetry-worker.ts": {
+        "telemetryWorkerInput": "The worker thread's inputs: read from workerData before its root exists.",
+        "serveTelemetryWorker": "The worker's native loop beside its root. A span here would feed the telemetry it drains.",
+        "ringLines": "A step of serveTelemetryWorker.",
+        "takeLines": "A step of serveTelemetryWorker."
+      },
+      "tinker/components/telemetry/thread.server.ts": {
+        "plain": "A check inside the native observer callbacks: a span here would feed the telemetry it sends."
+      },
+      "cmds/server.ts": {
+        "send": "The stand-in mailer at the seam (ADR 0113): Core hands it to the drain through the `mailer` tag; it is the outside effect, not a step."
+      }
+    }
+  },
+  "tests": "bun run test"
+}

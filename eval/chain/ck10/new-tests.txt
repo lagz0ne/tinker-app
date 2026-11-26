@@ -1,0 +1,5 @@
+a person added gets one welcome mail; a role change or a refused add sends none
+mail is down once: the add answers, and a later drain sends the mail once
+mail never answers: the add answers; after the limit a later drain sends it once
+two drains at once send each mail once
+the member form adds a person while mail hangs; one welcome mail goes later

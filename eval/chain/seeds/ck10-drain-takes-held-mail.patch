@@ -1,0 +1,20 @@
+--- a/src/issues/outbox.server.ts
++++ b/src/issues/outbox.server.ts
+@@ -46,7 +46,7 @@
+   run: async ({ box, mail }, { clock, signal }) => {
+     const now = clock.currentTimeMillis();
+     const hold = now + 2 * patience;
+-    const free = box.get().filter((l) => l.until <= now);
++    const free = box.get();
+     for (const l of free) box.set({ ...l, until: hold });
+ 
+     let sent = 0;
+@@ -65,7 +65,7 @@
+       stop.abort();
+ 
+       const held = box.of({ id: l.id }).get();
+-      if (held?.until !== hold) continue;
++      if (!held) continue;
+ 
+       if (ok) {
+         box.delete({ id: l.id });

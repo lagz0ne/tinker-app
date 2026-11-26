@@ -12,6 +12,7 @@ import {
   labels,
   members,
 } from "./contract";
+import { post } from "./outbox.server";
 
 // The server's work for `issueApi`. Each op writes members of the keyed cells; `issueBoard` tells
 // every member's tab that reads the part, and the tab asks for that part alone.
@@ -110,17 +111,31 @@ const createTeam = operation({
   },
 });
 
-/** Add a person, or set the role of one who is in. An assignee is always a `member`: a person
- * made a viewer is taken off each issue of the team, and each such issue is a change of it. */
+/** Add a person, or set the role of one who is in. A person new to the team gets one welcome
+ * mail: the call puts it in the outbox and answers; a drain sends it. An assignee is always a
+ * `member`: a person made a viewer is taken off each issue of the team, and each such issue is a
+ * change of it. */
 const addMember = operation({
   label: "team.add.do",
   input: issueApi["team.add"].input,
-  depends: { team: members.controller, list: issues.controller, can: canWrite, save: record },
-  run: ({ team, list, can, save }, { input }) => {
+  depends: {
+    team: members.controller,
+    list: issues.controller,
+    can: canWrite,
+    save: record,
+    mail: post,
+  },
+  run: ({ team, list, can, save, mail }, { input }) => {
     const now = can.run({ input });
     if (now.kind !== "ok") return now;
 
+    const { teamId, userId, role } = input;
+    const isNew = !team.of({ teamId, userId }).get();
     team.set(input);
+    if (isNew) {
+      const subject = `Welcome to ${teamId}`;
+      mail.run({ input: { to: userId, subject, body: `You are a ${role} of ${teamId}.` } });
+    }
     if (input.role === "member") return { kind: "added" as const };
 
     const theirs = list.where({ teamId: input.teamId }).get();
