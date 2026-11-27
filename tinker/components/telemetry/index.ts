@@ -2,7 +2,7 @@ import { capsule } from "@tinkered/core";
 
 import { logConsole } from "./console";
 import { queueSink } from "./observer";
-import { telemetryService, telemetrySide } from "./settings";
+import { logSpans, telemetryService, telemetrySide } from "./settings";
 
 export type { Telemetry } from "./records";
 export { exportHealth } from "./health";
@@ -11,7 +11,7 @@ export { exportHealth } from "./health";
 export const telemetry = {
   browser: capsule({
     label: "telemetry",
-    config: { service: telemetryService.required, console: logConsole },
+    config: { service: telemetryService.required, console: logConsole, spans: logSpans },
     tags: [telemetrySide("browser")],
     hooks: queueSink,
   }),

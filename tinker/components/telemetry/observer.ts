@@ -5,7 +5,7 @@ import { logConsole } from "./console";
 import { queue } from "./queue";
 import { encodeValue, quiet, spanBody } from "./records";
 import type { Telemetry } from "./records";
-import { logLevel, spanHistory, telemetryService, telemetrySide } from "./settings";
+import { logLevel, logSpans, spanHistory, telemetryService, telemetrySide } from "./settings";
 
 /**
  * Transfers trusted records to the telemetry root; callers must not edit them afterward.
@@ -66,11 +66,12 @@ export const observer = resource({
     level: logLevel,
     history: spanHistory,
     show: logConsole,
+    spans: logSpans,
     encodeValue,
     spanBody,
   },
   factory: (
-    { queue, service, side, level, history, show, encodeValue, spanBody },
+    { queue, service, side, level, history, show, spans, encodeValue, spanBody },
     ctx,
   ): Observe.Config => ({
     history,
@@ -90,7 +91,7 @@ export const observer = resource({
       };
       const encoded = queue.add("log", side, record);
       if (side !== "browser") queue.writeConsole(encoded, record);
-      else show?.info(record);
+      else if (spans) show?.info(record);
       queue.publishQueued();
     },
     log(entry) {

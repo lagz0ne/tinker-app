@@ -27,3 +27,10 @@ export const spanHistory = tag<number>({
   default: 80,
   parse: z.number().int().min(0),
 });
+
+/**
+ * Whether a tab writes each span to its console. Off by default, as OpenTelemetry's
+ * `ConsoleSpanExporter` is opt-in: with DevTools open, one line per span cost easel 4.4 s on
+ * one socket message (#66). Spans still go to the collector.
+ */
+export const logSpans = tag<boolean>({ label: "telemetry.logSpans", default: false });
