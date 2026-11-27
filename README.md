@@ -265,8 +265,12 @@ It shows keyed data with a guard.
   `issueBoard.part(input)?.teamId`.
 - A move names the version it saw. A newer
   version answers `stale`, as output.
-- Sign-in is a stand-in: a name in each
-  message's meta (`whoMeta`). No password.
+- Sign-in is a demo (`demoSignIn`): the
+  server trusts a name in each message's
+  meta (`whoMeta`). So any client can be any
+  user. Do not serve it. A real app checks a
+  secret that only the server can match, such
+  as a session cookie or a bearer token.
 - Every cell is served. A cell that is not
   served is a copy per session, so a
   call's write to it ends with the call.
@@ -305,7 +309,7 @@ It shows keyed data with a guard.
 ```ts
 issues.board({
   serve: true,
-  onStart: [signedIn, membersOnly],
+  onStart: [demoSignIn, membersOnly],
 });
 ```
 

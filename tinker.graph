@@ -2,10 +2,10 @@ comment.add.do exits{added,gone} reads{issues.list.of} writes{issues.comments.se
 greet.here exits{value} reads{} writes{} calls{}
 issue.create.do exits{created,gone} reads{issues.list.where} writes{issues.list.set} calls{issues.inTeam}
 issue.move.do exits{gone,moved,stale} reads{issues.list.of} writes{issues.list.set} calls{issues.inTeam}
+issues.demoSignIn exits{refused,value} reads{} writes{} calls{}
 issues.inTeam exits{value} reads{issues.members.of} writes{} calls{}
 issues.membersOnly exits{refused,value} reads{} writes{} calls{issues.inTeam}
 issues.signIn exits{value} reads{} writes{issues.me.set} calls{}
-issues.signedIn exits{refused,value} reads{} writes{} calls{}
 issues.whoMeta exits{value} reads{issues.me.get} writes{} calls{}
 team.add.do exits{added,gone} reads{} writes{issues.members.set} calls{issues.inTeam}
 team.create.do exits{created,exists} reads{issues.members.where} writes{issues.members.set} calls{}

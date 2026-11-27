@@ -4,7 +4,7 @@ import type { Observe, Scope } from "@tinkered/core";
 import { afterAll, beforeEach, expect, test } from "vite-plus/test";
 
 import { issues } from "@/issues";
-import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
+import { issueOps, membersOnly, demoSignIn } from "@/issues/ops.server";
 import { signIn, whoMeta } from "@/issues/sign-in";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
@@ -20,8 +20,8 @@ const backend = await createScope({
   observe: { export: (span) => void serverSpans.push(span) },
   capsules: [
     exits({ file: process.env.TINKER_EXITS }),
-    issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
-    issues.api({ implement: issueOps, onStart: [signedIn] }),
+    issues.board({ serve: true, onStart: [demoSignIn, membersOnly] }),
+    issues.api({ implement: issueOps, onStart: [demoSignIn] }),
     server.server({ path: "/rpc", services: [issues.board, issues.api] }),
   ],
 }).ready;
@@ -323,8 +323,8 @@ test("one move: one trace from tab A to the server's send; tab B's ask links to 
   expect(names(tabSpans, call)).toEqual(["issue.move", "issues.whoMeta", "ws.call", "ws.send"]);
   expect(names(serverSpans, call)).toEqual([
     "issue.move.do",
+    "issues.demoSignIn",
     "issues.inTeam",
-    "issues.signedIn",
     "remoteData.send",
     "rpc.answer",
     "ws.serve",
@@ -341,9 +341,9 @@ test("one move: one trace from tab A to the server's send; tab B's ask links to 
     "ws.send",
   ]);
   expect(names(serverSpans, ask)).toEqual([
+    "issues.demoSignIn",
     "issues.inTeam",
     "issues.membersOnly",
-    "issues.signedIn",
     "remoteData.answer",
     "remoteData.ask",
     "ws.serve",

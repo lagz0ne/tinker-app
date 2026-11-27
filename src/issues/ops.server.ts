@@ -6,12 +6,16 @@ import { comments, issueApi, issueBoard, issues, members } from "./contract";
 // The server's work for `issueApi`. Each op writes members of the keyed cells; `issueBoard` tells
 // every member's tab that reads the part, and the tab asks for that part alone.
 
-/** Who calls: `signedIn` binds it for each call. */
+/** Who calls: `demoSignIn` binds it for each call. */
 const viewer = tag<string>({ label: "issues.viewer" });
 
-/** Every call and ask: no `who` in its meta, no service; else it runs as the viewer. */
-export const signedIn = operation({
-  label: "issues.signedIn",
+/**
+ * A demo sign-in: it trusts the name the client sends in `meta.who`, so any client can be any
+ * user. A real app checks a secret that only the server can match (a session cookie, or a
+ * bearer token whose digest it stores) and binds the user it finds. Never serve this one.
+ */
+export const demoSignIn = operation({
+  label: "issues.demoSignIn",
   input: transport.hook.start,
   run: (_, { input }) => {
     const me = input.meta.who;

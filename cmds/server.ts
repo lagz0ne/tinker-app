@@ -10,7 +10,7 @@ import { telemetry } from "~/components/telemetry/index.server";
 import { greet } from "@/greet";
 import { greetOps } from "@/greet/greet.server";
 import { issues } from "@/issues";
-import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
+import { issueOps, membersOnly, demoSignIn } from "@/issues/ops.server";
 import { todo } from "@/todo";
 import { todoOps } from "@/todo/ops.server";
 
@@ -74,8 +74,8 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       todo.board({ serve: true }),
       todo.api({ implement: todoOps }),
       // The issue board: each part goes to its team's members; every call needs a viewer.
-      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
-      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [demoSignIn] }),
       socket,
       table,
     ],

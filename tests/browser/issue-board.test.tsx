@@ -10,7 +10,7 @@ import { page } from "vite-plus/test/browser/context";
 import { z } from "zod";
 
 import { issues } from "@/issues";
-import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
+import { issueOps, membersOnly, demoSignIn } from "@/issues/ops.server";
 import { signIn, whoMeta } from "@/issues/sign-in";
 import { routeTree } from "@/routes";
 
@@ -21,8 +21,8 @@ test("an issue made and moved on one tab moves on the drawn tab; a thread takes 
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
-      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
-      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [demoSignIn] }),
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -111,8 +111,8 @@ test('"Open team" on a new key makes the team and shows its board', async () => 
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
-      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
-      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [demoSignIn] }),
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -153,8 +153,8 @@ test('a tab that is not in the team sees why; "Try again" shows the team once it
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
-      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
-      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [demoSignIn] }),
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -204,8 +204,8 @@ test('a refused thread says why; "Try again" shows its comments once it is allow
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
-      issues.board({ serve: true, onStart: [signedIn, membersOnly, threads] }),
-      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly, threads] }),
+      issues.api({ implement: issueOps, onStart: [demoSignIn] }),
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -245,13 +245,13 @@ test('a refused thread says why; "Try again" shows its comments once it is allow
   await server.close();
 });
 
-// P4: a read with no `who` is refused by `signedIn`: the page says to sign in.
+// P4: a read with no `who` is refused by `demoSignIn`: the page says to sign in.
 test("a tab that is not signed in is told to sign in", async () => {
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
-      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
-      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [demoSignIn] }),
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -297,8 +297,8 @@ test("a board that is not read yet says that it loads", async () => {
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
-      issues.board({ serve: true, onStart: [signedIn, membersOnly, hold] }),
-      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly, hold] }),
+      issues.api({ implement: issueOps, onStart: [demoSignIn] }),
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -344,8 +344,8 @@ test("a stale move says that someone else changed the issue", async () => {
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
-      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
-      issues.api({ implement: { ...issueOps, "issue.move": stale }, onStart: [signedIn] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly] }),
+      issues.api({ implement: { ...issueOps, "issue.move": stale }, onStart: [demoSignIn] }),
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -397,10 +397,10 @@ test("a call that answers gone says so", async () => {
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
-      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly] }),
       issues.api({
         implement: { ...issueOps, "issue.move": moveGone, "team.add": addGone },
-        onStart: [signedIn],
+        onStart: [demoSignIn],
       }),
       memory.server({ services: [issues.board, issues.api] }),
     ],
@@ -453,8 +453,8 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
     observe: { export: (span) => void spans.push(span) },
     capsules: [
       exits({ store: localStorage }),
-      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
-      issues.api({ implement: { ...issueOps, "issue.create": boom }, onStart: [signedIn] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly] }),
+      issues.api({ implement: { ...issueOps, "issue.create": boom }, onStart: [demoSignIn] }),
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -500,8 +500,8 @@ test("the server goes away with the page open: the page says that it is offline"
   const server = await createScope({
     capsules: [
       exits({ store: localStorage }),
-      issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
-      issues.api({ implement: issueOps, onStart: [signedIn] }),
+      issues.board({ serve: true, onStart: [demoSignIn, membersOnly] }),
+      issues.api({ implement: issueOps, onStart: [demoSignIn] }),
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
