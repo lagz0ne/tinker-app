@@ -573,3 +573,24 @@ Fix: every hidden server in ck10b and ck11 binds a
 quiet mailer (`quietMail`, sends nothing) and
 installs `...serverParts`. Golden: ck10b 53/53,
 ck11 57/57 with the fix.
+
+### ck11 kit v2: two checks no stricter than the TASK (after the ck11 run)
+
+The ck11 run (kit v1, 7f29931) found two hidden
+checks stricter than the TASK. "At most 100 parts
+a second" lets a sweeper take 100 parts at once,
+then 100 more at 1.0 s.
+
+- "a read between the halves" and "stopped half
+  way" looked for parts left at exactly 1.0 s. A
+  writer that takes 100 at once and 100 at 1.0 s
+  had none left there. v2 looks at 0.9 s.
+- The page test's team had 30 issues (60 parts),
+  so a writer could free the key at once. v2 uses
+  150 issues (300 parts).
+
+v2 = the run's `kit-whatif/` ck11 hidden files,
+byte for byte. The TASK, the seeds and the judge
+are not changed. Score on v1: 6 of 14. On v2 (the
+what-if rescore): 12 of 14. Golden ck11 on v2:
+57/57 strict. The seed is still caught (1 fail).

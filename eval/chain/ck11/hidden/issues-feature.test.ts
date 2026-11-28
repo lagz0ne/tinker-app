@@ -708,8 +708,8 @@ test("between the halves: the team is hidden, its key is not free, another team 
   };
 
   await hidden();
-  await pass(1_000);
-  // Half way: some parts are gone, some are left.
+  await pass(900);
+  // Half way (what-if: before the 1 s mark): some parts are gone, some are left.
   expect(parts("HALF").other.length).toBeGreaterThan(0);
   await hidden();
   await pass(60_000);
@@ -753,7 +753,7 @@ test("stopped half way: the server closes while the parts go, and the close ends
   await big("STOP", 40);
 
   await ana.run(issues.api["team.delete"], { input: { teamId: "STOP" } });
-  await pass(1_000);
+  await pass(900);
   expect(parts("STOP").other.length).toBeGreaterThan(0);
   // No time passes from here: a close that waits on the clock never ends.
   const end = await Promise.race([

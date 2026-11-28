@@ -843,7 +843,7 @@ test("open team on a key still being deleted says you are not in it; later it ma
   };
   const [ana, cy] = [await tab("ana"), await tab("cy")];
   await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
-  for (let k = 0; k < 30; k++) {
+  for (let k = 0; k < 150; k++) {
     await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: `Old ${k}` } });
   }
   await ana.run(issues.api["team.delete"], { input: { teamId: "ENG" } });
