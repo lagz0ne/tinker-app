@@ -708,9 +708,8 @@ named `hook`. The scorer gives the judge the op
 lines only (`graph.txt`); `graph-full.txt` keeps
 the hook lines. The judge files do not change.
 
-ck12 stays on 0.34.19 until npm has 0.34.21 (on
-2026-11-28 npm has 0.34.19 as its latest; main
-dcefe5e5 is 0.34.21). Then: bump the golden,
+ck12 stays on 0.34.19 (lead, 2026-11-28: no
+rerun on 0.34.21). If it ever moves: bump the golden,
 `bunx tinker graph --write` once (format 2 to 3),
 check the close gap again, and run the canary and
 the seeds again.
@@ -737,7 +736,42 @@ sweeper keeps its `settle(..., { signal: closing })`
 (its writes reach the root through `atScope` and
 the store).
 
-Lane prep (not run yet): bump each tree to 0.34.19,
-`bun install`, `bunx tinker graph --write`, add the
-given `src/mail/` files and `TASK-ck12.md`, then
-write the manifest.
+Lane prep: pin each tree to exactly 0.34.19 (npm
+`latest` is 0.34.21 now, so `^0.34.19` would take
+it), `bun install`, `bunx tinker graph --write`,
+add the given `src/mail/` files and `TASK-ck12.md`,
+then write the manifest.
+
+### ck12 kit v2 (2026-11-28)
+
+The run (runner `cujv2d`, 14 lanes from their ck11
+v2 trees, 0.34.19) found a kit bug. The TASK says
+`givenUp` is a cell (`data<Letter[]>`), read with
+`server.resolve(givenUp).get()`. A top-level `data`
+resolves to its value, which has no `.get()`. Only
+a capsule export (the golden's `triedMail.givenUp`)
+resolves to a controller. Three lanes did what the
+TASK says and failed the 4 tests that read it.
+
+v2 (lead pick A): the hidden helper `givenUp` reads
+a value or a controller. No check changes. Golden
+ck12 on v2: 61/61 strict. The v2 scores are the
+run's what-if scores.
+
+Result (v1 official / v2), primary and strict:
+
+- Muse: v1 4/7 primary, 2/7 strict; v2 6/7, 5/7.
+- DeepSeek: 0/7, 0/7 on both.
+- Trap 1: 6 of 7 DeepSeek lanes, 0 of 7 Muse. Each
+  runs the send (or the op that sends) with a
+  `signal`, from a `resource` factory or an op, not
+  from a start hook. Then no mail reaches the fake
+  server's cells at the root.
+- Trap 2: 4 lanes, all DeepSeek. Hook lines: 0 on
+  all 14 (format 2).
+- o-ds-3 keeps its mail session in a module `let`.
+  A second server in the same process writes over it
+  and closes it. The judge does not see this.
+
+No rerun on 0.34.21 (lead, 2026-11-28). Chain v2 is
+parked after ck12; ck13 to ck16 are not built.

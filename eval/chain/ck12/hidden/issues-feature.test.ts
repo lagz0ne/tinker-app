@@ -1226,7 +1226,11 @@ const mailWorld = async () => {
         .resolve(testMail.tries)
         .get()
         .filter((t) => to === undefined || t.to === to),
-    givenUp: () => server.resolve(givenUp).get(),
+    // v2: a top-level data resolves to its value; a capsule export resolves to a controller.
+    givenUp: (): Letter[] => {
+      const v = server.resolve(givenUp) as unknown as Letter[] | { get(): Letter[] };
+      return Array.isArray(v) ? v : v.get();
+    },
   };
   const close = async () => {
     open = false;
