@@ -1,17 +1,74 @@
 import { serve } from "@tinkered/bun";
 import { exits } from "@tinkered/cli/test";
-import { createScope } from "@tinkered/core";
+import { capsule, createScope, data, operation } from "@tinkered/core";
 import type { Observe, Scope } from "@tinkered/core";
 import { makeTestClock, memory } from "@tinkered/core/testing";
 import { afterAll, beforeEach, expect, onTestFinished, test } from "vite-plus/test";
+import { z } from "zod";
 
 import { issues } from "@/issues";
-import { mailer } from "@/issues/mail";
-import type { Mailer } from "@/issues/mail";
-import { issueOps, membersOnly, serverParts, signedIn } from "@/issues/ops.server";
+import { givenUp, issueOps, membersOnly, serverParts, signedIn } from "@/issues/ops.server";
 import { signIn, whoMeta } from "@/issues/sign-in";
+import { letter, type Letter } from "@/mail/letter";
+import { mailProvider } from "@/mail/provider";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
+
+/** ck12: every test server fills the given `mailProvider` slot and installs the app's
+ * `serverParts`, as the TASK says. The provider is the test's own: it keeps each try and each letter sent in its cells,
+ * at the scope where it runs. `down`: these addresses throw. `hangs`: these never answer (`*`:
+ * every address). `fail`: the next tries throw. `slow`: each send takes that many ms. */
+type Mode = { down: string[]; hangs: string[]; fail: number; slow: number };
+
+const mode = data<Mode>({
+  label: "test.mail.mode",
+  initial: { down: [], hangs: [], fail: 0, slow: 0 },
+});
+
+const sentMail = data<Letter[]>({ label: "test.mail.sent", initial: [] });
+const tried = data<{ to: string; at: number }[]>({ label: "test.mail.tries", initial: [] });
+
+const setMode = operation({
+  label: "test.mail.setMode",
+  input: z.object({
+    down: z.array(z.string()).optional(),
+    hangs: z.array(z.string()).optional(),
+    fail: z.number().optional(),
+    slow: z.number().optional(),
+  }),
+  depends: { mode: mode.controller },
+  run: ({ mode }, { input }) => mode.update((m) => ({ ...m, ...input })),
+});
+
+const sendMail = operation({
+  label: "test.mail.send",
+  input: letter,
+  depends: { mode: mode.controller, sent: sentMail.controller, tries: tried.controller },
+  run: async ({ mode, sent, tries }, { input, clock, signal }) => {
+    tries.update((list) => [...list, { to: input.to, at: clock.currentTimeMillis() }]);
+
+    const m = mode.get();
+    const hit = (list: string[]) => list.includes("*") || list.includes(input.to);
+    if (hit(m.hangs)) {
+      return new Promise<void>((_, no) =>
+        signal.addEventListener("abort", () => no(new Error("closed")), { once: true }),
+      );
+    }
+    if (hit(m.down)) throw new Error("mail is down");
+    if (m.fail > 0) {
+      mode.set({ ...m, fail: m.fail - 1 });
+      throw new Error("mail is down");
+    }
+
+    if (m.slow) await clock.sleep(m.slow, signal);
+    sent.update((list) => [...list, input]);
+  },
+});
+
+const testMail = capsule({
+  label: "test.mail",
+  exports: { send: sendMail, sent: sentMail, tries: tried, mode, setMode },
+});
 
 // The issue board as the cmds install it, over a real socket: the server serves each team's parts
 // to its members and implements the api; each tab reads the board and calls the api. The `who`
@@ -26,6 +83,9 @@ const backend = await createScope({
     exits({ file: process.env.TINKER_EXITS }),
     issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
     issues.api({ implement: issueOps, onStart: [signedIn] }),
+    testMail(),
+    mailProvider({ provider: testMail.send }),
+    ...serverParts,
     server.server({ path: "/rpc", services: [issues.board, issues.api] }),
   ],
 }).ready;
@@ -538,15 +598,14 @@ const leftOf = (teamId: string) => {
  * bo, makes `n` issues with a label each, and archives it. */
 const sweepWorld = async () => {
   const clock = makeTestClock({ now: 5_000_000 });
-  const fake: Mailer = { send: async () => undefined };
-
   const server = await createScope({
     clock,
-    tags: [mailer(fake)],
     capsules: [
       exits({ file: process.env.TINKER_EXITS }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
       ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
@@ -702,8 +761,8 @@ test("between the halves: the team is hidden, its key is not free, another team 
   };
 
   await hidden();
-  await pass(1_000);
-  // Half way: some parts are gone, some are left.
+  await pass(900);
+  // Half way (what-if: before the 1 s mark): some parts are gone, some are left.
   expect(parts("HALF").other.length).toBeGreaterThan(0);
   await hidden();
   await pass(60_000);
@@ -747,7 +806,7 @@ test("stopped half way: the server closes while the parts go, and the close ends
   await big("STOP", 40);
 
   await ana.run(issues.api["team.delete"], { input: { teamId: "STOP" } });
-  await pass(1_000);
+  await pass(900);
   expect(parts("STOP").other.length).toBeGreaterThan(0);
   // No time passes from here: a close that waits on the clock never ends.
   const end = await Promise.race([
@@ -1107,44 +1166,24 @@ test("one move: one trace from tab A to the server's send; tab B's ask links to 
   );
 });
 
-// S17 (ck10b): a person added to a team gets one welcome mail. The call never waits for mail.
-// The server is the board, the api, and the app's own `serverParts`; its mailer is a fake on the
-// `mailer` tag, and its time is a test clock. The tests name no op: they add people, move the
-// clock, and count what the fake got.
+// S17 (ck10b, ck12): a person added to a team gets one welcome mail. The call never waits for
+// mail. The server is the board, the api, and the app's own `serverParts`; the `mailProvider`
+// slot holds the test's `testMail`, and time is a test clock. The tests name no op of the app: they add
+// people, move the clock, and read the provider's cells and `givenUp` at the server's root.
 
-/** A fake mailer. `fail`: the next sends throw. `hang`: each send never answers. `slow`: each send
- * answers after that many ms on the server's clock. `sent` holds each mail whose send answered. */
-const fakeMail = (clock: ReturnType<typeof makeTestClock>) => {
-  const sent: { to: string; subject: string; body: string }[] = [];
-  const state = { tries: 0, fail: 0, hang: false, slow: 0 };
-  const mail: Mailer = {
-    send: async (to, subject, body) => {
-      state.tries += 1;
-      if (state.hang) return new Promise<void>(() => undefined);
-      if (state.fail > 0) {
-        state.fail -= 1;
-        throw new Error("mail is down");
-      }
-      if (state.slow) await clock.sleep(state.slow);
-      sent.push({ to, subject, body });
-    },
-  };
-  return { mail, sent, state };
-};
-
-/** A server with the app's server parts, the fake mailer and a test clock, over `memory`, and
+/** A server with the app's server parts, the test provider and a test clock, over `memory`, and
  * ana's tab. Ana made `MAIL`. `pass(ms)` moves the clock in 100 ms steps, letting work run. */
 const mailWorld = async () => {
   const clock = makeTestClock({ now: 1_000_000 });
-  const fake = fakeMail(clock);
 
   const server = await createScope({
     clock,
-    tags: [mailer(fake.mail)],
     capsules: [
       exits({ file: process.env.TINKER_EXITS }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
       ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
@@ -1163,10 +1202,10 @@ const mailWorld = async () => {
   };
 
   const ana = await tabOf("ana");
+  let open = true;
   onTestFinished(async () => {
-    fake.state.hang = false;
     await ana.close();
-    await server.close();
+    if (open) await server.close();
   });
   await ana.run(issues.api["team.create"], { input: { teamId: "MAIL" } });
 
@@ -1178,15 +1217,37 @@ const mailWorld = async () => {
       await new Promise((r) => setTimeout(r, 1));
     }
   };
-  return { fake, server, ana, add, tabOf, pass };
+  /** The provider's state at the root: what it sent, each try, and the letters given up. */
+  const fake = {
+    set: (input: Partial<Mode>) => server.run(testMail.setMode, { input }),
+    sent: () => server.resolve(testMail.sent).get(),
+    tries: (to?: string) =>
+      server
+        .resolve(testMail.tries)
+        .get()
+        .filter((t) => to === undefined || t.to === to),
+    givenUp: () => server.resolve(givenUp).get(),
+  };
+  const close = async () => {
+    open = false;
+    return Promise.race([
+      server.close().then(() => "closed"),
+      new Promise((r) => setTimeout(() => r("still open after 3 s"), 3000)),
+    ]);
+  };
+  return { fake, server, ana, add, tabOf, pass, close };
 };
+
+/** The gaps between one address's tries, on the scope clock. */
+const gaps = (at: readonly { at: number }[]) =>
+  at.slice(1).map((t, i) => t.at - (at[i]?.at ?? t.at));
 
 test("a person added gets one welcome mail; a role change or a refused add sends none", async () => {
   const { fake, add, ana, tabOf, pass } = await mailWorld();
 
   expect(await add("bo")).toEqual({ kind: "added" });
   await pass(2_000);
-  expect(fake.sent.map((m) => [m.to, m.subject])).toEqual([["bo", "Welcome to MAIL"]]);
+  expect(fake.sent().map((m) => [m.to, m.subject])).toEqual([["bo", "Welcome to MAIL"]]);
   // A role change of a person in the team is not a welcome.
   expect(await add("bo", "viewer")).toEqual({ kind: "added" });
   expect(await add("bo", "member")).toEqual({ kind: "added" });
@@ -1200,55 +1261,146 @@ test("a person added gets one welcome mail; a role change or a refused add sends
   await ana.run(issues.api["team.archive"], { input: { teamId: "MAIL" } });
   expect(await ana.run(issues.api["team.add"], tryAdd)).toEqual({ kind: "archived" });
   await pass(5_000);
-  expect(fake.sent.map((m) => [m.to, m.subject])).toEqual([
+  expect(fake.sent().map((m) => [m.to, m.subject])).toEqual([
     ["bo", "Welcome to MAIL"],
     ["cy", "Welcome to MAIL"],
   ]);
-  expect(fake.state.tries).toBe(2);
+  expect(fake.tries()).toHaveLength(2);
+  expect(fake.givenUp()).toEqual([]);
   await cy.close();
   await dee.close();
 });
 
 test("mail is down once: the add answers, and the mail arrives once mail is back", async () => {
   const { fake, add, pass } = await mailWorld();
-  fake.state.fail = 1;
+  await fake.set({ fail: 1 });
 
   expect(await add("bo")).toEqual({ kind: "added" });
   await pass(60_000);
-  expect(fake.sent.map((m) => m.to)).toEqual(["bo"]);
-  expect(fake.state.tries).toBe(2);
+  expect(fake.sent().map((m) => m.to)).toEqual(["bo"]);
+  expect(fake.tries()).toHaveLength(2);
   await pass(60_000);
-  expect(fake.sent.map((m) => m.to)).toEqual(["bo"]);
+  expect(fake.sent().map((m) => m.to)).toEqual(["bo"]);
 });
 
 test("mail never answers: the add answers at once; the mail is tried again after 10 s, once", async () => {
   const { fake, add, pass } = await mailWorld();
-  fake.state.hang = true;
+  await fake.set({ hangs: ["*"] });
 
   // The call answers with no time passing: it does not wait for the mail.
   expect(await add("bo")).toEqual({ kind: "added" });
   await pass(1_000);
-  expect(fake.state.tries).toBe(1);
-  fake.state.hang = false;
+  expect(fake.tries()).toHaveLength(1);
+  await fake.set({ hangs: [] });
   // The first send may still answer for 10 s: nobody sends the mail again before that.
   await pass(8_000);
-  expect(fake.state.tries).toBe(1);
+  expect(fake.tries()).toHaveLength(1);
   await pass(60_000);
-  expect(fake.sent.map((m) => m.to)).toEqual(["bo"]);
-  expect(fake.state.tries).toBe(2);
+  expect(fake.sent().map((m) => m.to)).toEqual(["bo"]);
+  expect(fake.tries()).toHaveLength(2);
 });
 
 test("slow mail: sends that take 3 s are not sent again; each person gets one mail", async () => {
   const { fake, add, pass } = await mailWorld();
-  fake.state.slow = 3_000;
+  await fake.set({ slow: 3_000 });
 
   await add("bo");
   await add("cy");
   await add("dee");
   await pass(30_000);
-  expect(fake.sent.map((m) => m.to).toSorted()).toEqual(["bo", "cy", "dee"]);
-  expect(fake.state.tries).toBe(3);
+  expect(
+    fake
+      .sent()
+      .map((m) => m.to)
+      .toSorted(),
+  ).toEqual(["bo", "cy", "dee"]);
+  expect(fake.tries()).toHaveLength(3);
 });
+
+// S17 (ck12): a mail is tried at most 4 times. After a failed try it waits 1 s, then 2 s, then
+// 4 s. A mail whose 4th try fails is given up: it is never tried again, and `givenUp` keeps it.
+
+test("a mail that fails is tried again after 1 s, 2 s and 4 s; its 4th fail gives it up, kept", async () => {
+  const { fake, add, pass } = await mailWorld();
+  await fake.set({ down: ["bo"] });
+
+  expect(await add("bo")).toEqual({ kind: "added" });
+  await pass(5_000);
+  // Still trying: not given up yet.
+  expect(fake.tries("bo").length).toBeGreaterThanOrEqual(2);
+  expect(fake.tries("bo").length).toBeLessThan(4);
+  expect(fake.givenUp()).toEqual([]);
+
+  await pass(25_000);
+  const tries = fake.tries("bo");
+  expect(tries).toHaveLength(4);
+  const waits = gaps(tries);
+  for (const [i, wait] of [1_000, 2_000, 4_000].entries()) {
+    expect(waits[i]).toBeGreaterThanOrEqual(wait);
+    expect(waits[i]).toBeLessThanOrEqual(wait + 1_500);
+  }
+  expect(fake.givenUp().map((l) => [l.to, l.subject])).toEqual([["bo", "Welcome to MAIL"]]);
+
+  // Given up: never tried again, and kept once.
+  await pass(120_000);
+  expect(fake.tries("bo")).toHaveLength(4);
+  expect(fake.sent()).toEqual([]);
+  expect(fake.givenUp()).toHaveLength(1);
+}, 30_000);
+
+test("a mail that fails twice arrives on its third try, once; nothing is given up", async () => {
+  const { fake, add, pass } = await mailWorld();
+  await fake.set({ fail: 2 });
+
+  await add("bo");
+  await pass(30_000);
+  expect(fake.sent().map((m) => m.to)).toEqual(["bo"]);
+  expect(fake.tries("bo")).toHaveLength(3);
+  expect(fake.givenUp()).toEqual([]);
+  await pass(60_000);
+  expect(fake.tries("bo")).toHaveLength(3);
+});
+
+test("a try that never answers fails after 10 s and holds no other mail; 4 such tries give it up", async () => {
+  const { fake, add, pass } = await mailWorld();
+  await fake.set({ hangs: ["bo"], down: ["cy"] });
+
+  await add("bo");
+  await add("cy");
+  await pass(500);
+  await add("dee");
+  // dee's mail is not held up by bo's hanging try, nor by cy's waits.
+  await pass(2_000);
+  expect(fake.sent().map((m) => m.to)).toEqual(["dee"]);
+  await pass(6_000);
+  expect(fake.tries("bo")).toHaveLength(1);
+
+  await pass(120_000);
+  const bo = fake.tries("bo");
+  expect(bo).toHaveLength(4);
+  const waits = gaps(bo);
+  for (const [i, wait] of [1_000, 2_000, 4_000].entries()) {
+    expect(waits[i]).toBeGreaterThanOrEqual(10_000 + wait);
+    expect(waits[i]).toBeLessThanOrEqual(10_000 + wait + 2_500);
+  }
+  expect(fake.tries("cy")).toHaveLength(4);
+  // Both given up, cy first (its tries fail at once), each kept once.
+  expect(fake.givenUp().map((l) => l.to)).toEqual(["cy", "bo"]);
+  expect(fake.sent().map((m) => m.to)).toEqual(["dee"]);
+}, 30_000);
+
+test("stopped while mail waits: the server closes with a try hanging and a mail waiting, at once", async () => {
+  const { fake, add, pass, close } = await mailWorld();
+  await fake.set({ hangs: ["bo"], down: ["cy"] });
+
+  await add("bo");
+  await add("cy");
+  await pass(1_500);
+  expect(fake.tries("bo")).toHaveLength(1);
+  expect(fake.tries("cy").length).toBeGreaterThanOrEqual(1);
+  // No time passes from here: a close that waits on the clock never ends.
+  expect(await close()).toBe("closed");
+}, 30_000);
 
 test("the server cmd prints the welcome mail; the add answers first", async () => {
   type Server = typeof import("../cmds/server");

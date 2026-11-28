@@ -1,0 +1,4 @@
+a mail that fails is tried again after 1 s, 2 s and 4 s; its 4th fail gives it up, kept
+a mail that fails twice arrives on its third try, once; nothing is given up
+a try that never answers fails after 10 s and holds no other mail; 4 such tries give it up
+stopped while mail waits: the server closes with a try hanging and a mail waiting, at once

@@ -594,3 +594,130 @@ byte for byte. The TASK, the seeds and the judge
 are not changed. Score on v1: 6 of 14. On v2 (the
 what-if rescore): 12 of 14. Golden ck11 on v2:
 57/57 strict. The seed is still caught (1 fail).
+
+## ck12: a mail is tried a few times (behaviour only, 2026-11-28)
+
+On top of ck11 (kit v2). `@tinkered/*` goes to
+0.34.19: `bun add @tinkered/*@^0.34.19`, then
+`bunx tinker graph --write` (the graph gets the
+header `# tinker.graph 2`). The other op lines do
+not change.
+
+The TASK: S17 changes. A mail is tried at most 4
+times. A try fails on a throw, or after 10 s with
+no answer. The waits after a failed try are 1 s,
+2 s and 4 s; the next try comes within 1 s after
+the wait. After the 4th fail the mail is given up:
+never tried again, and kept once in `givenUp`. A
+hanging try or a waiting mail holds no other mail.
+The server can close while a try hangs and a mail
+waits; the close ends at once. The cmd still
+prints `mail to bo: Welcome to ENG`.
+
+Given (new, `ck12/given/mail/` = `src/mail/`), the
+lead's shape: an app capsule with an op slot, and
+each backend its own capsule.
+
+- `letter.ts`: the `letter` schema.
+- `index.ts`: `mail` (slot `mail.backend`,
+  op `mail.send`).
+- `provider.ts`: `mailProvider` (slot
+  `mail.provider`, op `mail.provider.send`): the way
+  out to the mail server. The tests fill it with a
+  fake.
+- `memory.server.ts`: `memoryMail`, a backend that
+  keeps each letter.
+
+`src/issues/mail.ts` (the `mailer` tag) goes. The
+seam: the tests install
+`testMail(), mailProvider({ provider: testMail.send }), ...serverParts`;
+`serverParts` installs `mail` with the writer's
+backend; `ops.server.ts` exports `givenUp`
+(`data<Letter[]>`), read with `server.resolve`.
+
+Golden: `src/mail/tries.server.ts`, the capsule
+`triedMail`, built on the 0.34.19 Queue (dead
+letter) and Retry shapes. `deliver` puts the
+letter in a keyed line cell (root) and answers. The
+start hook runs a pump with no signal. Each second
+the pump starts one `tryOne` for each due letter
+(not awaited, so a hang holds only its letter).
+`tryOne` races `mailProvider.send` with a 10 s
+sleep; a fail sets the next time (1, 2, 4 s) or
+gives up into `givenUp`. The cmd fills
+`mailProvider` with `stdoutMail.write`
+(`src/mail/stdout.server.ts`). The ck10 `plain`
+entry for `cmds/server.ts` goes. The graph shows
+`calls{slot:mail.backend}` and
+`calls{slot:mail.provider}`, and no `calls{?}`.
+
+Hidden: ck11 v2's 57, with the fake mailer tag
+replaced by the fake provider capsule (`testMail`:
+down, hangs, fail N times, slow; its cells written
+with `.controller`), and 4 new server tests = 61.
+
+- tried again after 1 s, 2 s and 4 s; the 4th fail
+  gives it up, kept;
+- fails twice, arrives on the third try, once;
+- a try that never answers fails after 10 s and
+  holds no other mail; 4 such tries give it up;
+- stopped while a try hangs and a mail waits: the
+  close ends at once.
+
+Score: `score-step.sh 12` (ORDER `12 11 10b 9..1`).
+The given mail files are compared with
+`src/mail/<file>`. `src/issues/mail.ts` must be
+gone (else `src/issues/mail.ts(kept)`). A writer
+may add or take away a `plain` entry. The judge
+stays frozen: step 12 is judged as step 11.
+
+Golden on 0.34.19: `tinker check: OK`, 61/61,
+strict, judge OK. Seeds (each caught):
+
+- `ck12-pump-with-signal.patch` (trap 1): the pump
+  runs with `signal: closing`. 9 fail: the fake's
+  cells stay empty at the root.
+- `ck12-no-backoff.patch`: every wait is 1 s. 2
+  fail.
+- `ck12-try-holds-the-line.patch`: the pump awaits
+  each try. 2 fail.
+
+### Traps recorded per lane (facts, never a gate)
+
+- trap 1: a start-hook `run` or `settle` with a
+  `signal`. Record the line (grep `signal:` in the
+  start hooks of `src/`) and the mail tests that
+  fail.
+- trap 2: a call through a list slot shows
+  `calls{?}`. Record each `calls{?}` line of the
+  lane's graph. The golden has none, so each one is
+  the writer's. (The two given slot ops show
+  `faults{?}`: a slot's faults are not known. That
+  is not trap 2.)
+
+### Tinker gap seen while building it (0.34.19)
+
+The messaging skill's Right shape,
+`void run(pump, {}, meta)`, says "the pump's own
+`ctx.signal` aborts at the scope's close". It does
+on `live.close()`. It does not when the scope
+closes by its `signal` (a cmd's `defineMain`
+signal): the hook's `closing` fires, and the close
+hook runs, but the pump's signal never aborts. The
+scope never closes, and a later `live.close()`
+hangs too. With `{ signal: closing }` both closes
+end, but the writes go to a child session (trap
+1).
+
+Golden fix: the hook passes `closing` as the
+pump's input (`input: z.instanceof(AbortSignal)`),
+and the pump sleeps on
+`AbortSignal.any([signal, closing])`. The ck11
+sweeper keeps its `settle(..., { signal: closing })`
+(its writes reach the root through `atScope` and
+the store).
+
+Lane prep (not run yet): bump each tree to 0.34.19,
+`bun install`, `bunx tinker graph --write`, add the
+given `src/mail/` files and `TASK-ck12.md`, then
+write the manifest.

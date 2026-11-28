@@ -1,0 +1,11 @@
+--- a/src/mail/tries.server.ts
++++ b/src/mail/tries.server.ts
+@@ -114,7 +114,7 @@
+       await next();
+       void run(
+         pump,
+-        { input: closing },
++        { input: closing, signal: closing },
+         { role: "handler", explain: "Tries each due letter each second" },
+       );
+     },

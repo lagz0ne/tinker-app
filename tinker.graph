@@ -1,3 +1,4 @@
+# tinker.graph 2
 greet.here exits{value} faults{} reads{} writes{} calls{} uses{}
 issue.assign.do exits{archived,assigned,forbidden,gone,notAssignable,stale} faults{} reads{issues.members.of} writes{} calls{issues.atVersion,issues.record} uses{}
 issue.create.do exits{archived,created,forbidden,gone} faults{} reads{issues.list.where} writes{} calls{issues.canWrite,issues.record} uses{}
@@ -7,11 +8,8 @@ issue.rename.do exits{archived,forbidden,gone,renamed,stale} faults{} reads{} wr
 issues.atVersion exits{archived,forbidden,gone,now,stale} faults{} reads{issues.list.of} writes{} calls{issues.canWrite} uses{}
 issues.canChange exits{forbidden,gone,ok} faults{} reads{} writes{} calls{issues.inTeam} uses{}
 issues.canWrite exits{archived,forbidden,gone,ok} faults{} reads{issues.archived.of} writes{} calls{issues.canChange} uses{}
-issues.drainMail exits{value} faults{} reads{issues.outbox.get,issues.outbox.of} writes{issues.outbox.delete,issues.outbox.set} calls{} uses{}
 issues.inTeam exits{value} faults{} reads{issues.members.of} writes{} calls{} uses{}
-issues.mailRelay exits{value} faults{} reads{} writes{} calls{issues.drainMail} uses{}
 issues.membersOnly exits{refused,value} faults{} reads{} writes{} calls{issues.inTeam} uses{}
-issues.post exits{value} faults{} reads{} writes{issues.outbox.set} calls{} uses{}
 issues.record exits{value} faults{} reads{} writes{issues.events.set,issues.list.set} calls{} uses{}
 issues.showLabel exits{value} faults{} reads{} writes{issues.shownLabel.set} calls{} uses{}
 issues.signIn exits{value} faults{} reads{} writes{issues.me.set} calls{} uses{}
@@ -20,7 +18,14 @@ issues.sweep exits{value} faults{} reads{issues.deleting.get} writes{issues.dele
 issues.sweepTeam exits{value} faults{} reads{issues.archived.of,issues.events.where,issues.labels.where,issues.list.where} writes{issues.archived.delete,issues.events.delete,issues.labels.delete,issues.list.delete} calls{} uses{}
 issues.sweeper exits{value} faults{} reads{} writes{} calls{issues.sweep} uses{}
 issues.whoMeta exits{value} faults{} reads{issues.me.get} writes{} calls{} uses{}
-team.add.do exits{added,archived,forbidden,gone} faults{} reads{issues.list.where,issues.members.of} writes{issues.members.set} calls{issues.canWrite,issues.post,issues.record} uses{}
+mail.memory.deliver exits{value} faults{} reads{} writes{mail.memory.sent.update} calls{} uses{}
+mail.provider.send exits{value} faults{?} reads{} writes{} calls{slot:mail.provider} uses{}
+mail.send exits{value} faults{?} reads{} writes{} calls{slot:mail.backend} uses{}
+mail.stdout.write exits{value} faults{} reads{} writes{} calls{} uses{}
+mail.tries.deliver exits{value} faults{} reads{} writes{mail.tries.line.set} calls{} uses{}
+mail.tries.pump exits{value} faults{} reads{mail.tries.line.get} writes{mail.tries.line.set} calls{mail.tries.tryOne} uses{}
+mail.tries.tryOne exits{givenUp,sent,waits} faults{} reads{} writes{mail.tries.givenUp.update,mail.tries.line.delete,mail.tries.line.set} calls{mail.provider.send} uses{}
+team.add.do exits{added,archived,forbidden,gone} faults{} reads{issues.list.where,issues.members.of} writes{issues.members.set} calls{issues.canWrite,issues.record,mail.send} uses{}
 team.archive.do exits{archived,forbidden,gone} faults{} reads{} writes{issues.archived.set} calls{issues.canWrite} uses{}
 team.create.do exits{created,exists} faults{} reads{issues.deleting.of,issues.members.where} writes{issues.members.set} calls{} uses{}
 team.delete.do exits{deleted,forbidden,gone} faults{?} reads{issues.members.where} writes{issues.deleting.set,issues.members.delete} calls{?,issues.canChange} uses{}

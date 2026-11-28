@@ -1,6 +1,9 @@
 import { operation, tag, transport } from "@tinkered/core";
 import { z } from "zod";
 
+import { mail } from "@/mail";
+import { triedMail } from "@/mail/tries.server";
+
 import {
   archived,
   changes,
@@ -12,7 +15,6 @@ import {
   labels,
   members,
 } from "./contract";
-import { mailRelay, post } from "./outbox.server";
 import { deleting, teamSweeper } from "./sweep.server";
 
 // The server's work for `issueApi`. Each op writes members of the keyed cells; `issueBoard` tells
@@ -126,7 +128,7 @@ const addMember = operation({
     list: issues.controller,
     can: canWrite,
     save: record,
-    mail: post,
+    mail: mail.send,
   },
   run: ({ team, list, can, save, mail }, { input }) => {
     const now = can.run({ input });
@@ -305,5 +307,8 @@ export const issueOps = {
 } as const;
 
 /** The capsules the issue board needs on the server, beyond `issues.board` and `issues.api`: the
- * mail relay and the sweeper of deleted teams. */
-export const serverParts = [mailRelay, teamSweeper];
+ * welcome mail's tries (behind `mail`) and the sweeper of deleted teams. */
+export const serverParts = [triedMail, mail({ backend: triedMail.deliver }), teamSweeper];
+
+/** The letters given up after their tries, oldest first. */
+export const givenUp = triedMail.givenUp;

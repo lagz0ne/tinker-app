@@ -1,0 +1,11 @@
+--- a/src/mail/tries.server.ts
++++ b/src/mail/tries.server.ts
+@@ -95,7 +95,7 @@
+       const now = clock.currentTimeMillis();
+       for (const due of line.get().filter((i) => i.next <= now)) {
+         line.set({ ...due, next: now + 2 * patience });
+-        void one.settle({ input: due });
++        await one.settle({ input: due });
+       }
+       const slept = await clock.sleep(tick, end).then(
+         () => true,

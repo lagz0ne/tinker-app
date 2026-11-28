@@ -5,6 +5,8 @@ import { afterAll, expect, test } from "vite-plus/test";
 import { issues } from "@/issues";
 import { issueOps, membersOnly, signedIn } from "@/issues/ops.server";
 import { signIn, whoMeta } from "@/issues/sign-in";
+import { mail } from "@/mail";
+import { memoryMail } from "@/mail/memory.server";
 
 import { listen, wsClient as tab, wsServer as server } from "./support/ws";
 
@@ -14,6 +16,8 @@ import { listen, wsClient as tab, wsServer as server } from "./support/ws";
 const backend = await createScope({
   capsules: [
     exits({ file: process.env.TINKER_EXITS }),
+    memoryMail(),
+    mail({ backend: memoryMail.deliver }),
     issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
     issues.api({ implement: issueOps, onStart: [signedIn] }),
     server.server({ path: "/rpc", services: [issues.board, issues.api] }),

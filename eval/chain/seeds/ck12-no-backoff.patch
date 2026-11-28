@@ -1,0 +1,11 @@
+--- a/src/mail/tries.server.ts
++++ b/src/mail/tries.server.ts
+@@ -73,7 +73,7 @@
+ 
+     const failed = input.failed + 1;
+     if (failed < most) {
+-      const next = clock.currentTimeMillis() + firstWait * 2 ** (failed - 1);
++      const next = clock.currentTimeMillis() + firstWait;
+       line.set({ ...input, failed, next });
+       return { kind: "waits" as const };
+     }

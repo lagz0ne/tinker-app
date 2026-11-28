@@ -10,8 +10,9 @@ import { telemetry } from "~/components/telemetry/index.server";
 import { greet } from "@/greet";
 import { greetOps } from "@/greet/greet.server";
 import { issues } from "@/issues";
-import { mailer } from "@/issues/mail";
 import { issueOps, membersOnly, serverParts, signedIn } from "@/issues/ops.server";
+import { mailProvider } from "@/mail/provider";
+import { stdoutMail } from "@/mail/stdout.server";
 import { todo } from "@/todo";
 import { todoOps } from "@/todo/ops.server";
 
@@ -60,13 +61,6 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
   });
   const app = createScope({
     signal,
-    // This app has no mail server: its mailer writes each mail to stdout. A real app binds its
-    // SMTP mailer here.
-    tags: [
-      mailer({
-        send: async (to, subject) => void stdout.write(`mail to ${to}: ${subject}\n`),
-      }),
-    ],
     capsules: [
       serve({
         port: Number({ ...defaults, ...env }.PORT),
@@ -84,6 +78,10 @@ export default defineMain(async ({ env, args, signal, stdout, stderr, exit }) =>
       // The issue board: each part goes to its team's members; every call needs a viewer.
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      // This app has no mail server: its provider writes each mail to stdout. A real app puts its
+      // SMTP backend here.
+      stdoutMail({ out: stdout }),
+      mailProvider({ provider: stdoutMail.write }),
       ...serverParts,
       socket,
       table,

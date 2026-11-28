@@ -1,6 +1,6 @@
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { exits } from "@tinkered/cli/test";
-import { createScope, operation, transport } from "@tinkered/core";
+import { capsule, createScope, data, operation, transport } from "@tinkered/core";
 import type { Observe, Scope } from "@tinkered/core";
 import { createMemory, makeTestClock, memory } from "@tinkered/core/testing";
 import { ScopeProvider } from "@tinkered/react";
@@ -11,11 +11,67 @@ import { z } from "zod";
 
 import { issues } from "@/issues";
 import { members } from "@/issues/contract";
-import { mailer } from "@/issues/mail";
-import type { Mailer } from "@/issues/mail";
 import { issueOps, membersOnly, serverParts, signedIn } from "@/issues/ops.server";
 import { signIn, whoMeta } from "@/issues/sign-in";
+import { letter, type Letter } from "@/mail/letter";
+import { mailProvider } from "@/mail/provider";
 import { routeTree } from "@/routes";
+
+/** ck12: every test server fills the given `mailProvider` slot and installs the app's
+ * `serverParts`, as the TASK says. The provider is the test's own: it keeps each try and each letter sent in its cells,
+ * at the scope where it runs. `down`: these addresses throw. `hangs`: these never answer (`*`:
+ * every address). `fail`: the next tries throw. `slow`: each send takes that many ms. */
+type Mode = { down: string[]; hangs: string[]; fail: number; slow: number };
+
+const mode = data<Mode>({
+  label: "test.mail.mode",
+  initial: { down: [], hangs: [], fail: 0, slow: 0 },
+});
+
+const sentMail = data<Letter[]>({ label: "test.mail.sent", initial: [] });
+const tried = data<{ to: string; at: number }[]>({ label: "test.mail.tries", initial: [] });
+
+const setMode = operation({
+  label: "test.mail.setMode",
+  input: z.object({
+    down: z.array(z.string()).optional(),
+    hangs: z.array(z.string()).optional(),
+    fail: z.number().optional(),
+    slow: z.number().optional(),
+  }),
+  depends: { mode: mode.controller },
+  run: ({ mode }, { input }) => mode.update((m) => ({ ...m, ...input })),
+});
+
+const sendMail = operation({
+  label: "test.mail.send",
+  input: letter,
+  depends: { mode: mode.controller, sent: sentMail.controller, tries: tried.controller },
+  run: async ({ mode, sent, tries }, { input, clock, signal }) => {
+    tries.update((list) => [...list, { to: input.to, at: clock.currentTimeMillis() }]);
+
+    const m = mode.get();
+    const hit = (list: string[]) => list.includes("*") || list.includes(input.to);
+    if (hit(m.hangs)) {
+      return new Promise<void>((_, no) =>
+        signal.addEventListener("abort", () => no(new Error("closed")), { once: true }),
+      );
+    }
+    if (hit(m.down)) throw new Error("mail is down");
+    if (m.fail > 0) {
+      mode.set({ ...m, fail: m.fail - 1 });
+      throw new Error("mail is down");
+    }
+
+    if (m.slow) await clock.sleep(m.slow, signal);
+    sent.update((list) => [...list, input]);
+  },
+});
+
+const testMail = capsule({
+  label: "test.mail",
+  exports: { send: sendMail, sent: sentMail, tries: tried, mode, setMode },
+});
 
 // In a real Chromium: the board's pages over `memory`, with the app's own routes. Two tabs are
 // two scopes; tab B is drawn, tab A only calls.
@@ -26,6 +82,9 @@ test("an issue made and moved on one tab moves on the drawn tab", async () => {
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -113,6 +172,9 @@ test('"Open team" on a new key makes the team and shows its board', async () => 
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -155,6 +217,9 @@ test('a tab that is not in the team sees why; "Try again" shows the team once it
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -195,6 +260,9 @@ test("a tab that is not signed in is told to sign in", async () => {
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -242,6 +310,9 @@ test("a board that is not read yet says that it loads", async () => {
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly, hold] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -289,6 +360,9 @@ test("a stale move says that someone else changed the issue", async () => {
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: { ...issueOps, "issue.move": stale }, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -335,6 +409,9 @@ const drawn = async (replace: Partial<Implement> = {}, viewer?: string) => {
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: { ...issueOps, ...replace }, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -570,6 +647,9 @@ test("my issues lists the issues assigned to me in each of my teams, live", asyn
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -659,6 +739,9 @@ test("a person made a viewer drops those issues from my issues at once", async (
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -718,26 +801,20 @@ test("a person made a viewer drops those issues from my issues at once", async (
 // P2 and S17 (ck10b): the member form adds a person while mail hangs. The add lands at once, and
 // each person gets one welcome mail once mail is back. Time is the server's test clock.
 test("the member form adds people while mail hangs; one welcome mail each arrives later", async () => {
-  const sent: string[] = [];
-  const state = { hang: true };
-  const mail: Mailer = {
-    send: async (to, subject) => {
-      if (state.hang) return new Promise<void>(() => undefined);
-      sent.push(`${to}: ${subject}`);
-    },
-  };
   const clock = makeTestClock({ now: 1_000_000 });
   const server = await createScope({
     clock,
-    tags: [mailer(mail)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
       ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
+  await server.run(testMail.setMode, { input: { hangs: ["*"] } });
   const ana = await createScope({
     capsules: [
       exits({ store: localStorage }),
@@ -761,7 +838,6 @@ test("the member form adds people while mail hangs; one welcome mail each arrive
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   onTestFinished(async () => {
     root.unmount();
-    state.hang = false;
     await ana.close();
     await server.close();
   });
@@ -785,9 +861,13 @@ test("the member form adds people while mail hangs; one welcome mail each arrive
   // The page shows no fault: no call is left without an answer.
   expect(document.querySelectorAll('main [role="alert"], main [role="status"]')).toHaveLength(0);
 
-  state.hang = false;
+  await server.run(testMail.setMode, { input: { hangs: [] } });
   await pass(60_000);
-  expect(sent.toSorted()).toEqual(["cy: Welcome to ENG", "dee: Welcome to ENG"]);
+  const sent = server.resolve(testMail.sent).get();
+  expect(sent.map((m) => `${m.to}: ${m.subject}`).toSorted()).toEqual([
+    "cy: Welcome to ENG",
+    "dee: Welcome to ENG",
+  ]);
 });
 
 // P1 and S15 (ck11): a key whose old team is still being taken away is not free. "Open team"
@@ -795,14 +875,14 @@ test("the member form adds people while mail hangs; one welcome mail each arrive
 // empty team. Time is the server's test clock.
 test("open team on a key still being deleted says you are not in it; later it makes a new team", async () => {
   const clock = makeTestClock({ now: 1_000_000 });
-  const fake: Mailer = { send: async () => undefined };
   const server = await createScope({
     clock,
-    tags: [mailer(fake)],
     capsules: [
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
       ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
@@ -821,7 +901,7 @@ test("open team on a key still being deleted says you are not in it; later it ma
   };
   const [ana, cy] = [await tab("ana"), await tab("cy")];
   await ana.run(issues.api["team.create"], { input: { teamId: "ENG" } });
-  for (let k = 0; k < 30; k++) {
+  for (let k = 0; k < 150; k++) {
     await ana.run(issues.api["issue.create"], { input: { teamId: "ENG", title: `Old ${k}` } });
   }
   await ana.run(issues.api["team.delete"], { input: { teamId: "ENG" } });
@@ -996,6 +1076,9 @@ test("a call that breaks on the server shows a ref, and the server's trace has t
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: { ...issueOps, "issue.create": boom }, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -1043,6 +1126,9 @@ test("the server goes away with the page open: the page says that it is offline"
       exits({ store: localStorage }),
       issues.board({ serve: true, onStart: [signedIn, membersOnly] }),
       issues.api({ implement: issueOps, onStart: [signedIn] }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       memory.server({ services: [issues.board, issues.api] }),
     ],
   }).ready;
@@ -1136,6 +1222,9 @@ test("a call that did not leave says that nothing was sent", async () => {
     capsules: [
       exits({ store: localStorage }),
       issues.api({ implement: issueOps }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       calls.server({ services: [issues.api] }),
     ],
   }).ready;
@@ -1176,6 +1265,9 @@ test("a call that left and got no answer says that it may be saved", async () =>
     capsules: [
       exits({ store: localStorage }),
       issues.api({ implement: { ...issueOps, "issue.create": create } }),
+      testMail(),
+      mailProvider({ provider: testMail.send }),
+      ...serverParts,
       calls.server({ services: [issues.api] }),
     ],
   }).ready;
