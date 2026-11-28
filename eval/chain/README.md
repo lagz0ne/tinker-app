@@ -695,6 +695,26 @@ strict, judge OK. Seeds (each caught):
   `faults{?}`: a slot's faults are not known. That
   is not trap 2.)
 
+- hook lines (only on 0.34.21 or later, graph
+  format 3): does a `hook <capsule>#start` line
+  name the worker or pump in its `runs{}`? ck11 had
+  6 of 14 sweeps invisible in the graph. The facts
+  print `graph format`, each hook line, and
+  `start-hook runs`.
+
+The frozen judge reads each line by its first
+word, so it would take all hook lines as one op
+named `hook`. The scorer gives the judge the op
+lines only (`graph.txt`); `graph-full.txt` keeps
+the hook lines. The judge files do not change.
+
+ck12 stays on 0.34.19 until npm has 0.34.21 (on
+2026-11-28 npm has 0.34.19 as its latest; main
+dcefe5e5 is 0.34.21). Then: bump the golden,
+`bunx tinker graph --write` once (format 2 to 3),
+check the close gap again, and run the canary and
+the seeds again.
+
 ### Tinker gap seen while building it (0.34.19)
 
 The messaging skill's Right shape,
